@@ -1,23 +1,23 @@
 import { router } from "@components/page-viewer/page-viewer";
+import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
+import {
+	Slider,
+	SliderFill,
+	SliderLabel,
+	SliderThumb,
+	SliderTrack,
+	SliderValueLabel,
+} from "@ui/slider/slider";
 import {
 	Switch,
 	SwitchControl,
 	SwitchLabel,
 	SwitchThumb,
 } from "@ui/switch/switch";
-import {
-	Slider,
-	SliderTrack,
-	SliderFill,
-	SliderThumb,
-	SliderLabel,
-	SliderValueLabel,
-} from "@ui/slider/slider";
-import { createSignal, onMount, Show, createEffect, onCleanup } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
 import { onConfigUpdate } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
 import "./settings-page.css";
 
 interface AppConfig {
@@ -64,7 +64,7 @@ function SettingsPage() {
 	createEffect(() => {
 		document.documentElement.style.setProperty(
 			"--color__primary-hue",
-			backgroundHue().toString()
+			backgroundHue().toString(),
 		);
 	});
 

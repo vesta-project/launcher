@@ -1,5 +1,5 @@
 import { DropZone } from "@ui/drop-zone/drop-zone";
-import { createSignal, For } from "solid-js";
+import { For, createSignal } from "solid-js";
 import "./file-drop-page.css";
 
 interface DroppedFile {
@@ -83,7 +83,7 @@ function FileDropPage() {
 					{singleFile() && (
 						<div class="file-drop-page__result">
 							<p class="file-drop-page__result-label">Dropped file:</p>
-							<code class="file-drop-page__path">{singleFile()!.path}</code>
+							<code class="file-drop-page__path">{singleFile()?.path}</code>
 						</div>
 					)}
 				</section>

@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tokio::sync::oneshot;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use piston_lib::auth::{
     get_auth_client, get_device_code, device_code_to_details, poll_for_token,
 };
@@ -262,9 +262,33 @@ async fn process_login_completion(
 #[tauri::command]
 pub fn get_accounts() -> Result<Vec<Account>, String> {
     let db = get_data_db().map_err(|e| e.to_string())?;
-    let accounts: Vec<Account> = db
-        .get_all_data_serde::<Account, Account>()
-        .map_err(|e| e.to_string())?;
+    let conn = db.get_connection();
+    
+    let mut stmt = conn.prepare(
+        "SELECT id, uuid, username, display_name, access_token, refresh_token, 
+                token_expires_at, is_active, skin_url, cape_url, created_at, updated_at
+         FROM account"
+    ).map_err(|e| e.to_string())?;
+    
+    let accounts = stmt.query_map([], |row| {
+        Ok(Account {
+            id: crate::utils::sqlite::AUTOINCREMENT::default(),
+            uuid: row.get(1)?,
+            username: row.get(2)?,
+            display_name: row.get(3)?,
+            access_token: row.get(4)?,
+            refresh_token: row.get(5)?,
+            token_expires_at: row.get(6)?,
+            is_active: row.get(7)?,
+            skin_url: row.get(8)?,
+            cape_url: row.get(9)?,
+            created_at: row.get(10)?,
+            updated_at: row.get(11)?,
+        })
+    }).map_err(|e| e.to_string())?
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| e.to_string())?;
+    
     Ok(accounts)
 }
 
@@ -342,6 +366,46 @@ pub fn remove_account(uuid: String) -> Result<(), String> {
         rusqlite::params![uuid],
     )
     .map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+/// Get path to cached player head image, downloading if necessary
+#[tauri::command]
+pub async fn get_player_head_path(
+    app: AppHandle,
+    uuid: String,
+    force_download: bool,
+) -> Result<String, String> {
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("player_heads");
+    
+    let image_path = cache_dir.join(format!("{}.png", uuid));
+    
+    let path = piston_lib::api::player::download_player_head(
+        &uuid,
+        image_path.clone(),
+        128,
+        true,
+        force_download,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    Ok(path.to_string_lossy().to_string())
+}
+
+/// Pre-download all account head images on startup
+#[tauri::command]
+pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
+    let accounts = get_accounts()?;
+    
+    for account in accounts {
+        let _ = get_player_head_path(app.clone(), account.uuid, false).await;
+    }
     
     Ok(())
 }

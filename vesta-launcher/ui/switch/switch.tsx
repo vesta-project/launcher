@@ -1,7 +1,7 @@
-import { splitProps, type JSX, type ValidComponent } from "solid-js";
-import * as SwitchPrimitive from "@kobalte/core/switch";
 import { type PolymorphicProps } from "@kobalte/core/polymorphic";
+import * as SwitchPrimitive from "@kobalte/core/switch";
 import clsx from "clsx";
+import { type JSX, type ValidComponent, splitProps } from "solid-js";
 import "./switch.css";
 
 // Root switch component (alias to primitive)
@@ -14,7 +14,7 @@ type SwitchControlProps = SwitchPrimitive.SwitchControlProps & {
 };
 
 const SwitchControl = <T extends ValidComponent = "input">(
-	props: PolymorphicProps<T, SwitchControlProps>
+	props: PolymorphicProps<T, SwitchControlProps>,
 ) => {
 	const [local, others] = splitProps(props as SwitchControlProps, [
 		"class",
@@ -40,7 +40,7 @@ type SwitchThumbProps = SwitchPrimitive.SwitchThumbProps & {
 };
 
 const SwitchThumb = <T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SwitchThumbProps>
+	props: PolymorphicProps<T, SwitchThumbProps>,
 ) => {
 	const [local, others] = splitProps(props as SwitchThumbProps, ["class"]);
 
@@ -58,7 +58,7 @@ type SwitchLabelProps = SwitchPrimitive.SwitchLabelProps & {
 };
 
 const SwitchLabel = <T extends ValidComponent = "label">(
-	props: PolymorphicProps<T, SwitchLabelProps>
+	props: PolymorphicProps<T, SwitchLabelProps>,
 ) => {
 	const [local, others] = splitProps(props as SwitchLabelProps, ["class"]);
 

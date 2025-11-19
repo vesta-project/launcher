@@ -22,7 +22,7 @@
     & .page-viewer-content {
       height: calc(100% - 24px);
       width: 100%;
-      background: linear-gradient(90deg, hsl(var(--color__primary-hue) 5% 35%) 20%, hsl(var(--color__primary-hue) 5% 40%) 80%);
+      background: #414141;
       overflow-y: auto;
     }
   }

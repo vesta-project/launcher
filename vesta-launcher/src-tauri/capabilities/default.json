@@ -28,6 +28,7 @@
 		"core:webview:allow-webview-size",
 		"os:default",
 		"os:allow-os-type",
-		"log:default"
+		"log:default",
+		"shell:default"
 	]
 }

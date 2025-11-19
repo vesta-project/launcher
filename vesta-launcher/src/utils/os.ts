@@ -38,6 +38,6 @@ export function getOsType(): OsType | undefined {
 	return osType;
 }
 
-export async function ensureOsType(): Promise<OsType | undefined> {
+export function ensureOsType(): Promise<OsType | undefined> {
 	return loadOsType();
 }

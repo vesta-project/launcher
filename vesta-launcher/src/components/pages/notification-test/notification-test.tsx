@@ -1,6 +1,6 @@
-import { createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
+import { createSignal } from "solid-js";
 import "./notification-test.css";
 
 function NotificationTestPage() {
@@ -114,7 +114,7 @@ function NotificationTestPage() {
 	return (
 		<div class="notification-test-page">
 			<h1>Notification System Test Page</h1>
-			
+
 			<div class="test-section">
 				<h2>Ephemeral Notifications (Toast Only)</h2>
 				<div class="button-group">
@@ -175,11 +175,25 @@ function NotificationTestPage() {
 			<div class="info-box">
 				<h3>How to Test:</h3>
 				<ul>
-					<li><strong>Ephemeral:</strong> Appear as toasts only, disappear after 5s</li>
-					<li><strong>Persistent:</strong> Appear in sidebar + toast, stay until dismissed</li>
-					<li><strong>Pulsing:</strong> Shows animated progress indicator (indeterminate)</li>
-					<li><strong>Progress Bar:</strong> Shows 0-100% with step counter</li>
-					<li><strong>Bell Icon:</strong> Shows spinner when tasks are active, badge when unread exist</li>
+					<li>
+						<strong>Ephemeral:</strong> Appear as toasts only, disappear after
+						5s
+					</li>
+					<li>
+						<strong>Persistent:</strong> Appear in sidebar + toast, stay until
+						dismissed
+					</li>
+					<li>
+						<strong>Pulsing:</strong> Shows animated progress indicator
+						(indeterminate)
+					</li>
+					<li>
+						<strong>Progress Bar:</strong> Shows 0-100% with step counter
+					</li>
+					<li>
+						<strong>Bell Icon:</strong> Shows spinner when tasks are active,
+						badge when unread exist
+					</li>
 				</ul>
 			</div>
 		</div>

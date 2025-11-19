@@ -3,11 +3,7 @@
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
-	background: linear-gradient(
-		90deg,
-		hsl(var(--color__primary-hue) 5% 35%) 20%,
-		hsl(var(--color__primary-hue) 5% 40%) 80%
-	);
+	background: #414141;
 	overflow: hidden;
 }
 

@@ -1,6 +1,7 @@
 import CloseIcon from "@assets/close.svg";
 import { PolymorphicProps } from "@kobalte/core";
 import * as ToastPrimitive from "@kobalte/core/toast";
+import { Progress } from "@ui/progress/progress";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
 import {
@@ -14,7 +15,6 @@ import {
 import { Portal } from "solid-js/web";
 import { closeAlert } from "../../src/utils/notifications";
 import "./toast.css";
-import { Progress } from "@ui/progress/progress";
 
 type ToastListProps = ToastPrimitive.ToastListProps & ClassProp;
 
@@ -123,7 +123,11 @@ function showToast(props: {
 							progress={props.progress}
 							current_step={props.current_step}
 							total_steps={props.total_steps}
-							severity={props.severity ? props.severity.toLowerCase() as any : undefined}
+							severity={
+								props.severity
+									? (props.severity.toLowerCase() as any)
+									: undefined
+							}
 							class={"toast__progress"}
 						/>
 					)}

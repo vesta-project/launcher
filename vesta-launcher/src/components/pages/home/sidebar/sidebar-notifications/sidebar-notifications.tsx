@@ -1,18 +1,18 @@
 import CloseIcon from "@assets/close.svg";
 import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import Button from "@ui/button/button";
-import { For, Show, createSignal, onMount, createResource } from "solid-js";
+import { Progress } from "@ui/progress/progress";
 import {
+	type BackendNotification,
 	closeAlert,
-	notifications,
-	removeAllAlerts,
+	deleteNotification,
 	listNotifications,
 	markNotificationRead,
-	deleteNotification,
+	notifications,
 	persistentNotificationTrigger,
-	type BackendNotification,
+	removeAllAlerts,
 } from "@utils/notifications";
-import { Progress } from "@ui/progress/progress";
+import { For, Show, createResource, createSignal, onMount } from "solid-js";
 import styles from "./sidebar-notifications.module.css";
 
 interface SidebarNotificationProps {
@@ -23,19 +23,19 @@ interface SidebarNotificationProps {
 // TODO: Make sidebar resizeable
 function SidebarNotifications(props: SidebarNotificationProps) {
 	// Load persistent notifications from backend - refetch when trigger changes
-	const [persistentNotifs, { refetch }] = createResource(
+	const [persistentNotifs] = createResource(
 		persistentNotificationTrigger,
 		async () => {
 			try {
 				return await listNotifications({ persist: true });
-			} catch (error) {
+			} catch (_error) {
 				// Silently handle errors (table might not exist yet during first startup)
 				return [];
 			}
-		}
+		},
 	);
 
-	const allNotifications = () => {
+	const _allNotifications = () => {
 		const ephemeral = notifications();
 		const persistent = persistentNotifs() || [];
 		return { ephemeral, persistent };
@@ -63,7 +63,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 			<Show
 				when={
 					notifications().length > 0 ||
-					(persistentNotifs() && persistentNotifs()!.length > 0)
+					(persistentNotifs() && persistentNotifs()?.length > 0)
 				}
 				fallback={<div>Wooo! No Notifications!</div>}
 			>
@@ -197,7 +197,11 @@ function NotificationCard(props: {
 							progress={props.progress}
 							current_step={props.current_step}
 							total_steps={props.total_steps}
-							severity={props.severity ? props.severity.toLowerCase() as any : undefined}
+							severity={
+								props.severity
+									? (props.severity.toLowerCase() as any)
+									: undefined
+							}
 							class={styles["sidebar__notification__progress"]}
 							size="sm"
 						/>

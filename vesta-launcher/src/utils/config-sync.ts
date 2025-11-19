@@ -1,4 +1,4 @@
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { UnlistenFn, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 
@@ -18,7 +18,7 @@ const updateHandlers: Set<ConfigUpdateHandler> = new Set();
  */
 export function onConfigUpdate(handler: ConfigUpdateHandler): () => void {
 	updateHandlers.add(handler);
-	
+
 	// Return unsubscribe function
 	return () => {
 		updateHandlers.delete(handler);
@@ -56,12 +56,12 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 						console.error(`Handler failed for config update ${field}:`, error);
 					}
 				});
-				
+
 				console.log(`Config synced: ${field} = ${value}`);
 			} catch (error) {
 				const errorMsg = `Failed to process config update: ${field} = ${value}`;
 				console.error(errorMsg, error);
-				
+
 				// Broadcast error event for other windows to be aware
 				if (hasTauriRuntime()) {
 					import("@tauri-apps/api/event").then(({ emit }) => {
@@ -74,7 +74,7 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 					});
 				}
 			}
-		}
+		},
 	);
 }
 
@@ -98,7 +98,7 @@ export function applyCommonConfigUpdates(field: string, value: any): void {
 	if (field === "background_hue" && typeof value === "number") {
 		document.documentElement.style.setProperty(
 			"--color__primary-hue",
-			value.toString()
+			value.toString(),
 		);
 	}
 	// Add more common handlers here as needed

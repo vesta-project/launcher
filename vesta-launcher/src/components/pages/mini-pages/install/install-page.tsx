@@ -22,7 +22,7 @@ import "./install-page.css";
 
 function InstallPage() {
 	const ALL_OPTIONS = ["Apple", "Banana", "Blueberry", "Grapes", "Pineapple"];
-	const [values, setValues] = createSignal(["bold", "underline"]);
+	const [_values, _setValues] = createSignal(["bold", "underline"]);
 
 	const IconSelect = () => {
 		return (

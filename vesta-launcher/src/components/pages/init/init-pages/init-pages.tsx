@@ -1,6 +1,7 @@
 import { NavigateOptions } from "@solidjs/router";
+import { open } from "@tauri-apps/plugin-shell";
 import Button from "@ui/button/button";
-import { Show, createSignal, onMount, onCleanup } from "solid-js";
+import { Show, createSignal, onCleanup, onMount } from "solid-js";
 
 interface InitPagesProps {
 	initStep: number;
@@ -17,7 +18,7 @@ function InitFirstPage(props: InitPagesProps) {
 			<div class={"init-page__middle"}>Some stuff</div>
 			<div class={"init-page__bottom"}>
 				<Button onClick={() => props.changeInitStep(props.initStep + 1)}>
-					Let's GO!
+					Next
 				</Button>
 			</div>
 		</>
@@ -103,8 +104,12 @@ function InitLoginPage(props: InitPagesProps) {
 		}
 	};
 
-	const openUrl = () => {
-		window.open(authUrl(), "_blank");
+	const openUrl = async () => {
+		try {
+			await open(authUrl());
+		} catch (error) {
+			console.error("Failed to open URL:", error);
+		}
 	};
 
 	return (
@@ -120,10 +125,18 @@ function InitLoginPage(props: InitPagesProps) {
 					</Show>
 				</Show>
 				<Show when={isAuthenticating()}>
-					<div style={"display: flex; flex-direction: column; gap: 15px; align-items: center"}>
+					<div
+						style={
+							"display: flex; flex-direction: column; gap: 15px; align-items: center"
+						}
+					>
 						<p>Visit the following URL and enter this code:</p>
 						<div style={"display: flex; gap: 10px; align-items: center"}>
-							<code style={"font-size: 24px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px"}>
+							<code
+								style={
+									"font-size: 24px; padding: 10px; background: rgba(255,255,255,0.1); border-radius: 8px"
+								}
+							>
 								{authCode()}
 							</code>
 							<Button onClick={copyCode}>
@@ -140,14 +153,10 @@ function InitLoginPage(props: InitPagesProps) {
 			</div>
 			<div class={"init-page__bottom"}>
 				<Show when={!isAuthenticating()}>
-					<Button onClick={handleLogin}>
-						Login with Microsoft
-					</Button>
+					<Button onClick={handleLogin}>Login with Microsoft</Button>
 				</Show>
 				<Show when={isAuthenticating()}>
-					<Button onClick={handleCancel}>
-						Cancel
-					</Button>
+					<Button onClick={handleCancel}>Cancel</Button>
 				</Show>
 			</div>
 		</>

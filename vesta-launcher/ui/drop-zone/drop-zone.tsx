@@ -1,5 +1,11 @@
-import { JSX, onCleanup, onMount, children as accessChildren, createEffect } from "solid-js";
 import { getDropZoneManager } from "@utils/file-drop";
+import {
+	JSX,
+	children as accessChildren,
+	createEffect,
+	onCleanup,
+	onMount,
+} from "solid-js";
 import "./drop-zone.css";
 
 export interface DropZoneProps {
@@ -44,7 +50,10 @@ export function DropZone(props: DropZoneProps) {
 				element.removeAttribute("data-drop-zone-accept");
 			}
 			if (props.allowedExtensions?.length) {
-				element.setAttribute("data-drop-zone-extensions", props.allowedExtensions.join(","));
+				element.setAttribute(
+					"data-drop-zone-extensions",
+					props.allowedExtensions.join(","),
+				);
 			} else {
 				element.removeAttribute("data-drop-zone-extensions");
 			}

@@ -4,7 +4,10 @@ import OpenIcon from "@assets/open.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import ForwardsArrowIcon from "@assets/right-arrow.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import { miniRouterPaths, miniRouterInvalidPage } from "@components/page-viewer/mini-router-config";
+import {
+	miniRouterInvalidPage,
+	miniRouterPaths,
+} from "@components/page-viewer/mini-router-config";
 
 import { Polymorphic } from "@kobalte/core";
 import { invoke } from "@tauri-apps/api/core";
@@ -67,10 +70,7 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 				>
 					<ForwardsArrowIcon />
 				</PageViewerNavbarButton>
-				<PageViewerNavbarButton
-					text={"Reload"}
-					onClick={reloadCurrentView}
-				>
+				<PageViewerNavbarButton text={"Reload"} onClick={reloadCurrentView}>
 					<RefreshIcon />
 				</PageViewerNavbarButton>
 			</div>

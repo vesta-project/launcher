@@ -5,22 +5,24 @@ import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { UnlistenFn, emit, listen } from "@tauri-apps/api/event";
 import { ChildrenProp } from "@ui/props";
-import { lazy, onCleanup, onMount } from "solid-js";
 import {
-	subscribeToBackendNotifications,
-	unsubscribeFromBackendNotifications,
-	cleanupNotifications,
-} from "@utils/notifications";
-import {
+	applyCommonConfigUpdates,
+	onConfigUpdate,
 	subscribeToConfigUpdates,
 	unsubscribeFromConfigUpdates,
-	onConfigUpdate,
-	applyCommonConfigUpdates,
 } from "@utils/config-sync";
+import {
+	cleanupNotifications,
+	subscribeToBackendNotifications,
+	unsubscribeFromBackendNotifications,
+} from "@utils/notifications";
+import { lazy, onCleanup, onMount } from "solid-js";
 // import { initializeFileDropSystem, cleanupFileDropSystem } from "@utils/file-drop";
 
 const HomePage = lazy(() => import("@components/pages/home/home"));
-const StandalonePageViewer = lazy(() => import("@components/page-viewer/standalone-page-viewer"));
+const StandalonePageViewer = lazy(
+	() => import("@components/page-viewer/standalone-page-viewer"),
+);
 
 function App() {
 	/*
@@ -57,24 +59,30 @@ function Root(props: ChildrenProp) {
 			navigate("/fatal", { replace: true });
 		});
 
-		// Setup notification system
-		try {
-			await subscribeToBackendNotifications();
-			const cleaned = await cleanupNotifications();
-			if (cleaned > 0) {
-				console.log(`Cleaned up ${cleaned} expired notifications`);
-			}
-		} catch (error) {
+		// Setup notification system (non-blocking)
+		subscribeToBackendNotifications().catch((error) => {
 			console.error("Failed to initialize notification system:", error);
-		}
+		});
 
-		// Setup config sync system with common handlers
-		try {
-			await subscribeToConfigUpdates();
-			onConfigUpdate(applyCommonConfigUpdates);
-		} catch (error) {
-			console.error("Failed to initialize config sync:", error);
-		}
+		// Cleanup notifications in background (don't block startup)
+		cleanupNotifications()
+			.then((cleaned) => {
+				if (cleaned > 0) {
+					console.log(`Cleaned up ${cleaned} expired notifications`);
+				}
+			})
+			.catch((error) => {
+				console.error("Failed to cleanup notifications:", error);
+			});
+
+		// Setup config sync system (non-blocking)
+		subscribeToConfigUpdates()
+			.then(() => {
+				onConfigUpdate(applyCommonConfigUpdates);
+			})
+			.catch((error) => {
+				console.error("Failed to initialize config sync:", error);
+			});
 
 		// File drop system disabled for now
 		// try {

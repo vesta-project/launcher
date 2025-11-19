@@ -1,12 +1,15 @@
+import BackArrowIcon from "@assets/back-arrow.svg";
+import RefreshIcon from "@assets/refresh.svg";
+import ForwardsArrowIcon from "@assets/right-arrow.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import { miniRouterPaths, miniRouterInvalidPage } from "@components/page-viewer/mini-router-config";
+import {
+	miniRouterInvalidPage,
+	miniRouterPaths,
+} from "@components/page-viewer/mini-router-config";
 import { useSearchParams } from "@solidjs/router";
-import { createSignal, onMount, Show } from "solid-js";
 import { WindowControls } from "@tauri-controls/solid";
 import { ensureOsType } from "@utils/os";
-import BackArrowIcon from "@assets/back-arrow.svg";
-import ForwardsArrowIcon from "@assets/right-arrow.svg";
-import RefreshIcon from "@assets/refresh.svg";
+import { Show, createSignal, onMount } from "solid-js";
 import "./standalone-page-viewer.css";
 
 function StandalonePageViewer() {
@@ -49,7 +52,9 @@ function StandalonePageViewer() {
 					</button>
 					<button
 						class="standalone-page-viewer__nav-button"
-						onClick={() => router()?.navigate(router()?.currentPath.get() || "")}
+						onClick={() =>
+							router()?.navigate(router()?.currentPath.get() || "")
+						}
 						title="Refresh"
 					>
 						<RefreshIcon />

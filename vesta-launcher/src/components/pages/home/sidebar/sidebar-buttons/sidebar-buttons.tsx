@@ -1,15 +1,21 @@
 import SearchIcon from "@assets/search.svg";
 import { Button } from "@kobalte/core/button";
+import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import {
 	Tooltip,
 	TooltipContent,
 	TooltipPlacement,
 	TooltipTrigger,
 } from "@ui/tooltip/tooltip";
+import { type Account, getActiveAccount } from "@utils/auth";
 import clsx from "clsx";
 import {
 	type ComponentProps,
+	Show,
 	children,
+	createResource,
+	createSignal,
 	mergeProps,
 	splitProps,
 } from "solid-js";
@@ -45,14 +51,65 @@ function SidebarButton(props: SidebarButtonProps) {
 	);
 }
 
-interface SidebarProfileButtonProps extends SidebarButtonProps {}
+interface SidebarProfileButtonProps extends SidebarButtonProps {
+	onAccountMenuToggle?: (open: boolean) => void;
+}
 
 function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	const c = children(() => props.children);
-	const [_, others] = splitProps(props, ["children"]);
+	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle"]);
+	const [menuOpen, setMenuOpen] = createSignal(false);
+
+	// Fetch active account
+	const [activeAccount] = createResource<Account | null>(async () => {
+		try {
+			return await getActiveAccount();
+		} catch (e) {
+			console.error("Failed to get active account:", e);
+			return null;
+		}
+	});
+
+	// Fetch player head image
+	const [avatarUrl] = createResource(
+		() => activeAccount()?.uuid,
+		async (uuid) => {
+			if (!uuid) return null;
+			try {
+				const path = await invoke<string>("get_player_head_path", {
+					uuid,
+					forceDownload: false,
+				});
+				return convertFileSrc(path);
+			} catch (e) {
+				console.error("Failed to get player head:", e);
+				return null;
+			}
+		},
+	);
+
+	const toggleMenu = () => {
+		const newState = !menuOpen();
+		setMenuOpen(newState);
+		props.onAccountMenuToggle?.(newState);
+	};
 
 	return (
-		<SidebarButton style={{ "background-color": "red" }} {...others}>
+		<SidebarButton
+			class="sidebar-profile-button"
+			onClick={toggleMenu}
+			style={{
+				"background-image": avatarUrl()
+					? `url(${avatarUrl()})`
+					: "linear-gradient(to bottom, hsl(0deg 0% 50%), hsl(0deg 0% 30%))",
+				"background-size": "cover",
+				"background-position": "center",
+			}}
+			{...others}
+		>
+			<Show when={activeAccount.loading}>
+				<div class="profile-loading-spinner" />
+			</Show>
 			{c()}
 		</SidebarButton>
 	);

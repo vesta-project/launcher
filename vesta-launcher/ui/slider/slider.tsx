@@ -1,7 +1,7 @@
-import { splitProps, type ValidComponent } from "solid-js";
-import * as SliderPrimitive from "@kobalte/core/slider";
 import { type PolymorphicProps } from "@kobalte/core/polymorphic";
+import * as SliderPrimitive from "@kobalte/core/slider";
 import clsx from "clsx";
+import { type ValidComponent, splitProps } from "solid-js";
 import "./slider.css";
 
 // Root slider component
@@ -13,7 +13,7 @@ type SliderTrackProps = SliderPrimitive.SliderTrackProps & {
 };
 
 const SliderTrack = <T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SliderTrackProps>
+	props: PolymorphicProps<T, SliderTrackProps>,
 ) => {
 	const [local, others] = splitProps(props as SliderTrackProps, ["class"]);
 
@@ -31,7 +31,7 @@ type SliderFillProps = SliderPrimitive.SliderFillProps & {
 };
 
 const SliderFill = <T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SliderFillProps>
+	props: PolymorphicProps<T, SliderFillProps>,
 ) => {
 	const [local, others] = splitProps(props as SliderFillProps, ["class"]);
 
@@ -49,7 +49,7 @@ type SliderThumbProps = SliderPrimitive.SliderThumbProps & {
 };
 
 const SliderThumb = <T extends ValidComponent = "span">(
-	props: PolymorphicProps<T, SliderThumbProps>
+	props: PolymorphicProps<T, SliderThumbProps>,
 ) => {
 	const [local, others] = splitProps(props as SliderThumbProps, ["class"]);
 
@@ -69,7 +69,7 @@ type SliderLabelProps = SliderPrimitive.SliderLabelProps & {
 };
 
 const SliderLabel = <T extends ValidComponent = "label">(
-	props: PolymorphicProps<T, SliderLabelProps>
+	props: PolymorphicProps<T, SliderLabelProps>,
 ) => {
 	const [local, others] = splitProps(props as SliderLabelProps, ["class"]);
 
@@ -87,7 +87,7 @@ type SliderValueLabelProps = SliderPrimitive.SliderValueLabelProps & {
 };
 
 const SliderValueLabel = <T extends ValidComponent = "output">(
-	props: PolymorphicProps<T, SliderValueLabelProps>
+	props: PolymorphicProps<T, SliderValueLabelProps>,
 ) => {
 	const [local, others] = splitProps(props as SliderValueLabelProps, ["class"]);
 

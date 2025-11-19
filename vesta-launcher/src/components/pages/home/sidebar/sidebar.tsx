@@ -4,6 +4,7 @@ import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
 import { router } from "@components/page-viewer/page-viewer";
+import { AccountList } from "@components/pages/home/sidebar/account-list/account-list";
 import {
 	SidebarActionButton,
 	SidebarPageButton,
@@ -11,14 +12,21 @@ import {
 } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
 import { invoke } from "@tauri-apps/api/core";
-import { For, Show, createEffect, onCleanup, createResource } from "solid-js";
-import { Transition } from "solid-transition-group";
 import {
 	closeAlert,
+	listNotifications,
 	notifications,
 	showAlert,
-	listNotifications,
 } from "@utils/notifications";
+import {
+	For,
+	Show,
+	createEffect,
+	createResource,
+	createSignal,
+	onCleanup,
+} from "solid-js";
+import { Transition } from "solid-transition-group";
 import { getOsType } from "../../../../utils/os";
 import "./sidebar.css";
 
@@ -31,6 +39,7 @@ interface SidebarProps {
 
 function Sidebar(props: SidebarProps) {
 	let ref: HTMLDivElement | ((el: HTMLDivElement) => void) | undefined;
+	const [accountMenuOpen, setAccountMenuOpen] = createSignal(false);
 
 	const openPage = (path: string) => {
 		router()?.navigate(path);
@@ -53,7 +62,7 @@ function Sidebar(props: SidebarProps) {
 						(n.progress === -1 || (n.progress >= 0 && n.progress < 100)),
 				);
 				return { unreadCount, hasActiveTask };
-			} catch (error) {
+			} catch (_error) {
 				// Silently handle errors (table might not exist yet during first startup)
 				return { unreadCount: 0, hasActiveTask: false };
 			}
@@ -84,7 +93,10 @@ function Sidebar(props: SidebarProps) {
 		>
 			<div class={"sidebar__root"}>
 				<div class={"sidebar__section"}>
-					<SidebarProfileButton tooltip_text={"Profile"} />
+					<SidebarProfileButton
+						tooltip_text={"Profile"}
+						onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
+					/>
 					<div class={"sidebar__section actions"}>
 						<SidebarActionButton
 							tooltip_text={"New"}
@@ -103,12 +115,6 @@ function Sidebar(props: SidebarProps) {
 							tooltip_text={"Instance Name"}
 							onClick={() => showAlert("Info", "SomeTitle", "SomeDescription")}
 						/>
-						<SidebarActionButton
-							tooltip_text={"Test Notifications"}
-							onClick={() => openPage("/notification-test")}
-						>
-							<span style={{ "font-size": "20px" }}>🔔</span>
-						</SidebarActionButton>
 					</div>
 				</div>
 				<div class={"sidebar__section"}>
@@ -119,10 +125,7 @@ function Sidebar(props: SidebarProps) {
 						<div style={{ position: "relative", display: "flex" }}>
 							<BellIcon />
 							{notifData().hasActiveTask && (
-								<div
-									class="notification-spinner"
-									title="Task in progress"
-								/>
+								<div class="notification-spinner" title="Task in progress" />
 							)}
 							{notifData().unreadCount > 0 && (
 								<div
@@ -143,6 +146,16 @@ function Sidebar(props: SidebarProps) {
 				</div>
 			</div>
 			<SidebarNotifications open={props.open} openChanged={props.openChanged} />
+
+			{/* Account List Menu */}
+			<AccountList
+				open={accountMenuOpen()}
+				onClose={() => setAccountMenuOpen(false)}
+				onAddAccount={() => {
+					setAccountMenuOpen(false);
+					openPage("/login");
+				}}
+			/>
 		</div>
 	);
 }

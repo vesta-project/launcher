@@ -22,3 +22,12 @@ root.ondragover = (e) => {
 
 initTheme();
 render(() => <App />, root);
+
+// Hide loader after app renders
+setTimeout(() => {
+	const loader = document.getElementById("app-loader");
+	if (loader) {
+		loader.classList.add("hidden");
+		setTimeout(() => loader.remove(), 300);
+	}
+}, 100);

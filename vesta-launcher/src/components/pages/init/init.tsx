@@ -5,9 +5,9 @@ import {
 	InitLoginPage,
 } from "@components/pages/init/init-pages/init-pages";
 import { useNavigate } from "@solidjs/router";
+import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Match, Switch, createSignal, onCleanup, onMount } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
 import { getOsType } from "../../../utils/os";
 import "./init.css";
 
@@ -15,13 +15,21 @@ const os = getOsType() ?? "windows";
 
 function InitPage() {
 	const navigate = useNavigate();
-	const [time, setTime] = createSignal(0);
+	const [_time, _setTime] = createSignal(0);
 	const [initStep, setInitStep] = createSignal(0);
 	const [isCheckingAccount, setIsCheckingAccount] = createSignal(true);
 
 	onMount(async () => {
+		// Quick account check with timeout to prevent hanging
+		const timeoutPromise = new Promise((_, reject) =>
+			setTimeout(() => reject(new Error("Account check timeout")), 1000),
+		);
+
 		try {
-			const account = await invoke("get_active_account");
+			const account = await Promise.race([
+				invoke("get_active_account"),
+				timeoutPromise,
+			]);
 			if (account) {
 				navigate("/home", { replace: true });
 				return;
@@ -61,16 +69,29 @@ function InitPage() {
 			<TitleBar os={os} class={"animate--hue"} />
 			<div id={"init-page__wrapper"}>
 				{isCheckingAccount() ? (
-					<div style={{ display: "flex", "justify-content": "center", "align-items": "center", height: "100%" }}>
+					<div
+						style={{
+							display: "flex",
+							"justify-content": "center",
+							"align-items": "center",
+							height: "100%",
+						}}
+					>
 						<p>Loading...</p>
 					</div>
 				) : (
 					<Switch>
 						<Match when={initStep() == 0}>
-							<InitFirstPage initStep={initStep()} changeInitStep={setInitStep} />
+							<InitFirstPage
+								initStep={initStep()}
+								changeInitStep={setInitStep}
+							/>
 						</Match>
 						<Match when={initStep() == 1}>
-							<InitLoginPage initStep={initStep()} changeInitStep={setInitStep} />
+							<InitLoginPage
+								initStep={initStep()}
+								changeInitStep={setInitStep}
+							/>
 						</Match>
 						<Match when={initStep() == 2}>
 							<InitFinishedPage

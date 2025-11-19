@@ -1,7 +1,7 @@
-import { showToast, tryRemoveToast } from "@ui/toast/toast";
-import { JSX, createSignal } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { showToast, tryRemoveToast } from "@ui/toast/toast";
+import { JSX, createSignal } from "solid-js";
 
 const [notifications, setNotifications] = createSignal<Notification[]>([]);
 
@@ -129,7 +129,9 @@ async function deleteNotification(id: number): Promise<void> {
 
 async function cleanupNotifications(): Promise<number> {
 	// Get retention days from config, default to 30
-	const config = await invoke<{ notification_retention_days: number }>("get_config");
+	const config = await invoke<{ notification_retention_days: number }>(
+		"get_config",
+	);
 	const retentionDays = config?.notification_retention_days || 30;
 	return await invoke<number>("cleanup_notifications", { retentionDays });
 }
@@ -138,7 +140,8 @@ async function cleanupNotifications(): Promise<number> {
 let unsubscribeFns: Array<() => void> = [];
 
 // Signal to trigger refetch of persistent notifications
-const [persistentNotificationTrigger, setPersistentNotificationTrigger] = createSignal(0);
+const [persistentNotificationTrigger, setPersistentNotificationTrigger] =
+	createSignal(0);
 
 function triggerPersistentNotificationRefetch() {
 	setPersistentNotificationTrigger((prev) => prev + 1);
@@ -150,7 +153,7 @@ async function subscribeToBackendNotifications() {
 		"core://notification",
 		(event) => {
 			const notif = event.payload;
-			
+
 			// Always show toast for immediate visibility
 			showAlert(
 				severityToAlertType(notif.severity),
@@ -161,7 +164,7 @@ async function subscribeToBackendNotifications() {
 				notif.current_step,
 				notif.total_steps,
 			);
-			
+
 			// If persistent, also trigger refetch to update sidebar
 			if (notif.persist) {
 				triggerPersistentNotificationRefetch();
@@ -191,7 +194,7 @@ async function subscribeToBackendNotifications() {
 			}
 		},
 	);
-	
+
 	// Listen for notification updates (read/delete)
 	const unsubUpdated = await listen<{ id_or_client_key: string }>(
 		"core://notification-updated",
