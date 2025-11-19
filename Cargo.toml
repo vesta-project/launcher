@@ -1,0 +1,8 @@
+[workspace]
+resolver = "2"
+members = [
+    "vesta-launcher/src-tauri",
+    "crates/piston-lib",
+    "rust-playground",
+    "crates/piston-macros",
+]

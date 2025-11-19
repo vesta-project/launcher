@@ -1,0 +1,19 @@
+{
+	"extends": ["stylelint-config-standard"],
+	"plugins": ["stylelint-selector-bem-pattern"],
+	"rules": {
+		"unit-allowed-list": ["%", "deg", "px", "rem", "ms", "fr", "vh", "vw"],
+		"function-disallowed-list": ["rgb", "hwb", "lch"],
+		"plugin/selector-bem-pattern": {
+			"componentName": "[A-Z]+",
+			"componentSelectors": {
+				"initial": "^\\.{componentName}(?:-[a-z]+)?$",
+				"combined": "^\\.combined-{componentName}-[a-z]+$"
+			},
+			"utilitySelectors": "^\\.util-[a-z]+$"
+		},
+		"custom-property-pattern": null,
+		"selector-class-pattern": null,
+		"alpha-value-notation": ["percentage", { "exceptProperties": ["opacity"] }]
+	}
+}

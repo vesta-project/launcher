@@ -1,0 +1,41 @@
+.tooltip__content {
+  --kb-tooltip-content-transform-origin: top center;
+
+  transform-origin: var(--kb-tooltip-content-transform-origin);
+  animation: contentHide 150ms ease-in forwards;
+  font-size: var(--font-xsmall);
+  color: hsl(var(--color__primary-hue) 5% 85%);
+  background-color: hsl(var(--color__primary-hue) 20% 20%);
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 2px solid hsl(var(--color__primary-hue) 20% 60% / 5%);
+  z-index: 10;
+}
+
+.tooltip__content[data-expanded] {
+  animation: contentShow 50ms ease-out;
+}
+
+@keyframes contentShow {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes contentHide {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}

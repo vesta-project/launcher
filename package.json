@@ -1,0 +1,25 @@
+{
+	"name": "vestaproject",
+	"module": "index.ts",
+	"type": "module",
+	"devDependencies": {
+		"@biomejs/biome": "1.7.3",
+		"@types/bun": "latest",
+		"@types/node": "^24.10.1"
+	},
+	"peerDependencies": {
+		"typescript": "^5.4.5"
+	},
+	"scripts": {
+		"vesta:dev": "cd vesta-launcher && bun run tauri dev",
+		"vesta:build": "cd vesta-launcher && bun run tauri build",
+		"playground:dev": "cd ui-playground && bun run dev",
+		"install": "cd vesta-launcher && bun install",
+		"i": "cd vesta-launcher && bun i",
+		"cmd": "cd vesta-launcher &&"
+	},
+	"dependencies": {
+		"@tauri-apps/plugin-os": "^2.3.2",
+		"caniuse-lite": "^1.0.30001755"
+	}
+}

@@ -1,0 +1,167 @@
+.sidebar__notifications-root {
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: auto 1fr auto;
+  grid-gap: 20px;
+  padding: 16px;
+  max-width: 600px;
+  height: 100%;
+  justify-content: space-between;
+  color: contrast(white);
+  overflow: hidden;
+
+  & svg {
+    fill: hsl(var(--color__primary-hue) 10% 85%);
+  }
+
+
+  transition: width 300ms, visibility 200ms, opacity 200ms, overflow 200ms;
+  transition-timing-function: ease-in-out;
+  width: 0;
+  opacity: 0;
+  visibility: visible;
+
+  &:is(.sidebar__notifications-root--open) {
+    transition: width 250ms, visibility 250ms, opacity 250ms, overflow 250ms;
+    width: clamp(400px, 35vw, max(600px, 100vw));
+    opacity: 1;
+    visibility: visible;
+    overflow: unset;
+  }
+
+  & h1 {
+
+  }
+
+  & p {
+
+  }
+}
+
+.sidebar__notifications__wrapper {
+  display: grid;
+  grid-template-columns: 100%;
+  grid-template-rows: repeat(auto-fill, 100px);
+  grid-gap: 20px;
+  overflow: visible hidden;
+  padding: 16px 16px 16px 8px;
+
+  --sb-track-color: transparent;
+  --sb-size: 8px;
+
+  &:hover {
+    overflow-y: scroll;
+    padding-right: 8px;
+  }
+}
+
+.sidebar__notifications__container {
+
+}
+
+.sidebar__notifications-titlebar {
+  display: flex;
+  justify-content: space-between;
+}
+
+
+/* An individual notification */
+.sidebar__notification {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: start;
+  gap: 8px;
+  border: 1px solid hsl(var(--color__primary-hue) 5% 50% 80%);
+  border-radius: 6px;
+  padding: 12px;
+  background-color: hsl(var(--color__primary-hue) 15% 60% / 20%);
+  box-shadow: 0 10px 15px -3px hsl(0deg 0% 0% / 10%), 0 4px 6px -4px hsl(0deg 0% 0% / 10%);
+  width: 100%;
+  height: 100px;
+}
+
+.sidebar__notification__close-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 3px;
+  margin-left: auto;
+  color: hsl(240deg 5% 34%);
+  cursor: pointer;
+  border-radius: 3px;
+  border: transparent solid 1px;
+  visibility: hidden;
+
+  & svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  &:active {
+    transform: scale(90%);
+    transition-duration: 75ms;
+  }
+
+  &:hover {
+    border: hsl(200deg 92% 35% / 10%) solid 1px;
+    filter: brightness(200%);
+  }
+
+  &:hover svg {
+    transform: scale(105%);
+    transition-duration: 75ms;
+  }
+}
+
+.sidebar__notification__action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 3px 6px;
+  color: hsl(240deg 5% 34%);
+  cursor: pointer;
+  border-radius: 3px;
+  border: transparent solid 1px;
+  background: hsl(var(--color__primary-hue) 15% 60% / 30%);
+  visibility: hidden;
+  font-size: 14px;
+
+  &:active {
+    transform: scale(90%);
+    transition-duration: 75ms;
+  }
+
+  &:hover {
+    border: hsl(200deg 92% 35% / 10%) solid 1px;
+    filter: brightness(150%);
+  }
+}
+
+.sidebar__notification:hover .sidebar__notification__close-btn,
+.sidebar__notification:hover .sidebar__notification__action-btn {
+  visibility: visible;
+  box-shadow: 0 10px 15px -3px hsl(0deg 0% 10% / 10%), 0 4px 6px -4px hsl(0deg 0% 10% / 10%);
+}
+
+.sidebar__notification__progress {
+  width: 100%;
+  margin-top: 8px;
+}
+.sidebar__notification__progress .progress__track {
+  height: 4px;
+  border-radius: 2px;
+  background: #333;
+}
+.sidebar__notification__progress .progress__fill {
+  height: 100%;
+  transition: width 0.3s;
+}
+.sidebar__notification__progress.progress--indeterminate .progress__fill,
+.sidebar__notification__progress .progress__fill--indeterminate {
+  background: linear-gradient(90deg, #333 0%, #777 50%, #333 100%);
+  background-size: 200% 100%;
+  animation: progress-pulse 1.4s linear infinite;
+}

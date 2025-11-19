@@ -1,0 +1,11 @@
+.page-root {
+  display: flex;
+  align-items: center;
+  flex-flow: column;
+  padding: 20px;
+}
+
+.page-wrapper {
+  width: fit-content;
+  padding-top: 20px;
+}

@@ -1,0 +1,18 @@
+/* Storybook styles for UI playground */
+/* This file is imported by ui-playground for consistent styling */
+
+:root {
+  --primary-color: #0b5cff;
+  --background-color: #ffffff;
+  --text-color: #000000;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+*, *::before, *::after {
+  box-sizing: inherit;
+}

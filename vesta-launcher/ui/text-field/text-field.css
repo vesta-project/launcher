@@ -1,0 +1,118 @@
+.text-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.text-field__input,
+.text-field__text-area {
+  display: block;
+  width: 100%;
+  border: 1px solid hsl(var(--color__primary-hue) 11% 25% / 30%);
+  border-radius: 6px;
+  line-height: 1.4;
+  color: hsl(var(--color__primary-hue) 5% 90%);
+  background-color: hsl(var(--color__primary-hue) 10% 12% / 10%);
+  padding: 0.5rem 0.75rem;
+  transition: box-shadow 150ms ease, border-color 150ms ease, background-color 150ms ease;
+  font-size: 14px;
+}
+
+.text-field__input::placeholder,
+.text-field__text-area::placeholder {
+  color: hsl(var(--color__primary-hue) 5% 70%);
+}
+
+.text-field__input:focus,
+.text-field__text-area:focus {
+  outline: none;
+  border-color: hsl(var(--color__primary-hue) 58% 55% / 70%);
+  box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 58% 55% / 10%);
+}
+
+.text-field__input[disabled],
+.text-field__text-area[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: hsl(var(--color__primary-hue) 10% 12% / 8%);
+}
+
+/* Indicate error state with clear border and accessible focus */
+.text-field__input[data-invalid],
+.text-field__text-area[data-invalid] {
+  border-color: hsl(0deg 80% 55%);
+}
+
+.text-field__input[data-invalid]:focus,
+.text-field__text-area[data-invalid]:focus {
+  box-shadow: 0 0 0 3px hsl(0deg 80% 55% / 12%);
+}
+
+.text-field__label {
+  font-weight: 600;
+  font-size: 13px;
+  color: hsl(var(--color__primary-hue) 5% 92%);
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.text-field__label[data-required]::after {
+  content: "*";
+  color: hsl(0deg 80% 55%);
+  margin-left: 4px;
+  font-weight: 700;
+}
+
+.text-field__description,
+.text-field__error-message {
+  font-size: 12px;
+  color: hsl(var(--color__primary-hue) 5% 75%);
+}
+
+.text-field__error-message {
+  color: hsl(0deg 80% 55%);
+}
+
+/* Helper sizes */
+.text-field--sm .text-field__input,
+.text-field--sm .text-field__text-area {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.text-field--lg .text-field__input,
+.text-field--lg .text-field__text-area {
+  padding: 12px 14px;
+  font-size: 16px;
+}
+
+/* Compact input with an icon */
+.text-field__input-icon-wrapper {
+  position: relative;
+}
+.text-field__input-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  opacity: 0.8;
+}
+.text-field__input-with-icon {
+  padding-left: 36px;
+}
+
+/* Read-only style */
+.text-field__input[readonly],
+.text-field__text-area[readonly] {
+  background-color: hsl(var(--color__primary-hue) 10% 14% / 6%);
+  border-color: hsl(var(--color__primary-hue) 6% 20% / 20%);
+}
+
+/* Visually hide the focus but keep accessible outline for keyboard navigation */
+.text-field__input:focus:not(:focus-visible),
+.text-field__text-area:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}

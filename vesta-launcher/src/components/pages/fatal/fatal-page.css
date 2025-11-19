@@ -1,0 +1,22 @@
+#fatal-page__wrapper {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  background-color: hsl(var(--color__primary-hue) 5% 40% / 40%);
+  border: 2px solid hsl(var(--color__primary-hue) 0% 10%);
+  padding: 24px;
+}
+
+#fatal-page__root {
+  display: grid;
+  height: 100%;
+  width: 100%;
+  flex-flow: column;
+  grid-template-columns: 1fr 75vw 1fr;
+  grid-template-rows: 1fr 75vh 1fr;
+  text-align: center;
+}

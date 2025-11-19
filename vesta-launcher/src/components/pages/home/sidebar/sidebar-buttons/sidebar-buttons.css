@@ -1,0 +1,65 @@
+.sidebar-button {
+  height: 40px;
+  width: 40px;
+  border-radius: 3px;
+
+  &:hover {
+    box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+
+    & > svg {
+      transform: scale(108%);
+    }
+  }
+
+  &:active {
+    transform: scale(95%);
+    transition-duration: 50ms;
+  }
+}
+
+.sidebar-action-button {
+  padding: 10px;
+  background: linear-gradient(
+    to bottom,
+    hsl(0deg 0% 71% / 1%),
+    hsl(0deg 0% 40% / 1%)
+  );
+  transition-property: background-color;
+  transition-duration: 20ms;
+  transition-timing-function: linear;
+
+  & svg path {
+    transition-property: fill;
+    transition-duration: 20ms;
+    transition-timing-function: linear;
+    fill: rgb(204 204 204 / 95%);
+  }
+
+  &:hover {
+    & svg path {
+      fill: white;
+    }
+
+    background: linear-gradient(
+      -45deg,
+      hsl(0deg 0% 71% / 9%),
+      hsl(0deg 0% 40% / 9%)
+    );
+  }
+}
+
+.button-notify-red {
+  position: relative;
+
+  &::after {
+    content: "";
+    display: block;
+    width: 14px;
+    height: 14px;
+    background-color: #cd1616;
+    border-radius: 50%;
+    position: absolute;
+    top: -3px;
+    right: -3px;
+  }
+}

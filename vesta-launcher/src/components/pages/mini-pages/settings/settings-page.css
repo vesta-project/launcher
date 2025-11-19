@@ -1,0 +1,56 @@
+.settings-page {
+	padding: 2rem;
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+.settings-page h1 {
+	font-size: var(--font-large);
+	margin-bottom: 1.5rem;
+	color: hsl(var(--color__primary-hue) 60% 90%);
+}
+
+.settings-section {
+	margin-bottom: 2rem;
+	padding: 1.5rem;
+	background-color: hsl(var(--color__primary-hue) 10% 15% / 0.3);
+	border-radius: 8px;
+	border: 1px solid hsl(var(--color__primary-hue) 20% 30% / 0.4);
+}
+
+.settings-section h2 {
+	font-size: var(--font-medium);
+	margin-bottom: 1rem;
+	color: hsl(var(--color__primary-hue) 60% 85%);
+}
+
+.settings-row {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 0.5rem 0;
+}
+
+.settings-switch {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+}
+
+.settings-description {
+	margin-top: 0.5rem;
+	font-size: var(--font-xsmall);
+	color: hsl(var(--color__primary-hue) 10% 70%);
+	font-style: italic;
+}
+
+.slider__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 0.5rem;
+}
+
+.slider--hue {
+    width: 100%;
+}

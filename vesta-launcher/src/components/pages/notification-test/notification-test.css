@@ -1,0 +1,60 @@
+.notification-test-page {
+  padding: 40px;
+  max-width: 1200px;
+  margin: 0 auto;
+  color: hsl(var(--color__primary-hue) 5% 90%);
+}
+
+.notification-test-page h1 {
+  font-size: 32px;
+  margin-bottom: 32px;
+  color: hsl(var(--color__primary-hue) 5% 95%);
+}
+
+.test-section {
+  margin-bottom: 32px;
+  padding: 24px;
+  background: hsl(var(--color__primary-hue) 15% 15%);
+  border-radius: 8px;
+  border: 1px solid hsl(var(--color__primary-hue) 20% 25%);
+}
+
+.test-section h2 {
+  font-size: 20px;
+  margin-bottom: 16px;
+  color: hsl(var(--color__primary-hue) 5% 85%);
+}
+
+.button-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.info-box {
+  padding: 24px;
+  background: hsl(210 15% 18%);
+  border-radius: 8px;
+  border: 1px solid hsl(210 20% 30%);
+  border-left: 4px solid hsl(210 70% 50%);
+}
+
+.info-box h3 {
+  font-size: 18px;
+  margin-bottom: 12px;
+  color: hsl(210 70% 60%);
+}
+
+.info-box ul {
+  margin: 0;
+  padding-left: 20px;
+  line-height: 1.8;
+}
+
+.info-box li {
+  color: hsl(var(--color__primary-hue) 5% 80%);
+}
+
+.info-box strong {
+  color: hsl(var(--color__primary-hue) 5% 90%);
+}

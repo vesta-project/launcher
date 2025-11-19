@@ -1,0 +1,29 @@
+{
+	"productName": "Vesta Launcher",
+	"version": "0.0.0-alpha.1",
+	"identifier": "net.vesta.launcher",
+	"build": {
+		"beforeDevCommand": "bun run dev",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "bun run build",
+		"frontendDist": "../dist"
+	},
+	"app": {
+		"macOSPrivateApi": true,
+		"security": {
+			"csp": null
+		}
+	},
+	"bundle": {
+		"shortDescription": "Vesta Launcher",
+		"active": true,
+		"targets": "all",
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		]
+	}
+}

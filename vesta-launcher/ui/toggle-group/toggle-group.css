@@ -1,0 +1,34 @@
+.toggle-group {
+    width: fit-content;
+    display: flex;
+    border-radius: 6px;
+    background-color: hsl(var(--color__primary-hue) 100% var(--color__br-20));
+    overflow: hidden;
+}
+
+.toggle-group[data-orientation="vertical"] {
+    flex-direction: column;
+}
+
+.toggle-group__item {
+    padding: .5rem;
+    appearance: none;
+    user-select: none;
+    outline: none;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition-property: background-color, color;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+}
+
+
+.toggle-group__item:hover, .toggle-group__item:focus-visible {
+    background-color: hsl(var(--color__primary-hue) 40% 39%);
+}
+
+.toggle-group__item[data-pressed] {
+    background-color: hsl(var(--color__primary-hue) 98% 39%);
+    color: white;
+}

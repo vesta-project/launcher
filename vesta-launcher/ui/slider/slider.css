@@ -1,0 +1,101 @@
+.slider {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	width: 100%;
+	user-select: none;
+	touch-action: none;
+}
+
+.slider__label {
+	font-size: 0.875rem;
+	font-weight: 500;
+	line-height: 1.25;
+	color: hsl(var(--color__primary-hue) 60% 90%);
+}
+
+.slider__value-label {
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: hsl(var(--color__primary-hue) 60% 85%);
+	text-align: right;
+}
+
+.slider__track {
+	position: relative;
+	height: 8px;
+	flex-grow: 1;
+	border-radius: 9999px;
+	background-color: hsl(var(--color__primary-hue) 20% 30%);
+	cursor: pointer;
+    
+}
+
+.slider__track[data-disabled] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.slider__fill {
+	position: absolute;
+	height: 100%;
+	border-radius: 9999px;
+	background-color: hsl(var(--color__primary-hue) 60% 45%);
+	transition: background-color 150ms ease-in-out;
+	pointer-events: none;
+}
+
+.slider__thumb {
+	position: absolute;
+	top: -50%;
+	display: block;
+	width: 20px;
+	height: 20px;
+	background-color: #fff;
+	border-radius: 9999px;
+	border: 2px solid hsl(var(--color__primary-hue) 60% 45%);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	cursor: grab;
+	transition: border-color 150ms ease-in-out, box-shadow 150ms ease-in-out;
+}
+
+.slider__thumb:hover {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+.slider__thumb:active {
+	cursor: grabbing;
+}
+
+.slider__thumb[data-disabled] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.slider__thumb:focus-visible {
+	outline: none;
+	box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 60% 45% / 0.3);
+}
+
+/* Hue-specific styling for theme preview */
+.slider--hue .slider__track {
+	background: linear-gradient(
+		to right,
+		hsl(0 60% 45%),
+		hsl(60 60% 45%),
+		hsl(120 60% 45%),
+		hsl(180 60% 45%),
+		hsl(240 60% 45%),
+		hsl(300 60% 45%),
+		hsl(360 60% 45%)
+	);
+}
+
+.slider--hue .slider__fill {
+	background: transparent;
+}
+
+.slider--hue .slider__thumb {
+	border-color: hsl(var(--preview-hue, var(--color__primary-hue)) 60% 45%);
+	background-color: hsl(var(--preview-hue, var(--color__primary-hue)) 80% 70%);
+}

@@ -1,0 +1,131 @@
+:root {
+  /* Use the system font stack for consistent cross-platform rendering */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'Segoe UI Emoji', 'Segoe UI Symbol', Inter, Avenir, Helvetica, sans-serif;
+  font-size: 100%;
+  /* Fallback for text color — modern browsers may support color-contrast, but provide a reliable fallback */
+  --text-color: #e8eef0; /* light fallback for dark backgrounds */
+  color: var(--text-color);
+
+  --background-opacity: 0.05;
+  --background-color: linear-gradient(
+          var(--background-angle),
+          hsl(245deg 100% 7% / var(--background-opacity)) 0%,
+          hsl(var(--color__primary-hue) 81% 40% / var(--background-opacity)) 35%,
+          hsl(var(--color__secondary-hue) 100% 50% / var(--background-opacity)) 100%
+  );
+
+  font-synthesis: none;
+  text-rendering: optimizelegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-size-adjust: 100%;
+
+  --kb-menu-content-transform-origin: top center;
+  --color__secondary-hue: calc(var(--color__primary-hue) - 180);
+  --color__destructive-hue: 0;
+  --color__green-hue: 120;
+  --color__warning-hue: 40;
+  --color__sat-20: 20%;
+  --color__sat-50: 50%;
+  --color__sat-70: 70%;
+  --color__br-12: 12%;
+  --color__br-20: 20%;
+  --color__br-50: 50%;
+  --color__br-70: 70%;
+  --font-xxsmall: 0.75rem;
+  --font-xsmall: 0.85rem;
+  --font-small: 1rem;
+  --font-medium: 1.25rem;
+  --font-large: 2rem;
+  --font-xlarge: 4rem;
+  --font-min-size: 12px; /* minimum readable font-size */
+  --sb-track-color: hsl(var(--color__secondary-hue) 20% 30% / 20%);
+  --sb-thumb-color: hsl(var(--color__primary-hue) 0% var(--color__br-12));
+  --sb-size: 14px;
+
+  /* Severity hues (used for progress and borders) */
+  --color__error-hue: 0;
+  --color__warning-hue: 40;
+  --color__success-hue: 120;
+  --color__info-hue: var(--color__primary-hue);
+}
+
+#app {
+  height: 100%;
+  width: 100%;
+  background: var(--background-color);
+  min-width: 450px;
+  overflow: hidden;
+}
+
+body {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Respect user preferences for light color scheme */
+@media (prefers-color-scheme: light) {
+  :root {
+    --text-color: #111827; /* near-black for strong contrast on light backgrounds */
+    --sb-track-color: hsl(var(--color__secondary-hue) 20% 90% / 28%);
+    --sb-thumb-color: hsl(var(--color__primary-hue) 70% 40%);
+  }
+}
+
+/* Respect user preference for higher contrast */
+@media (prefers-contrast: more) {
+  :root {
+    --text-color: #0b0b0b;
+    font-weight: 500;
+  }
+  .sidebar__notification {
+    border-width: 1.5px;
+  }
+}
+
+h1 {
+  font-size: var(--font-medium);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+select, textarea, input, button {
+  font: inherit;
+}
+
+*::-webkit-scrollbar {
+  width: var(--sb-size);
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--sb-track-color);
+  border-radius: 3px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--sb-thumb-color);
+  border-radius: 3px;
+  border: 1px solid #232e33;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-color: var(--sb-thumb-color) var(--sb-track-color);
+  }
+}
+
+@property --color__primary-hue {
+  syntax: '<integer>';
+  initial-value: 120;
+  inherits: true;
+}
+
+@property --background-angle {
+  syntax: '<angle>';
+  initial-value: 90deg;
+  inherits: true;
+}

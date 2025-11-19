@@ -1,0 +1,31 @@
+/* Applied to elements with data-drop-zone attribute */
+[data-drop-zone] {
+	transition: all 150ms ease-in-out;
+}
+
+/* Applied when dragging over the zone */
+.drop-zone--active {
+	outline: 2px dashed hsl(var(--color__primary-hue) 60% 50%) !important;
+	outline-offset: -2px !important;
+	background-color: hsl(var(--color__primary-hue) 60% 50% / 0.05) !important;
+	position: relative;
+}
+
+.drop-zone--active::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	background-color: hsl(var(--color__primary-hue) 60% 50% / 0.1);
+	pointer-events: none;
+	animation: pulse 1s ease-in-out infinite;
+	z-index: 1;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
