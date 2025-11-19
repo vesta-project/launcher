@@ -25,6 +25,7 @@ import {
 	createResource,
 	createSignal,
 	onCleanup,
+	onMount,
 } from "solid-js";
 import { Transition } from "solid-transition-group";
 import { getOsType } from "../../../../utils/os";
@@ -40,6 +41,12 @@ interface SidebarProps {
 function Sidebar(props: SidebarProps) {
 	let ref: HTMLDivElement | ((el: HTMLDivElement) => void) | undefined;
 	const [accountMenuOpen, setAccountMenuOpen] = createSignal(false);
+	const [ready, setReady] = createSignal(false);
+
+	onMount(() => {
+		// Defer notification check to avoid blocking initial render
+		setTimeout(() => setReady(true), 1000);
+	});
 
 	const openPage = (path: string) => {
 		router()?.navigate(path);
@@ -52,7 +59,9 @@ function Sidebar(props: SidebarProps) {
 
 	// Check for unread and active notifications
 	const [notifData] = createResource(
-		async () => {
+		ready,
+		async (isReady) => {
+			if (!isReady) return { unreadCount: 0, hasActiveTask: false };
 			try {
 				const persistent = await listNotifications({ persist: true });
 				const unreadCount = persistent.filter((n) => !n.read).length;
@@ -147,15 +156,17 @@ function Sidebar(props: SidebarProps) {
 			</div>
 			<SidebarNotifications open={props.open} openChanged={props.openChanged} />
 
-			{/* Account List Menu */}
-			<AccountList
-				open={accountMenuOpen()}
-				onClose={() => setAccountMenuOpen(false)}
-				onAddAccount={() => {
-					setAccountMenuOpen(false);
-					openPage("/login");
-				}}
-			/>
+			{/* Account List Menu - Lazy load */}
+			<Show when={accountMenuOpen()}>
+				<AccountList
+					open={accountMenuOpen()}
+					onClose={() => setAccountMenuOpen(false)}
+					onAddAccount={() => {
+						setAccountMenuOpen(false);
+						openPage("/login");
+					}}
+				/>
+			</Show>
 		</div>
 	);
 }

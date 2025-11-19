@@ -19,12 +19,10 @@ use crate::utils::db_manager::get_data_db;
 /// # Errors
 /// 
 /// Returns error if database cannot be created or migrations fail
-pub fn initialize_data_db() -> Result<SQLiteDB> {
-    let db = get_data_db()?;
-
+pub fn init_data_db(db: &SQLiteDB) -> Result<()> {
     // Run DATA migrations only
     let migrations = get_data_migrations();
     db.run_migrations(migrations, env!("CARGO_PKG_VERSION"))?;
 
-    Ok(db)
+    Ok(())
 }

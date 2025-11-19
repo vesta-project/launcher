@@ -1,15 +1,15 @@
 use tauri::Manager;
 use winver::WindowsVersion;
-use crate::utils::config::initialize_config_db;
-use crate::utils::data::initialize_data_db;
+use crate::utils::db_manager::{get_config_db, get_data_db};
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize databases in background thread to not block window creation
+    // This triggers the lazy initialization in db_manager
     tauri::async_runtime::spawn(async {
-        if let Err(e) = initialize_config_db() {
+        if let Err(e) = get_config_db() {
             eprintln!("Failed to initialize config database: {}", e);
         }
-        if let Err(e) = initialize_data_db() {
+        if let Err(e) = get_data_db() {
             eprintln!("Failed to initialize data database: {}", e);
         }
     });

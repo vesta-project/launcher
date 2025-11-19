@@ -22,9 +22,16 @@ interface SidebarNotificationProps {
 
 // TODO: Make sidebar resizeable
 function SidebarNotifications(props: SidebarNotificationProps) {
+	const [ready, setReady] = createSignal(false);
+
+	onMount(() => {
+		// Defer fetching notifications to avoid blocking initial render
+		setTimeout(() => setReady(true), 1000);
+	});
+
 	// Load persistent notifications from backend - refetch when trigger changes
 	const [persistentNotifs] = createResource(
-		persistentNotificationTrigger,
+		() => (ready() ? persistentNotificationTrigger() : false),
 		async () => {
 			try {
 				return await listNotifications({ persist: true });
@@ -63,7 +70,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 			<Show
 				when={
 					notifications().length > 0 ||
-					(persistentNotifs() && persistentNotifs()?.length > 0)
+					(persistentNotifs() && (persistentNotifs()?.length ?? 0) > 0)
 				}
 				fallback={<div>Wooo! No Notifications!</div>}
 			>

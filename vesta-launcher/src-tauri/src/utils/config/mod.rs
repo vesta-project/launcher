@@ -175,9 +175,7 @@ impl AppConfig {
 /// # Errors
 /// 
 /// Returns error if database cannot be created or migrations fail
-pub fn initialize_config_db() -> Result<SQLiteDB, anyhow::Error> {
-    let db = get_config_db()?;
-
+pub fn init_config_db(db: &SQLiteDB) -> Result<(), anyhow::Error> {
     // Run CONFIG migrations only
     let migrations = get_config_migrations();
     db.run_migrations(migrations, env!("CARGO_PKG_VERSION"))?;
@@ -189,7 +187,7 @@ pub fn initialize_config_db() -> Result<SQLiteDB, anyhow::Error> {
         []
     )?;
 
-    Ok(db)
+    Ok(())
 }
 
 /// Get the current application configuration

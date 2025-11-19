@@ -51,9 +51,20 @@
 //! ```
 
 use std::path::PathBuf;
+use std::sync::{Mutex, Once};
 use anyhow::Result;
 use directories::BaseDirs;
 use crate::utils::sqlite::{SQLiteDB, VersionVerification};
+use crate::utils::config::init_config_db;
+use crate::utils::data::init_data_db;
+
+/// One-time initialization guards for databases
+static CONFIG_DB_INIT: Once = Once::new();
+static DATA_DB_INIT: Once = Once::new();
+
+/// Store initialization results
+static CONFIG_INIT_RESULT: Mutex<Option<Result<(), String>>> = Mutex::new(None);
+static DATA_INIT_RESULT: Mutex<Option<Result<(), String>>> = Mutex::new(None);
 
 /// Get the application's config directory (~/.VestaLauncher or %APPDATA%/.VestaLauncher)
 pub fn get_app_config_dir() -> Result<PathBuf> {
@@ -69,36 +80,71 @@ pub fn get_app_config_dir() -> Result<PathBuf> {
     Ok(config_dir)
 }
 
+/// Internal helper to create a raw DB connection without initialization
+fn create_raw_db(name: &str) -> Result<SQLiteDB> {
+    let path = get_app_config_dir()?;
+    SQLiteDB::new(
+        path,
+        name.into(),
+        env!("CARGO_PKG_VERSION").into(),
+        VersionVerification::LessOrEqual
+    )
+}
+
 /// Get the **config database** connection (app_config.db)
 /// 
 /// This database contains application settings and preferences.
 /// 
-/// # Note
-/// This does NOT run migrations. Use `initialize_config_db()` for full setup.
+/// **Auto-initializes on first access**: Runs migrations automatically if not yet initialized.
 pub fn get_config_db() -> Result<SQLiteDB> {
-    let path = get_app_config_dir()?;
-    let db = SQLiteDB::new(
-        path,
-        "app_config.db".into(),
-        env!("CARGO_PKG_VERSION").into(),
-        VersionVerification::LessOrEqual
-    )?;
-    Ok(db)
+    // Lazy initialization: run migrations on first access using Once
+    // Once::call_once ensures this runs exactly once, even with multiple threads
+    CONFIG_DB_INIT.call_once(|| {
+        let result = (|| -> Result<()> {
+            let db = create_raw_db("app_config.db")?;
+            init_config_db(&db)?;
+            Ok(())
+        })().map_err(|e| e.to_string());
+        
+        let mut init_result = CONFIG_INIT_RESULT.lock().unwrap();
+        *init_result = Some(result);
+    });
+    
+    // Check if initialization succeeded
+    let init_result = CONFIG_INIT_RESULT.lock().unwrap();
+    if let Some(Err(e)) = init_result.as_ref() {
+        return Err(anyhow::anyhow!("Config database initialization failed: {}", e));
+    }
+    
+    // Return fresh connection
+    create_raw_db("app_config.db")
 }
 
 /// Get the **data database** connection (vesta.db)
 /// 
 /// This database contains user data: instances, accounts, notifications.
 /// 
-/// # Note
-/// This does NOT run migrations. Use `initialize_data_db()` for full setup.
+/// **Auto-initializes on first access**: Runs migrations automatically if not yet initialized.
 pub fn get_data_db() -> Result<SQLiteDB> {
-    let path = get_app_config_dir()?;
-    let db = SQLiteDB::new(
-        path,
-        "vesta.db".into(),
-        env!("CARGO_PKG_VERSION").into(),
-        VersionVerification::LessOrEqual
-    )?;
-    Ok(db)
+    // Lazy initialization: run migrations on first access using Once
+    // Once::call_once ensures this runs exactly once, even with multiple threads
+    DATA_DB_INIT.call_once(|| {
+        let result = (|| -> Result<()> {
+            let db = create_raw_db("vesta.db")?;
+            init_data_db(&db)?;
+            Ok(())
+        })().map_err(|e| e.to_string());
+        
+        let mut init_result = DATA_INIT_RESULT.lock().unwrap();
+        *init_result = Some(result);
+    });
+    
+    // Check if initialization succeeded
+    let init_result = DATA_INIT_RESULT.lock().unwrap();
+    if let Some(Err(e)) = init_result.as_ref() {
+        return Err(anyhow::anyhow!("Data database initialization failed: {}", e));
+    }
+    
+    // Return fresh connection
+    create_raw_db("vesta.db")
 }

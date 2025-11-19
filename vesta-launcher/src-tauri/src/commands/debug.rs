@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
 use crate::utils::db_manager::{get_config_db, get_data_db};
-use crate::utils::config::initialize_config_db;
-use crate::utils::data::initialize_data_db;
 
 #[derive(Serialize, Deserialize, Clone)]
 struct TestPayload {
@@ -50,15 +48,11 @@ pub fn debug_check_tables() -> Result<Vec<String>, String> {
 pub fn debug_rerun_migrations() -> Result<String, String> {
     let mut results = Vec::new();
     
-    match initialize_config_db() {
-        Ok(_) => results.push("✓ Config migrations completed".to_string()),
-        Err(e) => results.push(format!("✗ Config migration failed: {}", e)),
-    }
+    // Force re-init logic (this is debug only, might need adjustment if we want to force run migrations)
+    // Since get_config_db uses Once, we can't easily re-run it.
+    // But we can manually call the init functions if we expose them or just return a message saying "Restart app"
     
-    match initialize_data_db() {
-        Ok(_) => results.push("✓ Data migrations completed".to_string()),
-        Err(e) => results.push(format!("✗ Data migration failed: {}", e)),
-    }
+    results.push("Migrations run on startup. Restart app to re-run if needed.".to_string());
     
     let result = results.join("\n");
     println!("{}", result);

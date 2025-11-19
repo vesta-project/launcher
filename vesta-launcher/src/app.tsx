@@ -50,6 +50,7 @@ function Root(props: ChildrenProp) {
 	let unlisten: UnlistenFn | null = null;
 
 	onMount(async () => {
+		// Critical: Setup crash handler immediately
 		unlisten = await listen<{
 			title: string;
 			description: string;
@@ -59,30 +60,34 @@ function Root(props: ChildrenProp) {
 			navigate("/fatal", { replace: true });
 		});
 
-		// Setup notification system (non-blocking)
-		subscribeToBackendNotifications().catch((error) => {
-			console.error("Failed to initialize notification system:", error);
-		});
-
-		// Cleanup notifications in background (don't block startup)
-		cleanupNotifications()
-			.then((cleaned) => {
-				if (cleaned > 0) {
-					console.log(`Cleaned up ${cleaned} expired notifications`);
-				}
-			})
-			.catch((error) => {
-				console.error("Failed to cleanup notifications:", error);
+		// Defer non-critical initialization to not block UI render
+		// This allows the window to show immediately while background tasks start
+		setTimeout(() => {
+			// Setup notification system (non-blocking)
+			subscribeToBackendNotifications().catch((error) => {
+				console.error("Failed to initialize notification system:", error);
 			});
 
-		// Setup config sync system (non-blocking)
-		subscribeToConfigUpdates()
-			.then(() => {
-				onConfigUpdate(applyCommonConfigUpdates);
-			})
-			.catch((error) => {
-				console.error("Failed to initialize config sync:", error);
-			});
+			// Cleanup notifications in background (don't block startup)
+			cleanupNotifications()
+				.then((cleaned) => {
+					if (cleaned > 0) {
+						console.log(`Cleaned up ${cleaned} expired notifications`);
+					}
+				})
+				.catch((error) => {
+					console.error("Failed to cleanup notifications:", error);
+				});
+
+			// Setup config sync system (non-blocking)
+			subscribeToConfigUpdates()
+				.then(() => {
+					onConfigUpdate(applyCommonConfigUpdates);
+				})
+				.catch((error) => {
+					console.error("Failed to initialize config sync:", error);
+				});
+		}, 100); // 100ms delay to ensure UI renders first
 
 		// File drop system disabled for now
 		// try {

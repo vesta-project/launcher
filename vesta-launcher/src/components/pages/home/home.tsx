@@ -17,6 +17,7 @@ import {
 	createMemo,
 	createSignal,
 	onCleanup,
+	onMount,
 } from "solid-js";
 import { getOsType } from "../../../utils/os";
 import "./home.css";
@@ -52,26 +53,35 @@ function HomePage() {
 }
 
 function MainMenu() {
+	const [ready, setReady] = createSignal(false);
+
+	onMount(() => {
+		// Defer rendering of heavy instance cards to allow initial paint
+		setTimeout(() => setReady(true), 50);
+	});
+
 	return (
 		<div class={"main-menu"}>
 			<div class={"instance-wrapper"}>
 				<div class={"instance-container"}>
-					<InstanceCard modloader={"forge"} />
-					<InstanceCard modloader={"fabric"} />
-					<InstanceCard modloader={"neoforge"} />
-					<InstanceCard modloader={"quilt"} />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
-					<InstanceCard />
+					<Show when={ready()}>
+						<InstanceCard modloader={"forge"} />
+						<InstanceCard modloader={"fabric"} />
+						<InstanceCard modloader={"neoforge"} />
+						<InstanceCard modloader={"quilt"} />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+						<InstanceCard />
+					</Show>
 				</div>
 			</div>
 		</div>

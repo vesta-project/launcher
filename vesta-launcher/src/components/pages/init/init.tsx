@@ -17,28 +17,27 @@ function InitPage() {
 	const navigate = useNavigate();
 	const [_time, _setTime] = createSignal(0);
 	const [initStep, setInitStep] = createSignal(0);
-	const [isCheckingAccount, setIsCheckingAccount] = createSignal(true);
+	const [isLoading, setIsLoading] = createSignal(true);
 
-	onMount(async () => {
-		// Quick account check with timeout to prevent hanging
-		const timeoutPromise = new Promise((_, reject) =>
-			setTimeout(() => reject(new Error("Account check timeout")), 1000),
-		);
-
-		try {
-			const account = await Promise.race([
-				invoke("get_active_account"),
-				timeoutPromise,
-			]);
-			if (account) {
-				navigate("/home", { replace: true });
-				return;
+	onMount(() => {
+		// Non-blocking account check - UI shows immediately
+		// Check happens in background without blocking render
+		setTimeout(async () => {
+			try {
+				const account = await invoke("get_active_account");
+				if (account) {
+					// User is logged in, redirect to home
+					navigate("/home", { replace: true });
+					return;
+				}
+			} catch (e) {
+				console.error("Failed to check active account:", e);
+				// Continue to init flow on error
+			} finally {
+				// Stop loading state if we haven't redirected
+				setIsLoading(false);
 			}
-		} catch (e) {
-			console.error("Failed to check active account:", e);
-		} finally {
-			setIsCheckingAccount(false);
-		}
+		}, 0);
 	});
 
 	//navigate("/home", { replace: true });
@@ -68,40 +67,34 @@ function InitPage() {
 		<div id={"init-page__root"}>
 			<TitleBar os={os} class={"animate--hue"} />
 			<div id={"init-page__wrapper"}>
-				{isCheckingAccount() ? (
-					<div
-						style={{
+				<Switch>
+					<Match when={isLoading()}>
+						<div style={{
 							display: "flex",
 							"justify-content": "center",
 							"align-items": "center",
 							height: "100%",
-						}}
-					>
-						<p>Loading...</p>
-					</div>
-				) : (
-					<Switch>
-						<Match when={initStep() == 0}>
-							<InitFirstPage
-								initStep={initStep()}
-								changeInitStep={setInitStep}
-							/>
-						</Match>
-						<Match when={initStep() == 1}>
-							<InitLoginPage
-								initStep={initStep()}
-								changeInitStep={setInitStep}
-							/>
-						</Match>
-						<Match when={initStep() == 2}>
-							<InitFinishedPage
-								initStep={initStep()}
-								changeInitStep={setInitStep}
-								navigate={navigate}
-							/>
-						</Match>
-					</Switch>
-				)}
+							"flex-direction": "column",
+							gap: "1rem"
+						}}>
+							<h1 style={{ "font-size": "24px" }}>Loading Vesta...</h1>
+							{/* Add a spinner here if available */}
+						</div>
+					</Match>
+					<Match when={initStep() == 0}>
+						<InitFirstPage initStep={initStep()} changeInitStep={setInitStep} />
+					</Match>
+					<Match when={initStep() == 1}>
+						<InitLoginPage initStep={initStep()} changeInitStep={setInitStep} />
+					</Match>
+					<Match when={initStep() == 2}>
+						<InitFinishedPage
+							initStep={initStep()}
+							changeInitStep={setInitStep}
+							navigate={navigate}
+						/>
+					</Match>
+				</Switch>
 				{/*{initStep()}*/}
 			</div>
 		</div>
