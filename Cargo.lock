@@ -3542,6 +3542,7 @@ dependencies = [
  "anyhow",
  "bytes",
  "futures",
+ "log",
  "minecraft-msa-auth",
  "oauth2",
  "parking_lot",

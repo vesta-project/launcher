@@ -58,6 +58,9 @@ impl Task for InstallGameTask {
         let mut cancel_rx = ctx.cancel_rx;
         
         Box::pin(async move {
+            log::info!("Starting installation: {} {} (Modloader: {:?})", version_id, loader_version.as_ref().unwrap_or(&"none".to_string()), modloader);
+            log::debug!("Installation paths - Game: {:?}, Runtime: {:?}", game_dir, runtime_dir);
+            
             // Create progress tracking struct
             let progress = TaskProgressTracker {
                 notification_manager: notification_manager.clone(),
@@ -96,8 +99,10 @@ impl Task for InstallGameTask {
             }
             
             // Run the appropriate installer
+            log::info!("Executing installer for modloader: {:?}", modloader);
             let result = match modloader {
                 ModloaderType::None => {
+                    log::debug!("Using VanillaInstaller");
                     let installer = VanillaInstaller::new(
                         game_dir,
                         version_id.clone(),
@@ -106,37 +111,41 @@ impl Task for InstallGameTask {
                     installer.install(&progress).await
                 }
                 ModloaderType::Fabric => {
+                    log::debug!("Using FabricInstaller with version: {}", loader_version.as_ref().unwrap_or(&"latest".to_string()));
                     let installer = FabricInstaller::new(
                         game_dir,
                         version_id.clone(),
-                        loader_version.ok_or("Fabric loader version required")?,
+                        loader_version.clone().ok_or("Fabric loader version required")?,
                     );
                     installer.install(&progress).await
                 }
                 ModloaderType::Quilt => {
+                    log::debug!("Using QuiltInstaller with version: {}", loader_version.as_ref().unwrap_or(&"latest".to_string()));
                     let installer = QuiltInstaller::new(
                         game_dir,
                         version_id.clone(),
-                        loader_version.ok_or("Quilt loader version required")?,
+                        loader_version.clone().ok_or("Quilt loader version required")?,
                     );
                     installer.install(&progress).await
                 }
                 ModloaderType::Forge => {
+                    log::debug!("Using ForgeInstaller with version: {}", loader_version.as_ref().unwrap_or(&"latest".to_string()));
                     let java_manager = JavaManager::new(runtime_dir);
                     let installer = ForgeInstaller::new(
                         game_dir,
                         version_id.clone(),
-                        loader_version.ok_or("Forge version required")?,
+                        loader_version.clone().ok_or("Forge version required")?,
                         java_manager,
                     );
                     installer.install(&progress).await
                 }
                 ModloaderType::NeoForge => {
+                    log::debug!("Using NeoForgeInstaller with version: {}", loader_version.as_ref().unwrap_or(&"latest".to_string()));
                     let java_manager = JavaManager::new(runtime_dir);
                     let installer = NeoForgeInstaller::new(
                         game_dir,
                         version_id.clone(),
-                        loader_version.ok_or("NeoForge version required")?,
+                        loader_version.clone().ok_or("NeoForge version required")?,
                         java_manager,
                     );
                     installer.install(&progress).await
@@ -150,6 +159,7 @@ impl Task for InstallGameTask {
             
             match result {
                 Ok(_) => {
+                    log::info!("Installation completed successfully: {} {} {:?}", version_id, loader_version.as_ref().unwrap_or(&"none".to_string()), modloader);
                     notification_manager.create(CreateNotificationInput {
                         client_key: Some(client_key.clone()),
                         title: Some(format!("{} {} Installed", modloader, version_id)),
@@ -167,6 +177,7 @@ impl Task for InstallGameTask {
                     Ok(())
                 }
                 Err(e) => {
+                    log::error!("Installation failed for {} {}: {}", version_id, loader_version.as_ref().unwrap_or(&"none".to_string()), e);
                     notification_manager.create(CreateNotificationInput {
                         client_key: Some(client_key.clone()),
                         title: Some(format!("Installation Failed")),
@@ -201,6 +212,7 @@ struct TaskProgressTracker {
 
 impl ProgressCallback for TaskProgressTracker {
     fn on_progress(&self, step: &str, current: u32, total: u32) {
+        log::debug!("Installation progress: {} ({}/{})", step, current, total);
         self.current_step.store(current, Ordering::Relaxed);
         self.total_steps.store(total, Ordering::Relaxed);
         
@@ -228,6 +240,11 @@ impl ProgressCallback for TaskProgressTracker {
     }
     
     fn on_download(&self, file: &str, downloaded: u64, total: u64) {
+        if total > 0 {
+            let percent = (downloaded * 100) / total;
+            log::debug!("Downloading: {} - {} / {} bytes ({}%)", file, downloaded, total, percent);
+        }
+        
         *self.current_file.lock() = file.to_string();
         self.downloaded_bytes.store(downloaded, Ordering::Relaxed);
         self.total_bytes.store(total, Ordering::Relaxed);

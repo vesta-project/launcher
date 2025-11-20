@@ -20,8 +20,32 @@ fn main() {
         println!("Vesta Launcher closed unexpectedly: {e:?}");
     }));
 
+    // Override app data directory to %APPDATA%/.VestaLauncher
+    #[cfg(target_os = "windows")]
+    {
+        use tauri::api::path::BaseDirectory;
+        use std::env;
+        let appdata = env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Public\\AppData\\Roaming".to_string());
+        let custom_dir = std::path::Path::new(&appdata).join(".VestaLauncher");
+        std::fs::create_dir_all(&custom_dir).ok();
+        std::env::set_var("TAURI_DATA_DIR", &custom_dir);
+    }
     tauri::Builder::default()
         .setup(setup::init)
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
+                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+                ])
+                .level(log::LevelFilter::Info)
+                .level_for("vesta_launcher", log::LevelFilter::Debug)
+                .level_for("piston_lib", log::LevelFilter::Debug)
+                .max_file_size(50_000 /* 50kb */)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .build(),
+        )
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
