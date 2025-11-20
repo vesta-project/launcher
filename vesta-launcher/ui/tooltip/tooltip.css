@@ -9,7 +9,7 @@
   padding: 2px 8px;
   border-radius: 3px;
   border: 2px solid hsl(var(--color__primary-hue) 20% 60% / 5%);
-  z-index: 10;
+  z-index: 10000;
 }
 
 .tooltip__content[data-expanded] {

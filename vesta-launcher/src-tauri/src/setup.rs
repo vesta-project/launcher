@@ -1,8 +1,18 @@
 use tauri::Manager;
 use winver::WindowsVersion;
 use crate::utils::db_manager::{get_config_db, get_data_db};
+use crate::tasks::manager::TaskManager;
+use crate::notifications::manager::NotificationManager;
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize NotificationManager
+    let notification_manager = NotificationManager::new(app.handle().clone());
+    app.manage(notification_manager);
+
+    // Initialize TaskManager
+    let task_manager = TaskManager::new(app.handle().clone());
+    app.manage(task_manager);
+
     // Initialize databases in background thread to not block window creation
     // This triggers the lazy initialization in db_manager
     tauri::async_runtime::spawn(async {

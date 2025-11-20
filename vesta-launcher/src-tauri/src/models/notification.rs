@@ -2,13 +2,16 @@ use serde::{Deserialize, Serialize};
 use crate::utils::sqlite::{AUTOINCREMENT, SqlTable};
 use piston_macros::SqlTable;
 
-/// Notification model for persisted and ephemeral notifications
+/// Notification model for persisted notifications with flexible types
 /// 
-/// Supports both persistent notifications (stored in DB) and ephemeral progress
-/// notifications for async tasks with progress tracking.
+/// Supports four notification types:
+/// - Alert: Non-dismissible critical notifications
+/// - Progress: Task notifications with progress tracking
+/// - Immediate: Auto-cleared on app restart (crashes, status updates)
+/// - Patient: Persistent until manually dismissed (updates, releases)
 #[derive(Serialize, Deserialize, Debug, Clone, SqlTable)]
-#[migration_version("0.5.0")]
-#[migration_description("Notification system with progress tracking")]
+#[migration_version("0.5.1")]
+#[migration_description("Added cancellable field")]
 pub struct Notification {
     #[primary_key]
     #[autoincrement]
@@ -21,12 +24,21 @@ pub struct Notification {
     pub title: Option<String>,
     pub description: Option<String>,
     
-    /// Severity level: "info", "success", "warning", "error", "debug"
+    /// Severity level: "info", "success", "warning", "error"
     pub severity: String,
     
-    /// Whether this notification should be persisted in the database
-    /// false = ephemeral (toast only), true = stored and shown in sidebar
-    pub persist: bool,
+    /// Notification type: "alert", "progress", "immediate", "patient"
+    /// Converted from old persist field:
+    /// - persist=true -> "patient"
+    /// - persist=false -> "immediate"
+    pub notification_type: String,
+    
+    /// Whether this notification can be dismissed by the user
+    /// - Alert: false (non-dismissible)
+    /// - Progress: false (until complete)
+    /// - Immediate: true
+    /// - Patient: true
+    pub dismissible: bool,
     
     /// Progress indicator:
     /// - null/None: no progress display
@@ -40,6 +52,10 @@ pub struct Notification {
     
     /// Whether the user has read this notification
     pub read: bool,
+    
+    /// JSON array of action buttons: [{id, label, type}]
+    /// type can be: "primary", "secondary", "destructive"
+    pub actions: Option<String>,
     
     /// Optional JSON metadata for custom data
     pub metadata: Option<String>,
@@ -93,11 +109,13 @@ mod tests {
         assert!(schema.contains("title"));
         assert!(schema.contains("description"));
         assert!(schema.contains("severity"));
-        assert!(schema.contains("persist"));
+        assert!(schema.contains("notification_type"));
+        assert!(schema.contains("dismissible"));
         assert!(schema.contains("progress"));
         assert!(schema.contains("current_step"));
         assert!(schema.contains("total_steps"));
         assert!(schema.contains("read"));
+        assert!(schema.contains("actions"));
         assert!(schema.contains("metadata"));
         assert!(schema.contains("created_at"));
         assert!(schema.contains("updated_at"));

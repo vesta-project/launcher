@@ -70,19 +70,21 @@ export const Progress = <T extends ValidComponent = "div">(
 			{...rest}
 		>
 			{local.children}
-			<ProgressPrimitive.Track class="progress__track">
-				<ProgressPrimitive.Fill
-					class={clsx(
-						"progress__fill",
-						isIndeterminate && "progress__fill--indeterminate",
-					)}
-				/>
-			</ProgressPrimitive.Track>
-			{local.current_step !== undefined && local.total_steps !== undefined && (
-				<div class="progress__steps">
-					Step {local.current_step} of {local.total_steps}
-				</div>
-			)}
+			<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+				<ProgressPrimitive.Track class="progress__track" style={{ flex: 1 }}>
+					<ProgressPrimitive.Fill
+						class={clsx(
+							"progress__fill",
+							isIndeterminate && "progress__fill--indeterminate",
+						)}
+					/>
+				</ProgressPrimitive.Track>
+				{local.current_step !== undefined && local.total_steps !== undefined && (
+					<div class="progress__steps">
+						{local.current_step}/{local.total_steps}
+					</div>
+				)}
+			</div>
 		</ProgressPrimitive.Root>
 	);
 };

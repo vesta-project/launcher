@@ -8,7 +8,6 @@
 use anyhow::Result;
 use crate::utils::sqlite::SQLiteDB;
 use crate::utils::migrations::get_data_migrations;
-use crate::utils::db_manager::get_data_db;
 
 /// Initialize the data database with migrations
 /// 

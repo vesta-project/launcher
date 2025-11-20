@@ -1,13 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
+import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import {
 	type Account,
 	getAccounts,
 	removeAccount,
 	setActiveAccount,
 } from "@utils/auth";
-import { For, Show, createResource, createSignal } from "solid-js";
+import { For, Show, createResource } from "solid-js";
 import "./account-list.css";
 
 interface AccountListProps {
@@ -76,9 +77,8 @@ function AccountList(props: AccountListProps) {
 	};
 
 	return (
-		<Show when={props.open}>
-			<div class="account-list-overlay" onClick={props.onClose}>
-				<div class="account-list-menu" onClick={(e) => e.stopPropagation()}>
+		<Dialog open={props.open} onOpenChange={(open) => { if (!open) props.onClose(); }}>
+			<DialogContent class={"account-list-menu"}>
 					<h3>Accounts</h3>
 					<div class="account-list-items">
 						<For each={accounts()}>
@@ -100,9 +100,8 @@ function AccountList(props: AccountListProps) {
 					>
 						Add Account
 					</Button>
-				</div>
-			</div>
-		</Show>
+			</DialogContent>
+		</Dialog>
 	);
 }
 

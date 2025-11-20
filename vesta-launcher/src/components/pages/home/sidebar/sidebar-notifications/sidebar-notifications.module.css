@@ -28,35 +28,32 @@
     visibility: visible;
     overflow: unset;
   }
-
-  & h1 {
-
-  }
-
-  & p {
-
-  }
 }
 
 .sidebar__notifications__wrapper {
-  display: grid;
-  grid-template-columns: 100%;
-  grid-template-rows: repeat(auto-fill, 100px);
-  grid-gap: 20px;
-  overflow: visible hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-x: visible;
+  overflow-y: hidden;
   padding: 16px 16px 16px 8px;
 
   --sb-track-color: transparent;
   --sb-size: 8px;
-
-  &:hover {
-    overflow-y: scroll;
-    padding-right: 8px;
-  }
+  -webkit-overflow-scrolling: touch;
 }
 
-.sidebar__notifications__container {
+.sidebar__notifications__wrapper:hover {
+  overflow-y: auto;
+  padding-right: 8px;
+}
 
+/* optional lightweight scrollbar styling using the existing vars */
+.sidebar__notifications__wrapper::-webkit-scrollbar {
+  width: var(--sb-size);
+}
+.sidebar__notifications__wrapper::-webkit-scrollbar-track {
+  background: var(--sb-track-color);
 }
 
 .sidebar__notifications-titlebar {
@@ -78,7 +75,8 @@
   background-color: hsl(var(--color__primary-hue) 15% 60% / 20%);
   box-shadow: 0 10px 15px -3px hsl(0deg 0% 0% / 10%), 0 4px 6px -4px hsl(0deg 0% 0% / 10%);
   width: 100%;
-  height: 100px;
+  min-height: fit-content;
+  height: auto;
 }
 
 .sidebar__notification__close-btn {
@@ -86,13 +84,15 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 3px;
+  padding: 4px;
   margin-left: auto;
-  color: hsl(240deg 5% 34%);
+  color: hsl(var(--color__primary-hue) 10% 70%);
   cursor: pointer;
   border-radius: 3px;
-  border: transparent solid 1px;
-  visibility: hidden;
+  border: hsl(var(--color__primary-hue) 5% 50% / 20%) solid 1px;
+  background: hsl(var(--color__primary-hue) 15% 60% / 20%);
+  visibility: visible;
+  transition: all 0.15s ease;
 
   & svg {
     width: 12px;
@@ -100,13 +100,14 @@
   }
 
   &:active {
-    transform: scale(90%);
+    transform: scale(95%);
     transition-duration: 75ms;
   }
 
   &:hover {
-    border: hsl(200deg 92% 35% / 10%) solid 1px;
-    filter: brightness(200%);
+    border: hsl(0deg 70% 50% / 30%) solid 1px;
+    background: hsl(0deg 70% 50% / 20%);
+    filter: brightness(130%);
   }
 
   &:hover svg {
@@ -120,44 +121,51 @@
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  padding: 3px 6px;
-  color: hsl(240deg 5% 34%);
+  padding: 6px 10px;
+  color: hsl(var(--color__primary-hue) 10% 85%);
   cursor: pointer;
   border-radius: 3px;
-  border: transparent solid 1px;
+  border: hsl(var(--color__primary-hue) 5% 50% / 30%) solid 1px;
   background: hsl(var(--color__primary-hue) 15% 60% / 30%);
-  visibility: hidden;
-  font-size: 14px;
+  visibility: visible;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.15s ease;
 
   &:active {
-    transform: scale(90%);
+    transform: scale(95%);
     transition-duration: 75ms;
   }
 
   &:hover {
-    border: hsl(200deg 92% 35% / 10%) solid 1px;
-    filter: brightness(150%);
+    border: hsl(200deg 92% 35% / 40%) solid 1px;
+    filter: brightness(130%);
+    transform: translateY(-1px);
   }
 }
 
 .sidebar__notification:hover .sidebar__notification__close-btn,
 .sidebar__notification:hover .sidebar__notification__action-btn {
-  visibility: visible;
-  box-shadow: 0 10px 15px -3px hsl(0deg 0% 10% / 10%), 0 4px 6px -4px hsl(0deg 0% 10% / 10%);
+  box-shadow: 0 4px 8px -2px hsl(0deg 0% 0% / 20%);
 }
 
 .sidebar__notification__progress {
   width: 100%;
+  max-width: 100%;
   margin-top: 8px;
+  overflow: hidden;
 }
 .sidebar__notification__progress .progress__track {
   height: 4px;
   border-radius: 2px;
   background: #333;
+  max-width: 100%;
 }
 .sidebar__notification__progress .progress__fill {
   height: 100%;
   transition: width 0.3s;
+  max-width: 100%;
 }
 .sidebar__notification__progress.progress--indeterminate .progress__fill,
 .sidebar__notification__progress .progress__fill--indeterminate {

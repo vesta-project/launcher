@@ -1,5 +1,4 @@
 import BellIcon from "@assets/bell.svg";
-import CloseIcon from "@assets/close.svg";
 import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
@@ -14,21 +13,21 @@ import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-not
 import { invoke } from "@tauri-apps/api/core";
 import {
 	closeAlert,
+	createNotification,
 	listNotifications,
 	notifications,
+	persistentNotificationTrigger,
 	showAlert,
 } from "@utils/notifications";
 import {
 	For,
-	Show,
 	createEffect,
 	createResource,
 	createSignal,
 	onCleanup,
 	onMount,
 } from "solid-js";
-import { Transition } from "solid-transition-group";
-import { getOsType } from "../../../../utils/os";
+// Transition and getOsType are unused in this file; remove imports to clean code.
 import "./sidebar.css";
 
 interface SidebarProps {
@@ -57,32 +56,45 @@ function Sidebar(props: SidebarProps) {
 		await invoke("test_command");
 	};
 
-	// Check for unread and active notifications
+	// Check for notification counts and active tasks - refetch when trigger changes
 	const [notifData] = createResource(
-		ready,
+		() => ready() ? persistentNotificationTrigger() : false,
 		async (isReady) => {
-			if (!isReady) return { unreadCount: 0, hasActiveTask: false };
+			if (!isReady) return { totalCount: 0, hasActiveTask: false };
 			try {
-				const persistent = await listNotifications({ persist: true });
-				const unreadCount = persistent.filter((n) => !n.read).length;
+				// Fetch all notifications (includes Immediate which are in-memory only)
+				const persistent = await listNotifications();
+				const totalCount = persistent.length;
 				const hasActiveTask = persistent.some(
 					(n) =>
+						n.notification_type === "progress" &&
 						n.progress !== null &&
 						(n.progress === -1 || (n.progress >= 0 && n.progress < 100)),
 				);
-				return { unreadCount, hasActiveTask };
+				return { totalCount, hasActiveTask };
 			} catch (_error) {
 				// Silently handle errors (table might not exist yet during first startup)
-				return { unreadCount: 0, hasActiveTask: false };
+				return { totalCount: 0, hasActiveTask: false };
 			}
 		},
-		{ initialValue: { unreadCount: 0, hasActiveTask: false } },
+		{ initialValue: { totalCount: 0, hasActiveTask: false } },
 	);
 
 	createEffect(() => {
 		const checkFocus = (event: FocusEvent) => {
-			let target = event.target;
-			if (target && ref && !(ref as HTMLDivElement).contains(target as Node)) {
+			const target = event.target as HTMLElement | null;
+			if (!target || !ref) return;
+
+			// Ignore clicks that happen inside a dialog (content or overlay)
+			if (
+				target.closest(".dialog__portal-container") ||
+				target.closest(".dialog__overlay") ||
+				target.closest(".dialog__content")
+			) {
+				return;
+			}
+
+			if (!(ref as HTMLDivElement).contains(target as Node)) {
 				props.openChanged(false);
 			}
 		};
@@ -104,6 +116,7 @@ function Sidebar(props: SidebarProps) {
 				<div class={"sidebar__section"}>
 					<SidebarProfileButton
 						tooltip_text={"Profile"}
+						open={accountMenuOpen()}
 						onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
 					/>
 					<div class={"sidebar__section actions"}>
@@ -122,7 +135,15 @@ function Sidebar(props: SidebarProps) {
 						</SidebarActionButton>
 						<SidebarPageButton
 							tooltip_text={"Instance Name"}
-							onClick={() => showAlert("Info", "SomeTitle", "SomeDescription")}
+							onClick={() =>
+								createNotification({
+									title: "SomeTitle",
+									description: "SomeDescription",
+									severity: "info",
+									notification_type: "immediate",
+									dismissible: true,
+								})
+							}
 						/>
 					</div>
 				</div>
@@ -136,12 +157,12 @@ function Sidebar(props: SidebarProps) {
 							{notifData().hasActiveTask && (
 								<div class="notification-spinner" title="Task in progress" />
 							)}
-							{notifData().unreadCount > 0 && (
+							{notifData().totalCount > 0 && (
 								<div
 									class="notification-badge"
-									title={`${notifData().unreadCount} unread`}
+									title={`${notifData().totalCount} notification${notifData().totalCount === 1 ? '' : 's'}`}
 								>
-									{notifData().unreadCount}
+									{notifData().totalCount}
 								</div>
 							)}
 						</div>
@@ -156,17 +177,15 @@ function Sidebar(props: SidebarProps) {
 			</div>
 			<SidebarNotifications open={props.open} openChanged={props.openChanged} />
 
-			{/* Account List Menu - Lazy load */}
-			<Show when={accountMenuOpen()}>
-				<AccountList
-					open={accountMenuOpen()}
-					onClose={() => setAccountMenuOpen(false)}
-					onAddAccount={() => {
-						setAccountMenuOpen(false);
-						openPage("/login");
-					}}
-				/>
-			</Show>
+			{/* Account List Menu */}
+			<AccountList
+				open={accountMenuOpen()}
+				onClose={() => setAccountMenuOpen(false)}
+				onAddAccount={() => {
+					setAccountMenuOpen(false);
+					openPage("/login");
+				}}
+			/>
 		</div>
 	);
 }

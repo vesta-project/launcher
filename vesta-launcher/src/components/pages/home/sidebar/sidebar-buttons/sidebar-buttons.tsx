@@ -1,4 +1,4 @@
-import SearchIcon from "@assets/search.svg";
+// SearchIcon not used in this file; removed import.
 import { Button } from "@kobalte/core/button";
 import { invoke } from "@tauri-apps/api/core";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -15,7 +15,6 @@ import {
 	Show,
 	children,
 	createResource,
-	createSignal,
 	mergeProps,
 	splitProps,
 } from "solid-js";
@@ -53,12 +52,12 @@ function SidebarButton(props: SidebarButtonProps) {
 
 interface SidebarProfileButtonProps extends SidebarButtonProps {
 	onAccountMenuToggle?: (open: boolean) => void;
+	open?: boolean;
 }
 
 function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	const c = children(() => props.children);
-	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle"]);
-	const [menuOpen, setMenuOpen] = createSignal(false);
+	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle", "open"]);
 
 	// Fetch active account
 	const [activeAccount] = createResource<Account | null>(async () => {
@@ -89,8 +88,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	);
 
 	const toggleMenu = () => {
-		const newState = !menuOpen();
-		setMenuOpen(newState);
+		const newState = !props.open;
 		props.onAccountMenuToggle?.(newState);
 	};
 

@@ -4,14 +4,19 @@ import Button from "@ui/button/button";
 import { Progress } from "@ui/progress/progress";
 import {
 	type BackendNotification,
+	type NotificationAction,
+	type NotificationSeverity,
+	type NotificationType,
 	closeAlert,
 	deleteNotification,
+	invokeNotificationAction,
 	listNotifications,
 	markNotificationRead,
 	notifications,
 	persistentNotificationTrigger,
 	removeAllAlerts,
 } from "@utils/notifications";
+import { invoke } from "@tauri-apps/api/core";
 import { For, Show, createResource, createSignal, onMount } from "solid-js";
 import styles from "./sidebar-notifications.module.css";
 
@@ -27,6 +32,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 	onMount(() => {
 		// Defer fetching notifications to avoid blocking initial render
 		setTimeout(() => setReady(true), 1000);
+
 	});
 
 	// Load persistent notifications from backend - refetch when trigger changes
@@ -34,7 +40,8 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 		() => (ready() ? persistentNotificationTrigger() : false),
 		async () => {
 			try {
-				return await listNotifications({ persist: true });
+				// Fetch all notifications (includes Immediate which are in-memory only)
+				return await listNotifications();
 			} catch (_error) {
 				// Silently handle errors (table might not exist yet during first startup)
 				return [];
@@ -75,12 +82,14 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 				fallback={<div>Wooo! No Notifications!</div>}
 			>
 				<div class={styles.sidebar__notifications__wrapper}>
-					{/* Persistent notifications from backend */}
+					{/* All notifications from backend (includes Immediate which won't persist after restart) */}
 					<For each={persistentNotifs()}>
-						{(notification) => (
+						{(notification) => {
+							console.log(`Rendering notification: ${notification.title} - type: ${notification.notification_type}, dismissible: ${notification.dismissible}`);
+							return (
 							<NotificationCard
 								id={notification.id}
-								title={notification.title || undefined}
+								title={notification.title}
 								description={notification.description || undefined}
 								progress={notification.progress || undefined}
 								current_step={notification.current_step || undefined}
@@ -88,28 +97,19 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 								persistent={true}
 								read={notification.read}
 								severity={notification.severity}
+								notification_type={notification.notification_type}
+								dismissible={notification.dismissible}
+								actions={notification.actions}
+								client_key={notification.client_key}
 							/>
-						)}
-					</For>
-					{/* Ephemeral notifications (in-memory) */}
-					<For each={notifications()}>
-						{(notification) => (
-							<NotificationCard
-								id={notification.id}
-								title={notification.title}
-								description={notification.description}
-								progress={notification.progress}
-								current_step={notification.current_step}
-								total_steps={notification.total_steps}
-								persistent={false}
-							/>
-						)}
+							);
+						}}
 					</For>
 				</div>
 			</Show>
 			<Show when={notifications().length > 0}>
 				<div>
-					<Button onClick={removeAllAlerts}>Clear Ephemeral</Button>
+					<Button onClick={removeAllAlerts}>Clear</Button>
 				</div>
 			</Show>
 		</div>
@@ -125,14 +125,20 @@ function NotificationCard(props: {
 	total_steps?: number | null;
 	persistent: boolean;
 	read?: boolean;
-	severity?: string;
+	severity?: NotificationSeverity;
+	notification_type?: NotificationType;
+	dismissible?: boolean;
+	actions?: NotificationAction[];
+	client_key?: string | null;
 }) {
-	const handleMarkRead = async () => {
-		if (!props.persistent) return;
+	// Debug logging
+	console.log(`NotificationCard: ${props.title} - type: ${props.notification_type}, dismissible: ${props.dismissible}, progress: ${props.progress}`);
+	
+	const handleAction = async (actionId: string) => {
 		try {
-			await markNotificationRead(props.id);
+			await invokeNotificationAction(actionId, props.client_key || undefined);
 		} catch (error) {
-			console.error("Failed to mark notification as read:", error);
+			console.error(`Failed to invoke action ${actionId}:`, error);
 		}
 	};
 
@@ -149,16 +155,16 @@ function NotificationCard(props: {
 	};
 
 	const severityColor = () => {
-		if (!props.severity) return "#3498db";
+		if (!props.severity) return "hsl(210 70% 50%)"; // Info blue
 		switch (props.severity.toLowerCase()) {
 			case "error":
-				return "#e74c3c";
+				return "hsl(0 70% 50%)";
 			case "warning":
-				return "#f39c12";
+				return "hsl(45 90% 50%)";
 			case "success":
-				return "#27ae60";
+				return "hsl(140 70% 50%)";
 			default:
-				return "#3498db";
+				return "hsl(210 70% 50%)";
 		}
 	};
 
@@ -166,40 +172,33 @@ function NotificationCard(props: {
 		<div
 			class={styles.sidebar__notification}
 			style={{
-				...(props.persistent && props.severity
-					? { "border-left": `4px solid ${severityColor()}` }
-					: {}),
-				...(props.persistent && props.read ? { opacity: 0.6 } : {}),
+				"border-left": `4px solid ${severityColor()}`,
 			}}
 		>
-			<div>
-				{props.persistent && props.severity && (
-					<div style={{ display: "flex", gap: "8px", "align-items": "center" }}>
+			<div style={{ width: "100%", "min-width": "0", "overflow": "hidden" }}>
+				<div style={{ display: "flex", gap: "8px", "align-items": "center", "margin-bottom": "4px" }}>
+					{props.persistent && props.severity && (
 						<span
 							style={{
-								"font-size": "12px",
+								"font-size": "10px",
 								"font-weight": "bold",
 								color: severityColor(),
+								"text-transform": "uppercase",
+								"letter-spacing": "0.5px",
 							}}
 						>
-							{props.severity.toUpperCase()}
+							{props.severity}
 						</span>
-						{!props.read && (
-							<span
-								style={{
-									width: "8px",
-									height: "8px",
-									"border-radius": "50%",
-									background: "#e74c3c",
-								}}
-							/>
-						)}
-					</div>
-				)}
-				<h1>{props.title || "Notification"}</h1>
-				<p>{props.description}</p>
+					)}
+				</div>
+				<h1 style={{ "font-size": "14px", "font-weight": "600", margin: "0 0 4px 0" }}>
+					{props.title || "Notification"}
+				</h1>
+				<p style={{ "font-size": "13px", color: "hsl(var(--color__primary-hue) 5% 80%)", margin: 0, "word-break": "break-word" }}>
+					{props.description}
+				</p>
 				{props.progress !== null && props.progress !== undefined && (
-					<div style={{ "margin-top": "8px" }}>
+					<div style={{ "margin-top": "8px", "max-width": "100%" }}>
 						<Progress
 							progress={props.progress}
 							current_step={props.current_step}
@@ -215,23 +214,44 @@ function NotificationCard(props: {
 					</div>
 				)}
 			</div>
-			<div style={{ display: "flex", gap: "4px" }}>
-				{props.persistent && !props.read && (
+			<div style={{ display: "flex", gap: "6px", "flex-direction": "column", "flex-shrink": "0", "align-items": "stretch", "min-width": "60px" }}>
+				{/* Action buttons */}
+				<Show when={props.actions && props.actions.length > 0}>
+					<For each={props.actions}>
+						{(action) => (
+							<button
+								class={styles["sidebar__notification__action-btn"]}
+								onClick={() => handleAction(action.id)}
+								title={action.label}
+								style={{
+									background: action.type === "destructive" 
+										? "hsl(0deg 70% 40% / 25%)" 
+										: action.type === "primary"
+										? "hsl(210deg 80% 50% / 25%)"
+										: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
+									"border-color": action.type === "destructive"
+										? "hsl(0deg 70% 40% / 40%)"
+										: action.type === "primary"
+										? "hsl(210deg 80% 50% / 40%)"
+										: "hsl(var(--color__primary-hue) 5% 50% / 30%)"
+								}}
+							>
+								{action.label}
+							</button>
+						)}
+					</For>
+				</Show>
+				
+				{/* Delete/Close button - show for dismissible notifications */}
+				<Show when={props.dismissible}>
 					<button
-						class={styles["sidebar__notification__action-btn"]}
-						onClick={handleMarkRead}
-						title="Mark as read"
+						class={styles["sidebar__notification__close-btn"]}
+						onClick={handleDelete}
+						title="Delete"
 					>
-						✓
+						<CloseIcon />
 					</button>
-				)}
-				<button
-					class={styles["sidebar__notification__close-btn"]}
-					onClick={handleDelete}
-					title="Delete"
-				>
-					<CloseIcon />
-				</button>
+				</Show>
 			</div>
 		</div>
 	);

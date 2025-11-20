@@ -20,14 +20,15 @@ root.ondragover = (e) => {
 	e.preventDefault();
 };
 
-initTheme();
-render(() => <App />, root);
-
-// Hide loader after app renders
-setTimeout(() => {
-	const loader = document.getElementById("app-loader");
-	if (loader) {
-		loader.classList.add("hidden");
-		setTimeout(() => loader.remove(), 300);
+// Add Ctrl+R / Cmd+R reload handler
+document.addEventListener("keydown", (e) => {
+	if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+		e.preventDefault();
+		window.location.reload();
 	}
-}, 100);
+});
+
+// Initialize theme and render app
+initTheme().then(() => {
+	render(() => <App />, root);
+});

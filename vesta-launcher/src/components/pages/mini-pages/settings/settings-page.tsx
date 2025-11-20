@@ -190,6 +190,13 @@ function SettingsPage() {
 					>
 						Navigate to File Drop Test
 					</LauncherButton>
+					<LauncherButton
+						onClick={() => {
+							router()?.navigate("/task-test");
+						}}
+					>
+						Navigate to Task System Test
+					</LauncherButton>
 				</section>
 			</Show>
 		</div>

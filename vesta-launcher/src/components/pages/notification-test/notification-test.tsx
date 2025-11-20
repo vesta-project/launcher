@@ -111,9 +111,32 @@ function NotificationTestPage() {
 		}
 	};
 
+	const submitCancellableTask = async () => {
+		setLoading(true);
+		try {
+			await invoke("submit_test_task", {
+				title: "Long Running Task",
+				durationSecs: 15,
+			});
+		} catch (error) {
+			console.error("Failed to submit task:", error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
 	return (
 		<div class="notification-test-page">
 			<h1>Notification System Test Page</h1>
+
+			<div class="test-section">
+				<h2>Task System</h2>
+				<div class="button-group">
+					<Button onClick={submitCancellableTask} disabled={loading()}>
+						Submit Cancellable Task (15s)
+					</Button>
+				</div>
+			</div>
 
 			<div class="test-section">
 				<h2>Ephemeral Notifications (Toast Only)</h2>

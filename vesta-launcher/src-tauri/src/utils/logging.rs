@@ -4,7 +4,7 @@
 //! notification emission for important events.
 
 use serde::Serialize;
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 
 /// Log an info message
 pub fn info(text: &str) {
@@ -69,14 +69,17 @@ pub fn emit_notification(
     // TODO: Check AppConfig.debug_logging before emitting debug notifications
     // For now, always emit for error and warning levels when persist=true
     if persist && (level == "error" || level == "warning" || level == "warn") {
-        use crate::notifications::{create_notification, NotificationPayload};
+        use crate::notifications::manager::NotificationManager;
+        use crate::notifications::models::{CreateNotificationInput, NotificationType};
         
-        let payload = NotificationPayload {
+        let input = CreateNotificationInput {
             client_key,
             title: title.map(|s| s.to_string()),
             description: Some(message.to_string()),
-            severity: level.to_string(),
-            persist,
+            severity: Some(level.to_string()),
+            notification_type: Some(if persist { NotificationType::Patient } else { NotificationType::Immediate }),
+            dismissible: Some(true),
+            actions: None,
             progress: None,
             current_step: None,
             total_steps: None,
@@ -86,7 +89,8 @@ pub fn emit_notification(
         // Fire and forget - don't block on notification creation
         let app_handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            let _ = create_notification(app_handle, payload).await;
+            let manager = app_handle.state::<NotificationManager>();
+            let _ = manager.create(input);
         });
     }
 }

@@ -19,6 +19,8 @@
 
 .sidebar-profile-button {
   background-color: transparent;
+  border: 2px solid hsla(0, 0%, 100%, .15);
+  box-sizing: border-box;
 }
 
 .profile-loading-spinner {

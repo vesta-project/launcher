@@ -1,36 +1,50 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { showToast, tryRemoveToast } from "@ui/toast/toast";
+import { showToast, tryRemoveToast, updateToast } from "@ui/toast/toast";
 import { JSX, createSignal } from "solid-js";
 
 const [notifications, setNotifications] = createSignal<Notification[]>([]);
+let _notificationCache: Notification[] = [];
 
-type AlertType = "Info" | "Success" | "Warning" | "Error";
-type DismissType = "Close" | "Hide";
+// New notification type system
+type NotificationType = "alert" | "progress" | "immediate" | "patient";
+type NotificationSeverity = "info" | "success" | "warning" | "error";
+type NotificationActionType = "primary" | "secondary" | "destructive";
 
+interface NotificationAction {
+	id: string;
+	label: string;
+	type: NotificationActionType;
+}
+
+// Frontend notification structure (for toast/ephemeral display)
 interface Notification {
 	id: number;
-	dismiss_type: DismissType;
-	type: AlertType;
+	type: NotificationSeverity;
 	title?: string;
 	description?: string;
 	progress?: number | null; // -1 for pulsing, 0-100 for percentage, null for none
 	current_step?: number | null;
 	total_steps?: number | null;
 	client_key?: string | null;
+	notification_type?: NotificationType;
+	dismissible?: boolean;
+	actions?: NotificationAction[];
 }
 
-// Backend notification structure from Rust
+// Backend notification structure from Rust (matches Rust Notification struct)
 interface BackendNotification {
 	id: number;
 	client_key: string | null;
-	title: string | null;
+	title: string;
 	description: string | null;
-	severity: string;
-	persist: boolean;
+	severity: NotificationSeverity;
+	notification_type: NotificationType;
+	dismissible: boolean;
 	progress: number | null;
 	current_step: number | null;
 	total_steps: number | null;
+	actions: NotificationAction[];
 	read: boolean;
 	metadata: string | null;
 	created_at: string;
@@ -39,57 +53,89 @@ interface BackendNotification {
 }
 
 function showAlert(
-	type: AlertType,
+	severity: NotificationSeverity,
 	title?: string,
 	description?: string,
-	dismiss_type: DismissType = "Hide",
 	progress?: number | null,
 	current_step?: number | null,
 	total_steps?: number | null,
+	client_key?: string | null,
+	notification_type?: NotificationType,
+	dismissible?: boolean,
+	actions?: NotificationAction[],
 ) {
+	console.log(`[Notification] showAlert: ${title}, Key: ${client_key}, Type: ${notification_type}, Actions:`, actions);
+	// If progress is 0, treat it as indeterminate (-1) and hide steps to show a pulsing bar
+	let displayProgress = progress;
+	let displayCurrentStep = current_step;
+	let displayTotalSteps = total_steps;
+
+	if (progress === 0) {
+		displayProgress = -1;
+		displayCurrentStep = undefined; // Hide steps text
+		displayTotalSteps = undefined;  // Hide steps text
+	}
+
+	// Determine if cancellable based on actions (for backward compatibility)
+	const cancellable = actions?.some(a => a.id === 'cancel_task') ?? false;
+
 	let id = showToast({
 		title,
 		description,
 		duration: 5000,
 		onToastForceClose: (id: number) => closeAlert(id),
-		severity: type,
+		severity: capitalizeFirstLetter(severity) as "Info" | "Success" | "Warning" | "Error",
+		progress: displayProgress,
+		current_step: displayCurrentStep,
+		total_steps: displayTotalSteps,
+		cancellable: cancellable,
+		onCancel: client_key ? () => cancelTask(client_key) : undefined,
+	});
+
+	const newNotif: Notification = {
+		id,
+		type: severity,
+		title,
+		description,
 		progress,
 		current_step,
 		total_steps,
-	});
+		client_key,
+		notification_type,
+		dismissible,
+		actions,
+	};
 
-	setNotifications((notifications) => [
-		...notifications,
-		{
-			id,
-			dismiss_type,
-			type,
-			title,
-			description,
-			progress,
-			current_step,
-			total_steps,
-		},
-	]);
+	_notificationCache.push(newNotif);
+	setNotifications([..._notificationCache]);
 	return id;
 }
 
 function removeAllAlerts() {
+	_notificationCache = [];
 	setNotifications([]);
 }
 
 function closeAlert(id: number) {
 	console.log(`Closing Alert ${id}`);
-	setNotifications((notifications) => notifications.filter((n) => n.id !== id));
+	_notificationCache = _notificationCache.filter((n) => n.id !== id);
+	setNotifications([..._notificationCache]);
 	tryRemoveToast(id);
+}
+
+// Helper function to capitalize first letter
+function capitalizeFirstLetter(str: string): string {
+	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // Tauri command wrappers
 async function createNotification(params: {
 	title?: string;
 	description?: string;
-	severity: "info" | "success" | "warning" | "error";
-	persist?: boolean;
+	severity?: NotificationSeverity;
+	notification_type?: NotificationType;
+	dismissible?: boolean;
+	actions?: NotificationAction[];
 	progress?: number;
 	current_step?: number;
 	total_steps?: number;
@@ -97,6 +143,16 @@ async function createNotification(params: {
 	metadata?: string;
 }): Promise<number> {
 	return await invoke<number>("create_notification", { payload: params });
+}
+
+async function cancelTask(clientKey: string): Promise<void> {
+	console.log(`Cancelling task: ${clientKey}`);
+	await invoke("cancel_task", { clientKey });
+}
+
+async function invokeNotificationAction(actionId: string, clientKey?: string): Promise<void> {
+	console.log(`Invoking notification action: ${actionId}, key: ${clientKey}`);
+	await invoke("invoke_notification_action", { actionId, clientKey });
 }
 
 async function updateNotificationProgress(params: {
@@ -110,9 +166,9 @@ async function updateNotificationProgress(params: {
 }
 
 async function listNotifications(filters?: {
-	severity?: string;
+	severity?: NotificationSeverity;
 	read?: boolean;
-	persist?: boolean;
+	notification_type?: NotificationType;
 }): Promise<BackendNotification[]> {
 	return await invoke<BackendNotification[]>("list_notifications", {
 		filters: filters || null,
@@ -153,22 +209,75 @@ async function subscribeToBackendNotifications() {
 		"core://notification",
 		(event) => {
 			const notif = event.payload;
+			console.log(`[Notification] Event: ${notif.title}, Key: ${notif.client_key}, Cache Size: ${_notificationCache.length}`);
 
-			// Always show toast for immediate visibility
-			showAlert(
-				severityToAlertType(notif.severity),
-				notif.title || undefined,
-				notif.description || undefined,
-				notif.progress == null || notif.progress >= 100 ? "Hide" : "Close",
-				notif.progress,
-				notif.current_step,
-				notif.total_steps,
-			);
+			// Check if we already have this notification in our ephemeral list
+			let updated = false;
+			if (notif.client_key) {
+				const existing = _notificationCache.find(
+					(n) => n.client_key === notif.client_key,
+				);
+				if (existing) {
+					console.log(`[Notification] Updating existing: ${existing.id}`);
+					updated = true;
+					// Update existing toast and notification state
+					const clientKey = notif.client_key;
+					// Determine if cancellable based on actions
+					const cancellable = notif.actions?.some(a => a.id === 'cancel_task') ?? false;
+					updateToast(existing.id, {
+						title: notif.title,
+						description: notif.description || undefined,
+						progress: notif.progress,
+						current_step: notif.current_step,
+						total_steps: notif.total_steps,
+						severity: capitalizeFirstLetter(notif.severity) as "Info" | "Success" | "Warning" | "Error",
+						duration: 5000,
+						cancellable: cancellable,
+						onCancel: clientKey ? () => cancelTask(clientKey) : undefined,
+					});
 
-			// If persistent, also trigger refetch to update sidebar
-			if (notif.persist) {
-				triggerPersistentNotificationRefetch();
+					console.log(`[Notification] Updating cache with actions:`, notif.actions);
+					_notificationCache = _notificationCache.map((n) =>
+						n.client_key === notif.client_key
+							? {
+									...n,
+									title: notif.title,
+									description: notif.description || undefined,
+									progress: notif.progress,
+									current_step: notif.current_step,
+									total_steps: notif.total_steps,
+									type: notif.severity,
+									notification_type: notif.notification_type,
+									dismissible: notif.dismissible,
+									actions: notif.actions,
+								}
+							: n,
+					);
+					setNotifications([..._notificationCache]);
+				}
 			}
+
+			if (!updated) {
+				console.log(`[Notification] Creating new toast for type: ${notif.notification_type}`);
+				// Show toast for Progress and Immediate notifications
+				if (notif.notification_type === "immediate" || notif.notification_type === "progress") {
+					showAlert(
+						notif.severity,
+						notif.title,
+						notif.description || undefined,
+						notif.progress,
+						notif.current_step,
+						notif.total_steps,
+						notif.client_key,
+						notif.notification_type,
+						notif.dismissible,
+						notif.actions,
+					);
+				}
+			}
+
+			// Trigger refetch for sidebar to show all notification types
+			triggerPersistentNotificationRefetch();
 		},
 	);
 
@@ -176,22 +285,70 @@ async function subscribeToBackendNotifications() {
 	const unsubProgress = await listen<BackendNotification>(
 		"core://notification-progress",
 		(event) => {
+			console.log("Received progress event:", event.payload);
 			const notif = event.payload;
-			// Update existing toast if it's ephemeral
-			if (!notif.persist && notif.client_key) {
-				const existing = notifications().find(
+			
+			// Always try to update existing toast if we have it in our ephemeral list
+			// regardless of whether it's persistent or not
+			if (notif.client_key) {
+				const existing = _notificationCache.find(
 					(n) => n.client_key && n.client_key === notif.client_key,
 				);
 				if (existing) {
-					console.debug(
-						`Progress update for ${notif.client_key}: ${notif.progress}%`,
+					// Check if task just completed (progress went from <100 to 100)
+					const wasIncomplete = existing.progress !== null && existing.progress !== undefined && existing.progress < 100;
+					const isNowComplete = notif.progress === 100;
+					
+					// Update the toast UI
+					const clientKey = notif.client_key;
+					// Use actions from payload if available, otherwise keep existing
+					const currentActions = notif.actions && notif.actions.length > 0 ? notif.actions : existing.actions;
+					const cancellable = currentActions?.some(a => a.id === 'cancel_task') ?? false;
+					
+					// If task just completed, remove the cancel button
+					const shouldShowCancel = !isNowComplete && cancellable;
+					
+					updateToast(existing.id, {
+						title: notif.title || existing.title,
+						description: notif.description || existing.description,
+						progress: notif.progress,
+						current_step: notif.current_step,
+						total_steps: notif.total_steps,
+						severity: notif.severity ? capitalizeFirstLetter(notif.severity) as "Info" | "Success" | "Warning" | "Error" : capitalizeFirstLetter(existing.type) as "Info" | "Success" | "Warning" | "Error",
+						duration: isNowComplete ? 5000 : 0, // Auto-dismiss after 5s on completion
+						cancellable: shouldShowCancel,
+						onCancel: shouldShowCancel && clientKey ? () => cancelTask(clientKey) : undefined,
+					});
+
+					_notificationCache = _notificationCache.map((n) =>
+						n.client_key === notif.client_key
+							? {
+									...n,
+									title: notif.title || n.title,
+									description: notif.description || n.description,
+									progress: notif.progress,
+									current_step: notif.current_step,
+									total_steps: notif.total_steps,
+									type: notif.severity || n.type,
+									notification_type: notif.notification_type || n.notification_type,
+									actions: currentActions,
+									dismissible: notif.dismissible !== undefined ? notif.dismissible : n.dismissible,
+								}
+							: n,
 					);
-					// TODO: Update the toast UI directly (requires toast refactor)
+					setNotifications([..._notificationCache]);
+					
+					// If just completed, log it
+					if (wasIncomplete && isNowComplete) {
+						console.log(`[Notification] Task completed: ${notif.title || existing.title}`);
+					}
+				} else {
+					// console.log("Could not find existing ephemeral notification for client_key:", notif.client_key);
 				}
-			} else if (notif.persist) {
-				// Trigger refetch for persistent notifications with progress updates
-				triggerPersistentNotificationRefetch();
 			}
+			
+			// Trigger refetch for sidebar
+			triggerPersistentNotificationRefetch();
 		},
 	);
 
@@ -213,28 +370,19 @@ function unsubscribeFromBackendNotifications() {
 	unsubscribeFns = [];
 }
 
-function severityToAlertType(severity: string): AlertType {
-	switch (severity.toLowerCase()) {
-		case "error":
-			return "Error";
-		case "warning":
-			return "Warning";
-		case "success":
-			return "Success";
-		default:
-			return "Info";
-	}
-}
-
 export {
 	type Notification,
 	type BackendNotification,
-	type AlertType,
+	type NotificationType,
+	type NotificationSeverity,
+	type NotificationAction,
+	type NotificationActionType,
 	notifications,
 	showAlert,
 	closeAlert,
 	removeAllAlerts,
 	createNotification,
+	invokeNotificationAction,
 	updateNotificationProgress,
 	listNotifications,
 	markNotificationRead,

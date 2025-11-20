@@ -28,8 +28,8 @@
   &:is(.sidebar--open) {
     z-index: 3;
     transition: background 250ms, grid-gap 200ms;
-    background: hsl(0deg 20% 12%) var(--bg);
-    box-shadow: hsl(0deg 0% 12% / 32%) 6px 6px 5px;
+    background: hsl(0, 0%, 15%) var(--bg);
+    box-shadow: hsl(0deg 0% 20% / 32%) 6px 6px 5px;
     grid-gap: 16px;
   }
 }
