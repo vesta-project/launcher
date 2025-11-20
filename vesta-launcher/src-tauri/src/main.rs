@@ -64,7 +64,8 @@ fn main() {
             notifications::commands::test_notification_multiple,
             tasks::commands::submit_test_task,
             tasks::commands::set_worker_limit,
-            tasks::commands::cancel_task
+            tasks::commands::cancel_task,
+            tasks::commands::install_game
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

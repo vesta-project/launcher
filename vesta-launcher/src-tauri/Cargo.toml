@@ -43,6 +43,9 @@ oauth2 = "4.4"
 minecraft-msa-auth = "0.4.0"
 lazy_static = "1.5"
 
+# Game installation dependencies
+parking_lot = "0.12"
+
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26.1"
 
