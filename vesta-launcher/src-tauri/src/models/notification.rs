@@ -100,8 +100,8 @@ mod tests {
     fn test_notification_schema() {
         let schema = Notification::schema_sql();
         
-        // Verify table name
-        assert!(schema.contains("CREATE TABLE IF NOT EXISTS Notification"));
+        // Verify table name (lowercase)
+        assert!(schema.contains("CREATE TABLE IF NOT EXISTS notification"));
         
         // Verify key fields exist
         assert!(schema.contains("id"));

@@ -20,60 +20,22 @@ fn main() {
         println!("Vesta Launcher closed unexpectedly: {e:?}");
     }));
 
-    // Override app data directory to %APPDATA%/.VestaLauncher
-    #[cfg(target_os = "windows")]
-    {
-        use std::env;
-        use std::fs::read_dir;
-        let appdata = env::var("APPDATA").unwrap_or_else(|_| "C:\\Users\\Public\\AppData\\Roaming".to_string());
-        let custom_dir = std::path::Path::new(&appdata).join(".VestaLauncher");
-        let logs_dir = custom_dir.join("logs");
-        std::fs::create_dir_all(&logs_dir).ok();
-        std::env::set_var("TAURI_DATA_DIR", &custom_dir);
-        std::env::set_var("VESTA_LOG_DIR", logs_dir.to_string_lossy().to_string());
-        
-        // Cleanup logs older than 30 days
-        if let Ok(entries) = read_dir(&logs_dir) {
-            let now = std::time::SystemTime::now();
-            for entry in entries.flatten() {
-                if let Ok(meta) = entry.metadata() {
-                    if let Ok(modified) = meta.modified() {
-                        if now.duration_since(modified).map(|d| d.as_secs()).unwrap_or(0) > 30 * 24 * 60 * 60 {
-                            let _ = std::fs::remove_file(entry.path());
-                        }
-                    }
-                }
-            }
-        }
-    }
+    // Configure logging with 30-day retention in %appdata%/.VestaLauncher/logs/
+    let log_plugin = tauri_plugin_log::Builder::new()
+        .targets([
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
+            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
+        ])
+        .level(log::LevelFilter::Info)
+        .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
+        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+        .max_file_size(10_000_000) // 10MB per file
+        .build();
+
     tauri::Builder::default()
         .setup(setup::init)
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .targets([
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Folder {
-                        path: std::path::PathBuf::from(
-                            std::env::var("VESTA_LOG_DIR")
-                                .unwrap_or_else(|_| "logs".to_string())
-                        ),
-                        file_name: Some("launcher.log".to_string()),
-                    }),
-                    tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
-                ])
-                .level(log::LevelFilter::Info)
-                .level_for("vesta_launcher", log::LevelFilter::Debug)
-                .level_for("piston_lib", log::LevelFilter::Debug)
-                .format(|out, message, record| {
-                    out.finish(format_args!(
-                        "[{}] [{}] {}",
-                        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
-                        record.level(),
-                        message
-                    ))
-                })
-                .build(),
-        )
+        .plugin(log_plugin)
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
@@ -117,7 +79,7 @@ fn main() {
             tasks::commands::submit_test_task,
             tasks::commands::set_worker_limit,
             tasks::commands::cancel_task,
-            tasks::commands::install_game
+            commands::instances::install_instance
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

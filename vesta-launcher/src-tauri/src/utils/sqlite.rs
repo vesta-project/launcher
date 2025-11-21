@@ -23,6 +23,16 @@ pub enum AUTOINCREMENT {
     VALUE(i32),
 }
 
+impl AUTOINCREMENT {
+    /// Convert to i32, returning 0 for INIT
+    pub fn as_i32(&self) -> i32 {
+        match self {
+            AUTOINCREMENT::INIT => 0,
+            AUTOINCREMENT::VALUE(i) => *i,
+        }
+    }
+}
+
 impl<T: Eq> PartialEq<T> for AUTOINCREMENT where i32: PartialEq<T> {
     fn eq(&self, other: &T) -> bool {
         match self {

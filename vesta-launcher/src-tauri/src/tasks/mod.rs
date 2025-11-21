@@ -1,5 +1,5 @@
 pub mod manager;
 pub mod commands;
-pub mod install;
+pub mod installers;
 mod versioning;
 mod init;

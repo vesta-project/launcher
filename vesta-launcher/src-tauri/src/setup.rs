@@ -3,8 +3,14 @@ use winver::WindowsVersion;
 use crate::utils::db_manager::{get_config_db, get_data_db};
 use crate::tasks::manager::TaskManager;
 use crate::notifications::manager::NotificationManager;
+// use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
+use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // Clean up old log files (>30 days)
+    cleanup_old_logs(app.handle());
+
     // Initialize NotificationManager
     let notification_manager = NotificationManager::new(app.handle().clone());
     app.manage(notification_manager);
@@ -12,6 +18,62 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize TaskManager
     let task_manager = TaskManager::new(app.handle().clone());
     app.manage(task_manager);
+
+    // TODO: InstanceManager doesn't exist yet - commenting out for now
+    /*
+    // Initialize InstanceManager
+    let instance_manager = InstanceManager::new();
+    app.manage(instance_manager.clone());
+    
+    // Scan for running instances on startup
+    let instance_manager_clone = instance_manager.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Ok(db) = get_data_db() {
+            let conn = db.get_connection();
+            let mut stmt = match conn.prepare(
+                "SELECT id, name, minecraft_version, modloader, modloader_version, java_path, 
+                        java_args, game_directory, width, height, memory_mb, icon_path, 
+                        last_played, total_playtime_minutes, created_at, updated_at
+                 FROM instance"
+            ) {
+                Ok(stmt) => stmt,
+                Err(e) => {
+                    log::warn!("Failed to prepare instance query: {}", e);
+                    return;
+                }
+            };
+            
+            let instances_result = stmt.query_map([], |row| {
+                Ok(crate::models::instance::Instance {
+                    id: crate::utils::sqlite::AUTOINCREMENT::VALUE(row.get(0)?),
+                    name: row.get(1)?,
+                    minecraft_version: row.get(2)?,
+                    modloader: row.get(3)?,
+                    modloader_version: row.get(4)?,
+                    java_path: row.get(5)?,
+                    java_args: row.get(6)?,
+                    game_directory: row.get(7)?,
+                    width: row.get(8)?,
+                    height: row.get(9)?,
+                    memory_mb: row.get(10)?,
+                    icon_path: row.get(11)?,
+                    last_played: row.get(12)?,
+                    total_playtime_minutes: row.get(13)?,
+                    created_at: row.get(14)?,
+                    updated_at: row.get(15)?,
+                })
+            });
+            
+            if let Ok(instances_iter) = instances_result {
+                let instances: Vec<crate::models::instance::Instance> = instances_iter.filter_map(|r| r.ok()).collect();
+                let running = instance_manager_clone.scan_for_running_instances(&instances);
+                if !running.is_empty() {
+                    log::info!("Found {} running instances on startup", running.len());
+                }
+            }
+        }
+    });
+    */
 
     // Initialize databases in background thread to not block window creation
     // This triggers the lazy initialization in db_manager
@@ -81,4 +143,38 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // }
     
     Ok(())
+}
+
+fn cleanup_old_logs(app_handle: &tauri::AppHandle) {
+    let app_handle_clone = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Ok(log_dir) = app_handle_clone.path().app_log_dir() {
+            log::debug!("Cleaning up old logs in: {:?}", log_dir);
+            
+            if let Ok(entries) = fs::read_dir(&log_dir) {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let retention_secs = 30 * 24 * 60 * 60; // 30 days
+                
+                for entry in entries.flatten() {
+                    if let Ok(metadata) = entry.metadata() {
+                        if let Ok(modified) = metadata.modified() {
+                            if let Ok(duration) = modified.duration_since(UNIX_EPOCH) {
+                                let age_secs = now.saturating_sub(duration.as_secs());
+                                if age_secs > retention_secs {
+                                    if let Err(e) = fs::remove_file(entry.path()) {
+                                        log::warn!("Failed to remove old log file {:?}: {}", entry.path(), e);
+                                    } else {
+                                        log::debug!("Removed old log file: {:?}", entry.path());
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    });
 }
