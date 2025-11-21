@@ -1,15 +1,5 @@
 use tauri::State;
-use crate::tasks::manager::{TaskManager, TestTask};
-
-#[tauri::command]
-pub async fn submit_test_task(
-    state: State<'_, TaskManager>,
-    title: String,
-    duration_secs: u64,
-) -> Result<(), String> {
-    let task = TestTask { title, duration_secs };
-    state.submit(Box::new(task)).await
-}
+use crate::tasks::manager::TaskManager;
 
 #[tauri::command]
 pub async fn set_worker_limit(

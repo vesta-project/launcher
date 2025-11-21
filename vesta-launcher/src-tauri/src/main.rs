@@ -4,7 +4,6 @@
 pub mod utils;
 pub mod models;
 pub mod auth;
-mod structs;
 mod tasks;
 mod notifications;
 mod commands;
@@ -39,9 +38,6 @@ fn main() {
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .invoke_handler(tauri::generate_handler![
-            commands::debug::test_command,
-            commands::debug::debug_check_tables,
-            commands::debug::debug_rerun_migrations,
             launch_new_window,
             get_config,
             set_config,
@@ -61,24 +57,16 @@ fn main() {
             auth::remove_account,
             auth::get_player_head_path,
             auth::preload_account_heads,
-            notifications::commands::create_notification,
-            notifications::commands::update_notification_progress,
-            notifications::commands::list_notifications,
-            notifications::commands::mark_notification_read,
-            notifications::commands::delete_notification,
-            notifications::commands::invoke_notification_action,
-            notifications::commands::cleanup_notifications,
-            notifications::commands::clear_immediate_notifications,
-            notifications::commands::test_notification_info,
-            notifications::commands::test_notification_success,
-            notifications::commands::test_notification_warning,
-            notifications::commands::test_notification_error,
-            notifications::commands::test_notification_pulsing,
-            notifications::commands::test_notification_progress,
-            notifications::commands::test_notification_multiple,
-            tasks::commands::submit_test_task,
-            tasks::commands::set_worker_limit,
-            tasks::commands::cancel_task,
+            commands::notifications::create_notification,
+            commands::notifications::update_notification_progress,
+            commands::notifications::list_notifications,
+            commands::notifications::mark_notification_read,
+            commands::notifications::delete_notification,
+            commands::notifications::invoke_notification_action,
+            commands::notifications::cleanup_notifications,
+            commands::notifications::clear_immediate_notifications,
+            commands::tasks::set_worker_limit,
+            commands::tasks::cancel_task,
             commands::instances::install_instance
         ])
         .run(tauri::generate_context!())

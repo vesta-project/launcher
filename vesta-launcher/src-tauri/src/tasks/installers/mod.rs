@@ -69,13 +69,22 @@ impl Task for InstallInstanceTask {
                 current_step: Arc::new(RwLock::new(String::new())),
             };
             
-            // Run the installation
-            install_instance(spec, &reporter)
-                .await
-                .map_err(|e| {
+            // Run the installation on a blocking thread to avoid Send bounds
+            let join = tauri::async_runtime::spawn_blocking(move || {
+                tauri::async_runtime::block_on(install_instance(spec, &reporter))
+            });
+
+            match join.await {
+                Ok(res) => res.map_err(|e| {
                     log::error!("Installation failed: {}", e);
                     e.to_string()
-                })
+                }),
+                Err(join_err) => {
+                    let msg = format!("Installation task join error: {}", join_err);
+                    log::error!("{}", msg);
+                    Err(msg)
+                }
+            }
         })
     }
 }

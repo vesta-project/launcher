@@ -1,6 +1,6 @@
 use tauri::utils::WindowEffect;
 
-struct Settings {
+pub struct Settings {
     pub version: String,
     pub language: String,
 
@@ -11,7 +11,7 @@ struct Settings {
     pub java_versions: Vec<JavaPath>,
 }
 
-struct JavaPath {
+pub struct JavaPath {
     pub name: String,
     pub path: String,
     pub version: String,
