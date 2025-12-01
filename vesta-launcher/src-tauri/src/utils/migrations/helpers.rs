@@ -8,11 +8,9 @@ pub fn generate_create_table_sql(
 ) -> String {
     let columns_sql: Vec<String> = columns
         .iter()
-        .map(|(name, (options, type_))| {
-            format!("{} {} {}", name, type_, options.join(" "))
-        })
+        .map(|(name, (options, type_))| format!("{} {} {}", name, type_, options.join(" ")))
         .collect();
-    
+
     format!(
         "CREATE TABLE IF NOT EXISTS {} ({})",
         table_name,
@@ -26,11 +24,7 @@ pub fn generate_drop_table_sql(table_name: &str) -> String {
 }
 
 /// Generate SQL for creating an index
-pub fn generate_create_index_sql(
-    index_name: &str,
-    table_name: &str,
-    columns: &[&str],
-) -> String {
+pub fn generate_create_index_sql(index_name: &str, table_name: &str, columns: &[&str]) -> String {
     format!(
         "CREATE INDEX {} ON {}({})",
         index_name,
@@ -69,20 +63,19 @@ pub fn generate_drop_column_sql(
     column_definitions: &HashMap<String, (Vec<String>, String)>,
 ) -> Vec<String> {
     let temp_table = format!("{}_old", table_name);
-    
+
     let columns_sql: Vec<String> = column_definitions
         .iter()
         .filter(|(name, _)| name.as_str() != column_name)
-        .map(|(name, (options, type_))| {
-            format!("{} {} {}", name, type_, options.join(" "))
-        })
+        .map(|(name, (options, type_))| format!("{} {} {}", name, type_, options.join(" ")))
         .collect();
-    
+
     vec![
         format!("ALTER TABLE {} RENAME TO {}", table_name, temp_table),
         format!("CREATE TABLE {} ({})", table_name, columns_sql.join(", ")),
-        format!("INSERT INTO {} ({}) SELECT {} FROM {}", 
-            table_name, 
+        format!(
+            "INSERT INTO {} ({}) SELECT {} FROM {}",
+            table_name,
             remaining_columns.join(", "),
             remaining_columns.join(", "),
             temp_table
@@ -99,17 +92,16 @@ pub fn generate_modify_column_sql(
     column_list: &[&str],
 ) -> Vec<String> {
     let temp_table = format!("{}_temp", table_name);
-    
+
     let columns_sql: Vec<String> = column_definitions
         .iter()
-        .map(|(name, (options, type_))| {
-            format!("{} {} {}", name, type_, options.join(" "))
-        })
+        .map(|(name, (options, type_))| format!("{} {} {}", name, type_, options.join(" ")))
         .collect();
-    
+
     vec![
         format!("CREATE TABLE {} ({})", temp_table, columns_sql.join(", ")),
-        format!("INSERT INTO {} ({}) SELECT {} FROM {}", 
+        format!(
+            "INSERT INTO {} ({}) SELECT {} FROM {}",
             temp_table,
             column_list.join(", "),
             column_list.join(", "),
@@ -121,10 +113,9 @@ pub fn generate_modify_column_sql(
 }
 
 /// Generate SQL for renaming a column
-pub fn generate_rename_column_sql(
-    table_name: &str,
-    old_name: &str,
-    new_name: &str,
-) -> String {
-    format!("ALTER TABLE {} RENAME COLUMN {} TO {}", table_name, old_name, new_name)
+pub fn generate_rename_column_sql(table_name: &str, old_name: &str, new_name: &str) -> String {
+    format!(
+        "ALTER TABLE {} RENAME COLUMN {} TO {}",
+        table_name, old_name, new_name
+    )
 }

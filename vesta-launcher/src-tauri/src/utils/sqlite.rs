@@ -1,13 +1,13 @@
+use crate::utils::migrations::{Migration, MigrationRunner, SQLiteMigrationRunner};
 use anyhow::{anyhow, Error};
 use piston_macros::SqlTable;
-use rusqlite::{Statement, params, params_from_iter, Connection};
 use rusqlite::types::{Null, ToSqlOutput};
+use rusqlite::{params, params_from_iter, Connection, Statement};
+use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::{fmt, fs};
-use serde::de::DeserializeOwned;
-use crate::utils::migrations::{Migration, MigrationRunner, SQLiteMigrationRunner};
 
 pub enum VersionVerification {
     Equal,
@@ -33,7 +33,10 @@ impl AUTOINCREMENT {
     }
 }
 
-impl<T: Eq> PartialEq<T> for AUTOINCREMENT where i32: PartialEq<T> {
+impl<T: Eq> PartialEq<T> for AUTOINCREMENT
+where
+    i32: PartialEq<T>,
+{
     fn eq(&self, other: &T) -> bool {
         match self {
             AUTOINCREMENT::INIT => false,
@@ -72,14 +75,12 @@ pub trait SqlTable {
     fn schema_sql() -> String {
         let columns = Self::columns();
         let table_name = Self::name();
-        
+
         let columns_sql: Vec<String> = columns
             .iter()
-            .map(|(name, (options, type_))| {
-                format!("{} {} {}", name, type_, options.join(" "))
-            })
+            .map(|(name, (options, type_))| format!("{} {} {}", name, type_, options.join(" ")))
             .collect();
-        
+
         format!(
             "CREATE TABLE IF NOT EXISTS {} ({})",
             table_name,
@@ -122,7 +123,13 @@ struct CustomTableStruct {
 fn test() {
     let path = std::env::temp_dir().join("vesta_sqlite_test");
 
-    let db = SQLiteDB::new(path, "test.db".to_string(), "1.0.5".to_string(), VersionVerification::LessOrEqual).unwrap();
+    let db = SQLiteDB::new(
+        path,
+        "test.db".to_string(),
+        "1.0.5".to_string(),
+        VersionVerification::LessOrEqual,
+    )
+    .unwrap();
 
     let data = CustomTableStruct::new("AnotherOne".to_string(), "John".to_string(), 20);
 
@@ -137,7 +144,13 @@ fn test() {
         age: i32,
     }
 
-    let results = db.search_data_serde::<CustomTableStruct, &str, CustomTableStruct2>(SQLiteSelect::ALL, "last_name", "John").unwrap();
+    let results = db
+        .search_data_serde::<CustomTableStruct, &str, CustomTableStruct2>(
+            SQLiteSelect::ALL,
+            "last_name",
+            "John",
+        )
+        .unwrap();
 
     println!("{:?}", results);
 }
@@ -310,7 +323,11 @@ impl SQLiteDB {
     ///
     /// # Errors
     /// Returns an error if migrations fail to execute
-    pub fn run_migrations(&self, migrations: Vec<Migration>, target_version: &str) -> Result<(), Error> {
+    pub fn run_migrations(
+        &self,
+        migrations: Vec<Migration>,
+        target_version: &str,
+    ) -> Result<(), Error> {
         let runner = SQLiteMigrationRunner::new(&self.conn, migrations);
         runner.migrate_up(target_version)
     }
@@ -351,20 +368,18 @@ impl SQLiteDB {
     pub fn create_table_from_trait<T: SqlTable>(&self) -> Result<String, Error> {
         let columns = T::columns();
         let table_name = T::name();
-        
+
         let columns_sql: Vec<String> = columns
             .iter()
-            .map(|(name, (options, type_))| {
-                format!("{} {} {}", name, type_, options.join(" "))
-            })
+            .map(|(name, (options, type_))| format!("{} {} {}", name, type_, options.join(" ")))
             .collect();
-        
+
         let create_sql = format!(
             "CREATE TABLE IF NOT EXISTS {} ({})",
             table_name,
             columns_sql.join(", ")
         );
-        
+
         Ok(create_sql)
     }
 
@@ -394,13 +409,15 @@ impl SQLiteDB {
         preserve_columns: Option<Vec<&str>>,
     ) -> Result<(), Error> {
         let temp_table = format!("{}_temp", table_name);
-        
+
         // Get column names to preserve
         let column_list = if let Some(cols) = preserve_columns {
             cols.join(", ")
         } else {
             // Get all current columns from the table
-            let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
+            let mut stmt = self
+                .conn
+                .prepare(&format!("PRAGMA table_info({})", table_name))?;
             let columns: Vec<String> = stmt
                 .query_map([], |row| row.get::<_, String>(1))?
                 .filter_map(Result::ok)
@@ -410,22 +427,26 @@ impl SQLiteDB {
 
         // Create new table with updated schema
         self.create_new_table(&temp_table, new_columns)?;
-        
+
         // Copy data from old table
         self.conn.execute(
-            &format!("INSERT INTO {} SELECT {} FROM {}", temp_table, column_list, table_name),
+            &format!(
+                "INSERT INTO {} SELECT {} FROM {}",
+                temp_table, column_list, table_name
+            ),
             [],
         )?;
-        
+
         // Drop old table
-        self.conn.execute(&format!("DROP TABLE {}", table_name), [])?;
-        
+        self.conn
+            .execute(&format!("DROP TABLE {}", table_name), [])?;
+
         // Rename temp table to original name
         self.conn.execute(
             &format!("ALTER TABLE {} RENAME TO {}", temp_table, table_name),
             [],
         )?;
-        
+
         Ok(())
     }
 
@@ -434,22 +455,18 @@ impl SQLiteDB {
     ///
     /// # Errors
     /// Returns an error if column addition fails
-    pub fn add_column(
-        &self,
-        table_name: &str,
-        column: SQLiteColumn,
-    ) -> Result<(), Error> {
+    pub fn add_column(&self, table_name: &str, column: SQLiteColumn) -> Result<(), Error> {
         let mut column_sql = format!("{} {}", column.name, column.column_type);
-        
+
         for option in &column.column_options {
             column_sql.push_str(&format!(" {}", option));
         }
-        
+
         self.conn.execute(
             &format!("ALTER TABLE {} ADD COLUMN {}", table_name, column_sql),
             [],
         )?;
-        
+
         Ok(())
     }
 
@@ -457,13 +474,11 @@ impl SQLiteDB {
     ///
     /// # Errors
     /// Returns an error if column drop fails
-    pub fn drop_column(
-        &self,
-        table_name: &str,
-        column_name: &str,
-    ) -> Result<(), Error> {
+    pub fn drop_column(&self, table_name: &str, column_name: &str) -> Result<(), Error> {
         // Get all columns except the one to drop
-        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
+        let mut stmt = self
+            .conn
+            .prepare(&format!("PRAGMA table_info({})", table_name))?;
         let columns: Vec<(String, String, String)> = stmt
             .query_map([], |row| {
                 Ok((
@@ -475,13 +490,13 @@ impl SQLiteDB {
             .filter_map(Result::ok)
             .filter(|(name, _, _)| name != column_name)
             .collect();
-        
+
         let column_list = columns
             .iter()
             .map(|(name, _, _)| name.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        
+
         let new_columns: Vec<SQLiteColumn> = columns
             .iter()
             .map(|(name, type_, _)| {
@@ -498,9 +513,13 @@ impl SQLiteDB {
                 )
             })
             .collect();
-        
-        self.modify_table_schema(table_name, new_columns, Some(column_list.split(", ").collect()))?;
-        
+
+        self.modify_table_schema(
+            table_name,
+            new_columns,
+            Some(column_list.split(", ").collect()),
+        )?;
+
         Ok(())
     }
 
@@ -515,10 +534,13 @@ impl SQLiteDB {
         new_name: &str,
     ) -> Result<(), Error> {
         self.conn.execute(
-            &format!("ALTER TABLE {} RENAME COLUMN {} TO {}", table_name, old_name, new_name),
+            &format!(
+                "ALTER TABLE {} RENAME COLUMN {} TO {}",
+                table_name, old_name, new_name
+            ),
             [],
         )?;
-        
+
         Ok(())
     }
 
@@ -567,8 +589,8 @@ impl SQLiteDB {
         columns: Vec<&str>,
         values: P,
     ) -> Result<(), rusqlite::Error>
-        where
-            P: rusqlite::Params,
+    where
+        P: rusqlite::Params,
     {
         let columns_str = columns.join(", ");
         let placeholders: Vec<String> = vec!["?".to_string(); columns.len()];
@@ -581,8 +603,8 @@ impl SQLiteDB {
     }
 
     pub fn insert_data_serde<P>(&self, data: &P) -> Result<(), Error>
-        where
-            P: SqlTable,
+    where
+        P: SqlTable,
     {
         let (values, columns) = data.values()?;
         let columns_str = columns
@@ -602,20 +624,25 @@ impl SQLiteDB {
         Ok(())
     }
 
-    pub fn insert_data_if_not_exists_serde<T>(&self, data: &T) -> Result<(), Error> 
+    pub fn insert_data_if_not_exists_serde<T>(&self, data: &T) -> Result<(), Error>
     where
-        T: SqlTable + serde::de::DeserializeOwned
+        T: SqlTable + serde::de::DeserializeOwned,
     {
         match data.get_auto_increment() {
             Some((name, AUTOINCREMENT::VALUE(term))) => {
-                let info: Vec<T> = self.search_data(SQLiteSelect::ONLY(vec!(name.clone())), &T::name(), &name, term)?;
-                
+                let info: Vec<T> = self.search_data(
+                    SQLiteSelect::ONLY(vec![name.clone()]),
+                    &T::name(),
+                    &name,
+                    term,
+                )?;
+
                 if info.is_empty() {
                     self.insert_data_serde(data)?;
                 } else {
                     panic!("Duplicate found")
                 }
-                
+
                 Ok(())
             }
             Some((_name, AUTOINCREMENT::INIT)) => {
@@ -623,18 +650,20 @@ impl SQLiteDB {
                 self.insert_data_serde(data)?;
                 Ok(())
             }
-            None => {
-                Err(anyhow!("Auto increment not found"))
-            }
+            None => Err(anyhow!("Auto increment not found")),
         }
     }
 
-    fn create_search_stmt(&self, select: SQLiteSelect, table_name: &str, column_name: &str) -> Result<Statement, Error> {
+    fn create_search_stmt(
+        &self,
+        select: SQLiteSelect,
+        table_name: &str,
+        column_name: &str,
+    ) -> Result<Statement, Error> {
         Ok(match select {
             SQLiteSelect::ALL => self.conn.prepare(&format!(
                 "SELECT * FROM {} WHERE {} = ?",
-                table_name,
-                column_name
+                table_name, column_name
             ))?,
             SQLiteSelect::ONLY(columns) => self.conn.prepare(&format!(
                 "SELECT {} FROM {} WHERE {} = ?",
@@ -656,9 +685,9 @@ impl SQLiteDB {
         column_name: &str,
         search_term: S,
     ) -> Result<Vec<T>, Error>
-        where
-            T: serde::de::DeserializeOwned,
-            S: rusqlite::ToSql,
+    where
+        T: serde::de::DeserializeOwned,
+        S: rusqlite::ToSql,
     {
         // TODO: Maybe not use a mut. This is a bit of a hack
         let mut stmt = self.create_search_stmt(select, table_name, column_name)?;
@@ -679,10 +708,10 @@ impl SQLiteDB {
         column_name: &str,
         search_term: S,
     ) -> Result<Vec<R>, Error>
-        where
-            T: SqlTable,
-            S: rusqlite::ToSql,
-            R: serde::de::DeserializeOwned,
+    where
+        T: SqlTable,
+        S: rusqlite::ToSql,
+        R: serde::de::DeserializeOwned,
     {
         // TODO: Use a macro to generate R
         // TODO: Maybe not use a mut. This is a bit of a hack
@@ -693,9 +722,7 @@ impl SQLiteDB {
             Ok(())
         })?;
         for (idx, result) in then.enumerate() {
-            result.map_err(|e| {
-                anyhow::anyhow!("Failed to deserialize row {}: {}", idx, e)
-            })?;
+            result.map_err(|e| anyhow::anyhow!("Failed to deserialize row {}: {}", idx, e))?;
         }
         Ok(persons)
     }
@@ -708,9 +735,7 @@ impl SQLiteDB {
             Ok(())
         })?;
         for (idx, result) in then.enumerate() {
-            result.map_err(|e| {
-                anyhow::anyhow!("Failed to deserialize row {}: {}", idx, e)
-            })?;
+            result.map_err(|e| anyhow::anyhow!("Failed to deserialize row {}: {}", idx, e))?;
         }
         Ok(persons)
     }
@@ -723,40 +748,43 @@ impl SQLiteDB {
             Ok(())
         })?;
         for (idx, result) in then.enumerate() {
-            result.map_err(|e| {
-                anyhow::anyhow!("Failed to deserialize row {}: {}", idx, e)
-            })?;
+            result.map_err(|e| anyhow::anyhow!("Failed to deserialize row {}: {}", idx, e))?;
         }
         Ok(persons)
     }
 
     /// Update data using SqlTable
     /// Updates a row identified by the primary key
-    pub fn update_data_serde<T, K>(&self, data: &T, pk_column: &str, pk_value: K) -> Result<(), Error>
+    pub fn update_data_serde<T, K>(
+        &self,
+        data: &T,
+        pk_column: &str,
+        pk_value: K,
+    ) -> Result<(), Error>
     where
         T: SqlTable,
         K: rusqlite::ToSql,
     {
         let (values, columns) = data.values()?;
-        
+
         // Build SET clause (excluding primary key)
         let set_clauses: Vec<String> = columns
             .iter()
             .filter(|col| *col != pk_column)
             .map(|col| format!("\"{}\" = ?", col))
             .collect();
-        
+
         if set_clauses.is_empty() {
             return Err(anyhow!("No columns to update"));
         }
-        
+
         let sql = format!(
             "UPDATE {} SET {} WHERE {} = ?",
             T::name(),
             set_clauses.join(", "),
             pk_column
         );
-        
+
         // Build parameters (excluding primary key column value, then add pk_value at end)
         let mut params: Vec<Box<dyn rusqlite::ToSql>> = values
             .into_iter()
@@ -764,9 +792,9 @@ impl SQLiteDB {
             .filter(|(_, col)| *col != pk_column)
             .map(|(val, _)| val)
             .collect();
-        
+
         params.push(Box::new(pk_value));
-        
+
         self.conn.execute(&sql, params_from_iter(params))?;
         Ok(())
     }

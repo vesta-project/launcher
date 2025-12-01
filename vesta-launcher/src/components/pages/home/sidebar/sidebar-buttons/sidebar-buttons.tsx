@@ -60,6 +60,10 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle", "open"]);
 
 	// Fetch active account
+	// NOTE: when createResource is called with only a fetcher function the
+	// helper may not return the second control tuple reliably across build
+	// configurations. Avoid relying on destructuring the `loading` accessor
+	// and instead check the resource value directly (undefined while loading).
 	const [activeAccount] = createResource<Account | null>(async () => {
 		try {
 			return await getActiveAccount();
@@ -105,7 +109,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 			}}
 			{...others}
 		>
-			<Show when={activeAccount.loading}>
+			<Show when={activeAccount() === undefined}>
 				<div class="profile-loading-spinner" />
 			</Show>
 			{c()}

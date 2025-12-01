@@ -20,13 +20,13 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
         WebviewUrl::App("file-drop-overlay.html".into()),
     )
     .title("File Drop Overlay")
-    .inner_size(9999.0, 9999.0)  // Start full-screen to capture all drags
+    .inner_size(9999.0, 9999.0) // Start full-screen to capture all drags
     .position(0.0, 0.0)
     .decorations(false)
     .transparent(true)
     .always_on_top(true)
     .skip_taskbar(true)
-    .visible(false)  // But keep invisible until drag starts
+    .visible(false) // But keep invisible until drag starts
     // Note: We do NOT disable the drag drop handler here, so it can receive native events
     .build()
     .map_err(|e| {
@@ -40,17 +40,31 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
 
 /// Position and show the overlay window over a drop zone
 #[tauri::command]
-pub async fn position_overlay(app_handle: AppHandle, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
-    log::debug!("Positioning overlay at ({}, {}) with size {}x{}", x, y, width, height);
-    
+pub async fn position_overlay(
+    app_handle: AppHandle,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
+    log::debug!(
+        "Positioning overlay at ({}, {}) with size {}x{}",
+        x,
+        y,
+        width,
+        height
+    );
+
     let overlay = app_handle
         .get_webview_window("file-drop-overlay")
         .ok_or("Overlay window not found")?;
 
-    overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
+    overlay
+        .set_position(tauri::Position::Physical(tauri::PhysicalPosition { x, y }))
         .map_err(|e| format!("Failed to set position: {}", e))?;
 
-    overlay.set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
+    overlay
+        .set_size(tauri::Size::Physical(tauri::PhysicalSize { width, height }))
         .map_err(|e| format!("Failed to set size: {}", e))?;
 
     Ok(())
@@ -60,12 +74,13 @@ pub async fn position_overlay(app_handle: AppHandle, x: i32, y: i32, width: u32,
 #[tauri::command]
 pub async fn show_overlay(app_handle: AppHandle) -> Result<(), String> {
     log::debug!("Showing overlay");
-    
+
     let overlay = app_handle
         .get_webview_window("file-drop-overlay")
         .ok_or("Overlay window not found")?;
 
-    overlay.show()
+    overlay
+        .show()
         .map_err(|e| format!("Failed to show overlay: {}", e))?;
 
     Ok(())
@@ -75,12 +90,13 @@ pub async fn show_overlay(app_handle: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub async fn hide_overlay(app_handle: AppHandle) -> Result<(), String> {
     log::debug!("Hiding overlay");
-    
+
     let overlay = app_handle
         .get_webview_window("file-drop-overlay")
         .ok_or("Overlay window not found")?;
 
-    overlay.hide()
+    overlay
+        .hide()
         .map_err(|e| format!("Failed to hide overlay: {}", e))?;
 
     Ok(())
@@ -97,7 +113,7 @@ pub async fn set_overlay_visual_state(
     opacity: String,
 ) -> Result<(), String> {
     log::debug!("Setting overlay visual state");
-    
+
     let overlay = app_handle
         .get_webview_window("file-drop-overlay")
         .ok_or("Overlay window not found")?;

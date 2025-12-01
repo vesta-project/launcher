@@ -3,12 +3,12 @@ import {
 	InitFinishedPage,
 	InitFirstPage,
 	InitLoginPage,
-} from "@components/pages/init/init-pages/init-pages";
+} from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Match, Switch, createSignal, onCleanup, onMount } from "solid-js";
-import { getOsType } from "../../../utils/os";
+import { getOsType } from "@utils/os";
 import "./init.css";
 
 const os = getOsType() ?? "windows";

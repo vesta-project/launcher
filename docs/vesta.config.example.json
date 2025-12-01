@@ -1,0 +1,44 @@
+{
+	"$comment": "Example Vesta configuration. Remove this field and other $comment lines before using in production.",
+	"schema_version": 1,
+	"profile": {
+		"id": "default",
+		"name": "Primary",
+		"game_directory": "%APPDATA%/VestaLauncher/game",
+		"$comment_game_directory": "Must be writable by the current user and align with docs/vesta_preferences.md",
+		"backups": {
+			"enabled": true,
+			"max_entries": 5,
+			"location": "%APPDATA%/VestaLauncher/backups",
+			"$comment": "Folders are created automatically; prefer fast local storage"
+		}
+	},
+	"java": {
+		"runtime_preference": "temurin-17-x86_64",
+		"$comment_runtime": "Follow docs/launch_process_addendum.md for architecture-specific runtimes",
+		"min_heap_mb": 2048,
+		"max_heap_mb": 4096,
+		"use_custom_runtime": false
+	},
+	"downloads": {
+		"max_parallel": 4,
+		"retry_limit": 3,
+		"checksum_policy": "require",
+		"$comment_checksum_policy": "Options: require | warn | skip",
+		"quarantine_on_failure": true
+	},
+	"cache": {
+		"path": "%APPDATA%/VestaLauncher/cache",
+		"max_bytes": 5368709120,
+		"prune_on_exit": false
+	},
+	"telemetry": {
+		"enabled": false,
+		"include_system_fingerprint": false,
+		"$comment": "Telemetry is always opt-in per docs/vesta_preferences.md"
+	},
+	"notifications": {
+		"persist_completed_tasks": true,
+		"dismiss_after_seconds": 15
+	}
+}

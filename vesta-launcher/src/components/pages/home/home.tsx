@@ -3,7 +3,7 @@ import GearIcon from "@assets/gear.svg";
 import logo from "@assets/logo.svg";
 import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
-import ConnectionStatus from "@components/page-root/connection-status/connection-status";
+import ConnectionStatus from "@components/page-root/connection-status";
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import { PageViewer, router } from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
@@ -18,8 +18,11 @@ import {
 	createSignal,
 	onCleanup,
 	onMount,
+	For,
+	createResource,
 } from "solid-js";
-import { getOsType } from "../../../utils/os";
+import { getOsType } from "@utils/os";
+import { listInstances, subscribeToInstanceUpdates, unsubscribeFromInstanceUpdates } from "@utils/instances";
 import "./home.css";
 import Sidebar from "./sidebar/sidebar";
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
@@ -53,35 +56,43 @@ function HomePage() {
 }
 
 function MainMenu() {
-	const [ready, setReady] = createSignal(false);
+	// createResource returns [resource, { refetch, loading, error, mutate }]
+	// The status signals (loading, error) live on the second item — not
+	// as properties on the resource signal itself. Destructure loading/error
+	// and use them correctly (call them) in JSX.
+	const [instances, { refetch, loading, error }] = createResource(listInstances);
 
 	onMount(() => {
-		// Defer rendering of heavy instance cards to allow initial paint
-		setTimeout(() => setReady(true), 50);
+		// Subscribe to instance updates to refetch when instances change
+		subscribeToInstanceUpdates(() => {
+			refetch();
+		});
+	});
+
+	onCleanup(() => {
+		unsubscribeFromInstanceUpdates();
 	});
 
 	return (
 		<div class={"main-menu"}>
 			<div class={"instance-wrapper"}>
 				<div class={"instance-container"}>
-					<Show when={ready()}>
-						<InstanceCard modloader={"forge"} />
-						<InstanceCard modloader={"fabric"} />
-						<InstanceCard modloader={"neoforge"} />
-						<InstanceCard modloader={"quilt"} />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
-						<InstanceCard />
+					<Show when={typeof loading === "function" ? loading() : !!loading}>
+						<p style={{ color: "#888", padding: "20px" }}>Loading instances...</p>
 					</Show>
+					<Show when={typeof error === "function" ? error() : !!error}>
+						<p style={{ color: "#ff4444", padding: "20px" }}>
+							Failed to load instances: {String(typeof error === "function" ? error() : error)}
+						</p>
+					</Show>
+					<Show when={instances() && instances().length === 0}>
+						<p style={{ color: "#888", padding: "20px" }}>
+							No instances found. Create one to get started!
+						</p>
+					</Show>
+					<For each={instances()}>
+						{(instance) => <InstanceCard instance={instance} />}
+					</For>
 				</div>
 			</div>
 		</div>

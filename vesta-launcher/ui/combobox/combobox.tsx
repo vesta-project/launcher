@@ -147,7 +147,7 @@ function ComboboxContent<T extends ValidComponent = "div">(
 				class={clsx("combobox__content", props.class)}
 				{...rest}
 			>
-				<ComboboxPrimitive.Listbox class="m-0 p-1" />
+				<ComboboxPrimitive.Listbox class="combobox__listbox" />
 			</ComboboxPrimitive.Content>
 		</ComboboxPrimitive.Portal>
 	);

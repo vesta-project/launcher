@@ -5,7 +5,7 @@
   border-radius: 0.5rem;
   user-select: none;
 
-  &:hover {
+  &:hover:not(:disabled) {
     filter: brightness(110%);
     box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
 
@@ -14,9 +14,15 @@
     }
   }
 
-  &:active {
+  &:active:not(:disabled) {
     transform: scale(95%);
     transition-duration: 50ms;
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(50%);
   }
 
   &:is(.launcher-button--icon-only) {

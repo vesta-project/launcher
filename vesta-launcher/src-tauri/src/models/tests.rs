@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use super::super::{Instance, Account};
+    use super::super::{Account, Instance};
     use crate::utils::sqlite::SqlTable;
 
     #[test]

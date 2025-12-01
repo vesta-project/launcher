@@ -8,6 +8,7 @@ import {
 	JSX,
 	Match,
 	Switch,
+	Show,
 	ValidComponent,
 	onCleanup,
 	splitProps,
@@ -146,24 +147,25 @@ function showToast(props: {
 							class={"toast__progress"}
 						/>
 					)}
-					{props.cancellable && (
-						<button 
-							class="toast__cancel-btn"
-							onClick={() => props.onCancel?.()}
-							style={{
-								"margin-top": "8px",
-								"padding": "4px 8px",
-								"background": "rgba(0,0,0,0.1)",
-								"border": "1px solid rgba(0,0,0,0.2)",
-								"border-radius": "4px",
-								"cursor": "pointer",
-								"font-size": "0.8rem",
-								"width": "fit-content"
-							}}
-						>
-							Cancel
-						</button>
-					)}
+					<div class="toast__cancel-area">
+						<Show when={props.cancellable} fallback={<div class="toast__cancel-placeholder" aria-hidden="true" />}>
+							<button
+								class="toast__cancel-btn"
+								onClick={() => props.onCancel?.()}
+								style={{
+									"padding": "4px 8px",
+									"background": "rgba(0,0,0,0.1)",
+									"border": "1px solid rgba(0,0,0,0.2)",
+									"border-radius": "4px",
+									"cursor": "pointer",
+									"font-size": "0.8rem",
+									"width": "fit-content"
+								}}
+							>
+								Cancel
+							</button>
+						</Show>
+					</div>
 				</div>
 				<ToastClose onClick={() => props.onToastForceClose?.(data.toastId)} />
 			</Toast>

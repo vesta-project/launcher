@@ -1,4 +1,3 @@
-pub mod manager;
 pub mod installers;
-mod versioning;
-mod init;
+pub mod manager;
+pub mod manifest;

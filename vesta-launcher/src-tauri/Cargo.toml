@@ -8,13 +8,17 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "2.0.0-beta.16", features = [] }
+tauri-build = { version = "2.0", features = [] }
 
 [dependencies]
-piston-lib = { path= "../../crates/piston-lib" }
+piston-lib = { path = "../../crates/piston-lib" }
 piston-macros = { path = "../../crates/piston-macros" }
+slug = "0.1"
 
-tauri = { version = "2.9.3", features = ["protocol-asset", "macos-private-api"] }
+tauri = { version = "2.9.3", features = [
+    "protocol-asset",
+    "macos-private-api",
+] }
 
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.145"
@@ -25,10 +29,10 @@ tauri-plugin-os = "2.3.2"
 tauri-plugin-log = "2.7.1"
 tauri-plugin-shell = "2"
 
-anyhow = "1.0.100"
+anyhow = "1.0.94"
 anyhow-tauri = "1.0.0"
 thiserror = "2.0.17"
-chrono = "0.4"
+chrono = "0.4.38"
 log = "0.4.28"
 
 rusqlite = { version = "0.37.0", features = ["bundled"] }
@@ -38,9 +42,10 @@ directories = "6.0.0"
 version-compare = "0.2.0"
 open = "5.3.1"
 urlencoding = "2.1"
+which = "6.0"
 
 # OAuth2 and Microsoft authentication
-oauth2 = "4.4"
+oauth2 = "4.4.2"
 minecraft-msa-auth = "0.4.0"
 lazy_static = "1.5"
 

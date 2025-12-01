@@ -9,19 +9,20 @@
   justify-content: space-between;
   position: relative;
   overflow-wrap: break-word;
-  background:
-    radial-gradient(
-        109.12% 79.52% at 47.71% 0%,
-        rgb(175 175 175 / 20%) 0%,
-        rgb(159 159 159 / 20%) 20%,
-        rgb(36 35 35 / 20%) 45.5%,
-        rgb(0 0 0 / 70%) 100%
-      )
-      no-repeat,
-    url("@assets/placeholder-instance-image.jpg") transparent no-repeat center
-      center / cover;
-  background-size: auto 100%;
-  transition: background-size 0.2s ease;
+  /* Decorative radial overlay plus a customizable background image.
+     The image is provided via the --instance-bg-image CSS variable (fallback to placeholder). */
+  background-image: radial-gradient(
+      109.12% 79.52% at 47.71% 0%,
+      rgb(175 175 175 / 20%) 0%,
+      rgb(159 159 159 / 20%) 20%,
+      rgb(36 35 35 / 20%) 45.5%,
+      rgb(0 0 0 / 70%) 100%
+    ),
+    var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+  background-repeat: no-repeat, no-repeat;
+  background-position: center center, center center;
+  background-size: auto, cover; /* radial overlay auto, image covers card */
+  transition: background-size 0.2s ease, box-shadow 0.15s ease;
   color: white;
   max-width: 200px;
   max-height: 200px;
@@ -44,18 +45,18 @@
   } */
 
   &:hover {
-    background:
-      radial-gradient(
-        109.12% 79.52% at 47.71% 0%,
+    /* Slightly enlarge the background image on hover for a subtle effect */
+    background-size: auto, 105%;
+    box-shadow: 0 4px 6px 0 rgb(0 0 0 / 8%);
+
+    background-image: radial-gradient(
+          109.12% 79.52% at 47.71% 0%,
         rgb(185 179 179 / 30%) 0%,
         rgb(149 144 144 / 30%) 19.5%,
         rgb(36 35 35 / 75%) 67.93%,
         rgb(0 0 0 / 75%) 100%
-      ),
-      url("@assets/placeholder-instance-image.jpg") transparent 50% / cover
-        no-repeat;
-    box-shadow: 0 4px 6px 0 rgb(0 0 0 / 8%);
-    background-size: auto 105%;
+        ),
+      var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
   }
 }
 

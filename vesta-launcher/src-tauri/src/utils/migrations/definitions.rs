@@ -1,7 +1,7 @@
 use super::Migration;
-use crate::utils::sqlite::SqlTable;
+use crate::models::{Account, Instance, Notification};
 use crate::utils::config::AppConfig;
-use crate::models::{Instance, Account, Notification};
+use crate::utils::sqlite::SqlTable;
 
 /// Generate a migration from a SqlTable implementation
 /// This is the single source of truth - the struct defines the schema!
@@ -10,12 +10,12 @@ pub fn migration_from_sqltable<T: SqlTable>() -> Migration {
     let description = T::migration_description();
     let create_sql = T::schema_sql();
     let default_data = T::default_data_sql();
-    
+
     let mut up_sql = vec![create_sql];
     up_sql.extend(default_data);
-    
+
     let down_sql = vec![format!("DROP TABLE IF EXISTS {}", T::name())];
-    
+
     Migration {
         version,
         description,
@@ -40,11 +40,10 @@ fn migration_001_config_initial_schema() -> Migration {
                 version TEXT PRIMARY KEY,
                 description TEXT NOT NULL,
                 applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )".to_string(),
+            )"
+            .to_string(),
         ],
-        down_sql: vec![
-            "DROP TABLE IF EXISTS schema_migrations".to_string(),
-        ],
+        down_sql: vec!["DROP TABLE IF EXISTS schema_migrations".to_string()],
     }
 }
 
@@ -52,10 +51,10 @@ fn migration_001_config_initial_schema() -> Migration {
 fn migration_002_app_config() -> Migration {
     let schema_sql = AppConfig::schema_sql();
     let default_data = AppConfig::get_default_data_sql();
-    
+
     let mut up_sql = vec![schema_sql];
     up_sql.extend(default_data);
-    
+
     Migration {
         version: AppConfig::migration_version(),
         description: AppConfig::migration_description(),
@@ -88,11 +87,10 @@ fn migration_001_data_initial_schema() -> Migration {
                 version TEXT PRIMARY KEY,
                 description TEXT NOT NULL,
                 applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )".to_string(),
+            )"
+            .to_string(),
         ],
-        down_sql: vec![
-            "DROP TABLE IF EXISTS schema_migrations".to_string(),
-        ],
+        down_sql: vec!["DROP TABLE IF EXISTS schema_migrations".to_string()],
     }
 }
 
@@ -102,13 +100,13 @@ fn migration_002_instances_table() -> Migration {
     let schema_sql = Instance::schema_sql();
     let indices = Instance::get_indices();
     let drop_indices = Instance::get_drop_indices();
-    
+
     let mut up_sql = vec![schema_sql];
     up_sql.extend(indices);
-    
+
     let mut down_sql = drop_indices;
     down_sql.push(format!("DROP TABLE IF EXISTS {}", Instance::name()));
-    
+
     Migration {
         version: Instance::migration_version(),
         description: Instance::migration_description(),
@@ -123,13 +121,13 @@ fn migration_003_accounts_table() -> Migration {
     let schema_sql = Account::schema_sql();
     let indices = Account::get_indices();
     let drop_indices = Account::get_drop_indices();
-    
+
     let mut up_sql = vec![schema_sql];
     up_sql.extend(indices);
-    
+
     let mut down_sql = drop_indices;
     down_sql.push(format!("DROP TABLE IF EXISTS {}", Account::name()));
-    
+
     Migration {
         version: Account::migration_version(),
         description: Account::migration_description(),
@@ -143,13 +141,13 @@ fn migration_004_notifications_table() -> Migration {
     let schema_sql = Notification::schema_sql();
     let indices = Notification::get_indices();
     let drop_indices = Notification::get_drop_indices();
-    
+
     let mut up_sql = vec![schema_sql];
     up_sql.extend(indices);
-    
+
     let mut down_sql = drop_indices;
     down_sql.push(format!("DROP TABLE IF EXISTS {}", Notification::name()));
-    
+
     Migration {
         version: Notification::migration_version(),
         description: Notification::migration_description(),
@@ -169,7 +167,7 @@ pub fn get_data_migrations() -> Vec<Migration> {
 }
 
 /// Legacy function for backwards compatibility
-/// 
+///
 /// # Deprecated
 /// Use `get_config_migrations()` for app_config.db or `get_data_migrations()` for vesta.db instead
 #[deprecated(note = "Use get_config_migrations() or get_data_migrations() instead")]
@@ -178,4 +176,3 @@ pub fn get_all_migrations() -> Vec<Migration> {
     // (config migrations should be run separately via initialize_config_db)
     get_data_migrations()
 }
-

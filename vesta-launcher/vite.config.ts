@@ -22,6 +22,9 @@ export default defineConfig(async () => ({
 	},
 
 	resolve: {
+		// Provide a default `conditions` set to avoid plugin runtime lookups
+		// (prevents incompatible calls to `defaultServerConditions` in some environments)
+		conditions: ["solid"],
 		alias: [
 			{
 				find: "@components",

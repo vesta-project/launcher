@@ -1,8 +1,8 @@
 pub mod account;
+pub mod api;
+pub mod domain;
 pub mod instance;
 pub mod notification;
-pub mod domain;
-pub mod api;
 
 pub use account::Account;
 pub use instance::Instance;

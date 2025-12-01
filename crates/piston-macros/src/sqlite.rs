@@ -1,9 +1,9 @@
 use proc_macro::TokenStream;
 
+use heck::ToSnakeCase;
 use proc_macro2::Ident;
 use quote::{quote, ToTokens};
 use syn::{DeriveInput, TypePath};
-use heck::ToSnakeCase;
 
 use crate::common::{extract_type_from_enum, generate_enum_with_generic, get_name_from_path};
 
@@ -94,21 +94,19 @@ pub(crate) fn parse_sqlite_table(ast: &DeriveInput) -> TokenStream {
         })
         .collect();
 
-
     let mut auto_increment: Vec<_> = columns
         .iter()
-        .filter(|(_, _, attr, _)| {
-            attr.contains(&"AUTOINCREMENT".to_string())
-        }).map(|(key, _, _, _)| {
+        .filter(|(_, _, attr, _)| attr.contains(&"AUTOINCREMENT".to_string()))
+        .map(|(key, _, _, _)| {
             let k = Ident::new(key, proc_macro2::Span::call_site());
             quote! { Some((#key.to_string(), &self.#k)) }
-        }).collect::<Vec<_>>();
-    
+        })
+        .collect::<Vec<_>>();
+
     if auto_increment.is_empty() {
         auto_increment.push(quote! { None });
     }
 
-    
     // The values used in the new function
     let struct_new_params: Vec<_> = columns
         .iter()
@@ -122,7 +120,7 @@ pub(crate) fn parse_sqlite_table(ast: &DeriveInput) -> TokenStream {
                 if t.contains('<') {
                     let t = t.replace('>', "");
                     let mut t = t.split('<');
-                    
+
                     generate_enum_with_generic(t.next().unwrap(), t.last().unwrap())
                     //syn::parse_str::<TypePath>(t.last().unwrap()).unwrap()
                 } else {
@@ -158,9 +156,9 @@ pub(crate) fn parse_sqlite_table(ast: &DeriveInput) -> TokenStream {
             !c.2.contains(&"AUTOINCREMENT".to_string()) && !c.2.contains(&"TABLE NAME".to_string())
         })
         .collect::<Vec<&(String, String, Vec<String>, String)>>();
-    
+
     let mut pre_values_column: Vec<proc_macro2::TokenStream> = Vec::new();
-    
+
     let values_expr = fields
         .iter()
         .filter(|f| {
@@ -172,7 +170,7 @@ pub(crate) fn parse_sqlite_table(ast: &DeriveInput) -> TokenStream {
         })
         .map(|field: &syn::Field| field_to_value(field, &values_column, &mut pre_values_column))
         .collect::<Vec<_>>();
-    
+
     let values_column = values_column
         .iter()
         .map(|c| c.0.clone())
@@ -210,13 +208,13 @@ pub(crate) fn parse_sqlite_table(ast: &DeriveInput) -> TokenStream {
                 hash
             }
 
-            fn values(&self) -> anyhow::Result<(Vec<Box<dyn rusqlite::ToSql>>, Vec<String>)> { 
+            fn values(&self) -> anyhow::Result<(Vec<Box<dyn rusqlite::ToSql>>, Vec<String>)> {
                 #(#pre_values_column)*
-                Ok(#values) 
+                Ok(#values)
             }
 
             fn name() -> String { #table_name.to_string() }
-            
+
             fn get_auto_increment(&self) -> Option<(String, &AUTOINCREMENT)> {
                 return (#(#auto_increment)*);
             }
@@ -264,9 +262,9 @@ fn get_field_columns(field: &syn::Field) -> (String, String, Vec<String>, String
     let sql_t: (String, Option<String>, bool) = match &field.ty {
         syn::Type::Path(syn::TypePath { path, .. }) => {
             // Check if this is an Option type
-            let is_option = path.segments.len() == 1 
-                && path.segments.first().unwrap().ident == "Option";
-            
+            let is_option =
+                path.segments.len() == 1 && path.segments.first().unwrap().ident == "Option";
+
             if is_option {
                 // Extract the inner type from Option<T>
                 match &path.segments.first().unwrap().arguments {
@@ -274,7 +272,9 @@ fn get_field_columns(field: &syn::Field) -> (String, String, Vec<String>, String
                         if let Some(syn::GenericArgument::Type(inner_ty)) = args.args.first() {
                             match inner_ty {
                                 syn::Type::Path(inner_path) => {
-                                    let inner_ident = inner_path.path.get_ident()
+                                    let inner_ident = inner_path
+                                        .path
+                                        .get_ident()
                                         .expect("Failed to get inner type ident");
                                     (inner_ident.to_string(), Some("Option".to_string()), true)
                                 }
@@ -305,7 +305,7 @@ fn get_field_columns(field: &syn::Field) -> (String, String, Vec<String>, String
         }
         t => panic!("Only paths are supported found {}", t.to_token_stream()),
     };
-    
+
     // AUTOINCREMENT must always be INTEGER in SQLite
     let t = if attr.contains(&"AUTOINCREMENT".to_string()) {
         "INTEGER".to_string()
@@ -326,7 +326,7 @@ fn get_field_columns(field: &syn::Field) -> (String, String, Vec<String>, String
             _ => "BLOB".to_string(),
         }
     };
-    
+
     // Return the full type string including Option if present
     let type_string = if sql_t.2 {
         format!("Option<{}>", sql_t.0)
@@ -335,30 +335,34 @@ fn get_field_columns(field: &syn::Field) -> (String, String, Vec<String>, String
     } else {
         sql_t.0.clone()
     };
-    
+
     (ident.to_string(), t, attr, type_string)
 }
 
-fn field_to_value(field: &syn::Field, values_column: &Vec<&(String, String, Vec<String>, String)>, columns_pre: &mut Vec<proc_macro2::TokenStream>) -> proc_macro2::TokenStream {
+fn field_to_value(
+    field: &syn::Field,
+    values_column: &Vec<&(String, String, Vec<String>, String)>,
+    columns_pre: &mut Vec<proc_macro2::TokenStream>,
+) -> proc_macro2::TokenStream {
     let ident = field.ident.as_ref().unwrap();
     let ty = values_column
-    .iter()
-    .filter(|c| *ident == c.0)
-    .map(|c| &c.1)
-    .collect::<Vec<&String>>();
-    
+        .iter()
+        .filter(|c| *ident == c.0)
+        .map(|c| &c.1)
+        .collect::<Vec<&String>>();
+
     if "BLOB" == *ty.first().unwrap() {
         columns_pre.push(quote::quote! { let #ident = &self.#ident; });
         return quote::quote! { #ident };
     }
-    
+
     // Check if the field is an Option type or bool by looking at the type string
     let field_type_str = values_column
         .iter()
         .filter(|c| *ident == c.0)
         .map(|c| &c.3)
         .collect::<Vec<&String>>();
-    
+
     if let Some(type_str) = field_type_str.first() {
         if type_str.starts_with("Option<") {
             // For Option types, we need to clone the Option itself
@@ -369,7 +373,7 @@ fn field_to_value(field: &syn::Field, values_column: &Vec<&(String, String, Vec<
             return quote::quote! { if self.#ident { 1 } else { 0 } };
         }
     }
-    
+
     // All other types can be cloned
     quote::quote! { self.#ident.clone() }
 }

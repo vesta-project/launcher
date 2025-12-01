@@ -1,8 +1,8 @@
-use tauri::State;
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, Notification};
 use crate::notifications::store::NotificationStore;
 use serde::Deserialize;
+use tauri::State;
 
 #[derive(Deserialize)]
 pub struct UpdateProgressPayload {
@@ -34,12 +34,14 @@ pub async fn update_notification_progress(
         return Err("Missing id or client_key".to_string());
     };
 
-    state.update_progress(
-        id_or_key,
-        payload.progress.unwrap_or(0),
-        payload.current_step,
-        payload.total_steps,
-    ).map_err(|e| e.to_string())
+    state
+        .update_progress(
+            id_or_key,
+            payload.progress.unwrap_or(0),
+            payload.current_step,
+            payload.total_steps,
+        )
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Deserialize)]
@@ -54,17 +56,24 @@ pub async fn list_notifications(
     state: State<'_, NotificationManager>,
     filters: Option<NotificationFilters>,
 ) -> Result<Vec<Notification>, String> {
-    let only_persisted = filters.as_ref()
+    let only_persisted = filters
+        .as_ref()
         .and_then(|f| f.notification_type.as_ref())
         .map(|_| true)
         .unwrap_or(false);
-    let only_unread = filters.as_ref().and_then(|f| f.read).map(|r| !r).unwrap_or(false);
+    let only_unread = filters
+        .as_ref()
+        .and_then(|f| f.read)
+        .map(|r| !r)
+        .unwrap_or(false);
 
-    let notifications = state.list(only_persisted, only_unread).map_err(|e| e.to_string())?;
-    println!("list_notifications returning {} notifications", notifications.len());
-    for n in &notifications {
-        println!("  - {}: type={:?}, dismissible={}, progress={:?}", n.title, n.notification_type, n.dismissible, n.progress);
-    }
+    let notifications = state
+        .list(only_persisted, only_unread)
+        .map_err(|e| e.to_string())?;
+    // println!("list_notifications returning {} notifications", notifications.len());
+    // for n in &notifications {
+    //     println!("  - {}: type={:?}, dismissible={}, progress={:?}", n.title, n.notification_type, n.dismissible, n.progress);
+    // }
     Ok(notifications)
 }
 
@@ -100,13 +109,13 @@ pub async fn invoke_notification_action(
     action_id: String,
     client_key: Option<String>,
 ) -> Result<(), String> {
-    state.invoke_action(&action_id, client_key).map_err(|e| e.to_string())
+    state
+        .invoke_action(&action_id, client_key)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub async fn cleanup_notifications(
-    retention_days: i32,
-) -> Result<usize, String> {
+pub async fn cleanup_notifications(retention_days: i32) -> Result<usize, String> {
     NotificationStore::cleanup(retention_days).map_err(|e| e.to_string())
 }
 
@@ -114,5 +123,16 @@ pub async fn cleanup_notifications(
 pub async fn clear_immediate_notifications(
     state: State<'_, NotificationManager>,
 ) -> Result<(), String> {
-    state.clear_immediate_notifications().map_err(|e| e.to_string())
+    state
+        .clear_immediate_notifications()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn clear_all_dismissible_notifications(
+    state: State<'_, NotificationManager>,
+) -> Result<usize, String> {
+    state
+        .clear_all_dismissible_notifications()
+        .map_err(|e| e.to_string())
 }

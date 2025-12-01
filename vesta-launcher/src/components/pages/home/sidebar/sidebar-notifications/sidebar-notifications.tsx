@@ -7,6 +7,7 @@ import {
 	type NotificationAction,
 	type NotificationSeverity,
 	type NotificationType,
+	clearAllDismissibleNotifications,
 	closeAlert,
 	deleteNotification,
 	invokeNotificationAction,
@@ -17,7 +18,7 @@ import {
 	removeAllAlerts,
 } from "@utils/notifications";
 import { invoke } from "@tauri-apps/api/core";
-import { For, Show, createResource, createSignal, onMount } from "solid-js";
+import { For, Show, createResource, createSignal, onMount, createEffect } from "solid-js";
 import styles from "./sidebar-notifications.module.css";
 
 interface SidebarNotificationProps {
@@ -48,6 +49,32 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 			}
 		},
 	);
+
+	// When the sidebar becomes open, mark unread persistent notifications as read
+	// so the bell's unread indicator clears. We only act on persisted notifications
+	// and rely on backend events to refresh the frontend list.
+	createEffect(() => {
+		if (!props.open) return;
+		const notifs = persistentNotifs() || [];
+		const unread = notifs.filter((n) => !n.read);
+		if (unread.length === 0) return;
+
+		(async () => {
+			try {
+				await Promise.all(
+					unread.map(async (n) => {
+						try {
+							await markNotificationRead(n.id);
+						} catch (err) {
+							console.error("Failed to mark notification read:", err);
+						}
+					}),
+				);
+			} catch (err) {
+				console.error("Failed to mark unread notifications as read:", err);
+			}
+		})();
+	});
 
 	const _allNotifications = () => {
 		const ephemeral = notifications();
@@ -101,15 +128,20 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 								dismissible={notification.dismissible}
 								actions={notification.actions}
 								client_key={notification.client_key}
+								metadata={notification.metadata}
 							/>
 							);
 						}}
 					</For>
 				</div>
 			</Show>
-			<Show when={notifications().length > 0}>
+			<Show when={notifications().length > 0 || (persistentNotifs()?.some(n => n.dismissible) ?? false)}>
 				<div>
-					<Button onClick={removeAllAlerts}>Clear</Button>
+					<Button onClick={async () => {
+						removeAllAlerts();
+						const cleared = await clearAllDismissibleNotifications();
+						console.log(`Cleared ${cleared} dismissible notifications`);
+					}}>Clear All</Button>
 				</div>
 			</Show>
 		</div>
@@ -129,6 +161,7 @@ function NotificationCard(props: {
 	notification_type?: NotificationType;
 	dismissible?: boolean;
 	actions?: NotificationAction[];
+	metadata?: string | null;
 	client_key?: string | null;
 }) {
 	// Debug logging
@@ -197,6 +230,21 @@ function NotificationCard(props: {
 				<p style={{ "font-size": "13px", color: "hsl(var(--color__primary-hue) 5% 80%)", margin: 0, "word-break": "break-word" }}>
 					{props.description}
 				</p>
+				<Show when={props.metadata}>
+					<div style={{ margin: "6px 0 0 0", "font-size": "12px", color: "hsl(var(--color__primary-hue) 5% 70%)" }}>
+						<small>
+							<pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
+								{(() => {
+									try {
+										return JSON.stringify(JSON.parse(props.metadata as string), null, 2);
+									} catch {
+										return (props.metadata as string) || '';
+									}
+								})()}
+							</pre>
+						</small>
+					</div>
+				</Show>
 				{props.progress !== null && props.progress !== undefined && (
 					<div style={{ "margin-top": "8px", "max-width": "100%" }}>
 						<Progress

@@ -64,7 +64,9 @@ function Sidebar(props: SidebarProps) {
 			try {
 				// Fetch all notifications (includes Immediate which are in-memory only)
 				const persistent = await listNotifications();
-				const totalCount = persistent.length;
+				// Fetch only unread count for the badge
+				const unread = await listNotifications({ read: false });
+				const totalCount = unread.length;
 				const hasActiveTask = persistent.some(
 					(n) =>
 						n.notification_type === "progress" &&

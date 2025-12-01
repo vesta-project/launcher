@@ -1,0 +1,36 @@
+{
+	"$comment": "Mirror priority order: higher priority value is preferred. Remove $comment lines before use.",
+	"schema_version": 1,
+	"mirrors": [
+		{
+			"name": "Vesta Primary Maven",
+			"url": "https://maven.vesta.gg/releases",
+			"priority": 100,
+			"types": ["libraries", "assets"],
+			"require_https": true,
+			"timeout_ms": 10000,
+			"fail_fast": false,
+			"$comment": "Primary mirror must host Mojang + loader libraries"
+		},
+		{
+			"name": "CreeperHost Backup",
+			"url": "https://maven.creeperhost.net",
+			"priority": 80,
+			"types": ["libraries"],
+			"require_https": true,
+			"timeout_ms": 12000,
+			"fail_fast": false,
+			"$comment": "Used when primary returns 5xx or checksum mismatch"
+		},
+		{
+			"name": "Local Cache",
+			"url": "file:///C:/Vesta/mirror-cache",
+			"priority": 60,
+			"types": ["libraries", "installers", "processed"],
+			"require_https": false,
+			"timeout_ms": 2000,
+			"fail_fast": true,
+			"$comment": "Only use for trusted LAN/air-gapped deployments"
+		}
+	]
+}

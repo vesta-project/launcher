@@ -2,7 +2,10 @@
 	"$schema": "../gen/schemas/desktop-schema.json",
 	"identifier": "default",
 	"description": "Capability for the main window",
-	"windows": ["main", "page-viewer-*"],
+	"windows": [
+		"main",
+		"page-viewer-*"
+	],
 	"permissions": [
 		"core:path:default",
 		"core:event:default",
@@ -23,7 +26,6 @@
 		"core:window:allow-set-position",
 		"core:window:allow-set-size",
 		"core:window:allow-show",
-		"core:window:allow-hide",
 		"core:webview:allow-webview-position",
 		"core:webview:allow-webview-size",
 		"os:default",

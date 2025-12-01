@@ -62,3 +62,9 @@ Vesta Launcher is a Minecraft launcher built with **Tauri (Rust)** for the backe
 - **Notification Flashing:** Ensure `dismissible` state is consistent between backend updates and frontend rendering. Completed tasks should be `dismissible: true`.
 - **Database Locks:** SQLite is single-writer. Ensure transactions are short and handled correctly by the `db_manager`.
 - **Tauri Commands:** Arguments must match exactly between Rust (`#[tauri::command]`) and TypeScript (`invoke`). Use `camelCase` in JS and `snake_case` in Rust (Tauri handles conversion).
+
+## Assistant / Copilot behaviour
+- If there's anything technical that the assistant doesn't know or is unsure about, the assistant must notify the developer and request guidance rather than guessing.
+ - We're not in a release stage right now: **ignore backwards-compatibility constraints for now**. Breaking changes are acceptable when they help move the project forward — but please clearly document any breaking changes in the PR description (and add migrations where relevant).
+- If the assistant becomes stuck on a technical step or reaches an uncertainty, it should stop the current automated process and ask for clarification or additional context.
+- If assistance instructions change or the assistant's responsibilities update, update this file to reflect that guidance so future runs follow the current expectations.

@@ -25,6 +25,12 @@ interface ButtonProps
 }
 
 function Button(p: ButtonProps) {
+	console.log("[Button] Component rendering with props:", { 
+		disabled: p.disabled, 
+		onClick: !!p.onClick,
+		children: typeof p.children 
+	});
+	
 	const c = children(() => p.children);
 	const props = mergeProps(
 		{
@@ -36,7 +42,7 @@ function Button(p: ButtonProps) {
 		},
 		p,
 	);
-	const [_, rest] = splitProps(props, [
+	const [local, rest] = splitProps(props, [
 		"color",
 		"variant",
 		"size",
@@ -45,7 +51,19 @@ function Button(p: ButtonProps) {
 		"tooltip_text",
 		"tooltip_placement",
 		"class",
+		"onClick",
 	]);
+
+	const handleClick = (e: MouseEvent) => {
+		console.log("[Button] NATIVE CLICK EVENT RECEIVED", e);
+		console.log("[Button] Click event fired", { disabled: props.disabled, onClick: !!local.onClick });
+		if (local.onClick) {
+			console.log("[Button] Calling onClick handler");
+			local.onClick();
+		} else {
+			console.log("[Button] No onClick handler found!");
+		}
+	};
 
 	return (
 		<Tooltip placement={props.tooltip_placement}>
@@ -53,19 +71,23 @@ function Button(p: ButtonProps) {
 				as={ButtonPrimitive.Button}
 				classList={{
 					"launcher-button": true,
-					"launcher-button--sm": props.size === "sm",
-					"launcher-button--md": props.size === "md",
-					"launcher-button--lg": props.size === "lg",
-					"launcher-button--solid": props.variant === "solid",
-					"launcher-button--outline": props.variant === "outline",
-					"launcher-button--ghost": props.variant === "ghost",
-					"launcher-button--icon-only": props.icon_only,
-					[props.class ?? ""]: true,
+					"launcher-button--sm": local.size === "sm",
+					"launcher-button--md": local.size === "md",
+					"launcher-button--lg": local.size === "lg",
+					"launcher-button--solid": local.variant === "solid",
+					"launcher-button--outline": local.variant === "outline",
+					"launcher-button--ghost": local.variant === "ghost",
+					"launcher-button--icon-only": local.icon_only,
+					[local.class ?? ""]: true,
 				}}
 				style={{
 					"--button-color":
-						props.color != "none" ? "var(--" + props.color + ")" : "",
+						local.color != "none" ? "var(--" + local.color + ")" : "",
 				}}
+				onClick={handleClick}
+				onMouseDown={(e: MouseEvent) => console.log("[Button] MouseDown event", e)}
+				onMouseUp={(e: MouseEvent) => console.log("[Button] MouseUp event", e)}
+				disabled={props.disabled}
 				{...(rest as ButtonPrimitive.ButtonRootProps)}
 			>
 				{c()}

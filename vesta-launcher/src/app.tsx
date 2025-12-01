@@ -1,6 +1,6 @@
 import { FatalPage, setFatalInfo } from "@components/pages/fatal/fatal-page";
 import InitPage from "@components/pages/init/init";
-import InvalidPage from "@components/pages/invalid/invalid";
+import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { UnlistenFn, emit, listen } from "@tauri-apps/api/event";
@@ -16,6 +16,7 @@ import {
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
+import { getMinecraftVersions } from "@utils/instances";
 import { lazy, onCleanup, onMount } from "solid-js";
 // import { initializeFileDropSystem, cleanupFileDropSystem } from "@utils/file-drop";
 
@@ -67,6 +68,17 @@ function Root(props: ChildrenProp) {
 			subscribeToBackendNotifications().catch((error) => {
 				console.error("Failed to initialize notification system:", error);
 			});
+
+			// Preload Minecraft versions metadata in background (non-blocking)
+			// This warms up the cache so install page loads instantly
+			getMinecraftVersions()
+				.then(() => {
+					console.log("Preloaded Minecraft versions metadata");
+				})
+				.catch((error) => {
+					// Silent fail - install page will fetch on demand if preload fails
+					console.warn("Failed to preload Minecraft versions:", error);
+				});
 
 			// Cleanup notifications in background (don't block startup)
 			cleanupNotifications()

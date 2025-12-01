@@ -69,6 +69,8 @@ pub struct NotificationAction {
     pub label: String,
     #[serde(rename = "type")]
     pub action_type: NotificationActionType,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub payload: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -97,6 +99,10 @@ pub struct Notification {
     pub created_at: String,
     pub updated_at: String,
     pub expires_at: Option<String>,
+    // Whether a successful completion should leave a persistent completion notification
+    // true = keep as Patient on success, false/None = default behavior (auto-delete on success)
+    #[serde(default)]
+    pub show_on_completion: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +118,9 @@ pub struct CreateNotificationInput {
     pub total_steps: Option<i32>,
     pub actions: Option<Vec<NotificationAction>>,
     pub metadata: Option<String>,
+    /// If true, keep a persistent completion notification when a progress notification reaches 100%.
+    /// Default: None (treated as false for auto-delete behavior unless explicitly true)
+    pub show_on_completion: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -217,6 +217,19 @@
   text-align: right;
 }
 
+.toast__cancel-area {
+  margin-top: 8px;
+  min-height: 32px; /* Reserve space for cancel button to avoid layout shifts */
+  display: flex;
+  align-items: center;
+}
+
+.toast__cancel-placeholder {
+  visibility: hidden;
+  width: fit-content;
+  height: 24px;
+}
+
 @keyframes pulse {
   0% {
     background-position: 200% 0;

@@ -1,16 +1,17 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-pub mod utils;
-pub mod models;
 pub mod auth;
-mod tasks;
-mod notifications;
 mod commands;
+mod metadata_cache;
+pub mod models;
+mod notifications;
 mod setup;
+mod tasks;
+pub mod utils;
 
-use utils::windows::launch_new_window;
 use utils::config::{get_config, set_config, update_config_field};
+use utils::windows::launch_new_window;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 
@@ -65,9 +66,21 @@ fn main() {
             commands::notifications::invoke_notification_action,
             commands::notifications::cleanup_notifications,
             commands::notifications::clear_immediate_notifications,
+            commands::notifications::clear_all_dismissible_notifications,
             commands::tasks::set_worker_limit,
             commands::tasks::cancel_task,
-            commands::instances::install_instance
+            commands::instances::install_instance,
+            commands::instances::list_instances,
+            commands::instances::create_instance,
+            commands::instances::update_instance,
+            commands::instances::delete_instance,
+            commands::instances::get_instance,
+            commands::instances::launch_instance,
+            commands::instances::kill_instance,
+            commands::instances::get_running_instances,
+            commands::instances::is_instance_running,
+            commands::instances::get_minecraft_versions,
+            commands::instances::regenerate_piston_manifest
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

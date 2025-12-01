@@ -1,5 +1,5 @@
 import { CreateMiniRouterPath } from "@components/page-viewer/mini-router";
-import InvalidPage from "@components/pages/mini-pages/404/404-page";
+import InvalidPage from "@components/pages/mini-pages/404-page";
 import FileDropPage from "@components/pages/mini-pages/file-drop/file-drop-page";
 import InstallPage from "@components/pages/mini-pages/install/install-page";
 import LoginPage from "@components/pages/mini-pages/login/login-page";

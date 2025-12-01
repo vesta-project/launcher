@@ -13,11 +13,8 @@ use rusqlite::Connection;
 /// Compare two semantic version strings (e.g., "0.1.0" vs "0.2.0")
 /// Returns: -1 if v1 < v2, 0 if equal, 1 if v1 > v2
 fn compare_versions(v1: &str, v2: &str) -> i8 {
-    let parse_version = |v: &str| -> Vec<u32> {
-        v.split('.')
-            .filter_map(|s| s.parse::<u32>().ok())
-            .collect()
-    };
+    let parse_version =
+        |v: &str| -> Vec<u32> { v.split('.').filter_map(|s| s.parse::<u32>().ok()).collect() };
 
     let v1_parts = parse_version(v1);
     let v2_parts = parse_version(v2);
@@ -82,12 +79,10 @@ impl<'a> SQLiteMigrationRunner<'a> {
     /// Sort migrations by version for proper execution order
     fn sort_migrations(&self) -> Vec<Migration> {
         let mut sorted = self.migrations.clone();
-        sorted.sort_by(|a, b| {
-            match compare_versions(&a.version, &b.version) {
-                -1 => std::cmp::Ordering::Less,
-                1 => std::cmp::Ordering::Greater,
-                _ => std::cmp::Ordering::Equal,
-            }
+        sorted.sort_by(|a, b| match compare_versions(&a.version, &b.version) {
+            -1 => std::cmp::Ordering::Less,
+            1 => std::cmp::Ordering::Greater,
+            _ => std::cmp::Ordering::Equal,
         });
         sorted
     }
@@ -116,10 +111,8 @@ impl<'a> SQLiteMigrationRunner<'a> {
 
     /// Record that a migration has been rolled back
     fn record_migration_rolled_back(&self, version: &str) -> Result<(), Error> {
-        self.conn.execute(
-            "DELETE FROM schema_migrations WHERE version = ?",
-            [version],
-        )?;
+        self.conn
+            .execute("DELETE FROM schema_migrations WHERE version = ?", [version])?;
         Ok(())
     }
 }
@@ -128,7 +121,8 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
     fn migrate_up(&self, target_version: &str) -> Result<(), Error> {
         self.ensure_migration_table()?;
 
-        let current_version = self.get_current_version()
+        let current_version = self
+            .get_current_version()
             .unwrap_or_else(|_| "0.0.0".to_string());
 
         let target_ver = target_version.to_string();
@@ -142,8 +136,9 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
 
         // Execute migrations in order
         for migration in sorted_migrations {
-            if compare_versions(&migration.version, &current_ver) > 0 
-                && compare_versions(&migration.version, &target_ver) <= 0 {
+            if compare_versions(&migration.version, &current_ver) > 0
+                && compare_versions(&migration.version, &target_ver) <= 0
+            {
                 // Check if already applied
                 if self.is_migration_applied(&migration.version)? {
                     continue;
@@ -161,7 +156,10 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
                 })() {
                     Ok(_) => {
                         self.conn.execute("COMMIT", [])?;
-                        println!("✓ Applied migration {}: {}", migration.version, migration.description);
+                        println!(
+                            "✓ Applied migration {}: {}",
+                            migration.version, migration.description
+                        );
                     }
                     Err(e) => {
                         self.conn.execute("ROLLBACK", [])?;
@@ -194,8 +192,9 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
 
         // Find migrations to rollback (in reverse order)
         for migration in sorted_migrations.iter().rev() {
-            if compare_versions(&migration.version, &current_ver) <= 0 
-                && compare_versions(&migration.version, &target_ver) > 0 {
+            if compare_versions(&migration.version, &current_ver) <= 0
+                && compare_versions(&migration.version, &target_ver) > 0
+            {
                 if self.is_migration_applied(&migration.version)? {
                     migrations_to_rollback.push(migration.clone());
                 }
@@ -216,7 +215,10 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
             })() {
                 Ok(_) => {
                     self.conn.execute("COMMIT", [])?;
-                    println!("✓ Rolled back migration {}: {}", migration.version, migration.description);
+                    println!(
+                        "✓ Rolled back migration {}: {}",
+                        migration.version, migration.description
+                    );
                 }
                 Err(e) => {
                     self.conn.execute("ROLLBACK", [])?;
@@ -235,11 +237,12 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
     fn get_current_version(&self) -> Result<String, Error> {
         self.ensure_migration_table()?;
 
-        let mut stmt = self.conn.prepare(
-            "SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT version FROM schema_migrations ORDER BY version DESC LIMIT 1")?;
 
-        let version = stmt.query_row([], |row| row.get(0))
+        let version = stmt
+            .query_row([], |row| row.get(0))
             .unwrap_or("0.0.0".to_string());
 
         Ok(version)
@@ -248,11 +251,12 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
     fn get_applied_migrations(&self) -> Result<Vec<String>, Error> {
         self.ensure_migration_table()?;
 
-        let mut stmt = self.conn.prepare(
-            "SELECT version FROM schema_migrations ORDER BY applied_at"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT version FROM schema_migrations ORDER BY applied_at")?;
 
-        let versions = stmt.query_map([], |row| row.get(0))?
+        let versions = stmt
+            .query_map([], |row| row.get(0))?
             .collect::<Result<Vec<String>, _>>()?;
 
         Ok(versions)
@@ -261,9 +265,9 @@ impl<'a> MigrationRunner for SQLiteMigrationRunner<'a> {
     fn is_migration_applied(&self, version: &str) -> Result<bool, Error> {
         self.ensure_migration_table()?;
 
-        let mut stmt = self.conn.prepare(
-            "SELECT COUNT(*) FROM schema_migrations WHERE version = ?"
-        )?;
+        let mut stmt = self
+            .conn
+            .prepare("SELECT COUNT(*) FROM schema_migrations WHERE version = ?")?;
 
         let count: i64 = stmt.query_row([version], |row| row.get(0))?;
 
@@ -285,4 +289,3 @@ pub fn create_migration(
         down_sql: down_sql.into_iter().map(|s| s.to_string()).collect(),
     }
 }
-

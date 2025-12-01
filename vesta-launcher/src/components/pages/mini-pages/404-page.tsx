@@ -1,3 +1,3 @@
 export default function InvalidPage() {
-	return <div>Invalid Page</div>;
+    return <div>Invalid Page</div>;
 }
