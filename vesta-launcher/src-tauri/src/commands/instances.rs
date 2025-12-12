@@ -582,6 +582,61 @@ pub fn get_instance(id: i32) -> Result<Instance, String> {
 }
 
 #[tauri::command]
+pub fn get_instance_by_slug(slug: String) -> Result<Instance, String> {
+    log::info!("Fetching instance by slug: {}", slug);
+
+    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
+    let conn = db.get_connection();
+
+    // Fetch all instances and find the one with matching slug
+    let mut stmt = conn
+        .prepare(&format!(
+            "SELECT id, name, minecraft_version, modloader, modloader_version, 
+                    java_path, java_args, game_directory, width, height, memory_mb, 
+                    icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
+                    installation_status 
+             FROM {}",
+            Instance::name()
+        ))
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+    let instances = stmt
+        .query_map([], |row| {
+            Ok(Instance {
+                id: AUTOINCREMENT::VALUE(row.get(0)?),
+                name: row.get(1)?,
+                minecraft_version: row.get(2)?,
+                modloader: row.get(3)?,
+                modloader_version: row.get(4)?,
+                java_path: row.get(5)?,
+                java_args: row.get(6)?,
+                game_directory: row.get(7)?,
+                width: row.get(8)?,
+                height: row.get(9)?,
+                memory_mb: row.get(10)?,
+                icon_path: row.get(11)?,
+                last_played: row.get(12)?,
+                total_playtime_minutes: row.get(13)?,
+                created_at: row.get(14)?,
+                updated_at: row.get(15)?,
+                installation_status: row.get(16)?,
+            })
+        })
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    for inst_result in instances {
+        if let Ok(inst) = inst_result {
+            if inst.slug() == slug {
+                log::info!("Found instance by slug {}: {}", slug, inst.name);
+                return Ok(inst);
+            }
+        }
+    }
+
+    Err(format!("Instance with slug '{}' not found", slug))
+}
+
+#[tauri::command]
 pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance: Instance,

@@ -116,6 +116,11 @@ export async function getInstance(id: number): Promise<Instance> {
     return await invoke<Instance>("get_instance", { id });
 }
 
+// Get a single instance by slug (unique instance identifier)
+export async function getInstanceBySlug(slug: string): Promise<Instance> {
+    return await invoke<Instance>("get_instance_by_slug", { slug });
+}
+
 // Install an instance (queues installation task)
 export async function installInstance(instance: Instance): Promise<void> {
     console.log("[installInstance] Invoking Tauri command with instance:", instance);

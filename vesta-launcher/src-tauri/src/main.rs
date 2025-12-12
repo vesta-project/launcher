@@ -75,6 +75,7 @@ fn main() {
             commands::instances::update_instance,
             commands::instances::delete_instance,
             commands::instances::get_instance,
+            commands::instances::get_instance_by_slug,
             commands::instances::launch_instance,
             commands::instances::kill_instance,
             commands::instances::get_running_instances,

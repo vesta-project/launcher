@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Mutex;
 use winver::WindowsVersion;
 
@@ -7,12 +8,20 @@ static WINDOW_ID: Mutex<i32> = Mutex::new(0);
 pub async fn launch_new_window(
     app_handle: tauri::AppHandle,
     path: Option<String>,
+    props: Option<HashMap<String, String>>,
 ) -> Result<(), tauri::Error> {
     let mut window_id = WINDOW_ID.lock().unwrap();
 
     // Build URL with path parameter for routing
     let url_path = path.unwrap_or_else(|| "/config".to_string());
-    let url = format!("standalone?path={}", urlencoding::encode(&url_path));
+    let mut url = format!("standalone?path={}", urlencoding::encode(&url_path));
+    
+    // Add props as URL parameters
+    if let Some(props_map) = props {
+        for (key, value) in props_map {
+            url.push_str(&format!("&{}={}", urlencoding::encode(&key), urlencoding::encode(&value)));
+        }
+    }
 
     let win_builder = tauri::WebviewWindowBuilder::new(
         &app_handle,

@@ -7,6 +7,8 @@ import KillIcon from "@assets/rounded-square.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
 import ErrorIcon from "@assets/error.svg";
 import LauncherButton from "@ui/button/button";
+import { router } from "@components/page-viewer/page-viewer";
+import { setPageViewerOpen } from "@components/pages/home/home";
 import {
 	ContextMenu,
 	ContextMenuCheckboxItem,
@@ -147,6 +149,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 		void toggleRun();
 	};
 
+	// Navigate to instance details page using mini-router
+	const openInstanceDetails = () => {
+		router()?.navigate("/instance", { slug: instanceSlug });
+		setPageViewerOpen(true);
+	};
+
 	// Handler for context-menu Reinstall action
 	const handleReinstall = async () => {
 		if (busy()) return;
@@ -170,6 +178,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				class="instance-card" 
 				onMouseOver={() => setHover(true)} 
 				onMouseLeave={() => setHover(false)}
+				onClick={openInstanceDetails}
 				style={props.instance.icon_path ? { "--instance-bg-image": `url('${props.instance.icon_path}')` } : undefined}
 			>
 				<div class="instance-card-top">

@@ -22,11 +22,20 @@ function StandalonePageViewer() {
 		setOsType(os || "windows");
 
 		const initialPath = searchParams.path || "/config";
+		
+		// Parse props from URL search params (everything except 'path')
+		const initialProps: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(searchParams)) {
+			if (key !== "path" && value !== undefined) {
+				initialProps[key] = value;
+			}
+		}
 
 		const mini_router = new MiniRouter({
 			paths: miniRouterPaths,
 			invalid: miniRouterInvalidPage,
 			currentPath: initialPath,
+			initialProps: Object.keys(initialProps).length > 0 ? initialProps : undefined,
 		});
 
 		setRouter(mini_router);
@@ -74,7 +83,7 @@ function StandalonePageViewer() {
 					}
 				/>
 			</div>
-			<div class="standalone-page-viewer__content">{router()?.router}</div>
+			<div class="standalone-page-viewer__content">{router()?.getRouterView()}</div>
 		</div>
 	);
 }

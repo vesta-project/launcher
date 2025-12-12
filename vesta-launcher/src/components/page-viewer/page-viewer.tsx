@@ -44,7 +44,16 @@ function PageViewerNavbarButton(props: {
 function PageViewerNavbar(props: { closeClicked?: () => void }) {
 	const openWindow = () => {
 		const currentPath = router()?.currentPath.get();
-		invoke("launch_new_window", { path: currentPath });
+		const currentProps = router()?.currentPathProps();
+		
+		// Convert props to string values for URL serialization
+		const stringProps: Record<string, string> | undefined = currentProps
+			? Object.fromEntries(
+				Object.entries(currentProps).map(([k, v]) => [k, String(v)])
+			)
+			: undefined;
+		
+		invoke("launch_new_window", { path: currentPath, props: stringProps });
 		props.closeClicked?.();
 	};
 
@@ -114,7 +123,7 @@ function PageViewer(props: PageViewerProps) {
 			<div class={"page-viewer-wrapper"}>
 				<div class={"page-viewer-root"}>
 					<PageViewerNavbar closeClicked={() => props.viewChanged?.(false)} />
-					<div class={"page-viewer-content"}>{router()?.router}</div>
+					<div class={"page-viewer-content"}>{router()?.getRouterView()}</div>
 				</div>
 			</div>
 		</Show>

@@ -25,8 +25,12 @@ import { getOsType } from "@utils/os";
 import { listInstances, subscribeToInstanceUpdates, unsubscribeFromInstanceUpdates } from "@utils/instances";
 import "./home.css";
 import Sidebar from "./sidebar/sidebar";
+
+// Module-level signals for page viewer state - exported so child components can open pages
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
 const [sidebarOpen, setSidebarOpen] = createSignal(false);
+
+export { setPageViewerOpen };
 
 const os = getOsType() ?? "windows";
 
