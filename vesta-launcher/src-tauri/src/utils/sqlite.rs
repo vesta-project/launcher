@@ -659,7 +659,7 @@ impl SQLiteDB {
         select: SQLiteSelect,
         table_name: &str,
         column_name: &str,
-    ) -> Result<Statement, Error> {
+    ) -> Result<Statement<'_>, Error> {
         Ok(match select {
             SQLiteSelect::ALL => self.conn.prepare(&format!(
                 "SELECT * FROM {} WHERE {} = ?",

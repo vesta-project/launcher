@@ -8,14 +8,14 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "2.0", features = [] }
+tauri-build = { version = "2.5.3", features = [] }
 
 [dependencies]
 piston-lib = { path = "../../crates/piston-lib" }
 piston-macros = { path = "../../crates/piston-macros" }
 slug = "0.1"
 
-tauri = { version = "2.9.3", features = [
+tauri = { version = "2.9.5", features = [
     "protocol-asset",
     "macos-private-api",
 ] }
@@ -27,9 +27,9 @@ futures = "0.3"
 
 tauri-plugin-os = "2.3.2"
 tauri-plugin-log = "2.7.1"
-tauri-plugin-shell = "2"
+tauri-plugin-shell = "2.3.3"
 
-anyhow = "1.0.94"
+anyhow = "1.0.100"
 anyhow-tauri = "1.0.0"
 thiserror = "2.0.17"
 chrono = "0.4.38"
@@ -43,7 +43,7 @@ version-compare = "0.2.0"
 open = "5.3.1"
 urlencoding = "2.1"
 which = "6.0"
-sysinfo = "0.32"
+sysinfo = "0.37.2"
 
 # OAuth2 and Microsoft authentication
 oauth2 = "4.4.2"

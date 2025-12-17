@@ -425,7 +425,7 @@ pub fn update_instance(instance: Instance) -> Result<(), String> {
         // path based on the updated slug. We always enforce the app's instance
         // folder layout so instances remain isolated and predictable.
         let new_game_dir = compute_instance_game_dir(&instances_root, &new_slug);
-        let mut updated_game_dir = Some(new_game_dir.clone());
+        let updated_game_dir = Some(new_game_dir.clone());
 
         // Move log file if exists (done here so we do file ops before any await)
         let app_config_dir = crate::utils::db_manager::get_app_config_dir()

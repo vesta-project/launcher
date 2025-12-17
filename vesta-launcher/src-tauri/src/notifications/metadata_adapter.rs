@@ -1,8 +1,6 @@
 use crate::notifications::models::{
     CreateNotificationInput, NotificationAction, NotificationActionType, NotificationType,
 };
-use anyhow::Result;
-use serde_json::Value;
 use slug::slugify;
 
 /// Map a generator-provided NotificationHint (from piston-lib) into a CreateNotificationInput
