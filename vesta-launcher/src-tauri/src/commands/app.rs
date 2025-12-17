@@ -1,4 +1,4 @@
-use crate::utils::db_manager::get_app_config_dir;
+use crate::utils::db_manager::{get_app_config_dir, get_data_db};
 use tauri::Manager;
 
 #[tauri::command]
@@ -21,6 +21,44 @@ pub fn open_app_config_dir() -> Result<(), String> {
     // Use open crate to open directory in file explorer
     open::that(&dir_to_open)
         .map_err(|e| format!("Failed to open directory: {} (path: {:?})", e, dir_to_open))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn open_logs_folder(instance_id: Option<String>) -> Result<(), String> {
+    let logs_path = if let Some(id) = instance_id {
+        // Fetch instance from database to get its game directory
+        let db = get_data_db().map_err(|e| e.to_string())?;
+        let conn = db.get_connection();
+
+        let mut stmt = conn
+            .prepare(
+                "SELECT game_directory FROM instance WHERE name = ?1 OR id = (SELECT id FROM instance WHERE LOWER(REPLACE(REPLACE(REPLACE(name, ' ', '-'), '_', '-'), '\"', '')) = LOWER(REPLACE(REPLACE(REPLACE(?1, ' ', '-'), '_', '-'), '\"', '')))",
+            )
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+
+        let game_dir: Option<String> = stmt
+            .query_row([id.as_str()], |row| row.get(0))
+            .ok();
+
+        if let Some(game_dir) = game_dir {
+            std::path::PathBuf::from(game_dir).join("logs")
+        } else {
+            return Err(format!("Instance not found: {}", id));
+        }
+    } else {
+        get_app_config_dir()
+            .map_err(|e| e.to_string())?
+            .join("logs")
+    };
+
+    // Create logs directory if it doesn't exist
+    std::fs::create_dir_all(&logs_path)
+        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+
+    // Open logs directory in file explorer
+    open::that(&logs_path)
+        .map_err(|e| format!("Failed to open logs directory: {} (path: {:?})", e, logs_path))?;
     Ok(())
 }
 

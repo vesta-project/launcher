@@ -25,6 +25,7 @@ import { getOsType } from "@utils/os";
 import { listInstances, subscribeToInstanceUpdates, unsubscribeFromInstanceUpdates } from "@utils/instances";
 import "./home.css";
 import Sidebar from "./sidebar/sidebar";
+import { Skeleton } from "@ui/skeleton/skeleton";
 
 // Module-level signals for page viewer state - exported so child components can open pages
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
@@ -77,12 +78,42 @@ function MainMenu() {
 		unsubscribeFromInstanceUpdates();
 	});
 
+	const InstanceCardSkeleton = () => (
+		<div
+			class={"instance-card"}
+			style={{
+				display: "flex",
+				"flex-direction": "column",
+				gap: "8px",
+				"--instance-bg-image": "none",
+			}}
+		>
+			<div style={{ display: "flex", "justify-content": "flex-end" }}>
+				<Skeleton style={{ width: "32px", height: "32px", "border-radius": "5px" }} />
+			</div>
+			<div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
+				<Skeleton style={{ width: "70%", height: "16px" }} />
+				<div style={{ display: "flex", "justify-content": "space-between", "align-items": "center" }}>
+					<Skeleton style={{ width: "40%", height: "12px" }} />
+					<div style={{ display: "flex", gap: "6px", "align-items": "center" }}>
+						<Skeleton style={{ width: "28px", height: "12px" }} />
+						<Skeleton style={{ width: "18px", height: "12px" }} />
+					</div>
+				</div>
+			</div>
+		</div>
+	);
+
 	return (
 		<div class={"main-menu"}>
 			<div class={"instance-wrapper"}>
 				<div class={"instance-container"}>
 					<Show when={typeof loading === "function" ? loading() : !!loading}>
-						<p style={{ color: "#888", padding: "20px" }}>Loading instances...</p>
+						<>
+							{Array.from({ length: 8 }).map(() => (
+								<InstanceCardSkeleton />
+							))}
+						</>
 					</Show>
 					<Show when={typeof error === "function" ? error() : !!error}>
 						<p style={{ color: "#ff4444", padding: "20px" }}>

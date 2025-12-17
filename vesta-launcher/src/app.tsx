@@ -19,8 +19,7 @@ import {
 import { getMinecraftVersions } from "@utils/instances";
 import { lazy, onCleanup, onMount } from "solid-js";
 // import { initializeFileDropSystem, cleanupFileDropSystem } from "@utils/file-drop";
-
-const HomePage = lazy(() => import("@components/pages/home/home"));
+import HomePage from "@components/pages/home/home";
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
 );
@@ -116,14 +115,14 @@ function Root(props: ChildrenProp) {
 		// cleanupFileDropSystem();
 	});
 
-	// Hide loader after app renders
-	setTimeout(() => {
+	// Hide loader on first paint rather than a fixed timeout
+	requestAnimationFrame(() => {
 		const loader = document.getElementById("app-loader");
 		if (loader) {
 			loader.classList.add("hidden");
 			setTimeout(() => loader.remove(), 300);
 		}
-	}, 100);
+	});
 
 	return <>{props.children}</>;
 }

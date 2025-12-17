@@ -43,6 +43,7 @@ version-compare = "0.2.0"
 open = "5.3.1"
 urlencoding = "2.1"
 which = "6.0"
+sysinfo = "0.32"
 
 # OAuth2 and Microsoft authentication
 oauth2 = "4.4.2"

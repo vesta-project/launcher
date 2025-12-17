@@ -195,6 +195,13 @@
 	color: hsl(var(--color__primary-hue) var(--color__sat-20) 65%);
 }
 
+.console-toolbar-buttons {
+	display: flex;
+	gap: 0.5rem;
+	align-items: center;
+}
+
+.console-logs,
 .console-clear {
 	background: transparent;
 	border: 1px solid hsl(var(--color__primary-hue) var(--color__sat-20) 25%);

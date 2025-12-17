@@ -78,7 +78,6 @@
 .standalone-page-viewer__content {
 	flex: 1;
 	overflow-y: auto;
-	padding: 1rem;
 }
 
 .standalone-page-viewer__controls > * {

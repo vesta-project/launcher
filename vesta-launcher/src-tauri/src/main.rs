@@ -44,6 +44,7 @@ fn main() {
             set_config,
             update_config_field,
             commands::app::open_app_config_dir,
+            commands::app::open_logs_folder,
             commands::app::close_all_windows_and_reset,
             // create_file_drop_overlay,
             // position_overlay,
@@ -81,7 +82,8 @@ fn main() {
             commands::instances::get_running_instances,
             commands::instances::is_instance_running,
             commands::instances::get_minecraft_versions,
-            commands::instances::regenerate_piston_manifest
+            commands::instances::regenerate_piston_manifest,
+            commands::instances::read_instance_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

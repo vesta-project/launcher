@@ -9,6 +9,70 @@ use winver::WindowsVersion;
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+/// Exit status JSON structure written by the exit handler JAR
+#[derive(serde::Deserialize, Debug)]
+struct ExitStatus {
+    instance_id: String,
+    exit_code: i32,
+    exited_at: String,
+}
+
+/// Update playtime for an instance in the database
+fn update_instance_playtime(instance_id: &str, started_at: &str, exited_at: &str) -> Result<(), String> {
+    // Parse timestamps
+    let started = chrono::DateTime::parse_from_rfc3339(started_at)
+        .map_err(|e| format!("Failed to parse started_at: {}", e))?;
+    let exited = chrono::DateTime::parse_from_rfc3339(exited_at)
+        .map_err(|e| format!("Failed to parse exited_at: {}", e))?;
+    
+    // Calculate duration in minutes
+    let duration = exited.signed_duration_since(started);
+    let minutes = (duration.num_seconds() / 60).max(0) as i32;
+    
+    log::info!(
+        "Updating playtime for instance {}: {} minutes (from {} to {})",
+        instance_id, minutes, started_at, exited_at
+    );
+    
+    // Update database - need to find instance by slug
+    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
+    let conn = db.get_connection();
+    
+    // Get all instances and find by slug
+    let mut stmt = conn
+        .prepare("SELECT id, name, total_playtime_minutes FROM instance")
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    let instances: Vec<(i32, String, i32)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .map_err(|e| format!("Failed to query instances: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+    
+    for (id, name, current_playtime) in instances {
+        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
+        if slug == instance_id {
+            let new_playtime = current_playtime + minutes;
+            let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            
+            conn.execute(
+                "UPDATE instance SET total_playtime_minutes = ?1, last_played = ?2, updated_at = ?3 WHERE id = ?4",
+                rusqlite::params![new_playtime, now, now, id],
+            )
+            .map_err(|e| format!("Failed to update playtime: {}", e))?;
+            
+            log::info!(
+                "Updated playtime for instance {} (id {}): {} -> {} minutes",
+                instance_id, id, current_playtime, new_playtime
+            );
+            return Ok(());
+        }
+    }
+    
+    log::warn!("Instance {} not found in database for playtime update", instance_id);
+    Ok(())
+}
+
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Clean up old log files (>30 days)
     cleanup_old_logs(app.handle());
@@ -29,61 +93,154 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize MetadataCache (in-memory fast path for manifest)
     app.manage(MetadataCache::new());
 
-    // TODO: InstanceManager doesn't exist yet - commenting out for now
-    /*
-    // Initialize InstanceManager
-    let instance_manager = InstanceManager::new();
-    app.manage(instance_manager.clone());
+    // Reattach to already-running processes on startup
+    {
+        let app_handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            log::info!("Checking for already-running instances...");
 
-    // Scan for running instances on startup
-    let instance_manager_clone = instance_manager.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Ok(db) = get_data_db() {
-            let conn = db.get_connection();
-            let mut stmt = match conn.prepare(
-                "SELECT id, name, minecraft_version, modloader, modloader_version, java_path,
-                        java_args, game_directory, width, height, memory_mb, icon_path,
-                        last_played, total_playtime_minutes, created_at, updated_at
-                 FROM instance"
-            ) {
-                Ok(stmt) => stmt,
-                Err(e) => {
-                    log::warn!("Failed to prepare instance query: {}", e);
-                    return;
+            match crate::utils::process_state::load_running_processes() {
+                Ok(processes) => {
+                    if processes.is_empty() {
+                        log::debug!("No persisted running processes found");
+                        return;
+                    }
+
+                    log::info!("Found {} persisted running processes", processes.len());
+
+                    for run_state in processes {
+                        // Validate PID still exists using sysinfo
+                        use sysinfo::System;
+                        let mut sys = System::new_all();
+                        sys.refresh_all();
+
+                        if sys.process(sysinfo::Pid::from_u32(run_state.pid)).is_some() {
+                            log::info!(
+                                "Reattaching to running instance: {} (PID {})",
+                                run_state.instance_id,
+                                run_state.pid
+                            );
+
+                            // Re-register in the game registry
+                            let game_instance = piston_lib::game::launcher::GameInstance {
+                                instance_id: run_state.instance_id.clone(),
+                                version_id: run_state.version_id.clone(),
+                                modloader: run_state.modloader.as_ref().map(|s| s.parse()).transpose().ok().flatten(),
+                                pid: run_state.pid,
+                                started_at: chrono::DateTime::parse_from_rfc3339(&run_state.started_at)
+                                    .ok()
+                                    .map(|dt| dt.with_timezone(&chrono::Utc))
+                                    .unwrap_or_else(chrono::Utc::now),
+                                log_file: run_state.log_file.clone(),
+                                game_dir: run_state.game_dir.clone(),
+                            };
+
+                            if let Err(e) = piston_lib::game::launcher::register_instance(game_instance.clone()).await {
+                                log::warn!("Failed to re-register instance {}: {}", run_state.instance_id, e);
+                                continue;
+                            }
+
+                            // Emit launched event to sync UI
+                            use tauri::Emitter;
+                            let _ = app_handle.emit(
+                                "core://instance-launched",
+                                serde_json::json!({
+                                    "instance_id": run_state.instance_id.clone(),
+                                    "pid": run_state.pid,
+                                    "reattached": true
+                                }),
+                            );
+
+                            log::info!("Successfully reattached to instance: {}", run_state.instance_id);
+                        } else {
+                            log::warn!(
+                                "Persisted instance {} (PID {}) is no longer running, checking for exit status",
+                                run_state.instance_id,
+                                run_state.pid
+                            );
+
+                            // Check for exit_status.json to get accurate exit time
+                            let exit_status_path = run_state.game_dir.join(".vesta").join("exit_status.json");
+                            
+                            if exit_status_path.exists() {
+                                // Read exit status and update playtime
+                                match std::fs::read_to_string(&exit_status_path) {
+                                    Ok(content) => {
+                                        match serde_json::from_str::<ExitStatus>(&content) {
+                                            Ok(exit_status) => {
+                                                log::info!(
+                                                    "Found exit status for {}: exit_code={}, exited_at={}",
+                                                    run_state.instance_id, exit_status.exit_code, exit_status.exited_at
+                                                );
+                                                
+                                                // Update playtime in database
+                                                if let Err(e) = update_instance_playtime(
+                                                    &run_state.instance_id,
+                                                    &run_state.started_at,
+                                                    &exit_status.exited_at,
+                                                ) {
+                                                    log::error!("Failed to update playtime for {}: {}", run_state.instance_id, e);
+                                                }
+                                                
+                                                // Delete the exit status file
+                                                if let Err(e) = std::fs::remove_file(&exit_status_path) {
+                                                    log::warn!("Failed to remove exit status file: {}", e);
+                                                }
+                                            }
+                                            Err(e) => {
+                                                log::warn!("Failed to parse exit status for {}: {}", run_state.instance_id, e);
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!("Failed to read exit status file for {}: {}", run_state.instance_id, e);
+                                    }
+                                }
+                            } else {
+                                // No exit status file - use log file mtime as fallback
+                                log::info!(
+                                    "No exit status file for {}, using log file mtime as fallback",
+                                    run_state.instance_id
+                                );
+                                
+                                if run_state.log_file.exists() {
+                                    if let Ok(metadata) = std::fs::metadata(&run_state.log_file) {
+                                        if let Ok(modified) = metadata.modified() {
+                                            let exited_at = chrono::DateTime::<chrono::Utc>::from(modified)
+                                                .to_rfc3339();
+                                            
+                                            if let Err(e) = update_instance_playtime(
+                                                &run_state.instance_id,
+                                                &run_state.started_at,
+                                                &exited_at,
+                                            ) {
+                                                log::error!("Failed to update playtime for {} (fallback): {}", run_state.instance_id, e);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Emit exited event to update UI
+                            use tauri::Emitter;
+                            let _ = app_handle.emit(
+                                "core://instance-exited",
+                                serde_json::json!({
+                                    "instance_id": run_state.instance_id.clone(),
+                                    "pid": run_state.pid,
+                                }),
+                            );
+
+                            let _ = crate::utils::process_state::remove_running_process(&run_state.instance_id);
+                        }
+                    }
                 }
-            };
-
-            let instances_result = stmt.query_map([], |row| {
-                Ok(crate::models::instance::Instance {
-                    id: crate::utils::sqlite::AUTOINCREMENT::VALUE(row.get(0)?),
-                    name: row.get(1)?,
-                    minecraft_version: row.get(2)?,
-                    modloader: row.get(3)?,
-                    modloader_version: row.get(4)?,
-                    java_path: row.get(5)?,
-                    java_args: row.get(6)?,
-                    game_directory: row.get(7)?,
-                    width: row.get(8)?,
-                    height: row.get(9)?,
-                    memory_mb: row.get(10)?,
-                    icon_path: row.get(11)?,
-                    last_played: row.get(12)?,
-                    total_playtime_minutes: row.get(13)?,
-                    created_at: row.get(14)?,
-                    updated_at: row.get(15)?,
-                })
-            });
-
-            if let Ok(instances_iter) = instances_result {
-                let instances: Vec<crate::models::instance::Instance> = instances_iter.filter_map(|r| r.ok()).collect();
-                let running = instance_manager_clone.scan_for_running_instances(&instances);
-                if !running.is_empty() {
-                    log::info!("Found {} running instances on startup", running.len());
+                Err(e) => {
+                    log::warn!("Failed to load persisted running processes: {}", e);
                 }
             }
-        }
-    });
-    */
+        });
+    }
 
     // Initialize databases in background thread to not block window creation
     // This triggers the lazy initialization in db_manager

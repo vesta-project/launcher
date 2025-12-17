@@ -71,10 +71,22 @@ export default function InstanceCard(props: InstanceCardProps) {
 				return newSet;
 			});
 		});
+		// Also listen for natural process exit (when game closes normally)
+		const unlistenExited = await listen("core://instance-exited", (event) => {
+			const payload = (event as any).payload as { instance_id?: string; pid?: number };
+			if (payload.instance_id) {
+				setRunningIds((prev) => {
+					const newSet = new Set(prev);
+					newSet.delete(payload.instance_id!);
+					return newSet;
+				});
+			}
+		});
 		onCleanup(() => {
 			// unlistenLaunch/unlistenKill are actual functions returned by listen (we awaited them above)
 			unlistenLaunch();
 			unlistenKill();
+			unlistenExited();
 		});
 	});
 

@@ -4,11 +4,68 @@ use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db_manager::get_data_db;
 use crate::utils::sqlite::{SqlTable, AUTOINCREMENT};
+use std::sync::Arc;
 use tauri::{Manager, State};
 
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
+}
+
+/// Update playtime for an instance in the database (internal helper)
+fn update_instance_playtime_internal(instance_id: &str, started_at: &str, exited_at: &str) -> Result<(), String> {
+    // Parse timestamps
+    let started = chrono::DateTime::parse_from_rfc3339(started_at)
+        .map_err(|e| format!("Failed to parse started_at: {}", e))?;
+    let exited = chrono::DateTime::parse_from_rfc3339(exited_at)
+        .map_err(|e| format!("Failed to parse exited_at: {}", e))?;
+    
+    // Calculate duration in minutes
+    let duration = exited.signed_duration_since(started);
+    let minutes = (duration.num_seconds() / 60).max(0) as i32;
+    
+    log::info!(
+        "Updating playtime for instance {}: {} minutes (from {} to {})",
+        instance_id, minutes, started_at, exited_at
+    );
+    
+    // Update database - need to find instance by slug
+    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
+    let conn = db.get_connection();
+    
+    // Get all instances and find by slug
+    let mut stmt = conn
+        .prepare("SELECT id, name, total_playtime_minutes FROM instance")
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    let instances: Vec<(i32, String, i32)> = stmt
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .map_err(|e| format!("Failed to query instances: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+    
+    for (id, name, current_playtime) in instances {
+        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
+        if slug == instance_id {
+            let new_playtime = current_playtime + minutes;
+            let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            
+            conn.execute(
+                "UPDATE instance SET total_playtime_minutes = ?1, last_played = ?2, updated_at = ?3 WHERE id = ?4",
+                rusqlite::params![new_playtime, now, now, id],
+            )
+            .map_err(|e| format!("Failed to update playtime: {}", e))?;
+            
+            log::info!(
+                "Updated playtime for instance {} (id {}): {} -> {} minutes",
+                instance_id, id, current_playtime, new_playtime
+            );
+            return Ok(());
+        }
+    }
+    
+    log::warn!("Instance {} not found in database for playtime update", instance_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -736,6 +793,36 @@ pub async fn launch_instance(
     }
 
     // Build launch spec
+    // Resolve exit handler JAR from bundled resources (if available)
+    // In production: resources are bundled alongside the binary
+    // In dev mode: use the source path directly
+    let exit_handler_jar = app_handle
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|dir| dir.join("exit-handler.jar"))
+        .filter(|p| p.exists())
+        .or_else(|| {
+            // Dev mode fallback: check the source directory
+            let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .parent() // src-tauri -> vesta-launcher
+                .map(|p| p.join("resources").join("exit-handler").join("exit-handler.jar"))
+                .filter(|p| p.exists());
+            if dev_path.is_some() {
+                log::info!("[launch_instance] Using dev mode exit handler JAR path");
+            }
+            dev_path
+        });
+    
+    if exit_handler_jar.is_some() {
+        log::info!("[launch_instance] Using exit handler JAR: {:?}", exit_handler_jar);
+    } else {
+        log::warn!("[launch_instance] Exit handler JAR not found in resources, playtime tracking will be limited");
+    }
+
+    // Determine log file path
+    let log_file = spec_data_dir.join("logs").join(format!("{}.log", instance_id));
+    
     let spec = piston_lib::game::launcher::LaunchSpec {
         instance_id: instance_id.clone(),
         version_id: instance.minecraft_version.clone(),
@@ -765,6 +852,8 @@ pub async fn launch_instance(
         game_args: vec![],
         window_width: Some(instance.width as u32),
         window_height: Some(instance.height as u32),
+        exit_handler_jar,
+        log_file: Some(log_file),
     };
 
     // Launch the game
@@ -860,12 +949,72 @@ pub async fn launch_instance(
         ));
     }
 
+    // Create a log callback that batches and emits events to the frontend
+    // We use a channel-based approach to batch log lines and emit them periodically
+    
+    // Create a channel for log lines - we'll batch them and emit periodically
+    let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String, String)>();
+    
+    // Spawn a task to batch and emit log events every 50ms
+    let app_for_batcher = app_handle.clone();
+    tokio::spawn(async move {
+        use tauri::Emitter;
+        let mut batch: Vec<serde_json::Value> = Vec::new();
+        let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
+        
+        loop {
+            tokio::select! {
+                _ = interval.tick() => {
+                    // Emit batched lines if any
+                    if !batch.is_empty() {
+                        let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({
+                            "lines": batch.clone()
+                        }));
+                        batch.clear();
+                    }
+                }
+                msg = log_rx.recv() => {
+                    match msg {
+                        Some((instance_id, line, stream)) => {
+                            batch.push(serde_json::json!({
+                                "instance_id": instance_id,
+                                "line": line,
+                                "stream": stream
+                            }));
+                            // Also emit immediately if batch gets large
+                            if batch.len() >= 50 {
+                                let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({
+                                    "lines": batch.clone()
+                                }));
+                                batch.clear();
+                            }
+                        }
+                        None => {
+                            // Channel closed, emit remaining and exit
+                            if !batch.is_empty() {
+                                let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({
+                                    "lines": batch
+                                }));
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Create the callback that sends to the channel
+    let log_callback: piston_lib::game::launcher::LogCallback = Arc::new(move |instance_id, line, stream| {
+        let _ = log_tx.send((instance_id, line, stream));
+    });
+
     // piston_lib::game::launcher::launch_game performs blocking / non-Send work
     // (uses non-Send readers internally). Tauri requires command futures to be
     // Send so run that work inside a blocking thread and await the JoinHandle.
     let join = tokio::task::spawn_blocking(move || {
         // Execute the async launch on the blocking thread synchronously.
-        futures::executor::block_on(piston_lib::game::launcher::launch_game(spec))
+        futures::executor::block_on(piston_lib::game::launcher::launch_game(spec, Some(log_callback)))
     })
     .await
     .map_err(|e| format!("Failed to spawn blocking task: {}", e))?;
@@ -883,6 +1032,21 @@ pub async fn launch_instance(
                 result.instance.pid
             );
 
+            // Persist the running process state for re-attachment if app closes
+            let run_state = crate::utils::process_state::InstanceRunState {
+                instance_id: instance_id.clone(),
+                pid: result.instance.pid,
+                log_file: result.log_file.clone(),
+                game_dir: result.instance.game_dir.clone(),
+                version_id: result.instance.version_id.clone(),
+                modloader: result.instance.modloader.as_ref().map(|m| m.to_string()),
+                started_at: result.instance.started_at.to_rfc3339(),
+            };
+
+            if let Err(e) = crate::utils::process_state::add_running_process(run_state.clone()) {
+                log::warn!("[launch_instance] Failed to persist process state: {}", e);
+            }
+
             // Emit success event
             use tauri::Emitter;
             let _ = app_handle.emit(
@@ -893,6 +1057,80 @@ pub async fn launch_instance(
                     "pid": result.instance.pid
                 }),
             );
+
+            // Spawn a background task to monitor for process exit and emit event
+            let app_handle_monitor = app_handle.clone();
+            let instance_id_monitor = instance_id.clone();
+            let pid_monitor = result.instance.pid;
+            let started_at_monitor = result.instance.started_at.to_rfc3339();
+            let game_dir_monitor = result.instance.game_dir.clone();
+            
+            tokio::spawn(async move {
+                use sysinfo::System;
+                let mut sys = System::new_all();
+                
+                // Poll every 2 seconds to check if process is still running
+                loop {
+                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+                    
+                    sys.refresh_all();
+                    
+                    if sys.process(sysinfo::Pid::from_u32(pid_monitor)).is_none() {
+                        log::info!(
+                            "[launch_instance] Process {} (PID {}) has exited, updating playtime",
+                            instance_id_monitor, pid_monitor
+                        );
+                        
+                        // Check for exit_status.json for accurate exit time
+                        let exit_status_path = game_dir_monitor.join(".vesta").join("exit_status.json");
+                        let exited_at = if exit_status_path.exists() {
+                            match std::fs::read_to_string(&exit_status_path) {
+                                Ok(content) => {
+                                    if let Ok(status) = serde_json::from_str::<serde_json::Value>(&content) {
+                                        status.get("exited_at")
+                                            .and_then(|v| v.as_str())
+                                            .map(|s| s.to_string())
+                                            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339())
+                                    } else {
+                                        chrono::Utc::now().to_rfc3339()
+                                    }
+                                }
+                                Err(_) => chrono::Utc::now().to_rfc3339()
+                            }
+                        } else {
+                            chrono::Utc::now().to_rfc3339()
+                        };
+                        
+                        // Update playtime in database
+                        if let Err(e) = update_instance_playtime_internal(
+                            &instance_id_monitor,
+                            &started_at_monitor,
+                            &exited_at,
+                        ) {
+                            log::error!("[launch_instance] Failed to update playtime: {}", e);
+                        }
+                        
+                        // Clean up exit status file
+                        if exit_status_path.exists() {
+                            let _ = std::fs::remove_file(&exit_status_path);
+                        }
+                        
+                        // Remove from persisted running processes
+                        let _ = crate::utils::process_state::remove_running_process(&instance_id_monitor);
+                        
+                        // Emit exit event
+                        let _ = app_handle_monitor.emit(
+                            "core://instance-exited",
+                            serde_json::json!({
+                                "instance_id": instance_id_monitor,
+                                "pid": pid_monitor
+                            }),
+                        );
+                        
+                        break;
+                    }
+                }
+            });
 
             Ok(())
         }
@@ -928,6 +1166,9 @@ pub async fn kill_instance(app_handle: tauri::AppHandle, instance: Instance) -> 
                 "[kill_instance] Instance killed successfully: {}",
                 instance_id
             );
+
+            // Remove from persisted running processes
+            let _ = crate::utils::process_state::remove_running_process(&instance_id);
 
             // Emit success event
             use tauri::Emitter;
@@ -1113,4 +1354,31 @@ pub fn update_installation_status(instance_id: i32, status: &str) -> Result<(), 
 
     log::info!("Installation status updated successfully");
     Ok(())
+}
+
+/// Read the last N lines from an instance's log file
+#[tauri::command]
+pub fn read_instance_log(instance_id: String, last_lines: Option<usize>) -> Result<Vec<String>, String> {
+    let data_dir = crate::utils::db_manager::get_app_config_dir()
+        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
+    
+    // Log file is stored at <data_dir>/data/logs/<instance_id>.log
+    let log_file = data_dir.join("data").join("logs").join(format!("{}.log", instance_id));
+    
+    if !log_file.exists() {
+        log::debug!("Log file not found for instance {}: {:?}", instance_id, log_file);
+        return Ok(vec![]);
+    }
+    
+    let content = std::fs::read_to_string(&log_file)
+        .map_err(|e| format!("Failed to read log file: {}", e))?;
+    
+    let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+    let limit = last_lines.unwrap_or(500);
+    
+    if lines.len() > limit {
+        Ok(lines[lines.len() - limit..].to_vec())
+    } else {
+        Ok(lines)
+    }
 }

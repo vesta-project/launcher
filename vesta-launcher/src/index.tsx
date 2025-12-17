@@ -28,7 +28,8 @@ document.addEventListener("keydown", (e) => {
 	}
 });
 
-// Initialize theme and render app
-initTheme().then(() => {
-	render(() => <App />, root);
+// Render app immediately, then initialize theme in background
+render(() => <App />, root as MountableElement);
+initTheme().catch((err) => {
+	console.error("Theme init failed; using defaults:", err);
 });

@@ -1,5 +1,6 @@
 import { createResource, createSignal, createEffect, onMount, onCleanup, For, Show } from "solid-js";
 import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
 import { getInstanceBySlug, updateInstance, launchInstance, killInstance, isInstanceRunning } from "@utils/instances";
 import LauncherButton from "@ui/button/button";
 import {
@@ -70,12 +71,55 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 	// Subscribe to console logs
 	onMount(async () => {
+		// Load last 500 lines from log file if instance is running (for re-attachment scenario)
+		const inst = instance();
+		if (inst) {
+			try {
+				const running = await isInstanceRunning(inst);
+				if (running) {
+					// Try to load existing log lines from file
+					const logLines = await invoke("read_instance_log", { 
+						instanceId: slug(),
+						lastLines: 500 
+					}).catch(() => []) as string[];
+					if (logLines.length > 0) {
+						setLines(logLines);
+					}
+				}
+			} catch (e) {
+				console.error("Failed to load existing logs:", e);
+			}
+		}
+
 		const unlisten = await listen("core://instance-log", (ev) => {
 			const payload = (ev as { payload: Record<string, unknown> }).payload || {};
 			const currentSlug = slug();
 
-			console.log("[InstanceDetails] Received log event:", payload);
+			// Handle batched format: { lines: [...] }
+			if (payload.lines && Array.isArray(payload.lines)) {
+				const newLines: string[] = [];
+				for (const item of payload.lines as Array<{ instance_id?: string; line?: string }>) {
+					if (item.instance_id && item.instance_id !== currentSlug) {
+						continue;
+					}
+					if (item.line) {
+						newLines.push(item.line);
+					}
+				}
+				if (newLines.length > 0) {
+					setLines((prev) => {
+						const next = [...prev, ...newLines];
+						// Keep last 500 lines
+						if (next.length > 500) {
+							return next.slice(next.length - 500);
+						}
+						return next;
+					});
+				}
+				return;
+			}
 
+			// Legacy single-line format
 			if (payload.instance_id && payload.instance_id !== currentSlug) {
 				return;
 			}
@@ -83,8 +127,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			const line = payload.line ?? payload.text ?? payload.message ?? JSON.stringify(payload);
 			setLines((prev) => {
 				const next = [...prev, String(line)];
-				if (next.length > 100) {
-					return next.slice(next.length - 100);
+				if (next.length > 500) {
+					return next.slice(next.length - 500);
 				}
 				return next;
 			});
@@ -94,6 +138,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			const payload = (ev as { payload: { instance_id?: string } }).payload;
 			if (payload.instance_id === slug()) {
 				setIsRunning(true);
+				// Clear console on new launch
+				setLines([]);
 			}
 		});
 
@@ -104,10 +150,19 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			}
 		});
 
+		// Listen for natural process exit (game closed by user)
+		const unlistenExited = await listen("core://instance-exited", (ev) => {
+			const payload = (ev as { payload: { instance_id?: string } }).payload;
+			if (payload.instance_id === slug()) {
+				setIsRunning(false);
+			}
+		});
+
 		onCleanup(() => {
 			unlisten();
 			unlistenLaunch();
 			unlistenKill();
+			unlistenExited();
 		});
 	});
 
@@ -162,6 +217,14 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	};
 
 	const clearConsole = () => setLines([]);
+
+	const openLogsFolder = async () => {
+		try {
+			await invoke("open_logs_folder", { instanceId: slug() });
+		} catch (e) {
+			console.error("Failed to open logs folder:", e);
+		}
+	};
 
 	return (
 		<div class="instance-details-page">
@@ -269,7 +332,14 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 									<section class="tab-console">
 										<div class="console-toolbar">
 											<span class="console-title">Game Console</span>
-											<button class="console-clear" onClick={clearConsole}>Clear</button>
+											<div class="console-toolbar-buttons">
+												<button class="console-logs" onClick={openLogsFolder} title="Open logs folder in file explorer">
+													📁 Logs
+												</button>
+												<button class="console-clear" onClick={clearConsole}>
+													Clear
+												</button>
+											</div>
 										</div>
 										<div class="console-output" ref={consoleRef}>
 											<Show when={lines().length === 0}>
