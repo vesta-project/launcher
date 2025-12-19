@@ -110,4 +110,26 @@
     transform: scale(90%);
     transition-duration: 75ms;
   }
+
+  &:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  &:disabled svg {
+    transform: none;
+  }
+}
+
+.page-viewer-navbar-button.forward svg {
+  transform: scaleX(-1);
+}
+
+.page-viewer-navbar-button.forward:hover svg {
+  transform: scaleX(-1) scale(105%);
+}
+
+.page-viewer-navbar-button.forward:disabled svg {
+  transform: scaleX(-1);
 }

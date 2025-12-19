@@ -284,3 +284,51 @@
 .settings-actions {
 	margin-top: 0.875rem;
 }
+
+/* Skeleton loaders */
+.instance-loading {
+	padding: 2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1rem;
+}
+
+.skeleton-header {
+	height: 120px;
+	border-radius: 8px;
+}
+
+.skeleton-content {
+	height: 300px;
+	border-radius: 8px;
+}
+
+.skeleton-grid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 1rem;
+	padding: 2rem;
+}
+
+.skeleton-item {
+	height: 60px;
+	border-radius: 6px;
+}
+
+.skeleton-console {
+	height: 400px;
+	margin: 2rem;
+	border-radius: 8px;
+}
+
+.skeleton-settings {
+	padding: 2rem;
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+.skeleton-field {
+	height: 80px;
+	border-radius: 6px;
+}

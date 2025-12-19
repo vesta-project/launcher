@@ -4,6 +4,7 @@ import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { UnlistenFn, emit, listen } from "@tauri-apps/api/event";
+import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { ChildrenProp } from "@ui/props";
 import {
 	applyCommonConfigUpdates,
@@ -23,6 +24,35 @@ import HomePage from "@components/pages/home/home";
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
 );
+
+/**
+ * Handles deep-link URLs like vesta://instance?slug=my-instance
+ * Parses the URL and navigates to the appropriate page
+ */
+function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
+	try {
+		// Parse URL: vesta://path?param1=value1&param2=value2
+		const urlObj = new URL(url);
+		const path = urlObj.hostname; // In vesta://instance, hostname is "instance"
+		const searchParams = urlObj.searchParams;
+		
+		console.log("Deep link parsed:", { path, params: Object.fromEntries(searchParams) });
+
+		// Navigate to standalone page viewer with path and params
+		// The standalone page viewer will handle the mini-router navigation
+		const params = new URLSearchParams();
+		params.set("path", path);
+		
+		// Add all query parameters
+		for (const [key, value] of searchParams) {
+			params.set(key, value);
+		}
+		
+		navigate(`/standalone?${params.toString()}`);
+	} catch (error) {
+		console.error("Failed to parse deep link:", url, error);
+	}
+}
 
 function App() {
 	/*
@@ -48,6 +78,7 @@ function Root(props: ChildrenProp) {
 	const navigate = useNavigate();
 
 	let unlisten: UnlistenFn | null = null;
+	let unlistenDeepLink: (() => void) | null = null;
 
 	onMount(async () => {
 		// Critical: Setup crash handler immediately
@@ -59,6 +90,21 @@ function Root(props: ChildrenProp) {
 			setFatalInfo(event.payload);
 			navigate("/fatal", { replace: true });
 		});
+
+		// Setup deep-link handler for vesta:// URLs
+		try {
+			unlistenDeepLink = await onOpenUrl((urls) => {
+				console.log("Deep link received:", urls);
+				
+				// Handle the first URL in the array
+				if (urls && urls.length > 0) {
+					const url = urls[0];
+					handleDeepLink(url, navigate);
+				}
+			});
+		} catch (error) {
+			console.error("Failed to setup deep-link handler:", error);
+		}
 
 		// Defer non-critical initialization to not block UI render
 		// This allows the window to show immediately while background tasks start
@@ -110,6 +156,7 @@ function Root(props: ChildrenProp) {
 
 	onCleanup(() => {
 		unlisten?.();
+		unlistenDeepLink?.();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		// cleanupFileDropSystem();

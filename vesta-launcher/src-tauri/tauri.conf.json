@@ -21,6 +21,13 @@
 			}
 		}
 	},
+	"plugins": {
+		"deep-link": {
+			"desktop": {
+				"schemes": ["vesta"]
+			}
+		}
+	},
 	"bundle": {
 		"shortDescription": "Vesta Launcher",
 		"active": true,

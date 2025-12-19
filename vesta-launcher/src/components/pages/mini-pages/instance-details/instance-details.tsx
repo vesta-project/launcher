@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { getInstanceBySlug, updateInstance, launchInstance, killInstance, isInstanceRunning } from "@utils/instances";
 import LauncherButton from "@ui/button/button";
+import { Skeleton } from "@ui/skeleton/skeleton";
 import {
 	TextFieldInput,
 	TextFieldLabel,
@@ -16,22 +17,44 @@ import {
 	SliderTrack,
 	SliderValueLabel,
 } from "@ui/slider/slider";
+import { router } from "@components/page-viewer/page-viewer";
 import "./instance-details.css";
 
 type TabType = "home" | "console" | "mods" | "settings";
 
 interface InstanceDetailsProps {
-	slug?: string;
+	slug?: string; // Optional - can come from props or router params
 }
 
 export default function InstanceDetails(props: InstanceDetailsProps) {
-	const slug = () => props.slug || "";
+	// Get slug from props first, then fallback to router params
+	const getSlug = () => {
+		if (props.slug) return props.slug;
+		const params = router()?.currentParams.get();
+		return params?.slug as string | undefined;
+	};
+	
+	const slug = () => getSlug() || "";
 
 	const [instance, { refetch }] = createResource(slug, async (s) => {
 		if (!s) return undefined;
 		return await getInstanceBySlug(s);
 	});
 
+	// Register refetch callback with router so reload button can trigger it
+	const handleRefetch = async () => {
+		await refetch();
+	};
+
+	onMount(() => {
+		router()?.setRefetch(handleRefetch);
+	});
+
+	onCleanup(() => {
+		router()?.setRefetch(() => Promise.resolve());
+	});
+
+	// Local tab state - no longer synced with router props
 	const [activeTab, setActiveTab] = createSignal<TabType>("home");
 
 	// Running state
@@ -226,20 +249,27 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		}
 	};
 
+	// Handle tab changes - use updateQuery to avoid creating history entries
+	const handleTabChange = (tab: TabType) => {
+		setActiveTab(tab);
+		router()?.updateQuery('activeTab', tab);
+	};
+
+
 	return (
 		<div class="instance-details-page">
 			<aside class="instance-details-sidebar">
 				<nav class="instance-tabs">
-					<button classList={{ active: activeTab() === "home" }} onClick={() => setActiveTab("home")}>
+					<button classList={{ active: activeTab() === "home" }} onClick={() => handleTabChange("home")}>
 						Home
 					</button>
-					<button classList={{ active: activeTab() === "console" }} onClick={() => setActiveTab("console")}>
+					<button classList={{ active: activeTab() === "console" }} onClick={() => handleTabChange("console")}>
 						Console
 					</button>
-					<button classList={{ active: activeTab() === "mods" }} onClick={() => setActiveTab("mods")}>
+					<button classList={{ active: activeTab() === "mods" }} onClick={() => handleTabChange("mods")}>
 						Mods
 					</button>
-					<button classList={{ active: activeTab() === "settings" }} onClick={() => setActiveTab("settings")}>
+					<button classList={{ active: activeTab() === "settings" }} onClick={() => handleTabChange("settings")}>
 						Settings
 					</button>
 				</nav>
@@ -247,9 +277,11 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 			<main class="instance-details-content">
 				<Show when={instance.loading}>
-					<div class="instance-loading">Loading instance…</div>
+					<div class="instance-loading">
+						<Skeleton class="skeleton-header" />
+						<Skeleton class="skeleton-content" />
+					</div>
 				</Show>
-
 				<Show when={instance.error}>
 					<div class="instance-error">
 						<p>Failed to load instance: {String(instance.error)}</p>
@@ -293,13 +325,21 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 							<div class="instance-tab-content">
 								<Show when={activeTab() === "home"}>
-									<section class="tab-home">
-										<h2>Overview</h2>
-										<div class="info-grid">
-											<div class="info-item">
-												<span class="info-label">Name</span>
-												<span class="info-value">{inst().name}</span>
-											</div>
+									<Show when={instance.loading}>
+										<div class="skeleton-grid">
+											{Array.from({ length: 7 }).map(() => (
+												<Skeleton class="skeleton-item" />
+											))}
+										</div>
+									</Show>
+									<Show when={!instance.loading}>
+										<section class="tab-home">
+											<h2>Overview</h2>
+											<div class="info-grid">
+												<div class="info-item">
+													<span class="info-label">Name</span>
+													<span class="info-value">{inst().name}</span>
+												</div>
 											<div class="info-item">
 												<span class="info-label">Minecraft Version</span>
 												<span class="info-value">{inst().minecraft_version}</span>
@@ -326,10 +366,15 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 											</div>
 										</div>
 									</section>
+									</Show>
 								</Show>
 
 								<Show when={activeTab() === "console"}>
-									<section class="tab-console">
+									<Show when={instance.loading}>
+										<Skeleton class="skeleton-console" />
+									</Show>
+									<Show when={!instance.loading}>
+										<section class="tab-console">
 										<div class="console-toolbar">
 											<span class="console-title">Game Console</span>
 											<div class="console-toolbar-buttons">
@@ -352,6 +397,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 											</For>
 										</div>
 									</section>
+									</Show>
 								</Show>
 
 								<Show when={activeTab() === "mods"}>
@@ -364,8 +410,15 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 								</Show>
 
 								<Show when={activeTab() === "settings"}>
-									<section class="tab-settings">
-										<h2>Instance Settings</h2>
+									<Show when={instance.loading}>
+										<div class="skeleton-settings">
+											<Skeleton class="skeleton-field" />
+											<Skeleton class="skeleton-field" />
+										</div>
+									</Show>
+									<Show when={!instance.loading}>
+										<section class="tab-settings">
+											<h2>Instance Settings</h2>
 										
 										<div class="settings-field">
 											<TextFieldRoot>
@@ -405,6 +458,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 											</LauncherButton>
 										</div>
 									</section>
+									</Show>
 								</Show>
 							</div>
 						</>

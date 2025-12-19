@@ -9,6 +9,7 @@ pub async fn launch_new_window(
     app_handle: tauri::AppHandle,
     path: Option<String>,
     props: Option<HashMap<String, String>>,
+    history: Option<String>,
 ) -> Result<(), tauri::Error> {
     let mut window_id = WINDOW_ID.lock().unwrap();
 
@@ -21,6 +22,11 @@ pub async fn launch_new_window(
         for (key, value) in props_map {
             url.push_str(&format!("&{}={}", urlencoding::encode(&key), urlencoding::encode(&value)));
         }
+    }
+    
+    // Add history as URL parameter (as JSON string)
+    if let Some(history_data) = history {
+        url.push_str(&format!("&history={}", urlencoding::encode(&history_data)));
     }
 
     let win_builder = tauri::WebviewWindowBuilder::new(
