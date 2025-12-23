@@ -133,3 +133,10 @@ button {
 	initial-value: 90deg;
 	inherits: true;
 }
+
+:root[data-reduced-motion="true"] * {
+	animation-duration: 0ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0ms !important;
+	scroll-behavior: auto !important;
+}

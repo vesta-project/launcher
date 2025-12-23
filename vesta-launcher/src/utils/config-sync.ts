@@ -13,6 +13,17 @@ let configUnlisten: UnlistenFn | null = null;
 let currentWindowLabel: string | null = null;
 const updateHandlers: Set<ConfigUpdateHandler> = new Set();
 
+function setReducedMotion(enabled: boolean): void {
+	const root = document.documentElement;
+	root.dataset.reducedMotion = enabled ? "true" : "false";
+
+	if (enabled) {
+		root.style.setProperty("scroll-behavior", "auto");
+	} else {
+		root.style.removeProperty("scroll-behavior");
+	}
+}
+
 /**
  * Register a handler to be called when config updates arrive
  */
@@ -101,7 +112,21 @@ export function applyCommonConfigUpdates(field: string, value: any): void {
 			value.toString(),
 		);
 	}
+
+	if (field === "reduced_motion" && typeof value === "boolean") {
+		setReducedMotion(value);
+	}
 	// Add more common handlers here as needed
+}
+
+/** Apply a full config snapshot (used at startup) */
+export function applyConfigSnapshot(config: Record<string, any>): void {
+	if (typeof config.background_hue === "number") {
+		applyCommonConfigUpdates("background_hue", config.background_hue);
+	}
+	if (typeof config.reduced_motion === "boolean") {
+		applyCommonConfigUpdates("reduced_motion", config.reduced_motion);
+	}
 }
 
 /**

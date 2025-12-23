@@ -23,12 +23,14 @@ import "./settings-page.css";
 interface AppConfig {
 	debug_logging: boolean;
 	background_hue: number;
+	reduced_motion?: boolean;
 	[key: string]: any;
 }
 
 function SettingsPage() {
 	const [debugLogging, setDebugLogging] = createSignal(false);
 	const [backgroundHue, setBackgroundHue] = createSignal(220);
+	const [reducedMotion, setReducedMotion] = createSignal(false);
 	const [loading, setLoading] = createSignal(true);
 
 	let unsubscribeConfigUpdate: (() => void) | null = null;
@@ -38,6 +40,7 @@ function SettingsPage() {
 			const config = await invoke<AppConfig>("get_config");
 			setDebugLogging(config.debug_logging);
 			setBackgroundHue(config.background_hue);
+			setReducedMotion(Boolean(config.reduced_motion));
 		} catch (error) {
 			console.error("Failed to load config:", error);
 		} finally {
@@ -51,6 +54,8 @@ function SettingsPage() {
 				setBackgroundHue(value);
 			} else if (field === "debug_logging" && typeof value === "boolean") {
 				setDebugLogging(value);
+			} else if (field === "reduced_motion" && typeof value === "boolean") {
+				setReducedMotion(value);
 			}
 			// Add more field handlers as needed
 		});
@@ -115,6 +120,19 @@ function SettingsPage() {
 		}
 	};
 
+	const handleReducedMotionToggle = async (checked: boolean) => {
+		setReducedMotion(checked);
+		try {
+			await invoke("update_config_field", {
+				field: "reduced_motion",
+				value: checked,
+			});
+		} catch (error) {
+			console.error("Failed to update reduced motion:", error);
+			setReducedMotion(!checked);
+		}
+	};
+
 	return (
 		<div class="settings-page">
 			<h1>Settings</h1>
@@ -145,6 +163,23 @@ function SettingsPage() {
 					</div>
 					<p class="settings-description">
 						Adjust the primary color hue for the application theme (0-360°)
+					</p>
+
+					<div class="settings-row">
+						<Switch
+							checked={reducedMotion()}
+							onChange={handleReducedMotionToggle}
+							class="settings-switch"
+						>
+							<SwitchLabel>Reduced Motion</SwitchLabel>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					</div>
+					<p class="settings-description">
+						Disable non-essential animations and transitions for better performance
+						and accessibility.
 					</p>
 				</section>
 

@@ -10,6 +10,7 @@ import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { ChildrenProp } from "@ui/props";
 import {
 	applyCommonConfigUpdates,
+	applyConfigSnapshot,
 	onConfigUpdate,
 	subscribeToConfigUpdates,
 	unsubscribeFromConfigUpdates,
@@ -20,6 +21,7 @@ import {
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
+import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { lazy, onCleanup, onMount } from "solid-js";
 
 const StandalonePageViewer = lazy(
@@ -142,8 +144,17 @@ function Root(props: ChildrenProp) {
 
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()
-				.then(() => {
+				.then(async () => {
 					onConfigUpdate(applyCommonConfigUpdates);
+
+					if (hasTauriRuntime()) {
+						try {
+							const config = await invoke("get_config");
+							applyConfigSnapshot(config as Record<string, any>);
+						} catch (error) {
+							console.error("Failed to apply initial config:", error);
+						}
+					}
 				})
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);

@@ -68,7 +68,23 @@ pub fn get_config_migrations() -> Vec<Migration> {
     vec![
         migration_001_config_initial_schema(),
         migration_002_app_config(),
+        migration_003_reduced_motion_setting(),
     ]
+}
+
+/// Migration 003: Add reduced_motion toggle to app_config
+fn migration_003_reduced_motion_setting() -> Migration {
+    Migration {
+        version: "0.3.0".to_string(),
+        description: "Add reduced_motion setting to app_config".to_string(),
+        up_sql: vec![
+            "ALTER TABLE app_config ADD COLUMN reduced_motion INTEGER NOT NULL DEFAULT 0".to_string(),
+            "UPDATE app_config SET reduced_motion = 0 WHERE reduced_motion IS NULL".to_string(),
+        ],
+        // NOTE: SQLite drop column support requires 3.35+. If unavailable, this down migration will fail;
+        // in practice we do not roll back config migrations.
+        down_sql: vec!["ALTER TABLE app_config DROP COLUMN reduced_motion".to_string()],
+    }
 }
 
 // ============================================================================

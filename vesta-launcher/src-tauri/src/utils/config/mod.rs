@@ -103,6 +103,7 @@ pub struct AppConfig {
     pub startup_check_updates: bool,
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
+    pub reduced_motion: bool,
     pub last_window_width: i32,
     pub last_window_height: i32,
     pub debug_logging: bool,
@@ -126,6 +127,7 @@ impl Default for AppConfig {
             true,               // startup_check_updates
             true,               // show_tray_icon
             false,              // minimize_to_tray
+            false,              // reduced_motion
             1200,               // last_window_width
             700,                // last_window_height
             false,              // debug_logging
@@ -142,9 +144,9 @@ impl AppConfig {
         vec![format!(
             "INSERT OR IGNORE INTO {} (id, background_hue, theme, language, max_download_threads, \
              max_memory_mb, java_path, default_game_dir, auto_update_enabled, notification_enabled, \
-             startup_check_updates, show_tray_icon, minimize_to_tray, last_window_width, last_window_height, \
+             startup_check_updates, show_tray_icon, minimize_to_tray, reduced_motion, last_window_width, last_window_height, \
              debug_logging, notification_retention_days, active_account_uuid) \
-             VALUES ({}, {}, '{}', '{}', {}, {}, NULL, NULL, {}, {}, {}, {}, {}, {}, {}, {}, {}, NULL)",
+             VALUES ({}, {}, '{}', '{}', {}, {}, NULL, NULL, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, NULL)",
             Self::name(),
             default_config.id,
             default_config.background_hue,
@@ -157,6 +159,7 @@ impl AppConfig {
             if default_config.startup_check_updates { 1 } else { 0 },
             if default_config.show_tray_icon { 1 } else { 0 },
             if default_config.minimize_to_tray { 1 } else { 0 },
+            if default_config.reduced_motion { 1 } else { 0 },
             default_config.last_window_width,
             default_config.last_window_height,
             if default_config.debug_logging { 1 } else { 0 },
@@ -328,7 +331,7 @@ mod tests {
         // (overwrite any pre-existing rows from earlier runs).
         let default_config = AppConfig::default();
         let insert_sql = format!(
-            "INSERT OR REPLACE INTO {} (id, background_hue, theme, language, max_download_threads, max_memory_mb, java_path, default_game_dir, auto_update_enabled, notification_enabled, startup_check_updates, show_tray_icon, minimize_to_tray, last_window_width, last_window_height, debug_logging, notification_retention_days, active_account_uuid) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            "INSERT OR REPLACE INTO {} (id, background_hue, theme, language, max_download_threads, max_memory_mb, java_path, default_game_dir, auto_update_enabled, notification_enabled, startup_check_updates, show_tray_icon, minimize_to_tray, reduced_motion, last_window_width, last_window_height, debug_logging, notification_retention_days, active_account_uuid) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
             AppConfig::name(),
         );
 
@@ -364,6 +367,11 @@ mod tests {
                 } else {
                     0
                 },
+                if default_config.reduced_motion {
+                    1
+                } else {
+                    0
+                },
                 default_config.last_window_width,
                 default_config.last_window_height,
                 if default_config.debug_logging { 1 } else { 0 },
@@ -391,7 +399,7 @@ mod tests {
                 "SELECT id, background_hue, theme, language, max_download_threads, max_memory_mb, 
                     java_path, default_game_dir, auto_update_enabled,
                     notification_enabled, startup_check_updates, show_tray_icon, 
-                    minimize_to_tray, last_window_width, last_window_height,
+                    minimize_to_tray, reduced_motion, last_window_width, last_window_height,
                     debug_logging, notification_retention_days
              FROM app_config WHERE id = 1",
             )
@@ -413,10 +421,11 @@ mod tests {
                     startup_check_updates: row.get(10)?,
                     show_tray_icon: row.get(11)?,
                     minimize_to_tray: row.get(12)?,
-                    last_window_width: row.get(13)?,
-                    last_window_height: row.get(14)?,
-                    debug_logging: row.get(15)?,
-                    notification_retention_days: row.get(16)?,
+                    reduced_motion: row.get(13)?,
+                    last_window_width: row.get(14)?,
+                    last_window_height: row.get(15)?,
+                    debug_logging: row.get(16)?,
+                    notification_retention_days: row.get(17)?,
                     active_account_uuid: None, // Default for test
                 })
             })
