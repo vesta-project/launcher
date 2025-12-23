@@ -5,7 +5,7 @@ pub mod metadata;
 // Re-export commonly used types
 pub use launcher::{GameInstance, LaunchResult, LaunchSpec};
 pub use metadata::{
-    GameVersionMetadata, LoaderVersionInfo, ModloaderType, NotificationHint, PistonMetadata,
+    GameVersionMetadata, LoaderVersionInfo, ModloaderType, PistonMetadata,
 };
 
 // Re-export metadata cache functions for easy access

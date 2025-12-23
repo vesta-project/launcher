@@ -109,30 +109,11 @@ fn build_initial_game_versions(
             let mut loaders = HashMap::new();
 
             // Vanilla is always available
-            let mut vanilla_loader = LoaderVersionInfo {
+            let vanilla_loader = LoaderVersionInfo {
                 version: mojang_version.id.clone(),
                 stable: mojang_version.version_type == "release",
                 metadata: None,
-                notification: None,
             };
-
-            // Add a sample notification hint for the Mojang 'latest' release to demonstrate generator first approach.
-            if mojang_version.id == mojang_manifest.latest.release {
-                vanilla_loader.notification = Some(NotificationHint {
-                    client_key: Some(format!("release-{}", mojang_version.id)),
-                    title: Some(format!("New release: {}", mojang_version.id)),
-                    description: Some("A new Minecraft release is available.".to_string()),
-                    notification_type: Some("Immediate".to_string()),
-                    severity: Some("Info".to_string()),
-                    dismissible: Some(true),
-                    progress: None,
-                    current_step: None,
-                    total_steps: None,
-                    show_on_completion: None,
-                    actions: None,
-                    extra: None,
-                });
-            }
 
             loaders.insert(ModloaderType::Vanilla, vec![vanilla_loader]);
 
@@ -271,7 +252,6 @@ async fn add_fabric_modloader(
                                             .stable
                                             .unwrap_or_else(|| !l.loader.version.contains("beta")),
                                         metadata: None,
-                                        notification: None,
                                     })
                                     .collect();
 
@@ -380,7 +360,6 @@ fn process_forge_versions(
                     // Nexus uses stable=false here (as in supplied example)
                     stable: false,
                     metadata: None,
-                    notification: None,
                 },
             );
         }
@@ -615,7 +594,6 @@ fn process_neoforge_api_versions(
                             version: neo_version.clone(),
                             stable: false, // be conservative; NeoForge API might provide a more accurate field later
                             metadata: None,
-                            notification: None,
                         },
                     );
                 }
@@ -666,77 +644,6 @@ mod tests {
         assert!(loaders.contains_key(&ModloaderType::Forge));
         let list = loaders.get(&ModloaderType::Forge).unwrap();
         assert!(list.iter().any(|l| l.version == "47.2.0"));
-    }
-
-    #[test]
-    fn test_loader_version_notification_serialization() {
-        let notif = NotificationHint {
-            client_key: Some("test-key".to_string()),
-            title: Some("Install started".to_string()),
-            description: Some("Downloading files".to_string()),
-            notification_type: Some("Progress".to_string()),
-            severity: Some("Info".to_string()),
-            dismissible: Some(false),
-            progress: Some(-1),
-            current_step: None,
-            total_steps: None,
-            show_on_completion: Some(true),
-            actions: None,
-            extra: None,
-        };
-
-        let loader = LoaderVersionInfo {
-            version: "1.0.0".to_string(),
-            stable: true,
-            metadata: None,
-            notification: Some(notif),
-        };
-
-        let v = serde_json::to_value(&loader).expect("serialize");
-        assert!(v.get("notification").is_some());
-        assert_eq!(
-            v.get("notification").unwrap().get("client_key").unwrap(),
-            "test-key"
-        );
-    }
-
-    #[test]
-    fn test_build_initial_sets_latest_notification() {
-        use crate::game::metadata::types::MojangVersion;
-        use chrono::Utc;
-
-        let manifest = MojangVersionManifest {
-            latest: MojangLatest {
-                release: "1.42.0".to_string(),
-                snapshot: "out-of-scope".to_string(),
-            },
-            versions: vec![MojangVersion {
-                id: "1.42.0".to_string(),
-                version_type: "release".to_string(),
-                url: "".to_string(),
-                time: "".to_string(),
-                release_time: Utc::now().to_rfc3339(),
-                sha1: "".to_string(),
-                compliance_level: 0,
-            }],
-        };
-
-        let versions = build_initial_game_versions(&manifest);
-        let latest = versions
-            .iter()
-            .find(|v| v.id == "1.42.0")
-            .expect("latest present");
-        let vanilla = latest
-            .loaders
-            .get(&ModloaderType::Vanilla)
-            .expect("vanilla loader");
-        assert_eq!(vanilla.len(), 1);
-        assert!(
-            vanilla[0].notification.is_some(),
-            "Expected notification for latest release"
-        );
-        let notif = vanilla[0].notification.as_ref().unwrap();
-        assert_eq!(notif.title.as_ref().unwrap(), "New release: 1.42.0");
     }
 
     #[test]

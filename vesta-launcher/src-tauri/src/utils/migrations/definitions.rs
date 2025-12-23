@@ -1,5 +1,5 @@
 use super::Migration;
-use crate::models::{Account, Instance, Notification};
+use crate::models::{Account, Instance, Notification, UserVersionTracking};
 use crate::utils::config::AppConfig;
 use crate::utils::sqlite::SqlTable;
 
@@ -94,8 +94,7 @@ fn migration_001_data_initial_schema() -> Migration {
     }
 }
 
-/// Migration 003: Instances table for Minecraft instances
-
+/// Migration 002: Instances table for Minecraft instances
 fn migration_002_instances_table() -> Migration {
     let schema_sql = Instance::schema_sql();
     let indices = Instance::get_indices();
@@ -115,8 +114,7 @@ fn migration_002_instances_table() -> Migration {
     }
 }
 
-/// Migration 004: Accounts table for Microsoft authentication
-
+/// Migration 003: Accounts table for Microsoft authentication
 fn migration_003_accounts_table() -> Migration {
     let schema_sql = Account::schema_sql();
     let indices = Account::get_indices();
@@ -136,7 +134,7 @@ fn migration_003_accounts_table() -> Migration {
     }
 }
 
-/// Migration 005: Notifications table for persistent and ephemeral notifications
+/// Migration 004: Notifications table for persistent and ephemeral notifications
 fn migration_004_notifications_table() -> Migration {
     let schema_sql = Notification::schema_sql();
     let indices = Notification::get_indices();
@@ -156,6 +154,26 @@ fn migration_004_notifications_table() -> Migration {
     }
 }
 
+/// Migration 005: User version tracking for update notifications
+fn migration_005_user_version_tracking_table() -> Migration {
+    let schema_sql = UserVersionTracking::schema_sql();
+    let indices = UserVersionTracking::get_indices();
+    let drop_indices = UserVersionTracking::get_drop_indices();
+
+    let mut up_sql = vec![schema_sql];
+    up_sql.extend(indices);
+
+    let mut down_sql = drop_indices;
+    down_sql.push(format!("DROP TABLE IF EXISTS {}", UserVersionTracking::name()));
+
+    Migration {
+        version: UserVersionTracking::migration_version(),
+        description: UserVersionTracking::migration_description(),
+        up_sql,
+        down_sql,
+    }
+}
+
 /// Get all **data database** migrations in order
 pub fn get_data_migrations() -> Vec<Migration> {
     vec![
@@ -163,6 +181,7 @@ pub fn get_data_migrations() -> Vec<Migration> {
         migration_002_instances_table(),
         migration_003_accounts_table(),
         migration_004_notifications_table(),
+        migration_005_user_version_tracking_table(),
     ]
 }
 

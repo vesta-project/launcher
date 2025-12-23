@@ -5,7 +5,6 @@ use tokio::fs;
 
 use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
-use crate::notifications::metadata_adapter::notification_hint_to_create_input;
 use crate::tasks::manager::{BoxFuture, Task, TaskContext};
 
 pub struct GenerateManifestTask {
@@ -163,19 +162,6 @@ impl Task for GenerateManifestTask {
                 );
             } else {
                 log::warn!("MetadataCache state not found; fast-path cache disabled");
-            }
-
-            // Create notifications for any generator-provided notification hints found in metadata
-            for gv in metadata.game_versions.iter() {
-                for (loader, loader_list) in gv.loaders.iter() {
-                    for li in loader_list.iter() {
-                        if let Some(ref hint) = li.notification {
-                            // Map hint -> CreateNotificationInput and call manager.create
-                            let input = notification_hint_to_create_input(&hint);
-                            let _ = manager.create(input);
-                        }
-                    }
-                }
             }
 
             log::info!("PistonManifest generation completed successfully");

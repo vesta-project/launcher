@@ -269,31 +269,6 @@ function NotificationCard(props: {
 				>
 					{props.description}
 				</p>
-				<Show when={props.metadata}>
-					<div
-						style={{
-							margin: "6px 0 0 0",
-							"font-size": "12px",
-							color: "hsl(var(--color__primary-hue) 5% 70%)",
-						}}
-					>
-						<small>
-							<pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
-								{(() => {
-									try {
-										return JSON.stringify(
-											JSON.parse(props.metadata as string),
-											null,
-											2,
-										);
-									} catch {
-										return (props.metadata as string) || "";
-									}
-								})()}
-							</pre>
-						</small>
-					</div>
-				</Show>
 				{props.progress !== null && props.progress !== undefined && (
 					<div style={{ "margin-top": "8px", "max-width": "100%" }}>
 						<Progress

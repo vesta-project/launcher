@@ -8,4 +8,5 @@ pub mod migrations;
 pub mod process_state;
 pub mod sanitize;
 pub mod sqlite;
+pub mod version_tracking;
 pub mod windows;

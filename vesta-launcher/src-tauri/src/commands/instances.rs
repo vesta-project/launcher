@@ -5,7 +5,7 @@ use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db_manager::get_data_db;
 use crate::utils::sqlite::{SqlTable, AUTOINCREMENT};
 use std::sync::Arc;
-use tauri::{Manager, State};
+use tauri::{Manager, State, Emitter};
 
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
@@ -1306,6 +1306,11 @@ pub async fn get_minecraft_versions(
         metadata.game_versions.len()
     );
 
+    // Check for new versions and create notifications
+    if let Err(e) = check_and_notify_new_versions(&metadata, &app_handle).await {
+        log::warn!("Failed to check for new versions: {}", e);
+    }
+
     // Populate in-memory cache after disk/path load for future fast-path
     if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
         cache.set(&metadata);
@@ -1379,4 +1384,94 @@ pub fn read_instance_log(instance_id: String, last_lines: Option<usize>) -> Resu
     } else {
         Ok(lines)
     }
+}
+
+/// Check for new Minecraft versions and create notifications if found
+async fn check_and_notify_new_versions(
+    metadata: &piston_lib::game::metadata::PistonMetadata,
+    app_handle: &tauri::AppHandle,
+) -> Result<(), String> {
+    use crate::utils::version_tracking::VersionTrackingRepository;
+
+    // Initialize version tracking if this is the first run
+    if let Err(e) = VersionTrackingRepository::initialize_defaults() {
+        log::warn!("Failed to initialize version tracking defaults: {}", e);
+    }
+
+    // Check release version
+    let current_release = &metadata.latest.release;
+    if VersionTrackingRepository::is_version_newer("minecraft_release", current_release)
+        .map_err(|e| format!("Failed to check release version: {}", e))?
+    {
+        log::info!("New Minecraft release detected: {}", current_release);
+        create_version_notification(
+            app_handle,
+            "New Minecraft Release Available",
+            &format!("Minecraft {} is now available for download!", current_release),
+            "minecraft_release",
+            current_release,
+        ).await?;
+    }
+
+    // Check snapshot version
+    let current_snapshot = &metadata.latest.snapshot;
+    if VersionTrackingRepository::is_version_newer("minecraft_snapshot", current_snapshot)
+        .map_err(|e| format!("Failed to check snapshot version: {}", e))?
+    {
+        log::info!("New Minecraft snapshot detected: {}", current_snapshot);
+        create_version_notification(
+            app_handle,
+            "New Minecraft Snapshot Available",
+            &format!("Minecraft snapshot {} is now available for testing!", current_snapshot),
+            "minecraft_snapshot",
+            current_snapshot,
+        ).await?;
+    }
+
+    Ok(())
+}
+
+/// Create a notification for a new version
+async fn create_version_notification(
+    app_handle: &tauri::AppHandle,
+    title: &str,
+    description: &str,
+    version_type: &str,
+    version: &str,
+) -> Result<(), String> {
+    use crate::notifications::models::CreateNotificationInput;
+    use crate::utils::version_tracking::VersionTrackingRepository;
+
+    let notification_manager = app_handle.state::<crate::notifications::manager::NotificationManager>();
+
+    let input = CreateNotificationInput {
+        client_key: Some(format!("version_update_{}", version_type)),
+        title: Some(title.to_string()),
+        description: Some(description.to_string()),
+        severity: Some("info".to_string()),
+        notification_type: Some(crate::notifications::models::NotificationType::Patient),
+        dismissible: Some(true),
+        progress: None,
+        current_step: None,
+        total_steps: None,
+        actions: None, // Could add "View Versions" action later
+        metadata: Some(serde_json::json!({
+            "version_type": version_type,
+            "version": version,
+            "notification_type": "version_update"
+        }).to_string()),
+        show_on_completion: None,
+    };
+
+    // Create notification through the manager (handles DB insertion and event emission)
+    notification_manager
+        .create(input)
+        .map_err(|e| format!("Failed to create notification: {}", e))?;
+
+    // Update version tracking to mark as notified
+    VersionTrackingRepository::mark_notified(version_type, version)
+        .map_err(|e| format!("Failed to update version tracking: {}", e))?;
+
+    log::info!("Created version update notification for {}: {}", version_type, version);
+    Ok(())
 }

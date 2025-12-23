@@ -97,28 +97,6 @@ pub struct LoaderVersionInfo {
     /// Additional metadata (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
-    /// Optional notification hint for this loader/version
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub notification: Option<NotificationHint>,
-}
-
-/// Notification hint structure that can be embedded in metadata for client-side notifications
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct NotificationHint {
-    pub client_key: Option<String>,
-    pub title: Option<String>,
-    pub description: Option<String>,
-    pub notification_type: Option<String>,
-    pub severity: Option<String>,
-    pub dismissible: Option<bool>,
-    pub progress: Option<i32>,
-    pub current_step: Option<u32>,
-    pub total_steps: Option<u32>,
-    pub show_on_completion: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub actions: Option<Vec<serde_json::Value>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub extra: Option<serde_json::Value>,
 }
 
 // ============================================================================
