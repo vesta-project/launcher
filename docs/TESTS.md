@@ -10,7 +10,7 @@ Where tests live
 - `crates/piston-lib/tests/` — integration-style tests (e.g., installer flow tests).
 - `crates/piston-macros/` — tests for the procedural macros (derive behavior, sqlite helpers).
 - `src-tauri/` — may contain tests for Tauri-specific or migration logic.
-- `playground/` and `rust-playground/` — small example projects and can contain tests used for experimentation.
+- `playground/` — small example projects and can contain tests used for experimentation.
 
 Notable tests (examples you may encounter)
 - `game::launcher::arguments::tests::build_variables_canonicalize_paths` — verifies path canonicalization behavior; can fail on systems with unusual filesystem setups.

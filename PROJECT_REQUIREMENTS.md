@@ -310,8 +310,7 @@ VestaProject/
 │       ├── ui/              # Reusable UI component library
 │       └── utils/           # Frontend utilities
 │
-├── ui-playground/           # Component testing sandbox
-└── rust-playground/         # Backend testing/experimentation
+└── ui-playground/           # Component testing sandbox
 ```
 
 ### 🎯 Current State Summary
@@ -353,7 +352,6 @@ This project follows the **WAGile** (Waterfall planning + Agile execution) appro
 
 - 📝 Files like `logging.rs`, `task.rs` = **future implementations**, not dead code
 - 📝 Empty structs like `Settings`, `JavaPath` = **planned features**, not mistakes
-- 📝 Test files (`rust-playground`) = **development sandbox**, intentionally separate
 - 📝 Hardcoded UI data (16 instance cards) = **mockups awaiting backend**
 
 ---
