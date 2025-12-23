@@ -1,145 +1,145 @@
 .page-root {
-  display: flex;
-  align-items: center;
-  flex-flow: column;
-  padding: 20px;
-  width: 100%;
-  box-sizing: border-box;
+	display: flex;
+	align-items: center;
+	flex-flow: column;
+	padding: 20px;
+	width: 100%;
+	box-sizing: border-box;
 }
 
 .header-container {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  margin-bottom: 1rem;
-  width: 100%;
-  max-width: 600px;
-  /* Ensure header aligns with form */
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	margin-bottom: 1rem;
+	width: 100%;
+	max-width: 600px;
+	/* Ensure header aligns with form */
 }
 
 .page-wrapper {
-  width: 100%;
-  max-width: 600px;
-  padding-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+	width: 100%;
+	max-width: 600px;
+	padding-top: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
 }
 
 .install-form {
-  /* max-width handled by page-wrapper */
+	/* max-width handled by page-wrapper */
 }
 
 .form-row {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-  flex-wrap: wrap;
+	display: flex;
+	gap: 20px;
+	align-items: flex-start;
+	flex-wrap: wrap;
 }
 
 .form-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 /* Responsive adjustments */
 @media (max-width: 600px) {
-  .form-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-  
-  .header-container {
-    flex-direction: column-reverse; /* Title on top, tabs below on small screens? Or keep side-by-side? */
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .instance-icon-placeholder {
-    align-self: center;
-  }
+	.form-row {
+		flex-direction: column;
+		gap: 15px;
+	}
+
+	.header-container {
+		flex-direction: column-reverse; /* Title on top, tabs below on small screens? Or keep side-by-side? */
+		align-items: flex-start;
+		gap: 10px;
+	}
+
+	.instance-icon-placeholder {
+		align-self: center;
+	}
 }
 
 .form-label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--text-primary, #fff);
+	font-size: 0.9rem;
+	font-weight: 500;
+	color: var(--text-primary, #fff);
 }
 
 .instance-icon-placeholder {
-  width: 80px;
-  height: 80px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 0.2s;
+	width: 80px;
+	height: 80px;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	border-radius: 8px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	transition: transform 0.2s;
 }
 
 .instance-icon-placeholder:hover {
-  transform: scale(1.05);
+	transform: scale(1.05);
 }
 
 .error-text {
-  color: var(--error-color, #ff4444);
-  font-size: 0.9rem;
+	color: var(--error-color, #ff4444);
+	font-size: 0.9rem;
 }
 
 /* Tabs */
 .install-tabs {
-  display: inline-flex;
-  background-color: rgba(0, 0, 0, 0.2);
-  border-radius: 8px;
-  padding: 4px;
-  gap: 4px;
-  /* margin-bottom: 1rem; Removed as it's now in the header */
+	display: inline-flex;
+	background-color: rgba(0, 0, 0, 0.2);
+	border-radius: 8px;
+	padding: 4px;
+	gap: 4px;
+	/* margin-bottom: 1rem; Removed as it's now in the header */
 }
 
 .install-tabs .toggle-group__item {
-  padding: 6px 16px;
-  border-radius: 6px;
-  border: none;
-  background: transparent;
-  color: #aaa;
-  cursor: pointer;
-  font-weight: 500;
-  transition: all 0.2s;
+	padding: 6px 16px;
+	border-radius: 6px;
+	border: none;
+	background: transparent;
+	color: #aaa;
+	cursor: pointer;
+	font-weight: 500;
+	transition: all 0.2s;
 }
 
 .install-tabs .toggle-group__item[data-pressed] {
-  background-color: var(--accent-color, #667eea);
-  color: white;
+	background-color: var(--accent-color, #667eea);
+	color: white;
 }
 
 /* Modloader Pills */
 .modloader-pills {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  background-color: transparent; /* Override default ToggleGroup background */
-  border-radius: 0;
-  overflow: visible;
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	background-color: transparent; /* Override default ToggleGroup background */
+	border-radius: 0;
+	overflow: visible;
 }
 
 .modloader-pills .toggle-group__item {
-  padding: 6px 12px;
-  border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  background: rgba(255, 255, 255, 0.05);
-  color: #ccc;
-  cursor: pointer;
-  transition: all 0.2s;
+	padding: 6px 12px;
+	border-radius: 20px;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	background: rgba(255, 255, 255, 0.05);
+	color: #ccc;
+	cursor: pointer;
+	transition: all 0.2s;
 }
 
 .modloader-pills .toggle-group__item:hover {
-  background: rgba(255, 255, 255, 0.1);
+	background: rgba(255, 255, 255, 0.1);
 }
 
 .modloader-pills .toggle-group__item[data-pressed] {
-  background-color: var(--accent-color, #667eea);
-  border-color: var(--accent-color, #667eea);
-  color: white;
+	background-color: var(--accent-color, #667eea);
+	border-color: var(--accent-color, #667eea);
+	color: white;
 }

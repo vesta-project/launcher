@@ -1,54 +1,80 @@
 .progress {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
 }
 
 .progress__track {
-  height: 8px;
-  background-color: hsl(var(--color__primary-hue) 20% 92%);
-  border-radius: 9999px;
-  overflow: hidden;
+	height: 8px;
+	background-color: hsl(var(--color__primary-hue) 20% 92%);
+	border-radius: 9999px;
+	overflow: hidden;
 }
 
 .progress__fill {
-  height: 100%;
-  width: var(--progress-fill-width, var(--kb-progress-fill-width, 0%));
-  background-color: hsl(var(--color__primary-hue) 60% 45%);
-  transition: width 250ms linear;
+	height: 100%;
+	width: var(--progress-fill-width, var(--kb-progress-fill-width, 0%));
+	background-color: hsl(var(--color__primary-hue) 60% 45%);
+	transition: width 250ms linear;
 }
 
 .progress--indeterminate .progress__fill {
-  width: 100%;
-  background: linear-gradient(90deg, rgba(255,255,255,0.08) 25%, rgba(255,255,255,0.04) 37%, rgba(255,255,255,0.08) 63%);
-  background-size: 200% 100%;
-  animation: progress-pulse 1.4s linear infinite;
+	width: 100%;
+	background: linear-gradient(
+		90deg,
+		rgba(255, 255, 255, 0.08) 25%,
+		rgba(255, 255, 255, 0.04) 37%,
+		rgba(255, 255, 255, 0.08) 63%
+	);
+	background-size: 200% 100%;
+	animation: progress-pulse 1.4s linear infinite;
 }
 
 .progress__fill--indeterminate {
-  width: 100% !important;
-  background: linear-gradient(90deg, rgba(255,255,255,0.08) 25%, rgba(255,255,255,0.04) 37%, rgba(255,255,255,0.08) 63%);
-  background-size: 200% 100%;
-  animation: progress-pulse 1.4s linear infinite;
+	width: 100% !important;
+	background: linear-gradient(
+		90deg,
+		rgba(255, 255, 255, 0.08) 25%,
+		rgba(255, 255, 255, 0.04) 37%,
+		rgba(255, 255, 255, 0.08) 63%
+	);
+	background-size: 200% 100%;
+	animation: progress-pulse 1.4s linear infinite;
 }
 
 @keyframes progress-pulse {
-  0% { background-position: 100% 0; }
-  100% { background-position: 0 0; }
+	0% {
+		background-position: 100% 0;
+	}
+	100% {
+		background-position: 0 0;
+	}
 }
 
 .progress__steps {
-  font-size: 12px;
-  color: hsl(var(--color__primary-hue) 5% 85%);
+	font-size: 12px;
+	color: hsl(var(--color__primary-hue) 5% 85%);
 }
 
 /* severity variants */
-.progress--error .progress__fill { background-color: hsl(var(--color__error-hue, 0) 80% 50%); }
-.progress--warning .progress__fill { background-color: hsl(var(--color__warning-hue, 40) 80% 50%); }
-.progress--success .progress__fill { background-color: hsl(var(--color__success-hue, 120) 60% 45%); }
-.progress--info .progress__fill { background-color: hsl(var(--color__primary-hue) 60% 45%); }
+.progress--error .progress__fill {
+	background-color: hsl(var(--color__error-hue, 0) 80% 50%);
+}
+.progress--warning .progress__fill {
+	background-color: hsl(var(--color__warning-hue, 40) 80% 50%);
+}
+.progress--success .progress__fill {
+	background-color: hsl(var(--color__success-hue, 120) 60% 45%);
+}
+.progress--info .progress__fill {
+	background-color: hsl(var(--color__primary-hue) 60% 45%);
+}
 
 /* sizes */
-.progress--sm .progress__track { height: 6px; }
-.progress--lg .progress__track { height: 12px; }
+.progress--sm .progress__track {
+	height: 6px;
+}
+.progress--lg .progress__track {
+	height: 12px;
+}

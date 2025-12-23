@@ -1,9 +1,11 @@
 import { FatalPage, setFatalInfo } from "@components/pages/fatal/fatal-page";
+// import { initializeFileDropSystem, cleanupFileDropSystem } from "@utils/file-drop";
+import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
-import { UnlistenFn, emit, listen } from "@tauri-apps/api/event";
+import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { ChildrenProp } from "@ui/props";
 import {
@@ -12,15 +14,14 @@ import {
 	subscribeToConfigUpdates,
 	unsubscribeFromConfigUpdates,
 } from "@utils/config-sync";
+import { getMinecraftVersions } from "@utils/instances";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
-import { getMinecraftVersions } from "@utils/instances";
 import { lazy, onCleanup, onMount } from "solid-js";
-// import { initializeFileDropSystem, cleanupFileDropSystem } from "@utils/file-drop";
-import HomePage from "@components/pages/home/home";
+
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
 );
@@ -35,19 +36,22 @@ function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
 		const urlObj = new URL(url);
 		const path = urlObj.hostname; // In vesta://instance, hostname is "instance"
 		const searchParams = urlObj.searchParams;
-		
-		console.log("Deep link parsed:", { path, params: Object.fromEntries(searchParams) });
+
+		console.log("Deep link parsed:", {
+			path,
+			params: Object.fromEntries(searchParams),
+		});
 
 		// Navigate to standalone page viewer with path and params
 		// The standalone page viewer will handle the mini-router navigation
 		const params = new URLSearchParams();
 		params.set("path", path);
-		
+
 		// Add all query parameters
 		for (const [key, value] of searchParams) {
 			params.set(key, value);
 		}
-		
+
 		navigate(`/standalone?${params.toString()}`);
 	} catch (error) {
 		console.error("Failed to parse deep link:", url, error);
@@ -95,7 +99,7 @@ function Root(props: ChildrenProp) {
 		try {
 			unlistenDeepLink = await onOpenUrl((urls) => {
 				console.log("Deep link received:", urls);
-				
+
 				// Handle the first URL in the array
 				if (urls && urls.length > 0) {
 					const url = urls[0];

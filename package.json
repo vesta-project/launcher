@@ -3,7 +3,7 @@
 	"module": "index.ts",
 	"type": "module",
 	"devDependencies": {
-		"@biomejs/biome": "1.7.3",
+		"@biomejs/biome": "^2.3.10",
 		"@types/bun": "latest",
 		"@types/node": "^24.10.1"
 	},

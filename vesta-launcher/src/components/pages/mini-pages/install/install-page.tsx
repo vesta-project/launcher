@@ -1,27 +1,4 @@
-import {
-	createSignal,
-	createResource,
-	Show,
-	createEffect,
-	onMount,
-	For
-} from "solid-js";
-import {
-	createInstance,
-	installInstance,
-	getMinecraftVersions,
-	reloadMinecraftVersions,
-	type CreateInstanceData,
-	type PistonMetadata,
-	type Instance,
-} from "@utils/instances";
-import { showToast } from "@ui/toast/toast";
 import LauncherButton from "@ui/button/button";
-import {
-	TextFieldInput,
-	TextFieldLabel,
-	TextFieldRoot,
-} from "@ui/text-field/text-field";
 import {
 	Combobox,
 	ComboboxContent,
@@ -32,7 +9,6 @@ import {
 	ComboboxItemLabel,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import {
 	Slider,
 	SliderFill,
@@ -41,6 +17,30 @@ import {
 	SliderTrack,
 	SliderValueLabel,
 } from "@ui/slider/slider";
+import {
+	TextFieldInput,
+	TextFieldLabel,
+	TextFieldRoot,
+} from "@ui/text-field/text-field";
+import { showToast } from "@ui/toast/toast";
+import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import {
+	type CreateInstanceData,
+	createInstance,
+	getMinecraftVersions,
+	type Instance,
+	installInstance,
+	type PistonMetadata,
+	reloadMinecraftVersions,
+} from "@utils/instances";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onMount,
+	Show,
+} from "solid-js";
 import "./install-page.css";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
@@ -64,13 +64,13 @@ function InstallPage() {
 				severity: "Success",
 				duration: 4000,
 			});
-			
+
 			// Check if we're in a mini window and close it
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			const currentWindow = getCurrentWindow();
 			const label = currentWindow.label;
 			console.log("[InstallPage] Current window label:", label);
-			
+
 			if (label.startsWith("mini-")) {
 				console.log("[InstallPage] Closing mini window");
 				await currentWindow.close();
@@ -85,10 +85,12 @@ function InstallPage() {
 	const [activeTab, setActiveTab] = createSignal("basic");
 	const [instanceName, setInstanceName] = createSignal("");
 	const [selectedVersion, setSelectedVersion] = createSignal<string>("");
-	const [selectedModloader, setSelectedModloader] = createSignal<string>("vanilla");
-	const [selectedModloaderVersion, setSelectedModloaderVersion] = createSignal<string>("");
+	const [selectedModloader, setSelectedModloader] =
+		createSignal<string>("vanilla");
+	const [selectedModloaderVersion, setSelectedModloaderVersion] =
+		createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
-	
+
 	// Advanced State
 	const [javaArgs, setJavaArgs] = createSignal("");
 	const [memory, setMemory] = createSignal([2048]); // Slider uses array
@@ -97,27 +99,40 @@ function InstallPage() {
 
 	const [isInstalling, setIsInstalling] = createSignal(false);
 	const [isReloading, setIsReloading] = createSignal(false);
-	
+
 	let fileInputRef: HTMLInputElement | undefined;
 
 	// Fetch Minecraft versions
-	const [metadata, { refetch: refetchVersions, loading: metadataLoading, error: metadataError }] = createResource<PistonMetadata>(getMinecraftVersions);
+	const [
+		metadata,
+		{
+			refetch: refetchVersions,
+			loading: metadataLoading,
+			error: metadataError,
+		},
+	] = createResource<PistonMetadata>(getMinecraftVersions);
 
-	const isMetadataLoading = () => (typeof metadataLoading === "function" ? (metadataLoading as () => boolean)() : Boolean(metadataLoading));
-	const getMetadataError = () => (typeof metadataError === "function" ? (metadataError as () => any)() : metadataError);
+	const isMetadataLoading = () =>
+		typeof metadataLoading === "function"
+			? (metadataLoading as () => boolean)()
+			: Boolean(metadataLoading);
+	const getMetadataError = () =>
+		typeof metadataError === "function"
+			? (metadataError as () => any)()
+			: metadataError;
 
 	// Get stable versions list for dropdown, filtered by modloader
 	const filteredVersions = () => {
 		const loader = selectedModloader();
 		if (!metadata()) return [];
-		
+
 		return metadata()!.game_versions.filter((v) => {
 			// Only show stable versions
 			if (!v.stable) return false;
-			
+
 			// If vanilla, show all stable versions
 			if (loader === "vanilla") return true;
-			
+
 			// Otherwise, only show versions that support the selected loader
 			return !!v.loaders[loader];
 		});
@@ -126,12 +141,12 @@ function InstallPage() {
 	// Get all unique modloaders across all versions
 	const uniqueModloaders = () => {
 		if (!metadata()) return ["vanilla"];
-		
+
 		const loaders = new Set<string>(["vanilla"]);
 		metadata()?.game_versions.forEach((v) => {
 			Object.keys(v.loaders).forEach((l) => loaders.add(l));
 		});
-		
+
 		return Array.from(loaders);
 	};
 
@@ -153,7 +168,11 @@ function InstallPage() {
 		const versions = filteredVersions();
 		const current = selectedVersion();
 		// If we have a selected version, but it's not in the new filtered list
-		if (current && versions.length > 0 && !versions.find(v => v.id === current)) {
+		if (
+			current &&
+			versions.length > 0 &&
+			!versions.find((v) => v.id === current)
+		) {
 			setSelectedVersion("");
 		}
 	});
@@ -295,8 +314,8 @@ function InstallPage() {
 	return (
 		<div class={"page-root"}>
 			<div class="header-container">
-				<ToggleGroup 
-					value={activeTab()} 
+				<ToggleGroup
+					value={activeTab()}
 					onChange={(val) => val && setActiveTab(val)}
 					class="install-tabs"
 				>
@@ -318,27 +337,33 @@ function InstallPage() {
 
 			<Show when={metadata()}>
 				<div class={"page-wrapper install-form"}>
-					
 					{/* Basic Content (Always Visible) */}
-					
+
 					{/* Icon & Name */}
 					<div class="form-row icon-name-row">
 						<div
 							class={"instance-icon-placeholder"}
 							title="Click to upload icon"
 							onClick={handleImageUpload}
-							style={iconPath() ? { "background-image": `url('${iconPath()}')`, "background-size": "cover" } : {}}
+							style={
+								iconPath()
+									? {
+											"background-image": `url('${iconPath()}')`,
+											"background-size": "cover",
+										}
+									: {}
+							}
 						>
 							{!iconPath() && <span>Icon</span>}
 						</div>
-						<input 
-							type="file" 
-							ref={fileInputRef} 
-							style="display: none" 
+						<input
+							type="file"
+							ref={fileInputRef}
+							style="display: none"
 							accept="image/*"
 							onChange={onFileSelected}
 						/>
-						
+
 						<TextFieldRoot required={true} style={"flex: 1; min-width: 200px;"}>
 							<TextFieldLabel>Instance Name</TextFieldLabel>
 							<TextFieldInput
@@ -354,14 +379,17 @@ function InstallPage() {
 					{/* Modloader Pills (Now First) */}
 					<div class={"form-field"}>
 						<label class={"form-label"}>Modloader</label>
-						<ToggleGroup 
-							value={selectedModloader()} 
+						<ToggleGroup
+							value={selectedModloader()}
 							onChange={(val) => val && setSelectedModloader(val)}
 							class="modloader-pills"
 						>
 							<For each={uniqueModloaders()}>
 								{(loader) => (
-									<ToggleGroupItem value={loader} style="text-transform: capitalize">
+									<ToggleGroupItem
+										value={loader}
+										style="text-transform: capitalize"
+									>
 										{loader}
 									</ToggleGroupItem>
 								)}
@@ -372,9 +400,15 @@ function InstallPage() {
 					{/* Minecraft Version & Modloader Version */}
 					<div class="form-row version-row">
 						<div class={"form-field"} style="flex: 1; min-width: 200px;">
-							<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+							<div
+								style={{ display: "flex", "align-items": "center", gap: "8px" }}
+							>
 								<label class={"form-label"}>Minecraft Version</label>
-								<LauncherButton onClick={handleReload} disabled={isReloading()} style={{ padding: "4px 8px", "font-size": "0.8rem" }}>
+								<LauncherButton
+									onClick={handleReload}
+									disabled={isReloading()}
+									style={{ padding: "4px 8px", "font-size": "0.8rem" }}
+								>
 									{isReloading() ? "..." : "Reload"}
 								</LauncherButton>
 							</div>
@@ -406,7 +440,10 @@ function InstallPage() {
 								availableModloaderVersions().length > 0
 							}
 						>
-							<div class={"form-field"} style="flex: 1; min-width: 200px; padding: 4px 0px;">
+							<div
+								class={"form-field"}
+								style="flex: 1; min-width: 200px; padding: 4px 0px;"
+							>
 								<label class={"form-label"}>Modloader Version</label>
 								<Combobox
 									options={availableModloaderVersions().map((v) => v.version)}
@@ -415,7 +452,9 @@ function InstallPage() {
 									onChange={setSelectedModloaderVersion}
 									itemComponent={(props) => (
 										<ComboboxItem item={props.item}>
-											<ComboboxItemLabel>{props.item.rawValue}</ComboboxItemLabel>
+											<ComboboxItemLabel>
+												{props.item.rawValue}
+											</ComboboxItemLabel>
 											<ComboboxItemIndicator />
 										</ComboboxItem>
 									)}
@@ -432,18 +471,20 @@ function InstallPage() {
 
 					<Show when={activeTab() === "advanced"}>
 						{/* Advanced Tab Content */}
-						
+
 						{/* Memory Slider */}
 						<div class={"form-field"}>
 							<div style="display: flex; justify-content: space-between;">
 								<label class={"form-label"}>Memory Allocation</label>
-								<span style="font-size: 0.9rem; color: #aaa;">{memory()[0]} MB</span>
+								<span style="font-size: 0.9rem; color: #aaa;">
+									{memory()[0]} MB
+								</span>
 							</div>
-							<Slider 
-								value={memory()} 
-								onChange={setMemory} 
-								minValue={1024} 
-								maxValue={16384} 
+							<Slider
+								value={memory()}
+								onChange={setMemory}
+								minValue={1024}
+								maxValue={16384}
 								step={512}
 							>
 								<SliderTrack>

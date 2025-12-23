@@ -1,7 +1,7 @@
 import { type PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SwitchPrimitive from "@kobalte/core/switch";
 import clsx from "clsx";
-import { type JSX, type ValidComponent, splitProps } from "solid-js";
+import { type JSX, splitProps, type ValidComponent } from "solid-js";
 import "./switch.css";
 
 // Root switch component (alias to primitive)

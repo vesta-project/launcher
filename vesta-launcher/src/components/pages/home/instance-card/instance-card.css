@@ -1,38 +1,42 @@
 .instance-card {
-  padding: 16px;
-  font-weight: bold;
-  font-size: var(--font-small);
-  user-select: none;
-  tab-index: -1;
-  display: flex;
-  flex-flow: column;
-  justify-content: space-between;
-  position: relative;
-  overflow-wrap: break-word;
-  /* Decorative radial overlay plus a customizable background image.
+	padding: 16px;
+	font-weight: bold;
+	font-size: var(--font-small);
+	user-select: none;
+	tab-index: -1;
+	display: flex;
+	flex-flow: column;
+	justify-content: space-between;
+	position: relative;
+	overflow-wrap: break-word;
+	/* Decorative radial overlay plus a customizable background image.
      The image is provided via the --instance-bg-image CSS variable (fallback to placeholder). */
-  background-image: radial-gradient(
-      109.12% 79.52% at 47.71% 0%,
-      rgb(175 175 175 / 20%) 0%,
-      rgb(159 159 159 / 20%) 20%,
-      rgb(36 35 35 / 20%) 45.5%,
-      rgb(0 0 0 / 70%) 100%
-    ),
-    var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
-  background-repeat: no-repeat, no-repeat;
-  background-position: center center, center center;
-  background-size: auto, cover; /* radial overlay auto, image covers card */
-  transition: background-size 0.2s ease, box-shadow 0.15s ease;
-  color: white;
-  max-width: 200px;
-  max-height: 200px;
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 6px;
-  outline: 3px solid rgb(0 0 0 / 15%);
-  outline-offset: -3px;
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			rgb(175 175 175 / 20%) 0%,
+			rgb(159 159 159 / 20%) 20%,
+			rgb(36 35 35 / 20%) 45.5%,
+			rgb(0 0 0 / 70%) 100%
+		), var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+	background-repeat: no-repeat, no-repeat;
+	background-position:
+		center center,
+		center center;
+	background-size: auto, cover; /* radial overlay auto, image covers card */
+	transition:
+		background-size 0.2s ease,
+		box-shadow 0.15s ease;
+	color: white;
+	max-width: 200px;
+	max-height: 200px;
+	width: 100%;
+	aspect-ratio: 1;
+	border-radius: 6px;
+	outline: 3px solid rgb(0 0 0 / 15%);
+	outline-offset: -3px;
 
-  /* &::before {
+	/* &::before {
     content: "";
     position: absolute;
     width: 175px;
@@ -44,97 +48,96 @@
 
   } */
 
-  &:hover {
-    /* Slightly enlarge the background image on hover for a subtle effect */
-    background-size: auto, 105%;
-    box-shadow: 0 4px 6px 0 rgb(0 0 0 / 8%);
+	&:hover {
+		/* Slightly enlarge the background image on hover for a subtle effect */
+		background-size: auto, 105%;
+		box-shadow: 0 4px 6px 0 rgb(0 0 0 / 8%);
 
-    background-image: radial-gradient(
-          109.12% 79.52% at 47.71% 0%,
-        rgb(185 179 179 / 30%) 0%,
-        rgb(149 144 144 / 30%) 19.5%,
-        rgb(36 35 35 / 75%) 67.93%,
-        rgb(0 0 0 / 75%) 100%
-        ),
-      var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
-  }
+		background-image:
+			radial-gradient(
+				109.12% 79.52% at 47.71% 0%,
+				rgb(185 179 179 / 30%) 0%,
+				rgb(149 144 144 / 30%) 19.5%,
+				rgb(36 35 35 / 75%) 67.93%,
+				rgb(0 0 0 / 75%) 100%
+			), var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+	}
 }
 
 .instance-card-top {
-  display: flex;
-  justify-content: flex-end;
+	display: flex;
+	justify-content: flex-end;
 }
 
 .instance-card-bottom {
-  display: flex;
-  flex-flow: column;
-  justify-content: space-between;
-  font-weight: normal;
-  gap: 4px;
+	display: flex;
+	flex-flow: column;
+	justify-content: space-between;
+	font-weight: normal;
+	gap: 4px;
 
-  & p,
-  h1 {
-    margin: 0;
-    padding: 0;
-  }
+	& p,
+	h1 {
+		margin: 0;
+		padding: 0;
+	}
 
-  & p {
-    font-size: var(--font-xsmall);
-  }
+	& p {
+		font-size: var(--font-xsmall);
+	}
 
-  & h1 {
-    line-height: 16px;
-    font-weight: bold;
-  }
+	& h1 {
+		line-height: 16px;
+		font-weight: bold;
+	}
 
-  & .instance-card-bottom-version {
-    display: flex;
-    justify-content: space-between;
-    height: fit-content;
-    line-height: var(--font-small);
+	& .instance-card-bottom-version {
+		display: flex;
+		justify-content: space-between;
+		height: fit-content;
+		line-height: var(--font-small);
 
-    & .instance-card-bottom-version-modloader {
-      display: flex;
-      gap: 5px;
-      align-items: center;
+		& .instance-card-bottom-version-modloader {
+			display: flex;
+			gap: 5px;
+			align-items: center;
 
-      & svg {
-        display: block;
-        fill: white;
-        width: auto;
-        height: 100%;
-        max-height: 12px;
-      }
-    }
-  }
+			& svg {
+				display: block;
+				fill: white;
+				width: auto;
+				height: 100%;
+				max-height: 12px;
+			}
+		}
+	}
 }
 
 .play-button {
-  height: 32px;
-  width: 32px;
-  border: 1px solid hsl(var(--color__primary-hue) 20% 6% / 20%);
-  border-radius: 5px;
-  padding: 8px;
-  background-color: hsl(var(--color__secondary-hue) 20% 50% / 50%);
+	height: 32px;
+	width: 32px;
+	border: 1px solid hsl(var(--color__primary-hue) 20% 6% / 20%);
+	border-radius: 5px;
+	padding: 8px;
+	background-color: hsl(var(--color__secondary-hue) 20% 50% / 50%);
 
-  & svg {
-    fill: hsl(var(--color__secondary-hue) 10% 10%);
-  }
+	& svg {
+		fill: hsl(var(--color__secondary-hue) 10% 10%);
+	}
 
-  &:hover {
-    filter: brightness(110%);
-    box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
-    background-color: hsl(var(--color__secondary-hue) 20% 40%);
-    transition: background-color;
-    transition-duration: 50ms;
+	&:hover {
+		filter: brightness(110%);
+		box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+		background-color: hsl(var(--color__secondary-hue) 20% 40%);
+		transition: background-color;
+		transition-duration: 50ms;
 
+		& > * {
+			transform: scale(105%);
+		}
 
-    & > * {
-      transform: scale(105%);
-    }
-
-    &:active {
-      transform: scale(95%);
-    }
-  }
+		&:active {
+			transform: scale(95%);
+		}
+	}
 }

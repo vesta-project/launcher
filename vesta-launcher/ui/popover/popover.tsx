@@ -2,7 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as PopoverPrimitive from "@kobalte/core/popover";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { ValidComponent, splitProps } from "solid-js";
+import { splitProps, ValidComponent } from "solid-js";
 import "./popover.css";
 
 const PopoverTrigger = PopoverPrimitive.Trigger;

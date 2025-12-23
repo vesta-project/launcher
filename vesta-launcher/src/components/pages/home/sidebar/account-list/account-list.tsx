@@ -1,5 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import {
@@ -8,7 +7,7 @@ import {
 	removeAccount,
 	setActiveAccount,
 } from "@utils/auth";
-import { For, Show, createResource } from "solid-js";
+import { createResource, For, Show } from "solid-js";
 import "./account-list.css";
 
 interface AccountListProps {
@@ -77,29 +76,34 @@ function AccountList(props: AccountListProps) {
 	};
 
 	return (
-		<Dialog open={props.open} onOpenChange={(open) => { if (!open) props.onClose(); }}>
+		<Dialog
+			open={props.open}
+			onOpenChange={(open) => {
+				if (!open) props.onClose();
+			}}
+		>
 			<DialogContent class={"account-list-menu"}>
-					<h3>Accounts</h3>
-					<div class="account-list-items">
-						<For each={accounts()}>
-							{(account) => (
-								<AccountListItem
-									account={account}
-									isActive={account.uuid === activeAccount()?.uuid}
-									onSwitch={() => handleSwitchAccount(account.uuid)}
-									onRemove={() => handleRemoveAccount(account.uuid)}
-									getAvatarUrl={getAvatarUrl}
-								/>
-							)}
-						</For>
-					</div>
-					<Button
-						class="add-account-button"
-						onClick={props.onAddAccount}
-						variant="solid"
-					>
-						Add Account
-					</Button>
+				<h3>Accounts</h3>
+				<div class="account-list-items">
+					<For each={accounts()}>
+						{(account) => (
+							<AccountListItem
+								account={account}
+								isActive={account.uuid === activeAccount()?.uuid}
+								onSwitch={() => handleSwitchAccount(account.uuid)}
+								onRemove={() => handleRemoveAccount(account.uuid)}
+								getAvatarUrl={getAvatarUrl}
+							/>
+						)}
+					</For>
+				</div>
+				<Button
+					class="add-account-button"
+					onClick={props.onAddAccount}
+					variant="solid"
+				>
+					Add Account
+				</Button>
 			</DialogContent>
 		</Dialog>
 	);

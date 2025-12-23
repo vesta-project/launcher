@@ -4,9 +4,9 @@ import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import {
 	type ComponentProps,
-	ValidComponent,
 	children,
 	splitProps,
+	ValidComponent,
 } from "solid-js";
 import "./context-menu.css";
 

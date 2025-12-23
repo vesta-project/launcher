@@ -1,135 +1,134 @@
 .page-viewer-wrapper {
-  grid-column: 2/3;
-  grid-row: 2/3;
-  width: calc(100vw - 64px);
-  height: calc(100vh - 32px);
-  background: transparent;
-  position: relative;
-  padding: 13px;
-  margin: 0;
-  right: 0;
-  bottom: 0;
-  tab-index: 0;
+	grid-column: 2 / 3;
+	grid-row: 2 / 3;
+	width: calc(100vw - 64px);
+	height: calc(100vh - 32px);
+	background: transparent;
+	position: relative;
+	padding: 13px;
+	margin: 0;
+	right: 0;
+	bottom: 0;
+	tab-index: 0;
 
-  & .page-viewer-root {
-    width: 100%;
-    height: 100%;
-    border-radius: 5px;
-    box-shadow: #1a1a1a 0 0 10px 0;
-    overflow: hidden;
+	& .page-viewer-root {
+		width: 100%;
+		height: 100%;
+		border-radius: 5px;
+		box-shadow: #1a1a1a 0 0 10px 0;
+		overflow: hidden;
 
+		& .page-viewer-content {
+			height: calc(100% - 24px);
+			width: 100%;
+			background: #414141;
+			overflow-y: auto;
+		}
+	}
 
-    & .page-viewer-content {
-      height: calc(100% - 24px);
-      width: 100%;
-      background: #414141;
-      overflow-y: auto;
-    }
-  }
-
-  & svg {
-    fill: var(--page-viewer-nav-color);
-  }
+	& svg {
+		fill: var(--page-viewer-nav-color);
+	}
 }
 
 .page-viewer-navbar-root {
-  width: 100%;
-  height: 24px;
-  background: hsl(180deg 0% 10%);
-  display: grid;
-  grid-auto-columns: 1fr auto 1fr;
-  justify-content: space-between;
+	width: 100%;
+	height: 24px;
+	background: hsl(180deg 0% 10%);
+	display: grid;
+	grid-auto-columns: 1fr auto 1fr;
+	justify-content: space-between;
 
-  --page-viewer-nav-color: hsl(var(--color__primary-hue) 0% 100% / 95%);
+	--page-viewer-nav-color: hsl(var(--color__primary-hue) 0% 100% / 95%);
 
-  color: var(--page-viewer-nav-color);
-  font-size: var(--font-xsmall);
-  user-select: none;
+	color: var(--page-viewer-nav-color);
+	font-size: var(--font-xsmall);
+	user-select: none;
 }
 
 .page-viewer-navbar-left {
-  grid-column: 1/2;
-  display: flex;
+	grid-column: 1 / 2;
+	display: flex;
 }
 
 .page-viewer-navbar-right {
-  grid-column: 3/4;
-  display: flex;
-  flex-direction: row-reverse;
+	grid-column: 3 / 4;
+	display: flex;
+	flex-direction: row-reverse;
 }
 
 .page-viewer-navbar-center {
-  grid-column: 2/3;
-  display: flow;
-  gap: 8px;
+	grid-column: 2 / 3;
+	display: flow;
+	gap: 8px;
 
-  & .page-viewer-location {
-    display: flex;
-    align-items: center;
-    padding: 4px 8px;
-    height: 24px;
-    border: transparent solid 1px;
+	& .page-viewer-location {
+		display: flex;
+		align-items: center;
+		padding: 4px 8px;
+		height: 24px;
+		border: transparent solid 1px;
 
-    &:hover {
-      border-radius: 3px;
-      border: hsl(180deg 0% 20%) solid 1px;
-      background: hsl(0deg 0% 20% / 20%);
+		&:hover {
+			border-radius: 3px;
+			border: hsl(180deg 0% 20%) solid 1px;
+			background: hsl(0deg 0% 20% / 20%);
 
-      /* transform: scale(110%); */
-    }
-  }
+			/* transform: scale(110%); */
+		}
+	}
 }
 
 .page-viewer-navbar-button {
-  width: 24px;
-  height: 24px;
-  padding: 6px;
-  background: linear-gradient(
-    to bottom,
-    hsl(0deg 0% 71% / 1%),
-    hsl(0deg 0% 40% / 1%)
-  );
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  overflow: hidden;
-  border-radius: 3px;
-  border: transparent solid 1px;
+	width: 24px;
+	height: 24px;
+	padding: 6px;
+	background: linear-gradient(
+		to bottom,
+		hsl(0deg 0% 71% / 1%),
+		hsl(0deg 0% 40% / 1%)
+	);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	cursor: pointer;
+	overflow: hidden;
+	border-radius: 3px;
+	border: transparent solid 1px;
 
-  &:hover {
-    border: hsl(200deg 92% 35% / 10%) solid 1px;
-  }
+	&:hover {
+		border: hsl(200deg 92% 35% / 10%) solid 1px;
+	}
 
-  &:hover svg {
-    transform: scale(105%);
-    transition-duration: 75ms;
-  }
+	&:hover svg {
+		transform: scale(105%);
+		transition-duration: 75ms;
+	}
 
-  &:active {
-    transform: scale(90%);
-    transition-duration: 75ms;
-  }
+	&:active {
+		transform: scale(90%);
+		transition-duration: 75ms;
+	}
 
-  &:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-    pointer-events: none;
-  }
+	&:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+		pointer-events: none;
+	}
 
-  &:disabled svg {
-    transform: none;
-  }
+	&:disabled svg {
+		transform: none;
+	}
 }
 
 .page-viewer-navbar-button.forward svg {
-  transform: scaleX(-1);
+	transform: scaleX(-1);
 }
 
 .page-viewer-navbar-button.forward:hover svg {
-  transform: scaleX(-1) scale(105%);
+	transform: scaleX(-1) scale(105%);
 }
 
 .page-viewer-navbar-button.forward:disabled svg {
-  transform: scaleX(-1);
+	transform: scaleX(-1);
 }

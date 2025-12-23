@@ -4,7 +4,7 @@ import {
 } from "@kobalte/core";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { ValidComponent, splitProps } from "solid-js";
+import { splitProps, ValidComponent } from "solid-js";
 import "./text-field.css";
 
 const TextFieldRoot = TextFieldPrimitive.Root;

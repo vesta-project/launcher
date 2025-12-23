@@ -20,10 +20,10 @@ import {
 	showAlert,
 } from "@utils/notifications";
 import {
-	For,
 	createEffect,
 	createResource,
 	createSignal,
+	For,
 	onCleanup,
 	onMount,
 } from "solid-js";
@@ -58,7 +58,7 @@ function Sidebar(props: SidebarProps) {
 
 	// Check for notification counts and active tasks - refetch when trigger changes
 	const [notifData] = createResource(
-		() => ready() ? persistentNotificationTrigger() : false,
+		() => (ready() ? persistentNotificationTrigger() : false),
 		async (isReady) => {
 			if (!isReady) return { totalCount: 0, hasActiveTask: false };
 			try {
@@ -162,7 +162,7 @@ function Sidebar(props: SidebarProps) {
 							{notifData().totalCount > 0 && (
 								<div
 									class="notification-badge"
-									title={`${notifData().totalCount} notification${notifData().totalCount === 1 ? '' : 's'}`}
+									title={`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}
 								>
 									{notifData().totalCount}
 								</div>

@@ -1,14 +1,8 @@
-import { createResource, createSignal, createEffect, onMount, onCleanup, For, Show } from "solid-js";
-import { listen } from "@tauri-apps/api/event";
+import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
-import { getInstanceBySlug, updateInstance, launchInstance, killInstance, isInstanceRunning } from "@utils/instances";
+import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import {
-	TextFieldInput,
-	TextFieldLabel,
-	TextFieldRoot,
-} from "@ui/text-field/text-field";
 import {
 	Slider,
 	SliderFill,
@@ -17,7 +11,27 @@ import {
 	SliderTrack,
 	SliderValueLabel,
 } from "@ui/slider/slider";
-import { router } from "@components/page-viewer/page-viewer";
+import {
+	TextFieldInput,
+	TextFieldLabel,
+	TextFieldRoot,
+} from "@ui/text-field/text-field";
+import {
+	getInstanceBySlug,
+	isInstanceRunning,
+	killInstance,
+	launchInstance,
+	updateInstance,
+} from "@utils/instances";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import "./instance-details.css";
 
 type TabType = "home" | "console" | "mods" | "settings";
@@ -33,7 +47,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		const params = router()?.currentParams.get();
 		return params?.slug as string | undefined;
 	};
-	
+
 	const slug = () => getSlug() || "";
 
 	const [instance, { refetch }] = createResource(slug, async (s) => {
@@ -101,10 +115,10 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 				const running = await isInstanceRunning(inst);
 				if (running) {
 					// Try to load existing log lines from file
-					const logLines = await invoke("read_instance_log", { 
+					const logLines = (await invoke("read_instance_log", {
 						instanceId: slug(),
-						lastLines: 500 
-					}).catch(() => []) as string[];
+						lastLines: 500,
+					}).catch(() => [])) as string[];
 					if (logLines.length > 0) {
 						setLines(logLines);
 					}
@@ -115,13 +129,17 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		}
 
 		const unlisten = await listen("core://instance-log", (ev) => {
-			const payload = (ev as { payload: Record<string, unknown> }).payload || {};
+			const payload =
+				(ev as { payload: Record<string, unknown> }).payload || {};
 			const currentSlug = slug();
 
 			// Handle batched format: { lines: [...] }
 			if (payload.lines && Array.isArray(payload.lines)) {
 				const newLines: string[] = [];
-				for (const item of payload.lines as Array<{ instance_id?: string; line?: string }>) {
+				for (const item of payload.lines as Array<{
+					instance_id?: string;
+					line?: string;
+				}>) {
 					if (item.instance_id && item.instance_id !== currentSlug) {
 						continue;
 					}
@@ -147,7 +165,11 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 				return;
 			}
 
-			const line = payload.line ?? payload.text ?? payload.message ?? JSON.stringify(payload);
+			const line =
+				payload.line ??
+				payload.text ??
+				payload.message ??
+				JSON.stringify(payload);
 			setLines((prev) => {
 				const next = [...prev, String(line)];
 				if (next.length > 500) {
@@ -252,24 +274,35 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	// Handle tab changes - use updateQuery to avoid creating history entries
 	const handleTabChange = (tab: TabType) => {
 		setActiveTab(tab);
-		router()?.updateQuery('activeTab', tab);
+		router()?.updateQuery("activeTab", tab);
 	};
-
 
 	return (
 		<div class="instance-details-page">
 			<aside class="instance-details-sidebar">
 				<nav class="instance-tabs">
-					<button classList={{ active: activeTab() === "home" }} onClick={() => handleTabChange("home")}>
+					<button
+						classList={{ active: activeTab() === "home" }}
+						onClick={() => handleTabChange("home")}
+					>
 						Home
 					</button>
-					<button classList={{ active: activeTab() === "console" }} onClick={() => handleTabChange("console")}>
+					<button
+						classList={{ active: activeTab() === "console" }}
+						onClick={() => handleTabChange("console")}
+					>
 						Console
 					</button>
-					<button classList={{ active: activeTab() === "mods" }} onClick={() => handleTabChange("mods")}>
+					<button
+						classList={{ active: activeTab() === "mods" }}
+						onClick={() => handleTabChange("mods")}
+					>
 						Mods
 					</button>
-					<button classList={{ active: activeTab() === "settings" }} onClick={() => handleTabChange("settings")}>
+					<button
+						classList={{ active: activeTab() === "settings" }}
+						onClick={() => handleTabChange("settings")}
+					>
 						Settings
 					</button>
 				</nav>
@@ -294,29 +327,48 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 							<header class="instance-header">
 								<div
 									class="instance-header-image"
-									style={inst().icon_path ? { "background-image": `url('${inst().icon_path}')` } : {}}
+									style={
+										inst().icon_path
+											? { "background-image": `url('${inst().icon_path}')` }
+											: {}
+									}
 								/>
 								<div class="instance-header-meta">
 									<h1>{inst().name}</h1>
 									<p class="meta-row">
-										<span class="meta-label">Version:</span> {inst().minecraft_version}
+										<span class="meta-label">Version:</span>{" "}
+										{inst().minecraft_version}
 										{inst().modloader && inst().modloader !== "vanilla" && (
 											<span class="modloader-badge">{inst().modloader}</span>
 										)}
 									</p>
 									<p class="meta-row">
 										<span class="meta-label">Created:</span>{" "}
-										{inst().created_at ? new Date(inst().created_at as string).toLocaleDateString() : "—"}
+										{inst().created_at
+											? new Date(
+													inst().created_at as string,
+												).toLocaleDateString()
+											: "—"}
 									</p>
 									<p class="meta-row">
 										<span class="meta-label">Last Played:</span>{" "}
-										{inst().last_played ? new Date(inst().last_played as string).toLocaleDateString() : "Never"}
+										{inst().last_played
+											? new Date(
+													inst().last_played as string,
+												).toLocaleDateString()
+											: "Never"}
 									</p>
 									<div class="instance-actions">
-										<LauncherButton onClick={handlePlay} disabled={busy() || isRunning()}>
+										<LauncherButton
+											onClick={handlePlay}
+											disabled={busy() || isRunning()}
+										>
 											{isRunning() ? "Running…" : "Play"}
 										</LauncherButton>
-										<LauncherButton onClick={handleKill} disabled={busy() || !isRunning()}>
+										<LauncherButton
+											onClick={handleKill}
+											disabled={busy() || !isRunning()}
+										>
 											Kill
 										</LauncherButton>
 									</div>
@@ -340,32 +392,42 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 													<span class="info-label">Name</span>
 													<span class="info-value">{inst().name}</span>
 												</div>
-											<div class="info-item">
-												<span class="info-label">Minecraft Version</span>
-												<span class="info-value">{inst().minecraft_version}</span>
+												<div class="info-item">
+													<span class="info-label">Minecraft Version</span>
+													<span class="info-value">
+														{inst().minecraft_version}
+													</span>
+												</div>
+												<div class="info-item">
+													<span class="info-label">Modloader</span>
+													<span class="info-value">
+														{inst().modloader || "Vanilla"}
+													</span>
+												</div>
+												<div class="info-item">
+													<span class="info-label">Modloader Version</span>
+													<span class="info-value">
+														{inst().modloader_version || "—"}
+													</span>
+												</div>
+												<div class="info-item">
+													<span class="info-label">Memory</span>
+													<span class="info-value">{inst().memory_mb} MB</span>
+												</div>
+												<div class="info-item">
+													<span class="info-label">Total Playtime</span>
+													<span class="info-value">
+														{inst().total_playtime_minutes} minutes
+													</span>
+												</div>
+												<div class="info-item">
+													<span class="info-label">Installation Status</span>
+													<span class="info-value">
+														{inst().installation_status || "Unknown"}
+													</span>
+												</div>
 											</div>
-											<div class="info-item">
-												<span class="info-label">Modloader</span>
-												<span class="info-value">{inst().modloader || "Vanilla"}</span>
-											</div>
-											<div class="info-item">
-												<span class="info-label">Modloader Version</span>
-												<span class="info-value">{inst().modloader_version || "—"}</span>
-											</div>
-											<div class="info-item">
-												<span class="info-label">Memory</span>
-												<span class="info-value">{inst().memory_mb} MB</span>
-											</div>
-											<div class="info-item">
-												<span class="info-label">Total Playtime</span>
-												<span class="info-value">{inst().total_playtime_minutes} minutes</span>
-											</div>
-											<div class="info-item">
-												<span class="info-label">Installation Status</span>
-												<span class="info-value">{inst().installation_status || "Unknown"}</span>
-											</div>
-										</div>
-									</section>
+										</section>
 									</Show>
 								</Show>
 
@@ -375,28 +437,33 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 									</Show>
 									<Show when={!instance.loading}>
 										<section class="tab-console">
-										<div class="console-toolbar">
-											<span class="console-title">Game Console</span>
-											<div class="console-toolbar-buttons">
-												<button class="console-logs" onClick={openLogsFolder} title="Open logs folder in file explorer">
-													📁 Logs
-												</button>
-												<button class="console-clear" onClick={clearConsole}>
-													Clear
-												</button>
-											</div>
-										</div>
-										<div class="console-output" ref={consoleRef}>
-											<Show when={lines().length === 0}>
-												<div class="console-placeholder">
-													No output yet. Launch the game to see console output.
+											<div class="console-toolbar">
+												<span class="console-title">Game Console</span>
+												<div class="console-toolbar-buttons">
+													<button
+														class="console-logs"
+														onClick={openLogsFolder}
+														title="Open logs folder in file explorer"
+													>
+														📁 Logs
+													</button>
+													<button class="console-clear" onClick={clearConsole}>
+														Clear
+													</button>
 												</div>
-											</Show>
-											<For each={lines()}>
-												{(line) => <div class="console-line">{line}</div>}
-											</For>
-										</div>
-									</section>
+											</div>
+											<div class="console-output" ref={consoleRef}>
+												<Show when={lines().length === 0}>
+													<div class="console-placeholder">
+														No output yet. Launch the game to see console
+														output.
+													</div>
+												</Show>
+												<For each={lines()}>
+													{(line) => <div class="console-line">{line}</div>}
+												</For>
+											</div>
+										</section>
 									</Show>
 								</Show>
 
@@ -404,7 +471,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 									<section class="tab-mods">
 										<h2>Mods</h2>
 										<p class="placeholder-text">
-											Mod management is coming soon. You'll be able to browse, install, and manage mods for this instance here.
+											Mod management is coming soon. You'll be able to browse,
+											install, and manage mods for this instance here.
 										</p>
 									</section>
 								</Show>
@@ -419,45 +487,56 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 									<Show when={!instance.loading}>
 										<section class="tab-settings">
 											<h2>Instance Settings</h2>
-										
-										<div class="settings-field">
-											<TextFieldRoot>
-												<TextFieldLabel>Java Arguments</TextFieldLabel>
-												<TextFieldInput
-													value={javaArgs()}
-													onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) => setJavaArgs(e.currentTarget.value)}
-													placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
-												/>
-											</TextFieldRoot>
-											<p class="field-hint">Custom JVM arguments for this instance.</p>
-										</div>
 
-										<div class="settings-field">
-											<Slider
-												value={memoryMb()}
-												onChange={setMemoryMb}
-												minValue={512}
-												maxValue={16384}
-												step={512}
-											>
-												<div class="slider-header">
-													<SliderLabel>Memory</SliderLabel>
-													<SliderValueLabel />
-												</div>
-												<SliderTrack>
-													<SliderFill />
-													<SliderThumb />
-												</SliderTrack>
-											</Slider>
-											<p class="field-hint">Amount of RAM allocated to this instance (MB).</p>
-										</div>
+											<div class="settings-field">
+												<TextFieldRoot>
+													<TextFieldLabel>Java Arguments</TextFieldLabel>
+													<TextFieldInput
+														value={javaArgs()}
+														onInput={(
+															e: InputEvent & {
+																currentTarget: HTMLInputElement;
+															},
+														) => setJavaArgs(e.currentTarget.value)}
+														placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
+													/>
+												</TextFieldRoot>
+												<p class="field-hint">
+													Custom JVM arguments for this instance.
+												</p>
+											</div>
 
-										<div class="settings-actions">
-											<LauncherButton onClick={handleSave} disabled={saving()}>
-												{saving() ? "Saving…" : "Save Settings"}
-											</LauncherButton>
-										</div>
-									</section>
+											<div class="settings-field">
+												<Slider
+													value={memoryMb()}
+													onChange={setMemoryMb}
+													minValue={512}
+													maxValue={16384}
+													step={512}
+												>
+													<div class="slider-header">
+														<SliderLabel>Memory</SliderLabel>
+														<SliderValueLabel />
+													</div>
+													<SliderTrack>
+														<SliderFill />
+														<SliderThumb />
+													</SliderTrack>
+												</Slider>
+												<p class="field-hint">
+													Amount of RAM allocated to this instance (MB).
+												</p>
+											</div>
+
+											<div class="settings-actions">
+												<LauncherButton
+													onClick={handleSave}
+													disabled={saving()}
+												>
+													{saving() ? "Saving…" : "Save Settings"}
+												</LauncherButton>
+											</div>
+										</section>
 									</Show>
 								</Show>
 							</div>

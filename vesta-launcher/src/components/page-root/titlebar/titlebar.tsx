@@ -1,6 +1,6 @@
 import { WindowControls } from "@tauri-controls/solid";
-import { createSignal } from "solid-js";
 import { getOsType } from "@utils/os";
+import { createSignal } from "solid-js";
 import ConnectionStatus from "../connection-status";
 import "./titlebar.css";
 

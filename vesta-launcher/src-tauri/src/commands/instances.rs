@@ -1149,7 +1149,7 @@ pub async fn launch_instance(
 }
 
 #[tauri::command]
-pub async fn kill_instance(app_handle: tauri::AppHandle, instance: Instance) -> Result<(), String> {
+pub async fn kill_instance(app_handle: tauri::AppHandle, instance: Instance) -> Result<String, String> {
     log::info!(
         "[kill_instance] Kill requested for instance: {}",
         instance.name
@@ -1161,11 +1161,8 @@ pub async fn kill_instance(app_handle: tauri::AppHandle, instance: Instance) -> 
 
     // Kill the instance
     match piston_lib::game::launcher::kill_instance(&instance_id).await {
-        Ok(()) => {
-            log::info!(
-                "[kill_instance] Instance killed successfully: {}",
-                instance_id
-            );
+        Ok(message) => {
+            log::info!("[kill_instance] {}", message);
 
             // Remove from persisted running processes
             let _ = crate::utils::process_state::remove_running_process(&instance_id);
@@ -1176,11 +1173,12 @@ pub async fn kill_instance(app_handle: tauri::AppHandle, instance: Instance) -> 
                 "core://instance-killed",
                 serde_json::json!({
                     "instance_id": instance_id,
-                    "name": instance.name
+                    "name": instance.name,
+                    "message": message
                 }),
             );
 
-            Ok(())
+            Ok(message)
         }
         Err(e) => {
             log::error!("[kill_instance] Failed to kill instance: {}", e);

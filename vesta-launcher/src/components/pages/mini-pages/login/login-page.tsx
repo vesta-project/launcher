@@ -1,7 +1,7 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { open } from "@tauri-apps/plugin-shell";
 import LauncherButton from "@ui/button/button";
-import { Show, createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import "./login-page.css";
 
 interface LoginPageProps {

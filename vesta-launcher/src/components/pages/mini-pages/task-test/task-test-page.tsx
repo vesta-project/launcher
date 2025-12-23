@@ -90,9 +90,7 @@ function TaskTestPage() {
 						</SliderTrack>
 					</Slider>
 				</div>
-				<p class="description">
-					Controls how many tasks can run concurrently.
-				</p>
+				<p class="description">Controls how many tasks can run concurrently.</p>
 			</section>
 		</div>
 	);

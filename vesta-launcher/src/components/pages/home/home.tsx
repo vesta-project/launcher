@@ -10,22 +10,26 @@ import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import { invoke } from "@tauri-apps/api/core";
 import { attachConsole, info } from "@tauri-apps/plugin-log";
 import { WindowControls, WindowTitlebar } from "@tauri-controls/solid";
-import { Toaster, clearToasts, showToast } from "@ui/toast/toast";
+import { clearToasts, showToast, Toaster } from "@ui/toast/toast";
 import {
-	Show,
+	listInstances,
+	subscribeToInstanceUpdates,
+	unsubscribeFromInstanceUpdates,
+} from "@utils/instances";
+import { getOsType } from "@utils/os";
+import {
 	createEffect,
 	createMemo,
+	createResource,
 	createSignal,
+	For,
 	onCleanup,
 	onMount,
-	For,
-	createResource,
+	Show,
 } from "solid-js";
-import { getOsType } from "@utils/os";
-import { listInstances, subscribeToInstanceUpdates, unsubscribeFromInstanceUpdates } from "@utils/instances";
 import "./home.css";
-import Sidebar from "./sidebar/sidebar";
 import { Skeleton } from "@ui/skeleton/skeleton";
+import Sidebar from "./sidebar/sidebar";
 
 // Module-level signals for page viewer state - exported so child components can open pages
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
@@ -65,7 +69,8 @@ function MainMenu() {
 	// The status signals (loading, error) live on the second item — not
 	// as properties on the resource signal itself. Destructure loading/error
 	// and use them correctly (call them) in JSX.
-	const [instances, { refetch, loading, error }] = createResource(listInstances);
+	const [instances, { refetch, loading, error }] =
+		createResource(listInstances);
 
 	onMount(() => {
 		// Subscribe to instance updates to refetch when instances change
@@ -89,11 +94,19 @@ function MainMenu() {
 			}}
 		>
 			<div style={{ display: "flex", "justify-content": "flex-end" }}>
-				<Skeleton style={{ width: "32px", height: "32px", "border-radius": "5px" }} />
+				<Skeleton
+					style={{ width: "32px", height: "32px", "border-radius": "5px" }}
+				/>
 			</div>
 			<div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
 				<Skeleton style={{ width: "70%", height: "16px" }} />
-				<div style={{ display: "flex", "justify-content": "space-between", "align-items": "center" }}>
+				<div
+					style={{
+						display: "flex",
+						"justify-content": "space-between",
+						"align-items": "center",
+					}}
+				>
 					<Skeleton style={{ width: "40%", height: "12px" }} />
 					<div style={{ display: "flex", gap: "6px", "align-items": "center" }}>
 						<Skeleton style={{ width: "28px", height: "12px" }} />
@@ -117,7 +130,8 @@ function MainMenu() {
 					</Show>
 					<Show when={typeof error === "function" ? error() : !!error}>
 						<p style={{ color: "#ff4444", padding: "20px" }}>
-							Failed to load instances: {String(typeof error === "function" ? error() : error)}
+							Failed to load instances:{" "}
+							{String(typeof error === "function" ? error() : error)}
 						</p>
 					</Show>
 					<Show when={instances() && instances().length === 0}>

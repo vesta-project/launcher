@@ -1,6 +1,6 @@
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
-import * as ProgressPrimitive from "@kobalte/core/progress";
 import type { ProgressRootProps } from "@kobalte/core/progress";
+import * as ProgressPrimitive from "@kobalte/core/progress";
 import clsx from "clsx";
 import type { ParentProps, ValidComponent } from "solid-js";
 import { splitProps } from "solid-js";
@@ -79,11 +79,12 @@ export const Progress = <T extends ValidComponent = "div">(
 						)}
 					/>
 				</ProgressPrimitive.Track>
-				{local.current_step !== undefined && local.total_steps !== undefined && (
-					<div class="progress__steps">
-						{local.current_step}/{local.total_steps}
-					</div>
-				)}
+				{local.current_step !== undefined &&
+					local.total_steps !== undefined && (
+						<div class="progress__steps">
+							{local.current_step}/{local.total_steps}
+						</div>
+					)}
 			</div>
 		</ProgressPrimitive.Root>
 	);

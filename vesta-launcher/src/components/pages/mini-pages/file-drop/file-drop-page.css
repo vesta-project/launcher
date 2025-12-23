@@ -122,7 +122,7 @@
 	background-color: hsl(var(--color__primary-hue) 20% 20%);
 	border: 1px solid hsl(var(--color__primary-hue) 30% 30%);
 	border-radius: 4px;
-	font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+	font-family: "Consolas", "Monaco", "Courier New", monospace;
 	font-size: 0.875rem;
 	color: hsl(var(--color__primary-hue) 70% 80%);
 	word-break: break-all;

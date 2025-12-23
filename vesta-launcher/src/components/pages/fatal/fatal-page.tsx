@@ -4,8 +4,8 @@ import TitleBar from "@components/page-root/titlebar/titlebar";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
 import Button from "@ui/button/button";
-import { createSignal } from "solid-js";
 import { getOsType } from "@utils/os";
+import { createSignal } from "solid-js";
 import "./fatal-page.css";
 
 const os = getOsType() ?? "windows";

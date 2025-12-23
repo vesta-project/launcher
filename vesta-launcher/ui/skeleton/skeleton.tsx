@@ -1,10 +1,8 @@
-import type { ValidComponent } from "solid-js";
-import { splitProps } from "solid-js";
-
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SkeletonPrimitive from "@kobalte/core/skeleton";
-
 import clsx from "clsx";
+import type { ValidComponent } from "solid-js";
+import { splitProps } from "solid-js";
 import "./skeleton.css";
 
 type SkeletonRootProps<T extends ValidComponent = "div"> =

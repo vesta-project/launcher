@@ -17,7 +17,7 @@ import {
 } from "@ui/switch/switch";
 import { onConfigUpdate } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { Show, createEffect, createSignal, onCleanup, onMount } from "solid-js";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
 import "./settings-page.css";
 
 interface AppConfig {

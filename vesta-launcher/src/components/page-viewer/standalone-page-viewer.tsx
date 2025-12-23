@@ -10,42 +10,65 @@ import {
 import { useSearchParams } from "@solidjs/router";
 import { WindowControls } from "@tauri-controls/solid";
 import { ensureOsType } from "@utils/os";
-import { Show, createSignal, createMemo, onMount } from "solid-js";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
 import "./standalone-page-viewer.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
 	const [router, setRouter] = createSignal<MiniRouter>();
 	const [osType, setOsType] = createSignal<string>("windows");
-	const [refetchFn, setRefetchFn] = createSignal<(() => Promise<void>) | undefined>();
+	const [refetchFn, setRefetchFn] = createSignal<
+		(() => Promise<void>) | undefined
+	>();
 
 	onMount(async () => {
 		const os = await ensureOsType();
 		setOsType(os || "windows");
 
 		const initialPath = searchParams.path || "/config";
-		
+
 		// Separate route params (like slug) from component props (like activeTab)
 		const initialParams: Record<string, unknown> = {};
 		const initialProps: Record<string, unknown> = {};
-		
+
 		// Parse history if it was passed from the main window
-		let historyPast: Array<{ path: string; params: Record<string, unknown>; props?: Record<string, unknown> }> = [];
-		let historyFuture: Array<{ path: string; params: Record<string, unknown>; props?: Record<string, unknown> }> = [];
-		
+		let historyPast: Array<{
+			path: string;
+			params: Record<string, unknown>;
+			props?: Record<string, unknown>;
+		}> = [];
+		let historyFuture: Array<{
+			path: string;
+			params: Record<string, unknown>;
+			props?: Record<string, unknown>;
+		}> = [];
+
 		const historyData = (searchParams as any).history;
-		console.log("History data from searchParams:", historyData ? "Found" : "Not found");
-		if (historyData && typeof historyData === 'string') {
+		console.log(
+			"History data from searchParams:",
+			historyData ? "Found" : "Not found",
+		);
+		if (historyData && typeof historyData === "string") {
 			try {
 				const parsed = JSON.parse(historyData);
 				historyPast = parsed.past || [];
 				historyFuture = parsed.future || [];
-				console.log("Successfully parsed history - Past entries:", historyPast.length, "Future entries:", historyFuture.length);
+				console.log(
+					"Successfully parsed history - Past entries:",
+					historyPast.length,
+					"Future entries:",
+					historyFuture.length,
+				);
 			} catch (e) {
-				console.warn("Failed to parse history data:", e, "Raw data:", historyData?.substring?.(0, 100));
+				console.warn(
+					"Failed to parse history data:",
+					e,
+					"Raw data:",
+					historyData?.substring?.(0, 100),
+				);
 			}
 		}
-		
+
 		for (const [key, value] of Object.entries(searchParams)) {
 			if (key !== "path" && key !== "history" && value !== undefined) {
 				// Route params: slug, id, etc
@@ -62,28 +85,39 @@ function StandalonePageViewer() {
 			paths: miniRouterPaths,
 			invalid: miniRouterInvalidPage,
 			currentPath: initialPath,
-			initialProps: Object.keys(initialProps).length > 0 ? initialProps : undefined,
+			initialProps:
+				Object.keys(initialProps).length > 0 ? initialProps : undefined,
 		});
-		
+
 		// Set initial route params
 		if (Object.keys(initialParams).length > 0) {
 			mini_router.currentParams.set(initialParams);
 		}
-		
+
 		// Restore history stacks from main window
 		if (historyPast.length > 0 || historyFuture.length > 0) {
-			console.log("Restoring history - Past:", historyPast.length, "Future:", historyFuture.length);
-			mini_router.history.past = historyPast.map(entry => ({
+			console.log(
+				"Restoring history - Past:",
+				historyPast.length,
+				"Future:",
+				historyFuture.length,
+			);
+			mini_router.history.past = historyPast.map((entry) => ({
 				path: entry.path,
 				params: entry.params || {},
 				props: entry.props,
 			}));
-			mini_router.history.future = historyFuture.map(entry => ({
+			mini_router.history.future = historyFuture.map((entry) => ({
 				path: entry.path,
 				params: entry.params || {},
 				props: entry.props,
 			}));
-			console.log("History restored. Can go back:", mini_router.canGoBack(), "Can go forward:", mini_router.canGoForward());
+			console.log(
+				"History restored. Can go back:",
+				mini_router.canGoBack(),
+				"Can go forward:",
+				mini_router.canGoForward(),
+			);
 		} else {
 			console.log("No history data received");
 		}
@@ -94,7 +128,7 @@ function StandalonePageViewer() {
 	const copyUrl = async () => {
 		const url = router()?.generateUrl();
 		if (!url) return;
-		
+
 		try {
 			await navigator.clipboard.writeText(url);
 			console.log("URL copied to clipboard:", url);

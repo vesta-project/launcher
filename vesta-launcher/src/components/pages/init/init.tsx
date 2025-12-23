@@ -7,8 +7,8 @@ import {
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
-import { Match, Switch, createSignal, onCleanup, onMount } from "solid-js";
 import { getOsType } from "@utils/os";
+import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import "./init.css";
 
 const os = getOsType() ?? "windows";
@@ -69,14 +69,16 @@ function InitPage() {
 			<div id={"init-page__wrapper"}>
 				<Switch>
 					<Match when={isLoading()}>
-						<div style={{
-							display: "flex",
-							"justify-content": "center",
-							"align-items": "center",
-							height: "100%",
-							"flex-direction": "column",
-							gap: "1rem"
-						}}>
+						<div
+							style={{
+								display: "flex",
+								"justify-content": "center",
+								"align-items": "center",
+								height: "100%",
+								"flex-direction": "column",
+								gap: "1rem",
+							}}
+						>
 							<h1 style={{ "font-size": "24px" }}>Loading Vesta...</h1>
 							{/* Add a spinner here if available */}
 						</div>

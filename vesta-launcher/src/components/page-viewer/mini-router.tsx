@@ -10,10 +10,10 @@ Refactored to support:
 
 import {
 	type Accessor,
-	type JSXElement,
-	type ValidComponent,
 	createMemo,
 	createSignal,
+	type JSXElement,
+	type ValidComponent,
 } from "solid-js";
 
 import { Dynamic } from "solid-js/web";
@@ -40,17 +40,26 @@ interface HistoryEntry {
 class MiniRouter {
 	paths: Record<string, RouterComponent>;
 	currentPath: { set: (value: string) => void; get: Accessor<string> };
-	currentParams: { set: (value: Record<string, unknown>) => void; get: Accessor<Record<string, unknown>> };
+	currentParams: {
+		set: (value: Record<string, unknown>) => void;
+		get: Accessor<Record<string, unknown>>;
+	};
 	currentElement: Accessor<RouterComponent>;
 	currentPathProps: Accessor<Record<string, unknown> | undefined>;
-	private setCurrentPathProps: (props: Record<string, unknown> | undefined) => void;
+	private setCurrentPathProps: (
+		props: Record<string, unknown> | undefined,
+	) => void;
 	history: {
 		past: HistoryEntry[];
 		future: HistoryEntry[];
 		push: (entry: HistoryEntry) => void;
 		clear: () => void;
 	};
-	navigate: (path: string, params?: Record<string, unknown>, props?: Record<string, unknown>) => void;
+	navigate: (
+		path: string,
+		params?: Record<string, unknown>,
+		props?: Record<string, unknown>,
+	) => void;
 	updateQuery: (key: string, value: unknown) => void;
 	reload: () => Promise<void>;
 	setState: (state: Record<string, unknown>) => void;
@@ -72,24 +81,25 @@ class MiniRouter {
 			props.currentPath ?? "",
 		);
 
-		const [getCurrentParams, setCurrentParams] = createSignal<Record<string, unknown>>(
-			{},
-		);
+		const [getCurrentParams, setCurrentParams] = createSignal<
+			Record<string, unknown>
+		>({});
 
-		const [getCurrentPathProps, setCurrentPathProps] = createSignal<Record<string, unknown> | undefined>(
-			props.initialProps,
-		);
-		
+		const [getCurrentPathProps, setCurrentPathProps] = createSignal<
+			Record<string, unknown> | undefined
+		>(props.initialProps);
+
 		this.currentPathProps = getCurrentPathProps;
 		this.setCurrentPathProps = setCurrentPathProps;
 		this.currentPath = { set: setCurrentPath, get: getCurrentPath };
 		this.currentParams = { set: setCurrentParams, get: getCurrentParams };
 
 		this.currentElement = createMemo(() => {
-			const pathConfig = this.paths[this.currentPath.get()] ?? this.paths["404"];
+			const pathConfig =
+				this.paths[this.currentPath.get()] ?? this.paths["404"];
 			const params = this.currentParams.get();
 			const props = this.currentPathProps();
-			
+
 			return {
 				...pathConfig,
 				props: { ...params, ...props },
@@ -97,13 +107,23 @@ class MiniRouter {
 		});
 
 		const [getHistoryPast, setHistoryPast] = createSignal<HistoryEntry[]>([]);
-		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>([]);
+		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>(
+			[],
+		);
 
 		this.history = {
-			get past() { return getHistoryPast(); },
-			set past(value: HistoryEntry[]) { setHistoryPast(value); },
-			get future() { return getHistoryFuture(); },
-			set future(value: HistoryEntry[]) { setHistoryFuture(value); },
+			get past() {
+				return getHistoryPast();
+			},
+			set past(value: HistoryEntry[]) {
+				setHistoryPast(value);
+			},
+			get future() {
+				return getHistoryFuture();
+			},
+			set future(value: HistoryEntry[]) {
+				setHistoryFuture(value);
+			},
 			push: (entry: HistoryEntry) => {
 				if (this.currentPath.get() !== "") {
 					const newPast = [...getHistoryPast()];
@@ -138,11 +158,11 @@ class MiniRouter {
 		this.generateUrl = () => {
 			const path = this.currentPath.get();
 			const params = this.currentParams.get();
-			
+
 			if (Object.keys(params).length === 0) {
 				return `vesta://${path}`;
 			}
-			
+
 			const searchParams = new URLSearchParams();
 			for (const [key, value] of Object.entries(params)) {
 				searchParams.set(key, String(value));
@@ -150,14 +170,25 @@ class MiniRouter {
 			return `vesta://${path}?${searchParams.toString()}`;
 		};
 
-		this.navigate = (path: string, params?: Record<string, unknown>, props?: Record<string, unknown>) => {
+		this.navigate = (
+			path: string,
+			params?: Record<string, unknown>,
+			props?: Record<string, unknown>,
+		) => {
 			this.history.push({
 				path,
 				params: params || {},
 				props,
 			});
 			this.history.future = [];
-			console.log("Navigating to:", path, "with params:", params, "and props:", props);
+			console.log(
+				"Navigating to:",
+				path,
+				"with params:",
+				params,
+				"and props:",
+				props,
+			);
 		};
 
 		// NEW METHOD: Update query params without creating history entry (for component local state like tabs)
@@ -189,31 +220,37 @@ class MiniRouter {
 		};
 
 		// Expose new methods on the router instance
-		Object.defineProperty(this, 'updateQuery', { value: updateQuery, writable: false });
-		Object.defineProperty(this, 'reload', { value: reload, writable: false });
-		Object.defineProperty(this, 'setState', { value: setState, writable: false });
+		Object.defineProperty(this, "updateQuery", {
+			value: updateQuery,
+			writable: false,
+		});
+		Object.defineProperty(this, "reload", { value: reload, writable: false });
+		Object.defineProperty(this, "setState", {
+			value: setState,
+			writable: false,
+		});
 
 		this.backwards = () => {
 			if (!this.canGoBack()) return;
-			
+
 			const current: HistoryEntry = {
 				path: this.currentPath.get(),
 				params: this.currentParams.get(),
 				props: this.currentPathProps(),
 			};
-			
+
 			const pastArray = [...getHistoryPast()];
 			const prev = pastArray.pop();
 			if (!prev) return;
-			
+
 			const newFuture = [current, ...getHistoryFuture()];
 			setHistoryFuture(newFuture);
 			setHistoryPast(pastArray);
-			
+
 			setCurrentPath(prev.path);
 			setCurrentParams(prev.params);
 			setCurrentPathProps(prev.props);
-			
+
 			// Do NOT refetch on backwards - use cached data
 			this.refetchFn = undefined;
 			console.log("Navigating Back to:", prev.path);
@@ -221,25 +258,25 @@ class MiniRouter {
 
 		this.forwards = () => {
 			if (!this.canGoForward()) return;
-			
+
 			const current: HistoryEntry = {
 				path: this.currentPath.get(),
 				params: this.currentParams.get(),
 				props: this.currentPathProps(),
 			};
-			
+
 			const futureArray = [...getHistoryFuture()];
 			const next = futureArray.shift();
 			if (!next) return;
-			
+
 			const newPast = [...getHistoryPast(), current];
 			setHistoryPast(newPast);
 			setHistoryFuture(futureArray);
-			
+
 			setCurrentPath(next.path);
 			setCurrentParams(next.params);
 			setCurrentPathProps(next.props);
-			
+
 			// Do NOT refetch on forwards - use cached data
 			this.refetchFn = undefined;
 			console.log("Navigating Forward to:", next.path);
@@ -249,8 +286,8 @@ class MiniRouter {
 	// Getter that returns a reactive JSX element with optional additional props
 	getRouterView(additionalProps?: Record<string, unknown>): JSXElement {
 		return (
-			<Dynamic 
-				component={this.currentElement().element} 
+			<Dynamic
+				component={this.currentElement().element}
 				{...(this.currentElement().props || {})}
 				{...(additionalProps || {})}
 			/>

@@ -144,143 +144,143 @@
 
 .context-menu__content,
 .context-menu__sub-content {
-  z-index: 10;
-  min-width: 220px;
-  padding: 8px;
-  background-color: hsl(var(--color__primary-hue) 25% 20%);
-  border-radius: 6px;
-  border: 1px solid hsl(var(--color__primary-hue) 20% 60% / 8%);
-  box-shadow:
-    0 4px 6px -1px rgb(0 0 0 / 10%),
-    0 2px 4px -2px rgb(0 0 0 / 10%);
-  outline: none;
-  transform-origin: var(--kb-menu-content-transform-origin);
-  animation: contentHide 250ms ease-in forwards;
+	z-index: 10;
+	min-width: 220px;
+	padding: 8px;
+	background-color: hsl(var(--color__primary-hue) 25% 20%);
+	border-radius: 6px;
+	border: 1px solid hsl(var(--color__primary-hue) 20% 60% / 8%);
+	box-shadow:
+		0 4px 6px -1px rgb(0 0 0 / 10%),
+		0 2px 4px -2px rgb(0 0 0 / 10%);
+	outline: none;
+	transform-origin: var(--kb-menu-content-transform-origin);
+	animation: contentHide 250ms ease-in forwards;
 }
 
 .context-menu__content[data-expanded],
 .context-menu__sub-content[data-expanded] {
-  animation: contentShow 250ms ease-out;
+	animation: contentShow 250ms ease-out;
 }
 
 .context-menu__item,
 .context-menu__select,
 .context-menu__sub-trigger {
-  font-size: var(--font-small);
-  line-height: 1;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  height: 32px;
-  padding: 0 8px 0 24px;
-  position: relative;
-  user-select: none;
-  outline: none;
-  justify-content: space-between;
-  color: hsl(var(--color__primary-hue) 0% 90%);
+	font-size: var(--font-small);
+	line-height: 1;
+	border-radius: 4px;
+	display: flex;
+	align-items: center;
+	height: 32px;
+	padding: 0 8px 0 24px;
+	position: relative;
+	user-select: none;
+	outline: none;
+	justify-content: space-between;
+	color: hsl(var(--color__primary-hue) 0% 90%);
 }
 
 .context-menu__item:active,
 .context-menu__select:active {
-  transform: scale(95%);
+	transform: scale(95%);
 }
 
 .context-menu__sub-trigger[data-expanded] {
-  background-color: hsl(var(--color__primary-hue) 20% 15%);
-  color: white;
+	background-color: hsl(var(--color__primary-hue) 20% 15%);
+	color: white;
 }
 
 .context-menu__item[data-disabled],
 .context-menu__select[data-disabled],
 .context-menu__sub-trigger[data-disabled] {
-  color: hsl(240deg 5% 65%);
-  opacity: 0.5;
-  pointer-events: none;
+	color: hsl(240deg 5% 65%);
+	opacity: 0.5;
+	pointer-events: none;
 }
 
 .context-menu__item[data-highlighted],
 .context-menu__select[data-highlighted],
 .context-menu__sub-trigger[data-highlighted] {
-  outline: none;
-  background-color: hsl(var(--color__primary-hue) 30% 10%);
-  color: white;
+	outline: none;
+	background-color: hsl(var(--color__primary-hue) 30% 10%);
+	color: white;
 }
 
 .context-menu__group-label,
 .context-menu__label {
-  padding: 0 24px;
-  font-size: var(--font-xsmall);
-  line-height: 32px;
-  color: hsl(var(--color__primary-hue) 0% 950%);
+	padding: 0 24px;
+	font-size: var(--font-xsmall);
+	line-height: 32px;
+	color: hsl(var(--color__primary-hue) 0% 950%);
 }
 
 .context-menu__separator {
-  height: 1px;
-  border-top: 1px solid hsl(var(--color__primary-hue) 0% 70%);
-  margin: 6px;
+	height: 1px;
+	border-top: 1px solid hsl(var(--color__primary-hue) 0% 70%);
+	margin: 6px;
 }
 
 .context-menu__item-indicator {
-  position: absolute;
-  left: 0;
-  height: 20px;
-  width: 20px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+	position: absolute;
+	left: 0;
+	height: 20px;
+	width: 20px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 }
 
 .context-menu__item-right-slot {
-  margin-left: auto;
-  padding-left: 20px;
-  font-size: 14px;
-  color: hsl(240deg 4% 46%);
+	margin-left: auto;
+	padding-left: 20px;
+	font-size: 14px;
+	color: hsl(240deg 4% 46%);
 }
 
 [data-highlighted] > .context-menu__item-right-slot {
-  color: white;
+	color: white;
 }
 
 [data-disabled] .context-menu__item-right-slot {
-  color: hsl(240deg 5% 65%);
-  opacity: 0.5;
+	color: hsl(240deg 5% 65%);
+	opacity: 0.5;
 }
 
 .context-menu__select__span {
-  display: flex;
-  position: absolute;
-  left: 8px;
-  justify-content: center;
-  align-items: center;
+	display: flex;
+	position: absolute;
+	left: 8px;
+	justify-content: center;
+	align-items: center;
 }
 
 .context-menu__shortcut {
-  font-size: var(--font-xxsmall);
-  line-height: 1rem;
-  letter-spacing: 0.1em;
-  opacity: 0.6;
+	font-size: var(--font-xxsmall);
+	line-height: 1rem;
+	letter-spacing: 0.1em;
+	opacity: 0.6;
 }
 
 @keyframes contentShow {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
+	from {
+		opacity: 0;
+		transform: scale(0.96);
+	}
 
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
 }
 
 @keyframes contentHide {
-  from {
-    opacity: 1;
-    transform: scale(1);
-  }
+	from {
+		opacity: 1;
+		transform: scale(1);
+	}
 
-  to {
-    opacity: 0;
-    transform: scale(0.96);
-  }
+	to {
+		opacity: 0;
+		transform: scale(0.96);
+	}
 }

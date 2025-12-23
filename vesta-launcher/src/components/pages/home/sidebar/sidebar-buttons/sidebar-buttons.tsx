@@ -1,7 +1,6 @@
 // SearchIcon not used in this file; removed import.
 import { Button } from "@kobalte/core/button";
-import { invoke } from "@tauri-apps/api/core";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import {
 	Tooltip,
 	TooltipContent,
@@ -12,10 +11,10 @@ import { type Account, getActiveAccount } from "@utils/auth";
 import clsx from "clsx";
 import {
 	type ComponentProps,
-	Show,
 	children,
 	createResource,
 	mergeProps,
+	Show,
 	splitProps,
 } from "solid-js";
 import "./sidebar-buttons.css";
@@ -57,7 +56,11 @@ interface SidebarProfileButtonProps extends SidebarButtonProps {
 
 function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	const c = children(() => props.children);
-	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle", "open"]);
+	const [_, others] = splitProps(props, [
+		"children",
+		"onAccountMenuToggle",
+		"open",
+	]);
 
 	// Fetch active account
 	// NOTE: when createResource is called with only a fetcher function the

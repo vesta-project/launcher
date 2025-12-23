@@ -1,7 +1,7 @@
 import { type PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SliderPrimitive from "@kobalte/core/slider";
 import clsx from "clsx";
-import { type ValidComponent, splitProps } from "solid-js";
+import { splitProps, type ValidComponent } from "solid-js";
 import "./slider.css";
 
 // Root slider component

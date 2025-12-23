@@ -1,7 +1,7 @@
 /* @refresh reload */
-import { type MountableElement, render } from "solid-js/web";
 
 import { initTheme } from "@components/theming";
+import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
 import "./styles.css";
 

@@ -2,7 +2,13 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as DialogPrimitive from "@kobalte/core/dialog";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { Component, ComponentProps, JSX, ValidComponent, splitProps } from "solid-js";
+import {
+	Component,
+	ComponentProps,
+	JSX,
+	splitProps,
+	ValidComponent,
+} from "solid-js";
 import "./dialog.css";
 
 const Dialog = DialogPrimitive.Root;
@@ -12,9 +18,7 @@ const DialogPortal: Component<DialogPrimitive.DialogPortalProps> = (props) => {
 	const [, rest] = splitProps(props, ["children"]);
 	return (
 		<DialogPrimitive.Portal {...rest}>
-			<div class="dialog__portal-container">
-				{props.children}
-			</div>
+			<div class="dialog__portal-container">{props.children}</div>
 		</DialogPrimitive.Portal>
 	);
 };
@@ -35,9 +39,10 @@ const DialogOverlay = <T extends ValidComponent = "div">(
 };
 
 type DialogContentProps<T extends ValidComponent = "div"> =
-	DialogPrimitive.DialogContentProps<T> & ClassProp & {
-		children?: JSX.Element;
-	};
+	DialogPrimitive.DialogContentProps<T> &
+		ClassProp & {
+			children?: JSX.Element;
+		};
 
 const DialogContent = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, DialogContentProps<T>>,
@@ -67,7 +72,22 @@ const DialogContent = <T extends ValidComponent = "div">(
 						<path d="M18 6l-12 12" />
 						<path d="M6 6l12 12" />
 					</svg>
-					<span class="sr-only" style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0, 0, 0, 0)", "white-space": "nowrap", "border-width": 0 }}>Close</span>
+					<span
+						class="sr-only"
+						style={{
+							position: "absolute",
+							width: "1px",
+							height: "1px",
+							padding: 0,
+							margin: "-1px",
+							overflow: "hidden",
+							clip: "rect(0, 0, 0, 0)",
+							"white-space": "nowrap",
+							"border-width": 0,
+						}}
+					>
+						Close
+					</span>
 				</DialogPrimitive.CloseButton>
 			</DialogPrimitive.Content>
 		</DialogPortal>
@@ -76,19 +96,12 @@ const DialogContent = <T extends ValidComponent = "div">(
 
 const DialogHeader: Component<ComponentProps<"div"> & ClassProp> = (props) => {
 	const [local, rest] = splitProps(props, ["class"]);
-	return (
-		<div class={clsx("dialog__header", local.class)} {...rest} />
-	);
+	return <div class={clsx("dialog__header", local.class)} {...rest} />;
 };
 
 const DialogFooter: Component<ComponentProps<"div"> & ClassProp> = (props) => {
 	const [local, rest] = splitProps(props, ["class"]);
-	return (
-		<div
-			class={clsx("dialog__footer", local.class)}
-			{...rest}
-		/>
-	);
+	return <div class={clsx("dialog__footer", local.class)} {...rest} />;
 };
 
 type DialogTitleProps<T extends ValidComponent = "h2"> =

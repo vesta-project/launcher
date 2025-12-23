@@ -2,7 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as ComboboxPrimitive from "@kobalte/core/combobox";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { Component, ValidComponent, splitProps } from "solid-js";
+import { Component, splitProps, ValidComponent } from "solid-js";
 import "./combobox.css";
 
 const Combobox = ComboboxPrimitive.Combobox;

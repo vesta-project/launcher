@@ -13,9 +13,80 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
+#[cfg(unix)]
+use sysinfo::{Pid as SysPid, ProcessRefreshKind, ProcessStatus, System};
+
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsHungAppWindow, IsWindowVisible, PostMessageW, WM_CLOSE};
+#[cfg(windows)]
+use windows_sys::Win32::Foundation::HWND;
+
+
 /// Log callback type - receives (instance_id, line, stream_type)
 /// stream_type is "stdout" or "stderr"
 pub type LogCallback = Arc<dyn Fn(String, String, String) + Send + Sync + 'static>;
+
+#[cfg(windows)]
+fn find_main_window(pid: u32) -> Option<HWND> {
+    static mut FOUND_HWND: Option<HWND> = None;
+    static mut TARGET_PID: u32 = 0;
+
+    unsafe {
+        FOUND_HWND = None;
+        TARGET_PID = pid;
+
+        extern "system" fn enum_callback(hwnd: HWND, _lparam: isize) -> i32 {
+            unsafe {
+                let mut proc_id = 0;
+                GetWindowThreadProcessId(hwnd, &mut proc_id);
+
+                if proc_id == TARGET_PID && IsWindowVisible(hwnd) != 0 {
+                    FOUND_HWND = Some(hwnd);
+                    return 0; // stop enumeration
+                }
+                1 // continue enumeration
+            }
+        }
+
+        EnumWindows(Some(enum_callback), 0);
+        FOUND_HWND
+    }
+}
+
+#[cfg(windows)]
+fn is_process_stalled_windows(pid: u32) -> bool {
+    if let Some(hwnd) = find_main_window(pid) {
+        unsafe { IsHungAppWindow(hwnd) != 0 }
+    } else {
+        false
+    }
+}
+
+#[cfg(unix)]
+fn is_process_stalled_unix(pid: i32) -> bool {
+    let mut system = System::new();
+    let pid_sys = SysPid::from(pid as usize);
+
+    system.refresh_processes_specifics(pid_sys, ProcessRefreshKind::new().with_cpu().with_status());
+
+    if let Some(proc1) = system.process(pid_sys) {
+        if matches!(proc1.status(), ProcessStatus::Dead | ProcessStatus::Zombie | ProcessStatus::Stop) {
+            return true;
+        }
+
+        let cpu1 = proc1.cpu_usage();
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        system.refresh_processes_specifics(pid_sys, ProcessRefreshKind::new().with_cpu());
+
+        if let Some(proc2) = system.process(pid_sys) {
+            let cpu2 = proc2.cpu_usage();
+            return cpu1 < 0.1 && cpu2 < 0.1;
+        }
+    }
+
+    // If process disappeared or could not be read, treat as stalled/dead
+    true
+}
 
 /// Launch the game
 /// 
@@ -510,7 +581,7 @@ fn verify_java(java_path: &Path) -> Result<()> {
 }
 
 /// Kill a running game instance
-pub async fn kill_instance(instance_id: &str) -> Result<()> {
+pub async fn kill_instance(instance_id: &str) -> Result<String> {
     use crate::game::launcher::registry::{get_instance, unregister_instance};
 
     let instance = get_instance(instance_id)
@@ -520,45 +591,80 @@ pub async fn kill_instance(instance_id: &str) -> Result<()> {
     log::info!("Killing instance: {} (PID {})", instance_id, instance.pid);
 
     #[cfg(unix)]
-    {
+    let message = {
         use nix::sys::signal::{kill, Signal};
         use nix::unistd::Pid;
 
-        // Try SIGTERM first
         let pid = Pid::from_raw(instance.pid as i32);
-        kill(pid, Signal::SIGTERM).context("Failed to send SIGTERM")?;
+        let stalled = is_process_stalled_unix(instance.pid as i32);
 
-        // Wait a bit
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-        // Check if still running
-        if crate::game::launcher::registry::is_instance_running(instance_id).await? {
-            log::warn!("Process didn't respond to SIGTERM, sending SIGKILL");
+        if stalled {
+            log::warn!("Process appears stalled; sending SIGKILL");
             kill(pid, Signal::SIGKILL).context("Failed to send SIGKILL")?;
+            "Process stalled - killed with SIGKILL".to_string()
+        } else {
+            kill(pid, Signal::SIGTERM).context("Failed to send SIGTERM")?;
+            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+            if crate::game::launcher::registry::is_instance_running(instance_id).await? {
+                log::warn!("Process didn't respond to SIGTERM, sending SIGKILL");
+                kill(pid, Signal::SIGKILL).context("Failed to send SIGKILL")?;
+                "Graceful close failed - killed with SIGKILL".to_string()
+            } else {
+                "Gracefully killed with SIGTERM".to_string()
+            }
         }
-    }
+    };
 
     #[cfg(windows)]
-    {
-        // Use taskkill on Windows
-        let output = std::process::Command::new("taskkill")
-            .args(["/PID", &instance.pid.to_string(), "/T", "/F"])
-            .output()
-            .context("Failed to execute taskkill")?;
+    let message = {
+        let stalled = is_process_stalled_windows(instance.pid as u32);
 
-        if !output.status.success() {
-            anyhow::bail!(
-                "Failed to kill process: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+        if stalled {
+            log::warn!("Process appears stalled; force killing");
+            let output = std::process::Command::new("taskkill")
+                .args(["/PID", &instance.pid.to_string(), "/T", "/F"])
+                .output()
+                .context("Failed to execute taskkill")?;
+
+            if !output.status.success() {
+                anyhow::bail!(
+                    "Failed to kill process: {}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+
+            "Process stalled - killed via taskkill".to_string()
+        } else {
+            if let Some(hwnd) = find_main_window(instance.pid as u32) {
+                unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) };
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+
+            if crate::game::launcher::registry::is_instance_running(instance_id).await? {
+                log::warn!("Process didn't respond to WM_CLOSE, force killing");
+                let output = std::process::Command::new("taskkill")
+                    .args(["/PID", &instance.pid.to_string(), "/T", "/F"])
+                    .output()
+                    .context("Failed to execute taskkill")?;
+
+                if !output.status.success() {
+                    anyhow::bail!(
+                        "Failed to kill process: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    );
+                }
+
+                "Graceful close failed - killed via taskkill".to_string()
+            } else {
+                "Gracefully closed with WM_CLOSE".to_string()
+            }
         }
-    }
+    };
 
-    // Unregister the instance
     unregister_instance(instance_id).await?;
-
     log::info!("Instance killed: {}", instance_id);
-    Ok(())
+    Ok(message)
 }
 
 #[cfg(test)]

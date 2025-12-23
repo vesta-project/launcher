@@ -7,11 +7,11 @@ import clsx from "clsx";
 import {
 	JSX,
 	Match,
-	Switch,
-	Show,
-	ValidComponent,
 	onCleanup,
+	Show,
+	Switch,
 	splitProps,
+	ValidComponent,
 } from "solid-js";
 import { Portal } from "solid-js/web";
 import "./toast.css";
@@ -148,18 +148,23 @@ function showToast(props: {
 						/>
 					)}
 					<div class="toast__cancel-area">
-						<Show when={props.cancellable} fallback={<div class="toast__cancel-placeholder" aria-hidden="true" />}>
+						<Show
+							when={props.cancellable}
+							fallback={
+								<div class="toast__cancel-placeholder" aria-hidden="true" />
+							}
+						>
 							<button
 								class="toast__cancel-btn"
 								onClick={() => props.onCancel?.()}
 								style={{
-									"padding": "4px 8px",
-									"background": "rgba(0,0,0,0.1)",
-									"border": "1px solid rgba(0,0,0,0.2)",
+									padding: "4px 8px",
+									background: "rgba(0,0,0,0.1)",
+									border: "1px solid rgba(0,0,0,0.2)",
 									"border-radius": "4px",
-									"cursor": "pointer",
+									cursor: "pointer",
 									"font-size": "0.8rem",
-									"width": "fit-content"
+									width: "fit-content",
 								}}
 							>
 								Cancel
@@ -173,19 +178,22 @@ function showToast(props: {
 	});
 }
 
-function updateToast(id: number, props: {
-	title?: JSX.Element;
-	description?: JSX.Element;
-	duration?: number;
-	onToastForceClose?: (id: number) => void;
-	priority?: "high" | "low";
-	severity?: "Info" | "Success" | "Warning" | "Error";
-	progress?: number | null;
-	current_step?: number | null;
-	total_steps?: number | null;
-	cancellable?: boolean;
-	onCancel?: () => void;
-}) {
+function updateToast(
+	id: number,
+	props: {
+		title?: JSX.Element;
+		description?: JSX.Element;
+		duration?: number;
+		onToastForceClose?: (id: number) => void;
+		priority?: "high" | "low";
+		severity?: "Info" | "Success" | "Warning" | "Error";
+		progress?: number | null;
+		current_step?: number | null;
+		total_steps?: number | null;
+		cancellable?: boolean;
+		onCancel?: () => void;
+	},
+) {
 	ToastPrimitive.toaster.update(id, (data) => {
 		const severityColor = () => {
 			if (!props.severity) return "hsl(210 70% 50%)";
@@ -232,18 +240,18 @@ function updateToast(id: number, props: {
 						/>
 					)}
 					{props.cancellable && (
-						<button 
+						<button
 							class="toast__cancel-btn"
 							onClick={() => props.onCancel?.()}
 							style={{
 								"margin-top": "8px",
-								"padding": "4px 8px",
-								"background": "rgba(0,0,0,0.1)",
-								"border": "1px solid rgba(0,0,0,0.2)",
+								padding: "4px 8px",
+								background: "rgba(0,0,0,0.1)",
+								border: "1px solid rgba(0,0,0,0.2)",
 								"border-radius": "4px",
-								"cursor": "pointer",
+								cursor: "pointer",
 								"font-size": "0.8rem",
-								"width": "fit-content"
+								width: "fit-content",
 							}}
 						>
 							Cancel

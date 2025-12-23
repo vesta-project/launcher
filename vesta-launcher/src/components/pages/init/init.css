@@ -1,48 +1,48 @@
 .animate--hue {
-    animation: background-animation infinite 20s linear;
+	animation: background-animation infinite 20s linear;
 
-    &:is(.titlebar) {
-        background: hsl(var(--color__primary-hue) 30% 40% / 5%);
+	&:is(.titlebar) {
+		background: hsl(var(--color__primary-hue) 30% 40% / 5%);
 
-        & .titlebar__content {
-            visibility: hidden;
-        }
-    }
+		& .titlebar__content {
+			visibility: hidden;
+		}
+	}
 }
 
 @keyframes background-animation {
-    0% {
-        --color__primary-hue: 0;
-        --background-angle: 0deg;
-    }
+	0% {
+		--color__primary-hue: 0;
+		--background-angle: 0deg;
+	}
 
-    100% {
-        --color__primary-hue: 720;
-        --background-angle: 360deg;
-    }
+	100% {
+		--color__primary-hue: 720;
+		--background-angle: 360deg;
+	}
 }
 
 #init-page__root {
-    display: grid;
-    height: 100%;
-    width: 100%;
-    flex-flow: column;
-    grid-template-columns: 1fr 75vw 1fr;
-    grid-template-rows: 1fr 75vh 1fr;
-    text-align: center;
+	display: grid;
+	height: 100%;
+	width: 100%;
+	flex-flow: column;
+	grid-template-columns: 1fr 75vw 1fr;
+	grid-template-rows: 1fr 75vh 1fr;
+	text-align: center;
 }
 
 #init-page__wrapper {
-    display: grid;
-    grid-template-rows: auto 1fr auto;
-    grid-column: 2;
-    grid-row: 2;
-    width: 100%;
-    height: 100%;
-    border-radius: 6px;
-    background-color: hsl(var(--color__primary-hue) 5% 40% / 40%);
-    border: 2px solid hsl(var(--color__primary-hue) 0% 10% / 10%);
-    box-shadow: hsl(var(--color__primary-hue) 10% 5%) 0 0 12px 1px;
-    padding: 24px;
-    color: hsl(var(--color__primary-hue) 5% 85%);
+	display: grid;
+	grid-template-rows: auto 1fr auto;
+	grid-column: 2;
+	grid-row: 2;
+	width: 100%;
+	height: 100%;
+	border-radius: 6px;
+	background-color: hsl(var(--color__primary-hue) 5% 40% / 40%);
+	border: 2px solid hsl(var(--color__primary-hue) 0% 10% / 10%);
+	box-shadow: hsl(var(--color__primary-hue) 10% 5%) 0 0 12px 1px;
+	padding: 24px;
+	color: hsl(var(--color__primary-hue) 5% 85%);
 }

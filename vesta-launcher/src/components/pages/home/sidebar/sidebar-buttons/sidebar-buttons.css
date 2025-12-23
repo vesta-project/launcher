@@ -1,84 +1,86 @@
 .sidebar-button {
-  height: 40px;
-  width: 40px;
-  border-radius: 3px;
+	height: 40px;
+	width: 40px;
+	border-radius: 3px;
 
-  &:hover {
-    box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+	&:hover {
+		box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
 
-    & > svg {
-      transform: scale(108%);
-    }
-  }
+		& > svg {
+			transform: scale(108%);
+		}
+	}
 
-  &:active {
-    transform: scale(95%);
-    transition-duration: 50ms;
-  }
+	&:active {
+		transform: scale(95%);
+		transition-duration: 50ms;
+	}
 }
 
 .sidebar-profile-button {
-  background-color: transparent;
-  border: 2px solid hsla(0, 0%, 100%, .15);
-  box-sizing: border-box;
+	background-color: transparent;
+	border: 2px solid hsla(0, 0%, 100%, 0.15);
+	box-sizing: border-box;
 }
 
 .profile-loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+	width: 20px;
+	height: 20px;
+	border: 2px solid rgba(255, 255, 255, 0.3);
+	border-top-color: white;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .sidebar-action-button {
-  padding: 10px;
-  background: linear-gradient(
-    to bottom,
-    hsl(0deg 0% 71% / 1%),
-    hsl(0deg 0% 40% / 1%)
-  );
-  transition-property: background-color;
-  transition-duration: 20ms;
-  transition-timing-function: linear;
+	padding: 10px;
+	background: linear-gradient(
+		to bottom,
+		hsl(0deg 0% 71% / 1%),
+		hsl(0deg 0% 40% / 1%)
+	);
+	transition-property: background-color;
+	transition-duration: 20ms;
+	transition-timing-function: linear;
 
-  & svg path {
-    transition-property: fill;
-    transition-duration: 20ms;
-    transition-timing-function: linear;
-    fill: rgb(204 204 204 / 95%);
-  }
+	& svg path {
+		transition-property: fill;
+		transition-duration: 20ms;
+		transition-timing-function: linear;
+		fill: rgb(204 204 204 / 95%);
+	}
 
-  &:hover {
-    & svg path {
-      fill: white;
-    }
+	&:hover {
+		& svg path {
+			fill: white;
+		}
 
-    background: linear-gradient(
-      -45deg,
-      hsl(0deg 0% 71% / 9%),
-      hsl(0deg 0% 40% / 9%)
-    );
-  }
+		background: linear-gradient(
+			-45deg,
+			hsl(0deg 0% 71% / 9%),
+			hsl(0deg 0% 40% / 9%)
+		);
+	}
 }
 
 .button-notify-red {
-  position: relative;
+	position: relative;
 
-  &::after {
-    content: "";
-    display: block;
-    width: 14px;
-    height: 14px;
-    background-color: #cd1616;
-    border-radius: 50%;
-    position: absolute;
-    top: -3px;
-    right: -3px;
-  }
+	&::after {
+		content: "";
+		display: block;
+		width: 14px;
+		height: 14px;
+		background-color: #cd1616;
+		border-radius: 50%;
+		position: absolute;
+		top: -3px;
+		right: -3px;
+	}
 }

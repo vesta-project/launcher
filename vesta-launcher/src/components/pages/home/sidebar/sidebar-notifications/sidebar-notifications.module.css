@@ -1,175 +1,183 @@
 .sidebar__notifications-root {
-  display: grid;
-  grid-template-columns: 100%;
-  grid-template-rows: auto 1fr auto;
-  grid-gap: 20px;
-  padding: 16px;
-  max-width: 600px;
-  height: 100%;
-  justify-content: space-between;
-  color: contrast(white);
-  overflow: hidden;
+	display: grid;
+	grid-template-columns: 100%;
+	grid-template-rows: auto 1fr auto;
+	grid-gap: 20px;
+	padding: 16px;
+	max-width: 600px;
+	height: 100%;
+	justify-content: space-between;
+	color: contrast(white);
+	overflow: hidden;
 
-  & svg {
-    fill: hsl(var(--color__primary-hue) 10% 85%);
-  }
+	& svg {
+		fill: hsl(var(--color__primary-hue) 10% 85%);
+	}
 
+	transition:
+		width 300ms,
+		visibility 200ms,
+		opacity 200ms,
+		overflow 200ms;
+	transition-timing-function: ease-in-out;
+	width: 0;
+	opacity: 0;
+	visibility: visible;
 
-  transition: width 300ms, visibility 200ms, opacity 200ms, overflow 200ms;
-  transition-timing-function: ease-in-out;
-  width: 0;
-  opacity: 0;
-  visibility: visible;
-
-  &:is(.sidebar__notifications-root--open) {
-    transition: width 250ms, visibility 250ms, opacity 250ms, overflow 250ms;
-    width: clamp(400px, 35vw, max(600px, 100vw));
-    opacity: 1;
-    visibility: visible;
-    overflow: unset;
-  }
+	&:is(.sidebar__notifications-root--open) {
+		transition:
+			width 250ms,
+			visibility 250ms,
+			opacity 250ms,
+			overflow 250ms;
+		width: clamp(400px, 35vw, max(600px, 100vw));
+		opacity: 1;
+		visibility: visible;
+		overflow: unset;
+	}
 }
 
 .sidebar__notifications__wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  overflow-x: visible;
-  overflow-y: hidden;
-  padding: 16px 16px 16px 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	overflow-x: visible;
+	overflow-y: hidden;
+	padding: 16px 16px 16px 8px;
 
-  --sb-track-color: transparent;
-  --sb-size: 8px;
-  -webkit-overflow-scrolling: touch;
+	--sb-track-color: transparent;
+	--sb-size: 8px;
+	-webkit-overflow-scrolling: touch;
 }
 
 .sidebar__notifications__wrapper:hover {
-  overflow-y: auto;
-  padding-right: 8px;
+	overflow-y: auto;
+	padding-right: 8px;
 }
 
 /* optional lightweight scrollbar styling using the existing vars */
 .sidebar__notifications__wrapper::-webkit-scrollbar {
-  width: var(--sb-size);
+	width: var(--sb-size);
 }
 .sidebar__notifications__wrapper::-webkit-scrollbar-track {
-  background: var(--sb-track-color);
+	background: var(--sb-track-color);
 }
 
 .sidebar__notifications-titlebar {
-  display: flex;
-  justify-content: space-between;
+	display: flex;
+	justify-content: space-between;
 }
-
 
 /* An individual notification */
 .sidebar__notification {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: start;
-  gap: 8px;
-  border: 1px solid hsl(var(--color__primary-hue) 5% 50% 80%);
-  border-radius: 6px;
-  padding: 12px;
-  background-color: hsl(var(--color__primary-hue) 15% 60% / 20%);
-  box-shadow: 0 10px 15px -3px hsl(0deg 0% 0% / 10%), 0 4px 6px -4px hsl(0deg 0% 0% / 10%);
-  width: 100%;
-  min-height: fit-content;
-  height: auto;
+	display: flex;
+	flex-direction: row;
+	justify-content: space-between;
+	align-items: start;
+	gap: 8px;
+	border: 1px solid hsl(var(--color__primary-hue) 5% 50% 80%);
+	border-radius: 6px;
+	padding: 12px;
+	background-color: hsl(var(--color__primary-hue) 15% 60% / 20%);
+	box-shadow:
+		0 10px 15px -3px hsl(0deg 0% 0% / 10%),
+		0 4px 6px -4px hsl(0deg 0% 0% / 10%);
+	width: 100%;
+	min-height: fit-content;
+	height: auto;
 }
 
 .sidebar__notification__close-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 4px;
-  margin-left: auto;
-  color: hsl(var(--color__primary-hue) 10% 70%);
-  cursor: pointer;
-  border-radius: 3px;
-  border: hsl(var(--color__primary-hue) 5% 50% / 20%) solid 1px;
-  background: hsl(var(--color__primary-hue) 15% 60% / 20%);
-  visibility: visible;
-  transition: all 0.15s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	padding: 4px;
+	margin-left: auto;
+	color: hsl(var(--color__primary-hue) 10% 70%);
+	cursor: pointer;
+	border-radius: 3px;
+	border: hsl(var(--color__primary-hue) 5% 50% / 20%) solid 1px;
+	background: hsl(var(--color__primary-hue) 15% 60% / 20%);
+	visibility: visible;
+	transition: all 0.15s ease;
 
-  & svg {
-    width: 12px;
-    height: 12px;
-  }
+	& svg {
+		width: 12px;
+		height: 12px;
+	}
 
-  &:active {
-    transform: scale(95%);
-    transition-duration: 75ms;
-  }
+	&:active {
+		transform: scale(95%);
+		transition-duration: 75ms;
+	}
 
-  &:hover {
-    border: hsl(0deg 70% 50% / 30%) solid 1px;
-    background: hsl(0deg 70% 50% / 20%);
-    filter: brightness(130%);
-  }
+	&:hover {
+		border: hsl(0deg 70% 50% / 30%) solid 1px;
+		background: hsl(0deg 70% 50% / 20%);
+		filter: brightness(130%);
+	}
 
-  &:hover svg {
-    transform: scale(105%);
-    transition-duration: 75ms;
-  }
+	&:hover svg {
+		transform: scale(105%);
+		transition-duration: 75ms;
+	}
 }
 
 .sidebar__notification__action-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  padding: 6px 10px;
-  color: hsl(var(--color__primary-hue) 10% 85%);
-  cursor: pointer;
-  border-radius: 3px;
-  border: hsl(var(--color__primary-hue) 5% 50% / 30%) solid 1px;
-  background: hsl(var(--color__primary-hue) 15% 60% / 30%);
-  visibility: visible;
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: all 0.15s ease;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	padding: 6px 10px;
+	color: hsl(var(--color__primary-hue) 10% 85%);
+	cursor: pointer;
+	border-radius: 3px;
+	border: hsl(var(--color__primary-hue) 5% 50% / 30%) solid 1px;
+	background: hsl(var(--color__primary-hue) 15% 60% / 30%);
+	visibility: visible;
+	font-size: 11px;
+	font-weight: 500;
+	white-space: nowrap;
+	transition: all 0.15s ease;
 
-  &:active {
-    transform: scale(95%);
-    transition-duration: 75ms;
-  }
+	&:active {
+		transform: scale(95%);
+		transition-duration: 75ms;
+	}
 
-  &:hover {
-    border: hsl(200deg 92% 35% / 40%) solid 1px;
-    filter: brightness(130%);
-    transform: translateY(-1px);
-  }
+	&:hover {
+		border: hsl(200deg 92% 35% / 40%) solid 1px;
+		filter: brightness(130%);
+		transform: translateY(-1px);
+	}
 }
 
 .sidebar__notification:hover .sidebar__notification__close-btn,
 .sidebar__notification:hover .sidebar__notification__action-btn {
-  box-shadow: 0 4px 8px -2px hsl(0deg 0% 0% / 20%);
+	box-shadow: 0 4px 8px -2px hsl(0deg 0% 0% / 20%);
 }
 
 .sidebar__notification__progress {
-  width: 100%;
-  max-width: 100%;
-  margin-top: 8px;
-  overflow: hidden;
+	width: 100%;
+	max-width: 100%;
+	margin-top: 8px;
+	overflow: hidden;
 }
 .sidebar__notification__progress .progress__track {
-  height: 4px;
-  border-radius: 2px;
-  background: #333;
-  max-width: 100%;
+	height: 4px;
+	border-radius: 2px;
+	background: #333;
+	max-width: 100%;
 }
 .sidebar__notification__progress .progress__fill {
-  height: 100%;
-  transition: width 0.3s;
-  max-width: 100%;
+	height: 100%;
+	transition: width 0.3s;
+	max-width: 100%;
 }
 .sidebar__notification__progress.progress--indeterminate .progress__fill,
 .sidebar__notification__progress .progress__fill--indeterminate {
-  background: linear-gradient(90deg, #333 0%, #777 50%, #333 100%);
-  background-size: 200% 100%;
-  animation: progress-pulse 1.4s linear infinite;
+	background: linear-gradient(90deg, #333 0%, #777 50%, #333 100%);
+	background-size: 200% 100%;
+	animation: progress-pulse 1.4s linear infinite;
 }

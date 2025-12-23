@@ -13,7 +13,16 @@ import { Polymorphic } from "@kobalte/core";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { Show, children, createEffect, createMemo, createSignal, lazy } from "solid-js";
+import {
+	children,
+	createEffect,
+	createMemo,
+	createSignal,
+	lazy,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import { Dynamic } from "solid-js/web";
 import "./page-viewer.css";
 
@@ -51,49 +60,76 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 		const currentProps = router()?.currentPathProps();
 		const historyPast = router()?.history.past || [];
 		const historyFuture = router()?.history.future || [];
-		
+
 		// Convert params and props to string values for URL serialization
 		const stringParams: Record<string, string> | undefined = currentParams
 			? Object.fromEntries(
-				Object.entries(currentParams).map(([k, v]) => [k, String(v)])
-			)
+					Object.entries(currentParams).map(([k, v]) => [k, String(v)]),
+				)
 			: undefined;
-		
+
 		const stringProps: Record<string, string> | undefined = currentProps
 			? Object.fromEntries(
-				Object.entries(currentProps).map(([k, v]) => [k, String(v)])
-			)
+					Object.entries(currentProps).map(([k, v]) => [k, String(v)]),
+				)
 			: undefined;
-		
+
 		// Merge params and props for passing to new window
 		const allData = { ...stringParams, ...stringProps };
-		
+
 		// Serialize history for passing to new window
 		const historyData = {
 			path: currentPath,
-			past: historyPast.map(entry => ({
+			past: historyPast.map((entry) => ({
 				path: entry.path,
-				params: entry.params ? Object.fromEntries(Object.entries(entry.params).map(([k, v]) => [k, String(v)])) : {},
-				props: entry.props ? Object.fromEntries(Object.entries(entry.props).map(([k, v]) => [k, String(v)])) : undefined,
+				params: entry.params
+					? Object.fromEntries(
+							Object.entries(entry.params).map(([k, v]) => [k, String(v)]),
+						)
+					: {},
+				props: entry.props
+					? Object.fromEntries(
+							Object.entries(entry.props).map(([k, v]) => [k, String(v)]),
+						)
+					: undefined,
 			})),
-			future: historyFuture.map(entry => ({
+			future: historyFuture.map((entry) => ({
 				path: entry.path,
-				params: entry.params ? Object.fromEntries(Object.entries(entry.params).map(([k, v]) => [k, String(v)])) : {},
-				props: entry.props ? Object.fromEntries(Object.entries(entry.props).map(([k, v]) => [k, String(v)])) : undefined,
+				params: entry.params
+					? Object.fromEntries(
+							Object.entries(entry.params).map(([k, v]) => [k, String(v)]),
+						)
+					: {},
+				props: entry.props
+					? Object.fromEntries(
+							Object.entries(entry.props).map(([k, v]) => [k, String(v)]),
+						)
+					: undefined,
 			})),
 		};
-		
+
 		const historyJsonString = JSON.stringify(historyData);
-		console.log("Opening new window with history - Past:", historyPast.length, "Future:", historyFuture.length, "JSON length:", historyJsonString.length);
-		
-		invoke("launch_new_window", { path: currentPath, props: allData, history: historyJsonString });
+		console.log(
+			"Opening new window with history - Past:",
+			historyPast.length,
+			"Future:",
+			historyFuture.length,
+			"JSON length:",
+			historyJsonString.length,
+		);
+
+		invoke("launch_new_window", {
+			path: currentPath,
+			props: allData,
+			history: historyJsonString,
+		});
 		props.closeClicked?.();
 	};
 
 	const copyUrl = async () => {
 		const url = router()?.generateUrl();
 		if (!url) return;
-		
+
 		try {
 			await navigator.clipboard.writeText(url);
 			console.log("URL copied to clipboard:", url);
@@ -148,13 +184,13 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 				</div>
 			</div>
 			<div class={"page-viewer-navbar-right"}>
-				<PageViewerNavbarButton onClick={props.closeClicked} text={"Close"}>
+				<PageViewerNavbarButton
+					onClick={props.closeClicked}
+					text={"Close (esc)"}
+				>
 					<CloseIcon />
 				</PageViewerNavbarButton>
-				<PageViewerNavbarButton
-					text={"Copy URL"}
-					onClick={copyUrl}
-				>
+				<PageViewerNavbarButton text={"Copy URL"} onClick={copyUrl}>
 					<LinkIcon />
 				</PageViewerNavbarButton>
 				<PageViewerNavbarButton
@@ -174,7 +210,9 @@ interface PageViewerProps {
 }
 
 const [router, setRouter] = createSignal<MiniRouter>();
-const [refetchFn, setRefetchFn] = createSignal<(() => Promise<void>) | undefined>();
+const [refetchFn, setRefetchFn] = createSignal<
+	(() => Promise<void>) | undefined
+>();
 
 function PageViewer(props: PageViewerProps) {
 	const mini_router = new MiniRouter({
@@ -184,12 +222,28 @@ function PageViewer(props: PageViewerProps) {
 
 	setRouter(mini_router);
 
+	const handleKeyDown = (event: KeyboardEvent) => {
+		if (event.key === "Escape") {
+			props.viewChanged?.(false);
+		}
+	};
+
+	onMount(() => {
+		document.addEventListener("keydown", handleKeyDown);
+	});
+
+	onCleanup(() => {
+		document.removeEventListener("keydown", handleKeyDown);
+	});
+
 	return (
 		<Show when={props.open}>
 			<div class={"page-viewer-wrapper"}>
 				<div class={"page-viewer-root"}>
 					<PageViewerNavbar closeClicked={() => props.viewChanged?.(false)} />
-					<div class={"page-viewer-content"}>{router()?.getRouterView({ setRefetch: setRefetchFn })}</div>
+					<div class={"page-viewer-content"}>
+						{router()?.getRouterView({ setRefetch: setRefetchFn })}
+					</div>
 				</div>
 			</div>
 		</Show>

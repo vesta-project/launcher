@@ -1,5 +1,5 @@
 import { DropZone } from "@ui/drop-zone/drop-zone";
-import { For, createSignal } from "solid-js";
+import { createSignal, For } from "solid-js";
 import "./file-drop-page.css";
 
 interface DroppedFile {

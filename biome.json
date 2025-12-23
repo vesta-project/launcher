@@ -1,9 +1,20 @@
 {
-	"$schema": "https://biomejs.dev/schemas/1.7.1/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
 	"files": {
-		"ignore": ["dist", "node_modules", "target", "src-tauri/target", "vesta-launcher/dist"]
+		"excludes": ["dist", "node_modules", "target", "src-tauri/target", "vesta-launcher/dist"]
 	},
-	"organizeImports": { "enabled": true },
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git"
+	},
+	"assist": {
+		"enabled": true,
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {
@@ -15,13 +26,12 @@
 			"complexity": {
 				"noBannedTypes": "error",
 				"noExtraBooleanCast": "error",
-				"noMultipleSpacesInRegularExpressionLiterals": "error",
+				"noAdjacentSpacesInRegex": "error",
 				"noStaticOnlyClass": "error",
 				"noUselessCatch": "error",
 				"noUselessConstructor": "error",
 				"noUselessThisAlias": "error",
 				"noUselessTypeConstraint": "error",
-				"noWith": "error",
 				"useArrowFunction": "off"
 			},
 			"correctness": {
@@ -32,7 +42,7 @@
 				"noGlobalObjectCalls": "error",
 				"noInnerDeclarations": "error",
 				"noInvalidConstructorSuper": "error",
-				"noNewSymbol": "error",
+				"noInvalidBuiltinInstantiation": "error",
 				"noNonoctalDecimalEscape": "error",
 				"noPrecisionLoss": "error",
 				"noSelfAssign": "error",
@@ -47,6 +57,7 @@
 				"noUnusedVariables": "error",
 				"useIsNan": "error",
 				"useValidForDirection": "error",
+				"useValidTypeof": "error",
 				"useYield": "error"
 			},
 			"style": {
@@ -83,9 +94,9 @@
 				"noShadowRestrictedNames": "error",
 				"noUnsafeDeclarationMerging": "error",
 				"noUnsafeNegation": "error",
+				"noWith": "error",
 				"useAwait": "error",
-				"useGetterReturn": "error",
-				"useValidTypeof": "error"
+				"useGetterReturn": "error"
 			}
 		}
 	},

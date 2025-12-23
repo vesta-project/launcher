@@ -1,24 +1,31 @@
 import CloseIcon from "@assets/close.svg";
 import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
+import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Progress } from "@ui/progress/progress";
 import {
 	type BackendNotification,
-	type NotificationAction,
-	type NotificationSeverity,
-	type NotificationType,
 	clearAllDismissibleNotifications,
 	closeAlert,
 	deleteNotification,
 	invokeNotificationAction,
 	listNotifications,
 	markNotificationRead,
+	type NotificationAction,
+	type NotificationSeverity,
+	type NotificationType,
 	notifications,
 	persistentNotificationTrigger,
 	removeAllAlerts,
 } from "@utils/notifications";
-import { invoke } from "@tauri-apps/api/core";
-import { For, Show, createResource, createSignal, onMount, createEffect } from "solid-js";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onMount,
+	Show,
+} from "solid-js";
 import styles from "./sidebar-notifications.module.css";
 
 interface SidebarNotificationProps {
@@ -33,7 +40,6 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 	onMount(() => {
 		// Defer fetching notifications to avoid blocking initial render
 		setTimeout(() => setReady(true), 1000);
-
 	});
 
 	// Load persistent notifications from backend - refetch when trigger changes
@@ -112,36 +118,47 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 					{/* All notifications from backend (includes Immediate which won't persist after restart) */}
 					<For each={persistentNotifs()}>
 						{(notification) => {
-							console.log(`Rendering notification: ${notification.title} - type: ${notification.notification_type}, dismissible: ${notification.dismissible}`);
+							console.log(
+								`Rendering notification: ${notification.title} - type: ${notification.notification_type}, dismissible: ${notification.dismissible}`,
+							);
 							return (
-							<NotificationCard
-								id={notification.id}
-								title={notification.title}
-								description={notification.description || undefined}
-								progress={notification.progress || undefined}
-								current_step={notification.current_step || undefined}
-								total_steps={notification.total_steps || undefined}
-								persistent={true}
-								read={notification.read}
-								severity={notification.severity}
-								notification_type={notification.notification_type}
-								dismissible={notification.dismissible}
-								actions={notification.actions}
-								client_key={notification.client_key}
-								metadata={notification.metadata}
-							/>
+								<NotificationCard
+									id={notification.id}
+									title={notification.title}
+									description={notification.description || undefined}
+									progress={notification.progress || undefined}
+									current_step={notification.current_step || undefined}
+									total_steps={notification.total_steps || undefined}
+									persistent={true}
+									read={notification.read}
+									severity={notification.severity}
+									notification_type={notification.notification_type}
+									dismissible={notification.dismissible}
+									actions={notification.actions}
+									client_key={notification.client_key}
+									metadata={notification.metadata}
+								/>
 							);
 						}}
 					</For>
 				</div>
 			</Show>
-			<Show when={notifications().length > 0 || (persistentNotifs()?.some(n => n.dismissible) ?? false)}>
+			<Show
+				when={
+					notifications().length > 0 ||
+					(persistentNotifs()?.some((n) => n.dismissible) ?? false)
+				}
+			>
 				<div>
-					<Button onClick={async () => {
-						removeAllAlerts();
-						const cleared = await clearAllDismissibleNotifications();
-						console.log(`Cleared ${cleared} dismissible notifications`);
-					}}>Clear All</Button>
+					<Button
+						onClick={async () => {
+							removeAllAlerts();
+							const cleared = await clearAllDismissibleNotifications();
+							console.log(`Cleared ${cleared} dismissible notifications`);
+						}}
+					>
+						Clear All
+					</Button>
 				</div>
 			</Show>
 		</div>
@@ -165,8 +182,10 @@ function NotificationCard(props: {
 	client_key?: string | null;
 }) {
 	// Debug logging
-	console.log(`NotificationCard: ${props.title} - type: ${props.notification_type}, dismissible: ${props.dismissible}, progress: ${props.progress}`);
-	
+	console.log(
+		`NotificationCard: ${props.title} - type: ${props.notification_type}, dismissible: ${props.dismissible}, progress: ${props.progress}`,
+	);
+
 	const handleAction = async (actionId: string) => {
 		try {
 			await invokeNotificationAction(actionId, props.client_key || undefined);
@@ -208,8 +227,15 @@ function NotificationCard(props: {
 				"border-left": `4px solid ${severityColor()}`,
 			}}
 		>
-			<div style={{ width: "100%", "min-width": "0", "overflow": "hidden" }}>
-				<div style={{ display: "flex", gap: "8px", "align-items": "center", "margin-bottom": "4px" }}>
+			<div style={{ width: "100%", "min-width": "0", overflow: "hidden" }}>
+				<div
+					style={{
+						display: "flex",
+						gap: "8px",
+						"align-items": "center",
+						"margin-bottom": "4px",
+					}}
+				>
 					{props.persistent && props.severity && (
 						<span
 							style={{
@@ -224,21 +250,44 @@ function NotificationCard(props: {
 						</span>
 					)}
 				</div>
-				<h1 style={{ "font-size": "14px", "font-weight": "600", margin: "0 0 4px 0" }}>
+				<h1
+					style={{
+						"font-size": "14px",
+						"font-weight": "600",
+						margin: "0 0 4px 0",
+					}}
+				>
 					{props.title || "Notification"}
 				</h1>
-				<p style={{ "font-size": "13px", color: "hsl(var(--color__primary-hue) 5% 80%)", margin: 0, "word-break": "break-word" }}>
+				<p
+					style={{
+						"font-size": "13px",
+						color: "hsl(var(--color__primary-hue) 5% 80%)",
+						margin: 0,
+						"word-break": "break-word",
+					}}
+				>
 					{props.description}
 				</p>
 				<Show when={props.metadata}>
-					<div style={{ margin: "6px 0 0 0", "font-size": "12px", color: "hsl(var(--color__primary-hue) 5% 70%)" }}>
+					<div
+						style={{
+							margin: "6px 0 0 0",
+							"font-size": "12px",
+							color: "hsl(var(--color__primary-hue) 5% 70%)",
+						}}
+					>
 						<small>
 							<pre style={{ whiteSpace: "pre-wrap", margin: 0 }}>
 								{(() => {
 									try {
-										return JSON.stringify(JSON.parse(props.metadata as string), null, 2);
+										return JSON.stringify(
+											JSON.parse(props.metadata as string),
+											null,
+											2,
+										);
 									} catch {
-										return (props.metadata as string) || '';
+										return (props.metadata as string) || "";
 									}
 								})()}
 							</pre>
@@ -262,7 +311,16 @@ function NotificationCard(props: {
 					</div>
 				)}
 			</div>
-			<div style={{ display: "flex", gap: "6px", "flex-direction": "column", "flex-shrink": "0", "align-items": "stretch", "min-width": "60px" }}>
+			<div
+				style={{
+					display: "flex",
+					gap: "6px",
+					"flex-direction": "column",
+					"flex-shrink": "0",
+					"align-items": "stretch",
+					"min-width": "60px",
+				}}
+			>
 				{/* Action buttons */}
 				<Show when={props.actions && props.actions.length > 0}>
 					<For each={props.actions}>
@@ -272,16 +330,18 @@ function NotificationCard(props: {
 								onClick={() => handleAction(action.id)}
 								title={action.label}
 								style={{
-									background: action.type === "destructive" 
-										? "hsl(0deg 70% 40% / 25%)" 
-										: action.type === "primary"
-										? "hsl(210deg 80% 50% / 25%)"
-										: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
-									"border-color": action.type === "destructive"
-										? "hsl(0deg 70% 40% / 40%)"
-										: action.type === "primary"
-										? "hsl(210deg 80% 50% / 40%)"
-										: "hsl(var(--color__primary-hue) 5% 50% / 30%)"
+									background:
+										action.type === "destructive"
+											? "hsl(0deg 70% 40% / 25%)"
+											: action.type === "primary"
+												? "hsl(210deg 80% 50% / 25%)"
+												: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
+									"border-color":
+										action.type === "destructive"
+											? "hsl(0deg 70% 40% / 40%)"
+											: action.type === "primary"
+												? "hsl(210deg 80% 50% / 40%)"
+												: "hsl(var(--color__primary-hue) 5% 50% / 30%)",
 								}}
 							>
 								{action.label}
@@ -289,7 +349,7 @@ function NotificationCard(props: {
 						)}
 					</For>
 				</Show>
-				
+
 				{/* Delete/Close button - show for dismissible notifications */}
 				<Show when={props.dismissible}>
 					<button

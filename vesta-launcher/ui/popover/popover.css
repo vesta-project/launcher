@@ -1,13 +1,15 @@
 .popover__content {
-  border: 1px solid hsl(240deg 5% 84%);
-  border-radius: 6px;
-  padding: 12px;
-  background-color: white;
-  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 10%), 0 4px 6px -4px rgb(0 0 0 / 10%);
-  transform-origin: var(--kb-popover-content-transform-origin);
-  animation: contentHide 250ms ease-in forwards;
+	border: 1px solid hsl(240deg 5% 84%);
+	border-radius: 6px;
+	padding: 12px;
+	background-color: white;
+	box-shadow:
+		0 10px 15px -3px rgb(0 0 0 / 10%),
+		0 4px 6px -4px rgb(0 0 0 / 10%);
+	transform-origin: var(--kb-popover-content-transform-origin);
+	animation: contentHide 250ms ease-in forwards;
 }
 
 .popover__content[data-expanded] {
-  animation: contentShow 250ms ease-out;
+	animation: contentShow 250ms ease-out;
 }

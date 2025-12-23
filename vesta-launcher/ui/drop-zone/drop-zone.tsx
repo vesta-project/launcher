@@ -1,8 +1,8 @@
 import { getDropZoneManager } from "@utils/file-drop";
 import {
-	JSX,
 	children as accessChildren,
 	createEffect,
+	JSX,
 	onCleanup,
 	onMount,
 } from "solid-js";

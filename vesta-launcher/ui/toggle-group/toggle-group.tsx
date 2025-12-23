@@ -2,7 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as ToggleGroupPrimitive from "@kobalte/core/toggle-group";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { ValidComponent, children, splitProps } from "solid-js";
+import { children, splitProps, ValidComponent } from "solid-js";
 import "./toggle-group.css";
 
 type ToggleGroupRootProps = ToggleGroupPrimitive.ToggleGroupRootProps &

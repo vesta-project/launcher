@@ -7,7 +7,7 @@ import {
 	TooltipPlacement,
 	TooltipTrigger,
 } from "@ui/tooltip/tooltip";
-import { Show, children, mergeProps, splitProps } from "solid-js";
+import { children, mergeProps, Show, splitProps } from "solid-js";
 import "./button.css";
 
 interface ButtonProps
@@ -25,12 +25,12 @@ interface ButtonProps
 }
 
 function Button(p: ButtonProps) {
-	console.log("[Button] Component rendering with props:", { 
-		disabled: p.disabled, 
+	console.log("[Button] Component rendering with props:", {
+		disabled: p.disabled,
 		onClick: !!p.onClick,
-		children: typeof p.children 
+		children: typeof p.children,
 	});
-	
+
 	const c = children(() => p.children);
 	const props = mergeProps(
 		{
@@ -56,7 +56,10 @@ function Button(p: ButtonProps) {
 
 	const handleClick = (e: MouseEvent) => {
 		console.log("[Button] NATIVE CLICK EVENT RECEIVED", e);
-		console.log("[Button] Click event fired", { disabled: props.disabled, onClick: !!local.onClick });
+		console.log("[Button] Click event fired", {
+			disabled: props.disabled,
+			onClick: !!local.onClick,
+		});
 		if (local.onClick) {
 			console.log("[Button] Calling onClick handler");
 			local.onClick();
@@ -85,7 +88,9 @@ function Button(p: ButtonProps) {
 						local.color != "none" ? "var(--" + local.color + ")" : "",
 				}}
 				onClick={handleClick}
-				onMouseDown={(e: MouseEvent) => console.log("[Button] MouseDown event", e)}
+				onMouseDown={(e: MouseEvent) =>
+					console.log("[Button] MouseDown event", e)
+				}
 				onMouseUp={(e: MouseEvent) => console.log("[Button] MouseUp event", e)}
 				disabled={props.disabled}
 				{...(rest as ButtonPrimitive.ButtonRootProps)}
