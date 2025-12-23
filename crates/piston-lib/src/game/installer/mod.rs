@@ -1,0 +1,202 @@
+pub mod cache;
+pub mod config;
+pub mod core;
+pub mod modloaders;
+pub mod transaction;
+pub mod types;
+pub mod vanilla;
+
+#[cfg(test)]
+mod tests;
+
+use anyhow::{Context, Result};
+use types::{InstallSpec, ModloaderType, ProgressReporter};
+
+use crate::game::installer::core::traits::ModloaderInstaller;
+use crate::game::installer::modloaders::fabric::FabricInstaller;
+use crate::game::installer::modloaders::forge::ForgeInstaller;
+use crate::game::installer::modloaders::neoforge::NeoForgeInstaller;
+use crate::game::installer::modloaders::quilt::QuiltInstaller;
+use crate::game::installer::vanilla::VanillaInstaller;
+use cache::{ArtifactCache, InstallArtifactRef};
+use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use transaction::InstallTransaction;
+
+tokio::task_local! {
+    static INSTALL_SCOPE: InstallScope;
+}
+
+struct InstallScope {
+    cache: Arc<Mutex<ArtifactCache>>,
+    artifacts: Arc<Mutex<Vec<InstallArtifactRef>>>,
+}
+
+pub(crate) fn install_scope_handles() -> Option<(
+    Arc<Mutex<ArtifactCache>>,
+    Arc<Mutex<Vec<InstallArtifactRef>>>,
+)> {
+    INSTALL_SCOPE
+        .try_with(|scope| (scope.cache.clone(), scope.artifacts.clone()))
+        .ok()
+}
+
+pub(crate) async fn track_artifact_from_path(
+    label: impl Into<String>,
+    path: &Path,
+    signature: Option<String>,
+    source_url: Option<String>,
+) -> Result<()> {
+    if let Some((cache, artifacts)) = install_scope_handles() {
+        let label_str: String = label.into();
+        let sha = {
+            let mut cache_guard = cache.lock().await;
+            let sha = cache_guard.ingest_file(path, signature, source_url)?;
+            cache_guard.set_label(label_str.clone(), sha.clone());
+            sha
+        };
+        let mut refs = artifacts.lock().await;
+        refs.push(InstallArtifactRef::new(label_str, sha));
+    }
+    Ok(())
+}
+
+pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Result<bool> {
+    if let Some((cache, _)) = install_scope_handles() {
+        let restored = {
+            let cache_guard = cache.lock().await;
+            if let Some(sha) = cache_guard.find_component(label) {
+                cache_guard.restore_artifact(&sha, destination)?
+            } else {
+                false
+            }
+        };
+
+        if restored {
+            track_artifact_from_path(label.to_string(), destination, None, None).await?;
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn get_installer(modloader: Option<ModloaderType>) -> Box<dyn ModloaderInstaller> {
+    match modloader {
+        None | Some(ModloaderType::Vanilla) => Box::new(VanillaInstaller),
+        Some(ModloaderType::Fabric) => Box::new(FabricInstaller),
+        Some(ModloaderType::Quilt) => Box::new(QuiltInstaller),
+        Some(ModloaderType::Forge) => Box::new(ForgeInstaller),
+        Some(ModloaderType::NeoForge) => Box::new(NeoForgeInstaller),
+    }
+}
+
+/// Main entry point for game installation
+/// Dispatches to the appropriate installer based on modloader type
+pub async fn install_instance(
+    spec: InstallSpec,
+    reporter: std::sync::Arc<dyn ProgressReporter>,
+) -> Result<()> {
+    log::info!(
+        "Starting installation: version={}, modloader={:?}",
+        spec.version_id,
+        spec.modloader
+    );
+
+    // Ensure base directories exist
+    std::fs::create_dir_all(spec.data_dir())?;
+    std::fs::create_dir_all(spec.libraries_dir())?;
+    std::fs::create_dir_all(spec.assets_dir())?;
+    std::fs::create_dir_all(spec.versions_dir())?;
+    std::fs::create_dir_all(spec.jre_dir())?;
+    std::fs::create_dir_all(&spec.game_dir)?;
+
+    // Load cache + transaction state
+    let cache = Arc::new(Mutex::new(ArtifactCache::load_with_labels(
+        spec.data_dir(),
+    )?));
+    let recorded_artifacts = Arc::new(Mutex::new(Vec::new()));
+    let install_id = spec.installed_version_id();
+    let loader_label = spec.modloader.map(|m| m.as_str().to_string());
+    let txn = InstallTransaction::new(install_id.clone(), spec.data_dir());
+    txn.begin()?;
+
+    reporter.set_message("Starting installation...");
+    reporter.set_percent(0);
+
+    let installer = get_installer(spec.modloader);
+    let scope = InstallScope {
+        cache: cache.clone(),
+        artifacts: recorded_artifacts.clone(),
+    };
+
+    let install_result = INSTALL_SCOPE
+        .scope(scope, async {
+            installer.install(&spec, reporter.clone()).await
+        })
+        .await;
+
+    if let Err(err) = install_result {
+        let _ = txn.rollback(&err.to_string());
+        reporter.done(false, Some("Installation failed"));
+        return Err(err);
+    }
+
+    let finalize_result = async {
+        let mut cache_guard = cache.lock().await;
+        let mut artifacts = collect_version_artifacts(&spec, &install_id, &mut cache_guard)?;
+        drop(cache_guard);
+
+        {
+            let mut recorded = recorded_artifacts.lock().await;
+            artifacts.extend(recorded.drain(..));
+        }
+
+        let mut cache_guard = cache.lock().await;
+        cache_guard.record_install(&install_id, loader_label.clone(), &artifacts);
+        cache_guard.prune_unused();
+        cache_guard.save()?;
+        drop(cache_guard);
+
+        txn.commit()?;
+        Ok::<(), anyhow::Error>(())
+    }
+    .await;
+
+    if let Err(err) = finalize_result {
+        let _ = txn.rollback(&err.to_string());
+        reporter.done(false, Some("Installation failed"));
+        return Err(err);
+    }
+
+    reporter.done(true, Some("Installation complete"));
+    log::info!("Installation completed successfully: {}", spec.version_id);
+
+    Ok(())
+}
+
+fn collect_version_artifacts(
+    spec: &InstallSpec,
+    install_id: &str,
+    cache: &mut ArtifactCache,
+) -> Result<Vec<InstallArtifactRef>> {
+    let mut artifacts = Vec::new();
+    let version_dir = spec.versions_dir().join(install_id);
+    let jar_name = format!("{}.jar", install_id);
+    let jar_path = version_dir.join(&jar_name);
+    if jar_path.exists() {
+        let sha = cache
+            .ingest_file(&jar_path, None, None)
+            .with_context(|| format!("Cache version jar {:?}", jar_path))?;
+        artifacts.push(InstallArtifactRef::new(
+            format!("versions/{}/{}", install_id, jar_name),
+            sha,
+        ));
+    } else {
+        log::warn!(
+            "Version jar missing after install; skip cache ingestion: {:?}",
+            jar_path
+        );
+    }
+    Ok(artifacts)
+}

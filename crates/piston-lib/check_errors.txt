@@ -1,0 +1,194 @@
+﻿cargo :     Checking 
+piston-lib v0.1.0 (C:\
+Users\eatha\OneDrive 
+- Trinity Grammar Scho
+ol\Desktop\VestaProjec
+t\crates\piston-lib)
+At line:1 char:1
++ cargo check --lib 
+2>&1 | Out-File 
+-FilePath 
+"check_errors.txt" 
+-Encod ...
++ 
+~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (    Checki   
+ ng pi...tes\pisto    
+n-lib):String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+error[E0432]: 
+unresolved import 
+`super::common`
+ --> crates\piston-lib
+\src\game\installer\mo
+dloaders\forge\parser.
+rs:2:12
+  |
+2 | use super::common:
+:{ForgeVersionInfo, 
+InstallProfile};
+  |            ^^^^^^ 
+could not find 
+`common` in `super`
+
+warning: unused 
+import: 
+`std::path::Path`
+ --> crates\piston-lib
+\src\game\installer\mo
+dloaders\fabric.rs:8:5
+  |
+8 | use 
+std::path::Path;
+  |     
+^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unus
+ed_imports)]` (part 
+of `#[warn(unused)]`) 
+on by default
+
+warning: unused 
+import: `Arguments`
+ --> crates\piston-lib
+\src\game\launcher\arg
+uments.rs:4:70
+  |
+4 | use crate::game::l
+auncher::version_parse
+r::{Argument, 
+ArgumentValue, 
+Arguments, 
+VersionManifest};
+  |                   
+                      
+                      
+       ^^^^^^^^^
+
+warning: unused 
+import: `crate::game::
+launcher::version_pars
+er::Library`
+ --> crates\piston-lib
+\src\game\launcher\cla
+ssifier.rs:2:5
+  |
+2 | use crate::game::l
+auncher::version_parse
+r::Library;
+  |     ^^^^^^^^^^^^^^
+^^^^^^^^^^^^^^^^^^^^^^
+^^^^^^^^^^
+
+warning: unused 
+import: 
+`ProcessHandle`
+ --> crates\piston-lib
+\src\game\launcher\pro
+cess.rs:7:53
+  |
+7 |     
+types::{GameInstance, 
+LaunchResult, 
+LaunchSpec, 
+ProcessHandle},
+  |                   
+                      
+            
+^^^^^^^^^^^^^
+
+warning: unused 
+variable: `natives`
+   --> crates\piston-l
+ib\src\game\installer\
+vanilla\mod.rs:507:25
+    |
+507 |             if 
+let Some(natives) = 
+&library.natives {
+    |                 
+        ^^^^^^^ help: 
+if this is 
+intentional, prefix 
+it with an 
+underscore: `_natives`
+    |
+    = note: `#[warn(un
+used_variables)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: variable 
+does not need to be 
+mutable
+   --> crates\piston-l
+ib\src\game\launcher\p
+rocess.rs:207:9
+    |
+207 |     let mut 
+child = command.spawn(
+).context("Failed to 
+spawn game process")?;
+    |         
+----^^^^^
+    |         |
+    |         help: 
+remove this `mut`
+    |
+    = note: 
+`#[warn(unused_mut)]` 
+(part of 
+`#[warn(unused)]`) on 
+by default
+
+warning: unused 
+variable: 
+`loader_type`
+   --> crates\piston-l
+ib\src\game\metadata\f
+etcher.rs:659:9
+    |
+659 |     let 
+loader_type = match 
+loader_name {
+    |         
+^^^^^^^^^^^ help: if 
+this is intentional, 
+prefix it with an 
+underscore: 
+`_loader_type`
+
+warning: unused 
+variable: `lib_name`
+  --> crates\piston-li
+b\src\game\launcher\cl
+assifier.rs:45:5
+   |
+45 |     lib_name: 
+&str,
+   |     ^^^^^^^^ 
+help: if this is 
+intentional, prefix 
+it with an 
+underscore: 
+`_lib_name`
+
+For more information 
+about this error, try 
+`rustc --explain 
+E0432`.
+warning: `piston-lib` 
+(lib) generated 8 
+warnings
+error: could not 
+compile `piston-lib` 
+(lib) due to 1 
+previous error; 8 
+warnings emitted
