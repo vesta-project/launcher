@@ -84,11 +84,7 @@
 	width: 96px;
 	height: 96px;
 	border-radius: 10px;
-	background: linear-gradient(
-		135deg,
-		hsl(var(--color__primary-hue) var(--color__sat-50) 40%) 0%,
-		hsl(var(--color__secondary-hue) var(--color__sat-50) 40%) 100%
-	);
+	background-image: var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
 	background-size: cover;
 	background-position: center;
 	flex-shrink: 0;

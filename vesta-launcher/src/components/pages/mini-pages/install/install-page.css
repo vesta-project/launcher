@@ -70,7 +70,9 @@
 .instance-icon-placeholder {
 	width: 80px;
 	height: 80px;
-	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	background-image: var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+	background-size: cover;
+	background-position: center;
 	border-radius: 8px;
 	display: flex;
 	align-items: center;

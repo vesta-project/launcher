@@ -42,6 +42,7 @@ import {
 	Show,
 } from "solid-js";
 import "./install-page.css";
+import PlaceholderImage from "@assets/placeholder-instance-image.jpg";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
 
@@ -90,6 +91,7 @@ function InstallPage() {
 	const [selectedModloaderVersion, setSelectedModloaderVersion] =
 		createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
+	const effectiveIcon = () => iconPath() || PlaceholderImage;
 
 	// Advanced State
 	const [javaArgs, setJavaArgs] = createSignal("");
@@ -341,30 +343,15 @@ function InstallPage() {
 
 					{/* Icon & Name */}
 					<div class="form-row icon-name-row">
-						<div
-							class={"instance-icon-placeholder"}
-							title="Click to upload icon"
-							onClick={handleImageUpload}
-							style={
-								iconPath()
-									? {
-											"background-image": `url('${iconPath()}')`,
-											"background-size": "cover",
-										}
-									: {}
-							}
-						>
-							{!iconPath() && <span>Icon</span>}
-						</div>
+						<div class={"instance-icon-placeholder"} title="Click to upload icon" onClick={handleImageUpload} style={{ "background-image": `url('${effectiveIcon()}')`, "background-size": "cover", "background-color": "hsl(var(--color__primary-hue), 50%, 20%)" }} />
 						<input
 							type="file"
-							ref={fileInputRef}
-							style="display: none"
+							ref={(el) => (fileInputRef = el as HTMLInputElement | undefined)}
+							style={{ display: "none" }}
 							accept="image/*"
 							onChange={onFileSelected}
 						/>
-
-						<TextFieldRoot required={true} style={"flex: 1; min-width: 200px;"}>
+							<TextFieldRoot required={true} style={"flex: 1; min-width: 200px;"}>
 							<TextFieldLabel>Instance Name</TextFieldLabel>
 							<TextFieldInput
 								placeholder="My Awesome Instance"
