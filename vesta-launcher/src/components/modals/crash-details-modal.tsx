@@ -67,8 +67,7 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 	const openCrashReport = () => {
 		const report = crashDetails();
 		if (report?.report_path) {
-			// Open file in default app (would need tauri open command)
-			// For now, just show the path
+			// TODO: integrate tauri open once available; temporary log
 			console.log("Crash report location:", report.report_path);
 		}
 	};
@@ -79,20 +78,38 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 				<DialogHeader>
 					<DialogTitle class="crash-title">
 						<span class="crash-icon">
-							{() => {
-								const details = crashDetails();
-								return details ? getCrashTypeIcon(details.crash_type) : "❌";
-							}}
+							<Switch fallback={<span>❌</span>}>
+								<Match when={crashDetails()?.crash_type === "runtime"}>
+									<span>⚠️</span>
+								</Match>
+								<Match when={crashDetails()?.crash_type === "launch_mod"}>
+									<span>📦</span>
+								</Match>
+								<Match when={crashDetails()?.crash_type === "launch_other"}>
+									<span>🚫</span>
+								</Match>
+								<Match when={crashDetails()?.crash_type === "jvm"}>
+									<span>☕</span>
+								</Match>
+							</Switch>
 						</span>
 						Instance Crashed
 					</DialogTitle>
 					<DialogDescription>
-						{() => {
-							const details = crashDetails();
-							return details
-								? getCrashTypeLabel(details.crash_type)
-								: "Unknown crash";
-						}}
+						<Switch fallback={<span>Unknown crash</span>}>
+							<Match when={crashDetails()?.crash_type === "runtime"}>
+								<span>Runtime Crash</span>
+							</Match>
+							<Match when={crashDetails()?.crash_type === "launch_mod"}>
+								<span>Mod Incompatibility</span>
+							</Match>
+							<Match when={crashDetails()?.crash_type === "launch_other"}>
+								<span>Launch Failed</span>
+							</Match>
+							<Match when={crashDetails()?.crash_type === "jvm"}>
+								<span>Java Virtual Machine Crash</span>
+							</Match>
+						</Switch>
 					</DialogDescription>
 				</DialogHeader>
 
@@ -124,7 +141,7 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 										<p class="report-path">{details().report_path}</p>
 										<LauncherButton
 											onClick={openCrashReport}
-											variant="secondary"
+											variant="outline"
 											size="sm"
 										>
 											View Report
@@ -174,7 +191,7 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 				</Show>
 
 				<div class="crash-buttons">
-					<LauncherButton onClick={props.onClose} variant="secondary">
+					<LauncherButton onClick={props.onClose} variant="outline">
 						Close
 					</LauncherButton>
 				</div>

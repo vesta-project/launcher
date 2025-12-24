@@ -105,23 +105,11 @@ function InstallPage() {
 	let fileInputRef: HTMLInputElement | undefined;
 
 	// Fetch Minecraft versions
-	const [
-		metadata,
-		{
-			refetch: refetchVersions,
-			loading: metadataLoading,
-			error: metadataError,
-		},
-	] = createResource<PistonMetadata>(getMinecraftVersions);
+	const [metadata, { refetch: refetchVersions }] =
+		createResource<PistonMetadata>(getMinecraftVersions);
 
-	const isMetadataLoading = () =>
-		typeof metadataLoading === "function"
-			? (metadataLoading as () => boolean)()
-			: Boolean(metadataLoading);
-	const getMetadataError = () =>
-		typeof metadataError === "function"
-			? (metadataError as () => any)()
-			: metadataError;
+	const isMetadataLoading = () => Boolean(metadata.loading);
+	const getMetadataError = () => metadata.error;
 
 	// Get stable versions list for dropdown, filtered by modloader
 	const filteredVersions = () => {
