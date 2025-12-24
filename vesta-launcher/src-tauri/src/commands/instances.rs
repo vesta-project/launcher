@@ -1217,6 +1217,10 @@ pub async fn get_minecraft_versions(
                 "Serving Minecraft versions from in-memory MetadataCache ({} versions)",
                 meta.game_versions.len()
             );
+            // Ensure version notifications/checks run even on fast-path
+            if let Err(e) = check_and_notify_new_versions(&meta, &app_handle).await {
+                log::warn!("Failed to check for new versions: {}", e);
+            }
             return Ok(meta);
         } else {
             log::info!("In-memory MetadataCache empty; falling back to file load");

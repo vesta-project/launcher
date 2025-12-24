@@ -28,31 +28,39 @@ impl VersionTrackingRepository {
 
     /// Update or insert the last seen version for a version type
     pub fn update_last_seen_version(version_type: &str, version: &str, notified: bool) -> Result<()> {
+        log::info!(
+            "Updating last seen version for type '{}' to '{}' (notified: {})",
+            version_type,
+            version,
+            notified
+        );
+
         let db = get_data_db().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
         let conn = db.get_connection();
 
-        let tracking = UserVersionTracking {
-            id: crate::utils::sqlite::AUTOINCREMENT::INIT,
-            version_type: version_type.to_string(),
-            last_seen_version: version.to_string(),
-            last_seen_at: chrono::Utc::now().to_rfc3339(),
-            notified,
-        };
+        let now = chrono::Utc::now().to_rfc3339();
 
-        // Use INSERT OR REPLACE to update existing or create new
-        let columns = UserVersionTracking::columns();
-        let values = tracking.values()?;
-        let placeholders: Vec<String> = (0..values.0.len()).map(|i| format!("?{}", i + 1)).collect();
+        // Try to update an existing row first; avoid specifying the AUTOINCREMENT column to prevent column count mismatches.
+        let updated = conn.execute(
+            &format!(
+                "UPDATE {} SET last_seen_version = ?1, last_seen_at = ?2, notified = ?3 WHERE version_type = ?4",
+                UserVersionTracking::name()
+            ),
+            rusqlite::params![version, now, notified, version_type],
+        )?;
 
-        let sql = format!(
-            "INSERT OR REPLACE INTO {} ({}) VALUES ({})",
-            UserVersionTracking::name(),
-            columns.keys().map(|s| s.as_str()).collect::<Vec<_>>().join(", "),
-            placeholders.join(", ")
-        );
+        if updated == 0 {
+            // No row existed; insert a new one (omit id so SQLite assigns it)
+            conn.execute(
+                &format!(
+                    "INSERT INTO {} (version_type, last_seen_version, last_seen_at, notified) VALUES (?1, ?2, ?3, ?4)",
+                    UserVersionTracking::name()
+                ),
+                rusqlite::params![version_type, version, now, notified],
+            )?;
+        }
 
-        conn.execute(&sql, rusqlite::params_from_iter(values.0))?;
-
+        log::info!("Successfully updated last seen version for type '{}'", version_type);
         Ok(())
     }
 
