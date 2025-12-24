@@ -9,6 +9,7 @@ import QuiltLogo from "@assets/quilt-logo.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import { router } from "@components/page-viewer/page-viewer";
 import { setPageViewerOpen } from "@components/pages/home/home";
+import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
 import {
@@ -42,6 +43,11 @@ import {
 	launchInstance,
 } from "@utils/instances";
 import {
+	getCrashDetails,
+	isInstanceCrashed,
+	clearCrashDetails,
+} from "@utils/crash-handler";
+import {
 	createSignal,
 	Match,
 	onCleanup,
@@ -61,19 +67,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const [hover, setHover] = createSignal(false);
 	const [leaveAnim, setLeaveAnim] = createSignal(false);
 	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
+	const [hasCrashed, setHasCrashed] = createSignal(false);
+	const [showCrashModal, setShowCrashModal] = createSignal(false);
 
-	// Listen for launch/kill events from the backend
+	const instanceSlug = getInstanceSlug(props.instance);
+
 	onMount(async () => {
-		// Query actual running state from backend on mount
-		try {
-			const running = await isInstanceRunning(props.instance);
-			if (running) {
-				setRunningIds((prev) => new Set(prev).add(instanceSlug));
-			}
-		} catch (err) {
-			console.error("Failed to query instance running state:", err);
-		}
-
 		const unlistenLaunch = await listen("core://instance-launched", (event) => {
 			const payload = (event as any).payload as {
 				name: string;
@@ -140,6 +139,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 			const payload = (event as any).payload as {
 				instance_id?: string;
 				pid?: number;
+				crashed?: boolean;
 			};
 			if (payload.instance_id) {
 				setRunningIds((prev) => {
@@ -149,15 +149,32 @@ export default function InstanceCard(props: InstanceCardProps) {
 				});
 			}
 		});
+
+		// Listen for crash events
+		const unlistenCrash = await listen("core://instance-crashed", (event) => {
+			const payload = (event as any).payload as {
+				instance_id?: string;
+				crash_type: string;
+				message: string;
+				report_path?: string;
+				timestamp: string;
+			};
+			if (payload.instance_id === instanceSlug) {
+				setHasCrashed(true);
+			}
+		});
 		onCleanup(() => {
 			// unlistenLaunch/unlistenKill are actual functions returned by listen (we awaited them above)
 			unlistenLaunch();
 			unlistenKill();
 			unlistenExited();
+			unlistenCrash();
 		});
+
+		// Check for crash status
+		setHasCrashed(isInstanceCrashed(instanceSlug));
 	});
 
-	const instanceSlug = getInstanceSlug(props.instance);
 	const isRunning = () => runningIds().has(instanceSlug);
 
 	// Installation status checks
@@ -199,6 +216,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 			}
 		} else {
 			try {
+				// Clear crash flag when attempting to launch
+				clearCrashDetails(instanceSlug);
+				setHasCrashed(false);
+				
 				await launchInstance(props.instance);
 				showToast({
 					title: "Launching",
@@ -325,8 +346,18 @@ export default function InstanceCard(props: InstanceCardProps) {
 								<Show when={isRunning()}>
 									<span class="running">Running</span>
 								</Show>
-								<Show when={props.instance.crashed}>
-									<span class="crashed">Crashed</span>
+								<Show when={hasCrashed()}>
+									<span 
+										class="crashed"
+										onClick={(e) => {
+											e.stopPropagation();
+											setShowCrashModal(true);
+										}}
+										style={{ cursor: "pointer" }}
+										title="Click to view crash details"
+									>
+										Crashed
+									</span>
 								</Show>
 							</div>
 							<Show when={hover()}>
@@ -458,6 +489,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 					{/* Additional menu items can be added here */}
 				</ContextMenuContent>
 			</ContextMenuPortal>
+			<CrashDetailsModal 
+				instanceId={instanceSlug} 
+				isOpen={showCrashModal()} 
+				onClose={() => setShowCrashModal(false)} 
+			/>
 		</ContextMenu>
 	);
 }

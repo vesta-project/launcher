@@ -83,11 +83,12 @@ pub fn get_app_config_dir() -> Result<PathBuf> {
 /// Internal helper to create a raw DB connection without initialization
 fn create_raw_db(name: &str) -> Result<SQLiteDB> {
     let path = get_app_config_dir()?;
+    // Use Any to skip version verification - migrations handle schema versioning
     SQLiteDB::new(
         path,
         name.into(),
         env!("CARGO_PKG_VERSION").into(),
-        VersionVerification::LessOrEqual,
+        VersionVerification::Any,
     )
 }
 

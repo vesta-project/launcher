@@ -50,6 +50,12 @@ pub struct Instance {
 
     /// Installation status: "pending", "installing", "installed", "failed"
     pub installation_status: Option<String>,
+
+    /// Whether the instance has crashed
+    pub crashed: Option<i32>, // SQLite stores booleans as 0/1
+
+    /// JSON details about the crash (type, message, report path, timestamp)
+    pub crash_details: Option<String>,
 }
 
 impl Default for Instance {
@@ -71,6 +77,8 @@ impl Default for Instance {
             None,
             None,
             Some("pending".to_string()),
+            None,
+            None,
         )
     }
 }
@@ -122,6 +130,8 @@ mod tests {
             None,
             None,
             Some("pending".to_string()),
+            None,
+            None,
         );
 
         assert_eq!(inst.slug(), "my-cool-instance");

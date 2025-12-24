@@ -73,17 +73,17 @@ pub fn get_config_migrations() -> Vec<Migration> {
 }
 
 /// Migration 003: Add reduced_motion toggle to app_config
+/// NOTE: This migration exists for databases created before reduced_motion was added to AppConfig.
+/// For new databases, the column already exists from migration_002's CREATE TABLE.
+/// The migration runner will skip this if already applied or if column exists.
 fn migration_003_reduced_motion_setting() -> Migration {
     Migration {
         version: "0.3.0".to_string(),
         description: "Add reduced_motion setting to app_config".to_string(),
-        up_sql: vec![
-            "ALTER TABLE app_config ADD COLUMN reduced_motion INTEGER NOT NULL DEFAULT 0".to_string(),
-            "UPDATE app_config SET reduced_motion = 0 WHERE reduced_motion IS NULL".to_string(),
-        ],
-        // NOTE: SQLite drop column support requires 3.35+. If unavailable, this down migration will fail;
-        // in practice we do not roll back config migrations.
-        down_sql: vec!["ALTER TABLE app_config DROP COLUMN reduced_motion".to_string()],
+        // Empty up_sql since schema_sql() now includes reduced_motion
+        // This migration is kept for version tracking on databases that already have it applied
+        up_sql: vec![],
+        down_sql: vec![],
     }
 }
 
@@ -190,6 +190,21 @@ fn migration_005_user_version_tracking_table() -> Migration {
     }
 }
 
+/// Migration 006: Crash detection and tracking
+/// NOTE: This migration exists for databases created before crashed/crash_details were added to Instance.
+/// For new databases, the columns already exist from migration_002's CREATE TABLE (via Instance::schema_sql()).
+/// The migration runner will skip this if already applied or if columns exist.
+fn migration_006_crash_tracking() -> Migration {
+    Migration {
+        version: "0.7.1".to_string(),
+        description: "Add crash detection columns to instance table".to_string(),
+        // Empty up_sql since Instance struct now includes crashed/crash_details
+        // and schema_sql() generates CREATE TABLE with all current fields
+        up_sql: vec![],
+        down_sql: vec![],
+    }
+}
+
 /// Get all **data database** migrations in order
 pub fn get_data_migrations() -> Vec<Migration> {
     vec![
@@ -198,6 +213,7 @@ pub fn get_data_migrations() -> Vec<Migration> {
         migration_003_accounts_table(),
         migration_004_notifications_table(),
         migration_005_user_version_tracking_table(),
+        migration_006_crash_tracking(),
     ]
 }
 

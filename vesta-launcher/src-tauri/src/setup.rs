@@ -73,7 +73,69 @@ fn update_instance_playtime(instance_id: &str, started_at: &str, exited_at: &str
     Ok(())
 }
 
+/// Store crash details in the database for an instance (setup context)
+fn store_crash_details_setup(instance_id: &str, crash_info: &crate::utils::crash_parser::CrashDetails) -> Result<(), String> {
+    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
+    let conn = db.get_connection();
+    
+    // Get all instances and find by slug
+    let mut stmt = conn
+        .prepare("SELECT id FROM instance")
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    let instance_ids: Vec<i32> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| format!("Failed to query instances: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+    
+    for id in instance_ids {
+        // Get instance name to compute slug
+        let mut name_stmt = conn
+            .prepare("SELECT name FROM instance WHERE id = ?")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        
+        let name: String = name_stmt
+            .query_row([id], |row| row.get(0))
+            .map_err(|e| format!("Failed to query instance name: {}", e))?;
+        
+        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
+        
+        if slug == instance_id {
+            // Create crash details JSON
+            let crash_details_json = serde_json::json!({
+                "crash_type": crash_info.crash_type,
+                "message": crash_info.message,
+                "report_path": crash_info.report_path,
+                "timestamp": crash_info.timestamp,
+            });
+            
+            // Update instance with crash details
+            conn.execute(
+                "UPDATE instance SET crashed = 1, crash_details = ? WHERE id = ?",
+                rusqlite::params![crash_details_json.to_string(), id],
+            ).map_err(|e| format!("Failed to update crash details: {}", e))?;
+            
+            log::info!("Stored crash details for instance {} (id {})", instance_id, id);
+            return Ok(());
+        }
+    }
+    
+    Err(format!("Instance {} not found in database", instance_id))
+}
+
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // CRITICAL: Initialize databases FIRST before any other code runs
+    // This ensures migrations are applied before any queries are executed
+    log::info!("Initializing databases and running migrations...");
+    if let Err(e) = crate::utils::db_manager::get_config_db() {
+        log::error!("Failed to initialize config database: {}", e);
+    }
+    if let Err(e) = crate::utils::db_manager::get_data_db() {
+        log::error!("Failed to initialize data database: {}", e);
+    }
+    log::info!("Database initialization complete");
+
     // Clean up old log files (>30 days)
     cleanup_old_logs(app.handle());
 
@@ -159,8 +221,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 run_state.pid
                             );
 
-                            // Check for exit_status.json to get accurate exit time
+                            // Check for exit_status.json to get accurate exit time and exit code
                             let exit_status_path = run_state.game_dir.join(".vesta").join("exit_status.json");
+                            let mut crashed = false;
                             
                             if exit_status_path.exists() {
                                 // Read exit status and update playtime
@@ -173,13 +236,58 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                     run_state.instance_id, exit_status.exit_code, exit_status.exited_at
                                                 );
                                                 
-                                                // Update playtime in database
-                                                if let Err(e) = update_instance_playtime(
-                                                    &run_state.instance_id,
-                                                    &run_state.started_at,
-                                                    &exit_status.exited_at,
-                                                ) {
-                                                    log::error!("Failed to update playtime for {}: {}", run_state.instance_id, e);
+                                                // Check for crashes if exit code is non-zero
+                                                if exit_status.exit_code != 0 {
+                                                    // Convert started_at string to SystemTime for crash detection
+                                                    let launch_start_time = match chrono::DateTime::parse_from_rfc3339(&run_state.started_at) {
+                                                        Ok(dt) => SystemTime::from(dt),
+                                                        Err(_) => SystemTime::now(),
+                                                    };
+                                                    
+                                                    if let Some(crash_info) = crate::utils::crash_parser::detect_crash(
+                                                        &run_state.game_dir,
+                                                        &run_state.log_file,
+                                                        launch_start_time,
+                                                    ) {
+                                                        log::error!(
+                                                            "Crash detected for {}: {:?}",
+                                                            run_state.instance_id, crash_info
+                                                        );
+                                                        
+                                                        // Store crash details in database
+                                                        if let Err(e) = store_crash_details_setup(
+                                                            &run_state.instance_id,
+                                                            &crash_info,
+                                                        ) {
+                                                            log::error!("Failed to store crash details: {}", e);
+                                                        } else {
+                                                            crashed = true;
+                                                        }
+                                                        
+                                                        // Emit crash event to frontend
+                                                        use tauri::Emitter;
+                                                        let _ = app_handle.emit(
+                                                            "core://instance-crashed",
+                                                            serde_json::json!({
+                                                                "instance_id": run_state.instance_id.clone(),
+                                                                "crash_type": crash_info.crash_type,
+                                                                "message": crash_info.message,
+                                                                "report_path": crash_info.report_path,
+                                                                "timestamp": crash_info.timestamp,
+                                                            }),
+                                                        );
+                                                    }
+                                                }
+                                                
+                                                // Update playtime in database (only if not crashed)
+                                                if !crashed {
+                                                    if let Err(e) = update_instance_playtime(
+                                                        &run_state.instance_id,
+                                                        &run_state.started_at,
+                                                        &exit_status.exited_at,
+                                                    ) {
+                                                        log::error!("Failed to update playtime for {}: {}", run_state.instance_id, e);
+                                                    }
                                                 }
                                                 
                                                 // Delete the exit status file
@@ -228,6 +336,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 serde_json::json!({
                                     "instance_id": run_state.instance_id.clone(),
                                     "pid": run_state.pid,
+                                    "crashed": crashed,
                                 }),
                             );
 

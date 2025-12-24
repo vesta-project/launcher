@@ -1,4 +1,5 @@
 pub mod config;
+pub mod crash_parser;
 pub mod data;
 pub mod db_manager;
 mod errors;

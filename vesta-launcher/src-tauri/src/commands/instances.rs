@@ -68,6 +68,100 @@ fn update_instance_playtime_internal(instance_id: &str, started_at: &str, exited
     Ok(())
 }
 
+/// Store crash details in the database for an instance
+fn store_crash_details(instance_id: &str, crash_info: &crate::utils::crash_parser::CrashDetails) -> Result<(), String> {
+    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
+    let conn = db.get_connection();
+    
+    // Get all instances and find by slug
+    let mut stmt = conn
+        .prepare("SELECT id FROM instance")
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    let instance_ids: Vec<i32> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| format!("Failed to query instances: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+    
+    for id in instance_ids {
+        // Get instance name to compute slug
+        let mut name_stmt = conn
+            .prepare("SELECT name FROM instance WHERE id = ?")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        
+        let name: String = name_stmt
+            .query_row([id], |row| row.get(0))
+            .map_err(|e| format!("Failed to query instance name: {}", e))?;
+        
+        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
+        
+        if slug == instance_id {
+            // Create crash details JSON
+            let crash_details_json = serde_json::json!({
+                "crash_type": crash_info.crash_type,
+                "message": crash_info.message,
+                "report_path": crash_info.report_path,
+                "timestamp": crash_info.timestamp,
+            });
+            
+            // Update instance with crash details
+            conn.execute(
+                "UPDATE instance SET crashed = 1, crash_details = ? WHERE id = ?",
+                [crash_details_json.to_string(), id.to_string()],
+            ).map_err(|e| format!("Failed to update crash details: {}", e))?;
+            
+            log::info!("Stored crash details for instance {} (id {})", instance_id, id);
+            return Ok(());
+        }
+    }
+    
+    Err(format!("Instance {} not found in database", instance_id))
+}
+
+/// Clear the crashed flag for an instance when it successfully launches
+fn clear_crash_flag(instance_id: &str) -> Result<(), String> {
+    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
+    let conn = db.get_connection();
+    
+    // Get all instances and find by slug
+    let mut stmt = conn
+        .prepare("SELECT id FROM instance")
+        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+    
+    let instance_ids: Vec<i32> = stmt
+        .query_map([], |row| row.get(0))
+        .map_err(|e| format!("Failed to query instances: {}", e))?
+        .filter_map(Result::ok)
+        .collect();
+    
+    for id in instance_ids {
+        // Get instance name to compute slug
+        let mut name_stmt = conn
+            .prepare("SELECT name FROM instance WHERE id = ?")
+            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        
+        let name: String = name_stmt
+            .query_row([id], |row| row.get(0))
+            .map_err(|e| format!("Failed to query instance name: {}", e))?;
+        
+        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
+        
+        if slug == instance_id {
+            // Clear crash flag and crash details
+            conn.execute(
+                "UPDATE instance SET crashed = 0, crash_details = NULL WHERE id = ?",
+                [id],
+            ).map_err(|e| format!("Failed to clear crash flag: {}", e))?;
+            
+            log::info!("Cleared crash flag for instance {} (id {})", instance_id, id);
+            return Ok(());
+        }
+    }
+    
+    Err(format!("Instance {} not found in database", instance_id))
+}
+
 #[tauri::command]
 pub async fn install_instance(
     app_handle: tauri::AppHandle,
@@ -123,7 +217,7 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
             "SELECT id, name, minecraft_version, modloader, modloader_version, 
                     java_path, java_args, game_directory, width, height, memory_mb, 
                     icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
-                    installation_status 
+                    installation_status, COALESCE(crashed, NULL) as crashed, COALESCE(crash_details, NULL) as crash_details
              FROM {} ORDER BY last_played DESC, created_at DESC",
             Instance::name()
         ))
@@ -149,6 +243,8 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
                 created_at: row.get(14)?,
                 updated_at: row.get(15)?,
                 installation_status: row.get(16)?,
+                crashed: row.get(17)?,
+                crash_details: row.get(18)?,
             })
         })
         .map_err(|e| format!("Failed to query instances: {}", e))?
@@ -605,7 +701,7 @@ pub fn get_instance(id: i32) -> Result<Instance, String> {
                 "SELECT id, name, minecraft_version, modloader, modloader_version, 
                         java_path, java_args, game_directory, width, height, memory_mb, 
                         icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
-                        installation_status 
+                        installation_status, COALESCE(crashed, NULL) as crashed, COALESCE(crash_details, NULL) as crash_details 
                  FROM {} WHERE id = ?1",
                 Instance::name()
             ),
@@ -629,6 +725,8 @@ pub fn get_instance(id: i32) -> Result<Instance, String> {
                     created_at: row.get(14)?,
                     updated_at: row.get(15)?,
                     installation_status: row.get(16)?,
+                    crashed: row.get(17)?,
+                    crash_details: row.get(18)?,
                 })
             },
         )
@@ -651,7 +749,7 @@ pub fn get_instance_by_slug(slug: String) -> Result<Instance, String> {
             "SELECT id, name, minecraft_version, modloader, modloader_version, 
                     java_path, java_args, game_directory, width, height, memory_mb, 
                     icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
-                    installation_status 
+                    installation_status, COALESCE(crashed, NULL) as crashed, COALESCE(crash_details, NULL) as crash_details 
              FROM {}",
             Instance::name()
         ))
@@ -677,6 +775,8 @@ pub fn get_instance_by_slug(slug: String) -> Result<Instance, String> {
                 created_at: row.get(14)?,
                 updated_at: row.get(15)?,
                 installation_status: row.get(16)?,
+                crashed: row.get(17)?,
+                crash_details: row.get(18)?,
             })
         })
         .map_err(|e| format!("Failed to query instances: {}", e))?;
@@ -1031,6 +1131,11 @@ pub async fn launch_instance(
                 "[launch_instance] Game launched successfully, PID: {}",
                 result.instance.pid
             );
+            
+            // Clear crashed flag when game successfully launches
+            if let Err(e) = clear_crash_flag(&instance_id) {
+                log::error!("[launch_instance] Failed to clear crash flag: {}", e);
+            }
 
             // Persist the running process state for re-attachment if app closes
             let run_state = crate::utils::process_state::InstanceRunState {
@@ -1069,6 +1174,9 @@ pub async fn launch_instance(
                 use sysinfo::System;
                 let mut sys = System::new_all();
                 
+                // Store launch time for crash detection
+                let launch_time = std::time::SystemTime::now();
+                
                 // Poll every 2 seconds to check if process is still running
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
@@ -1081,33 +1189,78 @@ pub async fn launch_instance(
                             instance_id_monitor, pid_monitor
                         );
                         
-                        // Check for exit_status.json for accurate exit time
+                        // Check for exit_status.json for accurate exit time and exit code
                         let exit_status_path = game_dir_monitor.join(".vesta").join("exit_status.json");
-                        let exited_at = if exit_status_path.exists() {
+                        let (exited_at, exit_code) = if exit_status_path.exists() {
                             match std::fs::read_to_string(&exit_status_path) {
                                 Ok(content) => {
                                     if let Ok(status) = serde_json::from_str::<serde_json::Value>(&content) {
-                                        status.get("exited_at")
+                                        let exited = status.get("exited_at")
                                             .and_then(|v| v.as_str())
                                             .map(|s| s.to_string())
-                                            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339())
+                                            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
+                                        let code = status.get("exit_code")
+                                            .and_then(|v| v.as_i64())
+                                            .map(|c| c as i32)
+                                            .unwrap_or(0);
+                                        (exited, code)
                                     } else {
-                                        chrono::Utc::now().to_rfc3339()
+                                        (chrono::Utc::now().to_rfc3339(), 0)
                                     }
                                 }
-                                Err(_) => chrono::Utc::now().to_rfc3339()
+                                Err(_) => (chrono::Utc::now().to_rfc3339(), 0)
                             }
                         } else {
-                            chrono::Utc::now().to_rfc3339()
+                            (chrono::Utc::now().to_rfc3339(), 0)
                         };
                         
-                        // Update playtime in database
-                        if let Err(e) = update_instance_playtime_internal(
-                            &instance_id_monitor,
-                            &started_at_monitor,
-                            &exited_at,
-                        ) {
-                            log::error!("[launch_instance] Failed to update playtime: {}", e);
+                        // Check for crashes if exit code is non-zero
+                        let mut crashed = false;
+                        if exit_code != 0 {
+                            let log_file = game_dir_monitor.join("logs").join("latest.log");
+                            if let Some(crash_info) = crate::utils::crash_parser::detect_crash(
+                                &game_dir_monitor,
+                                &log_file,
+                                launch_time,
+                            ) {
+                                log::error!(
+                                    "[launch_instance] Crash detected for {}: {:?}",
+                                    instance_id_monitor, crash_info
+                                );
+                                
+                                // Store crash details in database
+                                if let Err(e) = store_crash_details(
+                                    &instance_id_monitor,
+                                    &crash_info,
+                                ) {
+                                    log::error!("[launch_instance] Failed to store crash details: {}", e);
+                                } else {
+                                    crashed = true;
+                                }
+                                
+                                // Emit crash event to frontend
+                                let _ = app_handle_monitor.emit(
+                                    "core://instance-crashed",
+                                    serde_json::json!({
+                                        "instance_id": instance_id_monitor,
+                                        "crash_type": crash_info.crash_type,
+                                        "message": crash_info.message,
+                                        "report_path": crash_info.report_path,
+                                        "timestamp": crash_info.timestamp,
+                                    }),
+                                );
+                            }
+                        }
+                        
+                        // Update playtime in database (only if not crashed)
+                        if !crashed {
+                            if let Err(e) = update_instance_playtime_internal(
+                                &instance_id_monitor,
+                                &started_at_monitor,
+                                &exited_at,
+                            ) {
+                                log::error!("[launch_instance] Failed to update playtime: {}", e);
+                            }
                         }
                         
                         // Clean up exit status file
@@ -1123,7 +1276,8 @@ pub async fn launch_instance(
                             "core://instance-exited",
                             serde_json::json!({
                                 "instance_id": instance_id_monitor,
-                                "pid": pid_monitor
+                                "pid": pid_monitor,
+                                "crashed": crashed,
                             }),
                         );
                         

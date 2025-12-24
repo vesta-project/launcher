@@ -1,0 +1,180 @@
+.crash-details-modal {
+	max-width: 600px;
+	max-height: 80vh;
+	overflow-y: auto;
+}
+
+.crash-title {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	font-size: 1.5rem;
+	font-weight: 600;
+	color: #ff4444;
+}
+
+.crash-icon {
+	font-size: 1.8rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.crash-details-content {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	padding: 20px 0;
+}
+
+.crash-description {
+	background-color: rgba(255, 68, 68, 0.08);
+	border-left: 4px solid #ff4444;
+	padding: 12px 16px;
+	border-radius: 4px;
+}
+
+.crash-description p {
+	margin: 0;
+	color: #333;
+	line-height: 1.5;
+	font-size: 0.95rem;
+}
+
+.crash-info {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.info-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.info-section h3 {
+	margin: 0;
+	font-size: 0.95rem;
+	font-weight: 600;
+	color: #333;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.error-message {
+	background-color: #f5f5f5;
+	padding: 12px;
+	border-radius: 4px;
+	font-family: "Courier New", monospace;
+	font-size: 0.85rem;
+	color: #333;
+	word-break: break-word;
+	max-height: 150px;
+	overflow-y: auto;
+	border: 1px solid #e0e0e0;
+	line-height: 1.4;
+}
+
+.timestamp {
+	margin: 0;
+	font-size: 0.9rem;
+	color: #666;
+	background-color: #f5f5f5;
+	padding: 8px 12px;
+	border-radius: 4px;
+}
+
+.report-path {
+	margin: 0 0 12px 0;
+	font-size: 0.85rem;
+	color: #666;
+	background-color: #f5f5f5;
+	padding: 8px 12px;
+	border-radius: 4px;
+	word-break: break-all;
+	max-height: 100px;
+	overflow-y: auto;
+	font-family: "Courier New", monospace;
+}
+
+.crash-actions {
+	background-color: #fffbf0;
+	border-left: 4px solid #ff9800;
+	padding: 16px;
+	border-radius: 4px;
+}
+
+.action-hint {
+	margin: 0 0 12px 0;
+	font-weight: 600;
+	color: #333;
+	font-size: 0.95rem;
+}
+
+.crash-actions ul {
+	margin: 0;
+	padding-left: 20px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.crash-actions li {
+	color: #666;
+	font-size: 0.9rem;
+	line-height: 1.4;
+}
+
+.crash-buttons {
+	display: flex;
+	gap: 12px;
+	justify-content: flex-end;
+	padding-top: 16px;
+	border-top: 1px solid #e0e0e0;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+	.crash-title {
+		color: #ff6666;
+	}
+
+	.crash-description {
+		background-color: rgba(255, 68, 68, 0.12);
+		border-left-color: #ff6666;
+	}
+
+	.crash-description p {
+		color: #e0e0e0;
+	}
+
+	.error-message,
+	.timestamp,
+	.report-path {
+		background-color: #2a2a2a;
+		color: #e0e0e0;
+		border-color: #444;
+	}
+
+	.info-section h3 {
+		color: #e0e0e0;
+	}
+
+	.crash-actions {
+		background-color: rgba(255, 152, 0, 0.1);
+		border-left-color: #ff9800;
+	}
+
+	.action-hint {
+		color: #e0e0e0;
+	}
+
+	.crash-actions li {
+		color: #b0b0b0;
+	}
+
+	.crash-buttons {
+		border-top-color: #444;
+	}
+}

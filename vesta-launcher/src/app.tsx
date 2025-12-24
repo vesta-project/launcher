@@ -21,6 +21,9 @@ import {
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
+import {
+	subscribeToCrashEvents,
+} from "@utils/crash-handler";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { lazy, onCleanup, onMount } from "solid-js";
 
@@ -85,6 +88,7 @@ function Root(props: ChildrenProp) {
 
 	let unlisten: UnlistenFn | null = null;
 	let unlistenDeepLink: (() => void) | null = null;
+	let unlistenCrash: (() => void) | null = null;
 
 	onMount(async () => {
 		// Critical: Setup crash handler immediately
@@ -119,6 +123,16 @@ function Root(props: ChildrenProp) {
 			subscribeToBackendNotifications().catch((error) => {
 				console.error("Failed to initialize notification system:", error);
 			});
+
+			// Setup crash event listener (non-blocking)
+			subscribeToCrashEvents()
+				.then((unlisten) => {
+					unlistenCrash = unlisten;
+					console.log("Crash event listener subscribed");
+				})
+				.catch((error) => {
+					console.error("Failed to initialize crash event listener:", error);
+				});
 
 			// Preload Minecraft versions metadata in background (non-blocking)
 			// This warms up the cache so install page loads instantly
@@ -172,6 +186,7 @@ function Root(props: ChildrenProp) {
 	onCleanup(() => {
 		unlisten?.();
 		unlistenDeepLink?.();
+		unlistenCrash?.();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		// cleanupFileDropSystem();

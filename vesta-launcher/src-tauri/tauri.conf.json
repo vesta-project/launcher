@@ -1,6 +1,6 @@
 {
 	"productName": "Vesta Launcher",
-	"version": "0.0.0-alpha.1",
+	"version": "0.7.1",
 	"identifier": "net.vesta.launcher",
 	"build": {
 		"beforeDevCommand": "npm run dev",
