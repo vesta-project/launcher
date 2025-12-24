@@ -59,6 +59,7 @@ interface InstanceCardProps {
 
 export default function InstanceCard(props: InstanceCardProps) {
 	const [hover, setHover] = createSignal(false);
+	const [leaveAnim, setLeaveAnim] = createSignal(false);
 	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
 
 	// Listen for launch/kill events from the backend
@@ -288,9 +289,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 		<ContextMenu>
 			<ContextMenuTrigger
 				as="div"
-				class="instance-card"
-				onMouseOver={() => setHover(true)}
-				onMouseLeave={() => setHover(false)}
+				class={`instance-card${isFailed() ? " failed" : ""}${leaveAnim() ? " instance-card-leave" : ""}`}
+				onMouseOver={() => {
+					setHover(true);
+					setLeaveAnim(false);
+				}}
+				onMouseLeave={() => {
+					setHover(false);
+					setLeaveAnim(true);
+					setTimeout(() => setLeaveAnim(false), 250);
+				}}
 				onClick={openInstanceDetails}
 				style={
 					props.instance.icon_path
@@ -298,66 +306,86 @@ export default function InstanceCard(props: InstanceCardProps) {
 						: undefined
 				}
 			>
-				<div class="instance-card-top">
-					<Show when={hover()} fallback="">
-						<button
-							class="play-button"
-							onClick={handleClick}
-							disabled={isInstalling()}
-							title={
-								isInstalling()
-									? "Installing..."
-									: needsInstallation()
-										? "Needs Installation"
-										: isRunning()
-											? "Running (click to stop)"
-											: "Launch"
-							}
-						>
-							{isInstalling() ? (
-								"⏳"
-							) : needsInstallation() ? (
-								<ErrorIcon />
-							) : isRunning() ? (
-								<KillIcon />
-							) : (
-								<PlayIcon />
-							)}
-						</button>
-					</Show>
-				</div>
-				<div class="instance-card-bottom">
-					<h1>{props.instance.name}</h1>
-					<div class="instance-card-bottom-version">
-						<p>{props.instance.minecraft_version}</p>
-						<div class="instance-card-bottom-version-modloader">
-							<Switch fallback="">
-								<Match when={props.instance.modloader === "forge"}>
-									<ForgeLogo />
-								</Match>
-								<Match when={props.instance.modloader === "neoforge"}>
-									<NeoForgeLogo />
-								</Match>
-								<Match when={props.instance.modloader === "fabric"}>
-									<FabricLogo />
-								</Match>
-								<Match when={props.instance.modloader === "quilt"}>
-									<QuiltLogo />
-								</Match>
-								<Match
-									when={
-										props.instance.modloader &&
-										props.instance.modloader !== "vanilla"
+				<Switch>
+					<Match when={isInstalling()}>
+						<div class="instance-card-centered">
+							<div class="instance-card-spinner"></div>
+							<h1 style={{ margin: 0, padding: 0, "line-height": "16px", "font-weight": "bold" }}>{props.instance.name}</h1>
+						</div>
+					</Match>
+					<Match when={isFailed()}>
+						<div class="instance-card-centered">
+							<ErrorIcon style={{ width: "24px", height: "24px" }} />
+							<h1 style={{ margin: 0, padding: 0, "line-height": "16px", "font-weight": "bold" }}>{props.instance.name}</h1>
+						</div>
+					</Match>
+					<Match when={true}>
+						<div class="instance-card-top">
+							<div class="instance-card-indicators">
+								<Show when={isRunning()}>
+									<span class="running">Running</span>
+								</Show>
+								<Show when={props.instance.crashed}>
+									<span class="crashed">Crashed</span>
+								</Show>
+							</div>
+							<Show when={hover()}>
+								<button
+									class="play-button"
+									onClick={handleClick}
+									disabled={isInstalling()}
+									title={
+										needsInstallation()
+											? "Needs Installation"
+											: isRunning()
+												? "Running (click to stop)"
+												: "Launch"
 									}
 								>
-									<p style={{ "text-transform": "capitalize" }}>
-										{props.instance.modloader}
-									</p>
-								</Match>
-							</Switch>
+									{needsInstallation() ? (
+										<ErrorIcon />
+									) : isRunning() ? (
+										<KillIcon />
+									) : (
+										<PlayIcon />
+									)}
+								</button>
+							</Show>
 						</div>
-					</div>
-				</div>
+						<div class="instance-card-bottom">
+							<h1>{props.instance.name}</h1>
+							<div class="instance-card-bottom-version">
+								<p>{props.instance.minecraft_version}</p>
+								<div class="instance-card-bottom-version-modloader">
+									<Switch fallback="">
+										<Match when={props.instance.modloader === "forge"}>
+											<ForgeLogo />
+										</Match>
+										<Match when={props.instance.modloader === "neoforge"}>
+											<NeoForgeLogo />
+										</Match>
+										<Match when={props.instance.modloader === "fabric"}>
+											<FabricLogo />
+										</Match>
+										<Match when={props.instance.modloader === "quilt"}>
+											<QuiltLogo />
+										</Match>
+										<Match
+											when={
+												props.instance.modloader &&
+												props.instance.modloader !== "vanilla"
+											}
+										>
+											<p style={{ "text-transform": "capitalize" }}>
+												{props.instance.modloader}
+											</p>
+										</Match>
+									</Switch>
+								</div>
+							</div>
+						</div>
+					</Match>
+				</Switch>
 			</ContextMenuTrigger>
 			<ContextMenuPortal>
 				<ContextMenuContent>

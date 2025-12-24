@@ -26,6 +26,7 @@ export interface Instance {
 		| "installed"
 		| "failed"
 		| null;
+	crashed?: boolean;
 }
 
 // Simplified version for creating new instances

@@ -190,14 +190,14 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 				>
 					<CloseIcon />
 				</PageViewerNavbarButton>
-				<PageViewerNavbarButton text={"Copy URL"} onClick={copyUrl}>
-					<LinkIcon />
-				</PageViewerNavbarButton>
 				<PageViewerNavbarButton
 					text={"Open in new window"}
 					onClick={openWindow}
 				>
 					<OpenIcon />
+				</PageViewerNavbarButton>
+				<PageViewerNavbarButton text={"Copy URL"} onClick={copyUrl}>
+					<LinkIcon />
 				</PageViewerNavbarButton>
 			</div>
 		</div>

@@ -26,7 +26,9 @@
 	background-size: auto, cover; /* radial overlay auto, image covers card */
 	transition:
 		background-size 0.2s ease,
-		box-shadow 0.15s ease;
+		box-shadow 0.15s ease,
+		transform 0.18s cubic-bezier(.4,1,.7,1);
+	will-change: transform, box-shadow;
 	color: white;
 	max-width: 200px;
 	max-height: 200px;
@@ -70,7 +72,8 @@
 
 .instance-card-top {
 	display: flex;
-	justify-content: flex-end;
+	justify-content: space-between;
+	align-items: flex-start;
 }
 
 .instance-card-bottom {
@@ -111,7 +114,7 @@
 				fill: white;
 				width: auto;
 				height: 100%;
-				max-height: 12px;
+				max-height: 16px;
 			}
 		}
 	}
@@ -144,4 +147,93 @@
 			transform: scale(95%);
 		}
 	}
+
+	transition:
+		transform 0.18s cubic-bezier(.4,1,.7,1),
+		box-shadow 0.18s cubic-bezier(.4,1,.7,1);
+	will-change: transform, box-shadow;
 }
+
+.play-button:hover {
+	transform: scale(1.08);
+	box-shadow: 0 2px 8px 0 rgb(0 0 0 / 18%);
+}
+
+/* Subtle reset when not hovered (mouse leave) */
+.play-button:not(:hover) {
+	transform: scale(1.0);
+	box-shadow: 0 1px 4px 0 rgb(0 0 0 / 10%);
+}
+
+.play-button-leave {
+	transform: scale(1.0);
+	box-shadow: 0 1px 4px 0 rgb(0 0 0 / 10%);
+	transition:
+		transform 0.22s cubic-bezier(.4,1,.7,1),
+		box-shadow 0.22s cubic-bezier(.4,1,.7,1);
+}
+
+.instance-card-centered {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	height: 100%;
+}
+
+.instance-card-spinner {
+	width: 24px;
+	height: 24px;
+	border: 2px solid transparent;
+	border-top-color: white;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	0% { transform: rotate(0deg); }
+	100% { transform: rotate(360deg); }
+}
+
+.instance-card-indicators {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.running, .crashed {
+	font-size: 10px;
+	padding: 2px 4px;
+	border-radius: 3px;
+	color: white;
+}
+
+.running {
+	background: rgba(0, 255, 0, 0.7);
+}
+
+.crashed {
+	background: rgba(255, 0, 0, 0.7);
+}
+
+.instance-card.failed {
+background-image:
+radial-gradient(
+109.12% 79.52% at 47.71% 0%,
+rgba(255, 80, 80, 0.3) 0%,
+rgba(200, 40, 40, 0.4) 20%,
+rgba(100, 0, 0, 0.6) 45.5%,
+rgba(50, 0, 0, 0.9) 100%
+), var(--instance-bg-image, url('@assets/placeholder-instance-image.jpg'));
+outline-color: rgba(255, 0, 0, 0.4);
+}
+
+.instance-card-leave {
+	transform: scale(1.0);
+	box-shadow: 0 2px 8px 0 rgb(0 0 0 / 10%);
+	transition:
+		transform 0.25s cubic-bezier(.4,1,.7,1),
+		box-shadow 0.25s cubic-bezier(.4,1,.7,1);
+}
+
