@@ -1,13 +1,13 @@
 //! # Configuration System
 //!
-//! This module provides a SqlTable-based configuration system with zero boilerplate.
+//! This module provides a SqlTable-based configuration system with **automatic schema sync**.
 //!
 //! ## Single Source of Truth Architecture
 //!
 //! The `AppConfig` struct with `#[derive(SqlTable)]` is the ONLY place you define the schema.
-//! Everything else is generated automatically:
+//! Everything else is handled automatically:
 //! - ✅ CREATE TABLE SQL (from SqlTable::schema_sql())
-//! - ✅ Database migrations (from SqlTable::migration_version())
+//! - ✅ **Automatic schema sync** - missing columns are added on startup!
 //! - ✅ INSERT/UPDATE/SELECT queries (from SqlTable methods)
 //! - ✅ Type-safe Rust API (from struct definition)
 //! - ✅ JSON serialization (from serde derives)
@@ -37,12 +37,10 @@
 //!    }
 //!    ```
 //!
-//! That's it! Everything else is automatic:
-//! - Database queries use SqlTable::values() for field names
-//! - UPDATE uses SqlTable::update_data_serde()
-//! - SELECT uses SqlTable::search_data_serde()
-//! - Migrations use SqlTable::schema_sql()
-//! - No hardcoded SQL anywhere!
+//! That's it! **No migrations needed!** On next app launch:
+//! - `sync_schema::<AppConfig>()` detects the missing column
+//! - Automatically runs `ALTER TABLE ADD COLUMN`
+//! - Your new field is ready to use
 //!
 //! ## Example Usage from Frontend
 //!
@@ -64,12 +62,11 @@
 //!
 //! - **No Duplication**: Schema defined once in Rust struct
 //! - **Type Safety**: Compile-time checking for all database operations
-//! - **Migration Safety**: Schema changes tracked with semantic versioning
+//! - **Zero Migrations**: Schema changes are auto-synced on startup
 //! - **Zero Boilerplate**: No manual SQL for CRUD operations
 //! - **Frontend Ready**: Automatic JSON serialization via serde
 
 use crate::utils::db_manager::get_config_db;
-use crate::utils::migrations::get_config_migrations;
 use crate::utils::sqlite::{SQLiteDB, SqlTable, AUTOINCREMENT};
 use piston_macros::SqlTable;
 use serde::{Deserialize, Serialize};
@@ -82,11 +79,15 @@ use crate::utils::sqlite::VersionVerification;
 ///
 /// This struct is the single source of truth for the app_config table schema.
 /// - Uses SqlTable derive for automatic schema generation
-/// - Migrations are generated from this struct
+/// - Schema is auto-synced on startup (missing columns added automatically)
 /// - All CRUD operations use SqlTable methods
 /// - Serde is used for JSON serialization (Tauri commands)
+///
+/// ## Adding a New Config Field
+///
+/// Just add the field to this struct and update the Default impl - that's it!
+/// The database schema will be automatically updated on next app launch.
 #[derive(Serialize, Deserialize, Clone, Debug, SqlTable)]
-#[migration_version("0.2.0")]
 #[migration_description("Application configuration table")]
 pub struct AppConfig {
     #[primary_key]
@@ -104,6 +105,7 @@ pub struct AppConfig {
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
     pub reduced_motion: bool,
+    pub reduced_effects: bool,
     pub last_window_width: i32,
     pub last_window_height: i32,
     pub debug_logging: bool,
@@ -128,6 +130,7 @@ impl Default for AppConfig {
             true,               // show_tray_icon
             false,              // minimize_to_tray
             false,              // reduced_motion
+            false,              // reduced_effects
             1200,               // last_window_width
             700,                // last_window_height
             false,              // debug_logging
@@ -144,9 +147,9 @@ impl AppConfig {
         vec![format!(
             "INSERT OR IGNORE INTO {} (id, background_hue, theme, language, max_download_threads, \
              max_memory_mb, java_path, default_game_dir, auto_update_enabled, notification_enabled, \
-             startup_check_updates, show_tray_icon, minimize_to_tray, reduced_motion, last_window_width, last_window_height, \
+             startup_check_updates, show_tray_icon, minimize_to_tray, reduced_motion, reduced_effects, last_window_width, last_window_height, \
              debug_logging, notification_retention_days, active_account_uuid) \
-             VALUES ({}, {}, '{}', '{}', {}, {}, NULL, NULL, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, NULL)",
+             VALUES ({}, {}, '{}', '{}', {}, {}, NULL, NULL, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, NULL)",
             Self::name(),
             default_config.id,
             default_config.background_hue,
@@ -160,6 +163,7 @@ impl AppConfig {
             if default_config.show_tray_icon { 1 } else { 0 },
             if default_config.minimize_to_tray { 1 } else { 0 },
             if default_config.reduced_motion { 1 } else { 0 },
+            if default_config.reduced_effects { 1 } else { 0 },
             default_config.last_window_width,
             default_config.last_window_height,
             if default_config.debug_logging { 1 } else { 0 },
@@ -171,27 +175,45 @@ impl AppConfig {
 /// Initialize the config database with migrations
 ///
 /// This should be called once during application startup to ensure:
-/// 1. The database exists and is created if needed
-/// 2. All migrations are run to bring schema up to date
+/// 1. The database and table exist (created if needed)
+/// 2. Schema is automatically synced with AppConfig struct (missing columns added)
 /// 3. Default config row exists
+///
+/// # Automatic Schema Sync
+/// 
+/// This function uses `sync_schema` which automatically:
+/// - Creates the table if it doesn't exist
+/// - Detects missing columns by comparing struct fields to DB columns
+/// - Adds any missing columns via ALTER TABLE
+/// 
+/// **No manual migrations needed!** Just add fields to AppConfig struct.
 ///
 /// # Errors
 ///
-/// Returns error if database cannot be created or migrations fail
+/// Returns error if database cannot be created or schema sync fails
 pub fn init_config_db(db: &SQLiteDB) -> Result<(), anyhow::Error> {
-    // Run CONFIG migrations only
-    let migrations = get_config_migrations();
-    db.run_migrations(migrations, env!("CARGO_PKG_VERSION"))?;
+    // Automatically sync schema with AppConfig struct
+    // This creates the table if needed and adds any missing columns
+    let added_columns = db.sync_schema::<AppConfig>()?;
+    
+    if !added_columns.is_empty() {
+        println!("Config DB: Auto-added {} new column(s)", added_columns.len());
+    }
 
-    // Ensure default config exists (migrations should handle this, but just in case)
+    // Ensure default config row exists with all fields populated
     let conn = db.get_connection();
-    conn.execute(
-        &format!(
-            "INSERT OR IGNORE INTO {} (id) VALUES (1)",
-            AppConfig::name()
-        ),
-        [],
-    )?;
+    
+    // Check if config row exists
+    let row_exists: bool = conn
+        .prepare(&format!("SELECT COUNT(*) FROM {} WHERE id = 1", AppConfig::name()))?
+        .query_row([], |row| row.get(0))?;
+    
+    if !row_exists {
+        // Insert default config
+        let default_config = AppConfig::default();
+        db.insert_data_serde(&default_config)?;
+        println!("Config DB: Created default configuration");
+    }
 
     Ok(())
 }
@@ -317,73 +339,15 @@ mod tests {
         )
         .unwrap();
 
-        // Run migrations up to version 1.0.0 (which will include all migrations)
-        let migrations = get_config_migrations();
-        db.run_migrations(migrations, "1.0.0").unwrap();
+        // Use automatic schema sync (same as production)
+        db.sync_schema::<AppConfig>().unwrap();
 
-        // Ensure default data is actually present in tests - some environments
-        // can skip default inserts if migrations were applied elsewhere or
-        // migration state is not reset. Explicitly run the default data SQL
-        // so tests are deterministic and reflect the current AppConfig::default().
-        // default SQL is available via AppConfig::get_default_data_sql() if needed
-        let conn = db.get_connection();
-        // Use an explicit REPLACE to make test initialization deterministic
-        // (overwrite any pre-existing rows from earlier runs).
+        // Insert default config for tests
         let default_config = AppConfig::default();
-        let insert_sql = format!(
-            "INSERT OR REPLACE INTO {} (id, background_hue, theme, language, max_download_threads, max_memory_mb, java_path, default_game_dir, auto_update_enabled, notification_enabled, startup_check_updates, show_tray_icon, minimize_to_tray, reduced_motion, last_window_width, last_window_height, debug_logging, notification_retention_days, active_account_uuid) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)",
-            AppConfig::name(),
-        );
-
-        let _ = conn.execute(
-            &insert_sql,
-            rusqlite::params![
-                default_config.id,
-                default_config.background_hue,
-                default_config.theme,
-                default_config.language,
-                default_config.max_download_threads,
-                default_config.max_memory_mb,
-                default_config.java_path,
-                default_config.default_game_dir,
-                if default_config.auto_update_enabled {
-                    1
-                } else {
-                    0
-                },
-                if default_config.notification_enabled {
-                    1
-                } else {
-                    0
-                },
-                if default_config.startup_check_updates {
-                    1
-                } else {
-                    0
-                },
-                if default_config.show_tray_icon { 1 } else { 0 },
-                if default_config.minimize_to_tray {
-                    1
-                } else {
-                    0
-                },
-                if default_config.reduced_motion {
-                    1
-                } else {
-                    0
-                },
-                default_config.last_window_width,
-                default_config.last_window_height,
-                if default_config.debug_logging { 1 } else { 0 },
-                default_config.notification_retention_days,
-                default_config.active_account_uuid,
-            ],
-        );
-
-        // Ensure default config exists
-        let conn = db.get_connection();
-        conn.execute("INSERT OR IGNORE INTO app_config (id) VALUES (1)", [])
-            .unwrap();
+        db.insert_data_serde(&default_config).unwrap_or_else(|_| {
+            // Already exists, update instead
+            db.update_data_serde(&default_config, "id", 1).unwrap();
+        });
 
         db
     }

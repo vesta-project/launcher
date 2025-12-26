@@ -420,7 +420,7 @@ mod tests {
 }
 
 #[tauri::command]
-pub fn update_instance(instance: Instance) -> Result<(), String> {
+pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Result<(), String> {
     log::info!("[update_instance] Updating instance: {:?}", instance.id);
 
     let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
@@ -627,6 +627,13 @@ pub fn update_instance(instance: Instance) -> Result<(), String> {
             }
         });
 
+        // Notify frontend so UI can refresh lists and react to updates
+        use tauri::Emitter;
+        let _ = app_handle.emit(
+            "core://instance-updated",
+            serde_json::json!({ "instance_id": id }),
+        );
+
         Ok(())
     } else {
         // Slug did not change; perform a normal update
@@ -660,6 +667,14 @@ pub fn update_instance(instance: Instance) -> Result<(), String> {
         .map_err(|e| format!("Failed to update instance: {}", e))?;
 
         log::info!("Updated instance ID: {}", id);
+
+        // Notify frontend so UI can refresh lists and react to updates
+        use tauri::Emitter;
+        let _ = app_handle.emit(
+            "core://instance-updated",
+            serde_json::json!({ "instance_id": id }),
+        );
+
         Ok(())
     }
 }

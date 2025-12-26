@@ -24,6 +24,7 @@ interface AppConfig {
 	debug_logging: boolean;
 	background_hue: number;
 	reduced_motion?: boolean;
+	reduced_effects?: boolean;
 	[key: string]: any;
 }
 
@@ -31,6 +32,7 @@ function SettingsPage() {
 	const [debugLogging, setDebugLogging] = createSignal(false);
 	const [backgroundHue, setBackgroundHue] = createSignal(220);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
+	const [reducedEffects, setReducedEffects] = createSignal(false);
 	const [loading, setLoading] = createSignal(true);
 
 	let unsubscribeConfigUpdate: (() => void) | null = null;
@@ -41,6 +43,7 @@ function SettingsPage() {
 			setDebugLogging(config.debug_logging);
 			setBackgroundHue(config.background_hue);
 			setReducedMotion(Boolean(config.reduced_motion));
+			setReducedEffects(Boolean(config.reduced_effects));
 		} catch (error) {
 			console.error("Failed to load config:", error);
 		} finally {
@@ -56,6 +59,8 @@ function SettingsPage() {
 				setDebugLogging(value);
 			} else if (field === "reduced_motion" && typeof value === "boolean") {
 				setReducedMotion(value);
+			} else if (field === "reduced_effects" && typeof value === "boolean") {
+				setReducedEffects(value);
 			}
 			// Add more field handlers as needed
 		});
@@ -71,6 +76,10 @@ function SettingsPage() {
 			"--color__primary-hue",
 			backgroundHue().toString(),
 		);
+	});
+
+	createEffect(() => {
+		document.documentElement.dataset.reducedEffects = reducedEffects().toString();
 	});
 
 	const handleDebugToggle = async (checked: boolean) => {
@@ -133,14 +142,25 @@ function SettingsPage() {
 		}
 	};
 
+	const handleReducedEffectsToggle = async (checked: boolean) => {
+		setReducedEffects(checked);
+		try {
+			await invoke("update_config_field", {
+				field: "reduced_effects",
+				value: checked,
+			});
+		} catch (error) {
+			console.error("Failed to update reduced effects:", error);
+			setReducedEffects(!checked);
+		}
+	};
+
 	return (
 		<div class="settings-page">
-			<h1>Settings</h1>
-
 			<Show when={!loading()} fallback={<div>Loading settings...</div>}>
 				<section class="settings-section">
 					<h2>Appearance</h2>
-					<div class="settings-row">
+					<div class="settings-row" style="flex-direction: column; align-items: stretch;">
 						<Slider
 							value={[backgroundHue()]}
 							onChange={handleHueChange}
@@ -160,78 +180,110 @@ function SettingsPage() {
 								<SliderThumb />
 							</SliderTrack>
 						</Slider>
+						<p class="settings-description">
+							Adjust the primary color hue for the application theme (0-360°)
+						</p>
 					</div>
-					<p class="settings-description">
-						Adjust the primary color hue for the application theme (0-360°)
-					</p>
 
 					<div class="settings-row">
+						<div class="settings-info">
+							<span class="settings-label">Reduced Motion</span>
+							<span class="settings-description">
+								Disable non-essential animations and transitions for better performance
+								and accessibility.
+							</span>
+						</div>
 						<Switch
 							checked={reducedMotion()}
 							onChange={handleReducedMotionToggle}
 							class="settings-switch"
 						>
-							<SwitchLabel>Reduced Motion</SwitchLabel>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
 						</Switch>
 					</div>
-					<p class="settings-description">
-						Disable non-essential animations and transitions for better performance
-						and accessibility.
-					</p>
+
+					<div class="settings-row">
+						<div class="settings-info">
+							<span class="settings-label">Reduced Effects</span>
+							<span class="settings-description">
+								Disable transparency and blur effects (glassmorphism) to improve performance.
+							</span>
+						</div>
+						<Switch
+							checked={reducedEffects()}
+							onChange={handleReducedEffectsToggle}
+							class="settings-switch"
+						>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					</div>
 				</section>
 
 				<section class="settings-section">
 					<h2>Developer Options</h2>
 					<div class="settings-row">
+						<div class="settings-info">
+							<span class="settings-label">Debug Logging</span>
+							<span class="settings-description">
+								Enable detailed logging for debugging purposes
+							</span>
+						</div>
 						<Switch
 							checked={debugLogging()}
 							onChange={handleDebugToggle}
 							class="settings-switch"
 						>
-							<SwitchLabel>Debug Logging</SwitchLabel>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
 						</Switch>
 					</div>
-					<p class="settings-description">
-						Enable detailed logging for debugging purposes
-					</p>
 				</section>
 
 				<section class="settings-section">
 					<h2>Application Data</h2>
-					<LauncherButton onClick={handleOpenAppData}>
-						Open App Data Folder
-					</LauncherButton>
+					<div class="settings-row">
+						<div class="settings-info">
+							<span class="settings-label">App Data Folder</span>
+							<span class="settings-description">
+								Open the folder where Vesta Launcher stores its configuration and data.
+							</span>
+						</div>
+						<LauncherButton onClick={handleOpenAppData}>
+							Open Folder
+						</LauncherButton>
+					</div>
 				</section>
 
 				<section class="settings-section">
 					<h2>Navigation Test</h2>
-					<LauncherButton
-						onClick={() => {
-							router()?.navigate("/install");
-						}}
-					>
-						Navigate to Install
-					</LauncherButton>
-					<LauncherButton
-						onClick={() => {
-							router()?.navigate("/file-drop");
-						}}
-					>
-						Navigate to File Drop Test
-					</LauncherButton>
-					<LauncherButton
-						onClick={() => {
-							router()?.navigate("/task-test");
-						}}
-					>
-						Navigate to Task System Test
-					</LauncherButton>
+					<div style="display: flex; gap: 12px; flex-wrap: wrap;">
+						<LauncherButton
+							onClick={() => {
+								router()?.navigate("/install");
+							}}
+						>
+							Navigate to Install
+						</LauncherButton>
+						<LauncherButton
+							onClick={() => {
+								router()?.navigate("/file-drop");
+							}}
+						>
+							Navigate to File Drop Test
+						</LauncherButton>
+						<LauncherButton
+							onClick={() => {
+								router()?.navigate("/task-test");
+							}}
+						>
+							Navigate to Task System Test
+						</LauncherButton>
+					</div>
 				</section>
 			</Show>
 		</div>

@@ -1,6 +1,5 @@
 use super::Migration;
 use crate::models::{Account, Instance, Notification, UserVersionTracking};
-use crate::utils::config::AppConfig;
 use crate::utils::sqlite::SqlTable;
 
 /// Generate a migration from a SqlTable implementation
@@ -27,64 +26,23 @@ pub fn migration_from_sqltable<T: SqlTable>() -> Migration {
 // ============================================================================
 // CONFIG DATABASE MIGRATIONS (app_config.db)
 // ============================================================================
-// These migrations manage application settings and preferences
-
-/// Migration 001: Initial schema setup for config database
-fn migration_001_config_initial_schema() -> Migration {
-    Migration {
-        version: "0.1.0".to_string(),
-        description: "Initial config database schema with migration tracking".to_string(),
-        up_sql: vec![
-            // Migration tracking table (created automatically by runner, but included for clarity)
-            "CREATE TABLE IF NOT EXISTS schema_migrations (
-                version TEXT PRIMARY KEY,
-                description TEXT NOT NULL,
-                applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
-            )"
-            .to_string(),
-        ],
-        down_sql: vec!["DROP TABLE IF EXISTS schema_migrations".to_string()],
-    }
-}
-
-/// Migration 002: App configuration table
-fn migration_002_app_config() -> Migration {
-    let schema_sql = AppConfig::schema_sql();
-    let default_data = AppConfig::get_default_data_sql();
-
-    let mut up_sql = vec![schema_sql];
-    up_sql.extend(default_data);
-
-    Migration {
-        version: AppConfig::migration_version(),
-        description: AppConfig::migration_description(),
-        up_sql,
-        down_sql: vec![format!("DROP TABLE IF EXISTS {}", AppConfig::name())],
-    }
-}
+// NOTE: Config database now uses AUTOMATIC SCHEMA SYNC via db.sync_schema<AppConfig>()
+// No manual migrations needed! Just add fields to the AppConfig struct.
+// 
+// The sync_schema function:
+// 1. Creates the table if it doesn't exist
+// 2. Automatically detects missing columns
+// 3. Adds them via ALTER TABLE
+//
+// This function is kept for backwards compatibility but returns an empty vec.
 
 /// Get all **config database** migrations in order
+/// 
+/// # Deprecated
+/// Config DB now uses automatic schema sync. This returns empty for compatibility.
 pub fn get_config_migrations() -> Vec<Migration> {
-    vec![
-        migration_001_config_initial_schema(),
-        migration_002_app_config(),
-        migration_003_reduced_motion_setting(),
-    ]
-}
-
-/// Migration 003: Add reduced_motion toggle to app_config
-/// NOTE: This migration exists for databases created before reduced_motion was added to AppConfig.
-/// For new databases, the column already exists from migration_002's CREATE TABLE.
-/// The migration runner will skip this if already applied or if column exists.
-fn migration_003_reduced_motion_setting() -> Migration {
-    Migration {
-        version: "0.3.0".to_string(),
-        description: "Add reduced_motion setting to app_config".to_string(),
-        // Empty up_sql since schema_sql() now includes reduced_motion
-        // This migration is kept for version tracking on databases that already have it applied
-        up_sql: vec![],
-        down_sql: vec![],
-    }
+    // Config DB uses automatic schema sync now - no manual migrations needed!
+    vec![]
 }
 
 // ============================================================================
@@ -220,10 +178,10 @@ pub fn get_data_migrations() -> Vec<Migration> {
 /// Legacy function for backwards compatibility
 ///
 /// # Deprecated
-/// Use `get_config_migrations()` for app_config.db or `get_data_migrations()` for vesta.db instead
-#[deprecated(note = "Use get_config_migrations() or get_data_migrations() instead")]
+/// Use `get_data_migrations()` for vesta.db instead.
+/// Config database (app_config.db) now uses automatic schema sync via `db.sync_schema::<AppConfig>()`.
+#[deprecated(note = "Use get_data_migrations() for data DB. Config DB uses automatic schema sync.")]
+#[allow(dead_code)]
 pub fn get_all_migrations() -> Vec<Migration> {
-    // Return data migrations for backwards compatibility
-    // (config migrations should be run separately via initialize_config_db)
     get_data_migrations()
 }

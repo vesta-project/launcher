@@ -242,7 +242,10 @@ function PageViewer(props: PageViewerProps) {
 				<div class={"page-viewer-root"}>
 					<PageViewerNavbar closeClicked={() => props.viewChanged?.(false)} />
 					<div class={"page-viewer-content"}>
-						{router()?.getRouterView({ setRefetch: setRefetchFn })}
+						{router()?.getRouterView({
+							setRefetch: setRefetchFn,
+							close: () => props.viewChanged?.(false),
+						})}
 					</div>
 				</div>
 			</div>

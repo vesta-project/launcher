@@ -323,7 +323,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 				onClick={openInstanceDetails}
 				style={
 					props.instance.icon_path
-						? { "--instance-bg-image": `url('${props.instance.icon_path}')` }
+						? props.instance.icon_path.startsWith("linear-gradient")
+							? { "--instance-bg-image": props.instance.icon_path }
+							: { "--instance-bg-image": `url('${props.instance.icon_path}')` }
 						: undefined
 				}
 			>

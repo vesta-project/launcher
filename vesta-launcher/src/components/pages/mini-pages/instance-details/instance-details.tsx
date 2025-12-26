@@ -2,6 +2,12 @@ import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
+import {
+	Popover,
+	PopoverCloseButton,
+	PopoverContent,
+	PopoverTrigger,
+} from "@ui/popover/popover";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import {
 	Slider,
@@ -22,6 +28,7 @@ import {
 	killInstance,
 	launchInstance,
 	updateInstance,
+	DEFAULT_ICONS,
 } from "@utils/instances";
 import {
 	createEffect,
@@ -80,9 +87,12 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	let consoleRef: HTMLDivElement | undefined;
 
 	// Settings form state
+	const [name, setName] = createSignal<string>("");
+	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [javaArgs, setJavaArgs] = createSignal<string>("");
 	const [memoryMb, setMemoryMb] = createSignal<number[]>([2048]);
 	const [saving, setSaving] = createSignal(false);
+	let fileInputRef: HTMLInputElement | undefined;
 
 	// Check running state on mount and when instance changes
 	createEffect(async () => {
@@ -101,6 +111,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	createEffect(() => {
 		const inst = instance();
 		if (inst) {
+			setName(inst.name);
+			setIconPath(inst.icon_path);
 			setJavaArgs(inst.java_args ?? "");
 			setMemoryMb([inst.memory_mb ?? 2048]);
 		}
@@ -251,6 +263,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		setSaving(true);
 		try {
 			const fresh = await getInstanceBySlug(slug());
+			fresh.name = name();
+			fresh.icon_path = iconPath();
 			fresh.java_args = javaArgs() || null;
 			fresh.memory_mb = memoryMb()[0];
 			await updateInstance(fresh);
@@ -259,6 +273,22 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			console.error("Failed to save instance settings:", e);
 		}
 		setSaving(false);
+	};
+
+	const handleImageUpload = () => {
+		fileInputRef?.click();
+	};
+
+	const onFileSelected = (e: Event) => {
+		const target = e.target as HTMLInputElement;
+		if (target.files && target.files.length > 0) {
+			const file = target.files[0];
+			const reader = new FileReader();
+			reader.onload = (e) => {
+				setIconPath(e.target?.result as string);
+			};
+			reader.readAsDataURL(file);
+		}
 	};
 
 	const clearConsole = () => setLines([]);
@@ -309,72 +339,83 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			</aside>
 
 			<main class="instance-details-content">
-				<Show when={instance.loading}>
-					<div class="instance-loading">
-						<Skeleton class="skeleton-header" />
-						<Skeleton class="skeleton-content" />
-					</div>
-				</Show>
-				<Show when={instance.error}>
-					<div class="instance-error">
-						<p>Failed to load instance: {String(instance.error)}</p>
-					</div>
-				</Show>
+				<div class="content-wrapper">
+					<Show when={instance.loading}>
+						<div class="instance-loading">
+							<Skeleton class="skeleton-header" />
+							<Skeleton class="skeleton-content" />
+						</div>
+					</Show>
+					<Show when={instance.error}>
+						<div class="instance-error">
+							<p>Failed to load instance: {String(instance.error)}</p>
+						</div>
+					</Show>
 
-				<Show when={instance()}>
-					{(inst) => (
-						<>
-							<header class="instance-header">
+					<Show when={instance()}>
+						{(inst) => (
+							<>
+								<Show when={activeTab() !== "settings"}>
+									<header
+										class="instance-header"
+										classList={{ shrunk: activeTab() !== "home" }}
+									>
 								<div
 									class="instance-header-image"
 									style={
-										inst().icon_path
-											? { "background-image": `url('${inst().icon_path}')` }
-											: {}
+										(inst().icon_path || "").startsWith("linear-gradient")
+											? { background: inst().icon_path! }
+											: {
+													"background-image": `url('${inst().icon_path || PlaceholderImage}')`,
+												}
 									}
 								/>
-								<div class="instance-header-meta">
-									<h1>{inst().name}</h1>
-									<p class="meta-row">
-										<span class="meta-label">Version:</span>{" "}
-										{inst().minecraft_version}
-										{inst().modloader && inst().modloader !== "vanilla" && (
-											<span class="modloader-badge">{inst().modloader}</span>
-										)}
-									</p>
-									<p class="meta-row">
-										<span class="meta-label">Created:</span>{" "}
-										{inst().created_at
-											? new Date(
-													inst().created_at as string,
-												).toLocaleDateString()
-											: "—"}
-									</p>
-									<p class="meta-row">
-										<span class="meta-label">Last Played:</span>{" "}
-										{inst().last_played
-											? new Date(
-													inst().last_played as string,
-												).toLocaleDateString()
-											: "Never"}
-									</p>
+								<div class="instance-header-content">
+									<div class="instance-header-meta">
+										<h1>{inst().name}</h1>
+										<p class="meta-row">
+											<span class="meta-label">Version:</span>{" "}
+											{inst().minecraft_version}
+											{inst().modloader && inst().modloader !== "vanilla" && (
+												<span class="modloader-badge">{inst().modloader}</span>
+											)}
+										</p>
+										<Show when={activeTab() === "home"}>
+											<p class="meta-row">
+												<span class="meta-label">Created:</span>{" "}
+												{inst().created_at
+													? new Date(
+															inst().created_at as string,
+														).toLocaleDateString()
+													: "—"}
+											</p>
+											<p class="meta-row">
+												<span class="meta-label">Last Played:</span>{" "}
+												{inst().last_played
+													? new Date(
+															inst().last_played as string,
+														).toLocaleDateString()
+													: "Never"}
+											</p>
+										</Show>
+									</div>
 									<div class="instance-actions">
 										<LauncherButton
-											onClick={handlePlay}
-											disabled={busy() || isRunning()}
+											onClick={isRunning() ? handleKill : handlePlay}
+											disabled={busy()}
+											color={isRunning() ? "destructive" : "primary"}
+											variant="solid"
+											size={activeTab() === "home" ? "lg" : "md"}
 										>
-											{isRunning() ? "Running…" : "Play"}
-										</LauncherButton>
-										<LauncherButton
-											onClick={handleKill}
-											disabled={busy() || !isRunning()}
-										>
-											Kill
+											{busy()
+												? "Working..."
+												: isRunning()
+													? "Kill Instance"
+													: "Play"}
 										</LauncherButton>
 									</div>
 								</div>
-							</header>
-
+							</header>								</Show>
 							<div class="instance-tab-content">
 								<Show when={activeTab() === "home"}>
 									<Show when={instance.loading}>
@@ -489,6 +530,78 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 											<h2>Instance Settings</h2>
 
 											<div class="settings-field">
+												<div class="form-row" style="align-items: flex-end;">
+													<Popover>
+														<PopoverTrigger as="button" class="instance-icon-trigger">
+															<div
+																class={"instance-icon-placeholder"}
+																title="Click to change icon"
+																style={
+																	(iconPath() || "").startsWith(
+																		"linear-gradient",
+																	)
+																		? { background: iconPath()! }
+																		: {
+																				"background-image": `url('${iconPath() || PlaceholderImage}')`,
+																			}
+																}
+															/>
+														</PopoverTrigger>
+														<PopoverContent class="icon-picker-content">
+															<div class="icon-grid">
+																<For each={DEFAULT_ICONS}>
+																	{(icon) => (
+																		<PopoverCloseButton
+																			as="button"
+																			class="icon-option"
+																			style={
+																				icon.startsWith("linear-gradient")
+																					? { background: icon }
+																					: { "background-image": `url(${icon})` }
+																			}
+																			onClick={() => setIconPath(icon)}
+																			title="Select icon"
+																		/>
+																	)}
+																</For>
+															</div>
+															<div class="icon-picker-actions">
+																<LauncherButton
+																	onClick={handleImageUpload}
+																	color="secondary"
+																	variant="solid"
+																	size="sm"
+																	style="width: 100%"
+																>
+																	Upload Custom Image
+																</LauncherButton>
+															</div>
+														</PopoverContent>
+													</Popover>
+													<input
+														type="file"
+														ref={(el) =>
+															(fileInputRef = el as HTMLInputElement | undefined)
+														}
+														style={{ display: "none" }}
+														accept="image/*"
+														onChange={onFileSelected}
+													/>
+													<TextFieldRoot style="flex: 1">
+														<TextFieldLabel>Instance Name</TextFieldLabel>
+														<TextFieldInput
+															value={name()}
+															onInput={(
+																e: InputEvent & {
+																	currentTarget: HTMLInputElement;
+																},
+															) => setName(e.currentTarget.value)}
+														/>
+													</TextFieldRoot>
+												</div>
+											</div>
+
+											<div class="settings-field">
 												<TextFieldRoot>
 													<TextFieldLabel>Java Arguments</TextFieldLabel>
 													<TextFieldInput
@@ -543,6 +656,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 						</>
 					)}
 				</Show>
+				</div>
 			</main>
 		</div>
 	);

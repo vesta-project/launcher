@@ -10,6 +10,11 @@ import {
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
 import {
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
+} from "@ui/popover/popover";
+import {
 	Slider,
 	SliderFill,
 	SliderLabel,
@@ -32,6 +37,7 @@ import {
 	installInstance,
 	type PistonMetadata,
 	reloadMinecraftVersions,
+	DEFAULT_ICONS,
 } from "@utils/instances";
 import {
 	createEffect,
@@ -59,12 +65,7 @@ function InstallPage() {
 
 	onMount(async () => {
 		await listen<{ name: string }>("core://instance-installed", async (ev) => {
-			showToast({
-				title: "Installation Complete",
-				description: `Instance \"${ev.payload.name}\" installed successfully`,
-				severity: "Success",
-				duration: 4000,
-			});
+			
 
 			// Check if we're in a mini window and close it
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -280,6 +281,16 @@ function InstallPage() {
 
 			await installInstance(fullInstance);
 
+			// Close window immediately after queuing installation
+			const { getCurrentWindow } = await import("@tauri-apps/api/window");
+			const currentWindow = getCurrentWindow();
+			const label = currentWindow.label;
+			if (label.startsWith("mini-")) {
+				await currentWindow.close();
+			} else {
+				navigate("/home");
+			}
+
 			// Reset form
 			setInstanceName("");
 			setSelectedVersion("");
@@ -309,211 +320,271 @@ function InstallPage() {
 					onChange={(val) => val && setActiveTab(val)}
 					class="install-tabs"
 				>
-					<ToggleGroupItem value="basic">Basic</ToggleGroupItem>
-					<ToggleGroupItem value="advanced">Advanced</ToggleGroupItem>
+					<ToggleGroupItem value="basic">Basic Settings</ToggleGroupItem>
+					<ToggleGroupItem value="advanced">Advanced Settings</ToggleGroupItem>
 				</ToggleGroup>
-				<h1 style={"font-size: 2rem; margin: 0;"}>Create New Instance</h1>
 			</div>
 
 			<Show when={isMetadataLoading()}>
-				<p>Loading Minecraft versions...</p>
+				<div class="instance-loading">
+					<p>Fetching Minecraft versions...</p>
+				</div>
 			</Show>
 
 			<Show when={getMetadataError()}>
-				<p class="error-text">
-					Failed to load Minecraft versions: {String(getMetadataError())}
-				</p>
+				<div class="instance-error">
+					<p class="error-text">
+						Failed to load Minecraft versions: {String(getMetadataError())}
+					</p>
+					<LauncherButton onClick={handleReload}>Retry</LauncherButton>
+				</div>
 			</Show>
 
 			<Show when={metadata()}>
-				<div class={"page-wrapper install-form"}>
-					{/* Basic Content (Always Visible) */}
-
-					{/* Icon & Name */}
-					<div class="form-row icon-name-row">
-						<div class={"instance-icon-placeholder"} title="Click to upload icon" onClick={handleImageUpload} style={{ "background-image": `url('${effectiveIcon()}')`, "background-size": "cover", "background-color": "hsl(var(--color__primary-hue), 50%, 20%)" }} />
-						<input
-							type="file"
-							ref={(el) => (fileInputRef = el as HTMLInputElement | undefined)}
-							style={{ display: "none" }}
-							accept="image/*"
-							onChange={onFileSelected}
-						/>
-							<TextFieldRoot required={true} style={"flex: 1; min-width: 200px;"}>
-							<TextFieldLabel>Instance Name</TextFieldLabel>
-							<TextFieldInput
-								placeholder="My Awesome Instance"
-								value={instanceName()}
-								onInput={(e: Event & { currentTarget: HTMLInputElement }) => {
-									setInstanceName(e.currentTarget.value);
-								}}
-							/>
-						</TextFieldRoot>
-					</div>
-
-					{/* Modloader Pills (Now First) */}
-					<div class={"form-field"}>
-						<label class={"form-label"}>Modloader</label>
-						<ToggleGroup
-							value={selectedModloader()}
-							onChange={(val) => val && setSelectedModloader(val)}
-							class="modloader-pills"
-						>
-							<For each={uniqueModloaders()}>
-								{(loader) => (
-									<ToggleGroupItem
-										value={loader}
-										style="text-transform: capitalize"
-									>
-										{loader}
-									</ToggleGroupItem>
-								)}
-							</For>
-						</ToggleGroup>
-					</div>
-
-					{/* Minecraft Version & Modloader Version */}
-					<div class="form-row version-row">
-						<div class={"form-field"} style="flex: 1; min-width: 200px;">
-							<div
-								style={{ display: "flex", "align-items": "center", gap: "8px" }}
-							>
-								<label class={"form-label"}>Minecraft Version</label>
-								<LauncherButton
-									onClick={handleReload}
-									disabled={isReloading()}
-									style={{ padding: "4px 8px", "font-size": "0.8rem" }}
+				<div class={"page-wrapper"}>
+					<div class="install-form">
+						{/* Left Column: Identity & Version */}
+						<div class="form-section">
+							<div class="form-row">
+								<Popover>
+									<PopoverTrigger class="instance-icon-trigger">
+										<div
+											class={"instance-icon-placeholder"}
+											title="Click to change icon"
+											style={
+												effectiveIcon().startsWith("linear-gradient")
+													? { background: effectiveIcon() }
+													: { "background-image": `url('${effectiveIcon()}')` }
+											}
+										/>
+									</PopoverTrigger>
+									<PopoverContent class="icon-picker-content">
+										<div class="icon-grid">
+											<For each={DEFAULT_ICONS}>
+												{(icon) => (
+													<button
+														class="icon-option"
+														style={{ background: icon }}
+														onClick={() => setIconPath(icon)}
+														title="Select color"
+													/>
+												)}
+											</For>
+										</div>
+										<div class="icon-picker-actions">
+											<LauncherButton
+												onClick={handleImageUpload}
+												variant="secondary"
+												size="small"
+												style="width: 100%"
+											>
+												Upload Custom Image
+											</LauncherButton>
+										</div>
+									</PopoverContent>
+								</Popover>
+								<input
+									type="file"
+									ref={(el) =>
+										(fileInputRef = el as HTMLInputElement | undefined)
+									}
+									style={{ display: "none" }}
+									accept="image/*"
+									onChange={onFileSelected}
+								/>
+								<TextFieldRoot
+									required={true}
+									style={"flex: 1; min-width: 200px;"}
 								>
-									{isReloading() ? "..." : "Reload"}
-								</LauncherButton>
+									<TextFieldLabel>Instance Name</TextFieldLabel>
+									<TextFieldInput
+										placeholder="My Awesome Instance"
+										value={instanceName()}
+										onInput={(e: Event & { currentTarget: HTMLInputElement }) => {
+											setInstanceName(e.currentTarget.value);
+										}}
+									/>
+								</TextFieldRoot>
 							</div>
-							<Combobox<string>
-								options={filteredVersions().map((v) => v.id)}
-								placeholder="Select Minecraft version..."
-								value={selectedVersion()}
-								onChange={setSelectedVersion}
-								itemComponent={(props) => (
-									<ComboboxItem item={props.item}>
-										<ComboboxItemLabel>{props.item.rawValue}</ComboboxItemLabel>
-										<ComboboxItemIndicator />
-									</ComboboxItem>
-								)}
-							>
-								<ComboboxControl aria-label="Minecraft Version">
-									<ComboboxInput />
-									<ComboboxTrigger />
-								</ComboboxControl>
-								<ComboboxContent />
-							</Combobox>
+
+							<h2 class="form-section-title" style="margin-top: 12px;">Version</h2>
+							<div class="form-field">
+								<label class="form-label">Modloader</label>
+								<ToggleGroup
+									value={selectedModloader()}
+									onChange={(val) => val && setSelectedModloader(val)}
+									class="modloader-pills"
+								>
+									<For each={uniqueModloaders()}>
+										{(loader) => (
+											<ToggleGroupItem value={loader}>
+												{loader.charAt(0).toUpperCase() + loader.slice(1)}
+											</ToggleGroupItem>
+										)}
+									</For>
+								</ToggleGroup>
+							</div>
+
+							<div class="form-row">
+								<div class="form-field">
+									<div
+										style={{ display: "flex", "align-items": "center", gap: "8px" }}
+									>
+										<label class="form-label">Minecraft Version</label>
+										<LauncherButton
+											onClick={handleReload}
+											disabled={isReloading()}
+											style={{ padding: "2px 6px", "font-size": "0.7rem" }}
+										>
+											{isReloading() ? "..." : "Reload"}
+										</LauncherButton>
+									</div>
+									<Combobox
+										options={filteredVersions().map((v) => v.id)}
+										value={selectedVersion()}
+										onChange={(val) => val && setSelectedVersion(val)}
+										placeholder="Select version..."
+										itemComponent={(props) => (
+											<ComboboxItem item={props.item}>
+												<ComboboxItemLabel>{props.item.rawValue}</ComboboxItemLabel>
+												<ComboboxItemIndicator />
+											</ComboboxItem>
+										)}
+									>
+										<ComboboxControl aria-label="Minecraft Version">
+											<ComboboxInput />
+											<ComboboxTrigger />
+										</ComboboxControl>
+										<ComboboxContent />
+									</Combobox>
+								</div>
+							</div>
 						</div>
 
-						{/* Modloader Version (Only if not vanilla AND Advanced tab) */}
-						<Show
-							when={
-								activeTab() === "advanced" &&
-								selectedModloader() !== "vanilla" &&
-								availableModloaderVersions().length > 0
-							}
-						>
-							<div
-								class={"form-field"}
-								style="flex: 1; min-width: 200px; padding: 4px 0px;"
-							>
-								<label class={"form-label"}>Modloader Version</label>
-								<Combobox
-									options={availableModloaderVersions().map((v) => v.version)}
-									placeholder="Select version..."
-									value={selectedModloaderVersion()}
-									onChange={setSelectedModloaderVersion}
-									itemComponent={(props) => (
-										<ComboboxItem item={props.item}>
-											<ComboboxItemLabel>
-												{props.item.rawValue}
-											</ComboboxItemLabel>
-											<ComboboxItemIndicator />
-										</ComboboxItem>
-									)}
-								>
-									<ComboboxControl aria-label="Modloader Version">
-										<ComboboxInput />
-										<ComboboxTrigger />
-									</ComboboxControl>
-									<ComboboxContent />
-								</Combobox>
+						{/* Right Column: Advanced Settings */}
+						<Show when={activeTab() === "advanced"}>
+							<div class="form-section">
+								<Show when={selectedModloader() !== "vanilla"}>
+									<h2 class="form-section-title">Modloader</h2>
+									<div class="form-field">
+										<label class="form-label">
+											{selectedModloader().charAt(0).toUpperCase() +
+												selectedModloader().slice(1)}{" "}
+											Version
+										</label>
+										<Show
+											when={selectedVersion()}
+											fallback={
+												<div class="helper-text">
+													Select a Minecraft version first
+												</div>
+											}
+										>
+											<Combobox
+												options={availableModloaderVersions().map(
+													(v) => v.version,
+												)}
+												value={selectedModloaderVersion()}
+												onChange={(val) =>
+													val && setSelectedModloaderVersion(val)
+												}
+												placeholder="Select loader version..."
+												itemComponent={(props) => (
+													<ComboboxItem item={props.item}>
+														<ComboboxItemLabel>
+															{props.item.rawValue}
+														</ComboboxItemLabel>
+														<ComboboxItemIndicator />
+													</ComboboxItem>
+												)}
+											>
+												<ComboboxControl aria-label="Modloader Version">
+													<ComboboxInput />
+													<ComboboxTrigger />
+												</ComboboxControl>
+												<ComboboxContent />
+											</Combobox>
+										</Show>
+									</div>
+								</Show>
+
+								<h2 class="form-section-title">Performance</h2>
+								<div class="form-field">
+									<div
+										style={{
+											display: "flex",
+											"justify-content": "space-between",
+											"align-items": "center",
+										}}
+									>
+										<label class="form-label">Memory Allocation</label>
+										<span style="font-size: 0.85rem; opacity: 0.7;">
+											{memory()[0]} MB
+										</span>
+									</div>
+									<Slider
+										value={memory()}
+										onChange={setMemory}
+										minValue={1024}
+										maxValue={16384}
+										step={512}
+									>
+										<SliderTrack>
+											<SliderFill />
+											<SliderThumb />
+										</SliderTrack>
+									</Slider>
+								</div>
+
+								<h2 class="form-section-title" style="margin-top: 12px;">Display</h2>
+								<div class="form-row">
+									<TextFieldRoot style="flex: 1;">
+										<TextFieldLabel>Width</TextFieldLabel>
+										<TextFieldInput
+											value={resolutionWidth()}
+											onInput={(e: any) => setResolutionWidth(e.target.value)}
+										/>
+									</TextFieldRoot>
+									<TextFieldRoot style="flex: 1;">
+										<TextFieldLabel>Height</TextFieldLabel>
+										<TextFieldInput
+											value={resolutionHeight()}
+											onInput={(e: any) => setResolutionHeight(e.target.value)}
+										/>
+									</TextFieldRoot>
+								</div>
+
+								<h2 class="form-section-title" style="margin-top: 12px;">Java</h2>
+								<TextFieldRoot>
+									<TextFieldLabel>JVM Arguments</TextFieldLabel>
+									<TextFieldInput
+										placeholder="-Xmx2G -XX:+UseG1GC..."
+										value={javaArgs()}
+										onInput={(e: any) => setJavaArgs(e.target.value)}
+									/>
+								</TextFieldRoot>
 							</div>
 						</Show>
 					</div>
 
-					<Show when={activeTab() === "advanced"}>
-						{/* Advanced Tab Content */}
-
-						{/* Memory Slider */}
-						<div class={"form-field"}>
-							<div style="display: flex; justify-content: space-between;">
-								<label class={"form-label"}>Memory Allocation</label>
-								<span style="font-size: 0.9rem; color: #aaa;">
-									{memory()[0]} MB
-								</span>
-							</div>
-							<Slider
-								value={memory()}
-								onChange={setMemory}
-								minValue={1024}
-								maxValue={16384}
-								step={512}
-							>
-								<SliderTrack>
-									<SliderFill />
-									<SliderThumb />
-								</SliderTrack>
-							</Slider>
-						</div>
-
-						{/* Java Arguments */}
-						<TextFieldRoot>
-							<TextFieldLabel>Java Arguments</TextFieldLabel>
-							<TextFieldInput
-								placeholder="-Xmx4G -XX:+UseG1GC"
-								value={javaArgs()}
-								onInput={(e: Event & { currentTarget: HTMLInputElement }) => {
-									setJavaArgs(e.currentTarget.value);
-								}}
-							/>
-						</TextFieldRoot>
-
-						{/* Resolution */}
-						<div class="form-row resolution-row">
-							<TextFieldRoot style="flex: 1; min-width: 150px;">
-								<TextFieldLabel>Window Width</TextFieldLabel>
-								<TextFieldInput
-									type="number"
-									value={resolutionWidth()}
-									onInput={(e: Event & { currentTarget: HTMLInputElement }) => {
-										setResolutionWidth(e.currentTarget.value);
-									}}
-								/>
-							</TextFieldRoot>
-							<TextFieldRoot style="flex: 1; min-width: 150px;">
-								<TextFieldLabel>Window Height</TextFieldLabel>
-								<TextFieldInput
-									type="number"
-									value={resolutionHeight()}
-									onInput={(e: Event & { currentTarget: HTMLInputElement }) => {
-										setResolutionHeight(e.currentTarget.value);
-									}}
-								/>
-							</TextFieldRoot>
-						</div>
-					</Show>
-
-					{/* Install Button (Always visible) */}
-					<LauncherButton
-						onClick={handleInstall}
-						disabled={isInstalling() || !instanceName() || !selectedVersion()}
-						style={"margin-top: 1rem;"}
+					<div
+						style={{
+							display: "flex",
+							"justify-content": "flex-end",
+							gap: "12px",
+							"margin-top": "12px",
+						}}
 					>
-						{isInstalling() ? "Creating..." : "Create Instance"}
-					</LauncherButton>
+						<LauncherButton
+							variant="primary"
+							size="large"
+							disabled={!instanceName() || !selectedVersion() || isInstalling()}
+							onClick={handleInstall}
+							style="min-width: 200px;"
+						>
+							{isInstalling() ? "Installing..." : "Create & Install"}
+						</LauncherButton>
+					</div>
 				</div>
 			</Show>
 		</div>

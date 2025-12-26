@@ -3,18 +3,50 @@
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
-	background: #414141;
+	
+	/* Solid background for standalone viewer (no glass) */
+	background: var(--bg-surface);
+	border: 1px solid var(--border-subtle);
+	
+	position: relative;
 	overflow: hidden;
+}
+
+/* Reduced effects override */
+:root[data-reduced-effects="true"] .standalone-page-viewer {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	background: var(--bg-surface);
+	box-shadow: none;
+	border: 1px solid transparent; /* More stable border color */
+}
+
+/* Top highlight - removed for standalone */
+.standalone-page-viewer::before {
+	display: none;
+}
+
+/* Left highlight - removed for standalone */
+.standalone-page-viewer::after {
+	display: none;
+}
+
+/* Noise overlay */
+.standalone-page-viewer {
+	background-image: var(--glass-noise);
+	background-blend-mode: overlay;
 }
 
 .standalone-page-viewer__header {
 	height: 32px;
-	background: hsl(180deg 0% 10%);
+	background: var(--bg-surface);
 	display: grid;
 	grid-template-columns: auto 1fr auto auto;
 	align-items: center;
-	border-bottom: 1px solid hsl(0deg 0% 20%);
+	border-bottom: 1px solid var(--border-subtle);
 	user-select: none;
+	position: relative;
+	z-index: 1;
 }
 
 .standalone-page-viewer__nav-left {
@@ -131,6 +163,9 @@
 .standalone-page-viewer__content {
 	flex: 1;
 	overflow-y: auto;
+	background: var(--bg-glass);
+	position: relative;
+	z-index: 1;
 }
 
 .standalone-page-viewer__controls > * {

@@ -350,6 +350,80 @@ impl SQLiteDB {
         runner.get_applied_migrations()
     }
 
+    /// Automatically sync database schema with a SqlTable struct definition.
+    /// 
+    /// This is the "magic" auto-migration method:
+    /// 1. Creates the table if it doesn't exist (using full schema from struct)
+    /// 2. Detects any missing columns and adds them via ALTER TABLE
+    /// 3. No manual migrations needed - just change the struct!
+    /// 
+    /// # Type Parameters
+    /// * `T` - A type implementing SqlTable trait
+    /// 
+    /// # Returns
+    /// * `Ok(Vec<String>)` - List of columns that were added (empty if none)
+    /// * `Err` - If schema sync fails
+    /// 
+    /// # Example
+    /// ```rust
+    /// // Just change your struct and call sync_schema - that's it!
+    /// let added_columns = db.sync_schema::<AppConfig>()?;
+    /// if !added_columns.is_empty() {
+    ///     println!("Added columns: {:?}", added_columns);
+    /// }
+    /// ```
+    pub fn sync_schema<T: SqlTable>(&self) -> Result<Vec<String>, Error> {
+        let table_name = T::name();
+        let struct_columns = T::columns();
+        
+        // Step 1: Create table if it doesn't exist
+        self.create_new_table_serde::<T>()?;
+        
+        // Step 2: Get existing columns from the database
+        let mut stmt = self.conn.prepare(&format!("PRAGMA table_info({})", table_name))?;
+        let existing_columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(Result::ok)
+            .map(|s| s.to_lowercase())
+            .collect();
+        
+        // Step 3: Find and add missing columns
+        let mut added_columns = Vec::new();
+        
+        for (column_name, (options, column_type)) in &struct_columns {
+            let column_name_lower = column_name.to_lowercase();
+            
+            if !existing_columns.contains(&column_name_lower) {
+                // Column is missing - add it!
+                let options_str = options.join(" ");
+                
+                // Determine default value based on type
+                let default_clause = if options_str.contains("NOT NULL") {
+                    // Need a default for NOT NULL columns
+                    match column_type.to_uppercase().as_str() {
+                        "INTEGER" => " DEFAULT 0",
+                        "TEXT" => " DEFAULT ''",
+                        "REAL" => " DEFAULT 0.0",
+                        _ => " DEFAULT NULL",
+                    }
+                } else {
+                    ""
+                };
+                
+                let sql = format!(
+                    "ALTER TABLE {} ADD COLUMN \"{}\" {} {}{}",
+                    table_name, column_name, column_type, options_str, default_clause
+                );
+                
+                self.conn.execute(&sql, [])?;
+                added_columns.push(column_name.clone());
+                println!("✓ Auto-added column: {}.{}", table_name, column_name);
+            }
+        }
+        
+        Ok(added_columns)
+    }
+
     /// Initialize database with all migrations up to current version
     ///
     /// # Errors
