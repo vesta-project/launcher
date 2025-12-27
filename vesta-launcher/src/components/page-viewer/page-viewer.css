@@ -9,75 +9,26 @@
 	margin: 0;
 	right: 0;
 	bottom: 0;
-	tab-index: 0;
 
 	& .page-viewer-root {
 		width: 100%;
 		height: 100%;
 		border-radius: 8px;
 		
-		/* Glassmorphism with Gradient */
-		background: linear-gradient(
-			135deg, 
-			hsl(var(--color__primary-hue) 30% 15% / 0.4), 
-			hsl(var(--color__secondary-hue) 30% 15% / 0.4)
-		);
-		backdrop-filter: blur(29px);
-		-webkit-backdrop-filter: blur(29px);
-		border: 1px solid hsl(var(--color__primary-hue) 40% 60% / 0.3);
-		box-shadow: 
-			0 8px 32px rgba(0, 0, 0, 0.3),
-			inset 0 1px 0 hsl(var(--color__primary-hue) 60% 80% / 0.5),
-			inset 0 -1px 0 hsl(var(--color__primary-hue) 40% 40% / 0.2),
-			inset 0 0 20px 10px hsl(var(--color__primary-hue) 40% 50% / 0.1);
-
-		/* Noise via background blend */
-		background-image: var(--glass-noise), linear-gradient(hsl(var(--color__primary-hue) 30% 15% / 0.5), hsl(var(--color__primary-hue) 30% 15% / 0.5));
-		background-blend-mode: overlay;
-
+		/* Apply Liquid Glass */
+		background: var(--liquid-background);
+		backdrop-filter: var(--liquid-backdrop-filter);
+		-webkit-backdrop-filter: var(--liquid-backdrop-filter);
+		box-shadow: var(--liquid-box-shadow);
+		isolation: isolate;
+		
 		overflow: hidden;
 		position: relative;
-
-		/* Top highlight */
-		&::before {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			right: 0;
-			height: 1px;
-			background: linear-gradient(
-				90deg,
-				transparent,
-				hsl(var(--color__primary-hue) 70% 80% / 0.8),
-				transparent
-			);
-			z-index: 2;
-			pointer-events: none;
-		}
-
-		/* Left highlight */
-		&::after {
-			content: '';
-			position: absolute;
-			top: 0;
-			left: 0;
-			width: 1px;
-			height: 100%;
-			background: linear-gradient(
-				180deg,
-				hsl(var(--color__primary-hue) 70% 80% / 0.8),
-				transparent,
-				hsl(var(--color__primary-hue) 40% 60% / 0.3)
-			);
-			z-index: 2;
-			pointer-events: none;
-		}
 
 		& .page-viewer-content {
 			height: calc(100% - 28px);
 			width: 100%;
-			background: transparent; /* Let the glass show through */
+			background: transparent;
 			overflow-y: auto;
 			position: relative;
 			z-index: 1;
@@ -91,11 +42,6 @@
 		background: var(--bg-surface);
 		box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
 		border: 1px solid var(--border-subtle);
-
-		&::before,
-		&::after {
-			display: none;
-		}
 	}
 
 	& svg {
@@ -106,13 +52,19 @@
 .page-viewer-navbar-root {
 	width: 100%;
 	height: 28px;
-	background: var(--bg-surface);
-	border-bottom: 1px solid var(--border-subtle);
+	/* Apply liquid glass to page viewer titlebar */
+	background: var(--liquid-background);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
+	box-shadow: 
+		var(--liquid-box-shadow),
+		0 1px 0 hsl(var(--color__primary-hue) 60% 80% / 0.1); /* Bottom highlight */
+	border-bottom: 1px solid hsl(var(--color__primary-hue) 30% 30% / 0.3);
 	display: grid;
 	grid-auto-columns: 1fr auto 1fr;
 	justify-content: space-between;
 
-	--page-viewer-nav-color: hsl(var(--color__primary-hue) 0% 100% / 95%);
+	--page-viewer-nav-color: hsl(var(--color__primary-hue) 10% 90%); /* Better contrast */
 
 	color: var(--page-viewer-nav-color);
 	font-size: var(--font-xsmall);
@@ -166,7 +118,7 @@
 	border: none;
 
 	&:hover {
-		background: var(--bg-surface-hover);
+		background: hsla(var(--color__primary-hue) 20% 70% / 0.05);
 	}
 
 	&:hover svg {

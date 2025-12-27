@@ -117,51 +117,7 @@
 	border-radius: 12px;
 }
 
-.instance-icon-trigger:focus-visible {
-	outline: 2px solid hsl(var(--color__primary-hue) 80% 60%);
-	outline-offset: 2px;
-}
-
-.icon-picker-content {
-	width: 280px;
-	padding: 16px;
-	background: var(--bg-surface);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
-	border: 1px solid var(--border-subtle);
-	border-radius: 12px;
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-	z-index: 100;
-}
-
-.icon-grid {
-	display: grid;
-	grid-template-columns: repeat(4, 1fr);
-	gap: 8px;
-}
-
-.icon-option {
-	width: 100%;
-	aspect-ratio: 1;
-	border-radius: 8px;
-	border: 0px solid transparent;
-	padding: 2px;
-	cursor: pointer;
-	transition: transform 0.1s, border-color 0.1s;
-	background-size: cover;
-}
-
-.icon-option:hover {
-	transform: scale(1.1);
-}
-
-.icon-option:focus-visible {
-	outline: none;
-	border-color: white;
-}
+/* Icon Picker Styles have been moved to @ui/icon-picker/icon-picker.css */
 
 .helper-text {
 	font-size: 0.85rem;

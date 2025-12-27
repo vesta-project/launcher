@@ -3,6 +3,7 @@ import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-butt
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Progress } from "@ui/progress/progress";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	type BackendNotification,
 	clearAllDismissibleNotifications,
@@ -300,40 +301,48 @@ function NotificationCard(props: {
 				<Show when={props.actions && props.actions.length > 0}>
 					<For each={props.actions}>
 						{(action) => (
-							<button
-								class={styles["sidebar__notification__action-btn"]}
-								onClick={() => handleAction(action.id)}
-								title={action.label}
-								style={{
-									background:
-										action.type === "destructive"
-											? "hsl(0deg 70% 40% / 25%)"
-											: action.type === "primary"
-												? "hsl(210deg 80% 50% / 25%)"
-												: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
-									"border-color":
-										action.type === "destructive"
-											? "hsl(0deg 70% 40% / 40%)"
-											: action.type === "primary"
-												? "hsl(210deg 80% 50% / 40%)"
-												: "hsl(var(--color__primary-hue) 5% 50% / 30%)",
-								}}
-							>
-								{action.label}
-							</button>
+							<Tooltip placement="top">
+								<TooltipTrigger>
+									<button
+										class={styles["sidebar__notification__action-btn"]}
+										onClick={() => handleAction(action.id)}
+										style={{
+											background:
+												action.type === "destructive"
+													? "hsl(0deg 70% 40% / 25%)"
+													: action.type === "primary"
+														? "hsl(210deg 80% 50% / 25%)"
+														: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
+											"border-color":
+												action.type === "destructive"
+													? "hsl(0deg 70% 40% / 40%)"
+													: action.type === "primary"
+														? "hsl(210deg 80% 50% / 40%)"
+														: "hsl(var(--color__primary-hue) 5% 50% / 30%)",
+										}}
+									>
+										{action.label}
+									</button>
+								</TooltipTrigger>
+								<TooltipContent>{action.label}</TooltipContent>
+							</Tooltip>
 						)}
 					</For>
 				</Show>
 
 				{/* Delete/Close button - show for dismissible notifications */}
 				<Show when={props.dismissible}>
-					<button
-						class={styles["sidebar__notification__close-btn"]}
-						onClick={handleDelete}
-						title="Delete"
-					>
-						<CloseIcon />
-					</button>
+					<Tooltip placement="top">
+						<TooltipTrigger>
+							<button
+								class={styles["sidebar__notification__close-btn"]}
+								onClick={handleDelete}
+							>
+								<CloseIcon />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent>Delete</TooltipContent>
+					</Tooltip>
 				</Show>
 			</div>
 		</div>

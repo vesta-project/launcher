@@ -18,12 +18,12 @@
 			rgb(159 159 159 / 20%) 20%,
 			rgb(36 35 35 / 20%) 45.5%,
 			rgb(0 0 0 / 70%) 100%
-		), var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+		), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
 	background-repeat: no-repeat, no-repeat;
 	background-position:
 		center center,
 		center center;
-	background-size: auto, cover; /* radial overlay auto, image covers card */
+	background-size: cover, cover; /* radial overlay auto, image covers card */
 	transition:
 		background-size 0.2s ease,
 		box-shadow 0.15s ease,
@@ -52,7 +52,7 @@
 
 	&:hover {
 		/* Slightly enlarge the background image and card on hover for a subtle effect */
-		background-size: auto, 105%;
+		background-size: cover, cover;
 		box-shadow: 0 8px 24px 0 rgb(0 0 0 / 18%);
 		background-image:
 			radial-gradient(
@@ -61,12 +61,27 @@
 				rgb(149 144 144 / 30%) 19.5%,
 				rgb(36 35 35 / 75%) 67.93%,
 				rgb(0 0 0 / 75%) 100%
-			), var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+			), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
 		transform: scale(1.045);
 		transition:
 			background-size 0.2s cubic-bezier(.4,1,.7,1),
 			box-shadow 0.18s cubic-bezier(.4,1,.7,1),
 			transform 0.18s cubic-bezier(.4,1,.7,1);
+	}
+
+	/* Disable hover effect when reduced motion is enabled */
+	:root[data-reduced-motion="true"] &:hover {
+		background-size: auto, cover;
+		box-shadow: none;
+		background-image:
+			radial-gradient(
+				109.12% 79.52% at 47.71% 0%,
+				rgb(175 175 175 / 20%) 0%,
+				rgb(159 159 159 / 20%) 20%,
+				rgb(36 35 35 / 20%) 45.5%,
+				rgb(0 0 0 / 70%) 100%
+			), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		transform: none;
 	}
 }
 
@@ -225,7 +240,7 @@ rgba(255, 80, 80, 0.3) 0%,
 rgba(200, 40, 40, 0.4) 20%,
 rgba(100, 0, 0, 0.6) 45.5%,
 rgba(50, 0, 0, 0.9) 100%
-), var(--instance-bg-image, url('@assets/placeholder-instance-image.jpg'));
+), var(--instance-bg-image, url('@assets/placeholder-images/placeholder-image1.jpg'));
 outline-color: rgba(255, 0, 0, 0.4);
 }
 

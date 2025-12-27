@@ -19,6 +19,7 @@ import {
 	persistentNotificationTrigger,
 	showAlert,
 } from "@utils/notifications";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	createEffect,
 	createResource,
@@ -155,17 +156,25 @@ function Sidebar(props: SidebarProps) {
 						tooltip_text={"Notifications"}
 					>
 						<div style={{ position: "relative", display: "flex" }}>
-							<BellIcon />
 							{notifData().hasActiveTask && (
-								<div class="notification-spinner" title="Task in progress" />
+								<Tooltip placement="top">
+									<TooltipTrigger>
+										<div class="notification-spinner" />
+									</TooltipTrigger>
+									<TooltipContent>Task in progress</TooltipContent>
+								</Tooltip>
 							)}
 							{notifData().totalCount > 0 && (
-								<div
-									class="notification-badge"
-									title={`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}
-								>
-									{notifData().totalCount}
-								</div>
+								<Tooltip placement="top">
+									<TooltipTrigger>
+										<div
+											class="notification-badge"
+										>
+											{notifData().totalCount}
+										</div>
+									</TooltipTrigger>
+									<TooltipContent>{`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}</TooltipContent>
+								</Tooltip>
 							)}
 						</div>
 					</SidebarActionButton>

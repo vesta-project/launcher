@@ -29,6 +29,7 @@ import {
 } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
 	type CreateInstanceData,
 	createInstance,
@@ -48,7 +49,6 @@ import {
 	Show,
 } from "solid-js";
 import "./install-page.css";
-import PlaceholderImage from "@assets/placeholder-instance-image.jpg";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
 
@@ -92,7 +92,17 @@ function InstallPage() {
 	const [selectedModloaderVersion, setSelectedModloaderVersion] =
 		createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
-	const effectiveIcon = () => iconPath() || PlaceholderImage;
+	const effectiveIcon = () => iconPath() || DEFAULT_ICONS[0];
+	
+	// Create uploadedIcons array that includes current iconPath if it's an uploaded image (base64 or custom URL)
+	const uploadedIcons = () => {
+		const current = iconPath();
+		// Check if current icon is uploaded (not null, not a default gradient/image)
+		if (current && !DEFAULT_ICONS.includes(current)) {
+			return [current];
+		}
+		return [];
+	};
 
 	// Advanced State
 	const [javaArgs, setJavaArgs] = createSignal("");
@@ -102,8 +112,6 @@ function InstallPage() {
 
 	const [isInstalling, setIsInstalling] = createSignal(false);
 	const [isReloading, setIsReloading] = createSignal(false);
-
-	let fileInputRef: HTMLInputElement | undefined;
 
 	// Fetch Minecraft versions
 	const [metadata, { refetch: refetchVersions }] =
@@ -201,23 +209,7 @@ function InstallPage() {
 		}
 	};
 
-	// Handle image upload
-	const handleImageUpload = () => {
-		fileInputRef?.click();
-	};
-
-	const onFileSelected = (e: Event) => {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files.length > 0) {
-			const file = target.files[0];
-			console.log("File selected:", file.name);
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				setIconPath(e.target?.result as string);
-			};
-			reader.readAsDataURL(file);
-		}
-	};
+	// Icon path is now handled by the IconPicker component
 
 	// Handle install button click
 	const handleInstall = async () => {
@@ -346,51 +338,11 @@ function InstallPage() {
 						{/* Left Column: Identity & Version */}
 						<div class="form-section">
 							<div class="form-row">
-								<Popover>
-									<PopoverTrigger class="instance-icon-trigger">
-										<div
-											class={"instance-icon-placeholder"}
-											title="Click to change icon"
-											style={
-												effectiveIcon().startsWith("linear-gradient")
-													? { background: effectiveIcon() }
-													: { "background-image": `url('${effectiveIcon()}')` }
-											}
-										/>
-									</PopoverTrigger>
-									<PopoverContent class="icon-picker-content">
-										<div class="icon-grid">
-											<For each={DEFAULT_ICONS}>
-												{(icon) => (
-													<button
-														class="icon-option"
-														style={{ background: icon }}
-														onClick={() => setIconPath(icon)}
-														title="Select color"
-													/>
-												)}
-											</For>
-										</div>
-										<div class="icon-picker-actions">
-											<LauncherButton
-												onClick={handleImageUpload}
-												variant="secondary"
-												size="small"
-												style="width: 100%"
-											>
-												Upload Custom Image
-											</LauncherButton>
-										</div>
-									</PopoverContent>
-								</Popover>
-								<input
-									type="file"
-									ref={(el) =>
-										(fileInputRef = el as HTMLInputElement | undefined)
-									}
-									style={{ display: "none" }}
-									accept="image/*"
-									onChange={onFileSelected}
+								<IconPicker
+									value={iconPath()}
+									onSelect={(icon) => setIconPath(icon)}
+									uploadedIcons={uploadedIcons()}
+									allowUpload={true}
 								/>
 								<TextFieldRoot
 									required={true}
@@ -576,8 +528,8 @@ function InstallPage() {
 						}}
 					>
 						<LauncherButton
-							variant="primary"
-							size="large"
+							color="primary"
+							size="md"
 							disabled={!instanceName() || !selectedVersion() || isInstalling()}
 							onClick={handleInstall}
 							style="min-width: 200px;"

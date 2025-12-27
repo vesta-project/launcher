@@ -50,16 +50,32 @@
 	--color__success-hue: 120;
 	--color__info-hue: var(--color__primary-hue);
 
-	/* Glassmorphism variables */
-	--bg-glass: hsl(var(--color__primary-hue) 10% 10% / 0.7);
-	--bg-surface: hsl(var(--color__primary-hue) 10% 15% / 0.8);
-	--bg-surface-hover: hsl(var(--color__primary-hue) 10% 20% / 0.85);
+	/* Liquid Glass Configuration Variables (8 controls) */
+	--liquid-inner-shadow-blur: 10px;
+	--liquid-inner-shadow-spread: -20px;
+	--liquid-inner-shadow-color: hsl(var(--color__primary-hue) 60% 80% / 0.7);
+	--liquid-tint-saturation: 30%;
+	--liquid-tint-lightness: 15%;
+	--liquid-tint-opacity: 0.8;
+	--liquid-frost-blur: 8px;
+	--liquid-noise-frequency: 2;
+	--liquid-noise-strength: 40;
+	--liquid-outer-shadow-blur: 24px;
+
+	/* Computed Liquid Glass Properties */
+	--liquid-background: hsl(var(--color__primary-hue) var(--liquid-tint-saturation) var(--liquid-tint-lightness) / var(--liquid-tint-opacity));
+	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+	--liquid-box-shadow: 
+		0 6px var(--liquid-outer-shadow-blur) rgba(0, 0, 0, 0.2),
+		inset 0 0 var(--liquid-inner-shadow-blur) var(--liquid-inner-shadow-spread) var(--liquid-inner-shadow-color);
+	
+	/* Legacy Glass variables (updated to use liquid system) */
+	--bg-glass: var(--liquid-background);
+	--bg-surface: hsl(var(--color__primary-hue) 10% 15% / 0.95);
+	--bg-surface-hover: hsl(var(--color__primary-hue) 10% 20% / 0.98);
 	--border-subtle: hsl(var(--color__primary-hue) 10% 30% / 0.4);
 	--border-glass: hsl(var(--color__primary-hue) 10% 100% / 0.15);
-	--glass-blur: blur(16px);
-	
-	/* Noise pattern for glass effect */
-	--glass-noise: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
+	--glass-blur: var(--liquid-backdrop-filter);
 }
 
 #app {
@@ -153,7 +169,33 @@ button {
 }
 
 :root[data-reduced-effects="true"] {
-	--glass-blur: none;
-	--bg-glass: hsl(var(--color__primary-hue) 10% 10% / 0.95);
-	--bg-surface: hsl(var(--color__primary-hue) 10% 15% / 0.98);
+	--liquid-backdrop-filter: none;
+	--liquid-background: var(--bg-surface);
+	--liquid-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	--bg-glass: var(--bg-surface);
+}
+
+/* Liquid Glass Utility Class */
+.liquid-glass {
+	background: var(--liquid-background);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
+	box-shadow: var(--liquid-box-shadow);
+	isolation: isolate;
+	border: 1px solid transparent;
+	position: relative;
+}
+
+/* Ensure content inside glass doesn't inherit backdrop blur */
+.liquid-glass > * {
+	backdrop-filter: none !important;
+	-webkit-backdrop-filter: none !important;
+}
+
+/* Reduced Effects Override */
+:root[data-reduced-effects="true"] .liquid-glass {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
+	filter: none;
+	border: 1px solid var(--border-subtle);
 }

@@ -2,6 +2,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
+import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
 	Popover,
 	PopoverCloseButton,
@@ -22,6 +23,7 @@ import {
 	TextFieldLabel,
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	getInstanceBySlug,
 	isInstanceRunning,
@@ -92,7 +94,16 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	const [javaArgs, setJavaArgs] = createSignal<string>("");
 	const [memoryMb, setMemoryMb] = createSignal<number[]>([2048]);
 	const [saving, setSaving] = createSignal(false);
-	let fileInputRef: HTMLInputElement | undefined;
+	
+	// Create uploadedIcons array that includes current iconPath if it's an uploaded image
+	const uploadedIcons = () => {
+		const current = iconPath();
+		// Check if current icon is uploaded (not null, not a default gradient/image)
+		if (current && !DEFAULT_ICONS.includes(current)) {
+			return [current];
+		}
+		return [];
+	};
 
 	// Check running state on mount and when instance changes
 	createEffect(async () => {
@@ -275,21 +286,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		setSaving(false);
 	};
 
-	const handleImageUpload = () => {
-		fileInputRef?.click();
-	};
-
-	const onFileSelected = (e: Event) => {
-		const target = e.target as HTMLInputElement;
-		if (target.files && target.files.length > 0) {
-			const file = target.files[0];
-			const reader = new FileReader();
-			reader.onload = (e) => {
-				setIconPath(e.target?.result as string);
-			};
-			reader.readAsDataURL(file);
-		}
-	};
+	// Icon path is now handled by the IconPicker component directly
 
 	const clearConsole = () => setLines([]);
 
@@ -366,7 +363,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 										(inst().icon_path || "").startsWith("linear-gradient")
 											? { background: inst().icon_path! }
 											: {
-													"background-image": `url('${inst().icon_path || PlaceholderImage}')`,
+													"background-image": `url('${inst().icon_path || DEFAULT_ICONS[0]}')`,
 												}
 									}
 								/>
@@ -481,13 +478,17 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 											<div class="console-toolbar">
 												<span class="console-title">Game Console</span>
 												<div class="console-toolbar-buttons">
-													<button
-														class="console-logs"
-														onClick={openLogsFolder}
-														title="Open logs folder in file explorer"
-													>
-														📁 Logs
-													</button>
+													<Tooltip placement="top">
+														<TooltipTrigger>
+															<button
+																class="console-logs"
+																onClick={openLogsFolder}
+															>
+																📁 Logs
+															</button>
+														</TooltipTrigger>
+														<TooltipContent>Open logs folder in file explorer</TooltipContent>
+													</Tooltip>
 													<button class="console-clear" onClick={clearConsole}>
 														Clear
 													</button>
@@ -531,61 +532,11 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 											<div class="settings-field">
 												<div class="form-row" style="align-items: flex-end;">
-													<Popover>
-														<PopoverTrigger as="button" class="instance-icon-trigger">
-															<div
-																class={"instance-icon-placeholder"}
-																title="Click to change icon"
-																style={
-																	(iconPath() || "").startsWith(
-																		"linear-gradient",
-																	)
-																		? { background: iconPath()! }
-																		: {
-																				"background-image": `url('${iconPath() || PlaceholderImage}')`,
-																			}
-																}
-															/>
-														</PopoverTrigger>
-														<PopoverContent class="icon-picker-content">
-															<div class="icon-grid">
-																<For each={DEFAULT_ICONS}>
-																	{(icon) => (
-																		<PopoverCloseButton
-																			as="button"
-																			class="icon-option"
-																			style={
-																				icon.startsWith("linear-gradient")
-																					? { background: icon }
-																					: { "background-image": `url(${icon})` }
-																			}
-																			onClick={() => setIconPath(icon)}
-																			title="Select icon"
-																		/>
-																	)}
-																</For>
-															</div>
-															<div class="icon-picker-actions">
-																<LauncherButton
-																	onClick={handleImageUpload}
-																	color="secondary"
-																	variant="solid"
-																	size="sm"
-																	style="width: 100%"
-																>
-																	Upload Custom Image
-																</LauncherButton>
-															</div>
-														</PopoverContent>
-													</Popover>
-													<input
-														type="file"
-														ref={(el) =>
-															(fileInputRef = el as HTMLInputElement | undefined)
-														}
-														style={{ display: "none" }}
-														accept="image/*"
-														onChange={onFileSelected}
+													<IconPicker
+														value={iconPath()}
+														onSelect={(icon) => setIconPath(icon)}
+														uploadedIcons={uploadedIcons()}
+														allowUpload={true}
 													/>
 													<TextFieldRoot style="flex: 1">
 														<TextFieldLabel>Instance Name</TextFieldLabel>

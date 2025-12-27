@@ -11,12 +11,17 @@
 .instance-details-sidebar {
 	width: 200px;
 	min-width: 200px;
-	background: var(--bg-surface);
+	background: hsl(var(--liquid-tint-color) / 0.3); /* Much lighter liquid glass background */
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
 	flex-direction: column;
 	padding: 1.5rem 1rem;
 	gap: 0.5rem;
-	border-right: 1px solid var(--border-subtle);
+	border-right: none; /* Remove regular border */
+	box-shadow: 
+		2px 0 20px rgba(0, 0, 0, 0.4), /* Strong shadow border on right */
+		inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2); /* Subtle inner highlight */
 }
 
 .instance-tabs {
@@ -28,8 +33,8 @@
 .instance-tabs button {
 	background: transparent;
 	border: none;
-	color: var(--text-color);
-	opacity: 0.6;
+	color: hsl(var(--color__primary-hue) 10% 85%); /* Lighter text for better contrast */
+	opacity: 0.8;
 	padding: 0.75rem 1rem;
 	border-radius: 8px;
 	cursor: pointer;
@@ -39,13 +44,24 @@
 }
 
 .instance-tabs button:hover {
-	background: var(--bg-surface-hover);
+	background: hsl(var(--color__primary-hue) 30% 20% / 0.4); /* Darker hover with transparency */
+	backdrop-filter: blur(10px);
+	-webkit-backdrop-filter: blur(10px);
+	color: hsl(var(--color__primary-hue) 10% 95%);
+	transform: translateX(4px); /* Subtle slide effect */
+	box-shadow: inset 0 0 20px hsl(var(--color__primary-hue) 60% 70% / 0.1);
 	opacity: 1;
 }
 
 .instance-tabs button.active {
-	background: hsl(var(--color__primary-hue) 70% 50%);
-	color: #fff;
+	background: hsl(var(--color__primary-hue) 60% 40% / 0.6);
+	backdrop-filter: blur(15px);
+	-webkit-backdrop-filter: blur(15px);
+	color: hsl(var(--color__primary-hue) 10% 95%);
+	box-shadow: 
+		inset 0 0 20px hsl(var(--color__primary-hue) 70% 50% / 0.3),
+		0 4px 12px rgba(0, 0, 0, 0.3);
+	transform: translateX(4px);
 	opacity: 1;
 }
 
@@ -56,6 +72,7 @@
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-glass);
+	color: hsl(var(--color__primary-hue) 10% 90%); /* Better text contrast */
 }
 
 .content-wrapper {
@@ -120,13 +137,14 @@
 	padding: 12px 16px;
 	gap: 16px;
 	align-items: center;
+	border: none;
 }
 
 .instance-header.shrunk .instance-header-image {
 	width: 48px;
 	height: 48px;
 	border-radius: 8px;
-	border-width: 1px;
+	border: none;
 }
 
 .instance-header.shrunk h1 {
@@ -151,59 +169,7 @@
 	position: relative; /* For absolute positioning of actions in shrunk mode */
 }
 
-/* Icon Picker Styles (Shared) */
-.instance-icon-trigger {
-	all: unset;
-	cursor: pointer;
-	border-radius: 12px;
-}
-
-.instance-icon-trigger:focus-visible {
-	outline: 2px solid hsl(var(--color__primary-hue) 80% 60%);
-	outline-offset: 2px;
-}
-
-.icon-picker-content {
-	width: 280px;
-	padding: 16px;
-	background: var(--bg-surface);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
-	border: 1px solid var(--border-subtle);
-	border-radius: 12px;
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-	display: flex;
-	flex-direction: column;
-	gap: 16px;
-	z-index: 100;
-}
-
-.icon-grid {
-	display: grid;
-	grid-template-columns: repeat(4, 1fr);
-	gap: 8px;
-}
-
-.icon-option {
-	width: 100%;
-	aspect-ratio: 1;
-	border-radius: 8px;
-	border: none;
-	box-shadow: inset 0 0 0 2px transparent, 0 1px 2px rgba(0, 0, 0, 0.06);
-	cursor: pointer;
-	transition: transform 0.1s, box-shadow 0.1s;
-	background-size: cover;
-	background-position: center;
-}
-
-.icon-option:hover {
-	transform: scale(1.1);
-}
-
-.icon-option:focus-visible {
-	outline: none;
-	box-shadow: inset 0 0 0 2px white;
-}
+/* Icon Picker Styles have been moved to @ui/icon-picker/icon-picker.css */
 
 .form-row {
 	display: flex;

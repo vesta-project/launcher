@@ -22,7 +22,7 @@ function PopoverContent<T extends ValidComponent = "div">(
 	return (
 		<PopoverPrimitive.Portal>
 			<PopoverPrimitive.Content
-				class={clsx("popover__content", local.class)}
+				class={clsx("popover__content", "liquid-glass", local.class)}
 				{...others}
 			/>
 		</PopoverPrimitive.Portal>

@@ -9,6 +9,7 @@ import {
 } from "@components/page-viewer/mini-router-config";
 import { useSearchParams } from "@solidjs/router";
 import { WindowControls } from "@tauri-controls/solid";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ensureOsType } from "@utils/os";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
 import "./standalone-page-viewer.css";
@@ -158,41 +159,57 @@ function StandalonePageViewer() {
 		<div class="standalone-page-viewer">
 			<div class="standalone-page-viewer__header">
 				<div class="standalone-page-viewer__nav-left">
-					<button
-						class="standalone-page-viewer__nav-button"
-						onClick={() => router()?.backwards()}
-						title="Back"
-						disabled={!canGoBack()}
-					>
-						<BackArrowIcon />
-					</button>
-					<button
-						class="standalone-page-viewer__nav-button forward"
-						onClick={() => router()?.forwards()}
-						title="Forward"
-						disabled={!canGoForward()}
-					>
-						<BackArrowIcon />
-					</button>
-					<button
-						class="standalone-page-viewer__nav-button"
-						onClick={reloadCurrentView}
-						title="Refresh"
-					>
-						<RefreshIcon />
-					</button>
+					<Tooltip placement="top">
+						<TooltipTrigger>
+							<button
+								class="standalone-page-viewer__nav-button"
+								onClick={() => router()?.backwards()}
+								disabled={!canGoBack()}
+							>
+								<BackArrowIcon />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent>Back</TooltipContent>
+					</Tooltip>
+					<Tooltip placement="top">
+						<TooltipTrigger>
+							<button
+								class="standalone-page-viewer__nav-button forward"
+								onClick={() => router()?.forwards()}
+								disabled={!canGoForward()}
+							>
+								<BackArrowIcon />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent>Forward</TooltipContent>
+					</Tooltip>
+					<Tooltip placement="top">
+						<TooltipTrigger>
+							<button
+								class="standalone-page-viewer__nav-button"
+								onClick={reloadCurrentView}
+							>
+								<RefreshIcon />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent>Refresh</TooltipContent>
+					</Tooltip>
 				</div>
 				<div class="standalone-page-viewer__title" data-tauri-drag-region>
 					{router()?.currentElement().name || "Page Viewer"}
 				</div>
 				<div class="standalone-page-viewer__nav-right">
-					<button
-						class="standalone-page-viewer__nav-button"
-						onClick={copyUrl}
-						title="Copy URL"
-					>
-						<LinkIcon />
-					</button>
+					<Tooltip placement="top">
+						<TooltipTrigger>
+							<button
+								class="standalone-page-viewer__nav-button"
+								onClick={copyUrl}
+							>
+								<LinkIcon />
+							</button>
+						</TooltipTrigger>
+						<TooltipContent>Copy URL</TooltipContent>
+					</Tooltip>
 				</div>
 				<WindowControls
 					class={"standalone-page-viewer__controls " + `controls-${osType()}`}

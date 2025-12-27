@@ -32,8 +32,10 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import type { Instance } from "@utils/instances";
 import {
+	DEFAULT_ICONS,
 	deleteInstance,
 	getInstanceId,
 	getInstanceSlug,
@@ -193,6 +195,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const canLaunch = () =>
 		!busy() && !isInstalling() && isInstalled() && !isRunning();
 
+	const playButtonTooltip = () =>
+		needsInstallation()
+			? "Needs Installation"
+			: isRunning()
+				? "Running (click to stop)"
+				: "Launch";
+
 	const toggleRun = async () => {
 		if (busy()) return;
 		setBusy(true);
@@ -306,6 +315,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setBusy(false);
 	};
 
+	console.log("eee Path: ", props.instance.icon_path);
+
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger
@@ -322,12 +333,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 				}}
 				onClick={openInstanceDetails}
 				style={
-					props.instance.icon_path
-						? props.instance.icon_path.startsWith("linear-gradient")
-							? { "--instance-bg-image": props.instance.icon_path }
-							: { "--instance-bg-image": `url('${props.instance.icon_path}')` }
-						: undefined
+						(props.instance.icon_path || "").startsWith("linear-gradient")
+																	? { background: props.instance.icon_path! }
+																	: {
+																			"background-image": `url('${props.instance.icon_path || DEFAULT_ICONS[0]}')`,
+																		}
 				}
+				data-instance={instanceSlug}
 			>
 				<Switch>
 					<Match when={isInstalling()}>
@@ -349,40 +361,42 @@ export default function InstanceCard(props: InstanceCardProps) {
 									<span class="running">Running</span>
 								</Show>
 								<Show when={hasCrashed()}>
-									<span 
-										class="crashed"
-										onClick={(e) => {
-											e.stopPropagation();
-											setShowCrashModal(true);
-										}}
-										style={{ cursor: "pointer" }}
-										title="Click to view crash details"
-									>
-										Crashed
-									</span>
+									<Tooltip placement="top">
+										<TooltipTrigger>
+											<span 
+												class="crashed"
+												onClick={(e) => {
+													e.stopPropagation();
+													setShowCrashModal(true);
+												}}
+												style={{ cursor: "pointer" }}
+											>
+												Crashed
+											</span>
+										</TooltipTrigger>
+										<TooltipContent>Click to view crash details</TooltipContent>
+									</Tooltip>
 								</Show>
 							</div>
 							<Show when={hover()}>
-								<button
-									class="play-button"
-									onClick={handleClick}
-									disabled={isInstalling()}
-									title={
-										needsInstallation()
-											? "Needs Installation"
-											: isRunning()
-												? "Running (click to stop)"
-												: "Launch"
-									}
-								>
-									{needsInstallation() ? (
-										<ErrorIcon />
-									) : isRunning() ? (
-										<KillIcon />
-									) : (
-										<PlayIcon />
-									)}
-								</button>
+								<Tooltip placement="top">
+									<TooltipTrigger>
+										<button
+											class="play-button"
+											onClick={handleClick}
+											disabled={isInstalling()}
+										>
+											{needsInstallation() ? (
+												<ErrorIcon />
+											) : isRunning() ? (
+												<KillIcon />
+											) : (
+												<PlayIcon />
+											)}
+										</button>
+									</TooltipTrigger>
+									<TooltipContent>{playButtonTooltip()}</TooltipContent>
+								</Tooltip>
 							</Show>
 						</div>
 						<div class="instance-card-bottom">
