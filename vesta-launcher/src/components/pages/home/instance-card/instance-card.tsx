@@ -75,6 +75,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const instanceSlug = getInstanceSlug(props.instance);
 
 	onMount(async () => {
+		// Check current running status on mount
+		try {
+			const isCurrentlyRunning = await isInstanceRunning(props.instance);
+			if (isCurrentlyRunning) {
+				setRunningIds((prev) => new Set(prev).add(instanceSlug));
+			}
+		} catch (error) {
+			console.error("Failed to check instance running status:", error);
+		}
+
 		const unlistenLaunch = await listen("core://instance-launched", (event) => {
 			const payload = (event as any).payload as {
 				name: string;
@@ -358,7 +368,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div class="instance-card-top">
 							<div class="instance-card-indicators">
 								<Show when={isRunning()}>
-									<span class="running">Running</span>
+									<span class="running">
+										<div class="status-dot" />
+										Running
+									</span>
 								</Show>
 								<Show when={hasCrashed()}>
 									<Tooltip placement="top">
@@ -371,6 +384,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 												}}
 												style={{ cursor: "pointer" }}
 											>
+												<div class="status-dot" />
 												Crashed
 											</span>
 										</TooltipTrigger>
@@ -378,26 +392,30 @@ export default function InstanceCard(props: InstanceCardProps) {
 									</Tooltip>
 								</Show>
 							</div>
-							<Show when={hover()}>
-								<Tooltip placement="top">
-									<TooltipTrigger>
-										<button
-											class="play-button"
-											onClick={handleClick}
-											disabled={isInstalling()}
-										>
-											{needsInstallation() ? (
-												<ErrorIcon />
-											) : isRunning() ? (
-												<KillIcon />
-											) : (
-												<PlayIcon />
-											)}
-										</button>
-									</TooltipTrigger>
-									<TooltipContent>{playButtonTooltip()}</TooltipContent>
-								</Tooltip>
-							</Show>
+							<Tooltip placement="top">
+								<TooltipTrigger>
+									<button
+										class={`play-button ${
+											needsInstallation() 
+												? "install" 
+												: isRunning() 
+													? "kill" 
+													: "launch"
+										}`}
+										onClick={handleClick}
+										disabled={isInstalling()}
+									>
+										{needsInstallation() ? (
+											<ErrorIcon />
+										) : isRunning() ? (
+											<KillIcon />
+										) : (
+											<PlayIcon />
+										)}
+									</button>
+								</TooltipTrigger>
+								<TooltipContent>{playButtonTooltip()}</TooltipContent>
+							</Tooltip>
 						</div>
 						<div class="instance-card-bottom">
 							<h1>{props.instance.name}</h1>
