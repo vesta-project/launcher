@@ -156,6 +156,7 @@ function Sidebar(props: SidebarProps) {
 						tooltip_text={"Notifications"}
 					>
 						<div style={{ position: "relative", display: "flex" }}>
+							<BellIcon />
 							{notifData().hasActiveTask && (
 								<Tooltip placement="top">
 									<TooltipTrigger>

@@ -1,5 +1,10 @@
 /* Icon Picker Component Styles */
 
+.icon-picker__anchor {
+	display: inline-block;
+	position: relative;
+}
+
 .icon-picker__trigger {
 	all: unset;
 	cursor: pointer;

@@ -1,7 +1,7 @@
 import { PolymorphicProps } from "@kobalte/core";
 import * as ButtonPrimitive from "@kobalte/core/button";
 import { ClassProp } from "@ui/props";
-import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { clsx } from "clsx";
 import { createSignal, For, Show, splitProps, ValidComponent } from "solid-js";
@@ -98,12 +98,14 @@ export function IconPicker<T extends ValidComponent = "button">(
 
 	return (
 		<Popover open={isOpen()} onOpenChange={setIsOpen}>
-			<PopoverTrigger
-				as={ButtonPrimitive.Root}
-				class={clsx("icon-picker__trigger", local.class)}
-				style={getTriggerStyle()}
-				{...local.triggerProps}
-			/>
+			<PopoverAnchor as="div" class="icon-picker__anchor">
+				<PopoverTrigger
+					as={ButtonPrimitive.Root}
+					class={clsx("icon-picker__trigger", local.class)}
+					style={getTriggerStyle()}
+					{...local.triggerProps}
+				/>
+			</PopoverAnchor>
 			<PopoverContent 
 				class="icon-picker__content" 
 				style={{ width: `${gridColumns() * 64 + (gridColumns() - 1) * 8 + 32}px` }}
