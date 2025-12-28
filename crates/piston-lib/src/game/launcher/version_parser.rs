@@ -292,6 +292,12 @@ pub async fn resolve_version_chain(version_id: &str, data_dir: &Path) -> Result<
     if let Some(parent_id) = manifest.inherits_from.clone() {
         let parent = Box::pin(resolve_version_chain(&parent_id, data_dir)).await?;
         manifest = merge_manifests(parent, manifest)?;
+        
+        // Validate the merged result
+        let validation_warnings = validate_manifest(&manifest)?;
+        for warning in validation_warnings {
+            log::warn!("Manifest validation for {}: {}", manifest.id, warning);
+        }
     }
 
     Ok(manifest)
@@ -345,17 +351,33 @@ pub(crate) fn merge_manifests(
     // Child's ID takes precedence
     parent.id = child.id;
 
-    // Child's main class overrides parent's
-    if child.main_class.is_some() {
-        parent.main_class = child.main_class;
+    // CRITICAL FIX: Child main class should only override if it's NOT a modloader
+    // Most modloaders (Forge/Fabric) should inherit the vanilla main class
+    if let Some(ref child_main_class) = child.main_class {
+        // Only override if it's not a LaunchWrapper (which most modloaders use)
+        // or if the parent doesn't have a main class
+        if child_main_class != "net.minecraft.launchwrapper.Launch" || parent.main_class.is_none() {
+            parent.main_class = child.main_class;
+        }
+        // If child uses LaunchWrapper but parent has a different main class,
+        // this likely means we should preserve the parent's main class for compatibility
+    } else if parent.main_class.is_none() {
+        // Provide sensible default if neither has main class
+        parent.main_class = Some("net.minecraft.client.Minecraft".to_string());
     }
 
-    // Merge arguments
+    // CRITICAL FIX: Merge arguments properly - modloader args should come FIRST
     if let Some(child_args) = child.arguments {
         if let Some(ref mut parent_args) = parent.arguments {
-            // Append child arguments to parent
-            parent_args.game.extend(child_args.game);
-            parent_args.jvm.extend(child_args.jvm);
+            // PREPEND child arguments before parent (modloader tweaks come first)
+            let mut new_game_args = child_args.game;
+            new_game_args.extend(parent_args.game.clone());
+            parent_args.game = new_game_args;
+            
+            // For JVM args, child args typically come first (modloader JVM flags)
+            let mut new_jvm_args = child_args.jvm;
+            new_jvm_args.extend(parent_args.jvm.clone());
+            parent_args.jvm = new_jvm_args;
         } else {
             parent.arguments = Some(child_args);
         }
@@ -395,12 +417,169 @@ pub(crate) fn merge_manifests(
     Ok(parent)
 }
 
-/// Get the main class from a manifest
+/// Validate a merged manifest to ensure it can be launched successfully
+pub fn validate_manifest(manifest: &VersionManifest) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+
+    // Check for main class
+    if manifest.main_class.is_none() {
+        warnings.push("No main class specified - will use default".to_string());
+    }
+
+    // Validate main class makes sense
+    if let Some(ref main_class) = manifest.main_class {
+        if main_class == "net.minecraft.launchwrapper.Launch" {
+            // Check if we have appropriate tweaker arguments
+            let has_tweakers = manifest.arguments
+                .as_ref()
+                .map(|args| args.game.iter().any(|arg| {
+                    match arg {
+                        Argument::Simple(s) => s.contains("tweakClass"),
+                        Argument::Conditional { .. } => false, // More complex check would be needed
+                    }
+                }))
+                .unwrap_or(false) || 
+                manifest.minecraft_arguments
+                    .as_ref()
+                    .map(|args| args.contains("tweakClass"))
+                    .unwrap_or(false);
+
+            if !has_tweakers && manifest.id != "1.0" {
+                warnings.push(format!(
+                    "LaunchWrapper main class specified but no tweaker classes found for version {}", 
+                    manifest.id
+                ));
+            }
+        }
+    }
+
+    // Check for assets/asset_index
+    if manifest.asset_index.is_none() && manifest.assets.is_none() {
+        warnings.push("No asset information specified".to_string());
+    }
+
+    // Check library count
+    if manifest.libraries.is_empty() {
+        warnings.push("No libraries specified - this may cause runtime failures".to_string());
+    }
+
+    // Validate arguments structure
+    if let Some(ref args) = manifest.arguments {
+        if args.game.is_empty() && manifest.minecraft_arguments.is_none() {
+            warnings.push("No game arguments specified".to_string());
+        }
+    } else if manifest.minecraft_arguments.is_none() {
+        warnings.push("No game arguments specified (neither modern nor legacy format)".to_string());
+    }
+
+    Ok(warnings)
+}
+
+/// Determines if a version is a "legacy" version that predates LaunchWrapper.
+/// 
+/// LaunchWrapper (net.minecraft.launchwrapper.Launch) was introduced in Minecraft 1.6
+/// (released July 1, 2013). Versions before this used direct main() invocation or
+/// Applet-based launching.
+/// 
+/// Mojang has retroactively modified old version manifests to use LaunchWrapper,
+/// but this doesn't actually work properly for these old versions. We need to
+/// detect them and use the correct direct launch method instead.
+/// 
+/// Detection criteria:
+/// 1. Asset index ID is "pre-1.6" or "legacy" 
+/// 2. Release date is before July 2013
+/// 3. Version ID pattern matches known legacy versions
+pub fn is_legacy_version(manifest: &VersionManifest) -> bool {
+    // Check asset index - "pre-1.6" or "legacy" indicates old version
+    if let Some(ref asset_index) = manifest.asset_index {
+        if asset_index.id == "pre-1.6" || asset_index.id == "legacy" {
+            log::debug!(
+                "Version {} detected as legacy: asset_index.id = {}",
+                manifest.id,
+                asset_index.id
+            );
+            return true;
+        }
+    }
+    
+    // Check assets field (older manifests use this)
+    if let Some(ref assets) = manifest.assets {
+        if assets == "pre-1.6" || assets == "legacy" {
+            log::debug!(
+                "Version {} detected as legacy: assets = {}",
+                manifest.id,
+                assets
+            );
+            return true;
+        }
+    }
+    
+    // Check release time - LaunchWrapper was introduced July 1, 2013
+    // Anything before that date is legacy
+    if let Some(ref release_time) = manifest.release_time {
+        // Parse ISO 8601 date format: 2012-03-01T00:00:00+00:00
+        if let Ok(date) = chrono::DateTime::parse_from_rfc3339(release_time) {
+            // LaunchWrapper was introduced with 1.6 on July 1, 2013
+            let launchwrapper_date = chrono::DateTime::parse_from_rfc3339("2013-07-01T00:00:00+00:00")
+                .expect("Invalid hardcoded date");
+            
+            if date < launchwrapper_date {
+                log::debug!(
+                    "Version {} detected as legacy: release_time {} < 2013-07-01",
+                    manifest.id,
+                    release_time
+                );
+                return true;
+            }
+        }
+    }
+    
+    // Additional check: if main_class is LaunchWrapper but minecraft_arguments
+    // doesn't contain --tweakClass, it's likely a retrofitted legacy version
+    // that can't actually work with LaunchWrapper
+    if let Some(ref main_class) = manifest.main_class {
+        if main_class == "net.minecraft.launchwrapper.Launch" {
+            if let Some(ref args) = manifest.minecraft_arguments {
+                if !args.contains("--tweakClass") {
+                    log::debug!(
+                        "Version {} detected as legacy: uses LaunchWrapper but no --tweakClass",
+                        manifest.id
+                    );
+                    return true;
+                }
+            }
+        }
+    }
+    
+    false
+}
+
+/// Get the main class from a manifest, with special handling for legacy versions.
+/// 
+/// For versions that predate LaunchWrapper (pre-1.6), Mojang's manifests have been
+/// retroactively modified to use `net.minecraft.launchwrapper.Launch`, but this
+/// doesn't work. We override these to use the original direct main class.
 pub fn get_main_class(manifest: &VersionManifest) -> Result<String> {
-    manifest
-        .main_class
-        .clone()
-        .ok_or_else(|| anyhow::anyhow!("No main class specified in version manifest"))
+    // Check if this is a legacy version that shouldn't use LaunchWrapper
+    if is_legacy_version(manifest) {
+        if let Some(ref main_class) = manifest.main_class {
+            if main_class == "net.minecraft.launchwrapper.Launch" {
+                log::info!(
+                    "Legacy version {} has LaunchWrapper as main class - overriding to net.minecraft.client.Minecraft",
+                    manifest.id
+                );
+                return Ok("net.minecraft.client.Minecraft".to_string());
+            }
+        }
+    }
+    
+    if let Some(ref main_class) = manifest.main_class {
+        Ok(main_class.clone())
+    } else {
+        // Default main class for versions that don't specify one
+        // Most legacy versions use this directly
+        Ok("net.minecraft.client.Minecraft".to_string())
+    }
 }
 
 /// Get the asset index from a manifest

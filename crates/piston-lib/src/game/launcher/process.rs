@@ -1,11 +1,11 @@
 /// Process management and game launch orchestration
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
-    classpath::{build_classpath, OsType},
+    classpath::{build_classpath, validate_classpath, OsType},
     natives::extract_natives,
     registry::register_instance,
     types::{GameInstance, LaunchResult, LaunchSpec},
-    version_parser::{get_main_class, resolve_version_chain},
+    version_parser::{get_main_class, is_legacy_version, resolve_version_chain},
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -207,10 +207,57 @@ pub async fn launch_game(
         }
     }
 
-    // 4. Build classpath
+    // Determine if this is a legacy version (pre-LaunchWrapper, before Minecraft 1.6)
+    let is_legacy = is_legacy_version(&manifest);
+    if is_legacy {
+        log::info!(
+            "Version {} detected as legacy (pre-LaunchWrapper) - using direct launch",
+            spec.version_id
+        );
+    }
+
+    // For legacy versions, filter out LaunchWrapper-related libraries
+    // These were added retroactively by Mojang but don't work for old versions
+    let libraries_for_classpath = if is_legacy {
+        manifest.libraries.iter()
+            .filter(|lib| {
+                let name_lower = lib.name.to_lowercase();
+                // Filter out LaunchWrapper and its related dependencies
+                if name_lower.contains("launchwrapper") 
+                    || name_lower.contains("jopt-simple")
+                    || name_lower.contains("asm-all") 
+                {
+                    log::debug!("Filtering legacy-incompatible library: {}", lib.name);
+                    false
+                } else {
+                    true
+                }
+            })
+            .cloned()
+            .collect::<Vec<_>>()
+    } else {
+        manifest.libraries.clone()
+    };
+
+    // 4. Validate classpath requirements before building
+    log::debug!("Validating classpath requirements");
+    let validation = validate_classpath(
+        &libraries_for_classpath,
+        &spec.libraries_dir(),
+        OsType::current(),
+    )
+    .context("Classpath validation failed - missing required libraries")?;
+    
+    log::info!(
+        "Classpath validation: {} valid, {} excluded libraries", 
+        validation.valid_libraries.len(),
+        validation.excluded_libraries.len()
+    );
+
+    // 5. Build classpath (now guaranteed to succeed)
     log::debug!("Building classpath");
     let mut classpath = build_classpath(
-        &manifest.libraries,
+        &libraries_for_classpath,
         &spec.libraries_dir(),
         OsType::current(),
     )
@@ -313,7 +360,6 @@ pub async fn launch_game(
     // On Unix: Use setsid() to create new session
     #[cfg(windows)]
     {
-        use std::os::windows::process::CommandExt;
         const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
         // Note: We don't use DETACHED_PROCESS (0x8) as it would prevent stdout/stderr piping
         // CREATE_NEW_PROCESS_GROUP alone allows the process to survive parent exit while
@@ -670,7 +716,6 @@ pub async fn kill_instance(instance_id: &str) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
 
     #[test]
     fn test_verify_java() {

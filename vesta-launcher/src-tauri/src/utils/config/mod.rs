@@ -363,8 +363,8 @@ mod tests {
                 "SELECT id, background_hue, theme, language, max_download_threads, max_memory_mb, 
                     java_path, default_game_dir, auto_update_enabled,
                     notification_enabled, startup_check_updates, show_tray_icon, 
-                    minimize_to_tray, reduced_motion, last_window_width, last_window_height,
-                    debug_logging, notification_retention_days
+                    minimize_to_tray, reduced_motion, reduced_effects, last_window_width, last_window_height,
+                    debug_logging, notification_retention_days, active_account_uuid
              FROM app_config WHERE id = 1",
             )
             .unwrap();
@@ -386,11 +386,12 @@ mod tests {
                     show_tray_icon: row.get(11)?,
                     minimize_to_tray: row.get(12)?,
                     reduced_motion: row.get(13)?,
-                    last_window_width: row.get(14)?,
-                    last_window_height: row.get(15)?,
-                    debug_logging: row.get(16)?,
-                    notification_retention_days: row.get(17)?,
-                    active_account_uuid: None, // Default for test
+                    reduced_effects: row.get(14)?,
+                    last_window_width: row.get(15)?,
+                    last_window_height: row.get(16)?,
+                    debug_logging: row.get(17)?,
+                    notification_retention_days: row.get(18)?,
+                    active_account_uuid: row.get(19)?,
                 })
             })
             .unwrap();

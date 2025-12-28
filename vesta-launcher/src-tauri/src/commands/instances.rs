@@ -5,7 +5,7 @@ use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db_manager::get_data_db;
 use crate::utils::sqlite::{SqlTable, AUTOINCREMENT};
 use std::sync::Arc;
-use tauri::{Manager, State, Emitter};
+use tauri::{Manager, State};
 
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
@@ -311,9 +311,6 @@ pub fn create_instance(instance: Instance) -> Result<i32, String> {
         &seen_names,
     );
 
-    // Recompute slug based on the potentially modified name
-    slug = instance.slug();
-
     // Also ensure that the on-disk path doesn't already exist
     let instances_root = data_dir.join("instances");
 
@@ -452,7 +449,7 @@ pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Resu
         .map_err(|e| format!("Failed to query existing instance: {}", e))?;
 
     let old_name = existing_row.0;
-    let old_game_dir = existing_row.1;
+    let _old_game_dir = existing_row.1;
 
     let old_slug = crate::utils::sanitize::sanitize_instance_name(&old_name);
     let mut new_slug = instance.slug();

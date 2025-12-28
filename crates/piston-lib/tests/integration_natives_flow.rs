@@ -19,10 +19,10 @@ async fn integration_installer_launcher_natives_flow() {
     classifiers.insert(
         "natives-windows-64".to_string(),
         Artifact {
-            path: "placeholder".to_string(),
-            url: "https://example.com/fake.jar".to_string(),
-            sha1: "deadbeef".to_string(),
-            size: 123,
+            path: Some("placeholder".to_string()),
+            url: Some("https://example.com/fake.jar".to_string()),
+            sha1: Some("deadbeef".to_string()),
+            size: Some(123),
         },
     );
 

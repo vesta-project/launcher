@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -42,6 +41,10 @@ impl ProgressReporter for ConsoleReporter {
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
         println!("[STEP COUNT] {}/{:?}", current, total);
+    }
+
+    fn set_substep(&self, name: Option<&str>, current: Option<u32>, total: Option<u32>) {
+        println!("[SUBSTEP] name={:?} {}/{:?}", name, current.unwrap_or(0), total);
     }
 
     fn set_actions(&self, actions: Option<Vec<NotificationActionSpec>>) {

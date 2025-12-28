@@ -3,6 +3,31 @@ use crate::game::launcher::version_parser::{Library, Rule, RuleAction};
 use anyhow::Result;
 use std::path::Path;
 
+/// Validation errors that occur during launch preparation
+#[derive(Debug, thiserror::Error)]
+pub enum ValidationError {
+    #[error("Required library not found: {library_path}")]
+    LibraryNotFound { library_path: String },
+    
+    #[error("Invalid Maven coordinates: {coords}")]
+    InvalidMavenCoords { coords: String },
+    
+    #[error("Rule evaluation failed for library: {library_name}")]
+    RuleEvaluationFailed { library_name: String },
+    
+    #[error("Architecture not supported: {arch} for OS: {os}")]
+    UnsupportedArchitecture { arch: String, os: String },
+}
+
+/// Results of classpath validation
+#[derive(Debug)]
+pub struct ClasspathValidation {
+    pub valid_libraries: Vec<String>,
+    pub missing_libraries: Vec<String>,
+    pub excluded_libraries: Vec<String>,
+    pub warnings: Vec<String>,
+}
+
 /// Operating system type for rule evaluation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OsType {
@@ -52,19 +77,83 @@ pub fn build_classpath(libraries: &[Library], libraries_dir: &Path, os: OsType) 
             continue;
         }
 
+        // CRITICAL FIX: Skip platform-only libraries from classpath
+        // These libraries (lwjgl-platform, jinput-platform) are native-only containers
+        if is_native_only_library(&library.name) {
+            log::debug!("Skipping native-only library from classpath: {}", library.name);
+            continue;
+        }
+
         // Convert Maven coordinates to file path
         let lib_path = maven_to_path(&library.name)?;
         let full_path = libraries_dir.join(&lib_path);
 
-        // Add to classpath if file exists
+        // Add to classpath if file exists - FAIL if missing required library
         if full_path.exists() {
             classpath_entries.push(full_path.to_string_lossy().to_string());
         } else {
-            log::warn!("Library not found: {:?}", full_path);
+            return Err(ValidationError::LibraryNotFound {
+                library_path: full_path.to_string_lossy().to_string(),
+            }.into());
         }
     }
 
     Ok(classpath_entries.join(os.classpath_separator()))
+}
+
+/// Validate classpath requirements before launch
+pub fn validate_classpath(libraries: &[Library], libraries_dir: &Path, os: OsType) -> Result<ClasspathValidation> {
+    let mut validation = ClasspathValidation {
+        valid_libraries: Vec::new(),
+        missing_libraries: Vec::new(),
+        excluded_libraries: Vec::new(),
+        warnings: Vec::new(),
+    };
+
+    for library in libraries {
+        // Check if this library should be included for this OS
+        if !should_include_library(library, os) {
+            validation.excluded_libraries.push(library.name.clone());
+            continue;
+        }
+
+        // CRITICAL FIX: Skip platform-only libraries from classpath validation
+        // These libraries (lwjgl-platform, jinput-platform) are native-only containers
+        // and should NOT be expected as JAR files on the classpath
+        if is_native_only_library(&library.name) {
+            log::debug!("Skipping native-only library from classpath validation: {}", library.name);
+            validation.excluded_libraries.push(library.name.clone());
+            continue;
+        }
+
+        // Convert Maven coordinates to file path
+        let lib_path = match maven_to_path(&library.name) {
+            Ok(path) => path,
+            Err(_) => {
+                validation.warnings.push(format!("Invalid Maven coordinates: {}", library.name));
+                continue;
+            }
+        };
+        
+        let full_path = libraries_dir.join(&lib_path);
+        
+        if full_path.exists() {
+            validation.valid_libraries.push(full_path.to_string_lossy().to_string());
+        } else {
+            validation.missing_libraries.push(full_path.to_string_lossy().to_string());
+        }
+    }
+
+    // Fail if any required libraries are missing
+    if !validation.missing_libraries.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Missing {} required libraries: {}", 
+            validation.missing_libraries.len(),
+            validation.missing_libraries.join(", ")
+        ));
+    }
+
+    Ok(validation)
 }
 
 /// Check if a library should be included based on rules
@@ -98,20 +187,75 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
                 return false;
             }
         }
-
-        // TODO: Check version and arch if needed
-        // For now, we only check OS name
+        
+        // Check architecture constraints
+        if let Some(ref arch) = os_rule.arch {
+            let current_arch = get_system_architecture();
+            if arch != current_arch {
+                return false;
+            }
+        }
+        
+        // Check OS version constraints (basic implementation)
+        if let Some(ref version) = os_rule.version {
+            // For now, just log that we're ignoring version constraints
+            log::debug!("OS version constraint '{}' not fully implemented, assuming match", version);
+        }
     }
 
-    // If there are feature constraints, we'd check them here
-    // For now, we don't support features
-    if rule.features.is_some() {
-        // Skip rules with features we don't understand
-        return false;
+    // If there are feature constraints, evaluate them
+    if let Some(ref features) = rule.features {
+        for (feature_name, required_state) in features {
+            match feature_name.as_str() {
+                "is_demo_user" => {
+                    // Most users are not demo users
+                    if *required_state {
+                        return false;
+                    }
+                }
+                "has_custom_resolution" => {
+                    // Assume false for now
+                    if *required_state {
+                        return false;
+                    }
+                }
+                _ => {
+                    // Unknown feature, be conservative and exclude
+                    log::warn!("Unknown feature constraint: {}", feature_name);
+                    return false;
+                }
+            }
+        }
     }
 
     // Rule matches
     true
+}
+
+/// Get current system architecture string
+fn get_system_architecture() -> &'static str {
+    #[cfg(target_arch = "x86_64")]
+    return "x64";
+    
+    #[cfg(target_arch = "x86")]
+    return "x86";
+    
+    #[cfg(target_arch = "aarch64")]
+    return "arm64";
+    
+    // Default fallback for other architectures
+    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
+    "x64"
+}
+
+/// Check if a library is native-only and should not be expected on classpath
+fn is_native_only_library(name: &str) -> bool {
+    // Platform libraries are containers for native files only, not Java code
+    name.contains("lwjgl-platform") || 
+    name.contains("jinput-platform") ||
+    name.ends_with("-platform") ||
+    // Add other known native-only patterns
+    (name.contains("platform") && (name.contains("lwjgl") || name.contains("jinput") || name.contains("native")))
 }
 
 /// Convert Maven coordinates to file path
@@ -204,7 +348,6 @@ pub fn create_classpath_jar(paths: &[String], temp_dir: &Path) -> Result<PathBuf
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs;
 
     #[test]
     fn test_maven_to_path_simple() {

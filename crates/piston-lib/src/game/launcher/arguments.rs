@@ -64,7 +64,12 @@ pub fn build_jvm_arguments(
     // Add manifest arguments
     args.extend(manifest_args);
 
-    // Note: -cp and ${classpath} are included in the manifest JVM args, processed above
+    // For legacy versions (like 1.0) that don't have JVM args in manifest, add classpath manually
+    let has_classpath = args.iter().any(|arg| arg == "-cp" || arg.starts_with("-cp=") || arg.starts_with("-classpath"));
+    if !has_classpath && manifest.arguments.is_none() {
+        args.push("-cp".to_string());
+        args.push(classpath.to_string());
+    }
 
     args
 }
@@ -444,7 +449,7 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &VersionManifest) -> HashMa
     let assets_canon = canonicalize(&assets_dir)
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|_| assets_dir.to_string_lossy().to_string());
-    vars.insert("assets_root".to_string(), assets_canon);
+    vars.insert("assets_root".to_string(), assets_canon.clone());
 
     // Asset index
     if let Some(ref asset_index) = manifest.asset_index {
@@ -452,6 +457,9 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &VersionManifest) -> HashMa
     } else if let Some(ref assets) = manifest.assets {
         vars.insert("assets_index_name".to_string(), assets.clone());
     }
+    
+    // Game assets directory (legacy versions like 1.0 use ${game_assets})
+    vars.insert("game_assets".to_string(), assets_canon);
 
     // Resolution
     if let Some(width) = spec.window_width {
@@ -549,6 +557,8 @@ mod tests {
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
         };
 
         let manifest = VersionManifest {
@@ -619,6 +629,8 @@ mod tests {
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
         };
 
         let mut vars = HashMap::new();
@@ -682,6 +694,8 @@ mod tests {
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
         };
 
         // Rule requiring demo user should match

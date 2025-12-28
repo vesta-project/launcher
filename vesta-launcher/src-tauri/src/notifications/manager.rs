@@ -37,11 +37,7 @@ impl ActionHandler for CancelTaskHandler {
 mod tests {
     use super::*;
     use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
-    use crate::notifications::store::NotificationStore;
-    use std::sync::{Arc, Mutex};
-    use std::time::{Duration, Instant};
-    use tauri::Builder;
-    use tauri::Manager;
+
 
     // Helper to build a minimal Tauri app for manager tests
     // NOTE: Upsert tests disabled on Windows due to Tauri event loop constraints (must run on main thread).
