@@ -42,6 +42,7 @@ import {
 	Show,
 } from "solid-js";
 import "./instance-details.css";
+import Button from "@ui/button/button";
 
 type TabType = "home" | "console" | "mods" | "settings";
 
@@ -479,13 +480,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 												<span class="console-title">Game Console</span>
 												<div class="console-toolbar-buttons">
 													<Tooltip placement="top">
-														<TooltipTrigger>
-															<button
-																class="console-logs"
-																onClick={openLogsFolder}
-															>
-																📁 Logs
-															</button>
+														<TooltipTrigger onClick={openLogsFolder} as={Button}>
+															📁 Logs
 														</TooltipTrigger>
 														<TooltipContent>Open logs folder in file explorer</TooltipContent>
 													</Tooltip>

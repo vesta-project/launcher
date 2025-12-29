@@ -1,4 +1,5 @@
 import LauncherButton from "@ui/button/button";
+import { Checkbox } from "@ui/checkbox/checkbox";
 import {
 	Combobox,
 	ComboboxContent,
@@ -52,7 +53,11 @@ import "./install-page.css";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
 
-function InstallPage() {
+interface InstallPageProps {
+	close?: () => void;
+}
+
+function InstallPage(props: InstallPageProps) {
 	// Safe navigation wrapper
 	const navigate = (() => {
 		try {
@@ -62,26 +67,6 @@ function InstallPage() {
 			return (path: string) => console.log("Mock navigation to:", path);
 		}
 	})();
-
-	onMount(async () => {
-		await listen<{ name: string }>("core://instance-installed", async (ev) => {
-			
-
-			// Check if we're in a mini window and close it
-			const { getCurrentWindow } = await import("@tauri-apps/api/window");
-			const currentWindow = getCurrentWindow();
-			const label = currentWindow.label;
-			console.log("[InstallPage] Current window label:", label);
-
-			if (label.startsWith("mini-")) {
-				console.log("[InstallPage] Closing mini window");
-				await currentWindow.close();
-			} else {
-				console.log("[InstallPage] Navigating to home");
-				navigate("/home");
-			}
-		});
-	});
 
 	// Basic State
 	const [activeTab, setActiveTab] = createSignal("basic");
@@ -109,6 +94,7 @@ function InstallPage() {
 	const [memory, setMemory] = createSignal([2048]); // Slider uses array
 	const [resolutionWidth, setResolutionWidth] = createSignal("854");
 	const [resolutionHeight, setResolutionHeight] = createSignal("480");
+	const [includeUnstableVersions, setIncludeUnstableVersions] = createSignal(false);
 
 	const [isInstalling, setIsInstalling] = createSignal(false);
 	const [isReloading, setIsReloading] = createSignal(false);
@@ -126,10 +112,10 @@ function InstallPage() {
 		if (!metadata()) return [];
 
 		return metadata()!.game_versions.filter((v) => {
-			// Only show stable versions
-			if (!v.stable) return false;
+			// Filter by stability (only show unstable if enabled)
+			if (!includeUnstableVersions() && !v.stable) return false;
 
-			// If vanilla, show all stable versions
+			// If vanilla, show all versions (stable or unstable based on setting)
 			if (loader === "vanilla") return true;
 
 			// Otherwise, only show versions that support the selected loader
@@ -271,17 +257,21 @@ function InstallPage() {
 				updated_at: null,
 			};
 
-			await installInstance(fullInstance);
-
-			// Close window immediately after queuing installation
+			// Close mini-router immediately when installation begins
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			const currentWindow = getCurrentWindow();
 			const label = currentWindow.label;
-			if (label.startsWith("mini-")) {
-				await currentWindow.close();
-			} else {
-				navigate("/home");
+			if (!label.startsWith("page-viewer-")) {
+				// Not a standalone window, so close the mini-window overlay
+				props.close?.();
 			}
+
+			await installInstance(fullInstance);
+
+			// // Close standalone windows after installation completes
+			// if (label.startsWith("page-viewer-")) {
+			// 	await currentWindow.close();
+			// }
 
 			// Reset form
 			setInstanceName("");
@@ -416,6 +406,19 @@ function InstallPage() {
 						{/* Right Column: Advanced Settings */}
 						<Show when={activeTab() === "advanced"}>
 							<div class="form-section">
+								<h2 class="form-section-title">Version Options</h2>
+								<div class="form-field">
+									<Checkbox
+										checked={includeUnstableVersions()}
+										onChange={setIncludeUnstableVersions}
+									>
+										Include unstable versions (snapshots, alphas, betas)
+									</Checkbox>
+									<div class="helper-text" style="margin-top: 4px;">
+										⚠️ Unstable versions may be unstable and incompatible with mods
+									</div>
+								</div>
+
 								<Show when={selectedModloader() !== "vanilla"}>
 									<h2 class="form-section-title">Modloader</h2>
 									<div class="form-field">
