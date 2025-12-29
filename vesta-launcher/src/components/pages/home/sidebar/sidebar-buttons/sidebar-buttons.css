@@ -26,7 +26,7 @@
 .profile-loading-spinner {
 	width: 20px;
 	height: 20px;
-	border: 2px solid rgba(255, 255, 255, 0.3);
+	border: 2px solid hsl(0 0% 100% / 0.3);
 	border-top-color: white;
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
@@ -53,12 +53,12 @@
 		transition-property: fill;
 		transition-duration: 20ms;
 		transition-timing-function: linear;
-		fill: rgb(204 204 204 / 95%);
+		fill: var(--icon-secondary);
 	}
 
 	&:hover {
 		& svg path {
-			fill: white;
+			fill: var(--icon-primary);
 		}
 
 		background: linear-gradient(
@@ -77,7 +77,7 @@
 		display: block;
 		width: 14px;
 		height: 14px;
-		background-color: #cd1616;
+		background-color: var(--semantic-error);
 		border-radius: 50%;
 		position: absolute;
 		top: -3px;

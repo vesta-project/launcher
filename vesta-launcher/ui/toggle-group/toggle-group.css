@@ -2,7 +2,7 @@
 	width: fit-content;
 	display: flex;
 	border-radius: 6px;
-	background-color: hsl(var(--color__primary-hue) 100% var(--color__br-20));
+	background-color: var(--surface-raised);
 	overflow: hidden;
 }
 
@@ -25,10 +25,10 @@
 
 .toggle-group__item:hover,
 .toggle-group__item:focus-visible {
-	background-color: hsl(var(--color__primary-hue) 40% 39%);
+	background-color: var(--surface-overlay);
 }
 
 .toggle-group__item[data-pressed] {
-	background-color: hsl(var(--color__primary-hue) 98% 39%);
-	color: white;
+	background-color: var(--accent-primary);
+	color: var(--text-on-primary);
 }

@@ -8,11 +8,11 @@
 .text-field__text-area {
 	display: block;
 	width: 100%;
-	border: 1px solid hsl(var(--color__primary-hue) 11% 25% / 30%);
+	border: 1px solid var(--border-subtle);
 	border-radius: 6px;
 	line-height: 1.4;
-	color: hsl(var(--color__primary-hue) 5% 90%);
-	background-color: hsl(var(--color__primary-hue) 10% 12% / 10%);
+	color: var(--text-primary);
+	background-color: var(--surface-raised);
 	padding: 0.5rem 0.75rem;
 	transition:
 		box-shadow 150ms ease,
@@ -23,7 +23,7 @@
 
 .text-field__input::placeholder,
 .text-field__text-area::placeholder {
-	color: hsl(var(--color__primary-hue) 5% 50%);
+	color: var(--text-tertiary);
 }
 
 .text-field__input:focus,
@@ -54,7 +54,7 @@
 .text-field__label {
 	font-weight: 600;
 	font-size: 13px;
-	color: hsla(var(--color__primary-hue) 5% 92%);
+	color: var(--text-primary);
 	display: inline-flex;
 	gap: 6px;
 	align-items: center;

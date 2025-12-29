@@ -11,13 +11,13 @@
 	font-size: 0.875rem;
 	font-weight: 500;
 	line-height: 1.25;
-	color: hsl(var(--color__primary-hue) 60% 90%);
+	color: var(--text-primary);
 }
 
 .slider__value-label {
 	font-size: 0.875rem;
 	font-weight: 500;
-	color: hsl(var(--color__primary-hue) 60% 85%);
+	color: var(--text-secondary);
 	text-align: right;
 }
 
@@ -50,10 +50,10 @@
 	display: block;
 	width: 20px;
 	height: 20px;
-	background-color: #fff;
+	background-color: white;
 	border-radius: 9999px;
 	border: 2px solid hsl(var(--color__primary-hue) 60% 45%);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.2);
 	cursor: grab;
 	transition:
 		border-color 150ms ease-in-out,
@@ -61,7 +61,7 @@
 }
 
 .slider__thumb:hover {
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+	box-shadow: 0 2px 8px hsl(0 0% 0% / 0.3);
 }
 
 .slider__thumb:active {

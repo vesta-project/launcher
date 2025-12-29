@@ -6,9 +6,9 @@
 	font-size: 14px;
 	line-height: 1.4;
 	outline: none;
-	background-color: hsl(var(--color__primary-hue) 10% 12% / 10%);
-	border: 1px solid hsl(var(--color__primary-hue) 11% 25% / 30%);
-	color: hsl(var(--color__primary-hue) 5% 90%);
+	background-color: var(--surface-raised);
+	border: 1px solid var(--border-subtle);
+	color: var(--text-primary);
 	transition:
 		box-shadow 150ms ease,
 		border-color 150ms ease,
@@ -70,8 +70,8 @@
 }
 
 .combobox__trigger:hover {
-	background-color: hsl(var(--color__primary-hue) 10% 12% / 20%);
-	color: hsl(var(--color__primary-hue) 5% 90%);
+	background-color: var(--surface-overlay);
+	color: var(--text-primary);
 }
 
 .combobox__icon {
@@ -82,7 +82,7 @@
 
 .combobox__description {
 	margin-top: 8px;
-	color: hsl(var(--color__primary-hue) 5% 75%);
+	color: var(--text-tertiary);
 	font-size: 12px;
 	user-select: none;
 }
@@ -95,9 +95,9 @@
 }
 
 .combobox__content {
-	background-color: hsl(240deg 5% 10%); /* Solid dark background for dropdown */
+	background-color: var(--surface-overlay);
 	border-radius: 6px;
-	border: 1px solid hsl(var(--color__primary-hue) 11% 25% / 30%);
+	border: 1px solid var(--border-subtle);
 	box-shadow:
 		0 4px 6px -1px rgb(0 0 0 / 30%),
 		0 2px 4px -2px rgb(0 0 0 / 30%);
@@ -129,7 +129,7 @@
 .combobox__item {
 	font-size: 14px;
 	line-height: 1;
-	color: hsl(var(--color__primary-hue) 5% 90%);
+	color: var(--text-primary);
 	border-radius: 4px;
 	display: flex;
 	align-items: center;

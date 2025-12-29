@@ -47,14 +47,14 @@
 	-webkit-backdrop-filter: blur(12px);
 	border-radius: 16px;
 	border: 1px solid var(--border-subtle);
-	box-shadow: 0 4px 24px -8px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 4px 24px -8px hsl(0 0% 0% / 0.2);
 }
 
 .form-section-title {
 	font-size: var(--font-medium);
 	font-weight: 600;
 	margin-bottom: 8px;
-	color: hsl(var(--color__primary-hue) 60% 90%);
+	color: var(--text-primary);
 }
 
 .form-row {
@@ -103,7 +103,7 @@
 
 .instance-icon-placeholder:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .error-text {

@@ -31,14 +31,24 @@
 		transform 0.18s cubic-bezier(.4,1,.7,1);
 	will-change: transform, box-shadow;
 	color: white;
-	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5);
+	text-shadow: 0 1px 4px hsl(0 0% 0% / 0.7), 0 2px 8px hsl(0 0% 0% / 0.5);
 	max-width: 200px;
 	max-height: 200px;
 	width: 100%;
 	aspect-ratio: 1;
 	border-radius: 6px;
-	outline: 3px solid rgb(0 0 0 / 15%);
-	outline-offset: -3px;
+	outline: var(--border-width-strong) solid var(--border-strong);
+	outline-offset: calc(-1 * var(--border-width-strong));
+}
+
+/* Glass mode uses subtle glass border */
+:root[data-style="glass"] .instance-card {
+	outline-color: var(--border-glass);
+}
+
+/* Flat mode uses stronger, more prominent borders */
+:root[data-style="flat"] .instance-card {
+	outline-color: var(--border-strong);
 
 	/* &::before {
     content: "";
@@ -48,7 +58,7 @@
     border-radius: 6px;
     top: 0;
     left: 0;
-    border: 2px solid rgba(0, 0, 0, 0.15);
+    border: 2px solid hsl(0 0% 0% / 0.15);
 
   } */
 
@@ -73,7 +83,7 @@
 
 	/* Disable hover effect when reduced motion is enabled */
 	:root[data-reduced-motion="true"] &:hover {
-		background-size: auto, cover;
+		background-size: cover, cover;
 		box-shadow: none;
 		background-image:
 			radial-gradient(
@@ -91,7 +101,7 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center; /* Center items vertically to prevent jumpy layout when button appears */
-	background: linear-gradient(to bottom, rgba(0, 0, 0, 0.4) 0%, transparent 100%);
+	background: linear-gradient(to bottom, hsl(0 0% 0% / 0.4) 0%, transparent 100%);
 	padding: 16px;
 	margin: -16px -16px 0 -16px;
 	border-radius: 6px 6px 0 0;
@@ -104,7 +114,7 @@
 	justify-content: space-between;
 	font-weight: normal;
 	gap: 4px;
-	background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.3) 50%, transparent 100%);
+	background: linear-gradient(to top, hsl(0 0% 0% / 0.7) 0%, hsl(0 0% 0% / 0.3) 50%, transparent 100%);
 	padding: 24px 16px 16px 16px;
 	margin: 0 -16px -16px -16px;
 	border-radius: 0 0 6px 6px;
@@ -137,7 +147,7 @@
 
 			& svg {
 				display: block;
-				fill: white;
+				fill: var(--icon-primary);
 				width: auto;
 				height: 100%;
 				max-height: 16px;
@@ -149,24 +159,26 @@
 .play-button {
 	height: 36px;
 	width: 36px;
-	border: 1px solid rgba(255, 255, 255, 0.1);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 	border-radius: 8px;
 	padding: 0; /* Remove padding to ensure SVG sizing is precise */
-	background: rgba(255, 255, 255, 0.1);
-	backdrop-filter: blur(4px);
+	background: hsl(0 0% 100% / 0.1);
+	backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	box-shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -1px hsl(0 0% 0% / 0.06);
 	flex-shrink: 0; /* Prevent shrinking in flex containers */
 	position: relative; /* Ensure stable positioning */
 	opacity: 0;
 	transform: scale(0.9);
 	pointer-events: none;
 
-	& svg {
+	}
+
+	.play-button svg {
 		fill: white;
 		width: 14px; /* Smaller icon */
 		height: 14px;
@@ -174,88 +186,97 @@
 		display: block;
 	}
 
-	.instance-card:hover & {
+	.instance-card:hover .play-button {
 		opacity: 1;
 		transform: scale(1);
 		pointer-events: auto;
 	}
 
-	&:hover {
-		background: rgba(255, 255, 255, 0.2);
+	.play-button:hover {
+		background: hsl(0 0% 100% / 0.2);
 		transform: translateY(-2px) scale(1.05) !important; /* Override the card-hover scale */
-		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-
-		& svg {
-			transform: scale(1.1);
-		}
+		box-shadow: 0 10px 15px -3px hsl(0 0% 0% / 0.2), 0 4px 6px -2px hsl(0 0% 0% / 0.05);
 	}
 
-	&:active {
+	.play-button:hover svg {
+		transform: scale(1.1);
+	}
+
+	.play-button:active {
 		transform: translateY(0) scale(0.95);
+		background: hsl(0 0% 100% / 0.1);
+		backdrop-filter: var(--liquid-backdrop-filter);
 	}
 
-	&.launch:hover {
-		background: hsla(var(--color__success-hue), 70%, 50%, 0.3);
-		border-color: hsla(var(--color__success-hue), 70%, 50%, 0.5);
-		box-shadow: 0 0 15px hsla(var(--color__success-hue), 70%, 50%, 0.4);
+	.play-button.launch:hover {
+		background: hsl(var(--hue-success) 70% 50% / 0.3);
+		border-color: hsl(var(--hue-success) 70% 50% / 0.5);
+		box-shadow: 0 0 15px hsl(var(--hue-success) 70% 50% / 0.4);
 	}
 
-	&.kill:hover {
-		background: hsla(var(--color__error-hue), 70%, 50%, 0.3);
-		border-color: hsla(var(--color__error-hue), 70%, 50%, 0.5);
-		box-shadow: 0 0 15px hsla(var(--color__error-hue), 70%, 50%, 0.4);
+	.play-button.kill:hover {
+		background: hsl(var(--hue-error) 70% 50% / 0.3);
+		border-color: hsl(var(--hue-error) 70% 50% / 0.5);
+		box-shadow: 0 0 15px hsl(var(--hue-error) 70% 50% / 0.4);
 	}
 
-	&.install:hover {
-		background: hsla(var(--color__warning-hue), 70%, 50%, 0.3);
-		border-color: hsla(var(--color__warning-hue), 70%, 50%, 0.5);
-		box-shadow: 0 0 15px hsla(var(--color__warning-hue), 70%, 50%, 0.4);
+	.play-button.install:hover {
+		background: hsl(var(--hue-warning) 70% 50% / 0.3);
+		border-color: hsl(var(--hue-warning) 70% 50% / 0.5);
+		box-shadow: 0 0 15px hsl(var(--hue-warning) 70% 50% / 0.4);
 	}
 
 	/* Reduced Motion Support */
-	:root[data-reduced-motion="true"] & {
+	:root[data-reduced-motion="true"] .play-button {
 		transition: none;
-		
-		&:hover {
-			transform: none;
-			box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-			
-			& svg {
-				transform: none;
-			}
-		}
+	}
 
-		&:active {
-			transform: none;
-		}
+	:root[data-reduced-motion="true"] .play-button:hover {
+		transform: none;
+		box-shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.1);
+	}
+
+	:root[data-reduced-motion="true"] .play-button:hover svg {
+		transform: none;
+	}
+
+	:root[data-reduced-motion="true"] .play-button:active {
+		transform: none;
 	}
 
 	/* Reduced Effects Support */
-	:root[data-reduced-effects="true"] & {
-		backdrop-filter: none;
-		background: var(--bg-surface);
-		border: 1px solid var(--border-subtle);
+	:root[data-bordered="true"] .play-button {
+		backdrop-filter: none !important;
+		background: var(--surface-base);
+		border: var(--border-width-subtle) solid var(--border-subtle);
 		box-shadow: none;
-
-		&:hover {
-			background: var(--bg-surface-hover);
-			box-shadow: none;
-		}
 	}
-}
 
-/* Remove old play-button hover/not-hover rules that might conflict */
-.play-button:hover {
-	/* Handled above */
-}
+	:root[data-bordered="true"] .play-button:hover {
+		background: var(--surface-raised);
+		box-shadow: none;
+	}
 
-.play-button:not(:hover) {
-	/* Handled above */
-}
+	/* Flat mode uses solid surface with stronger borders */
+	:root[data-style="flat"] .play-button {
+		backdrop-filter: none;
+		background: var(--surface-raised);
+		border-color: var(--border-strong);
+	}
 
-.play-button-leave {
-	/* Handled above */
-}
+	:root[data-style="flat"] .play-button:hover {
+		background: var(--surface-overlay);
+	}
+
+/* Glass mode uses no border for clean look */
+	:root[data-style="glass"] .play-button {
+		border: none;
+	}
+
+	/* Satin mode uses subtle border */
+	:root[data-style="satin"] .play-button {
+		border: var(--border-width-subtle) solid var(--border-glass);
+	}
 
 .instance-card-centered {
 	position: absolute;
@@ -265,12 +286,12 @@
 	bottom: 0;
 	display: flex;
 	flex-direction: column;
-	align-items: center;
+	backdrop-filter: var(--liquid-backdrop-filter);
 	justify-content: center;
 	gap: 8px;
-	background: rgba(0, 0, 0, 0.4);
+	background: hsl(0 0% 0% / 0.4);
 	border-radius: 6px;
-	backdrop-filter: blur(2px);
+	backdrop-filter: blur(var(--blur-overlay));
 	z-index: 10;
 }
 
@@ -280,7 +301,7 @@
 	border: 2px solid transparent;
 	border-top-color: white;
 	border-radius: 50%;
-	animation: spin 1s linear infinite;
+	backdrop-filter: var(--liquid-backdrop-filter);
 }
 
 @keyframes spin {
@@ -289,7 +310,11 @@
 }
 
 .instance-card-indicators {
-	display: flex;
+	background: linear-gradient(
+		to bottom,
+		hsl(0 0% 0% / 0.4) 0%,
+		transparent 100%
+	);
 	flex-direction: column;
 	gap: 4px;
 }
@@ -302,22 +327,27 @@
 	text-transform: uppercase;
 	letter-spacing: 0.8px;
 	font-weight: 800;
-	display: flex;
+	background: linear-gradient(
+		to top,
+		hsl(0 0% 0% / 0.7) 0%,
+		hsl(0 0% 0% / 0.3) 50%,
+		transparent 100%
+	);
 	align-items: center;
 	gap: 6px;
-	backdrop-filter: blur(4px);
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+	backdrop-filter: blur(var(--blur-subtle));
+	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.2);
 	width: fit-content;
 }
 
 .running {
-	background: hsla(var(--color__success-hue), 70%, 40%, 0.6);
-	border: 1px solid hsla(var(--color__success-hue), 70%, 50%, 0.4);
+	background: hsl(var(--hue-success) 70% 40% / 0.6);
+	border: var(--border-width-subtle) solid var(--semantic-success);
 }
 
 .crashed {
-	background: hsla(var(--color__error-hue), 70%, 40%, 0.6);
-	border: 1px solid hsla(var(--color__error-hue), 70%, 50%, 0.4);
+	background: hsl(var(--hue-error) 70% 40% / 0.6);
+	border: var(--border-width-subtle) solid var(--semantic-error);
 }
 
 .status-dot {
@@ -328,8 +358,8 @@
 }
 
 .running .status-dot {
-	background: #4ade80;
-	box-shadow: 0 0 8px #4ade80;
+	background: var(--semantic-success);
+	box-shadow: 0 0 8px var(--semantic-success);
 	animation: pulse 2s infinite;
 }
 
@@ -339,35 +369,35 @@
 }
 
 .crashed .status-dot {
-	background: #f87171;
-	box-shadow: 0 0 8px #f87171;
+	background: var(--semantic-error);
+	box-shadow: 0 0 8px var(--semantic-error);
 }
 
 @keyframes pulse {
 	0% {
 		transform: scale(0.95);
-		box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.7);
+		box-shadow: 0 0 0 0 hsl(142 69% 58% / 0.7);
 	}
 	70% {
 		transform: scale(1);
-		box-shadow: 0 0 0 6px rgba(74, 222, 128, 0);
+		box-shadow: 0 0 0 6px hsl(142 69% 58% / 0);
 	}
 	100% {
 		transform: scale(0.95);
-		box-shadow: 0 0 0 0 rgba(74, 222, 128, 0);
+		box-shadow: 0 0 0 0 hsl(142 69% 58% / 0);
 	}
 }
 
 .instance-card.failed {
-background-image:
-radial-gradient(
-109.12% 79.52% at 47.71% 0%,
-rgba(255, 80, 80, 0.2) 0%,
-rgba(200, 40, 40, 0.3) 20%,
-rgba(100, 0, 0, 0.5) 45.5%,
-rgba(30, 0, 0, 0.95) 100%
-), var(--instance-bg-image, url('@assets/placeholder-images/placeholder-image1.jpg'));
-outline-color: rgba(255, 0, 0, 0.4);
+	background-image:
+	radial-gradient(
+		109.12% 79.52% at 47.71% 0%,
+		hsl(0 100% 66% / 0.2) 0%,
+		hsl(0 67% 47% / 0.3) 20%,
+		hsl(0 100% 20% / 0.5) 45.5%,
+		hsl(0 100% 6% / 0.95) 100%
+	), var(--instance-bg-image, url('@assets/placeholder-images/placeholder-image1.jpg'));
+	outline-color: hsl(0 100% 50% / 0.4);
 }
 
 .instance-card-leave {
@@ -377,4 +407,3 @@ outline-color: rgba(255, 0, 0, 0.4);
 		transform 0.25s cubic-bezier(.4,1,.7,1),
 		box-shadow 0.25s cubic-bezier(.4,1,.7,1);
 }
-

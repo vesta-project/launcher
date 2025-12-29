@@ -1,31 +1,152 @@
 :root {
-	/* Use the system font stack for consistent cross-platform rendering */
-	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Segoe UI Emoji", "Segoe UI Symbol", Inter, Avenir, Helvetica, sans-serif;
-	font-size: 100%;
-	/* Fallback for text color — modern browsers may support color-contrast, but provide a reliable fallback */
-	--text-color: #e8eef0; /* light fallback for dark backgrounds */
-	color: var(--text-color);
-
+	/* =============================================================================
+	   THEME SYSTEM - LAYER 1: BASE TOKENS (Primitives)
+	   ============================================================================= */
+	
+	/* Base Hues (User Configurable) */
+	--hue-primary: 220;
+	--hue-secondary: calc(var(--hue-primary) + 180); /* Complementary by default */
+	--hue-accent: calc(var(--hue-primary) + 30); /* Analogous */
+	
+	/* Semantic Hues (Fixed for consistency) */
+	--hue-success: 140;
+	--hue-warning: 45;
+	--hue-error: 0;
+	--hue-info: 210;
+	
+	/* Light/Dark Mode Lightness Values */
+	--lightness-surface-base: 12%;
+	--lightness-surface-raised: 18%;
+	--lightness-surface-overlay: 20%;
+	--lightness-surface-sunken: 8%;
+	--lightness-text-primary: 90%;
+	--lightness-text-secondary: 70%;
+	--lightness-text-tertiary: 50%;
+	--lightness-border: 30%;
+	
+	/* Style Mode (Set by theme template: glass/satin/flat) */
+	--effect-blur: 16px;
+	--effect-opacity: 0.8;
+	--effect-shadow-depth: 24px;
+	--effect-glow-opacity: 0.7;
+	
+	/* Gradient Configuration */
+	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
+	--gradient-angle: 135deg;
 	--background-opacity: 0.05;
+	
+	/* =============================================================================
+	   THEME SYSTEM - LAYER 2: SEMANTIC TOKENS (Abstract Intent)
+	   ============================================================================= */
+	
+	/* Surface Hierarchy (with alpha for Windows Mica/Acrylic support) */
+	--surface-base: hsl(var(--hue-primary) 10% var(--lightness-surface-base) / 0.95);
+	--surface-raised: hsl(var(--hue-primary) 15% var(--lightness-surface-raised) / var(--effect-opacity));
+	--surface-overlay: hsl(var(--hue-primary) 20% var(--lightness-surface-overlay) / var(--effect-opacity));
+	--surface-sunken: hsl(var(--hue-primary) 5% var(--lightness-surface-sunken) / 0.98);
+	
+	/* Borders */
+	--border-subtle: hsl(var(--hue-primary) 10% var(--lightness-border) / 0.4);
+	--border-strong: hsl(var(--hue-primary) 20% var(--lightness-border) / 0.7);
+	--border-focus: hsl(var(--hue-primary) 70% 50% / 0.8);
+	--border-glass: hsl(var(--hue-primary) 10% 100% / 0.15);
+	--border-width-subtle: 1px;
+	--border-width-strong: 1px;
+	
+	/* Text Colors */
+	--text-primary: hsl(var(--hue-primary) 5% var(--lightness-text-primary));
+	--text-secondary: hsl(var(--hue-primary) 5% var(--lightness-text-secondary));
+	--text-tertiary: hsl(var(--hue-primary) 5% var(--lightness-text-tertiary));
+	--text-inverse: hsl(var(--hue-primary) 5% 10%);
+	--text-on-primary: hsl(var(--hue-primary) 5% 95%);
+	--text-on-accent: hsl(var(--hue-primary) 5% 95%);
+	
+	/* Interactive States */
+	--interactive-base: hsl(var(--hue-primary) 60% 50%);
+	--interactive-hover: hsl(var(--hue-primary) 70% 55%);
+	--interactive-active: hsl(var(--hue-primary) 80% 60%);
+	--interactive-disabled: hsl(var(--hue-primary) 10% 40% / 0.5);
+	
+	/* Icon Colors (for SVG fills) */
+	--icon-primary: hsl(var(--hue-primary) 5% 90%);
+	--icon-secondary: hsl(var(--hue-primary) 5% 70%);
+	--icon-muted: hsl(var(--hue-primary) 5% 50%);
+	
+	/* Header/Navigation Colors */
+	--page-viewer-nav-color: hsl(var(--hue-primary) 10% 90%);
+	--page-viewer-nav-bg: var(--surface-raised);
+	
+	/* Sidebar Colors */
+	--sidebar-bg: var(--surface-base);
+	--sidebar-hover: var(--surface-raised);
+	--sidebar-active: var(--surface-overlay);
+	
+	/* Accent Colors */
+	--accent-primary: hsl(var(--hue-primary) 70% 50%);
+	--accent-primary-hover: hsl(var(--hue-primary) 80% 55%);
+	--accent-secondary: hsl(var(--hue-secondary) 60% 50%);
+	
+	/* Semantic States (Fixed hues for recognition) */
+	--semantic-success: hsl(var(--hue-success) 60% 50%);
+	--semantic-success-bg: hsl(var(--hue-success) 60% 50% / 0.15);
+	--semantic-warning: hsl(var(--hue-warning) 90% 50%);
+	--semantic-warning-bg: hsl(var(--hue-warning) 90% 50% / 0.15);
+	--semantic-error: hsl(var(--hue-error) 70% 50%);
+	--semantic-error-bg: hsl(var(--hue-error) 70% 50% / 0.15);
+	--semantic-info: hsl(var(--hue-info) 70% 50%);
+	--semantic-info-bg: hsl(var(--hue-info) 70% 50% / 0.15);
+	
+	/* Effects */
+	--effect-blur-value: var(--effect-blur);
+	--effect-shadow: 0 6px var(--effect-shadow-depth) hsl(0 0% 0% / 0.2);
+	--effect-glow: hsl(var(--hue-primary) 60% 80% / var(--effect-glow-opacity));
+	
+	/* =============================================================================
+	   THEME SYSTEM - LAYER 3: COMPONENT TOKENS (Specific Use)
+	   ============================================================================= */
+	
+	/* Dialog/Modal */
+	--dialog-background: var(--surface-overlay);
+	--dialog-border: var(--border-subtle);
+	--dialog-overlay-bg: hsl(0 0% 0% / 0.6);
+	
+	/* Cards */
+	--card-background: var(--surface-raised);
+	--card-border: var(--border-subtle);
+	--card-hover-shadow: 0 8px 24px hsl(0 0% 0% / 0.18);
+	
+	/* Scrollbar */
+	--scrollbar-track: hsl(var(--hue-secondary) 20% var(--lightness-border) / 0.2);
+	--scrollbar-thumb: hsl(var(--hue-primary) 10% var(--lightness-border));
+	--scrollbar-thumb-border: hsl(var(--hue-primary) 10% 20%);
+	
+	/* Background Gradient */
 	--background-color: linear-gradient(
-		var(--background-angle),
+		var(--gradient-angle),
 		hsl(245deg 100% 7% / var(--background-opacity)) 0%,
-		hsl(var(--color__primary-hue) 81% 40% / var(--background-opacity)) 35%,
-		hsl(var(--color__secondary-hue) 100% 50% / var(--background-opacity)) 100%
+		hsl(var(--hue-primary) 81% 40% / var(--background-opacity)) 35%,
+		hsl(var(--hue-secondary) 100% 50% / var(--background-opacity)) 100%
 	);
-
-	font-synthesis: none;
-	text-rendering: optimizelegibility;
-	-webkit-font-smoothing: antialiased;
-	-moz-osx-font-smoothing: grayscale;
-	text-size-adjust: 100%;
-
-	--kb-menu-content-transform-origin: top center;
-	--color__secondary-hue: calc(var(--color__primary-hue) - 180);
-	--color__destructive-hue: 0;
-	--color__green-hue: 120;
-	--color__warning-hue: 40;
+	
+	/* =============================================================================
+	   LEGACY COMPATIBILITY (Backwards compatibility during migration)
+	   ============================================================================= */
+	
+	/* Keep old variable names mapped to new tokens for gradual migration */
+	--color__primary-hue: var(--hue-primary);
+	--color__secondary-hue: var(--hue-secondary);
+	--color__error-hue: var(--hue-error);
+	--color__warning-hue: var(--hue-warning);
+	--color__success-hue: var(--hue-success);
+	--color__info-hue: var(--hue-info);
+	--text-color: var(--text-primary);
+	--bg-surface: var(--surface-base);
+	--bg-surface-hover: var(--surface-raised);
+	--border-subtle: var(--border-subtle);
+	--sb-track-color: var(--scrollbar-track);
+	--sb-thumb-color: var(--scrollbar-thumb);
+	
+	/* Legacy saturation/brightness helpers */
 	--color__sat-20: 20%;
 	--color__sat-50: 50%;
 	--color__sat-70: 70%;
@@ -33,54 +154,65 @@
 	--color__br-20: 20%;
 	--color__br-50: 50%;
 	--color__br-70: 70%;
+	
+	/* =============================================================================
+	   LIQUID GLASS SYSTEM (Updated to use new tokens)
+	   ============================================================================= */
+	
+	--liquid-inner-shadow-blur: 10px;
+	--liquid-inner-shadow-spread: -20px;
+	--liquid-inner-shadow-color: var(--effect-glow);
+	--liquid-tint-saturation: 30%;
+	--liquid-tint-lightness: 15%;
+	--liquid-tint-opacity: var(--effect-opacity);
+	--liquid-frost-blur: var(--effect-blur);
+	--liquid-noise-frequency: 2;
+	--liquid-noise-strength: 40;
+	--liquid-outer-shadow-blur: var(--effect-shadow-depth);
+	
+	--liquid-background: hsl(var(--hue-primary) var(--liquid-tint-saturation) var(--liquid-tint-lightness) / var(--liquid-tint-opacity));
+	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+	--liquid-box-shadow: 
+		var(--effect-shadow),
+		inset 0 0 var(--liquid-inner-shadow-blur) var(--liquid-inner-shadow-spread) var(--liquid-inner-shadow-color);
+	
+	--bg-glass: var(--liquid-background);
+	--glass-blur: var(--liquid-backdrop-filter);
+	
+	/* =============================================================================
+	   TYPOGRAPHY & UI BASICS
+	   ============================================================================= */
+	
+	font-family:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Segoe UI Emoji", "Segoe UI Symbol", Inter, Avenir, Helvetica, sans-serif;
+	font-size: 100%;
+	color: var(--text-primary);
+	
+	font-synthesis: none;
+	text-rendering: optimizelegibility;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-size-adjust: 100%;
+	
 	--font-xxsmall: 0.75rem;
 	--font-xsmall: 0.85rem;
 	--font-small: 1rem;
 	--font-medium: 1.25rem;
 	--font-large: 2rem;
 	--font-xlarge: 4rem;
-	--font-min-size: 12px; /* minimum readable font-size */
-	--sb-track-color: hsl(var(--color__secondary-hue) 20% 30% / 20%);
-	--sb-thumb-color: hsl(var(--color__primary-hue) 0% var(--color__br-12));
+	--font-min-size: 12px;
 	--sb-size: 14px;
-
-	/* Severity hues (used for progress and borders) */
-	--color__error-hue: 0;
-	--color__warning-hue: 40;
-	--color__success-hue: 120;
-	--color__info-hue: var(--color__primary-hue);
-
-	/* Liquid Glass Configuration Variables (8 controls) */
-	--liquid-inner-shadow-blur: 10px;
-	--liquid-inner-shadow-spread: -20px;
-	--liquid-inner-shadow-color: hsl(var(--color__primary-hue) 60% 80% / 0.7);
-	--liquid-tint-saturation: 30%;
-	--liquid-tint-lightness: 15%;
-	--liquid-tint-opacity: 0.8;
-	--liquid-frost-blur: 8px;
-	--liquid-noise-frequency: 2;
-	--liquid-noise-strength: 40;
-	--liquid-outer-shadow-blur: 24px;
-
-	/* Computed Liquid Glass Properties */
-	--liquid-background: hsl(var(--color__primary-hue) var(--liquid-tint-saturation) var(--liquid-tint-lightness) / var(--liquid-tint-opacity));
-	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
-	--liquid-box-shadow: 
-		0 6px var(--liquid-outer-shadow-blur) rgba(0, 0, 0, 0.2),
-		inset 0 0 var(--liquid-inner-shadow-blur) var(--liquid-inner-shadow-spread) var(--liquid-inner-shadow-color);
 	
-	/* Legacy Glass variables (updated to use liquid system) */
-	--bg-glass: var(--liquid-background);
-	--bg-surface: hsl(var(--color__primary-hue) 10% 15% / 0.95);
-	--bg-surface-hover: hsl(var(--color__primary-hue) 10% 20% / 0.98);
-	--border-subtle: hsl(var(--color__primary-hue) 10% 30% / 0.4);
-	--border-glass: hsl(var(--color__primary-hue) 10% 100% / 0.15);
-	--glass-blur: var(--liquid-backdrop-filter);
+	--kb-menu-content-transform-origin: top center;
 }
 
 #app {
 	height: 100%;
 	width: 100%;
+	/* var(--background-color) can be either:
+	   - A gradient (when gradients enabled)
+	   - var(--surface-base) solid color (when gradients disabled, set by JS)
+	   We use 'background' shorthand so it works for both cases */
 	background: var(--background-color);
 	min-width: 450px;
 	overflow: hidden;
@@ -93,20 +225,114 @@ body {
 	overflow: hidden;
 }
 
-/* Respect user preferences for light color scheme */
+/* =============================================================================
+   LIGHT MODE OVERRIDES (Windows Mica support + light theme)
+   ============================================================================= */
 @media (prefers-color-scheme: light) {
 	:root {
-		--text-color: #111827; /* near-black for strong contrast on light backgrounds */
-		--sb-track-color: hsl(var(--color__secondary-hue) 20% 90% / 28%);
-		--sb-thumb-color: hsl(var(--color__primary-hue) 70% 40%);
+		/* Override lightness values for light mode */
+		--lightness-surface-base: 85%;
+		--lightness-surface-raised: 90%;
+		--lightness-surface-overlay: 95%;
+		--lightness-surface-sunken: 80%;
+		--lightness-text-primary: 15%;
+		--lightness-text-secondary: 35%;
+		--lightness-text-tertiary: 55%;
+		--lightness-border: 60%;
+		
+		/* Make background gradient more visible in light mode */
+		--background-opacity: 0.6;
+		
+		/* Override the main background gradient for better light mode visibility */
+		/* Higher saturation and lower lightness so hue is clearly visible */
+		--background-color: linear-gradient(
+			var(--gradient-angle),
+			hsl(var(--hue-primary) 70% 65% / var(--background-opacity)) 0%,
+			hsl(var(--hue-primary) 75% 60% / var(--background-opacity)) 35%,
+			hsl(var(--hue-secondary) 80% 65% / var(--background-opacity)) 100%
+		);
+		
+		/* Adjust surface colors to have better contrast against light Mica background */
+		--surface-base: hsl(var(--hue-primary) 20% 80% / 0.85);
+		--surface-raised: hsl(var(--hue-primary) 25% 85% / 0.9);
+		--surface-overlay: hsl(var(--hue-primary) 30% 90% / 0.92);
+		--surface-sunken: hsl(var(--hue-primary) 15% 75% / 0.8);
+		
+		/* Stronger borders for light mode visibility */
+		--border-subtle: hsl(var(--hue-primary) 25% 50% / 0.4);
+		--border-strong: hsl(var(--hue-primary) 35% 45% / 0.6);
+		
+		/* Icon Colors for light mode (DARK icons on light background) */
+		--icon-primary: hsl(var(--hue-primary) 20% 25%);
+		--icon-secondary: hsl(var(--hue-primary) 15% 35%);
+		--icon-muted: hsl(var(--hue-primary) 10% 50%);
+		
+		/* Button text/icon colors for light mode */
+		--text-on-accent: hsl(var(--hue-primary) 5% 95%); /* Keep light text on accent buttons */
+		
+		/* Header and navigation colors for light mode (DARK text/icons) */
+		--page-viewer-nav-color: hsl(var(--hue-primary) 30% 25%);
+		--page-viewer-nav-bg: hsl(var(--hue-primary) 20% 85% / 0.8);
+		
+		/* Sidebar colors for light mode */
+		--sidebar-bg: hsl(var(--hue-primary) 15% 82% / 0.9);
+		--sidebar-hover: hsl(var(--hue-primary) 20% 75% / 0.95);
+		--sidebar-active: hsl(var(--hue-primary) 30% 70% / 1);
+		
+		/* Scrollbar for light mode */
+		--scrollbar-track: hsl(var(--hue-primary) 15% 85% / 0.5);
+		--scrollbar-thumb: hsl(var(--hue-primary) 40% 50%);
+		--scrollbar-thumb-border: hsl(var(--hue-primary) 45% 45%);
+		
+		/* Adjust shadows for light mode */
+		--effect-shadow: 0 4px var(--effect-shadow-depth) hsl(0 0% 0% / 0.12);
+		--dialog-overlay-bg: hsl(0 0% 0% / 0.35);
+		
+		/* Liquid glass adjustments for light mode */
+		--liquid-tint-saturation: 30%;
+		--liquid-tint-lightness: 80%;
+		--liquid-background: hsl(var(--hue-primary) var(--liquid-tint-saturation) var(--liquid-tint-lightness) / var(--liquid-tint-opacity));
+	}
+	
+	/* Override #app background for light mode */
+	/* Note: When gradients are disabled, JS sets --background-color to var(--surface-base) */
+	/* The gradient's transparent colors let Mica show through when enabled */
+	#app {
+		backdrop-filter: none;
+	}
+	
+	/* Sidebar specific overrides for light mode */
+	#sidebar:is(.sidebar--open) {
+		background: var(--sidebar-bg) var(--bg);
+		box-shadow: hsl(0deg 0% 0% / 0.12) 4px 4px 8px;
 	}
 }
 
-/* Respect user preference for higher contrast */
+/* Light mode + Flat style: fully opaque surfaces with hue tint */
+@media (prefers-color-scheme: light) {
+	:root[data-style="flat"] {
+		/* Override surfaces to be fully opaque with light hue tint */
+		--surface-base: hsl(var(--hue-primary) 25% 80%);
+		--surface-raised: hsl(var(--hue-primary) 30% 85%);
+		--surface-overlay: hsl(var(--hue-primary) 35% 90%);
+		--surface-sunken: hsl(var(--hue-primary) 20% 75%);
+	}
+	
+	:root[data-style="bordered"] {
+		/* Override surfaces to be fully opaque with light hue tint */
+		--surface-base: hsl(var(--hue-primary) 25% 80%);
+		--surface-raised: hsl(var(--hue-primary) 30% 85%);
+		--surface-overlay: hsl(var(--hue-primary) 35% 90%);
+		--surface-sunken: hsl(var(--hue-primary) 20% 75%);
+	}
+}
+
+/* High contrast mode support */
 @media (prefers-contrast: more) {
 	:root {
-		--text-color: #0b0b0b;
+		--lightness-text-primary: 5%;
 		font-weight: 500;
+		--border-strong: hsl(var(--hue-primary) 30% var(--lightness-border) / 0.9);
 	}
 	.sidebar__notification {
 		border-width: 1.5px;
@@ -128,24 +354,27 @@ button {
 	font: inherit;
 }
 
+/* =============================================================================
+   SCROLLBAR STYLING (Token-based for light/dark mode support)
+   ============================================================================= */
 *::-webkit-scrollbar {
 	width: var(--sb-size);
 }
 
 *::-webkit-scrollbar-track {
-	background: var(--sb-track-color);
+	background: var(--scrollbar-track);
 	border-radius: 3px;
 }
 
 *::-webkit-scrollbar-thumb {
-	background: var(--sb-thumb-color);
+	background: var(--scrollbar-thumb);
 	border-radius: 3px;
-	border: 1px solid #232e33;
+	border: 1px solid var(--scrollbar-thumb-border);
 }
 
 @supports not selector(::-webkit-scrollbar) {
 	* {
-		scrollbar-color: var(--sb-thumb-color) var(--sb-track-color);
+		scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 	}
 }
 
@@ -168,11 +397,68 @@ button {
 	scroll-behavior: auto !important;
 }
 
-:root[data-reduced-effects="true"] {
+/* =============================================================================
+   STYLE MODE OVERRIDES (Glass/Satin/Flat/Bordered)
+   ============================================================================= */
+
+/* Glass Mode (Default with proper blur effects) */
+:root[data-style="glass"] {
+	--effect-blur: 16px;
+	--effect-opacity: 0.8;
+	--effect-shadow-depth: 24px;
+	--effect-glow-opacity: 0.7;
+	--liquid-tint-opacity: var(--effect-opacity);
+	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+}
+
+/* Glass Mode is also the default when no data-style is set */
+:root:not([data-style]) {
+	--effect-blur: 16px;
+	--effect-opacity: 0.8;
+	--effect-shadow-depth: 24px;
+	--effect-glow-opacity: 0.7;
+	--liquid-tint-opacity: var(--effect-opacity);
+	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+}
+
+/* Satin Mode - Subtle glass effect */
+:root[data-style="satin"] {
+	--effect-blur: 6px;
+	--effect-opacity: 0.95;
+	--effect-shadow-depth: 12px;
+	--effect-glow-opacity: 0.3;
+	--liquid-tint-opacity: 0.95;
+	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+}
+
+/* Flat Mode - No transparency, solid colors */
+:root[data-style="flat"] {
+	--effect-blur: 0px;
+	--effect-opacity: 1;
+	--effect-shadow-depth: 4px;
+	--effect-glow-opacity: 0;
+	--liquid-tint-opacity: 1;
 	--liquid-backdrop-filter: none;
-	--liquid-background: var(--bg-surface);
-	--liquid-box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-	--bg-glass: var(--bg-surface);
+	
+	/* Override surfaces to be fully opaque */
+	--surface-base: hsl(var(--hue-primary) 10% var(--lightness-surface-base));
+	--surface-raised: hsl(var(--hue-primary) 15% var(--lightness-surface-raised));
+	--surface-overlay: hsl(var(--hue-primary) 20% var(--lightness-surface-overlay));
+	--surface-sunken: hsl(var(--hue-primary) 5% var(--lightness-surface-sunken));
+}
+
+/* Bordered Style Mode (no transparency/blur, strong borders) */
+/* Note: This removes blur/transparency but preserves hue and semantic colors */
+:root[data-bordered="true"] {
+	--liquid-backdrop-filter: none;
+	--liquid-background: var(--surface-base);
+	--liquid-box-shadow: 0 6px 16px hsl(0 0% 0% / 0.25);
+	--bg-glass: var(--surface-base);
+	--effect-blur: 0px;
+	/* Strengthen borders and elevation for clarity without blur */
+	--border-subtle: hsl(var(--hue-primary) 12% var(--lightness-border) / 0.6);
+	--border-strong: hsl(var(--hue-primary) 30% var(--lightness-border) / 0.9);
+	--border-glass: var(--border-strong);
 }
 
 /* Liquid Glass Utility Class */
@@ -192,10 +478,10 @@ button {
 	-webkit-backdrop-filter: none !important;
 }
 
-/* Reduced Effects Override */
-:root[data-reduced-effects="true"] .liquid-glass {
+/* Bordered Style Override */
+:root[data-bordered="true"] .liquid-glass {
 	backdrop-filter: none;
 	-webkit-backdrop-filter: none;
 	filter: none;
-	border: 1px solid var(--border-subtle);
+	border: var(--border-width-subtle) solid var(--border-strong);
 }

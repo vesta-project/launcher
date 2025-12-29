@@ -35,17 +35,17 @@
 		}
 	}
 
-	/* Reduced effects override */
-	:root[data-reduced-effects="true"] & .page-viewer-root {
+	/* Bordered style override */
+	:root[data-bordered="true"] & .page-viewer-root {
 		backdrop-filter: none;
 		-webkit-backdrop-filter: none;
 		background: var(--bg-surface);
-		box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-		border: 1px solid var(--border-subtle);
+		box-shadow: 0 8px 32px 0 hsl(0 0% 0% / 0.37);
+		border: var(--border-width-subtle) solid var(--border-subtle);
 	}
 
-	/* Universal Reduced Effects Override for children */
-	:root[data-reduced-effects="true"] & * {
+	/* Universal Bordered Style Override for children */
+	:root[data-bordered="true"] & * {
 		backdrop-filter: none !important;
 		-webkit-backdrop-filter: none !important;
 	}
@@ -65,16 +65,19 @@
 	box-shadow: 
 		var(--liquid-box-shadow),
 		0 1px 0 hsl(var(--color__primary-hue) 60% 80% / 0.1); /* Bottom highlight */
-	border-bottom: 1px solid hsl(var(--color__primary-hue) 30% 30% / 0.3);
+	border-bottom: var(--border-width-subtle) solid hsl(var(--color__primary-hue) 30% 30% / 0.3);
 	display: grid;
 	grid-auto-columns: 1fr auto 1fr;
 	justify-content: space-between;
 
-	--page-viewer-nav-color: hsl(var(--color__primary-hue) 10% 90%); /* Better contrast */
-
+	/* Use the semantic variable (defined in styles.css, overridden in light mode) */
 	color: var(--page-viewer-nav-color);
 	font-size: var(--font-xsmall);
 	user-select: none;
+}
+
+.page-viewer-navbar-root svg {
+	fill: var(--page-viewer-nav-color);
 }
 
 .page-viewer-navbar-left {
@@ -125,6 +128,13 @@
 
 	&:hover {
 		background: hsla(var(--color__primary-hue) 20% 70% / 0.05);
+	}
+
+	/* Light mode: darker hover background */
+	@media (prefers-color-scheme: light) {
+		&:hover {
+			background: hsla(var(--color__primary-hue) 30% 40% / 0.15);
+		}
 	}
 
 	&:hover svg {

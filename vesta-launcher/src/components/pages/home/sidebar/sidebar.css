@@ -2,9 +2,9 @@
 	/* If the background gradient is not in a variable, the background would be transparent */
 	--bg: linear-gradient(
 		90deg,
-		hsl(var(--color__primary-hue) 100% 7% / 5%) 0%,
-		hsl(var(--color__primary-hue) 81% 40% / 5%) 35%,
-		hsl(var(--color__primary-hue) 81% 40% / 5%) 100%
+		hsl(var(--hue-primary) 100% 7% / calc(var(--gradient-enabled) * 0.05)) 0%,
+		hsl(var(--hue-primary) 81% 40% / calc(var(--gradient-enabled) * 0.05)) 35%,
+		hsl(var(--hue-primary) 81% 40% / calc(var(--gradient-enabled) * 0.05)) 100%
 	);
 	color: contrast(--bg);
 
@@ -36,8 +36,9 @@
 		transition:
 			background 250ms,
 			grid-gap 200ms;
-		background: hsl(0, 0%, 15%) var(--bg);
-		box-shadow: hsl(0deg 0% 20% / 32%) 6px 6px 5px;
+		background: var(--surface-base) var(--bg);
+		box-shadow: hsl(0deg 0% 0% / 32%) 6px 6px 5px;
+		backdrop-filter: blur(var(--blur-base));
 		grid-gap: 16px;
 	}
 }
@@ -62,7 +63,7 @@
 		margin: 5px 2px;
 		padding: 0;
 		height: 1px;
-		border: 1px solid rgb(154 154 154 / 30%);
+		border: 1px solid var(--border-subtle);
 		border-radius: 2px;
 	}
 
@@ -76,7 +77,7 @@
 	position: absolute;
 	top: -6px;
 	right: -6px;
-	background: #e74c3c;
+	background: var(--semantic-error);
 	color: white;
 	font-size: 10px;
 	font-weight: bold;
@@ -87,7 +88,7 @@
 	align-items: center;
 	justify-content: center;
 	padding: 0 4px;
-	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.3);
 }
 
 /* Notification spinner (active tasks) */
@@ -98,7 +99,7 @@
 	width: 12px;
 	height: 12px;
 	border: 2px solid transparent;
-	border-top-color: #3498db;
+	border-top-color: var(--semantic-info);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
 }

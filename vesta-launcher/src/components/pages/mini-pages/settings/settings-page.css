@@ -6,14 +6,7 @@
 	display: flex;
 	flex-direction: column;
 	gap: 24px;
-	overflow-y: auto;
-}
-
-.settings-page::after {
-	content: "";
-	display: block;
-	height: 1px; /* Force scroll padding */
-	flex-shrink: 0;
+	overflow: visible;
 }
 
 .settings-section {
@@ -22,7 +15,7 @@
 	backdrop-filter: blur(12px);
 	-webkit-backdrop-filter: blur(12px);
 	border-radius: 12px;
-	border: 1px solid var(--border-subtle);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 	flex-shrink: 0; /* Prevent shrinking */
 }
 
@@ -30,7 +23,7 @@
 	font-size: var(--font-medium);
 	font-weight: 600;
 	margin-bottom: 1.25rem;
-	color: hsl(var(--color__primary-hue) 60% 90%);
+	color: var(--text-primary);
 }
 
 .settings-row {
@@ -39,7 +32,7 @@
 	justify-content: space-between;
 	gap: 1rem;
 	padding: 0.75rem 0;
-	border-bottom: 1px solid var(--border-subtle);
+	border-bottom: var(--border-width-subtle) solid var(--border-strong);
 }
 
 .settings-row:last-child {
@@ -73,4 +66,31 @@
 
 .slider--hue {
 	width: 100%;
+}
+
+/* Ensure switches have visible background and clear checked state */
+.settings-switch .switch__control {
+    background: var(--surface-sunken);
+    border: var(--border-width-subtle) solid var(--border-subtle);
+}
+
+.settings-switch .switch__control:hover {
+    background: var(--surface-raised);
+}
+
+.settings-switch .switch__control[data-checked] {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.settings-switch .switch__control[data-checked]:hover {
+    background: var(--accent-primary-hover);
+    border-color: var(--accent-primary-hover);
+}
+
+/* Always show a border on textareas inside settings */
+.settings-section textarea {
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	background: var(--surface-base);
+	color: var(--text-primary);
 }

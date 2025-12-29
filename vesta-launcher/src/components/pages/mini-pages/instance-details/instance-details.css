@@ -20,7 +20,7 @@
 	gap: 0.5rem;
 	border-right: none; /* Remove regular border */
 	box-shadow: 
-		2px 0 20px rgba(0, 0, 0, 0.4), /* Strong shadow border on right */
+		2px 0 20px hsl(0 0% 0% / 0.4), /* Strong shadow border on right */
 		inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2); /* Subtle inner highlight */
 }
 
@@ -33,7 +33,7 @@
 .instance-tabs button {
 	background: transparent;
 	border: none;
-	color: hsl(var(--color__primary-hue) 10% 85%); /* Lighter text for better contrast */
+	color: var(--text-secondary);
 	opacity: 0.8;
 	padding: 0.75rem 1rem;
 	border-radius: 8px;
@@ -47,7 +47,7 @@
 	background: hsl(var(--color__primary-hue) 30% 20% / 0.4); /* Darker hover with transparency */
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
-	color: hsl(var(--color__primary-hue) 10% 95%);
+	color: var(--text-primary);
 	transform: translateX(4px); /* Subtle slide effect */
 	box-shadow: inset 0 0 20px hsl(var(--color__primary-hue) 60% 70% / 0.1);
 	opacity: 1;
@@ -57,10 +57,10 @@
 	background: hsl(var(--color__primary-hue) 60% 40% / 0.6);
 	backdrop-filter: blur(15px);
 	-webkit-backdrop-filter: blur(15px);
-	color: hsl(var(--color__primary-hue) 10% 95%);
+	color: var(--text-primary);
 	box-shadow: 
 		inset 0 0 20px hsl(var(--color__primary-hue) 70% 50% / 0.3),
-		0 4px 12px rgba(0, 0, 0, 0.3);
+		0 4px 12px hsl(0 0% 0% / 0.3);
 	transform: translateX(4px);
 	opacity: 1;
 }
@@ -72,7 +72,7 @@
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-glass);
-	color: hsl(var(--color__primary-hue) 10% 90%); /* Better text contrast */
+	color: var(--text-primary);
 }
 
 .content-wrapper {
@@ -113,7 +113,7 @@
 	background-size: cover;
 	background-position: center;
 	flex-shrink: 0;
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px rgba(0, 0, 0, 0.08);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
 }
 
 .instance-header-content {
@@ -189,19 +189,19 @@
 	justify-content: center;
 	cursor: pointer;
 	transition: transform 0.2s, box-shadow 0.2s;
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px rgba(0, 0, 0, 0.08);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
 }
 
 .instance-icon-placeholder:hover {
 	transform: translateY(-2px);
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .instance-header-meta h1 {
 	margin: 0;
 	font-size: var(--font-large);
 	font-weight: 700;
-	color: hsl(var(--color__primary-hue) 60% 90%);
+	color: var(--text-primary);
 }
 
 .instance-header.shrunk h1 {
@@ -225,7 +225,7 @@
 	margin-left: 0.75rem;
 	padding: 0.2rem 0.6rem;
 	background: hsl(var(--color__primary-hue) 70% 50%);
-	color: #fff;
+	color: white;
 	border-radius: 6px;
 	font-size: var(--font-xxsmall);
 	font-weight: 600;
@@ -251,7 +251,7 @@
 	margin: 0 0 1.5rem;
 	font-size: var(--font-medium);
 	font-weight: 600;
-	color: hsl(var(--color__primary-hue) 60% 90%);
+	color: var(--text-primary);
 }
 
 /* Home Tab - Overview */
@@ -306,7 +306,7 @@
 	justify-content: space-between;
 	align-items: center;
 	padding: 12px 16px;
-	background: rgba(0, 0, 0, 0.2);
+	background: hsl(0 0% 0% / 0.2);
 	border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -334,19 +334,19 @@
 
 .console-toolbar-buttons button:hover {
 	background: hsl(var(--color__primary-hue) 70% 50%);
-	color: #fff;
+	color: white;
 	border-color: transparent;
 }
 
 .console-output {
 	flex: 1;
-	background: rgba(0, 0, 0, 0.3);
+	background: hsl(0 0% 0% / 0.3);
 	padding: 16px;
 	font-family: "JetBrains Mono", "Fira Code", monospace;
 	font-size: 13px;
 	line-height: 1.5;
 	overflow-y: auto;
-	color: #d1d1d1;
+	color: var(--text-primary);
 }
 
 .console-line {

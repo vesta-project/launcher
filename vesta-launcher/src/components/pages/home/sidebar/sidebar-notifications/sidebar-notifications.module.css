@@ -7,11 +7,11 @@
 	max-width: 600px;
 	height: 100%;
 	justify-content: space-between;
-	color: contrast(white);
+	color: var(--text-primary);
 	overflow: hidden;
 
 	& svg {
-		fill: hsl(var(--color__primary-hue) 10% 85%);
+		fill: var(--text-secondary);
 	}
 
 	transition:
@@ -75,10 +75,10 @@
 	justify-content: space-between;
 	align-items: start;
 	gap: 8px;
-	border: 1px solid hsl(var(--color__primary-hue) 5% 50% 80%);
+	border: 1px solid var(--border-subtle);
 	border-radius: 6px;
 	padding: 12px;
-	background-color: hsl(var(--color__primary-hue) 15% 60% / 20%);
+	background-color: var(--surface-overlay);
 	box-shadow:
 		0 10px 15px -3px hsl(0deg 0% 0% / 10%),
 		0 4px 6px -4px hsl(0deg 0% 0% / 10%);
@@ -94,11 +94,11 @@
 	flex-shrink: 0;
 	padding: 4px;
 	margin-left: auto;
-	color: hsl(var(--color__primary-hue) 10% 70%);
+	color: var(--text-secondary);
 	cursor: pointer;
 	border-radius: 3px;
-	border: hsl(var(--color__primary-hue) 5% 50% / 20%) solid 1px;
-	background: hsl(var(--color__primary-hue) 15% 60% / 20%);
+	border: var(--border-subtle) solid 1px;
+	background: var(--surface-raised);
 	visibility: visible;
 	transition: all 0.15s ease;
 
@@ -113,8 +113,8 @@
 	}
 
 	&:hover {
-		border: hsl(0deg 70% 50% / 30%) solid 1px;
-		background: hsl(0deg 70% 50% / 20%);
+		border: var(--border-strong) solid 1px;
+		background: var(--surface-overlay);
 		filter: brightness(130%);
 	}
 
@@ -130,11 +130,11 @@
 	justify-content: center;
 	flex-shrink: 0;
 	padding: 6px 10px;
-	color: hsl(var(--color__primary-hue) 10% 85%);
+	color: var(--text-secondary);
 	cursor: pointer;
 	border-radius: 3px;
-	border: hsl(var(--color__primary-hue) 5% 50% / 30%) solid 1px;
-	background: hsl(var(--color__primary-hue) 15% 60% / 30%);
+	border: var(--border-subtle) solid 1px;
+	background: var(--surface-raised);
 	visibility: visible;
 	font-size: 11px;
 	font-weight: 500;
@@ -147,7 +147,7 @@
 	}
 
 	&:hover {
-		border: hsl(200deg 92% 35% / 40%) solid 1px;
+		border: var(--border-strong) solid 1px;
 		filter: brightness(130%);
 		transform: translateY(-1px);
 	}
@@ -167,7 +167,7 @@
 .sidebar__notification__progress .progress__track {
 	height: 4px;
 	border-radius: 2px;
-	background: #333;
+	background: var(--surface-base);
 	max-width: 100%;
 }
 .sidebar__notification__progress .progress__fill {
@@ -177,7 +177,7 @@
 }
 .sidebar__notification__progress.progress--indeterminate .progress__fill,
 .sidebar__notification__progress .progress__fill--indeterminate {
-	background: linear-gradient(90deg, #333 0%, #777 50%, #333 100%);
+	background: linear-gradient(90deg, var(--surface-base) 0%, var(--border-subtle) 50%, var(--surface-base) 100%);
 	background-size: 200% 100%;
 	animation: progress-pulse 1.4s linear infinite;
 }
