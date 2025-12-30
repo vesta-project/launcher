@@ -1,4 +1,4 @@
-import { createSignal, Show, Match, Switch } from "solid-js";
+import LauncherButton from "@ui/button/button";
 import {
 	Dialog,
 	DialogContent,
@@ -6,8 +6,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import LauncherButton from "@ui/button/button";
 import { getCrashDetails } from "@utils/crash-handler";
+import { createSignal, Match, Show, Switch } from "solid-js";
 import "./crash-details-modal.css";
 
 interface CrashDetailsModalProps {
@@ -19,7 +19,7 @@ interface CrashDetailsModalProps {
 export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 	const crashDetails = () => getCrashDetails(props.instanceId);
 
-	const getCrashTypeIcon = (crashType: string) => {
+	const _getCrashTypeIcon = (crashType: string) => {
 		switch (crashType) {
 			case "runtime":
 				return "⚠️";
@@ -34,7 +34,7 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 		}
 	};
 
-	const getCrashTypeLabel = (crashType: string) => {
+	const _getCrashTypeLabel = (crashType: string) => {
 		switch (crashType) {
 			case "runtime":
 				return "Runtime Crash";
@@ -151,37 +151,23 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 							</div>
 
 							<div class="crash-actions">
-								<p class="action-hint">
-									Try these steps to fix the crash:
-								</p>
+								<p class="action-hint">Try these steps to fix the crash:</p>
 								<ul>
 									<Switch>
 										<Match when={crashDetails()?.crash_type === "launch_mod"}>
 											<li>Remove recently added mods</li>
-											<li>
-												Update all mods to compatible versions
-											</li>
-											<li>
-												Check mod dependencies and conflicts
-											</li>
+											<li>Update all mods to compatible versions</li>
+											<li>Check mod dependencies and conflicts</li>
 										</Match>
 										<Match when={crashDetails()?.crash_type === "runtime"}>
 											<li>Update your graphics drivers</li>
-											<li>
-												Increase allocated RAM in instance
-												settings
-											</li>
+											<li>Increase allocated RAM in instance settings</li>
 											<li>Remove conflicting mods</li>
 										</Match>
 										<Match when={crashDetails()?.crash_type === "jvm"}>
 											<li>Update Java to latest version</li>
-											<li>
-												Increase allocated memory (Xmx flag)
-											</li>
-											<li>
-												Try a different Java version (Java
-												8, 11, 17, 21)
-											</li>
+											<li>Increase allocated memory (Xmx flag)</li>
+											<li>Try a different Java version (Java 8, 11, 17, 21)</li>
 										</Match>
 									</Switch>
 								</ul>

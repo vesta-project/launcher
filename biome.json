@@ -1,8 +1,5 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.3.10/schema.json",
-	"files": {
-		"excludes": ["dist", "node_modules", "target", "src-tauri/target", "vesta-launcher/dist"]
-	},
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git"
@@ -199,7 +196,10 @@
 			"oninput",
 			"onmessageerror",
 			"onmousewheel",
-			"ononline"
+			"ononline",
+			"describe",
+			"test",
+			"expect"
 		]
 	}
 }

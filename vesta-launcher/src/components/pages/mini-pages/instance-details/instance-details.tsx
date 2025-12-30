@@ -25,12 +25,12 @@ import {
 } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
+	DEFAULT_ICONS,
 	getInstanceBySlug,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
 	updateInstance,
-	DEFAULT_ICONS,
 } from "@utils/instances";
 import {
 	createEffect,
@@ -95,7 +95,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	const [javaArgs, setJavaArgs] = createSignal<string>("");
 	const [memoryMb, setMemoryMb] = createSignal<number[]>([2048]);
 	const [saving, setSaving] = createSignal(false);
-	
+
 	// Create uploadedIcons array that includes current iconPath if it's an uploaded image
 	const uploadedIcons = () => {
 		const current = iconPath();
@@ -358,251 +358,268 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 										class="instance-header"
 										classList={{ shrunk: activeTab() !== "home" }}
 									>
-								<div
-									class="instance-header-image"
-									style={
-										(inst().icon_path || "").startsWith("linear-gradient")
-											? { background: inst().icon_path! }
-											: {
-													"background-image": `url('${inst().icon_path || DEFAULT_ICONS[0]}')`,
-												}
-									}
-								/>
-								<div class="instance-header-content">
-									<div class="instance-header-meta">
-										<h1>{inst().name}</h1>
-										<p class="meta-row">
-											<span class="meta-label">Version:</span>{" "}
-											{inst().minecraft_version}
-											{inst().modloader && inst().modloader !== "vanilla" && (
-												<span class="modloader-badge">{inst().modloader}</span>
-											)}
-										</p>
-										<Show when={activeTab() === "home"}>
-											<p class="meta-row">
-												<span class="meta-label">Created:</span>{" "}
-												{inst().created_at
-													? new Date(
-															inst().created_at as string,
-														).toLocaleDateString()
-													: "—"}
-											</p>
-											<p class="meta-row">
-												<span class="meta-label">Last Played:</span>{" "}
-												{inst().last_played
-													? new Date(
-															inst().last_played as string,
-														).toLocaleDateString()
-													: "Never"}
-											</p>
-										</Show>
-									</div>
-									<div class="instance-actions">
-										<LauncherButton
-											onClick={isRunning() ? handleKill : handlePlay}
-											disabled={busy()}
-											color={isRunning() ? "destructive" : "primary"}
-											variant="solid"
-											size={activeTab() === "home" ? "lg" : "md"}
-										>
-											{busy()
-												? "Working..."
-												: isRunning()
-													? "Kill Instance"
-													: "Play"}
-										</LauncherButton>
-									</div>
-								</div>
-							</header>								</Show>
-							<div class="instance-tab-content">
-								<Show when={activeTab() === "home"}>
-									<Show when={instance.loading}>
-										<div class="skeleton-grid">
-											{Array.from({ length: 7 }).map(() => (
-												<Skeleton class="skeleton-item" />
-											))}
-										</div>
-									</Show>
-									<Show when={!instance.loading}>
-										<section class="tab-home">
-											<h2>Overview</h2>
-											<div class="info-grid">
-												<div class="info-item">
-													<span class="info-label">Name</span>
-													<span class="info-value">{inst().name}</span>
-												</div>
-												<div class="info-item">
-													<span class="info-label">Minecraft Version</span>
-													<span class="info-value">
-														{inst().minecraft_version}
-													</span>
-												</div>
-												<div class="info-item">
-													<span class="info-label">Modloader</span>
-													<span class="info-value">
-														{inst().modloader || "Vanilla"}
-													</span>
-												</div>
-												<div class="info-item">
-													<span class="info-label">Modloader Version</span>
-													<span class="info-value">
-														{inst().modloader_version || "—"}
-													</span>
-												</div>
-												<div class="info-item">
-													<span class="info-label">Memory</span>
-													<span class="info-value">{inst().memory_mb} MB</span>
-												</div>
-												<div class="info-item">
-													<span class="info-label">Total Playtime</span>
-													<span class="info-value">
-														{inst().total_playtime_minutes} minutes
-													</span>
-												</div>
-												<div class="info-item">
-													<span class="info-label">Installation Status</span>
-													<span class="info-value">
-														{inst().installation_status || "Unknown"}
-													</span>
-												</div>
-											</div>
-										</section>
-									</Show>
-								</Show>
-
-								<Show when={activeTab() === "console"}>
-									<Show when={instance.loading}>
-										<Skeleton class="skeleton-console" />
-									</Show>
-									<Show when={!instance.loading}>
-										<section class="tab-console">
-											<div class="console-toolbar">
-												<span class="console-title">Game Console</span>
-												<div class="console-toolbar-buttons">
-													<Tooltip placement="top">
-														<TooltipTrigger onClick={openLogsFolder} as={Button}>
-															📁 Logs
-														</TooltipTrigger>
-														<TooltipContent>Open logs folder in file explorer</TooltipContent>
-													</Tooltip>
-													<button class="console-clear" onClick={clearConsole}>
-														Clear
-													</button>
-												</div>
-											</div>
-											<div class="console-output" ref={consoleRef}>
-												<Show when={lines().length === 0}>
-													<div class="console-placeholder">
-														No output yet. Launch the game to see console
-														output.
-													</div>
+										<div
+											class="instance-header-image"
+											style={
+												(inst().icon_path || "").startsWith("linear-gradient")
+													? {
+															// biome-ignore lint/style/noNonNullAssertion: icon_path is confirmed to be a gradient string above
+															background: inst().icon_path!,
+														}
+													: {
+															"background-image": `url('${inst().icon_path || DEFAULT_ICONS[0]}')`,
+														}
+											}
+										/>
+										<div class="instance-header-content">
+											<div class="instance-header-meta">
+												<h1>{inst().name}</h1>
+												<p class="meta-row">
+													<span class="meta-label">Version:</span>{" "}
+													{inst().minecraft_version}
+													{inst().modloader &&
+														inst().modloader !== "vanilla" && (
+															<span class="modloader-badge">
+																{inst().modloader}
+															</span>
+														)}
+												</p>
+												<Show when={activeTab() === "home"}>
+													<p class="meta-row">
+														<span class="meta-label">Created:</span>{" "}
+														{inst().created_at
+															? new Date(
+																	inst().created_at as string,
+																).toLocaleDateString()
+															: "—"}
+													</p>
+													<p class="meta-row">
+														<span class="meta-label">Last Played:</span>{" "}
+														{inst().last_played
+															? new Date(
+																	inst().last_played as string,
+																).toLocaleDateString()
+															: "Never"}
+													</p>
 												</Show>
-												<For each={lines()}>
-													{(line) => <div class="console-line">{line}</div>}
-												</For>
 											</div>
+											<div class="instance-actions">
+												<LauncherButton
+													onClick={isRunning() ? handleKill : handlePlay}
+													disabled={busy()}
+													color={isRunning() ? "destructive" : "primary"}
+													variant="solid"
+													size={activeTab() === "home" ? "lg" : "md"}
+												>
+													{busy()
+														? "Working..."
+														: isRunning()
+															? "Kill Instance"
+															: "Play"}
+												</LauncherButton>
+											</div>
+										</div>
+									</header>{" "}
+								</Show>
+								<div class="instance-tab-content">
+									<Show when={activeTab() === "home"}>
+										<Show when={instance.loading}>
+											<div class="skeleton-grid">
+												{Array.from({ length: 7 }).map(() => (
+													<Skeleton class="skeleton-item" />
+												))}
+											</div>
+										</Show>
+										<Show when={!instance.loading}>
+											<section class="tab-home">
+												<h2>Overview</h2>
+												<div class="info-grid">
+													<div class="info-item">
+														<span class="info-label">Name</span>
+														<span class="info-value">{inst().name}</span>
+													</div>
+													<div class="info-item">
+														<span class="info-label">Minecraft Version</span>
+														<span class="info-value">
+															{inst().minecraft_version}
+														</span>
+													</div>
+													<div class="info-item">
+														<span class="info-label">Modloader</span>
+														<span class="info-value">
+															{inst().modloader || "Vanilla"}
+														</span>
+													</div>
+													<div class="info-item">
+														<span class="info-label">Modloader Version</span>
+														<span class="info-value">
+															{inst().modloader_version || "—"}
+														</span>
+													</div>
+													<div class="info-item">
+														<span class="info-label">Memory</span>
+														<span class="info-value">
+															{inst().memory_mb} MB
+														</span>
+													</div>
+													<div class="info-item">
+														<span class="info-label">Total Playtime</span>
+														<span class="info-value">
+															{inst().total_playtime_minutes} minutes
+														</span>
+													</div>
+													<div class="info-item">
+														<span class="info-label">Installation Status</span>
+														<span class="info-value">
+															{inst().installation_status || "Unknown"}
+														</span>
+													</div>
+												</div>
+											</section>
+										</Show>
+									</Show>
+
+									<Show when={activeTab() === "console"}>
+										<Show when={instance.loading}>
+											<Skeleton class="skeleton-console" />
+										</Show>
+										<Show when={!instance.loading}>
+											<section class="tab-console">
+												<div class="console-toolbar">
+													<span class="console-title">Game Console</span>
+													<div class="console-toolbar-buttons">
+														<Tooltip placement="top">
+															<TooltipTrigger
+																onClick={openLogsFolder}
+																as={Button}
+															>
+																📁 Logs
+															</TooltipTrigger>
+															<TooltipContent>
+																Open logs folder in file explorer
+															</TooltipContent>
+														</Tooltip>
+														<button
+															class="console-clear"
+															onClick={clearConsole}
+														>
+															Clear
+														</button>
+													</div>
+												</div>
+												<div class="console-output" ref={consoleRef}>
+													<Show when={lines().length === 0}>
+														<div class="console-placeholder">
+															No output yet. Launch the game to see console
+															output.
+														</div>
+													</Show>
+													<For each={lines()}>
+														{(line) => <div class="console-line">{line}</div>}
+													</For>
+												</div>
+											</section>
+										</Show>
+									</Show>
+
+									<Show when={activeTab() === "mods"}>
+										<section class="tab-mods">
+											<h2>Mods</h2>
+											<p class="placeholder-text">
+												Mod management is coming soon. You'll be able to browse,
+												install, and manage mods for this instance here.
+											</p>
 										</section>
 									</Show>
-								</Show>
 
-								<Show when={activeTab() === "mods"}>
-									<section class="tab-mods">
-										<h2>Mods</h2>
-										<p class="placeholder-text">
-											Mod management is coming soon. You'll be able to browse,
-											install, and manage mods for this instance here.
-										</p>
-									</section>
-								</Show>
+									<Show when={activeTab() === "settings"}>
+										<Show when={instance.loading}>
+											<div class="skeleton-settings">
+												<Skeleton class="skeleton-field" />
+												<Skeleton class="skeleton-field" />
+											</div>
+										</Show>
+										<Show when={!instance.loading}>
+											<section class="tab-settings">
+												<h2>Instance Settings</h2>
 
-								<Show when={activeTab() === "settings"}>
-									<Show when={instance.loading}>
-										<div class="skeleton-settings">
-											<Skeleton class="skeleton-field" />
-											<Skeleton class="skeleton-field" />
-										</div>
-									</Show>
-									<Show when={!instance.loading}>
-										<section class="tab-settings">
-											<h2>Instance Settings</h2>
+												<div class="settings-field">
+													<div class="form-row" style="align-items: flex-end;">
+														<IconPicker
+															value={iconPath()}
+															onSelect={(icon) => setIconPath(icon)}
+															uploadedIcons={uploadedIcons()}
+															allowUpload={true}
+														/>
+														<TextFieldRoot style="flex: 1">
+															<TextFieldLabel>Instance Name</TextFieldLabel>
+															<TextFieldInput
+																value={name()}
+																onInput={(
+																	e: InputEvent & {
+																		currentTarget: HTMLInputElement;
+																	},
+																) => setName(e.currentTarget.value)}
+															/>
+														</TextFieldRoot>
+													</div>
+												</div>
 
-											<div class="settings-field">
-												<div class="form-row" style="align-items: flex-end;">
-													<IconPicker
-														value={iconPath()}
-														onSelect={(icon) => setIconPath(icon)}
-														uploadedIcons={uploadedIcons()}
-														allowUpload={true}
-													/>
-													<TextFieldRoot style="flex: 1">
-														<TextFieldLabel>Instance Name</TextFieldLabel>
+												<div class="settings-field">
+													<TextFieldRoot>
+														<TextFieldLabel>Java Arguments</TextFieldLabel>
 														<TextFieldInput
-															value={name()}
+															value={javaArgs()}
 															onInput={(
 																e: InputEvent & {
 																	currentTarget: HTMLInputElement;
 																},
-															) => setName(e.currentTarget.value)}
+															) => setJavaArgs(e.currentTarget.value)}
+															placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
 														/>
 													</TextFieldRoot>
+													<p class="field-hint">
+														Custom JVM arguments for this instance.
+													</p>
 												</div>
-											</div>
 
-											<div class="settings-field">
-												<TextFieldRoot>
-													<TextFieldLabel>Java Arguments</TextFieldLabel>
-													<TextFieldInput
-														value={javaArgs()}
-														onInput={(
-															e: InputEvent & {
-																currentTarget: HTMLInputElement;
-															},
-														) => setJavaArgs(e.currentTarget.value)}
-														placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
-													/>
-												</TextFieldRoot>
-												<p class="field-hint">
-													Custom JVM arguments for this instance.
-												</p>
-											</div>
+												<div class="settings-field">
+													<Slider
+														value={memoryMb()}
+														onChange={setMemoryMb}
+														minValue={512}
+														maxValue={16384}
+														step={512}
+													>
+														<div class="slider-header">
+															<SliderLabel>Memory</SliderLabel>
+															<SliderValueLabel />
+														</div>
+														<SliderTrack>
+															<SliderFill />
+															<SliderThumb />
+														</SliderTrack>
+													</Slider>
+													<p class="field-hint">
+														Amount of RAM allocated to this instance (MB).
+													</p>
+												</div>
 
-											<div class="settings-field">
-												<Slider
-													value={memoryMb()}
-													onChange={setMemoryMb}
-													minValue={512}
-													maxValue={16384}
-													step={512}
-												>
-													<div class="slider-header">
-														<SliderLabel>Memory</SliderLabel>
-														<SliderValueLabel />
-													</div>
-													<SliderTrack>
-														<SliderFill />
-														<SliderThumb />
-													</SliderTrack>
-												</Slider>
-												<p class="field-hint">
-													Amount of RAM allocated to this instance (MB).
-												</p>
-											</div>
-
-											<div class="settings-actions">
-												<LauncherButton
-													onClick={handleSave}
-													disabled={saving()}
-												>
-													{saving() ? "Saving…" : "Save Settings"}
-												</LauncherButton>
-											</div>
-										</section>
+												<div class="settings-actions">
+													<LauncherButton
+														onClick={handleSave}
+														disabled={saving()}
+													>
+														{saving() ? "Saving…" : "Save Settings"}
+													</LauncherButton>
+												</div>
+											</section>
+										</Show>
 									</Show>
-								</Show>
-							</div>
-						</>
-					)}
-				</Show>
+								</div>
+							</>
+						)}
+					</Show>
 				</div>
 			</main>
 		</div>

@@ -4,20 +4,20 @@
 
 use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
+use diesel::prelude::*;
 use lazy_static::lazy_static;
 use oauth2::TokenResponse;
 use piston_lib::api::mojang::get_minecraft_profile;
 use piston_lib::auth::{device_code_to_details, get_auth_client, get_device_code, poll_for_token};
-use rusqlite::OptionalExtension;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
 
-use crate::models::account::Account;
+use crate::models::account::{Account, NewAccount};
+use crate::schema::account::dsl::*; // Bring table and column names into scope for queries
 use crate::utils::config::{get_app_config, update_app_config};
-use crate::utils::db_manager::get_data_db;
-use crate::utils::sqlite::SQLiteSelect;
+use crate::utils::db::get_vesta_conn;
 
 lazy_static! {
     /// Global cancel channel for aborting authentication
@@ -36,8 +36,8 @@ pub enum AuthStage {
     },
     Polling,
     Complete {
-        uuid: String,
-        username: String,
+        user_uuid: String,
+        user_username: String,
     },
     Cancelled,
     Error {
@@ -93,12 +93,12 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
             Ok(Some(token_response)) => {
                 // Exchange for Minecraft token and save account
                 match process_login_completion(token_response).await {
-                    Ok((uuid, username)) => {
+                    Ok((uuid_res, username_res)) => {
                         let _ = app_clone.emit(
                             "vesta://auth",
                             AuthStage::Complete {
-                                uuid: uuid.clone(),
-                                username: username.clone(),
+                                user_uuid: uuid_res.clone(),
+                                user_username: username_res.clone(),
                             },
                         );
                     }
@@ -187,7 +187,7 @@ async fn process_login_completion(
     token_response: oauth2::basic::BasicTokenResponse,
 ) -> Result<(String, String)> {
     let microsoft_access_token = token_response.access_token().secret();
-    let refresh_token = token_response
+    let refresh_token_val = token_response
         .refresh_token()
         .context("No refresh token provided")?
         .secret()
@@ -198,7 +198,7 @@ async fn process_login_completion(
         .unwrap_or(std::time::Duration::from_secs(3600))
         .as_secs();
 
-    let token_expires_at = Utc::now() + Duration::seconds(expires_in_secs as i64);
+    let token_expires_at_val = Utc::now() + Duration::seconds(expires_in_secs as i64);
 
     // Exchange for Minecraft token
     let minecraft_token = piston_lib::auth::exchange_for_minecraft_token(microsoft_access_token)
@@ -213,93 +213,69 @@ async fn process_login_completion(
         .await
         .context("Failed to fetch Minecraft profile")?;
 
-    let skin_url = profile.skins.first().map(|s| s.url.clone());
-    let cape_url = profile.capes.first().map(|c| c.url.clone());
-
-    // Create account record
-    let account = Account {
-        id: crate::utils::sqlite::AUTOINCREMENT::default(),
-        uuid: profile.id.clone(),
-        username: profile.name.clone(),
-        display_name: Some(profile.name.clone()),
-        access_token: Some(minecraft_access_token.into_inner()),
-        refresh_token: Some(refresh_token),
-        token_expires_at: Some(token_expires_at.to_rfc3339()),
-        is_active: true,
-        skin_url,
-        cape_url,
-        created_at: Some(Utc::now().to_rfc3339()),
-        updated_at: Some(Utc::now().to_rfc3339()),
-    };
+    let skin_url_val = profile.skins.first().map(|s| s.url.clone());
+    let cape_url_val = profile.capes.first().map(|c| c.url.clone());
 
     log::info!(
         "[auth] Completed token exchange and profile fetch for user {} ({})",
         profile.name,
         profile.id
     );
+
     // Save to database
-    let db = get_data_db().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+    let mut conn =
+        get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
     // Check if account already exists
-    let existing: Vec<Account> = db
-        .search_data_serde::<Account, String, Account>(
-            SQLiteSelect::ALL,
-            "uuid",
-            profile.id.clone(),
-        )
-        .unwrap_or_default();
+    let existing_count: i64 = account
+        .filter(uuid.eq(&profile.id))
+        .count()
+        .get_result(&mut conn)
+        .unwrap_or(0);
 
-    if existing.is_empty() {
-        // Insert new account using explicit column list
-        log::info!("[auth] Inserting new account for uuid: {}", account.uuid);
+    let now_str = Utc::now().to_rfc3339();
 
-        let conn = db.get_connection();
+    if existing_count == 0 {
+        // Insert new account
+        log::info!("[auth] Inserting new account for uuid: {}", profile.id);
 
-        // Log the actual schema of the account table
-        let mut stmt = conn
-            .prepare("PRAGMA table_info(account)")
-            .map_err(|e| anyhow::anyhow!("Failed to get table info: {}", e))?;
-        let columns: Vec<String> = stmt
-            .query_map([], |row| row.get::<_, String>(1))
-            .map_err(|e| anyhow::anyhow!("Failed to query table info: {}", e))?
-            .filter_map(Result::ok)
-            .collect();
-        log::info!("[auth] Account table columns: {:?}", columns);
+        let new_account = NewAccount {
+            uuid: profile.id.clone(),
+            username: profile.name.clone(),
+            display_name: Some(profile.name.clone()),
+            access_token: Some(minecraft_access_token.into_inner()),
+            refresh_token: Some(refresh_token_val),
+            token_expires_at: Some(token_expires_at_val.to_rfc3339()),
+            is_active: true,
+            skin_url: skin_url_val,
+            cape_url: cape_url_val,
+            created_at: Some(now_str.clone()),
+            updated_at: Some(now_str.clone()),
+        };
 
-        let result = conn.execute(
-            "INSERT INTO account (uuid, username, display_name, access_token, refresh_token, token_expires_at, is_active, skin_url, cape_url, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-            rusqlite::params![
-                account.uuid,
-                account.username,
-                account.display_name,
-                account.access_token,
-                account.refresh_token,
-                account.token_expires_at,
-                account.is_active,
-                account.skin_url,
-                account.cape_url,
-                account.created_at,
-                account.updated_at,
-            ],
-        );
+        diesel::insert_into(account)
+            .values(&new_account)
+            .execute(&mut conn)
+            .map_err(|e| anyhow::anyhow!("Failed to insert account: {}", e))?;
 
-        match result {
-            Ok(_) => log::info!("[auth] Account inserted successfully"),
-            Err(e) => {
-                log::error!("[auth] Failed to insert account: {}", e);
-                log::error!(
-                    "[auth] Account data: uuid={}, username={}, display_name={:?}",
-                    account.uuid,
-                    account.username,
-                    account.display_name
-                );
-                return Err(anyhow::anyhow!("Failed to insert account: {}", e));
-            }
-        }
+        log::info!("[auth] Account inserted successfully");
     } else {
         // Update existing account
-        db.update_data_serde(&account, "uuid", profile.id.clone())
-            .context("Failed to update account")?;
+        diesel::update(account.filter(uuid.eq(&profile.id)))
+            .set((
+                username.eq(&profile.name),
+                display_name.eq(&profile.name),
+                access_token.eq(Some(minecraft_access_token.into_inner())),
+                refresh_token.eq(Some(refresh_token_val)),
+                token_expires_at.eq(Some(token_expires_at_val.to_rfc3339())),
+                skin_url.eq(skin_url_val),
+                cape_url.eq(cape_url_val),
+                updated_at.eq(Some(now_str.clone())),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| anyhow::anyhow!("Failed to update account: {}", e))?;
+
+        log::info!("[auth] Account updated successfully");
     }
 
     // Update active account in config
@@ -313,36 +289,10 @@ async fn process_login_completion(
 /// Get all accounts from database
 #[tauri::command]
 pub fn get_accounts() -> Result<Vec<Account>, String> {
-    let db = get_data_db().map_err(|e| e.to_string())?;
-    let conn = db.get_connection();
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, uuid, username, display_name, access_token, refresh_token, 
-                token_expires_at, is_active, skin_url, cape_url, created_at, updated_at
-         FROM account",
-        )
-        .map_err(|e| e.to_string())?;
-
-    let accounts = stmt
-        .query_map([], |row| {
-            Ok(Account {
-                id: crate::utils::sqlite::AUTOINCREMENT::default(),
-                uuid: row.get(1)?,
-                username: row.get(2)?,
-                display_name: row.get(3)?,
-                access_token: row.get(4)?,
-                refresh_token: row.get(5)?,
-                token_expires_at: row.get(6)?,
-                is_active: row.get(7)?,
-                skin_url: row.get(8)?,
-                cape_url: row.get(9)?,
-                created_at: row.get(10)?,
-                updated_at: row.get(11)?,
-            })
-        })
-        .map_err(|e| e.to_string())?
-        .collect::<Result<Vec<_>, _>>()
+    let accounts = account
+        .load::<Account>(&mut conn)
         .map_err(|e| e.to_string())?;
 
     Ok(accounts)
@@ -353,67 +303,44 @@ pub fn get_accounts() -> Result<Vec<Account>, String> {
 pub fn get_active_account() -> Result<Option<Account>, String> {
     let config = get_app_config().map_err(|e| e.to_string())?;
 
-    if let Some(uuid) = config.active_account_uuid {
-        let db = get_data_db().map_err(|e| e.to_string())?;
-        let conn = db.get_connection();
+    if let Some(target_uuid) = config.active_account_uuid {
+        let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
-        // Use raw SQL query to avoid AUTOINCREMENT deserialization issues
-        let mut stmt = conn
-            .prepare(
-                "SELECT id, uuid, username, display_name, access_token, refresh_token, 
-                    token_expires_at, is_active, skin_url, cape_url, created_at, updated_at
-             FROM account WHERE uuid = ?1",
-            )
-            .map_err(|e| e.to_string())?;
-
-        let account = stmt
-            .query_row([uuid], |row| {
-                Ok(Account {
-                    id: crate::utils::sqlite::AUTOINCREMENT::default(),
-                    uuid: row.get(1)?,
-                    username: row.get(2)?,
-                    display_name: row.get(3)?,
-                    access_token: row.get(4)?,
-                    refresh_token: row.get(5)?,
-                    token_expires_at: row.get(6)?,
-                    is_active: row.get(7)?,
-                    skin_url: row.get(8)?,
-                    cape_url: row.get(9)?,
-                    created_at: row.get(10)?,
-                    updated_at: row.get(11)?,
-                })
-            })
+        let acct = account
+            .filter(uuid.eq(target_uuid))
+            .first::<Account>(&mut conn)
             .optional()
             .map_err(|e| e.to_string())?;
 
-        Ok(account)
+        Ok(acct)
     } else {
         Ok(None)
     }
 }
 
 /// Ensure account tokens are valid and refresh if they are near expiry
-pub async fn ensure_account_tokens_valid(uuid: String) -> Result<(), String> {
+pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), String> {
     // Load account
-    // Use the existing public getter rather than raw DB to avoid serde row mapping issues
+    // Use the existing public getter rather than raw DB to avoid duplication
     let accounts = get_accounts().map_err(|e| format!("Failed to get accounts: {}", e))?;
-    let account = match accounts.into_iter().find(|a| a.uuid == uuid) {
+    let acct = match accounts.into_iter().find(|a| a.uuid == target_uuid) {
         Some(a) => a,
         None => return Err("Account not found".to_string()),
     };
 
     // If no refresh token present, nothing to do
-    let _refresh = match account.refresh_token.clone() {
+    let _refresh = match acct.refresh_token.clone() {
         Some(s) => s,
         None => return Ok(()),
     };
 
     // Check expiry; if missing, assume token is expired and refresh
     let now = Utc::now();
-    let needs_refresh = match &account.token_expires_at {
+    let needs_refresh = match &acct.token_expires_at {
         Some(ts) => match chrono::DateTime::parse_from_rfc3339(ts) {
             Ok(datetime) => {
                 let dt_utc = datetime.with_timezone(&Utc);
+                // Refresh if expiring within 60 seconds
                 let margin = Duration::seconds(60);
                 dt_utc <= now + margin
             }
@@ -425,43 +352,54 @@ pub async fn ensure_account_tokens_valid(uuid: String) -> Result<(), String> {
     if needs_refresh {
         log::info!(
             "[auth] Token for account {} is expired or expiring soon; refreshing",
-            uuid
+            target_uuid
         );
         // Call our refresh function
-        match refresh_account_tokens(uuid.clone()).await {
+        match refresh_account_tokens(target_uuid.clone()).await {
             Ok(_) => {
-                log::info!("[auth] Token refresh successful for account {}", uuid);
+                log::info!(
+                    "[auth] Token refresh successful for account {}",
+                    target_uuid
+                );
                 Ok(())
             }
             Err(e) => {
-                log::error!("[auth] Token refresh failed for account {}: {}", uuid, e);
+                log::error!(
+                    "[auth] Token refresh failed for account {}: {}",
+                    target_uuid,
+                    e
+                );
                 Err(e)
             }
         }
     } else {
-        log::debug!("[auth] Token still valid for account {}", uuid);
+        log::debug!("[auth] Token still valid for account {}", target_uuid);
         Ok(())
     }
 }
 
 /// Refresh the tokens for the given account
 #[tauri::command]
-pub async fn refresh_account_tokens(uuid: String) -> Result<(), String> {
-    log::info!("[auth] Refresh requested for account: {}", uuid);
-    // Use the existing getter to load the account to avoid serde deserialization issues
+pub async fn refresh_account_tokens(target_uuid: String) -> Result<(), String> {
+    log::info!("[auth] Refresh requested for account: {}", target_uuid);
+
+    // Load account to get refresh token
     let accounts = get_accounts().map_err(|e| format!("Failed to get accounts: {}", e))?;
-    let mut account = match accounts.into_iter().find(|a| a.uuid == uuid) {
+    let mut acct = match accounts.into_iter().find(|a| a.uuid == target_uuid) {
         Some(a) => a,
         None => {
-            log::error!("[auth] No account found to refresh: {}", uuid);
+            log::error!("[auth] No account found to refresh: {}", target_uuid);
             return Err("Account not found".to_string());
         }
     };
 
-    let refresh_token = match account.refresh_token.clone() {
+    let refresh_token_val = match acct.refresh_token.clone() {
         Some(rt) => rt,
         None => {
-            log::error!("[auth] No refresh token present for account: {}", uuid);
+            log::error!(
+                "[auth] No refresh token present for account: {}",
+                target_uuid
+            );
             return Err("No refresh token available".to_string());
         }
     };
@@ -475,14 +413,14 @@ pub async fn refresh_account_tokens(uuid: String) -> Result<(), String> {
         }
     };
 
-    log::info!("[auth] Attempting refresh for account: {}", uuid);
+    log::info!("[auth] Attempting refresh for account: {}", target_uuid);
 
     // Attempt refresh
     let token_response =
-        match piston_lib::auth::refresh_access_token(&client, refresh_token.clone()).await {
+        match piston_lib::auth::refresh_access_token(&client, refresh_token_val.clone()).await {
             Ok(t) => t,
             Err(e) => {
-                log::error!("[auth] Refresh failed for account {}: {}", uuid, e);
+                log::error!("[auth] Refresh failed for account {}: {}", target_uuid, e);
                 return Err(format!("Failed to refresh token: {}", e));
             }
         };
@@ -497,7 +435,7 @@ pub async fn refresh_account_tokens(uuid: String) -> Result<(), String> {
             Err(e) => {
                 log::error!(
                     "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
-                    uuid,
+                    target_uuid,
                     e
                 );
                 return Err(format!("Failed to exchange for Minecraft token: {}", e));
@@ -514,53 +452,58 @@ pub async fn refresh_account_tokens(uuid: String) -> Result<(), String> {
         }
     };
 
-    let token_expires_at = (Utc::now() + Duration::seconds(expires_in_secs as i64)).to_rfc3339();
+    let token_expires_at_val =
+        (Utc::now() + Duration::seconds(expires_in_secs as i64)).to_rfc3339();
+    let now_str = Utc::now().to_rfc3339();
 
-    // Update account fields
-    account.access_token = Some(mc_access_token);
-    if let Some(rt) = ms_refresh_token {
-        account.refresh_token = Some(rt);
+    // Update account fields (in memory copy)
+    acct.access_token = Some(mc_access_token.clone());
+    if let Some(rt) = ms_refresh_token.clone() {
+        acct.refresh_token = Some(rt);
     }
-    account.token_expires_at = Some(token_expires_at);
-    account.updated_at = Some(Utc::now().to_rfc3339());
+    acct.token_expires_at = Some(token_expires_at_val.clone());
+    acct.updated_at = Some(now_str.clone());
 
     // Save to DB
-    let db = get_data_db().map_err(|e| e.to_string())?;
-    match db.update_data_serde(&account, "uuid", uuid.clone()) {
-        Ok(_) => {
-            log::info!("[auth] Successfully refreshed tokens for account: {}", uuid);
-            Ok(())
-        }
-        Err(e) => {
-            log::error!(
-                "[auth] Failed to update refreshed tokens in DB for {}: {}",
-                uuid,
-                e
-            );
-            Err(format!("Failed to update account in DB: {}", e))
-        }
-    }
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    diesel::update(account.filter(uuid.eq(&target_uuid)))
+        .set((
+            access_token.eq(Some(mc_access_token)),
+            refresh_token.eq(ms_refresh_token), // Handles Option logic naturally
+            token_expires_at.eq(Some(token_expires_at_val)),
+            updated_at.eq(Some(now_str)),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to update account in DB: {}", e))?;
+
+    log::info!(
+        "[auth] Successfully refreshed tokens for account: {}",
+        target_uuid
+    );
+    Ok(())
 }
 
 /// Set active account by UUID
 #[tauri::command]
-pub fn set_active_account(uuid: String) -> Result<(), String> {
-    let db = get_data_db().map_err(|e| e.to_string())?;
+pub fn set_active_account(target_uuid: String) -> Result<(), String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
     // Deactivate all accounts
-    let mut all_accounts: Vec<Account> = db
-        .get_all_data_serde::<Account, Account>()
+    diesel::update(account)
+        .set(is_active.eq(false))
+        .execute(&mut conn)
         .map_err(|e| e.to_string())?;
 
-    for account in &mut all_accounts {
-        account.is_active = account.uuid == uuid;
-        db.update_data_serde(account, "uuid", account.uuid.clone())
-            .map_err(|e| e.to_string())?;
-    }
+    // Activate target
+    diesel::update(account.filter(uuid.eq(&target_uuid)))
+        .set(is_active.eq(true))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
 
     // Update config
     let mut config = get_app_config().map_err(|e| e.to_string())?;
-    config.active_account_uuid = Some(uuid);
+    config.active_account_uuid = Some(target_uuid);
     update_app_config(&config).map_err(|e| e.to_string())?;
 
     Ok(())
@@ -568,15 +511,12 @@ pub fn set_active_account(uuid: String) -> Result<(), String> {
 
 /// Remove account by UUID
 #[tauri::command]
-pub fn remove_account(uuid: String) -> Result<(), String> {
-    let db = get_data_db().map_err(|e| e.to_string())?;
-    let conn = db.get_connection();
+pub fn remove_account(target_uuid: String) -> Result<(), String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
-    conn.execute(
-        "DELETE FROM account WHERE uuid = ?1",
-        rusqlite::params![uuid],
-    )
-    .map_err(|e| e.to_string())?;
+    diesel::delete(account.filter(uuid.eq(target_uuid)))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -585,7 +525,7 @@ pub fn remove_account(uuid: String) -> Result<(), String> {
 #[tauri::command]
 pub async fn get_player_head_path(
     app: AppHandle,
-    uuid: String,
+    player_uuid: String,
     force_download: bool,
 ) -> Result<String, String> {
     let cache_dir = app
@@ -594,10 +534,10 @@ pub async fn get_player_head_path(
         .map_err(|e| e.to_string())?
         .join("player_heads");
 
-    let image_path = cache_dir.join(format!("{}.png", uuid));
+    let image_path = cache_dir.join(format!("{}.png", player_uuid));
 
     let path = piston_lib::api::player::download_player_head(
-        &uuid,
+        &player_uuid,
         image_path.clone(),
         128,
         true,
@@ -614,8 +554,8 @@ pub async fn get_player_head_path(
 pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
     let accounts = get_accounts()?;
 
-    for account in accounts {
-        let _ = get_player_head_path(app.clone(), account.uuid, false).await;
+    for acct in accounts {
+        let _ = get_player_head_path(app.clone(), acct.uuid, false).await;
     }
 
     Ok(())

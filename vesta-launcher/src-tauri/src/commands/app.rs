@@ -1,4 +1,4 @@
-use crate::utils::db_manager::{get_app_config_dir, get_data_db};
+use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
 
 #[tauri::command]
@@ -25,29 +25,47 @@ pub fn open_app_config_dir() -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn open_logs_folder(instance_id: Option<String>) -> Result<(), String> {
-    let logs_path = if let Some(id) = instance_id {
+pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> {
+    let logs_path = if let Some(slug_val) = instance_id_slug {
         // Fetch instance from database to get its game directory
-        let db = get_data_db().map_err(|e| e.to_string())?;
-        let conn = db.get_connection();
+        // We use the slug directly as that's what we expect, but we also check for matching name
+        // actually open_logs_folder usually receives the slug (instance_id) from frontend
 
-        let mut stmt = conn
-            .prepare(
-                "SELECT game_directory FROM instance WHERE name = ?1 OR id = (SELECT id FROM instance WHERE LOWER(REPLACE(REPLACE(REPLACE(name, ' ', '-'), '_', '-'), '\"', '')) = LOWER(REPLACE(REPLACE(REPLACE(?1, ' ', '-'), '_', '-'), '\"', '')))",
-            )
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
+        use crate::schema::instance::dsl::*;
+        use crate::utils::db::get_vesta_conn;
+        use diesel::prelude::*;
 
-        let game_dir: Option<String> = stmt
-            .query_row([id.as_str()], |row| row.get(0))
-            .ok();
+        let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
-        if let Some(game_dir) = game_dir {
-            std::path::PathBuf::from(game_dir).join("logs")
+        // Try to find by direct slug comparison (logic: iterate and check slug because slug is not in DB)
+        // Or simpler: Just construct the path from config dir + instances + slug,
+        // because that IS the game directory structure we enforce now.
+        // However, `game_directory` column exists.
+
+        let instances_list = instance
+            .select((crate::schema::instance::dsl::id, name, game_directory))
+            .load::<(i32, String, Option<String>)>(&mut conn)
+            .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+        let found_dir = instances_list.into_iter().find_map(|(_id, _name, _gd)| {
+            let i_slug = crate::utils::sanitize::sanitize_instance_name(&_name);
+            if i_slug == slug_val {
+                _gd
+            } else {
+                None
+            }
+        });
+
+        if let Some(gd) = found_dir {
+            std::path::PathBuf::from(gd).join("logs")
         } else {
-            return Err(format!("Instance not found: {}", id));
+            // Fallback: assume standard path
+            let config_dir =
+                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+            config_dir.join("instances").join(&slug_val).join("logs")
         }
     } else {
-        get_app_config_dir()
+        crate::utils::db_manager::get_app_config_dir()
             .map_err(|e| e.to_string())?
             .join("logs")
     };
@@ -57,8 +75,12 @@ pub fn open_logs_folder(instance_id: Option<String>) -> Result<(), String> {
         .map_err(|e| format!("Failed to create logs directory: {}", e))?;
 
     // Open logs directory in file explorer
-    open::that(&logs_path)
-        .map_err(|e| format!("Failed to open logs directory: {} (path: {:?})", e, logs_path))?;
+    open::that(&logs_path).map_err(|e| {
+        format!(
+            "Failed to open logs directory: {} (path: {:?})",
+            e, logs_path
+        )
+    })?;
     Ok(())
 }
 

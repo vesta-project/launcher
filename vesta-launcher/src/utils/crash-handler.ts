@@ -95,7 +95,10 @@ async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
 			show_on_completion: true,
 		});
 	} catch (error) {
-		console.error("Failed to create patient crash notification, falling back to toast", error);
+		console.error(
+			"Failed to create patient crash notification, falling back to toast",
+			error,
+		);
 		showToast({
 			title,
 			description,
@@ -109,18 +112,21 @@ async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
  * Subscribe to crash events from the backend
  */
 export async function subscribeToCrashEvents(): Promise<UnlistenFn> {
-	const unlisten = await listen<CrashEvent>("core://instance-crashed", (event) => {
-		const crashEvent = event.payload;
-		console.log("[CrashHandler] Crash detected:", crashEvent);
+	const unlisten = await listen<CrashEvent>(
+		"core://instance-crashed",
+		(event) => {
+			const crashEvent = event.payload;
+			console.log("[CrashHandler] Crash detected:", crashEvent);
 
-		// Store crash details in memory
-		const updated = new Map(crashedInstances());
-		updated.set(crashEvent.instance_id, crashEvent);
-		setCrashedInstances(updated);
+			// Store crash details in memory
+			const updated = new Map(crashedInstances());
+			updated.set(crashEvent.instance_id, crashEvent);
+			setCrashedInstances(updated);
 
-		// Show notification
-		void showCrashNotification(crashEvent);
-	});
+			// Show notification
+			void showCrashNotification(crashEvent);
+		},
+	);
 
 	return unlisten;
 }

@@ -1,72 +1,78 @@
-use crate::models::UserVersionTracking;
-use crate::utils::db_manager::get_data_db;
-use crate::utils::sqlite::SqlTable;
+use crate::models::user_version_tracking::NewUserVersionTracking;
+use crate::schema::user_version_tracking::dsl::*;
+use crate::utils::db::get_vesta_conn;
 use anyhow::Result;
+use diesel::prelude::*;
 
 /// Repository functions for user version tracking
 pub struct VersionTrackingRepository;
 
 impl VersionTrackingRepository {
     /// Get the last seen version for a specific version type
-    pub fn get_last_seen_version(version_type: &str) -> Result<Option<String>> {
-        let db = get_data_db().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
-        let conn = db.get_connection();
+    pub fn get_last_seen_version(v_type: &str) -> Result<Option<String>> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
-        let mut stmt = conn.prepare(&format!(
-            "SELECT last_seen_version FROM {} WHERE version_type = ?1 ORDER BY last_seen_at DESC LIMIT 1",
-            UserVersionTracking::name()
-        ))?;
+        let result = user_version_tracking
+            .filter(version_type.eq(v_type))
+            .order(last_seen_at.desc())
+            .select(last_seen_version)
+            .first::<String>(&mut conn)
+            .optional()?;
 
-        let mut rows = stmt.query_map([version_type], |row| row.get::<_, String>(0))?;
-
-        if let Some(version) = rows.next() {
-            Ok(Some(version?))
-        } else {
-            Ok(None)
-        }
+        Ok(result)
     }
 
     /// Update or insert the last seen version for a version type
-    pub fn update_last_seen_version(version_type: &str, version: &str, notified: bool) -> Result<()> {
+    pub fn update_last_seen_version(v_type: &str, version: &str, is_notified: bool) -> Result<()> {
         log::info!(
             "Updating last seen version for type '{}' to '{}' (notified: {})",
-            version_type,
+            v_type,
             version,
-            notified
+            is_notified
         );
 
-        let db = get_data_db().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
-        let conn = db.get_connection();
-
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
         let now = chrono::Utc::now().to_rfc3339();
 
-        // Try to update an existing row first; avoid specifying the AUTOINCREMENT column to prevent column count mismatches.
-        let updated = conn.execute(
-            &format!(
-                "UPDATE {} SET last_seen_version = ?1, last_seen_at = ?2, notified = ?3 WHERE version_type = ?4",
-                UserVersionTracking::name()
-            ),
-            rusqlite::params![version, now, notified, version_type],
-        )?;
+        // Check if exists
+        let exists: bool = diesel::select(diesel::dsl::exists(
+            user_version_tracking.filter(version_type.eq(v_type)),
+        ))
+        .get_result(&mut conn)?;
 
-        if updated == 0 {
-            // No row existed; insert a new one (omit id so SQLite assigns it)
-            conn.execute(
-                &format!(
-                    "INSERT INTO {} (version_type, last_seen_version, last_seen_at, notified) VALUES (?1, ?2, ?3, ?4)",
-                    UserVersionTracking::name()
-                ),
-                rusqlite::params![version_type, version, now, notified],
-            )?;
+        if exists {
+            diesel::update(user_version_tracking.filter(version_type.eq(v_type)))
+                .set((
+                    last_seen_version.eq(version),
+                    last_seen_at.eq(&now),
+                    notified.eq(is_notified),
+                ))
+                .execute(&mut conn)?;
+        } else {
+            let new_tracking = NewUserVersionTracking {
+                version_type: v_type.to_string(),
+                last_seen_version: version.to_string(),
+                last_seen_at: now,
+                notified: is_notified,
+            };
+
+            diesel::insert_into(user_version_tracking)
+                .values(&new_tracking)
+                .execute(&mut conn)?;
         }
 
-        log::info!("Successfully updated last seen version for type '{}'", version_type);
+        log::info!(
+            "Successfully updated last seen version for type '{}'",
+            v_type
+        );
         Ok(())
     }
 
     /// Check if a version is newer than the last seen version
-    pub fn is_version_newer(version_type: &str, current_version: &str) -> Result<bool> {
-        if let Some(last_seen) = Self::get_last_seen_version(version_type)? {
+    pub fn is_version_newer(v_type: &str, current_version: &str) -> Result<bool> {
+        if let Some(last_seen) = Self::get_last_seen_version(v_type)? {
             // Simple string comparison for now - could be enhanced with semver parsing
             Ok(current_version != last_seen)
         } else {
@@ -76,8 +82,8 @@ impl VersionTrackingRepository {
     }
 
     /// Mark that user has been notified about a version
-    pub fn mark_notified(version_type: &str, version: &str) -> Result<()> {
-        Self::update_last_seen_version(version_type, version, true)
+    pub fn mark_notified(v_type: &str, version: &str) -> Result<()> {
+        Self::update_last_seen_version(v_type, version, true)
     }
 
     /// Initialize default version tracking entries on first run
@@ -88,9 +94,9 @@ impl VersionTrackingRepository {
             ("minecraft_snapshot", "25w51a"),
         ];
 
-        for (version_type, version) in defaults {
-            if Self::get_last_seen_version(version_type)?.is_none() {
-                Self::update_last_seen_version(version_type, version, true)?;
+        for (v_type, version) in defaults {
+            if Self::get_last_seen_version(v_type)?.is_none() {
+                Self::update_last_seen_version(v_type, version, true)?;
             }
         }
 

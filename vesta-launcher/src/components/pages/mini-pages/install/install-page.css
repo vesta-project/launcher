@@ -89,7 +89,10 @@
 .instance-icon-placeholder {
 	width: 96px;
 	height: 96px;
-	background-image: var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+	background-image: var(
+		--instance-bg-image,
+		url("@assets/placeholder-images/placeholder-image1.jpg")
+	);
 	background-size: cover;
 	background-position: center;
 	border-radius: 12px;
@@ -97,7 +100,9 @@
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
-	transition: transform 0.2s, box-shadow 0.2s;
+	transition:
+		transform 0.2s,
+		box-shadow 0.2s;
 	border: 0.5px solid var(--border-subtle);
 }
 

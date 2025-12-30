@@ -48,7 +48,7 @@ pub async fn update_notification_progress(
 pub struct NotificationFilters {
     pub notification_type: Option<String>,
     pub read: Option<bool>,
-    pub severity: Option<String>,
+    pub _severity: Option<String>,
 }
 
 #[tauri::command]

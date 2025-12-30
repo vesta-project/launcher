@@ -1,7 +1,3 @@
 [workspace]
 resolver = "2"
-members = [
-    "vesta-launcher/src-tauri",
-    "crates/piston-lib",
-    "crates/piston-macros",
-]
+members = ["vesta-launcher/src-tauri", "crates/piston-lib"]

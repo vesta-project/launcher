@@ -11,6 +11,7 @@ import {
 } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
 import { invoke } from "@tauri-apps/api/core";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	closeAlert,
 	createNotification,
@@ -19,7 +20,6 @@ import {
 	persistentNotificationTrigger,
 	showAlert,
 } from "@utils/notifications";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	createEffect,
 	createResource,
@@ -168,9 +168,7 @@ function Sidebar(props: SidebarProps) {
 							{notifData().totalCount > 0 && (
 								<Tooltip placement="top">
 									<TooltipTrigger>
-										<div
-											class="notification-badge"
-										>
+										<div class="notification-badge">
 											{notifData().totalCount}
 										</div>
 									</TooltipTrigger>

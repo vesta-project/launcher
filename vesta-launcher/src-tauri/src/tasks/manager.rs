@@ -1,7 +1,5 @@
 use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::{
-    CreateNotificationInput, NotificationAction, NotificationActionType, NotificationType,
-};
+use crate::notifications::models::{CreateNotificationInput, NotificationAction, NotificationType};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -80,10 +78,9 @@ impl TaskManager {
                 // Create actions array with cancel button if cancellable
                 let actions = if is_cancellable {
                     Some(vec![NotificationAction {
-                        id: "cancel_task".to_string(),
+                        action_id: "cancel_task".to_string(),
                         label: "Cancel".to_string(),
-                        action_type: NotificationActionType::Destructive,
-                        payload: None,
+                        primary: false,
                     }])
                 } else {
                     None
@@ -97,7 +94,7 @@ impl TaskManager {
                     notification_type: Some(NotificationType::Progress),
                     dismissible: Some(false),
                     show_on_completion: Some(task.show_completion_notification()),
-                    actions,
+                    actions: actions.and_then(|a| serde_json::to_string(&a).ok()),
                     progress: Some(-1), // Indeterminate until picked up
                     current_step: Some(0),
                     total_steps: Some(task.total_steps()),
@@ -284,6 +281,7 @@ impl TaskManager {
     }
 }
 
+#[allow(dead_code)]
 pub struct TestTask {
     pub title: String,
     pub duration_secs: u64,
