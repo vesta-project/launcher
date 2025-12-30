@@ -6,6 +6,8 @@ import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png
 import PlacehodlerImage4 from "@assets/placeholder-images/placeholder-image4.png";
 import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png";
 import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
+import PlacehodlerImage7 from "@assets/placeholder-images/placeholder-image7.png";
+import PlacehodlerImage8 from "@assets/placeholder-images/placeholder-image8.png";
 
 // Default icons for instances
 export const DEFAULT_ICONS = [
@@ -15,14 +17,16 @@ export const DEFAULT_ICONS = [
 	PlacehodlerImage4,
 	PlaceholderImage5,
 	PlaceholderImage6,
-	"linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
-	"linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
-	"linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",
-	"linear-gradient(135deg, #FA709A 0%, #FEE140 100%)",
-	"linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
-	"linear-gradient(135deg, #F6D365 0%, #FDA085 100%)",
-	"linear-gradient(135deg, #B721FF 0%, #21D4FD 100%)",
-	"linear-gradient(135deg, #0BA360 0%, #3CBA92 100%)",
+	PlacehodlerImage7,
+	PlacehodlerImage8,
+	// "linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
+	// "linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
+	// "linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",
+	// "linear-gradient(135deg, #FA709A 0%, #FEE140 100%)",
+	// "linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
+	// "linear-gradient(135deg, #F6D365 0%, #FDA085 100%)",
+	// "linear-gradient(135deg, #B721FF 0%, #21D4FD 100%)",
+	// "linear-gradient(135deg, #0BA360 0%, #3CBA92 100%)",
 ];
 
 // Instance type matching Rust struct
