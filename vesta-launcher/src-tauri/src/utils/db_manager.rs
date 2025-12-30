@@ -101,6 +101,7 @@ pub fn get_config_db() -> Result<SQLiteDB> {
     // Lazy initialization: run migrations on first access using Once
     // Once::call_once ensures this runs exactly once, even with multiple threads
     CONFIG_DB_INIT.call_once(|| {
+        log::info!("Config DB: Initialization starting...");
         let result = (|| -> Result<()> {
             let db = create_raw_db("app_config.db")?;
             init_config_db(&db)?;
@@ -108,6 +109,7 @@ pub fn get_config_db() -> Result<SQLiteDB> {
         })()
         .map_err(|e| e.to_string());
 
+        log::info!("Config DB: Initialization finished: {:?}", result);
         let mut init_result = CONFIG_INIT_RESULT.lock().unwrap();
         *init_result = Some(result);
     });
@@ -134,6 +136,7 @@ pub fn get_data_db() -> Result<SQLiteDB> {
     // Lazy initialization: run migrations on first access using Once
     // Once::call_once ensures this runs exactly once, even with multiple threads
     DATA_DB_INIT.call_once(|| {
+        log::info!("Data DB: Initialization starting...");
         let result = (|| -> Result<()> {
             let db = create_raw_db("vesta.db")?;
             init_data_db(&db)?;
@@ -141,6 +144,7 @@ pub fn get_data_db() -> Result<SQLiteDB> {
         })()
         .map_err(|e| e.to_string());
 
+        log::info!("Data DB: Initialization finished: {:?}", result);
         let mut init_result = DATA_INIT_RESULT.lock().unwrap();
         *init_result = Some(result);
     });

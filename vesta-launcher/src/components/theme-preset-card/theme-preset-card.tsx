@@ -17,6 +17,8 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 		<button
 			class={`theme-preset-card ${props.isSelected ? "theme-preset-card--selected" : ""}`}
 			onClick={props.onClick}
+			data-preview-style={props.theme.style}
+			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
 			style={{
 				"--preview-hue": props.theme.primaryHue,
 				"--preview-style": props.theme.style,

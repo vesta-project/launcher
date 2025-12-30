@@ -417,7 +417,7 @@ impl SQLiteDB {
                 
                 self.conn.execute(&sql, [])?;
                 added_columns.push(column_name.clone());
-                println!("✓ Auto-added column: {}.{}", table_name, column_name);
+                log::info!("Auto-added column to {}: {}", table_name, column_name);
             }
         }
         

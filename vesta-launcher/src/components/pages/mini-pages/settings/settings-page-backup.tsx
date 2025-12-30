@@ -90,7 +90,7 @@ function SettingsPage() {
 	createEffect(() => {
 		const root = document.documentElement;
 		const hue = backgroundHue();
-		root.style.setProperty("--hue-primary", hue.toString());
+		root.style.setProperty("--color__primary-hue", hue.toString());
 		root.style.setProperty("--color__primary-hue", hue.toString());
 		applyTheme(
 			validateTheme({
@@ -316,7 +316,7 @@ function SettingsPage() {
 								<textarea
 									value={customCss()}
 									onInput={(e) => setCustomCss(e.currentTarget.value)}
-									style="min-height:120px; border-radius:8px; padding:8px; background: var(--surface-base); color: var(--text-primary); border: var(--border-width-subtle) solid var(--border-subtle, hsl(var(--hue-primary) 10% var(--lightness-border) / 0.4));"
+									style="min-height:120px; border-radius:8px; padding:8px; background: var(--surface-base); color: var(--text-primary); border: var(--border-width-subtle) solid var(--border-subtle, hsl(var(--color__primary-hue) 10% var(--lightness-border) / 0.4));"
 								/>
 							</div>
 						</Show>

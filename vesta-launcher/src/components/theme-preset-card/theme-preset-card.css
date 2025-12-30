@@ -1,5 +1,6 @@
 .theme-preset-card {
 	all: unset;
+	position: relative; /* needed for pseudo elements */
 	display: flex;
 	flex-direction: column;
 	width: 180px;
@@ -24,6 +25,16 @@
 	&.theme-preset-card--selected {
 		border-color: var(--accent-primary);
 		border-width: 2px;
+	}
+
+	/* Accent overlay drawn above children to avoid being covered by preview */
+	&.theme-preset-card--selected::after {
+		content: "";
+		position: absolute;
+		inset: 0;
+		border-radius: inherit;
+		pointer-events: none;
+		z-index: 3; /* above preview */
 		box-shadow: 0 0 0 2px var(--accent-primary) inset;
 	}
 }
@@ -33,21 +44,42 @@
 	width: 100%;
 	height: 100px;
 	overflow: hidden;
+	z-index: 0; /* ensure preview sits below selected accent overlay */
 	
-	/* Apply theme-specific variables for preview */
-	--preview-bg-base: calc(var(--preview-style) == "flat" ? 1 : 0.8);
-	--preview-blur: calc(var(--preview-style) == "glass" ? 8px : (var(--preview-style) == "satin" ? 4px : 0px));
+	/* Defaults - overridden by data-attribute selectors below */
+	--preview-bg-base: 0.8;
+	--preview-blur: 4px;
+}
+
+/* Style-specific overrides using data attributes (PostCSS-friendly) */
+.theme-preset-card[data-preview-style="flat"] .theme-preview {
+	--preview-bg-base: 1;
+	--preview-blur: 0px;
+}
+
+.theme-preset-card[data-preview-style="glass"] .theme-preview {
+	--preview-bg-base: 0.8;
+	--preview-blur: 8px;
+}
+
+.theme-preset-card[data-preview-style="satin"] .theme-preview {
+	--preview-bg-base: 0.95;
+	--preview-blur: 4px;
 }
 
 .theme-preview__bg {
 	position: absolute;
 	inset: 0;
 	background: hsl(var(--preview-hue) 30% 15% / var(--preview-bg-base));
-	background-image: calc(var(--preview-gradient) * linear-gradient(
+}
+
+/* Apply gradient when enabled via data attribute */
+.theme-preset-card[data-preview-gradient="1"] .theme-preview__bg {
+	background-image: linear-gradient(
 		var(--preview-angle, 135deg),
 		hsl(var(--preview-hue) 70% 20% / 0.6) 0%,
 		hsl(calc(var(--preview-hue) + 60) 60% 25% / 0.4) 100%
-	));
+	);
 }
 
 .theme-preview__sidebar {
@@ -150,11 +182,14 @@
 @media (prefers-color-scheme: light) {
 	.theme-preview__bg {
 		background: hsl(var(--preview-hue) 30% 85% / var(--preview-bg-base));
-		background-image: calc(var(--preview-gradient) * linear-gradient(
+	}
+
+	.theme-preset-card[data-preview-gradient="1"] .theme-preview__bg {
+		background-image: linear-gradient(
 			var(--preview-angle, 135deg),
 			hsl(var(--preview-hue) 70% 80% / 0.6) 0%,
 			hsl(calc(var(--preview-hue) + 60) 60% 75% / 0.4) 100%
-		));
+		);
 	}
 	
 	.theme-preview__sidebar {

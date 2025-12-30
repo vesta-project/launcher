@@ -27,6 +27,18 @@ interface AppConfig {
 	background_hue: number;
 	reduced_motion?: boolean;
 	reduced_effects?: boolean;
+	
+	// Theme system fields
+	theme_id: string;
+	theme_mode: string;
+	theme_primary_hue: number;
+	theme_primary_sat?: number;
+	theme_primary_light?: number;
+	theme_style: string;
+	theme_gradient_enabled: boolean;
+	theme_gradient_angle?: number;
+	theme_gradient_harmony?: string;
+	theme_advanced_overrides?: string;
 	[key: string]: any;
 }
 
@@ -34,19 +46,19 @@ function SettingsPage() {
 	const [currentTab, setCurrentTab] = createSignal("appearance");
 	const [debugLogging, setDebugLogging] = createSignal(false);
 	const [backgroundHue, setBackgroundHue] = createSignal(220);
-	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>("glass");
-	const [gradientEnabled, setGradientEnabled] = createSignal(true);
-	const [gradientAngle, setGradientAngle] = createSignal(135);
-	const [themeId, setThemeId] = createSignal<string>("midnight");
+	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"] | null>(null);
+	const [gradientEnabled, setGradientEnabled] = createSignal<boolean | null>(null);
+	const [gradientAngle, setGradientAngle] = createSignal<number | null>(null);
+	const [themeId, setThemeId] = createSignal<string | null>(null);
 	const [borderThickness, setBorderThickness] = createSignal(1);
 	const [customCss, setCustomCss] = createSignal("");
 	const [reducedMotion, setReducedMotion] = createSignal(false);
 	const [loading, setLoading] = createSignal(true);
 
 	// Permissions helpers based on current theme
-	const canChangeStyle = () => (getThemeById(themeId())?.allowStyleChange ?? false);
-	const canChangeHue = () => (getThemeById(themeId())?.allowHueChange ?? false);
-	const canChangeBorder = () => (getThemeById(themeId())?.allowBorderChange ?? false);
+	const canChangeStyle = () => (themeId() ? (getThemeById(themeId()!)?.allowStyleChange ?? false) : false);
+	const canChangeHue = () => (themeId() ? (getThemeById(themeId()!)?.allowHueChange ?? false) : false);
+	const canChangeBorder = () => (themeId() ? (getThemeById(themeId()!)?.allowBorderChange ?? false) : false);
 
 	let unsubscribeConfigUpdate: (() => void) | null = null;
 
@@ -55,26 +67,54 @@ function SettingsPage() {
 			if (hasTauriRuntime()) {
 				const config = await invoke<AppConfig>("get_config");
 				setDebugLogging(config.debug_logging);
-				setBackgroundHue(config.background_hue || 220);
 				setReducedMotion(config.reduced_motion ?? false);
 				
-				// Apply current theme based on config
-				const currentTheme = getThemeById("midnight") || PRESET_THEMES[0];
-				applyTheme(validateTheme({
-					id: currentTheme.id,
-					primaryHue: config.background_hue || 220,
-					style: currentTheme.style,
-					gradientEnabled: currentTheme.gradientEnabled,
-					gradientAngle: currentTheme.gradientAngle || 135,
-				}));
+				// Load theme configuration - migrate from legacy background_hue if present
+				const themeIdFromConfig = config.theme_id ?? null;
+				const primaryHueFromConfig = typeof config.theme_primary_hue === "number" ? config.theme_primary_hue : (typeof config.background_hue === "number" ? config.background_hue : null);
+				const styleFromConfig = (config.theme_style as ThemeConfig["style"]) ?? null;
+				const gradientEnabledFromConfig = typeof config.theme_gradient_enabled === "boolean" ? config.theme_gradient_enabled : null;
+				const gradientAngleFromConfig = typeof config.theme_gradient_angle === "number" ? config.theme_gradient_angle : null;
+				
+				// Set UI state only for values present in config
+				if (themeIdFromConfig) setThemeId(themeIdFromConfig);
+				if (primaryHueFromConfig !== null) setBackgroundHue(primaryHueFromConfig as number);
+				if (styleFromConfig) setStyleMode(styleFromConfig);
+				if (gradientEnabledFromConfig !== null) setGradientEnabled(gradientEnabledFromConfig);
+				if (gradientAngleFromConfig !== null) setGradientAngle(gradientAngleFromConfig);
+				
+				// Apply current theme only if config provided explicit theme_id or primary hue
+				if (themeIdFromConfig || primaryHueFromConfig !== null) {
+					const effectiveThemeId = themeIdFromConfig ?? "midnight";
+					const currentTheme = getThemeById(effectiveThemeId);
+					const hueToApply = (primaryHueFromConfig !== null ? primaryHueFromConfig : currentTheme?.primaryHue ?? 220) as number;
+					const styleToApply = (styleFromConfig ?? currentTheme?.style ?? "glass") as ThemeConfig["style"];
+					const gradientToApply = (gradientEnabledFromConfig !== null ? gradientEnabledFromConfig : currentTheme?.gradientEnabled ?? true) as boolean;
+					const angleToApply = (gradientAngleFromConfig ?? currentTheme?.gradientAngle ?? 135) as number;
+					if (currentTheme) {
+						applyTheme(validateTheme({
+							...currentTheme,
+							primaryHue: hueToApply,
+							style: styleToApply,
+							gradientEnabled: gradientToApply,
+							gradientAngle: angleToApply,
+						}));
+					}
+				}
 			}
 
 			// Subscribe to config updates
 			unsubscribeConfigUpdate = onConfigUpdate(async (updatedConfig) => {
 				const config = updatedConfig as AppConfig;
 				setDebugLogging(config.debug_logging);
-				setBackgroundHue(config.background_hue || 220);
 				setReducedMotion(config.reduced_motion ?? false);
+				
+				// Update theme state from config changes
+				if (config.theme_id) setThemeId(config.theme_id);
+				if (config.theme_primary_hue) setBackgroundHue(config.theme_primary_hue);
+				if (config.theme_style) setStyleMode(config.theme_style as ThemeConfig["style"]);
+				if (typeof config.theme_gradient_enabled === "boolean") setGradientEnabled(config.theme_gradient_enabled);
+				if (config.theme_gradient_angle) setGradientAngle(config.theme_gradient_angle);
 			});
 		} catch (error) {
 			console.error("Failed to load settings:", error);
@@ -87,21 +127,80 @@ function SettingsPage() {
 		unsubscribeConfigUpdate?.();
 	});
 
-	const handlePresetSelect = (id: string) => {
+	const handlePresetSelect = async (id: string) => {
 		const theme = getThemeById(id);
 		if (theme) {
 			setThemeId(id);
 			setStyleMode(theme.style);
 			setGradientEnabled(theme.gradientEnabled);
 			setGradientAngle(theme.gradientAngle || 135);
-			if (theme.primaryHue) {
-				setBackgroundHue(theme.primaryHue);
+			
+			// For template themes with locked hue, use theme's hue; otherwise keep current
+			const newHue = theme.allowHueChange === false ? theme.primaryHue : backgroundHue();
+			if (theme.primaryHue && theme.allowHueChange === false) {
+				setBackgroundHue(newHue);
+			}
+			
+			// Apply theme immediately
+			applyTheme(validateTheme({
+				...theme,
+				primaryHue: newHue,
+			}));
+			
+			// Save to config database
+			if (hasTauriRuntime()) {
+				try {
+					const currentConfig = await invoke<AppConfig>("get_config");
+					const updatedConfig = {
+						...currentConfig,
+						theme_id: id,
+						theme_primary_hue: newHue,
+						theme_style: theme.style,
+						theme_gradient_enabled: theme.gradientEnabled,
+						theme_gradient_angle: theme.gradientAngle || 135,
+						theme_gradient_harmony: theme.gradientHarmony || "complementary",
+						// Keep legacy field in sync for migration compatibility
+						background_hue: newHue,
+					};
+					await invoke("set_config", { config: updatedConfig });
+				} catch (error) {
+					console.error("Failed to save theme preset selection:", error);
+				}
 			}
 		}
 	};
 
 	const handleHueChange = (values: number[]) => {
-		setBackgroundHue(values[0]);
+		const newHue = values[0];
+		setBackgroundHue(newHue);
+	
+		// Apply theme change immediately for live preview
+		const currentTheme = getThemeById(themeId());
+		if (currentTheme) {
+			applyTheme(validateTheme({
+				...currentTheme,
+				primaryHue: newHue,
+				style: styleMode(),
+				gradientEnabled: gradientEnabled(),
+				gradientAngle: gradientAngle(),
+			}));
+		}
+	};
+
+	const handleHueCommit = async () => {
+		if (!hasTauriRuntime()) return;
+		try {
+			const newHue = backgroundHue();
+			const currentConfig = await invoke<AppConfig>("get_config");
+			const updatedConfig = {
+				...currentConfig,
+				theme_primary_hue: newHue,
+				background_hue: newHue, // keep legacy field in sync
+			};
+			await invoke("set_config", { config: updatedConfig });
+		} catch (error) {
+			console.error("Failed to persist hue on commit:", error);
+		}
 	};
 
 	const handleStyleModeChange = (mode: ThemeConfig["style"]) => {
@@ -116,19 +215,52 @@ function SettingsPage() {
 		setGradientAngle(values[0]);
 	};
 
-	// React to hue changes
+	const handleGradientAngleCommit = async () => {
+		if (!hasTauriRuntime()) return;
+		try {
+			const newAngle = gradientAngle();
+			const currentConfig = await invoke<AppConfig>("get_config");
+			const updatedConfig = {
+				...currentConfig,
+				theme_gradient_angle: newAngle,
+			};
+			await invoke("set_config", { config: updatedConfig });
+		} catch (error) {
+			console.error("Failed to persist gradient angle on commit:", error);
+		}
+	};
+
+	// React to hue changes — only apply when we have explicit config-driven values
 	createEffect(() => {
-		applyTheme(
-			validateTheme({
-				id: themeId(),
-				primaryHue: backgroundHue(),
-				style: styleMode(),
-				gradientEnabled: gradientEnabled(),
-				gradientAngle: gradientAngle(),
+		// If no theme information is available yet, do not override the current app theme
+		if (!themeId() && backgroundHue() === 220 && styleMode() === null && gradientEnabled() === null && gradientAngle() === null) {
+			return;
+		}
+
+		const currentTheme = themeId() ? getThemeById(themeId()!) : undefined;
+		if (currentTheme) {
+			applyTheme(validateTheme({
+				...currentTheme,
+				primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
+				style: (styleMode() ?? currentTheme.style) as ThemeConfig["style"],
+				gradientEnabled: (gradientEnabled() ?? currentTheme.gradientEnabled) as boolean,
+				gradientAngle: (gradientAngle() ?? currentTheme.gradientAngle) as number,
 				borderWidthSubtle: borderThickness(),
 				borderWidthStrong: Math.max(borderThickness() + 1, 1),
-			}),
-		);
+			}));
+		} else if (backgroundHue() !== null && backgroundHue() !== undefined) {
+			// No preset theme id but we have a hue — apply a migrated style using a fallback preset
+			const fallback = PRESET_THEMES[0];
+			applyTheme(validateTheme({
+				...fallback,
+				primaryHue: backgroundHue() as number,
+				style: (styleMode() ?? fallback.style) as ThemeConfig["style"],
+				gradientEnabled: (gradientEnabled() ?? fallback.gradientEnabled) as boolean,
+				gradientAngle: (gradientAngle() ?? fallback.gradientAngle) as number,
+				borderWidthSubtle: borderThickness(),
+				borderWidthStrong: Math.max(borderThickness() + 1, 1),
+			}));
+		}
 	});
 
 	// Apply border thickness live (only in bordered mode)
@@ -145,6 +277,16 @@ function SettingsPage() {
 
 	const handleDebugToggle = async (checked: boolean) => {
 		setDebugLogging(checked);
+		
+		if (hasTauriRuntime()) {
+			try {
+				const currentConfig = await invoke<AppConfig>("get_config");
+				const updatedConfig = { ...currentConfig, debug_logging: checked };
+				await invoke("set_config", { config: updatedConfig });
+			} catch (error) {
+				console.error("Failed to save debug logging setting:", error);
+			}
+		}
 	};
 
 	const handleOpenAppData = async () => {
@@ -159,6 +301,16 @@ function SettingsPage() {
 
 	const handleReducedMotionToggle = async (checked: boolean) => {
 		setReducedMotion(checked);
+		
+		if (hasTauriRuntime()) {
+			try {
+				const currentConfig = await invoke<AppConfig>("get_config");
+				const updatedConfig = { ...currentConfig, reduced_motion: checked };
+				await invoke("set_config", { config: updatedConfig });
+			} catch (error) {
+				console.error("Failed to save reduced motion setting:", error);
+			}
+		}
 	};
 
 	return (
@@ -203,6 +355,10 @@ function SettingsPage() {
 										<Slider
 											value={[backgroundHue()]}
 											onChange={handleHueChange}
+											onPointerUp={() => handleHueCommit()}
+											onPointerCancel={() => handleHueCommit()}
+											onKeyUp={(e) => { if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') handleHueCommit(); }}
+											onBlur={() => handleHueCommit()}
 											minValue={0}
 											maxValue={360}
 											step={1}
@@ -268,6 +424,10 @@ function SettingsPage() {
 										<Slider
 											value={[gradientAngle()]}
 											onChange={handleGradientAngleChange}
+											onPointerUp={() => handleGradientAngleCommit()}
+											onPointerCancel={() => handleGradientAngleCommit()}
+											onKeyUp={(e) => { if ((e as KeyboardEvent).key === 'Enter' || (e as KeyboardEvent).key === ' ') handleGradientAngleCommit(); }}
+											onBlur={() => handleGradientAngleCommit()}
 											minValue={0}
 											maxValue={360}
 											step={1}

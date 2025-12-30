@@ -111,6 +111,18 @@ pub struct AppConfig {
     pub debug_logging: bool,
     pub notification_retention_days: i32,
     pub active_account_uuid: Option<String>,
+    
+    // Theme system fields
+    pub theme_id: String,                     // Current theme preset ID (e.g., "midnight", "solar")
+    pub theme_mode: String,                   // "template" or "advanced" 
+    pub theme_primary_hue: i32,               // User-customized primary hue
+    pub theme_primary_sat: Option<i32>,       // Advanced mode: primary saturation
+    pub theme_primary_light: Option<i32>,     // Advanced mode: primary lightness
+    pub theme_style: String,                  // "glass", "satin", "flat", "bordered"
+    pub theme_gradient_enabled: bool,         // Enable background gradient
+    pub theme_gradient_angle: Option<i32>,    // Gradient angle in degrees
+    pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
+    pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
 }
 
 impl Default for AppConfig {
@@ -136,6 +148,18 @@ impl Default for AppConfig {
             false,              // debug_logging
             30,                 // notification_retention_days
             None,               // active_account_uuid
+            
+            // Theme system defaults
+            "midnight".to_string(),  // theme_id - default to signature theme
+            "template".to_string(),  // theme_mode - start with easy mode  
+            220,                     // theme_primary_hue - default blue
+            None,                    // theme_primary_sat - advanced mode only
+            None,                    // theme_primary_light - advanced mode only
+            "glass".to_string(),     // theme_style - default glass effect
+            true,                    // theme_gradient_enabled - enable gradients
+            Some(135),               // theme_gradient_angle - diagonal gradient
+            Some("complementary".to_string()), // theme_gradient_harmony - complementary colors
+            None,                    // theme_advanced_overrides - no custom overrides by default
         )
     }
 }
@@ -194,10 +218,12 @@ impl AppConfig {
 pub fn init_config_db(db: &SQLiteDB) -> Result<(), anyhow::Error> {
     // Automatically sync schema with AppConfig struct
     // This creates the table if needed and adds any missing columns
+    log::info!("Config DB: syncing schema (AppConfig)");
     let added_columns = db.sync_schema::<AppConfig>()?;
+    log::info!("Config DB: sync_schema completed, added_columns={:?}", added_columns);
     
     if !added_columns.is_empty() {
-        println!("Config DB: Auto-added {} new column(s)", added_columns.len());
+        log::info!("Config DB: Auto-added {} new column(s): {:?}", added_columns.len(), added_columns);
     }
 
     // Ensure default config row exists with all fields populated
@@ -212,7 +238,7 @@ pub fn init_config_db(db: &SQLiteDB) -> Result<(), anyhow::Error> {
         // Insert default config
         let default_config = AppConfig::default();
         db.insert_data_serde(&default_config)?;
-        println!("Config DB: Created default configuration");
+        log::info!("Config DB: Created default configuration: {:?}", default_config);
     }
 
     Ok(())
@@ -235,10 +261,14 @@ pub fn get_app_config() -> Result<AppConfig, anyhow::Error> {
         1,
     )?;
 
-    configs
+    let config = configs
         .into_iter()
         .next()
-        .ok_or_else(|| anyhow::anyhow!("Config row not found"))
+        .ok_or_else(|| anyhow::anyhow!("Config row not found"))?;
+
+    log::debug!("Loaded AppConfig: {:?}", config);
+
+    Ok(config)
 }
 
 /// Update application configuration
@@ -259,12 +289,16 @@ pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
 /// Tauri command to get the current configuration
 #[tauri::command]
 pub fn get_config() -> Result<AppConfig, String> {
-    get_app_config().map_err(|e| e.to_string())
+    log::info!("Tauri command: get_config called");
+    let cfg = get_app_config().map_err(|e| e.to_string())?;
+    log::info!("Tauri command: get_config returning config id={}, theme_id={}", cfg.id, cfg.theme_id);
+    Ok(cfg)
 }
 
 /// Tauri command to update the configuration
 #[tauri::command]
 pub fn set_config(config: AppConfig) -> Result<(), String> {
+    log::info!("Tauri command: set_config called, id={}, theme_id={}", config.id, config.theme_id);
     update_app_config(&config).map_err(|e| e.to_string())
 }
 
@@ -299,6 +333,7 @@ pub fn update_config_field(
     let updated_config: AppConfig = serde_json::from_value(config_value)
         .map_err(|e| format!("Failed to deserialize config: {}", e))?;
 
+    log::info!("Updating config field '{}' via Tauri command", field);
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
 
     // Emit event to all windows so they can update their state
@@ -357,14 +392,16 @@ mod tests {
         let db = initialize_test_db();
         let conn = db.get_connection();
 
-        // Query the config
+        // Query the config (including theme fields)
         let mut stmt = conn
             .prepare(
                 "SELECT id, background_hue, theme, language, max_download_threads, max_memory_mb, 
                     java_path, default_game_dir, auto_update_enabled,
                     notification_enabled, startup_check_updates, show_tray_icon, 
                     minimize_to_tray, reduced_motion, reduced_effects, last_window_width, last_window_height,
-                    debug_logging, notification_retention_days, active_account_uuid
+                    debug_logging, notification_retention_days, active_account_uuid,
+                    theme_id, theme_mode, theme_primary_hue, theme_primary_sat, theme_primary_light,
+                    theme_style, theme_gradient_enabled, theme_gradient_angle, theme_gradient_harmony, theme_advanced_overrides
              FROM app_config WHERE id = 1",
             )
             .unwrap();
@@ -392,6 +429,18 @@ mod tests {
                     debug_logging: row.get(17)?,
                     notification_retention_days: row.get(18)?,
                     active_account_uuid: row.get(19)?,
+
+                    // theme fields
+                    theme_id: row.get(20)?,
+                    theme_mode: row.get(21)?,
+                    theme_primary_hue: row.get(22)?,
+                    theme_primary_sat: row.get(23)?,
+                    theme_primary_light: row.get(24)?,
+                    theme_style: row.get(25)?,
+                    theme_gradient_enabled: row.get(26)?,
+                    theme_gradient_angle: row.get(27)?,
+                    theme_gradient_harmony: row.get(28)?,
+                    theme_advanced_overrides: row.get(29)?,
                 })
             })
             .unwrap();

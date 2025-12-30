@@ -135,6 +135,31 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowBorderChange: false,
 	},
 	{
+		id: "oled",
+		name: "OLED",
+		description: "Ultra-dark OLED mode — pure black surfaces for true blacks",
+		primaryHue: 220, // Neutral hue to avoid colored accents
+		style: "flat",
+		gradientEnabled: false,
+		allowHueChange: false, // Lock hue — OLED is strictly near-black
+		allowStyleChange: false,
+		allowBorderChange: false,
+		customCss: `:root {
+			/* Force truly black surfaces for OLED panels */
+			--surface-base: hsl(0 0% 0%);
+			--surface-raised: hsl(0 0% 0%);
+			--surface-overlay: hsl(0 0% 0%);
+			--text-primary: hsl(0 0% 100%);
+			--text-secondary: hsl(0 0% 70%);
+			/* Override interactive/accent colors to neutral greys for OLED */
+			--accent-primary: hsl(0 0% 60%);
+			--accent-primary-hover: hsl(0 0% 70%);
+			--interactive-base: hsl(0 0% 60%);
+			--border-subtle: hsl(0 0% 20% / 0.4);
+			--border-strong: hsl(0 0% 30% / 0.6);
+		}`,
+	},
+	{
 		id: "oldschool",
 		name: "Old School",
 		description: "Classic customizable design with strong borders",
@@ -212,7 +237,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
  */
 export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
-		"--hue-primary": theme.primaryHue.toString(),
+		"--color__primary-hue": theme.primaryHue.toString(),
 		"--gradient-angle": `${theme.gradientAngle || 135}deg`,
 		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
 		// Note: --background-opacity is NOT set here so CSS media queries can control it
@@ -255,6 +280,12 @@ export function applyTheme(theme: ThemeConfig): void {
 	const root = document.documentElement;
 	const style = root.style;
 	
+	// Skip if theme is already applied (same primary hue)
+	const currentHue = style.getPropertyValue("--hue-primary");
+	if (currentHue === theme.primaryHue.toString()) {
+		return;
+	}
+	
 	// Apply CSS variables
 	const vars = themeToCSSVars(theme);
 	for (const [key, value] of Object.entries(vars)) {
@@ -295,9 +326,6 @@ export function applyTheme(theme: ThemeConfig): void {
 	} else if (styleTag) {
 		styleTag.textContent = "";
 	}
-	
-	// Log for debugging
-	console.log(`Theme applied: ${theme.name} (${theme.id})`);
 }
 
 /**

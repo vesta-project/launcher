@@ -25,19 +25,21 @@
 	height: 1.5em;
 	border: 2px solid var(--border-subtle);
 	border-radius: 6px;
-	background: white;
-	transition: border-color 0.2s;
+	background: var(--surface-base);
+	color: var(--text-primary);
+	transition: border-color 0.2s, background-color 0.2s, color 0.2s;
 }
 
 .checkbox__control:focus-within {
 	border-color: var(--border-focus);
+	box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 60% 50% / 0.06);
 }
 
 .checkbox__icon {
 	width: 1.2em;
 	height: 1.2em;
 	display: block;
-	color: var(--accent-base);
+	color: currentColor; /* inherit from control for proper theming */
 }
 
 .checkbox:hover,
@@ -47,9 +49,9 @@
 
 .checkbox[data-checked],
 .checkbox[data-indeterminate] {
-	background-color: var(--accent-subtle);
-	color: white;
-	border: 2px solid var(--accent-base);
+	background-color: var(--accent-primary);
+	color: var(--text-on-primary);
+	border: 2px solid var(--accent-primary);
 }
 
 .checkbox-group {

@@ -27,53 +27,44 @@ export async function initTheme() {
 	style.setProperty("--font-large", "2rem");
 	style.setProperty("--font-xlarge", "4rem");
 
-	// Load theme configuration
+	// Load theme configuration and only apply if config specifies one.
 	try {
 		const config = await invoke<AppConfig>("get_config");
-		let theme: ThemeConfig;
+		let theme: ThemeConfig | null = null;
 
-		// Migration path: Check for new theme_id first, fall back to legacy background_hue
+		// Prefer explicit theme_id
 		if (config.theme_id) {
-			// New system: Load theme preset by ID
 			const presetTheme = getThemeById(config.theme_id);
 			if (presetTheme) {
 				theme = presetTheme;
-				console.log(`Theme loaded from preset: ${theme.name} (${theme.id})`);
+				console.info(`Theme loaded from preset: ${theme.name} (${theme.id})`);
 			} else {
-				// Unknown theme ID, fallback to default
-				console.warn(`Unknown theme ID "${config.theme_id}", using default`);
-				theme = getDefaultTheme();
+				console.warn(`Unknown theme ID "${config.theme_id}", skipping apply`);
 			}
 		} else if (config.background_hue !== undefined) {
-			// Legacy system: Migrate from single hue value to midnight theme with custom hue
-			console.log(`Migrating legacy background_hue (${config.background_hue}) to new theme system`);
+			// Legacy hue present — create migrated theme and apply
+			console.info(`Migrating legacy background_hue (${config.background_hue}) to theme`);
 			theme = validateTheme({
 				id: "custom-migrated",
 				name: "Migrated Theme",
 				primaryHue: config.background_hue,
 				style: (config.theme_style as any) || "glass",
 				gradientEnabled: config.theme_gradient_enabled ?? true,
-				gradientAngle: 135,
-				gradientHarmony: "complementary",
+				gradientAngle: config.theme_gradient_angle ?? 135,
+				gradientHarmony: config.theme_gradient_harmony || "complementary",
 			});
-		} else {
-			// No theme config found, use default
-			console.log("No theme config found, using default theme");
-			theme = getDefaultTheme();
 		}
 
-		// Apply the theme to the document
-		applyTheme(theme);
-
-		// Keep legacy variable for backwards compatibility during migration
-		style.setProperty("--color__primary-hue", theme.primaryHue.toString());
-		
+		// Only apply if we have a theme from config; otherwise preserve current app theme
+		if (theme) {
+			applyTheme(theme);
+			// Keep legacy variable for backwards compatibility during migration
+			style.setProperty("--color__primary-hue", theme.primaryHue.toString());
+			console.info("Theme applied from config");
+		} else {
+			console.info("No explicit theme found in config, preserving existing app theme");
+		}
 	} catch (error) {
-		console.error("Failed to load theme config, using default:", error);
-		
-		// Emergency fallback
-		const defaultTheme = getDefaultTheme();
-		applyTheme(defaultTheme);
-		style.setProperty("--color__primary-hue", "220");
+		console.warn("Failed to load theme config — preserving existing theme:", error);
 	}
 }

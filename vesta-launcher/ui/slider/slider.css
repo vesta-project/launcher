@@ -97,6 +97,6 @@
 }
 
 .slider--hue .slider__thumb {
-	border-color: hsl(var(--preview-hue, var(--color__primary-hue)) 60% 45%);
-	background-color: hsl(var(--preview-hue, var(--color__primary-hue)) 80% 70%);
+	border-color: hsl(var(--color__primary-hue) 60% 45%);
+	background-color: hsl(var(--color__primary-hue) 80% 70%);
 }
