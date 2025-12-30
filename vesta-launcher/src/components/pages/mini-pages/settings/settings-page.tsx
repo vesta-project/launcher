@@ -79,7 +79,8 @@ function SettingsPage() {
 	});
 
 	createEffect(() => {
-		document.documentElement.dataset.reducedEffects = reducedEffects().toString();
+		document.documentElement.dataset.reducedEffects =
+			reducedEffects().toString();
 	});
 
 	const handleDebugToggle = async (checked: boolean) => {
@@ -160,7 +161,10 @@ function SettingsPage() {
 			<Show when={!loading()} fallback={<div>Loading settings...</div>}>
 				<section class="settings-section">
 					<h2>Appearance</h2>
-					<div class="settings-row" style="flex-direction: column; align-items: stretch;">
+					<div
+						class="settings-row"
+						style="flex-direction: column; align-items: stretch;"
+					>
 						<Slider
 							value={[backgroundHue()]}
 							onChange={handleHueChange}
@@ -189,8 +193,8 @@ function SettingsPage() {
 						<div class="settings-info">
 							<span class="settings-label">Reduced Motion</span>
 							<span class="settings-description">
-								Disable non-essential animations and transitions for better performance
-								and accessibility.
+								Disable non-essential animations and transitions for better
+								performance and accessibility.
 							</span>
 						</div>
 						<Switch
@@ -208,7 +212,8 @@ function SettingsPage() {
 						<div class="settings-info">
 							<span class="settings-label">Reduced Effects</span>
 							<span class="settings-description">
-								Disable transparency and blur effects (glassmorphism) to improve performance.
+								Disable transparency and blur effects (glassmorphism) to improve
+								performance.
 							</span>
 						</div>
 						<Switch
@@ -250,7 +255,8 @@ function SettingsPage() {
 						<div class="settings-info">
 							<span class="settings-label">App Data Folder</span>
 							<span class="settings-description">
-								Open the folder where Vesta Launcher stores its configuration and data.
+								Open the folder where Vesta Launcher stores its configuration
+								and data.
 							</span>
 						</div>
 						<LauncherButton onClick={handleOpenAppData}>

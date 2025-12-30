@@ -7,9 +7,9 @@ import NeoForgeLogo from "@assets/neoforge-logo.svg";
 import PlayIcon from "@assets/play.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
 import KillIcon from "@assets/rounded-square.svg";
+import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router } from "@components/page-viewer/page-viewer";
 import { setPageViewerOpen } from "@components/pages/home/home";
-import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
 import {
@@ -33,6 +33,11 @@ import {
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import {
+	clearCrashDetails,
+	getCrashDetails,
+	isInstanceCrashed,
+} from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
@@ -44,11 +49,6 @@ import {
 	killInstance,
 	launchInstance,
 } from "@utils/instances";
-import {
-	getCrashDetails,
-	isInstanceCrashed,
-	clearCrashDetails,
-} from "@utils/crash-handler";
 import {
 	createSignal,
 	Match,
@@ -66,7 +66,7 @@ interface InstanceCardProps {
 }
 
 export default function InstanceCard(props: InstanceCardProps) {
-	const [hover, setHover] = createSignal(false);
+	const [_hover, setHover] = createSignal(false);
 	const [leaveAnim, setLeaveAnim] = createSignal(false);
 	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
 	const [hasCrashed, setHasCrashed] = createSignal(false);
@@ -156,6 +156,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 			if (payload.instance_id) {
 				setRunningIds((prev) => {
 					const newSet = new Set(prev);
+					// biome-ignore lint/style/noNonNullAssertion: instance_id is checked above
 					newSet.delete(payload.instance_id!);
 					return newSet;
 				});
@@ -202,7 +203,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const [busy, setBusy] = createSignal(false);
 
 	// Can only launch if installed and not busy/installing/running
-	const canLaunch = () =>
+	const _canLaunch = () =>
 		!busy() && !isInstalling() && isInstalled() && !isRunning();
 
 	const playButtonTooltip = () =>
@@ -238,7 +239,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				// Clear crash flag when attempting to launch
 				clearCrashDetails(instanceSlug);
 				setHasCrashed(false);
-				
+
 				await launchInstance(props.instance);
 				showToast({
 					title: "Launching",
@@ -343,11 +344,14 @@ export default function InstanceCard(props: InstanceCardProps) {
 				}}
 				onClick={openInstanceDetails}
 				style={
-						(props.instance.icon_path || "").startsWith("linear-gradient")
-																	? { background: props.instance.icon_path! }
-																	: {
-																			"background-image": `url('${props.instance.icon_path || DEFAULT_ICONS[0]}')`,
-																		}
+					(props.instance.icon_path || "").startsWith("linear-gradient")
+						? {
+								// biome-ignore lint/style/noNonNullAssertion: icon_path is confirmed to be a gradient string above
+								background: props.instance.icon_path!,
+							}
+						: {
+								"background-image": `url('${props.instance.icon_path || DEFAULT_ICONS[0]}')`,
+							}
 				}
 				data-instance={instanceSlug}
 			>
@@ -355,13 +359,31 @@ export default function InstanceCard(props: InstanceCardProps) {
 					<Match when={isInstalling()}>
 						<div class="instance-card-centered">
 							<div class="instance-card-spinner"></div>
-							<h1 style={{ margin: 0, padding: 0, "line-height": "16px", "font-weight": "bold" }}>{props.instance.name}</h1>
+							<h1
+								style={{
+									margin: 0,
+									padding: 0,
+									"line-height": "16px",
+									"font-weight": "bold",
+								}}
+							>
+								{props.instance.name}
+							</h1>
 						</div>
 					</Match>
 					<Match when={isFailed()}>
 						<div class="instance-card-centered">
 							<ErrorIcon style={{ width: "24px", height: "24px" }} />
-							<h1 style={{ margin: 0, padding: 0, "line-height": "16px", "font-weight": "bold" }}>{props.instance.name}</h1>
+							<h1
+								style={{
+									margin: 0,
+									padding: 0,
+									"line-height": "16px",
+									"font-weight": "bold",
+								}}
+							>
+								{props.instance.name}
+							</h1>
 						</div>
 					</Match>
 					<Match when={true}>
@@ -376,7 +398,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 								<Show when={hasCrashed()}>
 									<Tooltip placement="top">
 										<TooltipTrigger>
-											<span 
+											<span
 												class="crashed"
 												onClick={(e) => {
 													e.stopPropagation();
@@ -396,10 +418,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 								<TooltipTrigger>
 									<button
 										class={`play-button ${
-											needsInstallation() 
-												? "install" 
-												: isRunning() 
-													? "kill" 
+											needsInstallation()
+												? "install"
+												: isRunning()
+													? "kill"
 													: "launch"
 										}`}
 										onClick={handleClick}
@@ -523,10 +545,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 					{/* Additional menu items can be added here */}
 				</ContextMenuContent>
 			</ContextMenuPortal>
-			<CrashDetailsModal 
-				instanceId={instanceSlug} 
-				isOpen={showCrashModal()} 
-				onClose={() => setShowCrashModal(false)} 
+			<CrashDetailsModal
+				instanceId={instanceSlug}
+				isOpen={showCrashModal()}
+				onClose={() => setShowCrashModal(false)}
 			/>
 		</ContextMenu>
 	);

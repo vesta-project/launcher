@@ -1,250 +1,252 @@
-use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
-use crate::utils::db_manager::get_data_db;
+use crate::models::notification::{NewNotification, Notification as DbNotification};
+use crate::notifications::models::{
+    Notification as DomainNotification, NotificationSeverity, NotificationType,
+};
+use crate::schema::notification::dsl::*;
+use crate::utils::db::get_vesta_conn;
 use anyhow::Result;
-use rusqlite::OptionalExtension;
+use diesel::prelude::*;
 
 pub struct NotificationStore;
 
+#[allow(dead_code)]
 impl NotificationStore {
-    pub fn create(notification: &Notification) -> Result<i32> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-
-        conn.execute(
-            "INSERT INTO notification (
-                client_key, title, description, severity, notification_type, dismissible,
-                progress, current_step, total_steps, read, actions, metadata, 
-                created_at, updated_at, expires_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
-            rusqlite::params![
-                notification.client_key,
-                notification.title,
-                notification.description,
-                notification.severity.to_string(),
-                notification.notification_type.to_string(),
-                notification.dismissible as i32,
-                notification.progress,
-                notification.current_step,
-                notification.total_steps,
-                notification.read as i32,
-                serde_json::to_string(&notification.actions).ok(),
-                notification.metadata,
-                notification.created_at,
-                notification.updated_at,
-                notification.expires_at
-            ],
-        )?;
-
-        Ok(conn.last_insert_rowid() as i32)
+    // Helper to convert DB model to Domain model
+    fn to_domain(db_model: DbNotification) -> DomainNotification {
+        DomainNotification {
+            id: Some(db_model.id),
+            client_key: db_model.client_key,
+            title: db_model.title.unwrap_or_default(),
+            description: db_model.description,
+            severity: NotificationSeverity::from(db_model.severity),
+            notification_type: match db_model.notification_type.as_str() {
+                "progress" => NotificationType::Progress,
+                "patient" => NotificationType::Patient,
+                "task" => NotificationType::Task,
+                _ => NotificationType::Immediate, // Default
+            },
+            dismissible: db_model.dismissible,
+            progress: db_model.progress,
+            current_step: db_model.current_step,
+            total_steps: db_model.total_steps,
+            read: db_model.read,
+            actions: db_model
+                .actions
+                .and_then(|json| serde_json::from_str(&json).ok())
+                .unwrap_or_default(),
+            metadata: db_model.metadata,
+            show_on_completion: db_model.show_on_completion,
+            created_at: db_model.created_at,
+            updated_at: db_model.updated_at,
+            expires_at: db_model.expires_at,
+        }
     }
 
-    pub fn update(id: i32, notification: &Notification) -> Result<()> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
+    pub fn create(new_notification: &DomainNotification) -> Result<i32> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
-        conn.execute(
-            "UPDATE notification SET 
-                title = ?1, description = ?2, severity = ?3, notification_type = ?4, dismissible = ?5,
-                progress = ?6, current_step = ?7, total_steps = ?8, 
-                actions = ?9, metadata = ?10, updated_at = ?11 
-            WHERE id = ?12",
-            rusqlite::params![
-                notification.title,
-                notification.description,
-                notification.severity.to_string(),
-                notification.notification_type.to_string(),
-                notification.dismissible as i32,
-                notification.progress,
-                notification.current_step,
-                notification.total_steps,
-                serde_json::to_string(&notification.actions).ok(),
-                notification.metadata,
-                notification.updated_at,
-                id
-            ],
-        )?;
+        // Prepare new notification for insertion
+        let insert_data = NewNotification {
+            client_key: new_notification.client_key.clone(),
+            title: Some(new_notification.title.clone()),
+            description: new_notification.description.clone(),
+            severity: new_notification.severity.to_string(),
+            notification_type: new_notification.notification_type.to_string(),
+            dismissible: new_notification.dismissible,
+            progress: new_notification.progress,
+            current_step: new_notification.current_step,
+            total_steps: new_notification.total_steps,
+            read: new_notification.read,
+            actions: serde_json::to_string(&new_notification.actions).ok(),
+            metadata: new_notification.metadata.clone(),
+            created_at: new_notification.created_at.clone(),
+            updated_at: new_notification.updated_at.clone(),
+            expires_at: new_notification.expires_at.clone(),
+            show_on_completion: new_notification.show_on_completion, // Ensure model has this
+        };
+
+        diesel::insert_into(notification)
+            .values(&insert_data)
+            .execute(&mut conn)?;
+
+        let inserted_id: i32 = notification.order(id.desc()).select(id).first(&mut conn)?;
+
+        Ok(inserted_id)
+    }
+
+    pub fn update(target_id: i32, update_notification: &DomainNotification) -> Result<()> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        diesel::update(notification.find(target_id))
+            .set((
+                title.eq(&update_notification.title),
+                description.eq(&update_notification.description),
+                severity.eq(update_notification.severity.to_string()),
+                notification_type.eq(update_notification.notification_type.to_string()),
+                dismissible.eq(update_notification.dismissible),
+                progress.eq(update_notification.progress),
+                current_step.eq(update_notification.current_step),
+                total_steps.eq(update_notification.total_steps),
+                actions.eq(serde_json::to_string(&update_notification.actions).ok()),
+                metadata.eq(&update_notification.metadata),
+                updated_at.eq(&update_notification.updated_at),
+                show_on_completion.eq(update_notification.show_on_completion),
+            ))
+            .execute(&mut conn)?;
+
         Ok(())
     }
 
-    pub fn get_by_client_key(client_key: &str) -> Result<Option<Notification>> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
+    pub fn get_by_client_key(target_key: &str) -> Result<Option<DomainNotification>> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
-        let mut stmt = conn.prepare("SELECT * FROM notification WHERE client_key = ?1")?;
-        let notification = stmt
-            .query_row([client_key], |row| Ok(Self::map_row(row)))
+        let result = notification
+            .filter(client_key.eq(target_key))
+            .first::<DbNotification>(&mut conn)
             .optional()?;
 
-        Ok(notification)
+        Ok(result.map(Self::to_domain))
     }
 
-    pub fn get_by_id(id: i32) -> Result<Option<Notification>> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
+    pub fn get_by_id(target_id: i32) -> Result<Option<DomainNotification>> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
-        let mut stmt = conn.prepare("SELECT * FROM notification WHERE id = ?1")?;
-        let notification = stmt
-            .query_row([id], |row| Ok(Self::map_row(row)))
+        let result = notification
+            .find(target_id)
+            .first::<DbNotification>(&mut conn)
             .optional()?;
 
-        Ok(notification)
+        Ok(result.map(Self::to_domain))
     }
 
-    pub fn list(only_persisted: bool, only_unread: bool) -> Result<Vec<Notification>> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
+    pub fn list(only_persisted: bool, only_unread: bool) -> Result<Vec<DomainNotification>> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
-        let mut query = "SELECT * FROM notification WHERE 1=1".to_string();
+        let mut query = notification.into_boxed();
+
         if only_persisted {
-            // Convert old persist=true to new notification_type IN ('alert', 'patient', 'progress')
-            query.push_str(" AND notification_type IN ('alert', 'patient', 'progress')");
+            query = query.filter(
+                notification_type
+                    .eq("alert")
+                    .or(notification_type.eq("patient"))
+                    .or(notification_type.eq("progress")),
+            );
         }
+
         if only_unread {
-            query.push_str(" AND read = 0");
+            query = query.filter(read.eq(false));
         }
-        query.push_str(" ORDER BY created_at DESC");
 
-        let mut stmt = conn.prepare(&query)?;
-        let notifications = stmt
-            .query_map([], |row| Ok(Self::map_row(row)))?
-            .collect::<Result<Vec<_>, _>>()?;
+        let results = query
+            .order(created_at.desc())
+            .load::<DbNotification>(&mut conn)?;
 
-        Ok(notifications)
+        Ok(results.into_iter().map(Self::to_domain).collect())
     }
 
-    pub fn mark_read(id: i32) -> Result<()> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-        conn.execute("UPDATE notification SET read = 1 WHERE id = ?1", [id])?;
+    pub fn mark_read(target_id: i32) -> Result<()> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        diesel::update(notification.find(target_id))
+            .set(read.eq(true))
+            .execute(&mut conn)?;
+
         Ok(())
     }
 
-    pub fn delete(id: i32) -> Result<()> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-        conn.execute("DELETE FROM notification WHERE id = ?1", [id])?;
+    pub fn delete(target_id: i32) -> Result<()> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        diesel::delete(notification.find(target_id)).execute(&mut conn)?;
+
         Ok(())
     }
 
     pub fn cleanup(retention_days: i32) -> Result<usize> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
         let cutoff = chrono::Utc::now() - chrono::Duration::days(retention_days as i64);
-        let count = conn.execute(
-            "DELETE FROM notification WHERE created_at < ?1 AND read = 1",
-            [cutoff.to_rfc3339()],
-        )?;
+        let cutoff_str = cutoff.to_rfc3339();
+
+        let count = diesel::delete(
+            notification
+                .filter(created_at.lt(cutoff_str))
+                .filter(read.eq(true)),
+        )
+        .execute(&mut conn)?;
+
         Ok(count)
     }
 
     /// Clear all Immediate notifications (called on app startup)
     pub fn clear_immediate_notifications() -> Result<usize> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-        let count = conn.execute(
-            "DELETE FROM notification WHERE notification_type = 'immediate'",
-            [],
-        )?;
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        let count = diesel::delete(notification.filter(notification_type.eq("immediate")))
+            .execute(&mut conn)?;
+
         Ok(count)
     }
 
     /// Clear all dismissible notifications (Patient type and Progress with 100%)
     pub fn clear_all_dismissible_notifications() -> Result<usize> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-        let count = conn.execute("DELETE FROM notification WHERE dismissible = 1", [])?;
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        let count = diesel::delete(notification.filter(dismissible.eq(true))).execute(&mut conn)?;
+
         Ok(count)
     }
 
     /// Clear all Progress notifications (called on app startup to remove old task notifications)
     pub fn clear_progress_notifications() -> Result<usize> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-        let count = conn.execute(
-            "DELETE FROM notification WHERE notification_type = 'progress'",
-            [],
-        )?;
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        let count = diesel::delete(notification.filter(notification_type.eq("progress")))
+            .execute(&mut conn)?;
+
         Ok(count)
     }
 
-    /// Clear all task-related notifications (Progress and Patient with task_ client keys)
+    /// Clear all task-related notifications (Progress and Patient from tasks)
     pub fn clear_task_notifications() -> Result<usize> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
-        let count = conn.execute(
-            "DELETE FROM notification WHERE notification_type = 'progress' OR (notification_type = 'patient' AND client_key LIKE 'task_%')",
-            [],
-        )?;
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
+
+        let count = diesel::delete(
+            notification
+                .filter(notification_type.eq("progress"))
+                .or_filter(
+                    notification_type
+                        .eq("patient")
+                        .and(client_key.like("task_%")),
+                ),
+        )
+        .execute(&mut conn)?;
+
         Ok(count)
     }
 
     /// Get notifications by type
-    pub fn get_by_type(notification_type: &str) -> Result<Vec<Notification>> {
-        let db = get_data_db()?;
-        let conn = db.get_connection();
+    pub fn get_by_type(target_type: &str) -> Result<Vec<DomainNotification>> {
+        let mut conn =
+            get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
-        let mut stmt = conn.prepare(
-            "SELECT * FROM notification WHERE notification_type = ?1 ORDER BY created_at DESC",
-        )?;
-        let notifications = stmt
-            .query_map([notification_type], |row| Ok(Self::map_row(row)))?
-            .collect::<Result<Vec<_>, _>>()?;
+        let results = notification
+            .filter(notification_type.eq(target_type))
+            .order(created_at.desc())
+            .load::<DbNotification>(&mut conn)?;
 
-        Ok(notifications)
-    }
-
-    fn map_row(row: &rusqlite::Row) -> Notification {
-        // Migration support: convert old persist/cancellable fields to new notification_type/dismissible
-        let notification_type = if let Ok(nt) = row.get::<_, String>("notification_type") {
-            NotificationType::from(nt)
-        } else {
-            // Fallback: convert old persist field
-            let persist = row.get::<_, i32>("persist").unwrap_or(0) == 1;
-            if persist {
-                NotificationType::Patient
-            } else {
-                NotificationType::Immediate
-            }
-        };
-
-        let dismissible = if let Ok(d) = row.get::<_, i32>("dismissible") {
-            d == 1
-        } else {
-            // Fallback: immediate and patient are dismissible, alert and progress are not
-            matches!(
-                notification_type,
-                NotificationType::Immediate | NotificationType::Patient
-            )
-        };
-
-        let actions_json = row.get::<_, Option<String>>("actions").ok().flatten();
-        let actions = if let Some(json_str) = actions_json {
-            serde_json::from_str(&json_str).unwrap_or_default()
-        } else {
-            Vec::new()
-        };
-
-        Notification {
-            id: row.get("id").ok(),
-            client_key: row.get("client_key").ok(),
-            title: row.get("title").unwrap_or_default(),
-            description: row.get("description").ok(),
-            severity: NotificationSeverity::from(
-                row.get::<_, String>("severity").unwrap_or_default(),
-            ),
-            notification_type,
-            dismissible,
-            progress: row.get("progress").ok(),
-            current_step: row.get("current_step").ok(),
-            total_steps: row.get("total_steps").ok(),
-            read: row.get::<_, i32>("read").unwrap_or(0) == 1,
-            actions,
-            metadata: row.get("metadata").ok(),
-            created_at: row.get("created_at").unwrap_or_default(),
-            updated_at: row.get("updated_at").unwrap_or_default(),
-            expires_at: row.get("expires_at").ok(),
-            // show_on_completion is an in-memory flag by default (not persisted)
-            show_on_completion: None,
-        }
+        Ok(results.into_iter().map(Self::to_domain).collect())
     }
 }

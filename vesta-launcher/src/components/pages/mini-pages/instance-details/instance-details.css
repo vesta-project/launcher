@@ -11,7 +11,10 @@
 .instance-details-sidebar {
 	width: 200px;
 	min-width: 200px;
-	background: hsl(var(--liquid-tint-color) / 0.3); /* Much lighter liquid glass background */
+	background: hsl(
+		var(--liquid-tint-color) /
+		0.3
+	); /* Much lighter liquid glass background */
 	backdrop-filter: var(--liquid-backdrop-filter);
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
@@ -19,7 +22,7 @@
 	padding: 1.5rem 1rem;
 	gap: 0.5rem;
 	border-right: none; /* Remove regular border */
-	box-shadow: 
+	box-shadow:
 		2px 0 20px rgba(0, 0, 0, 0.4), /* Strong shadow border on right */
 		inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2); /* Subtle inner highlight */
 }
@@ -33,7 +36,9 @@
 .instance-tabs button {
 	background: transparent;
 	border: none;
-	color: hsl(var(--color__primary-hue) 10% 85%); /* Lighter text for better contrast */
+	color: hsl(
+		var(--color__primary-hue) 10% 85%
+	); /* Lighter text for better contrast */
 	opacity: 0.8;
 	padding: 0.75rem 1rem;
 	border-radius: 8px;
@@ -44,7 +49,10 @@
 }
 
 .instance-tabs button:hover {
-	background: hsl(var(--color__primary-hue) 30% 20% / 0.4); /* Darker hover with transparency */
+	background: hsl(
+		var(--color__primary-hue) 30% 20% /
+		0.4
+	); /* Darker hover with transparency */
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
 	color: hsl(var(--color__primary-hue) 10% 95%);
@@ -58,7 +66,7 @@
 	backdrop-filter: blur(15px);
 	-webkit-backdrop-filter: blur(15px);
 	color: hsl(var(--color__primary-hue) 10% 95%);
-	box-shadow: 
+	box-shadow:
 		inset 0 0 20px hsl(var(--color__primary-hue) 70% 50% / 0.3),
 		0 4px 12px rgba(0, 0, 0, 0.3);
 	transform: translateX(4px);
@@ -109,11 +117,16 @@
 	width: 112px;
 	height: 112px;
 	border-radius: 12px;
-	background-image: var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+	background-image: var(
+		--instance-bg-image,
+		url("@assets/placeholder-images/placeholder-image1.jpg")
+	);
 	background-size: cover;
 	background-position: center;
 	flex-shrink: 0;
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px rgba(0, 0, 0, 0.08);
+	box-shadow:
+		inset 0 0 0 2px var(--border-subtle),
+		0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .instance-header-content {
@@ -121,8 +134,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
-	display: flex; 
-	flex-direction: row; 
+	display: flex;
+	flex-direction: row;
 	justify-content: space-between;
 	width: 100%;
 }
@@ -180,7 +193,10 @@
 .instance-icon-placeholder {
 	width: 64px;
 	height: 64px;
-	background-image: var(--instance-bg-image, url("@assets/placeholder-instance-image.jpg"));
+	background-image: var(
+		--instance-bg-image,
+		url("@assets/placeholder-images/placeholder-image1.jpg")
+	);
 	background-size: cover;
 	background-position: center;
 	border-radius: 12px;
@@ -188,13 +204,19 @@
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
-	transition: transform 0.2s, box-shadow 0.2s;
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px rgba(0, 0, 0, 0.08);
+	transition:
+		transform 0.2s,
+		box-shadow 0.2s;
+	box-shadow:
+		inset 0 0 0 2px var(--border-subtle),
+		0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 .instance-icon-placeholder:hover {
 	transform: translateY(-2px);
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow:
+		inset 0 0 0 2px var(--border-subtle),
+		0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .instance-header-meta h1 {

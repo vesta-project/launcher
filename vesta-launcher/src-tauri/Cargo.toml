@@ -8,12 +8,20 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
+
 tauri-build = { version = "2.5.3", features = [] }
+diesel = { version = "2.1", features = ["sqlite", "r2d2"] }
+diesel_migrations = "2.1"
+libsqlite3-sys = { version = "0.26", features = ["bundled"] }
 
 [dependencies]
 piston-lib = { path = "../../crates/piston-lib" }
-piston-macros = { path = "../../crates/piston-macros" }
 slug = "0.1"
+
+# Database - Diesel ORM
+diesel = { version = "2.1", features = ["sqlite", "r2d2"] }
+diesel_migrations = "2.1"
+libsqlite3-sys = { version = "0.26", features = ["bundled"] }
 
 tauri = { version = "2.9.5", features = [
     "protocol-asset",
@@ -36,8 +44,6 @@ thiserror = "2.0.17"
 chrono = "0.4.38"
 log = "0.4.28"
 
-rusqlite = { version = "0.37.0", features = ["bundled"] }
-serde_rusqlite = "0.40.1"
 
 directories = "6.0.0"
 version-compare = "0.2.0"

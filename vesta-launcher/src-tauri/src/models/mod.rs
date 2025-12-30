@@ -10,5 +10,8 @@ pub use instance::Instance;
 pub use notification::Notification;
 pub use user_version_tracking::UserVersionTracking;
 
+// Re-export AppConfig from utils::config for convenience
+pub use crate::utils::config::AppConfig;
+
 #[cfg(test)]
 mod tests;

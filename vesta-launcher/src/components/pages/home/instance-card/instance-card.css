@@ -19,7 +19,11 @@
 			rgb(159 159 159 / 15%) 20%,
 			rgb(36 35 35 / 30%) 45.5%,
 			rgb(0 0 0 / 85%) 100%
-		), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		),
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 	background-repeat: no-repeat, no-repeat;
 	background-position:
 		center center,
@@ -28,10 +32,12 @@
 	transition:
 		background-size 0.2s ease,
 		box-shadow 0.15s ease,
-		transform 0.18s cubic-bezier(.4,1,.7,1);
+		transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
 	will-change: transform, box-shadow;
 	color: white;
-	text-shadow: 0 1px 4px rgba(0, 0, 0, 0.7), 0 2px 8px rgba(0, 0, 0, 0.5);
+	text-shadow:
+		0 1px 4px rgba(0, 0, 0, 0.7),
+		0 2px 8px rgba(0, 0, 0, 0.5);
 	max-width: 200px;
 	max-height: 200px;
 	width: 100%;
@@ -63,12 +69,16 @@
 				rgb(149 144 144 / 25%) 19.5%,
 				rgb(36 35 35 / 80%) 67.93%,
 				rgb(0 0 0 / 90%) 100%
-			), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+			),
+			var(
+				--instance-bg-image,
+				url("@assets/placeholder-images/placeholder-image1.jpg")
+			);
 		transform: scale(1.045);
 		transition:
-			background-size 0.2s cubic-bezier(.4,1,.7,1),
-			box-shadow 0.18s cubic-bezier(.4,1,.7,1),
-			transform 0.18s cubic-bezier(.4,1,.7,1);
+			background-size 0.2s cubic-bezier(0.4, 1, 0.7, 1),
+			box-shadow 0.18s cubic-bezier(0.4, 1, 0.7, 1),
+			transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
 	}
 
 	/* Disable hover effect when reduced motion is enabled */
@@ -82,7 +92,11 @@
 				rgb(159 159 159 / 20%) 20%,
 				rgb(36 35 35 / 20%) 45.5%,
 				rgb(0 0 0 / 70%) 100%
-			), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+			),
+			var(
+				--instance-bg-image,
+				url("@assets/placeholder-images/placeholder-image1.jpg")
+			);
 		transform: none;
 	}
 }
@@ -91,7 +105,11 @@
 	display: flex;
 	justify-content: space-between;
 	align-items: center; /* Center items vertically to prevent jumpy layout when button appears */
-	background: linear-gradient(to bottom, rgba(0, 0, 0, 0.4) 0%, transparent 100%);
+	background: linear-gradient(
+		to bottom,
+		rgba(0, 0, 0, 0.4) 0%,
+		transparent 100%
+	);
 	padding: 16px;
 	margin: -16px -16px 0 -16px;
 	border-radius: 6px 6px 0 0;
@@ -104,7 +122,12 @@
 	justify-content: space-between;
 	font-weight: normal;
 	gap: 4px;
-	background: linear-gradient(to top, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.3) 50%, transparent 100%);
+	background: linear-gradient(
+		to top,
+		rgba(0, 0, 0, 0.7) 0%,
+		rgba(0, 0, 0, 0.3) 50%,
+		transparent 100%
+	);
 	padding: 24px 16px 16px 16px;
 	margin: 0 -16px -16px -16px;
 	border-radius: 0 0 6px 6px;
@@ -159,7 +182,9 @@
 	justify-content: center;
 	cursor: pointer;
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-	box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+	box-shadow:
+		0 4px 6px -1px rgba(0, 0, 0, 0.1),
+		0 2px 4px -1px rgba(0, 0, 0, 0.06);
 	flex-shrink: 0; /* Prevent shrinking in flex containers */
 	position: relative; /* Ensure stable positioning */
 	opacity: 0;
@@ -183,7 +208,9 @@
 	&:hover {
 		background: rgba(255, 255, 255, 0.2);
 		transform: translateY(-2px) scale(1.05) !important; /* Override the card-hover scale */
-		box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+		box-shadow:
+			0 10px 15px -3px rgba(0, 0, 0, 0.2),
+			0 4px 6px -2px rgba(0, 0, 0, 0.05);
 
 		& svg {
 			transform: scale(1.1);
@@ -215,11 +242,11 @@
 	/* Reduced Motion Support */
 	:root[data-reduced-motion="true"] & {
 		transition: none;
-		
+
 		&:hover {
 			transform: none;
 			box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-			
+
 			& svg {
 				transform: none;
 			}
@@ -284,8 +311,12 @@
 }
 
 @keyframes spin {
-	0% { transform: rotate(0deg); }
-	100% { transform: rotate(360deg); }
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
 }
 
 .instance-card-indicators {
@@ -294,7 +325,8 @@
 	gap: 4px;
 }
 
-.running, .crashed {
+.running,
+.crashed {
 	font-size: 10px;
 	padding: 3px 8px;
 	border-radius: 12px;
@@ -359,22 +391,25 @@
 }
 
 .instance-card.failed {
-background-image:
-radial-gradient(
-109.12% 79.52% at 47.71% 0%,
-rgba(255, 80, 80, 0.2) 0%,
-rgba(200, 40, 40, 0.3) 20%,
-rgba(100, 0, 0, 0.5) 45.5%,
-rgba(30, 0, 0, 0.95) 100%
-), var(--instance-bg-image, url('@assets/placeholder-images/placeholder-image1.jpg'));
-outline-color: rgba(255, 0, 0, 0.4);
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			rgba(255, 80, 80, 0.2) 0%,
+			rgba(200, 40, 40, 0.3) 20%,
+			rgba(100, 0, 0, 0.5) 45.5%,
+			rgba(30, 0, 0, 0.95) 100%
+		),
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
+	outline-color: rgba(255, 0, 0, 0.4);
 }
 
 .instance-card-leave {
-	transform: scale(1.0);
+	transform: scale(1);
 	box-shadow: 0 2px 8px 0 rgb(0 0 0 / 10%);
 	transition:
-		transform 0.25s cubic-bezier(.4,1,.7,1),
-		box-shadow 0.25s cubic-bezier(.4,1,.7,1);
+		transform 0.25s cubic-bezier(0.4, 1, 0.7, 1),
+		box-shadow 0.25s cubic-bezier(0.4, 1, 0.7, 1);
 }
-

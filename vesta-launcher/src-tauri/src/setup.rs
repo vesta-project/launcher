@@ -2,7 +2,9 @@ use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
-use crate::utils::db_manager::{get_config_db, get_data_db};
+use crate::utils::config::init_config_db;
+use crate::utils::db::{init_config_pool, init_vesta_pool};
+use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
@@ -12,96 +14,102 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// Exit status JSON structure written by the exit handler JAR
 #[derive(serde::Deserialize, Debug)]
 struct ExitStatus {
-    instance_id: String,
+    _instance_id: String,
     exit_code: i32,
     exited_at: String,
 }
 
 /// Update playtime for an instance in the database
-fn update_instance_playtime(instance_id: &str, started_at: &str, exited_at: &str) -> Result<(), String> {
+fn update_instance_playtime(
+    instance_id_slug: &str,
+    started_at_str: &str,
+    exited_at_str: &str,
+) -> Result<(), String> {
+    use crate::schema::instance::dsl::*;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
     // Parse timestamps
-    let started = chrono::DateTime::parse_from_rfc3339(started_at)
+    let started = chrono::DateTime::parse_from_rfc3339(started_at_str)
         .map_err(|e| format!("Failed to parse started_at: {}", e))?;
-    let exited = chrono::DateTime::parse_from_rfc3339(exited_at)
+    let exited = chrono::DateTime::parse_from_rfc3339(exited_at_str)
         .map_err(|e| format!("Failed to parse exited_at: {}", e))?;
-    
+
     // Calculate duration in minutes
     let duration = exited.signed_duration_since(started);
     let minutes = (duration.num_seconds() / 60).max(0) as i32;
-    
+
     log::info!(
         "Updating playtime for instance {}: {} minutes (from {} to {})",
-        instance_id, minutes, started_at, exited_at
+        instance_id_slug,
+        minutes,
+        started_at_str,
+        exited_at_str
     );
-    
-    // Update database - need to find instance by slug
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-    
-    // Get all instances and find by slug
-    let mut stmt = conn
-        .prepare("SELECT id, name, total_playtime_minutes FROM instance")
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-    
-    let instances: Vec<(i32, String, i32)> = stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-        .map_err(|e| format!("Failed to query instances: {}", e))?
-        .filter_map(Result::ok)
-        .collect();
-    
-    for (id, name, current_playtime) in instances {
-        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
-        if slug == instance_id {
+
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    // Find instance by slug
+    let instances_list = instance
+        .select((id, name, total_playtime_minutes))
+        .load::<(i32, String, i32)>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    for (inst_id, inst_name, current_playtime) in instances_list {
+        let slug = crate::utils::sanitize::sanitize_instance_name(&inst_name);
+        if slug == instance_id_slug {
             let new_playtime = current_playtime + minutes;
             let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-            
-            conn.execute(
-                "UPDATE instance SET total_playtime_minutes = ?1, last_played = ?2, updated_at = ?3 WHERE id = ?4",
-                rusqlite::params![new_playtime, now, now, id],
-            )
-            .map_err(|e| format!("Failed to update playtime: {}", e))?;
-            
+
+            diesel::update(instance.filter(id.eq(inst_id)))
+                .set((
+                    total_playtime_minutes.eq(new_playtime),
+                    last_played.eq(&now),
+                    updated_at.eq(&now),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to update playtime: {}", e))?;
+
             log::info!(
                 "Updated playtime for instance {} (id {}): {} -> {} minutes",
-                instance_id, id, current_playtime, new_playtime
+                instance_id_slug,
+                inst_id,
+                current_playtime,
+                new_playtime
             );
             return Ok(());
         }
     }
-    
-    log::warn!("Instance {} not found in database for playtime update", instance_id);
+
+    log::warn!(
+        "Instance {} not found in database for playtime update",
+        instance_id_slug
+    );
     Ok(())
 }
 
 /// Store crash details in the database for an instance (setup context)
-fn store_crash_details_setup(instance_id: &str, crash_info: &crate::utils::crash_parser::CrashDetails) -> Result<(), String> {
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-    
-    // Get all instances and find by slug
-    let mut stmt = conn
-        .prepare("SELECT id FROM instance")
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-    
-    let instance_ids: Vec<i32> = stmt
-        .query_map([], |row| row.get(0))
-        .map_err(|e| format!("Failed to query instances: {}", e))?
-        .filter_map(Result::ok)
-        .collect();
-    
-    for id in instance_ids {
-        // Get instance name to compute slug
-        let mut name_stmt = conn
-            .prepare("SELECT name FROM instance WHERE id = ?")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-        
-        let name: String = name_stmt
-            .query_row([id], |row| row.get(0))
-            .map_err(|e| format!("Failed to query instance name: {}", e))?;
-        
-        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
-        
-        if slug == instance_id {
+fn store_crash_details_setup(
+    instance_id_slug: &str,
+    crash_info: &crate::utils::crash_parser::CrashDetails,
+) -> Result<(), String> {
+    use crate::schema::instance::dsl::*;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    // Find instance by slug
+    let instances_list = instance
+        .select((id, name))
+        .load::<(i32, String)>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    for (inst_id, inst_name) in instances_list {
+        let slug = crate::utils::sanitize::sanitize_instance_name(&inst_name);
+        if slug == instance_id_slug {
             // Create crash details JSON
             let crash_details_json = serde_json::json!({
                 "crash_type": crash_info.crash_type,
@@ -109,32 +117,55 @@ fn store_crash_details_setup(instance_id: &str, crash_info: &crate::utils::crash
                 "report_path": crash_info.report_path,
                 "timestamp": crash_info.timestamp,
             });
-            
-            // Update instance with crash details
-            conn.execute(
-                "UPDATE instance SET crashed = 1, crash_details = ? WHERE id = ?",
-                rusqlite::params![crash_details_json.to_string(), id],
-            ).map_err(|e| format!("Failed to update crash details: {}", e))?;
-            
-            log::info!("Stored crash details for instance {} (id {})", instance_id, id);
+
+            diesel::update(instance.filter(id.eq(inst_id)))
+                .set((
+                    crashed.eq(true),
+                    crash_details.eq(crash_details_json.to_string()),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to update crash details: {}", e))?;
+
+            log::info!(
+                "Stored crash details for instance {} (id {})",
+                instance_id_slug,
+                inst_id
+            );
             return Ok(());
         }
     }
-    
-    Err(format!("Instance {} not found in database", instance_id))
+
+    Err(format!(
+        "Instance {} not found in database",
+        instance_id_slug
+    ))
 }
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    // CRITICAL: Initialize databases FIRST before any other code runs
+    // CRITICAL: Initialize Diesel connection pools FIRST before any other code runs
     // This ensures migrations are applied before any queries are executed
-    log::info!("Initializing databases and running migrations...");
-    if let Err(e) = crate::utils::db_manager::get_config_db() {
-        log::error!("Failed to initialize config database: {}", e);
+    log::info!("Initializing databases with Diesel and running migrations...");
+
+    // Get app data directory
+    let app_data_dir = get_app_config_dir()?;
+
+    // Initialize connection pools (this runs migrations automatically)
+    if let Err(e) = init_config_pool(app_data_dir.clone()) {
+        log::error!("Failed to initialize config database pool: {}", e);
+        return Err(e.into());
     }
-    if let Err(e) = crate::utils::db_manager::get_data_db() {
-        log::error!("Failed to initialize data database: {}", e);
+
+    if let Err(e) = init_vesta_pool(app_data_dir.clone()) {
+        log::error!("Failed to initialize vesta database pool: {}", e);
+        return Err(e.into());
     }
-    log::info!("Database initialization complete");
+
+    // Initialize default config row if needed
+    if let Err(e) = init_config_db() {
+        log::error!("Failed to initialize config table: {}", e);
+    }
+
+    log::info!("✓ Database initialization complete");
 
     // Clean up old log files (>30 days)
     cleanup_old_logs(app.handle());
@@ -187,18 +218,33 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                             let game_instance = piston_lib::game::launcher::GameInstance {
                                 instance_id: run_state.instance_id.clone(),
                                 version_id: run_state.version_id.clone(),
-                                modloader: run_state.modloader.as_ref().map(|s| s.parse()).transpose().ok().flatten(),
-                                pid: run_state.pid,
-                                started_at: chrono::DateTime::parse_from_rfc3339(&run_state.started_at)
+                                modloader: run_state
+                                    .modloader
+                                    .as_ref()
+                                    .map(|s| s.parse())
+                                    .transpose()
                                     .ok()
-                                    .map(|dt| dt.with_timezone(&chrono::Utc))
-                                    .unwrap_or_else(chrono::Utc::now),
+                                    .flatten(),
+                                pid: run_state.pid,
+                                started_at: chrono::DateTime::parse_from_rfc3339(
+                                    &run_state.started_at,
+                                )
+                                .ok()
+                                .map(|dt| dt.with_timezone(&chrono::Utc))
+                                .unwrap_or_else(chrono::Utc::now),
                                 log_file: run_state.log_file.clone(),
                                 game_dir: run_state.game_dir.clone(),
                             };
 
-                            if let Err(e) = piston_lib::game::launcher::register_instance(game_instance.clone()).await {
-                                log::warn!("Failed to re-register instance {}: {}", run_state.instance_id, e);
+                            if let Err(e) =
+                                piston_lib::game::launcher::register_instance(game_instance.clone())
+                                    .await
+                            {
+                                log::warn!(
+                                    "Failed to re-register instance {}: {}",
+                                    run_state.instance_id,
+                                    e
+                                );
                                 continue;
                             }
 
@@ -213,7 +259,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 }),
                             );
 
-                            log::info!("Successfully reattached to instance: {}", run_state.instance_id);
+                            log::info!(
+                                "Successfully reattached to instance: {}",
+                                run_state.instance_id
+                            );
                         } else {
                             log::warn!(
                                 "Persisted instance {} (PID {}) is no longer running, checking for exit status",
@@ -222,9 +271,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                             );
 
                             // Check for exit_status.json to get accurate exit time and exit code
-                            let exit_status_path = run_state.game_dir.join(".vesta").join("exit_status.json");
+                            let exit_status_path =
+                                run_state.game_dir.join(".vesta").join("exit_status.json");
                             let mut crashed = false;
-                            
+
                             if exit_status_path.exists() {
                                 // Read exit status and update playtime
                                 match std::fs::read_to_string(&exit_status_path) {
@@ -235,35 +285,44 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                     "Found exit status for {}: exit_code={}, exited_at={}",
                                                     run_state.instance_id, exit_status.exit_code, exit_status.exited_at
                                                 );
-                                                
+
                                                 // Check for crashes if exit code is non-zero
                                                 if exit_status.exit_code != 0 {
                                                     // Convert started_at string to SystemTime for crash detection
-                                                    let launch_start_time = match chrono::DateTime::parse_from_rfc3339(&run_state.started_at) {
-                                                        Ok(dt) => SystemTime::from(dt),
-                                                        Err(_) => SystemTime::now(),
-                                                    };
-                                                    
-                                                    if let Some(crash_info) = crate::utils::crash_parser::detect_crash(
-                                                        &run_state.game_dir,
-                                                        &run_state.log_file,
-                                                        launch_start_time,
-                                                    ) {
+                                                    let launch_start_time =
+                                                        match chrono::DateTime::parse_from_rfc3339(
+                                                            &run_state.started_at,
+                                                        ) {
+                                                            Ok(dt) => SystemTime::from(dt),
+                                                            Err(_) => SystemTime::now(),
+                                                        };
+
+                                                    if let Some(crash_info) =
+                                                        crate::utils::crash_parser::detect_crash(
+                                                            &run_state.game_dir,
+                                                            &run_state.log_file,
+                                                            launch_start_time,
+                                                        )
+                                                    {
                                                         log::error!(
                                                             "Crash detected for {}: {:?}",
-                                                            run_state.instance_id, crash_info
+                                                            run_state.instance_id,
+                                                            crash_info
                                                         );
-                                                        
+
                                                         // Store crash details in database
                                                         if let Err(e) = store_crash_details_setup(
                                                             &run_state.instance_id,
                                                             &crash_info,
                                                         ) {
-                                                            log::error!("Failed to store crash details: {}", e);
+                                                            log::error!(
+                                                                "Failed to store crash details: {}",
+                                                                e
+                                                            );
                                                         } else {
                                                             crashed = true;
                                                         }
-                                                        
+
                                                         // Emit crash event to frontend
                                                         use tauri::Emitter;
                                                         let _ = app_handle.emit(
@@ -278,7 +337,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                         );
                                                     }
                                                 }
-                                                
+
                                                 // Update playtime in database (only if not crashed)
                                                 if !crashed {
                                                     if let Err(e) = update_instance_playtime(
@@ -286,22 +345,39 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                         &run_state.started_at,
                                                         &exit_status.exited_at,
                                                     ) {
-                                                        log::error!("Failed to update playtime for {}: {}", run_state.instance_id, e);
+                                                        log::error!(
+                                                            "Failed to update playtime for {}: {}",
+                                                            run_state.instance_id,
+                                                            e
+                                                        );
                                                     }
                                                 }
-                                                
+
                                                 // Delete the exit status file
-                                                if let Err(e) = std::fs::remove_file(&exit_status_path) {
-                                                    log::warn!("Failed to remove exit status file: {}", e);
+                                                if let Err(e) =
+                                                    std::fs::remove_file(&exit_status_path)
+                                                {
+                                                    log::warn!(
+                                                        "Failed to remove exit status file: {}",
+                                                        e
+                                                    );
                                                 }
                                             }
                                             Err(e) => {
-                                                log::warn!("Failed to parse exit status for {}: {}", run_state.instance_id, e);
+                                                log::warn!(
+                                                    "Failed to parse exit status for {}: {}",
+                                                    run_state.instance_id,
+                                                    e
+                                                );
                                             }
                                         }
                                     }
                                     Err(e) => {
-                                        log::warn!("Failed to read exit status file for {}: {}", run_state.instance_id, e);
+                                        log::warn!(
+                                            "Failed to read exit status file for {}: {}",
+                                            run_state.instance_id,
+                                            e
+                                        );
                                     }
                                 }
                             } else {
@@ -310,13 +386,14 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                     "No exit status file for {}, using log file mtime as fallback",
                                     run_state.instance_id
                                 );
-                                
+
                                 if run_state.log_file.exists() {
                                     if let Ok(metadata) = std::fs::metadata(&run_state.log_file) {
                                         if let Ok(modified) = metadata.modified() {
-                                            let exited_at = chrono::DateTime::<chrono::Utc>::from(modified)
-                                                .to_rfc3339();
-                                            
+                                            let exited_at =
+                                                chrono::DateTime::<chrono::Utc>::from(modified)
+                                                    .to_rfc3339();
+
                                             if let Err(e) = update_instance_playtime(
                                                 &run_state.instance_id,
                                                 &run_state.started_at,
@@ -340,7 +417,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 }),
                             );
 
-                            let _ = crate::utils::process_state::remove_running_process(&run_state.instance_id);
+                            let _ = crate::utils::process_state::remove_running_process(
+                                &run_state.instance_id,
+                            );
                         }
                     }
                 }
@@ -350,17 +429,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
-
-    // Initialize databases in background thread to not block window creation
-    // This triggers the lazy initialization in db_manager
-    tauri::async_runtime::spawn(async {
-        if let Err(e) = get_config_db() {
-            eprintln!("Failed to initialize config database: {}", e);
-        }
-        if let Err(e) = get_data_db() {
-            eprintln!("Failed to initialize data database: {}", e);
-        }
-    });
 
     // Initialize process registry (in-memory only, no persistence)
     {

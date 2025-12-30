@@ -29,7 +29,7 @@ function AccountList(props: AccountListProps) {
 	const getAvatarUrl = async (uuid: string): Promise<string | null> => {
 		try {
 			const path = await invoke<string>("get_player_head_path", {
-				uuid,
+				playerUuid: uuid,
 				forceDownload: false,
 			});
 			return convertFileSrc(path);
