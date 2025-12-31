@@ -147,7 +147,7 @@ function InstallPage(props: InstallPageProps) {
 
 	// Reset version if it becomes invalid when switching modloaders
 	createEffect(() => {
-		const versions = filteredVersions();
+		const versions = filteredVersions() || [];
 		const current = selectedVersion();
 		// If we have a selected version, but it's not in the new filtered list
 		if (
@@ -236,7 +236,7 @@ function InstallPage(props: InstallPageProps) {
 
 			// Get full instance and queue installation
 			const fullInstance: Instance = {
-				id: { VALUE: instanceId },
+				id: instanceId,
 				name,
 				minecraft_version: version,
 				modloader: selectedModloader() || "vanilla",
@@ -387,7 +387,7 @@ function InstallPage(props: InstallPageProps) {
 										</LauncherButton>
 									</div>
 									<Combobox
-										options={filteredVersions().map((v) => v.id)}
+										options={(filteredVersions() || []).map((v) => v.id)}
 										value={selectedVersion()}
 										onChange={(val) => val && setSelectedVersion(val)}
 										placeholder="Select version..."

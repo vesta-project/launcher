@@ -132,6 +132,20 @@ function Root(props: ChildrenProp) {
 					console.error("Failed to initialize crash event listener:", error);
 				});
 
+			// Check DB status (diagnostics)
+			if (hasTauriRuntime()) {
+				invoke("get_db_status")
+					.then((status: any) => {
+						console.group("Database Diagnostic Report");
+						console.log("Vesta DB Tables:", status.vesta?.tables || "NOT FOUND");
+						console.log("Config DB Tables:", status.config?.tables || "NOT FOUND");
+						console.groupEnd();
+					})
+					.catch((err) => {
+						console.error("Failed to get DB status:", err);
+					});
+			}
+
 			// Preload Minecraft versions metadata in background (non-blocking)
 			// This warms up the cache so install page loads instantly
 			getMinecraftVersions()

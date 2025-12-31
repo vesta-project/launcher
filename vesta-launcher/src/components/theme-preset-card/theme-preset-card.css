@@ -10,18 +10,18 @@
 	overflow: hidden;
 	cursor: pointer;
 	transition: all 200ms ease;
-	
+
 	&:hover {
 		border-color: var(--border-strong);
 		transform: translateY(-2px);
 		box-shadow: var(--effect-shadow);
 	}
-	
+
 	&:focus-visible {
 		outline: 2px solid var(--accent-primary);
 		outline-offset: 2px;
 	}
-	
+
 	&.theme-preset-card--selected {
 		border-color: var(--accent-primary);
 		border-width: 2px;
@@ -45,7 +45,7 @@
 	height: 100px;
 	overflow: hidden;
 	z-index: 0; /* ensure preview sits below selected accent overlay */
-	
+
 	/* Defaults - overridden by data-attribute selectors below */
 	--preview-bg-base: 0.8;
 	--preview-blur: 4px;
@@ -101,7 +101,7 @@
 	height: 6px;
 	background: hsl(var(--preview-hue) 10% 40%);
 	border-radius: 3px;
-	
+
 	&.theme-preview__sidebar-item--active {
 		background: hsl(var(--preview-hue) 60% 50%);
 	}
@@ -151,7 +151,7 @@
 	height: 4px;
 	background: hsl(var(--preview-hue) 5% 60%);
 	border-radius: 2px;
-	
+
 	&.theme-preview__card-line--short {
 		width: 60%;
 	}
@@ -191,28 +191,28 @@
 			hsl(calc(var(--preview-hue) + 60) 60% 75% / 0.4) 100%
 		);
 	}
-	
+
 	.theme-preview__sidebar {
 		background: hsl(var(--preview-hue) 20% 88% / var(--preview-bg-base));
 	}
-	
+
 	.theme-preview__sidebar-item {
 		background: hsl(var(--preview-hue) 10% 60%);
-		
+
 		&.theme-preview__sidebar-item--active {
 			background: hsl(var(--preview-hue) 60% 50%);
 		}
 	}
-	
+
 	.theme-preview__card {
 		background: hsl(var(--preview-hue) 25% 92% / var(--preview-bg-base));
 		border-color: hsl(var(--preview-hue) 20% 70% / 0.3);
 	}
-	
+
 	.theme-preview__card-header {
 		background: hsl(var(--preview-hue) 5% 20%);
 	}
-	
+
 	.theme-preview__card-line {
 		background: hsl(var(--preview-hue) 5% 40%);
 	}

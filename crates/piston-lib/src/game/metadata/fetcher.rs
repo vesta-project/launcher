@@ -49,9 +49,15 @@ struct ForgeVersionList {
 pub async fn fetch_metadata() -> Result<PistonMetadata> {
     log::info!("Fetching PistonMetadata from all sources...");
 
+    // Create HTTP client with timeout to prevent hanging requests
+    let http_client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .context("Failed to create HTTP client")?;
+
     // Fetch Mojang vanilla versions (required - fail fast if this fails)
     log::info!("Vanilla");
-    let mojang_manifest = fetch_mojang_manifest()
+    let mojang_manifest = fetch_mojang_manifest_with_client(&http_client)
         .await
         .context("Failed to fetch Mojang version manifest")?;
 
@@ -59,16 +65,17 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
 
     // Fetch loader versions sequentially (following Nexus pattern)
     log::info!("Fabric");
-    add_fabric_modloader("Fabric", FABRIC_META_URL, &mut game_versions).await;
+    add_fabric_modloader(&http_client, "Fabric", FABRIC_META_URL, &mut game_versions).await;
 
     log::info!("Quilt");
-    add_fabric_modloader("Quilt", QUILT_META_URL, &mut game_versions).await;
+    add_fabric_modloader(&http_client, "Quilt", QUILT_META_URL, &mut game_versions).await;
 
     log::info!("Forge");
-    add_forge_modloader("Forge", FORGE_MAVEN_URL, &mut game_versions).await;
+    add_forge_modloader(&http_client, "Forge", FORGE_MAVEN_URL, &mut game_versions).await;
 
     log::info!("NeoForge");
     add_neoforge_api_then_maven(
+        &http_client,
         "NeoForge",
         NEOFORGE_API_VERSIONS,
         NEOFORGE_API_FALLBACK_VERSIONS,
@@ -133,7 +140,7 @@ fn build_initial_game_versions(
 }
 
 /// Fetch Mojang version manifest with retry logic
-async fn fetch_mojang_manifest() -> Result<MojangVersionManifest> {
+async fn fetch_mojang_manifest_with_client(client: &reqwest::Client) -> Result<MojangVersionManifest> {
     const MAX_RETRIES: u32 = 3;
     const INITIAL_BACKOFF_MS: u64 = 1000;
 
@@ -151,7 +158,7 @@ async fn fetch_mojang_manifest() -> Result<MojangVersionManifest> {
             tokio::time::sleep(tokio::time::Duration::from_millis(backoff)).await;
         }
 
-        match reqwest::get(MOJANG_MANIFEST_URL).await {
+        match client.get(MOJANG_MANIFEST_URL).send().await {
             Ok(response) => {
                 let status = response.status();
                 if !status.is_success() {
@@ -193,12 +200,13 @@ async fn fetch_mojang_manifest() -> Result<MojangVersionManifest> {
 
 /// Add Fabric-style modloader (Fabric or Quilt) using parallel requests
 async fn add_fabric_modloader(
+    client: &reqwest::Client,
     loader_name: &str,
     repo: &str,
     game_versions: &mut Vec<GameVersionMetadata>,
 ) {
     // Get list of game versions that support this loader
-    let loader_version_list: Vec<String> = match reqwest::get(format!("{}/game", repo)).await {
+    let loader_version_list: Vec<String> = match client.get(format!("{}/game", repo)).send().await {
         Ok(result) => match result.json::<Vec<VersionStruct>>().await {
             Ok(versions) => versions.iter().map(|v| v.version.clone()).collect(),
             Err(e) => {
@@ -237,9 +245,10 @@ async fn add_fabric_modloader(
             let url = format!("{}/loader/{}", repo, version.id);
             let version_id = version.id.clone();
             let loader_name_owned = loader_name.to_string();
+            let client_clone = client.clone();
 
             async move {
-                match reqwest::get(&url).await {
+                match client_clone.get(&url).send().await {
                     Ok(response) if response.status().is_success() => {
                         match response.json::<Vec<FabricGameMetaVersionInfo>>().await {
                             Ok(loader_versions) => {
@@ -395,12 +404,13 @@ fn process_forge_versions(
 /// Try to fetch NeoForge releases from the JSON API, normalize it and return
 /// a mapping from Minecraft version (e.g., "1.20.2") -> list of releases
 async fn fetch_neoforge_api_index(
+    client: &reqwest::Client,
     api_base: &str,
     gav: &str,
 ) -> Result<HashMap<String, Vec<serde_json::Value>>> {
     let url = format!("{}{}", api_base, gav);
 
-    let resp = reqwest::get(&url).await?.text().await?;
+    let resp = client.get(&url).send().await?.text().await?;
 
     // Be forgiving: accept either an object with `versions` or a bare array.
     // We will normalize into a HashMap keyed by minecraft-version string.
@@ -748,11 +758,12 @@ mod tests {
 
 /// Add Forge-style modloader (Forge or NeoForge)
 async fn add_forge_modloader(
+    client: &reqwest::Client,
     loader_name: &str,
     repo: &str,
     game_versions: &mut Vec<GameVersionMetadata>,
 ) {
-    let xml = match reqwest::get(format!("{}/maven-metadata.xml", repo)).await {
+    let xml = match client.get(format!("{}/maven-metadata.xml", repo)).send().await {
         Ok(result) => match result.text().await {
             Ok(text) => text,
             Err(e) => {
@@ -793,6 +804,7 @@ async fn add_forge_modloader(
 
 /// API-first NeoForge fetcher (with API fallback then maven fallback)
 async fn add_neoforge_api_then_maven(
+    client: &reqwest::Client,
     loader_name: &str,
     api_base: &str,
     fallback_api_base: &str,
@@ -800,7 +812,7 @@ async fn add_neoforge_api_then_maven(
     game_versions: &mut Vec<GameVersionMetadata>,
 ) {
     // Try primary API
-    match fetch_neoforge_api_index(api_base, NEOFORGE_GAV).await {
+    match fetch_neoforge_api_index(client, api_base, NEOFORGE_GAV).await {
         Ok(index) if !index.is_empty() => {
             log::info!(
                 "{}: Using API (primary): {} entries",
@@ -826,7 +838,7 @@ async fn add_neoforge_api_then_maven(
     }
 
     // Try fallback API
-    match fetch_neoforge_api_index(fallback_api_base, NEOFORGE_GAV).await {
+    match fetch_neoforge_api_index(client, fallback_api_base, NEOFORGE_GAV).await {
         Ok(index) if !index.is_empty() => {
             log::info!(
                 "{}: Using API (fallback): {} entries",
@@ -849,5 +861,5 @@ async fn add_neoforge_api_then_maven(
 
     // Last resort: parse maven metadata XML like Forge does
     log::info!("{}: Falling back to maven XML parsing", loader_name);
-    add_forge_modloader(loader_name, maven_repo, game_versions).await;
+    add_forge_modloader(client, loader_name, maven_repo, game_versions).await;
 }

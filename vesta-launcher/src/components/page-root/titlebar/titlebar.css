@@ -56,7 +56,7 @@
 			hsl(var(--color__secondary-hue) 65% 70% / var(--titlebar__opacity)) 100%
 		);
 	}
-	
+
 	.titlebar:is(.titlebar--right) {
 		background: linear-gradient(
 			var(--background-angle),

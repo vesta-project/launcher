@@ -1,5 +1,5 @@
-import { type ThemeConfig } from "../../../../themes/presets";
 import { type Component } from "solid-js";
+import { type ThemeConfig } from "../../../../themes/presets";
 import "./theme-preset-card.css";
 
 interface ThemePresetCardProps {
@@ -44,11 +44,13 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 					</div>
 				</div>
 			</div>
-			
+
 			{/* Theme Name */}
 			<div class="theme-preset-card__info">
 				<span class="theme-preset-card__name">{props.theme.name}</span>
-				<span class="theme-preset-card__description">{props.theme.description || props.theme.style}</span>
+				<span class="theme-preset-card__description">
+					{props.theme.description || props.theme.style}
+				</span>
 			</div>
 		</button>
 	);

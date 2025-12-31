@@ -48,6 +48,8 @@ fn main() {
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
             commands::app::close_all_windows_and_reset,
+            commands::app::os_type,
+            utils::db::get_db_status,
             // create_file_drop_overlay,
             // position_overlay,
             // show_overlay,

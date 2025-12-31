@@ -216,10 +216,10 @@ mod tests {
         classifiers.insert(
             "natives-windows-64".to_string(),
             Artifact {
-                path: "".to_string(),
-                url: "".to_string(),
-                sha1: "".to_string(),
-                size: 0,
+                path: "".to_string()?,
+                url: "".to_string()?,
+                sha1: "".to_string()?,
+                size: Some(0),
             },
         );
 

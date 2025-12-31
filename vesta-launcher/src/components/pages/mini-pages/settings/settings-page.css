@@ -122,7 +122,8 @@
 }
 
 .hue-track .slider__track {
-	background: linear-gradient(to right,
+	background: linear-gradient(
+		to right,
 		hsl(0, 70%, 50%),
 		hsl(60, 70%, 50%),
 		hsl(120, 70%, 50%),
@@ -136,28 +137,30 @@
 }
 
 .hue-track .slider__thumb {
-	box-shadow: 0 0 0 2px var(--surface-overlay), 0 4px 12px rgba(0,0,0,0.3);
+	box-shadow:
+		0 0 0 2px var(--surface-overlay),
+		0 4px 12px rgba(0, 0, 0, 0.3);
 	border: 2px solid white;
 }
 
 /* Ensure switches have visible background and clear checked state */
 .settings-switch .switch__control {
-    background: var(--surface-sunken);
-    border: var(--border-width-subtle) solid var(--border-subtle);
+	background: var(--surface-sunken);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 }
 
 .settings-switch .switch__control:hover {
-    background: var(--surface-raised);
+	background: var(--surface-raised);
 }
 
 .settings-switch .switch__control[data-checked] {
-    background: var(--accent-primary);
-    border-color: var(--accent-primary);
+	background: var(--accent-primary);
+	border-color: var(--accent-primary);
 }
 
 .settings-switch .switch__control[data-checked]:hover {
-    background: var(--accent-primary-hover);
-    border-color: var(--accent-primary-hover);
+	background: var(--accent-primary-hover);
+	border-color: var(--accent-primary-hover);
 }
 
 /* Always show a border on textareas inside settings */

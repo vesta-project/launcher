@@ -68,15 +68,13 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 
 		(async () => {
 			try {
-				await Promise.all(
-					unread.map(async (n) => {
-						try {
-							await markNotificationRead(n.id);
-						} catch (err) {
-							console.error("Failed to mark notification read:", err);
-						}
-					}),
-				);
+				for (const n of unread) {
+					try {
+						await markNotificationRead(n.id);
+					} catch (err) {
+						console.error("Failed to mark notification read:", err);
+					}
+				}
 			} catch (err) {
 				console.error("Failed to mark unread notifications as read:", err);
 			}

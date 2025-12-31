@@ -1,6 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { JSX } from "solid-js";
-import { getThemeById, getDefaultTheme, applyTheme, validateTheme, type ThemeConfig } from "../themes/presets";
+import {
+	applyTheme,
+	getDefaultTheme,
+	getThemeById,
+	type ThemeConfig,
+	validateTheme,
+} from "../themes/presets";
 
 interface AppConfig {
 	debug_logging: boolean;
@@ -43,7 +49,9 @@ export async function initTheme() {
 			}
 		} else if (config.background_hue !== undefined) {
 			// Legacy hue present — create migrated theme and apply
-			console.info(`Migrating legacy background_hue (${config.background_hue}) to theme`);
+			console.info(
+				`Migrating legacy background_hue (${config.background_hue}) to theme`,
+			);
 			theme = validateTheme({
 				id: "custom-migrated",
 				name: "Migrated Theme",
@@ -62,9 +70,14 @@ export async function initTheme() {
 			style.setProperty("--color__primary-hue", theme.primaryHue.toString());
 			console.info("Theme applied from config");
 		} else {
-			console.info("No explicit theme found in config, preserving existing app theme");
+			console.info(
+				"No explicit theme found in config, preserving existing app theme",
+			);
 		}
 	} catch (error) {
-		console.warn("Failed to load theme config — preserving existing theme:", error);
+		console.warn(
+			"Failed to load theme config — preserving existing theme:",
+			error,
+		);
 	}
 }

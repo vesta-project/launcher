@@ -177,7 +177,12 @@
 }
 .sidebar__notification__progress.progress--indeterminate .progress__fill,
 .sidebar__notification__progress .progress__fill--indeterminate {
-	background: linear-gradient(90deg, var(--surface-base) 0%, var(--border-subtle) 50%, var(--surface-base) 100%);
+	background: linear-gradient(
+		90deg,
+		var(--surface-base) 0%,
+		var(--border-subtle) 50%,
+		var(--surface-base) 100%
+	);
 	background-size: 200% 100%;
 	animation: progress-pulse 1.4s linear infinite;
 }

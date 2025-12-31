@@ -20,7 +20,7 @@ slug = "0.1"
 
 # Database - Diesel ORM
 diesel = { version = "2.1", features = ["sqlite", "r2d2"] }
-diesel_migrations = "2.1"
+diesel_migrations = { version = "2.1", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.26", features = ["bundled"] }
 
 tauri = { version = "2.9.5", features = [

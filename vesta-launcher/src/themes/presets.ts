@@ -1,44 +1,48 @@
 /**
  * Vesta Launcher Theme System - Preset Definitions
- * 
+ *
  * This file contains type-safe theme configurations for built-in and custom themes.
  * Each theme includes complete styling information (hue, style mode, gradient settings).
  */
 
 export type StyleMode = "glass" | "satin" | "flat" | "bordered";
-export type GradientHarmony = "none" | "analogous" | "complementary" | "triadic";
+export type GradientHarmony =
+	| "none"
+	| "analogous"
+	| "complementary"
+	| "triadic";
 
 export interface ThemeConfig {
 	/** Unique theme identifier */
 	id: string;
-	
+
 	/** Display name shown in UI */
 	name: string;
-	
+
 	/** Optional description */
 	description?: string;
-	
+
 	/** Primary hue (0-360) */
 	primaryHue: number;
-	
+
 	/** Primary saturation (0-100) - advanced mode only */
 	primarySat?: number;
-	
+
 	/** Primary lightness (0-100) - advanced mode only */
 	primaryLight?: number;
-	
+
 	/** Visual style mode */
 	style: StyleMode;
-	
+
 	/** Enable background gradient */
 	gradientEnabled: boolean;
-	
+
 	/** Gradient angle in degrees (0-360) */
 	gradientAngle?: number;
-	
+
 	/** Gradient color harmony */
 	gradientHarmony?: GradientHarmony;
-	
+
 	/** Preview thumbnail URL (optional) */
 	thumbnail?: string;
 
@@ -209,17 +213,26 @@ export function getDefaultTheme(): ThemeConfig {
  */
 export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 	const defaultTheme = getDefaultTheme();
-	
+
 	return {
 		id: theme.id || "custom",
 		name: theme.name || "Custom Theme",
 		description: theme.description,
 		primaryHue: clamp(theme.primaryHue ?? defaultTheme.primaryHue, 0, 360),
-		primarySat: theme.primarySat !== undefined ? clamp(theme.primarySat, 0, 100) : undefined,
-		primaryLight: theme.primaryLight !== undefined ? clamp(theme.primaryLight, 0, 100) : undefined,
+		primarySat:
+			theme.primarySat !== undefined
+				? clamp(theme.primarySat, 0, 100)
+				: undefined,
+		primaryLight:
+			theme.primaryLight !== undefined
+				? clamp(theme.primaryLight, 0, 100)
+				: undefined,
 		style: theme.style || defaultTheme.style,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
-		gradientAngle: theme.gradientAngle !== undefined ? clamp(theme.gradientAngle, 0, 360) : undefined,
+		gradientAngle:
+			theme.gradientAngle !== undefined
+				? clamp(theme.gradientAngle, 0, 360)
+				: undefined,
 		gradientHarmony: theme.gradientHarmony || defaultTheme.gradientHarmony,
 		thumbnail: theme.thumbnail,
 		// Pass-through extras for runtime application
@@ -261,7 +274,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	if (!theme.gradientEnabled) {
 		vars["--background-color"] = "var(--surface-base)";
 	}
-	
+
 	// Advanced mode overrides
 	if (theme.primarySat !== undefined) {
 		vars["--primary-saturation"] = `${theme.primarySat}%`;
@@ -269,7 +282,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	if (theme.primaryLight !== undefined) {
 		vars["--primary-lightness"] = `${theme.primaryLight}%`;
 	}
-	
+
 	return vars;
 }
 
@@ -279,13 +292,13 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 export function applyTheme(theme: ThemeConfig): void {
 	const root = document.documentElement;
 	const style = root.style;
-	
+
 	// Skip if theme is already applied (same primary hue)
 	const currentHue = style.getPropertyValue("--hue-primary");
 	if (currentHue === theme.primaryHue.toString()) {
 		return;
 	}
-	
+
 	// Apply CSS variables
 	const vars = themeToCSSVars(theme);
 	for (const [key, value] of Object.entries(vars)) {
@@ -302,7 +315,7 @@ export function applyTheme(theme: ThemeConfig): void {
 		style.setProperty("--background-color", "var(--surface-base)");
 		style.setProperty("--background-opacity", "0");
 	}
-	
+
 	// Apply style mode attribute
 	root.setAttribute("data-style", theme.style);
 
