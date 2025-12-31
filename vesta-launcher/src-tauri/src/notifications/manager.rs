@@ -38,7 +38,6 @@ mod tests {
     use super::*;
     use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
 
-
     // Helper to build a minimal Tauri app for manager tests
     // NOTE: Upsert tests disabled on Windows due to Tauri event loop constraints (must run on main thread).
     // Integration tests should cover upsert behavior in a runtime context.
@@ -286,6 +285,7 @@ pub struct NotificationManager {
     show_on_completion_ids: Arc<Mutex<HashSet<i32>>>,
 }
 
+#[allow(dead_code)]
 impl NotificationManager {
     pub fn new(app_handle: AppHandle) -> Self {
         let manager = Self {
@@ -337,7 +337,10 @@ impl NotificationManager {
                 .notification_type
                 .unwrap_or(NotificationType::Immediate),
             dismissible: input.dismissible.unwrap_or(true),
-            actions: input.actions.unwrap_or_default(),
+            actions: input
+                .actions
+                .and_then(|json| serde_json::from_str(&json).ok())
+                .unwrap_or_default(),
             read: false,
             progress: input.progress,
             current_step: input.current_step,

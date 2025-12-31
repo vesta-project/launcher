@@ -3,11 +3,11 @@
 	height: 100vh;
 	display: flex;
 	flex-direction: column;
-	
+
 	/* Solid background for standalone viewer (no glass) */
 	background: var(--bg-surface);
 	border: 1px solid var(--border-subtle);
-	
+
 	position: relative;
 	overflow: hidden;
 }

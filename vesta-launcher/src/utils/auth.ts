@@ -24,7 +24,7 @@ export type AuthStage =
 	| { stage: "Start" }
 	| { stage: "AuthCode"; code: string; url: string; expires_in: number }
 	| { stage: "Polling" }
-	| { stage: "Complete"; uuid: string; username: string }
+	| { stage: "Complete"; user_uuid: string; user_username: string }
 	| { stage: "Cancelled" }
 	| { stage: "Error"; message: string };
 

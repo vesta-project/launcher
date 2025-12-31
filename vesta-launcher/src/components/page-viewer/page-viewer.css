@@ -14,14 +14,14 @@
 		width: 100%;
 		height: 100%;
 		border-radius: 8px;
-		
+
 		/* Apply Liquid Glass */
 		background: var(--liquid-background);
 		backdrop-filter: var(--liquid-backdrop-filter);
 		-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 		box-shadow: var(--liquid-box-shadow);
 		isolation: isolate;
-		
+
 		overflow: hidden;
 		position: relative;
 
@@ -62,7 +62,7 @@
 	background: var(--liquid-background);
 	backdrop-filter: var(--liquid-backdrop-filter);
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
-	box-shadow: 
+	box-shadow:
 		var(--liquid-box-shadow),
 		0 1px 0 hsl(var(--color__primary-hue) 60% 80% / 0.1); /* Bottom highlight */
 	border-bottom: var(--border-width-subtle) solid hsl(var(--color__primary-hue) 30% 30% / 0.3);

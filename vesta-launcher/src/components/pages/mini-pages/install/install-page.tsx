@@ -10,11 +10,8 @@ import {
 	ComboboxItemLabel,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@ui/popover/popover";
+import { IconPicker } from "@ui/icon-picker/icon-picker";
+import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import {
 	Slider,
 	SliderFill,
@@ -30,16 +27,15 @@ import {
 } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
-import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
 	type CreateInstanceData,
 	createInstance,
+	DEFAULT_ICONS,
 	getMinecraftVersions,
 	type Instance,
 	installInstance,
 	type PistonMetadata,
 	reloadMinecraftVersions,
-	DEFAULT_ICONS,
 } from "@utils/instances";
 import {
 	createEffect,
@@ -59,10 +55,10 @@ interface InstallPageProps {
 
 function InstallPage(props: InstallPageProps) {
 	// Safe navigation wrapper
-	const navigate = (() => {
+	const _navigate = (() => {
 		try {
 			return useNavigate();
-		} catch (e) {
+		} catch (_e) {
 			console.warn("Router context not found, navigation disabled");
 			return (path: string) => console.log("Mock navigation to:", path);
 		}
@@ -77,8 +73,8 @@ function InstallPage(props: InstallPageProps) {
 	const [selectedModloaderVersion, setSelectedModloaderVersion] =
 		createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
-	const effectiveIcon = () => iconPath() || DEFAULT_ICONS[0];
-	
+	const _effectiveIcon = () => iconPath() || DEFAULT_ICONS[0];
+
 	// Create uploadedIcons array that includes current iconPath if it's an uploaded image (base64 or custom URL)
 	const uploadedIcons = () => {
 		const current = iconPath();
@@ -94,7 +90,8 @@ function InstallPage(props: InstallPageProps) {
 	const [memory, setMemory] = createSignal([2048]); // Slider uses array
 	const [resolutionWidth, setResolutionWidth] = createSignal("854");
 	const [resolutionHeight, setResolutionHeight] = createSignal("480");
-	const [includeUnstableVersions, setIncludeUnstableVersions] = createSignal(false);
+	const [includeUnstableVersions, setIncludeUnstableVersions] =
+		createSignal(false);
 
 	const [isInstalling, setIsInstalling] = createSignal(false);
 	const [isReloading, setIsReloading] = createSignal(false);
@@ -111,7 +108,7 @@ function InstallPage(props: InstallPageProps) {
 		const loader = selectedModloader();
 		if (!metadata()) return [];
 
-		return metadata()!.game_versions.filter((v) => {
+		return metadata()?.game_versions.filter((v) => {
 			// Filter by stability (only show unstable if enabled)
 			if (!includeUnstableVersions() && !v.stable) return false;
 
@@ -342,14 +339,18 @@ function InstallPage(props: InstallPageProps) {
 									<TextFieldInput
 										placeholder="My Awesome Instance"
 										value={instanceName()}
-										onInput={(e: Event & { currentTarget: HTMLInputElement }) => {
+										onInput={(
+											e: Event & { currentTarget: HTMLInputElement },
+										) => {
 											setInstanceName(e.currentTarget.value);
 										}}
 									/>
 								</TextFieldRoot>
 							</div>
 
-							<h2 class="form-section-title" style="margin-top: 12px;">Version</h2>
+							<h2 class="form-section-title" style="margin-top: 12px;">
+								Version
+							</h2>
 							<div class="form-field">
 								<label class="form-label">Modloader</label>
 								<ToggleGroup
@@ -370,7 +371,11 @@ function InstallPage(props: InstallPageProps) {
 							<div class="form-row">
 								<div class="form-field">
 									<div
-										style={{ display: "flex", "align-items": "center", gap: "8px" }}
+										style={{
+											display: "flex",
+											"align-items": "center",
+											gap: "8px",
+										}}
 									>
 										<label class="form-label">Minecraft Version</label>
 										<LauncherButton
@@ -388,7 +393,9 @@ function InstallPage(props: InstallPageProps) {
 										placeholder="Select version..."
 										itemComponent={(props) => (
 											<ComboboxItem item={props.item}>
-												<ComboboxItemLabel>{props.item.rawValue}</ComboboxItemLabel>
+												<ComboboxItemLabel>
+													{props.item.rawValue}
+												</ComboboxItemLabel>
 												<ComboboxItemIndicator />
 											</ComboboxItem>
 										)}
@@ -415,7 +422,8 @@ function InstallPage(props: InstallPageProps) {
 										Include unstable versions (snapshots, alphas, betas)
 									</Checkbox>
 									<div class="helper-text" style="margin-top: 4px;">
-										⚠️ Unstable versions may be unstable and incompatible with mods
+										⚠️ Unstable versions may be unstable and incompatible with
+										mods
 									</div>
 								</div>
 
@@ -491,7 +499,9 @@ function InstallPage(props: InstallPageProps) {
 									</Slider>
 								</div>
 
-								<h2 class="form-section-title" style="margin-top: 12px;">Display</h2>
+								<h2 class="form-section-title" style="margin-top: 12px;">
+									Display
+								</h2>
 								<div class="form-row">
 									<TextFieldRoot style="flex: 1;">
 										<TextFieldLabel>Width</TextFieldLabel>
@@ -509,7 +519,9 @@ function InstallPage(props: InstallPageProps) {
 									</TextFieldRoot>
 								</div>
 
-								<h2 class="form-section-title" style="margin-top: 12px;">Java</h2>
+								<h2 class="form-section-title" style="margin-top: 12px;">
+									Java
+								</h2>
 								<TextFieldRoot>
 									<TextFieldLabel>JVM Arguments</TextFieldLabel>
 									<TextFieldInput

@@ -26,7 +26,6 @@ interface AppConfig {
 	debug_logging: boolean;
 	background_hue: number;
 	reduced_motion?: boolean;
-	reduced_effects?: boolean;
 	
 	// Theme system fields
 	theme_id: string;

@@ -6,6 +6,7 @@ mod commands;
 mod metadata_cache;
 pub mod models;
 mod notifications;
+pub mod schema; // Diesel schema definitions
 mod setup;
 mod tasks;
 pub mod utils;

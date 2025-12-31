@@ -83,7 +83,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 			if (!uuid) return null;
 			try {
 				const path = await invoke<string>("get_player_head_path", {
-					uuid,
+					playerUuid: uuid,
 					forceDownload: false,
 				});
 				return convertFileSrc(path);

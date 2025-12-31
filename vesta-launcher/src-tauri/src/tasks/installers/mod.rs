@@ -12,7 +12,6 @@ use crate::models::instance::Instance;
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use crate::tasks::manager::{Task, TaskContext};
-use crate::utils::sqlite::AUTOINCREMENT;
 
 /// Task adapter for game installation
 pub struct InstallInstanceTask {
@@ -143,9 +142,9 @@ impl Task for InstallInstanceTask {
                     );
 
                     // Update database status to 'installed'
-                    if let AUTOINCREMENT::VALUE(id) = instance.id {
+                    if instance.id > 0 {
                         if let Err(e) = crate::commands::instances::update_installation_status(
-                            id, "installed",
+                            instance.id, "installed",
                         ) {
                             log::error!("[InstallTask] Failed to update status: {}", e);
                         }
@@ -164,9 +163,9 @@ impl Task for InstallInstanceTask {
                     log::error!("[InstallTask] Installation failed: {}", e);
                     
                     // Update database status to 'failed'
-                    if let AUTOINCREMENT::VALUE(id) = instance.id {
+                    if instance.id > 0 {
                         if let Err(status_err) = crate::commands::instances::update_installation_status(
-                            id, "failed",
+                            instance.id, "failed",
                         ) {
                             log::error!("[InstallTask] Failed to update error status: {}", status_err);
                         }

@@ -4,7 +4,7 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 let osType: OsType | undefined;
 let osTypePromise: Promise<OsType | undefined> | null = null;
 
-async function loadOsType(): Promise<OsType | undefined> {
+function loadOsType(): Promise<OsType | undefined> {
 	if (!hasTauriRuntime()) {
 		return undefined;
 	}

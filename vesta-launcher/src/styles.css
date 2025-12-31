@@ -168,14 +168,16 @@
 	--liquid-frost-blur: var(--effect-blur);
 	--liquid-noise-frequency: 2;
 	--liquid-noise-strength: 40;
-	--liquid-outer-shadow-blur: var(--effect-shadow-depth);
-	
+	--liquid-outer-shadow-blur: 24px;
+
+	/* Computed Liquid Glass Properties */
 	--liquid-background: hsl(var(--color__primary-hue) var(--liquid-tint-saturation) var(--liquid-tint-lightness) / var(--liquid-tint-opacity));
 	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
 	--liquid-box-shadow: 
-		var(--effect-shadow),
+		0 6px var(--liquid-outer-shadow-blur) rgba(0, 0, 0, 0.2),
 		inset 0 0 var(--liquid-inner-shadow-blur) var(--liquid-inner-shadow-spread) var(--liquid-inner-shadow-color);
 	
+	/* Legacy Glass variables (updated to use liquid system) */
 	--bg-glass: var(--liquid-background);
 	--glass-blur: var(--liquid-backdrop-filter);
 	

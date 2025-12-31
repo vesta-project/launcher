@@ -15,15 +15,13 @@ import {
 	subscribeToConfigUpdates,
 	unsubscribeFromConfigUpdates,
 } from "@utils/config-sync";
+import { subscribeToCrashEvents } from "@utils/crash-handler";
 import { getMinecraftVersions } from "@utils/instances";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
-import {
-	subscribeToCrashEvents,
-} from "@utils/crash-handler";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { lazy, onCleanup, onMount } from "solid-js";
 

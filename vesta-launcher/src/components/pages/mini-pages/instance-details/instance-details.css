@@ -11,7 +11,10 @@
 .instance-details-sidebar {
 	width: 200px;
 	min-width: 200px;
-	background: hsl(var(--liquid-tint-color) / 0.3); /* Much lighter liquid glass background */
+	background: hsl(
+		var(--liquid-tint-color) /
+		0.3
+	); /* Much lighter liquid glass background */
 	backdrop-filter: var(--liquid-backdrop-filter);
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
@@ -44,7 +47,10 @@
 }
 
 .instance-tabs button:hover {
-	background: hsl(var(--color__primary-hue) 30% 20% / 0.4); /* Darker hover with transparency */
+	background: hsl(
+		var(--color__primary-hue) 30% 20% /
+		0.4
+	); /* Darker hover with transparency */
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
 	color: var(--text-primary);
@@ -121,8 +127,8 @@
 	display: flex;
 	flex-direction: column;
 	gap: 0.5rem;
-	display: flex; 
-	flex-direction: row; 
+	display: flex;
+	flex-direction: row;
 	justify-content: space-between;
 	width: 100%;
 }

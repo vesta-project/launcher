@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
 import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.jpg";
 import PlaceholderImage2 from "@assets/placeholder-images/placeholder-image2.png";
 import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png";
@@ -8,6 +6,8 @@ import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png
 import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
 import PlacehodlerImage7 from "@assets/placeholder-images/placeholder-image7.png";
 import PlacehodlerImage8 from "@assets/placeholder-images/placeholder-image8.png";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 // Default icons for instances
 export const DEFAULT_ICONS = [
@@ -129,7 +129,9 @@ export async function createInstance(
 		instance,
 	);
 	try {
-		const result = await invoke<number>("create_instance", { instance });
+		const result = await invoke<number>("create_instance", {
+			instanceData: instance,
+		});
 		console.log("[createInstance] DB insert successful, new ID:", result);
 		return result;
 	} catch (error) {

@@ -97,7 +97,9 @@
 	align-items: center;
 	justify-content: center;
 	cursor: pointer;
-	transition: transform 0.2s, box-shadow 0.2s;
+	transition:
+		transform 0.2s,
+		box-shadow 0.2s;
 	border: 0.5px solid var(--border-subtle);
 }
 

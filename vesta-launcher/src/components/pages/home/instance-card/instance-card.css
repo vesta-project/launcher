@@ -19,7 +19,11 @@
 			rgb(159 159 159 / 15%) 20%,
 			rgb(36 35 35 / 30%) 45.5%,
 			rgb(0 0 0 / 85%) 100%
-		), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		),
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 	background-repeat: no-repeat, no-repeat;
 	background-position:
 		center center,
@@ -28,7 +32,7 @@
 	transition:
 		background-size 0.2s ease,
 		box-shadow 0.15s ease,
-		transform 0.18s cubic-bezier(.4,1,.7,1);
+		transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
 	will-change: transform, box-shadow;
 	color: white;
 	text-shadow: 0 1px 4px hsl(0 0% 0% / 0.7), 0 2px 8px hsl(0 0% 0% / 0.5);
@@ -73,12 +77,16 @@
 				rgb(149 144 144 / 25%) 19.5%,
 				rgb(36 35 35 / 80%) 67.93%,
 				rgb(0 0 0 / 90%) 100%
-			), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+			),
+			var(
+				--instance-bg-image,
+				url("@assets/placeholder-images/placeholder-image1.jpg")
+			);
 		transform: scale(1.045);
 		transition:
-			background-size 0.2s cubic-bezier(.4,1,.7,1),
-			box-shadow 0.18s cubic-bezier(.4,1,.7,1),
-			transform 0.18s cubic-bezier(.4,1,.7,1);
+			background-size 0.2s cubic-bezier(0.4, 1, 0.7, 1),
+			box-shadow 0.18s cubic-bezier(0.4, 1, 0.7, 1),
+			transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
 	}
 
 	/* Disable hover effect when reduced motion is enabled */
@@ -92,7 +100,11 @@
 				rgb(159 159 159 / 20%) 20%,
 				rgb(36 35 35 / 20%) 45.5%,
 				rgb(0 0 0 / 70%) 100%
-			), var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+			),
+			var(
+				--instance-bg-image,
+				url("@assets/placeholder-images/placeholder-image1.jpg")
+			);
 		transform: none;
 	}
 }
@@ -305,8 +317,12 @@
 }
 
 @keyframes spin {
-	0% { transform: rotate(0deg); }
-	100% { transform: rotate(360deg); }
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
 }
 
 .instance-card-indicators {
@@ -319,7 +335,8 @@
 	gap: 4px;
 }
 
-.running, .crashed {
+.running,
+.crashed {
 	font-size: 10px;
 	padding: 3px 8px;
 	border-radius: 12px;
@@ -401,9 +418,9 @@
 }
 
 .instance-card-leave {
-	transform: scale(1.0);
+	transform: scale(1);
 	box-shadow: 0 2px 8px 0 rgb(0 0 0 / 10%);
 	transition:
-		transform 0.25s cubic-bezier(.4,1,.7,1),
-		box-shadow 0.25s cubic-bezier(.4,1,.7,1);
+		transform 0.25s cubic-bezier(0.4, 1, 0.7, 1),
+		box-shadow 0.25s cubic-bezier(0.4, 1, 0.7, 1);
 }

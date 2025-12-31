@@ -1,9 +1,10 @@
-use crate::models::instance::Instance;
+use crate::models::instance::{Instance, NewInstance};
+use crate::schema::instance::dsl::*;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
-use crate::utils::db_manager::get_data_db;
-use crate::utils::sqlite::{SqlTable, AUTOINCREMENT};
+use crate::utils::db::get_vesta_conn;
+use diesel::prelude::*;
 use std::sync::Arc;
 use tauri::{Manager, State};
 
@@ -12,91 +13,84 @@ fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
 }
 
-/// Update playtime for an instance in the database (internal helper)
-fn update_instance_playtime_internal(instance_id: &str, started_at: &str, exited_at: &str) -> Result<(), String> {
+/// Update playtime for an instance in the database
+fn update_instance_playtime(
+    instance_id_slug: &str,
+    started_at_str: &str,
+    exited_at_str: &str,
+) -> Result<(), String> {
     // Parse timestamps
-    let started = chrono::DateTime::parse_from_rfc3339(started_at)
+    let started = chrono::DateTime::parse_from_rfc3339(started_at_str)
         .map_err(|e| format!("Failed to parse started_at: {}", e))?;
-    let exited = chrono::DateTime::parse_from_rfc3339(exited_at)
+    let exited = chrono::DateTime::parse_from_rfc3339(exited_at_str)
         .map_err(|e| format!("Failed to parse exited_at: {}", e))?;
-    
+
     // Calculate duration in minutes
     let duration = exited.signed_duration_since(started);
     let minutes = (duration.num_seconds() / 60).max(0) as i32;
-    
+
     log::info!(
         "Updating playtime for instance {}: {} minutes (from {} to {})",
-        instance_id, minutes, started_at, exited_at
+        instance_id_slug,
+        minutes,
+        started_at_str,
+        exited_at_str
     );
-    
-    // Update database - need to find instance by slug
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-    
-    // Get all instances and find by slug
-    let mut stmt = conn
-        .prepare("SELECT id, name, total_playtime_minutes FROM instance")
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-    
-    let instances: Vec<(i32, String, i32)> = stmt
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
-        .map_err(|e| format!("Failed to query instances: {}", e))?
-        .filter_map(Result::ok)
-        .collect();
-    
-    for (id, name, current_playtime) in instances {
-        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
-        if slug == instance_id {
-            let new_playtime = current_playtime + minutes;
+
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    // Find instance by slug
+    let instances_list = instance
+        .load::<Instance>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    for inst in instances_list {
+        if inst.slug() == instance_id_slug {
+            let new_playtime = inst.total_playtime_minutes + minutes;
             let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-            
-            conn.execute(
-                "UPDATE instance SET total_playtime_minutes = ?1, last_played = ?2, updated_at = ?3 WHERE id = ?4",
-                rusqlite::params![new_playtime, now, now, id],
-            )
-            .map_err(|e| format!("Failed to update playtime: {}", e))?;
-            
+
+            diesel::update(instance.filter(id.eq(inst.id)))
+                .set((
+                    total_playtime_minutes.eq(new_playtime),
+                    last_played.eq(&now),
+                    updated_at.eq(&now),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to update playtime: {}", e))?;
+
             log::info!(
                 "Updated playtime for instance {} (id {}): {} -> {} minutes",
-                instance_id, id, current_playtime, new_playtime
+                instance_id_slug,
+                inst.id,
+                inst.total_playtime_minutes,
+                new_playtime
             );
             return Ok(());
         }
     }
-    
-    log::warn!("Instance {} not found in database for playtime update", instance_id);
+
+    log::warn!(
+        "Instance {} not found in database for playtime update",
+        instance_id_slug
+    );
     Ok(())
 }
 
 /// Store crash details in the database for an instance
-fn store_crash_details(instance_id: &str, crash_info: &crate::utils::crash_parser::CrashDetails) -> Result<(), String> {
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-    
-    // Get all instances and find by slug
-    let mut stmt = conn
-        .prepare("SELECT id FROM instance")
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-    
-    let instance_ids: Vec<i32> = stmt
-        .query_map([], |row| row.get(0))
-        .map_err(|e| format!("Failed to query instances: {}", e))?
-        .filter_map(Result::ok)
-        .collect();
-    
-    for id in instance_ids {
-        // Get instance name to compute slug
-        let mut name_stmt = conn
-            .prepare("SELECT name FROM instance WHERE id = ?")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-        
-        let name: String = name_stmt
-            .query_row([id], |row| row.get(0))
-            .map_err(|e| format!("Failed to query instance name: {}", e))?;
-        
-        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
-        
-        if slug == instance_id {
+fn store_crash_details(
+    instance_id_slug: &str,
+    crash_info: &crate::utils::crash_parser::CrashDetails,
+) -> Result<(), String> {
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    let all_instances = instance
+        .load::<Instance>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    for inst in all_instances {
+        if inst.slug() == instance_id_slug {
             // Create crash details JSON
             let crash_details_json = serde_json::json!({
                 "crash_type": crash_info.crash_type,
@@ -104,97 +98,101 @@ fn store_crash_details(instance_id: &str, crash_info: &crate::utils::crash_parse
                 "report_path": crash_info.report_path,
                 "timestamp": crash_info.timestamp,
             });
-            
-            // Update instance with crash details
-            conn.execute(
-                "UPDATE instance SET crashed = 1, crash_details = ? WHERE id = ?",
-                [crash_details_json.to_string(), id.to_string()],
-            ).map_err(|e| format!("Failed to update crash details: {}", e))?;
-            
-            log::info!("Stored crash details for instance {} (id {})", instance_id, id);
+
+            diesel::update(instance.filter(id.eq(inst.id)))
+                .set((
+                    crashed.eq(true),
+                    crash_details.eq(crash_details_json.to_string()),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to update crash details: {}", e))?;
+
+            log::info!(
+                "Stored crash details for instance {} (id {})",
+                instance_id_slug,
+                inst.id
+            );
             return Ok(());
         }
     }
-    
-    Err(format!("Instance {} not found in database", instance_id))
+
+    Err(format!(
+        "Instance {} not found in database",
+        instance_id_slug
+    ))
 }
 
 /// Clear the crashed flag for an instance when it successfully launches
-fn clear_crash_flag(instance_id: &str) -> Result<(), String> {
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-    
-    // Get all instances and find by slug
-    let mut stmt = conn
-        .prepare("SELECT id FROM instance")
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-    
-    let instance_ids: Vec<i32> = stmt
-        .query_map([], |row| row.get(0))
-        .map_err(|e| format!("Failed to query instances: {}", e))?
-        .filter_map(Result::ok)
-        .collect();
-    
-    for id in instance_ids {
-        // Get instance name to compute slug
-        let mut name_stmt = conn
-            .prepare("SELECT name FROM instance WHERE id = ?")
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-        
-        let name: String = name_stmt
-            .query_row([id], |row| row.get(0))
-            .map_err(|e| format!("Failed to query instance name: {}", e))?;
-        
-        let slug = crate::utils::sanitize::sanitize_instance_name(&name);
-        
-        if slug == instance_id {
-            // Clear crash flag and crash details
-            conn.execute(
-                "UPDATE instance SET crashed = 0, crash_details = NULL WHERE id = ?",
-                [id],
-            ).map_err(|e| format!("Failed to clear crash flag: {}", e))?;
-            
-            log::info!("Cleared crash flag for instance {} (id {})", instance_id, id);
+fn clear_crash_flag(instance_id_slug: &str) -> Result<(), String> {
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    let all_instances = instance
+        .load::<Instance>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    for inst in all_instances {
+        if inst.slug() == instance_id_slug {
+            diesel::update(instance.filter(id.eq(inst.id)))
+                .set((crashed.eq(false), crash_details.eq::<Option<String>>(None)))
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to clear crash flag: {}", e))?;
+
+            log::info!(
+                "Cleared crash flag for instance {} (id {})",
+                instance_id_slug,
+                inst.id
+            );
             return Ok(());
         }
     }
-    
-    Err(format!("Instance {} not found in database", instance_id))
+
+    Err(format!(
+        "Instance {} not found in database",
+        instance_id_slug
+    ))
 }
 
 #[tauri::command]
 pub async fn install_instance(
     app_handle: tauri::AppHandle,
     task_manager: State<'_, TaskManager>,
-    instance: Instance,
+    instance_data: Instance,
 ) -> Result<(), String> {
     log::info!(
         "[install_instance] Command invoked for instance: {}",
-        instance.name
+        instance_data.name
     );
-    log::info!("[install_instance] Instance details - version: {}, modloader: {:?}, modloader_version: {:?}", 
-        instance.minecraft_version, instance.modloader, instance.modloader_version);
+    log::info!(
+        "[install_instance] Instance details - version: {}, modloader: {:?}, modloader_version: {:?}",
+        instance_data.minecraft_version,
+        instance_data.modloader,
+        instance_data.modloader_version
+    );
 
     log::info!("[install_instance] Creating InstallInstanceTask");
-    let task = InstallInstanceTask::new(instance.clone());
+    let task = InstallInstanceTask::new(instance_data.clone());
 
     log::info!("[install_instance] Submitting task to TaskManager");
     match task_manager.submit(Box::new(task)).await {
         Ok(_) => {
             // Immediately update DB to 'installing' so UI shows progress without waiting
-            if let AUTOINCREMENT::VALUE(id) = instance.id.clone() {
-                let _ = crate::commands::instances::update_installation_status(id, "installing");
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    instance_data.id,
+                    "installing",
+                );
             }
             // Emit an early update so UI homescreen refreshes as soon as installation starts
             use tauri::Emitter;
             let _ = app_handle.emit(
                 "core://instance-updated",
-                serde_json::json!({ "name": instance.name, "instance_id": instance.slug() }),
+                serde_json::json!({ "name": instance_data.name, "instance_id": instance_data.slug() }),
             );
 
             log::info!(
                 "[install_instance] Task submitted successfully for: {}",
-                instance.name
+                instance_data.name
             );
             Ok(())
         }
@@ -209,63 +207,33 @@ pub async fn install_instance(
 pub fn list_instances() -> Result<Vec<Instance>, String> {
     log::info!("Fetching all instances from database");
 
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    let mut stmt = conn
-        .prepare(&format!(
-            "SELECT id, name, minecraft_version, modloader, modloader_version, 
-                    java_path, java_args, game_directory, width, height, memory_mb, 
-                    icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
-                    installation_status, COALESCE(crashed, NULL) as crashed, COALESCE(crash_details, NULL) as crash_details
-             FROM {} ORDER BY last_played DESC, created_at DESC",
-            Instance::name()
-        ))
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-    let instances = stmt
-        .query_map([], |row| {
-            Ok(Instance {
-                id: AUTOINCREMENT::VALUE(row.get(0)?),
-                name: row.get(1)?,
-                minecraft_version: row.get(2)?,
-                modloader: row.get(3)?,
-                modloader_version: row.get(4)?,
-                java_path: row.get(5)?,
-                java_args: row.get(6)?,
-                game_directory: row.get(7)?,
-                width: row.get(8)?,
-                height: row.get(9)?,
-                memory_mb: row.get(10)?,
-                icon_path: row.get(11)?,
-                last_played: row.get(12)?,
-                total_playtime_minutes: row.get(13)?,
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
-                installation_status: row.get(16)?,
-                crashed: row.get(17)?,
-                crash_details: row.get(18)?,
-            })
-        })
-        .map_err(|e| format!("Failed to query instances: {}", e))?
-        .collect::<Result<Vec<Instance>, _>>()
-        .map_err(|e| format!("Failed to collect instances: {}", e))?;
+    let instances = instance
+        .order((last_played.desc(), created_at.desc()))
+        .load::<Instance>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
 
     log::info!("Retrieved {} instances", instances.len());
     Ok(instances)
 }
 
 #[tauri::command]
-pub fn create_instance(instance: Instance) -> Result<i32, String> {
+pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
     log::info!(
         "[create_instance] Command invoked for instance: {}",
-        instance.name
+        instance_data.name
     );
-    log::info!("[create_instance] Instance details - version: {}, modloader: {:?}, modloader_version: {:?}", 
-        instance.minecraft_version, instance.modloader, instance.modloader_version);
+    log::info!(
+        "[create_instance] Instance details - version: {}, modloader: {:?}, modloader_version: {:?}",
+        instance_data.minecraft_version,
+        instance_data.modloader,
+        instance_data.modloader_version
+    );
 
     log::info!("[create_instance] Getting database connection");
-    let db = get_data_db().map_err(|e| {
+    let mut conn = get_vesta_conn().map_err(|e| {
         log::error!("[create_instance] Failed to get database: {}", e);
         format!("Failed to get database: {}", e)
     })?;
@@ -273,7 +241,7 @@ pub fn create_instance(instance: Instance) -> Result<i32, String> {
     log::info!("[create_instance] Determining unique slug and game directory");
 
     // Make a mutable copy so we can set defaults (game_directory) before inserting
-    let mut instance = instance;
+    let mut inst = instance_data;
 
     // Determine config data dir (use nested data folder when available)
     let app_config_dir = crate::utils::db_manager::get_app_config_dir()
@@ -282,124 +250,95 @@ pub fn create_instance(instance: Instance) -> Result<i32, String> {
     let data_dir = app_config_dir.clone();
 
     // Compute a filesystem-safe slug and ensure uniqueness against existing instances
-    let mut slug = instance.slug();
 
     // Fetch existing instance names and compute their slugs
-    let conn = db.get_connection();
-    let mut stmt = conn
-        .prepare(&format!("SELECT name FROM {}", Instance::name()))
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-    let names_iter = stmt
-        .query_map([], |row| Ok::<String, _>(row.get(0)?))
+    let existing_names: Vec<String> = instance
+        .select(name)
+        .load::<String>(&mut conn)
         .map_err(|e| format!("Failed to query existing instance names: {}", e))?;
 
     let mut seen_names = std::collections::HashSet::new();
     let mut seen_slugs = std::collections::HashSet::new();
-    for r in names_iter {
-        if let Ok(existing_name) = r {
-            seen_names.insert(existing_name.to_lowercase());
-            seen_slugs.insert(crate::utils::sanitize::sanitize_instance_name(
-                &existing_name,
-            ));
-        }
+    for existing_name in existing_names {
+        seen_names.insert(existing_name.to_lowercase());
+        seen_slugs.insert(crate::utils::sanitize::sanitize_instance_name(
+            &existing_name,
+        ));
     }
 
     // Check for duplicate name (case-insensitive) and make it unique
-    instance.name = crate::utils::instance_helpers::compute_unique_name(
-        &instance.name,
-        &seen_names,
-    );
+    inst.name = crate::utils::instance_helpers::compute_unique_name(&inst.name, &seen_names);
 
     // Also ensure that the on-disk path doesn't already exist
     let instances_root = data_dir.join("instances");
 
     // Use shared helper to compute unique slug (in case the name change wasn't enough)
-    slug = crate::utils::instance_helpers::compute_unique_slug(
-        &instance.name,
+    let slug = crate::utils::instance_helpers::compute_unique_slug(
+        &inst.name,
         &seen_slugs,
         &instances_root,
     );
 
     // Always set the instance game_directory to the configured instances root
-    // using the computed instance id (slug). This ensures instances are stored
-    // under %APPDATA%/.VestaLauncher/instances/<instance_id> and prevents two
-    // instances that share other properties (like version) from mixing their
-    // data directories.
+    // using the computed instance id (slug).
     let gd = compute_instance_game_dir(&instances_root, &slug);
-    if instance.game_directory.is_some() {
+    if inst.game_directory.is_some() {
         log::info!(
             "[create_instance] Overriding supplied game_directory with instances root path: {}",
             gd
         );
     }
-    instance.game_directory = Some(gd);
+    inst.game_directory = Some(gd);
 
     log::info!("[create_instance] Inserting instance into database");
 
-    // Get connection
-    let conn = db.get_connection();
+    // Create NewInstance from Instance (excluding ID which works automatically)
+    let new_instance = NewInstance {
+        name: inst.name,
+        minecraft_version: inst.minecraft_version,
+        modloader: inst.modloader,
+        modloader_version: inst.modloader_version,
+        java_path: inst.java_path,
+        java_args: inst.java_args,
+        game_directory: inst.game_directory,
+        width: inst.width,
+        height: inst.height,
+        memory_mb: inst.memory_mb,
+        icon_path: inst.icon_path,
+        last_played: inst.last_played,
+        total_playtime_minutes: inst.total_playtime_minutes,
+        created_at: Some(chrono::Utc::now().to_rfc3339()),
+        updated_at: Some(chrono::Utc::now().to_rfc3339()),
+        installation_status: Some("ready".to_string()),
+        crashed: None,
+        crash_details: None,
+    };
 
-    // Log the actual schema of the instance table
-    let mut stmt = conn.prepare("PRAGMA table_info(instance)").map_err(|e| {
-        log::error!("[create_instance] Failed to get table info: {}", e);
-        format!("Failed to get table info: {}", e)
-    })?;
-    let columns: Vec<String> = stmt
-        .query_map([], |row| row.get::<_, String>(1))
-        .map_err(|e| format!("Failed to query table info: {}", e))?
-        .filter_map(Result::ok)
-        .collect();
-    log::info!("[create_instance] Instance table columns: {:?}", columns);
-
-    // Insert the instance using explicit column list
-    let result = conn.execute(
-        "INSERT INTO instance (name, minecraft_version, modloader, modloader_version, java_path, java_args, game_directory, width, height, memory_mb, icon_path, last_played, total_playtime_minutes, created_at, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, datetime('now'), datetime('now'))",
-        rusqlite::params![
-            instance.name,
-            instance.minecraft_version,
-            instance.modloader,
-            instance.modloader_version,
-            instance.java_path,
-            instance.java_args,
-            instance.game_directory,
-            instance.width,
-            instance.height,
-            instance.memory_mb,
-            instance.icon_path,
-            instance.last_played,
-            instance.total_playtime_minutes,
-        ],
-    );
-
-    match result {
-        Ok(_) => log::info!("[create_instance] Instance inserted successfully"),
-        Err(e) => {
+    diesel::insert_into(instance)
+        .values(&new_instance)
+        .execute(&mut conn)
+        .map_err(|e| {
             log::error!("[create_instance] Failed to insert instance: {}", e);
-            log::error!(
-                "[create_instance] Instance data: name={}, version={}, modloader={:?}",
-                instance.name,
-                instance.minecraft_version,
-                instance.modloader
-            );
-            return Err(format!("Failed to insert instance: {}", e));
-        }
-    }
+            format!("Failed to insert instance: {}", e)
+        })?;
 
-    // Get the last inserted row ID (we still persist in DB but return slug)
-    let conn = db.get_connection();
-    let id = conn.last_insert_rowid() as i32;
+    // Get the ID of the inserted row
+    let inserted_id: i32 = instance
+        .select(id)
+        .order(id.desc())
+        .first(&mut conn)
+        .map_err(|e| format!("Failed to get inserted instance ID: {}", e))?;
 
     // Set initial installation_status to "pending"
-    let _ = crate::commands::instances::update_installation_status(id, "pending");
+    let _ = crate::commands::instances::update_installation_status(inserted_id, "pending");
 
     log::info!(
         "[create_instance] Instance created successfully with ID: {} and slug: {}",
-        id,
+        inserted_id,
         slug
     );
 
-    Ok(id)
+    Ok(inserted_id)
 }
 
 #[cfg(test)]
@@ -417,42 +356,36 @@ mod tests {
 }
 
 #[tauri::command]
-pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Result<(), String> {
-    log::info!("[update_instance] Updating instance: {:?}", instance.id);
+pub fn update_instance(
+    app_handle: tauri::AppHandle,
+    instance_data: Instance,
+) -> Result<(), String> {
+    log::info!(
+        "[update_instance] Updating instance: {:?}",
+        instance_data.id
+    );
 
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    // Extract the ID
-    let id = match instance.id {
-        AUTOINCREMENT::VALUE(id) => id,
-        AUTOINCREMENT::INIT => {
-            return Err("Cannot update instance with uninitialized ID".to_string())
-        }
-    };
+    let update_id = instance_data.id;
+    if update_id <= 0 {
+        return Err("Cannot update instance with uninitialized ID".to_string());
+    }
 
     // Fetch the existing row so we can detect name changes and old game_directory
-    let existing_row = conn
-        .query_row(
-            &format!(
-                "SELECT name, game_directory FROM {} WHERE id = ?1",
-                Instance::name()
-            ),
-            rusqlite::params![id],
-            |row| {
-                Ok((
-                    row.get::<usize, String>(0)?,
-                    row.get::<usize, Option<String>>(1)?,
-                ))
-            },
-        )
+    let existing_row: (String, Option<String>) = instance
+        .find(update_id)
+        .select((name, game_directory))
+        .first(&mut conn)
         .map_err(|e| format!("Failed to query existing instance: {}", e))?;
 
     let old_name = existing_row.0;
-    let _old_game_dir = existing_row.1;
 
     let old_slug = crate::utils::sanitize::sanitize_instance_name(&old_name);
-    let mut new_slug = instance.slug();
+    let mut new_slug = instance_data.slug();
+
+    let mut final_instance = instance_data.clone();
 
     // If slug changes, compute unique slug against other instances and filesystem
     if old_slug != new_slug {
@@ -461,31 +394,21 @@ pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Resu
         let instances_root = app_config_dir.join("instances");
 
         // Build set of seen slugs excluding current row
-        let mut stmt = conn
-            .prepare(&format!("SELECT id, name FROM {}", Instance::name()))
-            .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-        let rows = stmt
-            .query_map([], |row| Ok::<(i32, String), _>((row.get(0)?, row.get(1)?)))
+        let existing_instances: Vec<(i32, String)> = instance
+            .select((id, name))
+            .load(&mut conn)
             .map_err(|e| format!("Failed to query existing instances: {}", e))?;
 
         let mut seen = std::collections::HashSet::new();
-        for r in rows {
-            if let Ok((rid, rname)) = r {
-                if rid != id {
-                    seen.insert(crate::utils::sanitize::sanitize_instance_name(&rname));
-                }
+        for (rid, rname) in existing_instances {
+            if rid != update_id {
+                seen.insert(crate::utils::sanitize::sanitize_instance_name(&rname));
             }
         }
 
-        // stmt holds non-Send references to the DB connection; drop it so
-        // it doesn't remain alive across later await points (we must not hold non-Send
-        // types while awaiting async registry ops)
-        drop(stmt);
-
         // Avoid filesystem collisions using shared helper
         new_slug = crate::utils::instance_helpers::compute_unique_slug(
-            &instance.name,
+            &final_instance.name,
             &seen,
             &instances_root,
         );
@@ -496,7 +419,6 @@ pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Resu
 
         if old_dir.exists() {
             if let Err(e) = std::fs::rename(&old_dir, &new_dir) {
-                // If rename fails, try to create the new directory and continue
                 log::warn!(
                     "[update_instance] Failed to rename instance dir: {} -> {} : {}",
                     old_dir.display(),
@@ -515,12 +437,10 @@ pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Resu
         }
 
         // Update the instance.game_directory to the canonical instances root
-        // path based on the updated slug. We always enforce the app's instance
-        // folder layout so instances remain isolated and predictable.
         let new_game_dir = compute_instance_game_dir(&instances_root, &new_slug);
-        let updated_game_dir = Some(new_game_dir.clone());
+        final_instance.game_directory = Some(new_game_dir);
 
-        // Move log file if exists (done here so we do file ops before any await)
+        // Move log file if exists
         let app_config_dir = crate::utils::db_manager::get_app_config_dir()
             .map_err(|e| format!("Failed to get app config dir: {}", e))?;
         let old_log = app_config_dir
@@ -531,299 +451,161 @@ pub fn update_instance(app_handle: tauri::AppHandle, instance: Instance) -> Resu
             .join("data")
             .join("logs")
             .join(format!("{}.log", new_slug));
+
         if old_log.exists() {
             if let Err(e) = std::fs::rename(&old_log, &new_log) {
-                log::warn!(
-                    "[update_instance] Failed to move log file: {} -> {} : {}",
-                    old_log.display(),
-                    new_log.display(),
-                    e
-                );
+                log::warn!("[update_instance] Failed to move log file: {}", e);
             }
         }
 
-        // Register updated GameInstance will happen after DB update (so no non-Send DB types live across await)
+        // Need to update registry if running associated with old slug
+        // logic moved to background task to avoid blocking db connection
+        let old_slug_clone = old_slug.clone();
+        let new_slug_clone = new_slug.clone();
+        let logpath = new_log.clone();
+        let dirpath = final_instance.game_directory.clone().unwrap_or_default();
 
-        // Overwrite instance.game_directory with updated value
-        let mut instance = instance;
-        instance.game_directory = updated_game_dir;
-        // write this modified instance back into DB in the update below
-
-        // Set instance name to stay as provided (we will still update DB)
-        // Use new_slug from here
-
-        // Proceed to update DB with new game_directory (we'll commit once below)
-
-        // Commit DB update before doing registry (no DB handles will remain across awaits)
-        conn.execute(
-            &format!(
-                "UPDATE {} SET name = ?1, minecraft_version = ?2, modloader = ?3, 
-                        modloader_version = ?4, java_path = ?5, java_args = ?6, 
-                        game_directory = ?7, width = ?8, height = ?9, memory_mb = ?10, 
-                        icon_path = ?11, last_played = ?12, total_playtime_minutes = ?13, 
-                        updated_at = datetime('now') 
-                 WHERE id = ?14",
-                Instance::name()
-            ),
-            rusqlite::params![
-                instance.name,
-                instance.minecraft_version,
-                instance.modloader,
-                instance.modloader_version,
-                instance.java_path,
-                instance.java_args,
-                instance.game_directory,
-                instance.width,
-                instance.height,
-                instance.memory_mb,
-                instance.icon_path,
-                instance.last_played,
-                instance.total_playtime_minutes,
-                id,
-            ],
-        )
-        .map_err(|e| format!("Failed to update instance after rename: {}", e))?;
+        tauri::async_runtime::spawn(async move {
+            if let Ok(Some(running)) =
+                piston_lib::game::launcher::get_instance(&old_slug_clone).await
+            {
+                log::info!("[update_instance] Instance currently running; updating registry id from {} to {}", old_slug_clone, new_slug_clone);
+                if let Err(e) =
+                    piston_lib::game::launcher::unregister_instance(&old_slug_clone).await
+                {
+                    log::warn!("Failed to unregister: {}", e);
+                }
+                let mut updated = running.clone();
+                updated.instance_id = new_slug_clone;
+                updated.game_dir = std::path::PathBuf::from(dirpath);
+                updated.log_file = logpath;
+                if let Err(e) = piston_lib::game::launcher::register_instance(updated).await {
+                    log::warn!("Failed to re-register: {}", e);
+                }
+            }
+        });
 
         log::info!(
             "[update_instance] Renamed/updated instance id from {} -> {}",
             old_slug,
             new_slug
         );
+    }
 
-        // Now that DB work is done (no non-Send types are live), update the running registry if needed
-        // Spawn an async task to update the registry so we don't hold non-Send DB objects across awaits
-        let old = old_slug.clone();
-        let new = new_slug.clone();
-        let logpath = new_log.clone();
-        let dirpath = instance.game_directory.clone().unwrap_or_default();
+    // Perform Update
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-        tauri::async_runtime::spawn(async move {
-            if let Ok(Some(running)) = piston_lib::game::launcher::get_instance(&old).await {
-                log::info!("[update_instance] Instance currently running; updating registry id from {} to {}", old, new);
-                if let Err(e) = piston_lib::game::launcher::unregister_instance(&old).await {
-                    log::warn!(
-                        "[update_instance] Failed to unregister old running instance {}: {}",
-                        old,
-                        e
-                    );
-                }
-
-                // Register updated GameInstance
-                let mut updated = running.clone();
-                updated.instance_id = new.clone();
-                updated.game_dir = std::path::PathBuf::from(dirpath);
-                updated.log_file = logpath;
-
-                if let Err(e) = piston_lib::game::launcher::register_instance(updated).await {
-                    log::warn!(
-                        "[update_instance] Failed to register new running instance {}: {}",
-                        new,
-                        e
-                    );
-                }
-            }
-        });
-
-        // Notify frontend so UI can refresh lists and react to updates
-        use tauri::Emitter;
-        let _ = app_handle.emit(
-            "core://instance-updated",
-            serde_json::json!({ "instance_id": id }),
-        );
-
-        Ok(())
-    } else {
-        // Slug did not change; perform a normal update
-        conn.execute(
-            &format!(
-                "UPDATE {} SET name = ?1, minecraft_version = ?2, modloader = ?3, 
-                    modloader_version = ?4, java_path = ?5, java_args = ?6, 
-                    game_directory = ?7, width = ?8, height = ?9, memory_mb = ?10, 
-                    icon_path = ?11, last_played = ?12, total_playtime_minutes = ?13, 
-                    updated_at = datetime('now') 
-             WHERE id = ?14",
-                Instance::name()
-            ),
-            rusqlite::params![
-                instance.name,
-                instance.minecraft_version,
-                instance.modloader,
-                instance.modloader_version,
-                instance.java_path,
-                instance.java_args,
-                instance.game_directory,
-                instance.width,
-                instance.height,
-                instance.memory_mb,
-                instance.icon_path,
-                instance.last_played,
-                instance.total_playtime_minutes,
-                id,
-            ],
-        )
+    diesel::update(instance.find(update_id))
+        .set((
+            name.eq(&final_instance.name),
+            minecraft_version.eq(&final_instance.minecraft_version),
+            modloader.eq(&final_instance.modloader),
+            modloader_version.eq(&final_instance.modloader_version),
+            java_path.eq(&final_instance.java_path),
+            java_args.eq(&final_instance.java_args),
+            game_directory.eq(&final_instance.game_directory),
+            width.eq(final_instance.width),
+            height.eq(final_instance.height),
+            memory_mb.eq(final_instance.memory_mb),
+            icon_path.eq(&final_instance.icon_path),
+            last_played.eq(&final_instance.last_played),
+            total_playtime_minutes.eq(final_instance.total_playtime_minutes),
+            updated_at.eq(&now),
+        ))
+        .execute(&mut conn)
         .map_err(|e| format!("Failed to update instance: {}", e))?;
 
-        log::info!("Updated instance ID: {}", id);
+    log::info!("Updated instance ID: {}", update_id);
 
-        // Notify frontend so UI can refresh lists and react to updates
-        use tauri::Emitter;
-        let _ = app_handle.emit(
-            "core://instance-updated",
-            serde_json::json!({ "instance_id": id }),
-        );
-
-        Ok(())
-    }
-}
-
-#[tauri::command]
-pub fn delete_instance(app_handle: tauri::AppHandle, id: i32) -> Result<(), String> {
-    log::info!("Deleting instance ID: {}", id);
-
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-
-    conn.execute(
-        &format!("DELETE FROM {} WHERE id = ?1", Instance::name()),
-        rusqlite::params![id],
-    )
-    .map_err(|e| format!("Failed to delete instance: {}", e))?;
-
-    log::info!("Deleted instance ID: {}", id);
-
-    // Notify frontend so UI can refresh lists and react to deletion
+    // Notify frontend
     use tauri::Emitter;
     let _ = app_handle.emit(
         "core://instance-updated",
-        serde_json::json!({ "instance_id": id }),
+        serde_json::json!({ "instance_id": update_id }),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn delete_instance(app_handle: tauri::AppHandle, instance_id: i32) -> Result<(), String> {
+    log::info!("Deleting instance ID: {}", instance_id);
+
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    diesel::delete(instance.find(instance_id))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to delete instance: {}", e))?;
+
+    log::info!("Deleted instance ID: {}", instance_id);
+
+    // Notify frontend
+    use tauri::Emitter;
+    let _ = app_handle.emit(
+        "core://instance-updated",
+        serde_json::json!({ "instance_id": instance_id }),
     );
     Ok(())
 }
 
 #[tauri::command]
-pub fn get_instance(id: i32) -> Result<Instance, String> {
-    log::info!("Fetching instance ID: {}", id);
+pub fn get_instance(instance_id: i32) -> Result<Instance, String> {
+    log::info!("Fetching instance ID: {}", instance_id);
 
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    let instance = conn
-        .query_row(
-            &format!(
-                "SELECT id, name, minecraft_version, modloader, modloader_version, 
-                        java_path, java_args, game_directory, width, height, memory_mb, 
-                        icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
-                        installation_status, COALESCE(crashed, NULL) as crashed, COALESCE(crash_details, NULL) as crash_details 
-                 FROM {} WHERE id = ?1",
-                Instance::name()
-            ),
-            rusqlite::params![id],
-            |row| {
-                Ok(Instance {
-                    id: AUTOINCREMENT::VALUE(row.get(0)?),
-                    name: row.get(1)?,
-                    minecraft_version: row.get(2)?,
-                    modloader: row.get(3)?,
-                    modloader_version: row.get(4)?,
-                    java_path: row.get(5)?,
-                    java_args: row.get(6)?,
-                    game_directory: row.get(7)?,
-                    width: row.get(8)?,
-                    height: row.get(9)?,
-                    memory_mb: row.get(10)?,
-                    icon_path: row.get(11)?,
-                    last_played: row.get(12)?,
-                    total_playtime_minutes: row.get(13)?,
-                    created_at: row.get(14)?,
-                    updated_at: row.get(15)?,
-                    installation_status: row.get(16)?,
-                    crashed: row.get(17)?,
-                    crash_details: row.get(18)?,
-                })
-            },
-        )
+    let fetched_instance = instance
+        .find(instance_id)
+        .first::<Instance>(&mut conn)
         .map_err(|e| format!("Failed to fetch instance: {}", e))?;
 
-    log::info!("Retrieved instance: {}", instance.name);
-    Ok(instance)
+    log::info!("Retrieved instance: {}", fetched_instance.name);
+    Ok(fetched_instance)
 }
 
 #[tauri::command]
-pub fn get_instance_by_slug(slug: String) -> Result<Instance, String> {
-    log::info!("Fetching instance by slug: {}", slug);
+pub fn get_instance_by_slug(slug_val: String) -> Result<Instance, String> {
+    log::info!("Fetching instance by slug: {}", slug_val);
 
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    // Fetch all instances and find the one with matching slug
-    let mut stmt = conn
-        .prepare(&format!(
-            "SELECT id, name, minecraft_version, modloader, modloader_version, 
-                    java_path, java_args, game_directory, width, height, memory_mb, 
-                    icon_path, last_played, total_playtime_minutes, created_at, updated_at, 
-                    installation_status, COALESCE(crashed, NULL) as crashed, COALESCE(crash_details, NULL) as crash_details 
-             FROM {}",
-            Instance::name()
-        ))
-        .map_err(|e| format!("Failed to prepare statement: {}", e))?;
-
-    let instances = stmt
-        .query_map([], |row| {
-            Ok(Instance {
-                id: AUTOINCREMENT::VALUE(row.get(0)?),
-                name: row.get(1)?,
-                minecraft_version: row.get(2)?,
-                modloader: row.get(3)?,
-                modloader_version: row.get(4)?,
-                java_path: row.get(5)?,
-                java_args: row.get(6)?,
-                game_directory: row.get(7)?,
-                width: row.get(8)?,
-                height: row.get(9)?,
-                memory_mb: row.get(10)?,
-                icon_path: row.get(11)?,
-                last_played: row.get(12)?,
-                total_playtime_minutes: row.get(13)?,
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
-                installation_status: row.get(16)?,
-                crashed: row.get(17)?,
-                crash_details: row.get(18)?,
-            })
-        })
+    // Inefficient but compatible: fetch all and matching slug
+    let instances_list = instance
+        .load::<Instance>(&mut conn)
         .map_err(|e| format!("Failed to query instances: {}", e))?;
 
-    for inst_result in instances {
-        if let Ok(inst) = inst_result {
-            if inst.slug() == slug {
-                log::info!("Found instance by slug {}: {}", slug, inst.name);
-                return Ok(inst);
-            }
+    for inst in instances_list {
+        if inst.slug() == slug_val {
+            log::info!("Found instance by slug {}: {}", slug_val, inst.name);
+            return Ok(inst);
         }
     }
 
-    Err(format!("Instance with slug '{}' not found", slug))
+    Err(format!("Instance with slug '{}' not found", slug_val))
 }
 
 #[tauri::command]
 pub async fn launch_instance(
     app_handle: tauri::AppHandle,
-    instance: Instance,
+    instance_data: Instance,
 ) -> Result<(), String> {
     log::info!(
         "[launch_instance] Launch requested for instance: {}",
-        instance.name
+        instance_data.name
     );
 
     // Derive a filesystem-safe runtime instance id (slug) from the instance name
-    let instance_id = instance.slug();
+    let instance_id = instance_data.slug();
 
     // Get app config directory
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
     // Determine Java path
-    let java_path = instance.java_path.clone().unwrap_or_else(|| {
+    let java_path_str = instance_data.java_path.clone().unwrap_or_else(|| {
         // Try to find java in PATH
         #[cfg(windows)]
         let default_java = "java.exe";
@@ -836,24 +618,16 @@ pub async fn launch_instance(
             .unwrap_or_else(|| default_java.to_string())
     });
 
-    // Determine which data_dir to use for launch artifacts. Historically the installer
-    // used <config>/data as the root for 'versions', 'libraries', 'assets' etc while
-    // some code paths used the config root directly. Prefer <config>/data if it exists.
+    // Determine which data_dir to use
     let spec_data_dir = if data_dir.join("data").exists() {
-        let p = data_dir.join("data");
-        log::debug!("Using nested data directory for launch spec: {:?}", p);
-        p
+        data_dir.join("data")
     } else {
-        log::debug!(
-            "Using root config directory for launch spec: {:?}",
-            data_dir
-        );
         data_dir.clone()
     };
 
-    // Derive game directory from the app config root instances folder e.g., %APPDATA%/.VestaLauncher/instances/<slug>
+    // Derive game directory
     let instances_root = data_dir.join("instances");
-    let game_dir = instance.game_directory.clone().unwrap_or_else(|| {
+    let game_dir = instance_data.game_directory.clone().unwrap_or_else(|| {
         instances_root
             .join(&instance_id)
             .to_string_lossy()
@@ -861,53 +635,37 @@ pub async fn launch_instance(
     });
 
     // Parse modloader type
-    let modloader = instance
+    let modloader_type = instance_data
         .modloader
         .as_ref()
         .and_then(|m| m.parse::<piston_lib::game::ModloaderType>().ok());
 
-    // Attempt to read the current active account from the DB. If present
-    // ensure tokens are valid (refresh them if needed) and use the account's username/uuid/access_token; otherwise fall back to
-    // safe defaults so launch still proceeds.
+    // Attempt to read the current active account
     let mut active_account = match crate::auth::get_active_account() {
         Ok(Some(acc)) => Some(acc),
         Ok(None) => None,
         Err(e) => {
-            // Non-fatal: log and continue with defaults
             log::warn!("[launch_instance] Failed to read active account: {}", e);
             None
         }
     };
 
-    // If we have an active account, ensure token validity which may refresh tokens
+    // If we have an active account, ensure token validity
     if let Some(acc) = active_account.clone() {
         if let Err(e) = crate::auth::ensure_account_tokens_valid(acc.uuid.clone()).await {
-            log::error!(
-                "[launch_instance] Failed to ensure account tokens valid for {}: {}",
-                acc.uuid,
-                e
-            );
+            log::error!("[launch_instance] Failed to refresh token: {}", e);
             return Err(format!("Failed to refresh authentication: {}", e));
         }
 
-        // Re-fetch the active account after potential refresh
+        // Re-fetch
         active_account = match crate::auth::get_active_account() {
             Ok(Some(acc)) => Some(acc),
             Ok(None) => None,
-            Err(e) => {
-                log::warn!(
-                    "[launch_instance] Failed to read active account after refresh: {}",
-                    e
-                );
-                None
-            }
+            Err(_) => None,
         };
     }
 
     // Build launch spec
-    // Resolve exit handler JAR from bundled resources (if available)
-    // In production: resources are bundled alongside the binary
-    // In dev mode: use the source path directly
     let exit_handler_jar = app_handle
         .path()
         .resource_dir()
@@ -915,41 +673,36 @@ pub async fn launch_instance(
         .map(|dir| dir.join("exit-handler.jar"))
         .filter(|p| p.exists())
         .or_else(|| {
-            // Dev mode fallback: check the source directory
-            let dev_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
                 .parent() // src-tauri -> vesta-launcher
-                .map(|p| p.join("resources").join("exit-handler").join("exit-handler.jar"))
-                .filter(|p| p.exists());
-            if dev_path.is_some() {
-                log::info!("[launch_instance] Using dev mode exit handler JAR path");
-            }
-            dev_path
+                .map(|p| {
+                    p.join("resources")
+                        .join("exit-handler")
+                        .join("exit-handler.jar")
+                })
+                .filter(|p| p.exists())
         });
-    
-    if exit_handler_jar.is_some() {
-        log::info!("[launch_instance] Using exit handler JAR: {:?}", exit_handler_jar);
-    } else {
-        log::warn!("[launch_instance] Exit handler JAR not found in resources, playtime tracking will be limited");
-    }
 
     // Determine log file path
-    let log_file = spec_data_dir.join("logs").join(format!("{}.log", instance_id));
-    
+    let log_file = spec_data_dir
+        .join("logs")
+        .join(format!("{}.log", instance_id));
+
     let spec = piston_lib::game::launcher::LaunchSpec {
         instance_id: instance_id.clone(),
-        version_id: instance.minecraft_version.clone(),
-        modloader,
-        modloader_version: instance.modloader_version.clone(),
+        version_id: instance_data.minecraft_version.clone(),
+        modloader: modloader_type,
+        modloader_version: instance_data.modloader_version.clone(),
         data_dir: spec_data_dir.clone(),
         game_dir: std::path::PathBuf::from(&game_dir),
-        java_path: std::path::PathBuf::from(&java_path),
+        java_path: std::path::PathBuf::from(&java_path_str),
         username: active_account
             .as_ref()
-            .and_then(|a| Some(a.username.clone()))
+            .map(|a| a.username.clone())
             .unwrap_or_else(|| "Player".to_string()),
         uuid: active_account
             .as_ref()
-            .and_then(|a| Some(a.uuid.clone()))
+            .map(|a| a.uuid.clone())
             .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string()),
         access_token: active_account
             .as_ref()
@@ -957,42 +710,29 @@ pub async fn launch_instance(
             .unwrap_or_else(|| "0".to_string()),
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
-        jvm_args: instance
+        jvm_args: instance_data
             .java_args
             .map(|args| args.split_whitespace().map(|s| s.to_string()).collect())
             .unwrap_or_default(),
         game_args: vec![],
-        window_width: Some(instance.width as u32),
-        window_height: Some(instance.height as u32),
+        window_width: Some(instance_data.width as u32),
+        window_height: Some(instance_data.height as u32),
         exit_handler_jar,
         log_file: Some(log_file),
     };
 
-    // Launch the game
     log::info!(
-        "[launch_instance] Launching game with spec: instance_id={}, version={}",
+        "[launch_instance] Launching game: {} {}",
         spec.instance_id,
         spec.version_id
     );
 
-    // Emit an explicit start log before the blocking hand-off so tauri logs
-    // clearly show the intent to start a launch operation.
-    log::info!(
-        "[launch_instance] Starting blocking launch task for instance: {}",
-        spec.instance_id
-    );
-
-    // Pre-check: ensure the version manifest exists. If it doesn't, return a clear error so the
-    // frontend can prompt the user to install the version instead of attempting to launch.
-    // Prefer loader-installed manifest if present, otherwise fall back to
-    // vanilla manifest. This supports installed ids like
-    // "fabric-loader-0.38.2-1.20.1" living in their own folder.
+    // Verify manifest exists
     let installed_id = spec.installed_version_id();
     let installed_manifest = spec
         .versions_dir()
         .join(&installed_id)
         .join(format!("{}.json", installed_id));
-
     let vanilla_manifest = spec
         .versions_dir()
         .join(&spec.version_id)
@@ -1005,108 +745,40 @@ pub async fn launch_instance(
     };
 
     if !manifest_path.exists() {
-        // Provide more diagnostics: report the directory contents so we can see what actually exists.
-        let version_dir = spec.versions_dir().join(&spec.version_id);
-        let mut listing = vec![];
-        match std::fs::read_dir(&version_dir) {
-            Ok(rd) => {
-                for entry in rd.flatten() {
-                    if let Ok(fname) = entry.file_name().into_string() {
-                        listing.push(fname);
-                    }
-                }
-            }
-            Err(e) => {
-                listing.push(format!("<read_dir_error: {}>", e));
-            }
-        }
-
-        let listing_str = listing.join(", ");
-        log::error!(
-            "[launch_instance] Version manifest missing for {}: {:?} — dir {:?} contents: {}",
-            spec.version_id,
-            manifest_path,
-            version_dir,
-            listing_str
-        );
-
-        // As a final attempt, include std::fs::metadata error (if any) for the file itself
-        match std::fs::metadata(&manifest_path) {
-            Ok(meta) => {
-                if meta.is_file() {
-                    log::warn!(
-                        "[launch_instance] Manifest metadata says file exists but Path::exists() was false: {:?} (len={})",
-                        manifest_path,
-                        meta.len()
-                    );
-                } else {
-                    log::warn!(
-                        "[launch_instance] Manifest path exists but is not a file: {:?}",
-                        manifest_path
-                    );
-                }
-            }
-            Err(e) => {
-                log::error!(
-                    "[launch_instance] Could not read metadata for manifest path {:?}: {}",
-                    manifest_path,
-                    e
-                );
-            }
-        }
-
         return Err(format!(
-            "Version {} is not installed (missing manifest: {:?})",
-            spec.version_id, manifest_path
+            "Version {} is not installed (missing manifest)",
+            spec.version_id
         ));
     }
 
-    // Create a log callback that batches and emits events to the frontend
-    // We use a channel-based approach to batch log lines and emit them periodically
-    
-    // Create a channel for log lines - we'll batch them and emit periodically
+    // Log batching setup
     let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String, String)>();
-    
-    // Spawn a task to batch and emit log events every 50ms
     let app_for_batcher = app_handle.clone();
     tokio::spawn(async move {
         use tauri::Emitter;
         let mut batch: Vec<serde_json::Value> = Vec::new();
         let mut interval = tokio::time::interval(std::time::Duration::from_millis(50));
-        
+
         loop {
             tokio::select! {
                 _ = interval.tick() => {
-                    // Emit batched lines if any
                     if !batch.is_empty() {
-                        let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({
-                            "lines": batch.clone()
-                        }));
-                        batch.clear();
+                         let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({ "lines": batch.clone() }));
+                         batch.clear();
                     }
                 }
                 msg = log_rx.recv() => {
                     match msg {
-                        Some((instance_id, line, stream)) => {
-                            batch.push(serde_json::json!({
-                                "instance_id": instance_id,
-                                "line": line,
-                                "stream": stream
-                            }));
-                            // Also emit immediately if batch gets large
+                        Some((iid, line, stream)) => {
+                            batch.push(serde_json::json!({ "instance_id": iid, "line": line, "stream": stream }));
                             if batch.len() >= 50 {
-                                let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({
-                                    "lines": batch.clone()
-                                }));
+                                let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({ "lines": batch.clone() }));
                                 batch.clear();
                             }
                         }
                         None => {
-                            // Channel closed, emit remaining and exit
                             if !batch.is_empty() {
-                                let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({
-                                    "lines": batch
-                                }));
+                                let _ = app_for_batcher.emit("core://instance-log", serde_json::json!({ "lines": batch }));
                             }
                             break;
                         }
@@ -1115,41 +787,28 @@ pub async fn launch_instance(
             }
         }
     });
-    
-    // Create the callback that sends to the channel
-    let log_callback: piston_lib::game::launcher::LogCallback = Arc::new(move |instance_id, line, stream| {
-        let _ = log_tx.send((instance_id, line, stream));
-    });
 
-    // piston_lib::game::launcher::launch_game performs blocking / non-Send work
-    // (uses non-Send readers internally). Tauri requires command futures to be
-    // Send so run that work inside a blocking thread and await the JoinHandle.
+    let log_callback: piston_lib::game::launcher::LogCallback =
+        Arc::new(move |iid, line, stream| {
+            let _ = log_tx.send((iid, line, stream));
+        });
+
     let join = tokio::task::spawn_blocking(move || {
-        // Execute the async launch on the blocking thread synchronously.
-        futures::executor::block_on(piston_lib::game::launcher::launch_game(spec, Some(log_callback)))
+        futures::executor::block_on(piston_lib::game::launcher::launch_game(
+            spec,
+            Some(log_callback),
+        ))
     })
     .await
     .map_err(|e| format!("Failed to spawn blocking task: {}", e))?;
 
-    // Blocking task finished; we now have the launch result (success or error)
-    log::info!(
-        "[launch_instance] Blocking launch task completed for instance: {}",
-        instance_id
-    );
-
     match join {
         Ok(result) => {
-            log::info!(
-                "[launch_instance] Game launched successfully, PID: {}",
-                result.instance.pid
-            );
-            
-            // Clear crashed flag when game successfully launches
+            log::info!("[launch_instance] Started PID: {}", result.instance.pid);
             if let Err(e) = clear_crash_flag(&instance_id) {
-                log::error!("[launch_instance] Failed to clear crash flag: {}", e);
+                log::error!("Failed to clear crash flag: {}", e);
             }
 
-            // Persist the running process state for re-attachment if app closes
             let run_state = crate::utils::process_state::InstanceRunState {
                 instance_id: instance_id.clone(),
                 pid: result.instance.pid,
@@ -1161,73 +820,71 @@ pub async fn launch_instance(
             };
 
             if let Err(e) = crate::utils::process_state::add_running_process(run_state.clone()) {
-                log::warn!("[launch_instance] Failed to persist process state: {}", e);
+                log::warn!("Failed to persist process state: {}", e);
             }
 
-            // Emit success event
             use tauri::Emitter;
             let _ = app_handle.emit(
                 "core://instance-launched",
-                serde_json::json!({
-                    "instance_id": instance_id,
-                    "name": instance.name,
-                    "pid": result.instance.pid
-                }),
+                serde_json::json!({ "instance_id": instance_id, "name": instance_data.name, "pid": result.instance.pid }),
             );
 
-            // Spawn a background task to monitor for process exit and emit event
+            // Monitor process
             let app_handle_monitor = app_handle.clone();
             let instance_id_monitor = instance_id.clone();
             let pid_monitor = result.instance.pid;
             let started_at_monitor = result.instance.started_at.to_rfc3339();
             let game_dir_monitor = result.instance.game_dir.clone();
-            
+
             tokio::spawn(async move {
                 use sysinfo::System;
                 let mut sys = System::new_all();
-                
-                // Store launch time for crash detection
                 let launch_time = std::time::SystemTime::now();
-                
-                // Poll every 2 seconds to check if process is still running
+
                 loop {
                     tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    
                     sys.refresh_all();
-                    
                     if sys.process(sysinfo::Pid::from_u32(pid_monitor)).is_none() {
-                        log::info!(
-                            "[launch_instance] Process {} (PID {}) has exited, updating playtime",
-                            instance_id_monitor, pid_monitor
-                        );
-                        
-                        // Check for exit_status.json for accurate exit time and exit code
-                        let exit_status_path = game_dir_monitor.join(".vesta").join("exit_status.json");
-                        let (exited_at, exit_code) = if exit_status_path.exists() {
-                            match std::fs::read_to_string(&exit_status_path) {
-                                Ok(content) => {
-                                    if let Ok(status) = serde_json::from_str::<serde_json::Value>(&content) {
-                                        let exited = status.get("exited_at")
-                                            .and_then(|v| v.as_str())
-                                            .map(|s| s.to_string())
-                                            .unwrap_or_else(|| chrono::Utc::now().to_rfc3339());
-                                        let code = status.get("exit_code")
-                                            .and_then(|v| v.as_i64())
-                                            .map(|c| c as i32)
-                                            .unwrap_or(0);
-                                        (exited, code)
-                                    } else {
-                                        (chrono::Utc::now().to_rfc3339(), 0)
-                                    }
+                        log::info!("Process exited");
+
+                        // Check exit status
+                        let exit_status_path =
+                            game_dir_monitor.join(".vesta").join("exit_status.json");
+                        let (exited_at_ts, exit_code) = if exit_status_path.exists() {
+                            // Simplified read logic
+                            if let Ok(content) = std::fs::read_to_string(&exit_status_path) {
+                                if let Ok(status) =
+                                    serde_json::from_str::<serde_json::Value>(&content)
+                                {
+                                    let ex = status
+                                        .get("exited_at")
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let code = status
+                                        .get("exit_code")
+                                        .and_then(|v| v.as_i64())
+                                        .unwrap_or(0)
+                                        as i32;
+                                    (
+                                        if ex.is_empty() {
+                                            chrono::Utc::now().to_rfc3339()
+                                        } else {
+                                            ex
+                                        },
+                                        code,
+                                    )
+                                } else {
+                                    (chrono::Utc::now().to_rfc3339(), 0)
                                 }
-                                Err(_) => (chrono::Utc::now().to_rfc3339(), 0)
+                            } else {
+                                (chrono::Utc::now().to_rfc3339(), 0)
                             }
                         } else {
                             (chrono::Utc::now().to_rfc3339(), 0)
                         };
-                        
-                        // Check for crashes if exit code is non-zero
-                        let mut crashed = false;
+
+                        let mut is_crashed = false;
                         if exit_code != 0 {
                             let log_file = game_dir_monitor.join("logs").join("latest.log");
                             if let Some(crash_info) = crate::utils::crash_parser::detect_crash(
@@ -1235,64 +892,43 @@ pub async fn launch_instance(
                                 &log_file,
                                 launch_time,
                             ) {
-                                log::error!(
-                                    "[launch_instance] Crash detected for {}: {:?}",
-                                    instance_id_monitor, crash_info
-                                );
-                                
-                                // Store crash details in database
-                                if let Err(e) = store_crash_details(
-                                    &instance_id_monitor,
-                                    &crash_info,
-                                ) {
-                                    log::error!("[launch_instance] Failed to store crash details: {}", e);
-                                } else {
-                                    crashed = true;
+                                if let Err(e) =
+                                    store_crash_details(&instance_id_monitor, &crash_info)
+                                {
+                                    log::error!("Failed to store crash: {}", e);
                                 }
-                                
-                                // Emit crash event to frontend
-                                let _ = app_handle_monitor.emit(
-                                    "core://instance-crashed",
-                                    serde_json::json!({
-                                        "instance_id": instance_id_monitor,
-                                        "crash_type": crash_info.crash_type,
-                                        "message": crash_info.message,
-                                        "report_path": crash_info.report_path,
-                                        "timestamp": crash_info.timestamp,
-                                    }),
-                                );
+                                is_crashed = true;
                             }
                         }
-                        
+
                         // Update playtime in database (only if not crashed)
-                        if !crashed {
-                            if let Err(e) = update_instance_playtime_internal(
+                        if !is_crashed {
+                            if let Err(e) = update_instance_playtime(
                                 &instance_id_monitor,
                                 &started_at_monitor,
-                                &exited_at,
+                                &exited_at_ts,
                             ) {
-                                log::error!("[launch_instance] Failed to update playtime: {}", e);
+                                log::error!(
+                                    "Failed to update playtime for {}: {}",
+                                    instance_id_monitor,
+                                    e
+                                );
                             }
                         }
-                        
-                        // Clean up exit status file
-                        if exit_status_path.exists() {
-                            let _ = std::fs::remove_file(&exit_status_path);
+
+                        // Remove from running processes
+                        if let Err(e) = crate::utils::process_state::remove_running_process(
+                            &instance_id_monitor,
+                        ) {
+                            log::error!("Failed to remove running process: {}", e);
                         }
-                        
-                        // Remove from persisted running processes
-                        let _ = crate::utils::process_state::remove_running_process(&instance_id_monitor);
-                        
-                        // Emit exit event
-                        let _ = app_handle_monitor.emit(
-                            "core://instance-exited",
-                            serde_json::json!({
-                                "instance_id": instance_id_monitor,
-                                "pid": pid_monitor,
-                                "crashed": crashed,
-                            }),
-                        );
-                        
+
+                        // Notify frontend
+                        use tauri::Emitter;
+                        // Use app_handle_monitor
+                        let _ = app_handle_monitor.emit("core://instance-exited", serde_json::json!({
+                             "instance_id": instance_id_monitor, "pid": pid_monitor, "crashed": is_crashed
+                        }));
                         break;
                     }
                 }
@@ -1300,56 +936,26 @@ pub async fn launch_instance(
 
             Ok(())
         }
-        Err(e) => {
-            log::error!(
-                "[launch_instance] Failed to launch game for version {}: {:#?}",
-                instance.minecraft_version,
-                e
-            );
-            Err(format!(
-                "Failed to launch game for {}: {}",
-                instance.minecraft_version, e
-            ))
-        }
+        Err(e) => Err(format!("Failed to launch game: {}", e)),
     }
 }
 
 #[tauri::command]
-pub async fn kill_instance(app_handle: tauri::AppHandle, instance: Instance) -> Result<String, String> {
-    log::info!(
-        "[kill_instance] Kill requested for instance: {}",
-        instance.name
-    );
+pub async fn kill_instance(app_handle: tauri::AppHandle, inst: Instance) -> Result<String, String> {
+    log::info!("[kill_instance] Kill requested for instance: {}", inst.name);
+    let instance_id = inst.slug();
 
-    // Extract instance ID
-    // runtime instance id is derived from the sanitized name
-    let instance_id = instance.slug();
-
-    // Kill the instance
     match piston_lib::game::launcher::kill_instance(&instance_id).await {
         Ok(message) => {
-            log::info!("[kill_instance] {}", message);
-
-            // Remove from persisted running processes
             let _ = crate::utils::process_state::remove_running_process(&instance_id);
-
-            // Emit success event
             use tauri::Emitter;
             let _ = app_handle.emit(
                 "core://instance-killed",
-                serde_json::json!({
-                    "instance_id": instance_id,
-                    "name": instance.name,
-                    "message": message
-                }),
+                serde_json::json!({ "instance_id": instance_id, "name": inst.name, "message": message }),
             );
-
             Ok(message)
         }
-        Err(e) => {
-            log::error!("[kill_instance] Failed to kill instance: {}", e);
-            Err(format!("Failed to kill instance: {}", e))
-        }
+        Err(e) => Err(format!("Failed to kill instance: {}", e)),
     }
 }
 
@@ -1362,10 +968,8 @@ pub async fn get_running_instances() -> Result<Vec<piston_lib::game::launcher::G
 }
 
 #[tauri::command]
-pub async fn is_instance_running(instance: Instance) -> Result<bool, String> {
-    let instance_id = instance.slug();
-
-    piston_lib::game::launcher::is_instance_running(&instance_id)
+pub async fn is_instance_running(instance_data: Instance) -> Result<bool, String> {
+    piston_lib::game::launcher::is_instance_running(&instance_data.slug())
         .await
         .map_err(|e| format!("Failed to check instance status: {}", e))
 }
@@ -1374,117 +978,60 @@ pub async fn is_instance_running(instance: Instance) -> Result<bool, String> {
 pub async fn get_minecraft_versions(
     app_handle: tauri::AppHandle,
 ) -> Result<piston_lib::game::metadata::PistonMetadata, String> {
-    log::info!("get_minecraft_versions: attempting fast-path in-memory cache");
-
-    // Fast path: try in-memory cache first
     if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
         if let Some(meta) = cache.get() {
-            log::info!(
-                "Serving Minecraft versions from in-memory MetadataCache ({} versions)",
-                meta.game_versions.len()
-            );
-            // Ensure version notifications/checks run even on fast-path
             if let Err(e) = check_and_notify_new_versions(&meta, &app_handle).await {
                 log::warn!("Failed to check for new versions: {}", e);
             }
             return Ok(meta);
-        } else {
-            log::info!("In-memory MetadataCache empty; falling back to file load");
         }
-    } else {
-        log::info!("MetadataCache state not available; falling back to file load");
     }
 
-    log::info!("Fetching Minecraft versions metadata from disk/cache");
-
-    // Use launcher config dir: %APPDATA%/.VestaLauncher
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-
-    // Prefer reading pre-generated piston_manifest.json when available
     let manifest_path = data_dir.join("piston_manifest.json");
+
     let metadata = if manifest_path.exists() {
-        match tokio::fs::read_to_string(&manifest_path).await {
-            Ok(contents) => {
-                match serde_json::from_str::<piston_lib::game::metadata::PistonMetadata>(&contents)
-                {
-                    Ok(parsed) => {
-                        // Validate the structure
-                        if parsed.game_versions.is_empty() {
-                            log::warn!("piston_manifest.json is empty or corrupted, refetching...");
-                            let meta = piston_lib::game::metadata::cache::load_or_fetch_metadata(
-                                &data_dir,
-                            )
-                            .await
-                            .map_err(|e| format!("Failed to load metadata: {}", e))?;
-                            let _ = tokio::fs::write(
-                                &manifest_path,
-                                serde_json::to_string_pretty(&meta).unwrap_or_default(),
-                            )
-                            .await;
-                            meta
-                        } else {
-                            parsed
-                        }
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to parse piston_manifest.json ({}), refetching...",
-                            e
-                        );
-                        let meta =
-                            piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
-                                .await
-                                .map_err(|e| format!("Failed to load metadata: {}", e))?;
-                        let _ = tokio::fs::write(
-                            &manifest_path,
-                            serde_json::to_string_pretty(&meta).unwrap_or_default(),
-                        )
-                        .await;
-                        meta
-                    }
+        if let Ok(contents) = tokio::fs::read_to_string(&manifest_path).await {
+            if let Ok(parsed) =
+                serde_json::from_str::<piston_lib::game::metadata::PistonMetadata>(&contents)
+            {
+                if !parsed.game_versions.is_empty() {
+                    parsed
+                } else {
+                    piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
+                        .await
+                        .map_err(|e| e.to_string())?
                 }
-            }
-            Err(e) => {
-                log::warn!("Failed to read piston_manifest.json ({}), refetching...", e);
-                let meta = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
+            } else {
+                piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
                     .await
-                    .map_err(|e| format!("Failed to load metadata: {}", e))?;
-                let _ = tokio::fs::write(
-                    &manifest_path,
-                    serde_json::to_string_pretty(&meta).unwrap_or_default(),
-                )
-                .await;
-                meta
+                    .map_err(|e| e.to_string())?
             }
+        } else {
+            piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
+                .await
+                .map_err(|e| e.to_string())?
         }
     } else {
-        log::info!("piston_manifest.json not found, fetching fresh...");
-        let meta = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
+        piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
             .await
-            .map_err(|e| format!("Failed to load metadata: {}", e))?;
-        let _ = tokio::fs::write(
-            &manifest_path,
-            serde_json::to_string_pretty(&meta).unwrap_or_default(),
-        )
-        .await;
-        meta
+            .map_err(|e| e.to_string())?
     };
 
-    log::info!(
-        "Retrieved metadata with {} game versions",
-        metadata.game_versions.len()
-    );
+    // Save cache
+    let _ = tokio::fs::write(
+        &manifest_path,
+        serde_json::to_string_pretty(&metadata).unwrap_or_default(),
+    )
+    .await;
 
-    // Check for new versions and create notifications
     if let Err(e) = check_and_notify_new_versions(&metadata, &app_handle).await {
         log::warn!("Failed to check for new versions: {}", e);
     }
 
-    // Populate in-memory cache after disk/path load for future fast-path
     if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
         cache.set(&metadata);
-        log::info!("Populated in-memory MetadataCache after disk load");
     }
 
     Ok(metadata)
@@ -1492,16 +1039,11 @@ pub async fn get_minecraft_versions(
 
 #[tauri::command]
 pub async fn regenerate_piston_manifest(app_handle: tauri::AppHandle) -> Result<(), String> {
-    log::info!("Submitting force refresh task to TaskManager");
-
     let task_manager = app_handle.state::<TaskManager>();
-
     task_manager
         .submit(Box::new(GenerateManifestTask::new_force_refresh()))
         .await
-        .map_err(|e| format!("Failed to submit refresh task: {}", e))?;
-
-    log::info!("Force refresh task submitted successfully");
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -1512,48 +1054,45 @@ pub fn update_installation_status(instance_id: i32, status: &str) -> Result<(), 
         instance_id,
         status
     );
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
-    let db = get_data_db().map_err(|e| format!("Failed to get database: {}", e))?;
-    let conn = db.get_connection();
-
-    conn.execute(
-        &format!(
-            "UPDATE {} SET installation_status = ?1, updated_at = datetime('now') WHERE id = ?2",
-            Instance::name()
-        ),
-        rusqlite::params![status, instance_id],
-    )
-    .map_err(|e| format!("Failed to update installation status: {}", e))?;
-
-    log::info!("Installation status updated successfully");
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    diesel::update(instance.find(instance_id))
+        .set((installation_status.eq(status), updated_at.eq(now)))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to update installation status: {}", e))?;
     Ok(())
 }
 
-/// Read the last N lines from an instance's log file
 #[tauri::command]
-pub fn read_instance_log(instance_id: String, last_lines: Option<usize>) -> Result<Vec<String>, String> {
+pub fn read_instance_log(
+    instance_id_slug: String,
+    last_lines: Option<usize>,
+) -> Result<Vec<String>, String> {
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-    
-    // Log file is stored at <data_dir>/data/logs/<instance_id>.log
-    let log_file = data_dir.join("data").join("logs").join(format!("{}.log", instance_id));
-    
+    let log_file = data_dir
+        .join("data")
+        .join("logs")
+        .join(format!("{}.log", instance_id_slug));
+
     if !log_file.exists() {
-        log::debug!("Log file not found for instance {}: {:?}", instance_id, log_file);
         return Ok(vec![]);
     }
-    
-    let content = std::fs::read_to_string(&log_file)
-        .map_err(|e| format!("Failed to read log file: {}", e))?;
-    
-    let lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
-    let limit = last_lines.unwrap_or(500);
-    
-    if lines.len() > limit {
-        Ok(lines[lines.len() - limit..].to_vec())
-    } else {
-        Ok(lines)
+
+    let file =
+        std::fs::File::open(&log_file).map_err(|e| format!("Failed to open log file: {}", e))?;
+    let reader = std::io::BufReader::new(file);
+    use std::io::BufRead;
+
+    let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+    if let Some(n) = last_lines {
+        if lines.len() > n {
+            return Ok(lines[lines.len() - n..].to_vec());
+        }
     }
+    Ok(lines)
 }
 
 /// Check for new Minecraft versions and create notifications if found
@@ -1577,10 +1116,14 @@ async fn check_and_notify_new_versions(
         create_version_notification(
             app_handle,
             "New Minecraft Release Available",
-            &format!("Minecraft {} is now available for download!", current_release),
+            &format!(
+                "Minecraft {} is now available for download!",
+                current_release
+            ),
             "minecraft_release",
             current_release,
-        ).await?;
+        )
+        .await?;
     }
 
     // Check snapshot version
@@ -1592,10 +1135,14 @@ async fn check_and_notify_new_versions(
         create_version_notification(
             app_handle,
             "New Minecraft Snapshot Available",
-            &format!("Minecraft snapshot {} is now available for testing!", current_snapshot),
+            &format!(
+                "Minecraft snapshot {} is now available for testing!",
+                current_snapshot
+            ),
             "minecraft_snapshot",
             current_snapshot,
-        ).await?;
+        )
+        .await?;
     }
 
     Ok(())
@@ -1609,31 +1156,35 @@ async fn create_version_notification(
     version_type: &str,
     version: &str,
 ) -> Result<(), String> {
-    use crate::notifications::models::CreateNotificationInput;
+    use crate::notifications::models::{CreateNotificationInput, NotificationType};
     use crate::utils::version_tracking::VersionTrackingRepository;
 
-    let notification_manager = app_handle.state::<crate::notifications::manager::NotificationManager>();
+    let notification_manager =
+        app_handle.state::<crate::notifications::manager::NotificationManager>();
 
     let input = CreateNotificationInput {
         client_key: Some(format!("version_update_{}", version_type)),
         title: Some(title.to_string()),
         description: Some(description.to_string()),
         severity: Some("info".to_string()),
-        notification_type: Some(crate::notifications::models::NotificationType::Patient),
+        notification_type: Some(NotificationType::Patient),
         dismissible: Some(true),
         progress: None,
         current_step: None,
         total_steps: None,
-        actions: None, // Could add "View Versions" action later
-        metadata: Some(serde_json::json!({
-            "version_type": version_type,
-            "version": version,
-            "notification_type": "version_update"
-        }).to_string()),
+        actions: None,
+        metadata: Some(
+            serde_json::json!({
+                "version_type": version_type,
+                "version": version,
+                "notification_type": "version_update"
+            })
+            .to_string(),
+        ),
         show_on_completion: None,
     };
 
-    // Create notification through the manager (handles DB insertion and event emission)
+    // Create notification through the manager
     notification_manager
         .create(input)
         .map_err(|e| format!("Failed to create notification: {}", e))?;
@@ -1642,6 +1193,10 @@ async fn create_version_notification(
     VersionTrackingRepository::mark_notified(version_type, version)
         .map_err(|e| format!("Failed to update version tracking: {}", e))?;
 
-    log::info!("Created version update notification for {}: {}", version_type, version);
+    log::info!(
+        "Created version update notification for {}: {}",
+        version_type,
+        version
+    );
     Ok(())
 }
