@@ -99,6 +99,14 @@
 	--icon-secondary: hsl(var(--color__primary-hue) 5% 70%);
 	--icon-muted: hsl(var(--color__primary-hue) 5% 50%);
 
+	/* Typography */
+	--font-xxsmall: 0.75rem;
+	--font-xsmall: 0.85rem;
+	--font-small: 1rem;
+	--font-medium: 1.25rem;
+	--font-large: 2rem;
+	--font-xlarge: 4rem;
+
 	/* Header/Navigation Colors */
 	--page-viewer-nav-color: hsl(var(--color__primary-hue) 10% 90%);
 	--page-viewer-nav-bg: var(--surface-raised);

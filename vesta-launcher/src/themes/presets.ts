@@ -15,48 +15,69 @@ export type GradientHarmony =
 export interface ThemeConfig {
 	/** Unique theme identifier */
 	id: string;
-
-	/** Display name shown in UI */
+	/** Display name */
 	name: string;
-
 	/** Optional description */
 	description?: string;
-
 	/** Primary hue (0-360) */
 	primaryHue: number;
-
-	/** Primary saturation (0-100) - advanced mode only */
+	/** Optional primary saturation override (0-100) */
 	primarySat?: number;
-
-	/** Primary lightness (0-100) - advanced mode only */
+	/** Optional primary lightness override (0-100) */
 	primaryLight?: number;
-
 	/** Visual style mode */
 	style: StyleMode;
-
-	/** Enable background gradient */
+	/** Whether background gradient is enabled */
 	gradientEnabled: boolean;
-
-	/** Gradient angle in degrees (0-360) */
+	/** Angle of the background gradient (0-360) */
 	gradientAngle?: number;
-
-	/** Gradient color harmony */
+	/** Color harmony for the gradient */
 	gradientHarmony?: GradientHarmony;
-
-	/** Preview thumbnail URL (optional) */
+	/** Optional thumbnail image URL */
 	thumbnail?: string;
-
-	/** Permissions: whether the theme allows UI customization controls */
-	allowHueChange?: boolean; // controls hue slider availability
-	allowStyleChange?: boolean; // controls style mode picker availability
-	allowBorderChange?: boolean; // controls border thickness slider availability
-
-	/** Optional custom CSS to inject when this theme is active */
-	customCss?: string;
-
-	/** Optional default border widths (px) */
+	/** Border width for subtle borders (px) */
 	borderWidthSubtle?: number;
+	/** Border width for strong borders (px) */
 	borderWidthStrong?: number;
+	/** Custom CSS to inject when theme is active */
+	customCss?: string;
+	/** Whether the user can change the hue of this theme */
+	allowHueChange?: boolean;
+	/** Whether the user can change the style mode of this theme */
+	allowStyleChange?: boolean;
+	/** Whether the user can change the border thickness of this theme */
+	allowBorderChange?: boolean;
+}
+
+/**
+ * Backend configuration structure for theme-related fields
+ */
+export interface AppThemeConfig {
+	theme_id: string;
+	theme_primary_hue: number;
+	theme_style: StyleMode;
+	theme_gradient_enabled: boolean;
+	theme_gradient_angle?: number;
+	theme_gradient_harmony?: GradientHarmony;
+	theme_advanced_overrides?: string;
+	background_hue?: number; // Legacy/Fallback
+}
+
+/**
+ * Convert backend config to a full ThemeConfig
+ */
+export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
+	const themeId = config.theme_id || "midnight";
+	const baseTheme = getThemeById(themeId) || getDefaultTheme();
+
+	return validateTheme({
+		...baseTheme,
+		primaryHue: config.theme_primary_hue ?? config.background_hue ?? baseTheme.primaryHue,
+		style: config.theme_style ?? baseTheme.style,
+		gradientEnabled: config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
+		gradientAngle: config.theme_gradient_angle ?? baseTheme.gradientAngle,
+		gradientHarmony: config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
+	});
 }
 
 /**
@@ -306,8 +327,12 @@ export function applyTheme(theme: ThemeConfig): void {
 	const style = root.style;
 
 	// Skip if theme is already applied (same primary hue)
-	const currentHue = style.getPropertyValue("--hue-primary");
-	if (currentHue === theme.primaryHue.toString()) {
+	const currentHue = style.getPropertyValue("--color__primary-hue");
+	if (
+		currentHue === theme.primaryHue.toString() &&
+		root.getAttribute("data-style") === theme.style &&
+		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0")
+	) {
 		return;
 	}
 
@@ -319,10 +344,12 @@ export function applyTheme(theme: ThemeConfig): void {
 
 	// Ensure background behaves correctly when toggling gradient
 	if (theme.gradientEnabled) {
+		root.setAttribute("data-gradient", "1");
 		// Let stylesheet-defined gradient and opacity take over (CSS media queries handle light/dark)
 		style.removeProperty("--background-color");
 		style.removeProperty("--background-opacity");
 	} else {
+		root.setAttribute("data-gradient", "0");
 		// Force solid background
 		style.setProperty("--background-color", "var(--surface-base)");
 		style.setProperty("--background-opacity", "0");

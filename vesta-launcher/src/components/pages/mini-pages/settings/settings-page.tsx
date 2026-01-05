@@ -33,10 +33,13 @@ import {
 } from "solid-js";
 import {
 	applyTheme,
+	configToTheme,
 	getThemeById,
 	PRESET_THEMES,
 	type ThemeConfig,
 	validateTheme,
+	type StyleMode,
+	type GradientHarmony,
 } from "../../../../themes/presets";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
 import "./settings-page.css";
@@ -68,10 +71,10 @@ interface AppConfig {
 	theme_primary_hue: number;
 	theme_primary_sat?: number;
 	theme_primary_light?: number;
-	theme_style: string;
+	theme_style: StyleMode;
 	theme_gradient_enabled: boolean;
 	theme_gradient_angle?: number;
-	theme_gradient_harmony?: string;
+	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
 	[key: string]: any;
 }
@@ -87,9 +90,6 @@ function SettingsPage() {
 	const [borderThickness, setBorderThickness] = createSignal(1);
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
-
-	// Debounce timer for hue slider to prevent excessive applyTheme calls
-	let hueDebounceTimer: number | undefined;
 
 	// Permissions helpers based on current theme
 	const canChangeHue = () => {
@@ -107,57 +107,20 @@ function SettingsPage() {
 				setReducedMotion(config.reduced_motion ?? false);
 
 				// Load theme configuration
-				const themeIdFromConfig = config.theme_id ?? undefined;
-				const primaryHueFromConfig =
-					typeof config.theme_primary_hue === "number"
-						? config.theme_primary_hue
-						: typeof config.background_hue === "number"
-							? config.background_hue
-							: undefined;
-				const styleFromConfig =
-					(config.theme_style as ThemeConfig["style"]) ?? undefined;
-				const gradientEnabledFromConfig =
-					typeof config.theme_gradient_enabled === "boolean"
-						? config.theme_gradient_enabled
-						: undefined;
-				const gradientAngleFromConfig =
-					typeof config.theme_gradient_angle === "number"
-						? config.theme_gradient_angle
-						: undefined;
+				if (config.theme_id) setThemeId(config.theme_id);
+				if (config.theme_primary_hue !== undefined)
+					setBackgroundHue(config.theme_primary_hue);
+				else if (config.background_hue !== undefined)
+					setBackgroundHue(config.background_hue);
 
-				if (themeIdFromConfig) setThemeId(themeIdFromConfig);
-				if (primaryHueFromConfig !== undefined)
-					setBackgroundHue(primaryHueFromConfig as number);
-				if (styleFromConfig) setStyleMode(styleFromConfig);
-				if (gradientEnabledFromConfig !== undefined)
-					setGradientEnabled(gradientEnabledFromConfig);
-				if (gradientAngleFromConfig !== undefined)
-					setGradientAngle(gradientAngleFromConfig);
+				if (config.theme_style) setStyleMode(config.theme_style as ThemeConfig["style"]);
+				if (config.theme_gradient_enabled !== undefined)
+					setGradientEnabled(config.theme_gradient_enabled);
+				if (config.theme_gradient_angle !== undefined)
+					setGradientAngle(config.theme_gradient_angle);
 
-				// Apply current theme
-				if (themeIdFromConfig || primaryHueFromConfig !== undefined) {
-					const effectiveThemeId = themeIdFromConfig ?? "midnight";
-					const currentTheme = getThemeById(effectiveThemeId);
-					if (currentTheme) {
-						applyTheme(
-							validateTheme({
-								...currentTheme,
-								primaryHue: (primaryHueFromConfig !== undefined
-									? primaryHueFromConfig
-									: (currentTheme.primaryHue ?? 220)) as number,
-								style: (styleFromConfig ??
-									currentTheme.style ??
-									"glass") as ThemeConfig["style"],
-								gradientEnabled: (gradientEnabledFromConfig !== undefined
-									? gradientEnabledFromConfig
-									: (currentTheme.gradientEnabled ?? true)) as boolean,
-								gradientAngle: (gradientAngleFromConfig ??
-									currentTheme.gradientAngle ??
-									135) as number,
-							}),
-						);
-					}
-				}
+				// Apply current theme using centralized logic
+				applyTheme(configToTheme(config));
 			}
 
 			unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
@@ -197,13 +160,6 @@ function SettingsPage() {
 				setBackgroundHue(newHue);
 			}
 
-			applyTheme(
-				validateTheme({
-					...theme,
-					primaryHue: newHue,
-				}),
-			);
-
 			if (hasTauriRuntime()) {
 				try {
 					await invoke("update_config_field", { field: "theme_id", value: id });
@@ -237,26 +193,6 @@ function SettingsPage() {
 	const handleHueChange = (values: number[]) => {
 		const newHue = values[0];
 		setBackgroundHue(newHue);
-		const id = themeId();
-		const currentTheme = id ? getThemeById(id) : undefined;
-		if (currentTheme) {
-			// Clear existing debounce timer
-			if (hueDebounceTimer !== undefined) {
-				clearTimeout(hueDebounceTimer);
-			}
-			// Apply theme after 50ms delay to avoid excessive calls while dragging
-			hueDebounceTimer = setTimeout(() => {
-				applyTheme(
-					validateTheme({
-						...currentTheme,
-						primaryHue: newHue,
-						style: styleMode(),
-						gradientEnabled: gradientEnabled(),
-						gradientAngle: gradientAngle(),
-					}),
-				);
-			}, 50) as unknown as number;
-		}
 	};
 
 	const handleHueCommit = async () => {

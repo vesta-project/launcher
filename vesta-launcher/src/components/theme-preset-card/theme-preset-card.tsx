@@ -1,5 +1,5 @@
 import { type Component } from "solid-js";
-import { type ThemeConfig } from "../../../../themes/presets";
+import { type ThemeConfig } from "../../themes/presets";
 import "./theme-preset-card.css";
 
 interface ThemePresetCardProps {

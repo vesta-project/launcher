@@ -177,17 +177,8 @@ function Root(props: ChildrenProp) {
 
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()
-				.then(async () => {
+				.then(() => {
 					onConfigUpdate(applyCommonConfigUpdates);
-
-					if (hasTauriRuntime()) {
-						try {
-							const config = await invoke("get_config");
-							applyConfigSnapshot(config as Record<string, any>);
-						} catch (error) {
-							console.error("Failed to apply initial config:", error);
-						}
-					}
 				})
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);

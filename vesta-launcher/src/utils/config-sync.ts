@@ -1,6 +1,7 @@
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { applyTheme, configToTheme, type AppThemeConfig } from "../themes/presets";
 
 interface ConfigUpdateEvent {
 	field: string;
@@ -83,8 +84,10 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 					});
 				}
 			}
-		},
-	);
+		});
+	})();
+
+	await setupPromise;
 }
 
 /**
@@ -100,16 +103,17 @@ export function unsubscribeFromConfigUpdates(): void {
 	}
 }
 
+let currentThemeConfig: Partial<AppThemeConfig> = {};
+
 /**
  * Apply common config updates (CSS variables, etc.)
  * This is a default handler that can be registered
  */
 export function applyCommonConfigUpdates(field: string, value: any): void {
-	if (field === "background_hue" && typeof value === "number") {
-		document.documentElement.style.setProperty(
-			"--color__primary-hue",
-			value.toString(),
-		);
+	// Handle theme-related fields
+	if (field.startsWith("theme_") || field === "background_hue") {
+		(currentThemeConfig as any)[field] = value;
+		applyTheme(configToTheme(currentThemeConfig));
 	}
 
 	if (field === "reduced_motion" && typeof value === "boolean") {
@@ -120,9 +124,19 @@ export function applyCommonConfigUpdates(field: string, value: any): void {
 
 /** Apply a full config snapshot (used at startup) */
 export function applyConfigSnapshot(config: Record<string, any>): void {
-	if (typeof config.background_hue === "number") {
-		applyCommonConfigUpdates("background_hue", config.background_hue);
-	}
+	// Extract theme fields for the initial application
+	currentThemeConfig = {
+		theme_id: config.theme_id,
+		theme_primary_hue: config.theme_primary_hue,
+		theme_style: config.theme_style,
+		theme_gradient_enabled: config.theme_gradient_enabled,
+		theme_gradient_angle: config.theme_gradient_angle,
+		theme_gradient_harmony: config.theme_gradient_harmony,
+		background_hue: config.background_hue,
+	};
+
+	applyTheme(configToTheme(currentThemeConfig));
+
 	if (typeof config.reduced_motion === "boolean") {
 		applyCommonConfigUpdates("reduced_motion", config.reduced_motion);
 	}
@@ -135,5 +149,5 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 export function getDebugLoggingEnabled(): boolean {
 	// This could be enhanced to actually read from a central config store
 	// For now, return a default or check localStorage/sessionStorage
-	return true; // Default to disabled
+	return false; // Default to disabled
 }
