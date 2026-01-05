@@ -1,7 +1,8 @@
 /// Argument builder for Minecraft launcher
-use crate::game::launcher::classpath::OsType;
+use crate::game::installer::types::OsType;
 use crate::game::launcher::types::LaunchSpec;
-use crate::game::launcher::version_parser::{Argument, ArgumentValue, VersionManifest};
+use crate::game::launcher::version_parser::{Argument, ArgumentValue};
+use crate::game::launcher::unified_manifest::UnifiedManifest;
 use dunce::canonicalize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -9,7 +10,7 @@ use std::path::Path;
 /// Build JVM arguments for launching the game
 pub fn build_jvm_arguments(
     spec: &LaunchSpec,
-    manifest: &VersionManifest,
+    manifest: &UnifiedManifest,
     natives_dir: &Path,
     classpath: &str,
 ) -> Vec<String> {
@@ -25,18 +26,16 @@ pub fn build_jvm_arguments(
 
     // Collect manifest JVM arguments first to check for duplicates
     let mut manifest_args = Vec::new();
-    if let Some(ref arguments) = manifest.arguments {
-        let variables = build_jvm_variables(spec, manifest, natives_dir, classpath);
+    let variables = build_jvm_variables(spec, manifest, natives_dir, classpath);
 
-        for arg in &arguments.jvm {
-            // Use special processing for JVM args to avoid splitting quoted strings with spaces
-            let parts = process_jvm_argument(arg, &variables, OsType::current(), spec);
-            for p in parts {
-                if p.trim().is_empty() {
-                    continue;
-                }
-                manifest_args.push(p);
+    for arg in &manifest.jvm_arguments {
+        // Use special processing for JVM args to avoid splitting quoted strings with spaces
+        let parts = process_jvm_argument(arg, &variables, OsType::current(), spec);
+        for p in parts {
+            if p.trim().is_empty() {
+                continue;
             }
+            manifest_args.push(p);
         }
     }
 
@@ -66,7 +65,7 @@ pub fn build_jvm_arguments(
 
     // For legacy versions (like 1.0) that don't have JVM args in manifest, add classpath manually
     let has_classpath = args.iter().any(|arg| arg == "-cp" || arg.starts_with("-cp=") || arg.starts_with("-classpath"));
-    if !has_classpath && manifest.arguments.is_none() {
+    if !has_classpath && manifest.jvm_arguments.is_empty() {
         args.push("-cp".to_string());
         args.push(classpath.to_string());
     }
@@ -75,27 +74,20 @@ pub fn build_jvm_arguments(
 }
 
 /// Build game arguments for launching the game
-pub fn build_game_arguments(spec: &LaunchSpec, manifest: &VersionManifest) -> Vec<String> {
+pub fn build_game_arguments(spec: &LaunchSpec, manifest: &UnifiedManifest) -> Vec<String> {
     let mut args = Vec::new();
 
     let variables = build_game_variables(spec, manifest);
 
     // Handle modern arguments format
-    if let Some(ref arguments) = manifest.arguments {
-        for arg in &arguments.game {
-            let parts = process_argument(arg, &variables, OsType::current(), spec);
-            for p in parts {
-                if p.trim().is_empty() {
-                    // ignore empty game-argument tokens that might come from optional quick-play params
-                    continue;
-                }
-                args.push(p);
+    for arg in &manifest.game_arguments {
+        let parts = process_argument(arg, &variables, OsType::current(), spec);
+        for p in parts {
+            if p.trim().is_empty() {
+                // ignore empty game-argument tokens that might come from optional quick-play params
+                continue;
             }
-        }
-    } else if let Some(ref legacy_args) = manifest.minecraft_arguments {
-        // Handle legacy format (pre-1.13)
-        for arg in legacy_args.split_whitespace() {
-            args.push(substitute_variables(arg, &variables));
+            args.push(p);
         }
     }
 
@@ -387,7 +379,7 @@ pub(crate) fn split_preserving_quotes(s: &str) -> Vec<String> {
 /// Build JVM variable map
 fn build_jvm_variables(
     spec: &LaunchSpec,
-    _manifest: &VersionManifest,
+    _manifest: &UnifiedManifest,
     natives_dir: &Path,
     classpath: &str,
 ) -> HashMap<String, String> {
@@ -416,7 +408,7 @@ fn build_jvm_variables(
 }
 
 /// Build game variable map
-fn build_game_variables(spec: &LaunchSpec, manifest: &VersionManifest) -> HashMap<String, String> {
+fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMap<String, String> {
     let mut vars = HashMap::new();
 
     // Player info (support multiple common placeholders for compatibility)
@@ -498,6 +490,7 @@ fn get_default_jvm_args() -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::launcher::version_parser::VersionManifest;
 
     #[test]
     fn test_substitute_variables() {
@@ -539,6 +532,7 @@ mod tests {
         fs::create_dir_all(&libs).unwrap();
         fs::create_dir_all(&natives).unwrap();
         fs::create_dir_all(&assets).unwrap();
+        fs::create_dir_all(data_dir.join("game_dir")).unwrap();
 
         let spec = LaunchSpec {
             instance_id: "test-inst".to_string(),
@@ -576,7 +570,8 @@ mod tests {
             time: None,
         };
 
-        let jvm_vars = build_jvm_variables(&spec, &manifest, &natives, "cp");
+        let unified = UnifiedManifest::from(manifest);
+        let jvm_vars = build_jvm_variables(&spec, &unified, &natives, "cp");
         // natives_directory should be canonicalized
         let expected_natives = canonicalize(&natives)
             .unwrap()
@@ -595,7 +590,7 @@ mod tests {
         assert_eq!(jvm_vars.get("library_directory").unwrap(), &expected_lib);
 
         // Game variables
-        let game_vars = build_game_variables(&spec, &manifest);
+        let game_vars = build_game_variables(&spec, &unified);
         let expected_game = canonicalize(&spec.game_dir)
             .unwrap()
             .to_string_lossy()

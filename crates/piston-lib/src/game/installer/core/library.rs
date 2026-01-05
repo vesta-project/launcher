@@ -121,7 +121,16 @@ impl<'a> LibraryDownloader<'a> {
         progress_base: i32,
         progress_range: i32,
     ) -> Result<usize> {
-        let total = libraries.len();
+        // Deduplicate libraries by name to avoid concurrent writes to the same file
+        let mut unique_libraries = Vec::new();
+        let mut seen_libs = std::collections::HashSet::new();
+        for lib in libraries {
+            if seen_libs.insert(lib.name.clone()) {
+                unique_libraries.push(lib);
+            }
+        }
+
+        let total = unique_libraries.len();
         if total == 0 {
             return Ok(0);
         }
@@ -133,7 +142,7 @@ impl<'a> LibraryDownloader<'a> {
 
         self.reporter.set_step_count(0, Some(total as u32));
 
-        let results: Vec<Result<()>> = stream::iter(libraries)
+        let results: Vec<Result<()>> = stream::iter(unique_libraries)
             .map(|lib| {
                 let downloaded = Arc::clone(&downloaded);
                 let last_update = Arc::clone(&last_update);
@@ -221,7 +230,9 @@ impl<'a> LibraryDownloader<'a> {
                     );
 
                     // Create a no-op reporter for individual downloads to avoid progress spam
-                    struct NoopReporter;
+                    struct NoopReporter {
+                        dry_run: bool,
+                    }
                     impl ProgressReporter for NoopReporter {
                         fn start_step(&self, _: &str, _: Option<u32>) {}
                         fn update_bytes(&self, _: u64, _: Option<u64>) {}
@@ -238,10 +249,24 @@ impl<'a> LibraryDownloader<'a> {
                         fn is_cancelled(&self) -> bool {
                             false
                         }
+                        fn is_paused(&self) -> bool {
+                            false
+                        }
+                        fn is_dry_run(&self) -> bool {
+                            self.dry_run
+                        }
                     }
 
-                    download_to_path(client, &url, &full_path, lib.sha1.as_deref(), &NoopReporter)
-                        .await?;
+                    download_to_path(
+                        client,
+                        &url,
+                        &full_path,
+                        lib.sha1.as_deref(),
+                        &NoopReporter {
+                            dry_run: reporter.is_dry_run(),
+                        },
+                    )
+                    .await?;
                     track_artifact_from_path(label, &full_path, None, Some(url)).await?;
 
                     // Update progress
@@ -284,7 +309,7 @@ impl<'a> LibraryDownloader<'a> {
     }
 
     /// Static version of resolve_library for use in async closures
-    fn resolve_library_static(name: &str, maven_url: Option<&str>) -> Result<(String, String)> {
+    pub fn resolve_library_static(name: &str, maven_url: Option<&str>) -> Result<(String, String)> {
         let parts: Vec<&str> = name.split(':').collect();
         if parts.len() < 3 {
             return Err(anyhow::anyhow!("Invalid library name: {}", name));
@@ -292,17 +317,30 @@ impl<'a> LibraryDownloader<'a> {
 
         let domain = parts[0].replace('.', "/");
         let lib_name = parts[1];
-        let version = parts[2];
-        let classifier = if parts.len() > 3 {
-            format!("-{}", parts[3])
-        } else {
-            "".to_string()
-        };
-        let ext = "jar";
+        let mut version = parts[2];
+        let mut extension = "jar".to_string();
+        let mut classifier = "".to_string();
+
+        // Handle version@extension if no classifier is present
+        if parts.len() == 3 {
+            if let Some((v, ext)) = version.split_once('@') {
+                version = v;
+                extension = ext.to_string();
+            }
+        } else if parts.len() >= 4 {
+            // Handle classifier and extension (e.g., "mappings@tsrg.lzma")
+            let classifier_ext = parts[3];
+            if let Some((clf, ext)) = classifier_ext.split_once('@') {
+                classifier = format!("-{}", clf);
+                extension = ext.to_string();
+            } else {
+                classifier = format!("-{}", classifier_ext);
+            }
+        }
 
         let rel_path = format!(
             "{}/{}/{}/{}-{}{}.{}",
-            domain, lib_name, version, lib_name, version, classifier, ext
+            domain, lib_name, version, lib_name, version, classifier, extension
         );
 
         let base_url = maven_url.unwrap_or("https://libraries.minecraft.net/");
@@ -316,35 +354,8 @@ impl<'a> LibraryDownloader<'a> {
     }
 
     /// Resolve Maven coordinates to path and URL
-    fn resolve_library(&self, name: &str, maven_url: Option<&str>) -> Result<(String, String)> {
-        let parts: Vec<&str> = name.split(':').collect();
-        if parts.len() < 3 {
-            return Err(anyhow::anyhow!("Invalid library name: {}", name));
-        }
-
-        let domain = parts[0].replace('.', "/");
-        let name = parts[1];
-        let version = parts[2];
-        let classifier = if parts.len() > 3 {
-            format!("-{}", parts[3])
-        } else {
-            "".to_string()
-        };
-        let ext = "jar"; // TODO: Support other extensions?
-
-        let rel_path = format!(
-            "{}/{}/{}/{}-{}{}.{}",
-            domain, name, version, name, version, classifier, ext
-        );
-
-        let base_url = maven_url.unwrap_or("https://libraries.minecraft.net/");
-        let url = if base_url.ends_with('/') {
-            format!("{}{}", base_url, rel_path)
-        } else {
-            format!("{}/{}", base_url, rel_path)
-        };
-
-        Ok((rel_path, url))
+    pub fn resolve_library(&self, name: &str, maven_url: Option<&str>) -> Result<(String, String)> {
+        Self::resolve_library_static(name, maven_url)
     }
 
     /// Build final URL for an explicit URL or fall back to resolved URL.

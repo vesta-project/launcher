@@ -404,7 +404,7 @@
 	backdrop-filter: var(--liquid-backdrop-filter);
 	justify-content: center;
 	align-items: center;
-	gap: 8px;
+	gap: 4px;
 	background: hsl(0 0% 0% / 0.4);
 	border-radius: 6px;
 	backdrop-filter: blur(var(--blur-overlay));
@@ -412,8 +412,8 @@
 }
 
 .instance-card-spinner {
-	width: 24px;
-	height: 24px;
+	width: clamp(12px, 8%, 20px);
+	height: clamp(12px, 8%, 20px);
 	border: 2px solid transparent;
 	border-top-color: white;
 	border-radius: 50%;
@@ -430,58 +430,61 @@
 }
 
 .instance-card-indicators {
-	background: linear-gradient(
-		to bottom,
-		hsl(0 0% 0% / 0.4) 0%,
-		transparent 100%
-	);
+	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: 3px;
+	align-items: flex-start;
+	border-radius: 6px;
+	backdrop-filter: blur(var(--blur-subtle));
 }
 
 .running,
 .crashed {
-	font-size: 10px;
-	padding: 3px 8px;
-	border-radius: 12px;
+	font-size: clamp(8px, 2vw, 10px);
+	padding: 2px 6px;
+	border-radius: 8px;
 	color: white;
 	text-transform: uppercase;
-	letter-spacing: 0.8px;
-	font-weight: 800;
+	letter-spacing: 0.5px;
+	font-weight: 700;
 	background: linear-gradient(
 		to top,
-		hsl(0 0% 0% / 0.7) 0%,
-		hsl(0 0% 0% / 0.3) 50%,
+		hsl(0 0% 0% / 0.8) 0%,
+		hsl(0 0% 0% / 0.4) 50%,
 		transparent 100%
 	);
 	align-items: center;
-	gap: 6px;
+	gap: 4px;
 	backdrop-filter: blur(var(--blur-subtle));
-	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.2);
+	box-shadow: 0 1px 3px hsl(0 0% 0% / 0.3);
 	width: fit-content;
 	white-space: nowrap;
+	transition: all 0.2s ease;
 }
 
 .running {
-	background: hsl(var(--hue-success) 70% 40% / 0.6);
-	border: var(--border-width-subtle) solid var(--semantic-success);
+	background: hsl(var(--hue-success) 70% 45% / 0.85);
+	border: 1px solid hsl(var(--hue-success) 70% 60%);
+	box-shadow: 0 0 8px hsl(var(--hue-success) 70% 30%);
 }
 
 .crashed {
-	background: hsl(var(--hue-error) 70% 40% / 0.6);
-	border: var(--border-width-subtle) solid var(--semantic-error);
+	background: hsl(var(--hue-error) 70% 45% / 0.85);
+	border: 1px solid hsl(var(--hue-error) 70% 60%);
+	box-shadow: 0 0 8px hsl(var(--hue-error) 70% 30%);
 }
 
 .status-dot {
-	width: 6px;
-	height: 6px;
+	width: 5px;
+	height: 5px;
 	border-radius: 50%;
 	background: white;
+	flex-shrink: 0;
 }
 
 .running .status-dot {
-	background: var(--semantic-success);
-	box-shadow: 0 0 8px var(--semantic-success);
+	background: hsl(var(--hue-success) 80% 70%);
+	box-shadow: 0 0 6px hsl(var(--hue-success) 70% 50%);
 	animation: pulse 2s infinite;
 }
 
@@ -491,8 +494,8 @@
 }
 
 .crashed .status-dot {
-	background: var(--semantic-error);
-	box-shadow: 0 0 8px var(--semantic-error);
+	background: hsl(var(--hue-error) 80% 70%);
+	box-shadow: 0 0 6px hsl(var(--hue-error) 70% 50%);
 }
 
 @keyframes pulse {

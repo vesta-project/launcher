@@ -73,19 +73,21 @@ function showAlert(
 		`[Notification] showAlert: ${title}, Key: ${client_key}, Type: ${notification_type}, Actions:`,
 		actions,
 	);
-	// If progress is 0, treat it as indeterminate (-1) and hide steps to show a pulsing bar
+	// If progress is null/undefined, treat it as indeterminate (-1)
 	let displayProgress = progress;
 	let displayCurrentStep = current_step;
 	let displayTotalSteps = total_steps;
 
-	if (progress === 0) {
+	if (progress == null) {
 		displayProgress = -1;
-		displayCurrentStep = undefined; // Hide steps text
-		displayTotalSteps = undefined; // Hide steps text
 	}
 
-	// Determine if cancellable based on actions (for backward compatibility)
+	// Determine if cancellable/pausable based on actions
 	const cancellable = actions?.some((a) => a.id === "cancel_task") ?? false;
+	const pausable =
+		actions?.some((a) => a.id === "pause_task" || a.id === "resume_task") ??
+		false;
+	const isPaused = actions?.some((a) => a.id === "resume_task") ?? false;
 
 	let id = showToast({
 		title,
@@ -102,6 +104,14 @@ function showAlert(
 		total_steps: displayTotalSteps,
 		cancellable: cancellable,
 		onCancel: client_key ? () => cancelTask(client_key) : undefined,
+		pausable: pausable,
+		isPaused: isPaused,
+		onPause: client_key
+			? () => invokeNotificationAction("pause_task", client_key)
+			: undefined,
+		onResume: client_key
+			? () => invokeNotificationAction("resume_task", client_key)
+			: undefined,
 	});
 
 	const newNotif: Notification = {
@@ -224,11 +234,14 @@ function triggerPersistentNotificationRefetch() {
 	setPersistentNotificationTrigger((prev) => prev + 1);
 }
 
+let subscriptionPromise: Promise<void> | null = null;
+
 async function subscribeToBackendNotifications() {
-	// Listen for new/updated notifications
-	const unsubNotif = await listen<BackendNotification>(
-		"core://notification",
-		(event) => {
+	if (subscriptionPromise) return subscriptionPromise;
+
+	subscriptionPromise = (async () => {
+		// Listen for new/updated notifications
+		await listen<BackendNotification>("core://notification", (event) => {
 			const notif = event.payload;
 			console.log(
 				`[Notification] Event: ${notif.title}, Key: ${notif.client_key}, Cache Size: ${_notificationCache.length}`,
@@ -245,9 +258,16 @@ async function subscribeToBackendNotifications() {
 					updated = true;
 					// Update existing toast and notification state
 					const clientKey = notif.client_key;
-					// Determine if cancellable based on actions
+					// Determine if cancellable/pausable based on actions
 					const cancellable =
 						notif.actions?.some((a) => a.id === "cancel_task") ?? false;
+					const pausable =
+						notif.actions?.some(
+							(a) => a.id === "pause_task" || a.id === "resume_task",
+						) ?? false;
+					const isPaused =
+						notif.actions?.some((a) => a.id === "resume_task") ?? false;
+
 					updateToast(existing.id, {
 						title: notif.title,
 						description: notif.description || undefined,
@@ -262,6 +282,14 @@ async function subscribeToBackendNotifications() {
 						duration: 5000,
 						cancellable: cancellable,
 						onCancel: clientKey ? () => cancelTask(clientKey) : undefined,
+						pausable: pausable,
+						isPaused: isPaused,
+						onPause: clientKey
+							? () => invokeNotificationAction("pause_task", clientKey)
+							: undefined,
+						onResume: clientKey
+							? () => invokeNotificationAction("resume_task", clientKey)
+							: undefined,
 					});
 
 					console.log(

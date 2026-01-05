@@ -251,9 +251,8 @@ class MiniRouter {
 			setCurrentParams(prev.params);
 			setCurrentPathProps(prev.props);
 
-			// Do NOT refetch on backwards - use cached data
-			this.refetchFn = undefined;
-			console.log("Navigating Back to:", prev.path);
+			// Preserve refetchFn across history navigation for cached data
+			// Do NOT clear or call refetchFn when navigating backwards
 		};
 
 		this.forwards = () => {
@@ -269,6 +268,8 @@ class MiniRouter {
 			const next = futureArray.shift();
 			if (!next) return;
 
+			console.log("Navigating Forward to:", next.path);
+
 			const newPast = [...getHistoryPast(), current];
 			setHistoryPast(newPast);
 			setHistoryFuture(futureArray);
@@ -277,14 +278,13 @@ class MiniRouter {
 			setCurrentParams(next.params);
 			setCurrentPathProps(next.props);
 
-			// Do NOT refetch on forwards - use cached data
-			this.refetchFn = undefined;
-			console.log("Navigating Forward to:", next.path);
+			// Preserve refetchFn across history navigation for cached data
+			// Do NOT clear or call refetchFn when navigating forwards
 		};
 	}
 
 	// Getter that returns a reactive JSX element with optional additional props
-	getRouterView(additionalProps?: Record<string, unknown>): JSXElement {
+	getRouterView(additionalProps?: Record<string, unknown>) {
 		return (
 			<Dynamic
 				component={this.currentElement().element}

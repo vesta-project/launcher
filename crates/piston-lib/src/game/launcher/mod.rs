@@ -6,11 +6,13 @@ pub mod process;
 pub mod registry;
 /// Game launcher module for executing Minecraft with various modloaders
 pub mod types;
+pub mod unified_manifest;
 pub mod version_parser;
 
 // Re-export commonly used types
+pub use crate::game::installer::types::OsType;
 pub use arguments::{build_game_arguments, build_jvm_arguments, substitute_variables};
-pub use classpath::{build_classpath, maven_to_path, OsType};
+pub use classpath::{build_classpath, maven_to_path};
 pub use natives::{extract_natives, get_natives_dir};
 pub use process::{kill_instance, launch_game, LogCallback};
 pub use registry::{

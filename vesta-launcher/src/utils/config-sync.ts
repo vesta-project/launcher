@@ -36,26 +36,24 @@ export function onConfigUpdate(handler: ConfigUpdateHandler): () => void {
 	};
 }
 
+let setupPromise: Promise<void> | null = null;
+
 /**
  * Subscribe to config updates from other windows
  * Broadcasts errors if updates fail
  */
 export async function subscribeToConfigUpdates(): Promise<void> {
-	if (configUnlisten) {
-		console.warn("Already subscribed to config updates");
-		return;
-	}
+	if (setupPromise) return setupPromise;
 
-	// Get current window label to track update source
-	try {
-		currentWindowLabel = getCurrentWindow().label;
-	} catch (error) {
-		console.error("Failed to get current window label:", error);
-	}
+	setupPromise = (async () => {
+		// Get current window label to track update source
+		try {
+			currentWindowLabel = getCurrentWindow().label;
+		} catch (error) {
+			console.error("Failed to get current window label:", error);
+		}
 
-	configUnlisten = await listen<ConfigUpdateEvent>(
-		"config-updated",
-		(event) => {
+		configUnlisten = await listen<ConfigUpdateEvent>("config-updated", (event) => {
 			const { field, value } = event.payload;
 
 			try {
@@ -96,6 +94,7 @@ export function unsubscribeFromConfigUpdates(): void {
 	if (configUnlisten) {
 		configUnlisten();
 		configUnlisten = null;
+		setupPromise = null;
 		updateHandlers.clear();
 		console.log("Unsubscribed from config updates");
 	}

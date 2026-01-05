@@ -451,43 +451,43 @@ button {
    ============================================================================= */
 
 /* Glass Mode (Default with proper blur effects) */
-:root[data-style="glass"] {
-	--effect-blur: 16px;
-	--effect-opacity: 0.8;
-	--effect-shadow-depth: 24px;
-	--effect-glow-opacity: 0.7;
-	--liquid-tint-opacity: var(--effect-opacity);
-	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
-}
-
-/* Glass Mode is also the default when no data-style is set */
+:root[data-style="glass"],
 :root:not([data-style]) {
-	--effect-blur: 16px;
-	--effect-opacity: 0.8;
-	--effect-shadow-depth: 24px;
-	--effect-glow-opacity: 0.7;
-	--liquid-tint-opacity: var(--effect-opacity);
-	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+	--effect-blur: 20px;
+	--effect-opacity: 0.75;
+	--effect-shadow-depth: 28px;
+	--effect-glow-opacity: 0.8;
+	--liquid-frost-blur: 16px;
+	--liquid-tint-opacity: 0.7;
+	--liquid-backdrop-filter: blur(16px) saturate(1.5);
+	--border-subtle: hsl(var(--color__primary-hue) 12% var(--lightness-border) / 0.2);
+	--border-strong: hsl(var(--color__primary-hue) 30% var(--lightness-border) / 0.4);
 }
 
-/* Satin Mode - Subtle glass effect */
+/* Satin Mode - Medium glass effect with more opacity */
 :root[data-style="satin"] {
-	--effect-blur: 6px;
-	--effect-opacity: 0.95;
-	--effect-shadow-depth: 12px;
-	--effect-glow-opacity: 0.3;
-	--liquid-tint-opacity: 0.95;
-	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
+	--effect-blur: 10px;
+	--effect-opacity: 0.88;
+	--effect-shadow-depth: 16px;
+	--effect-glow-opacity: 0.5;
+	--liquid-frost-blur: 8px;
+	--liquid-tint-opacity: 0.9;
+	--liquid-backdrop-filter: blur(8px) saturate(1.2);
+	--border-subtle: hsl(var(--color__primary-hue) 12% var(--lightness-border) / 0.35);
+	--border-strong: hsl(var(--color__primary-hue) 30% var(--lightness-border) / 0.55);
 }
 
-/* Flat Mode - No transparency, solid colors */
+/* Flat Mode - No transparency, solid colors, stronger borders */
 :root[data-style="flat"] {
 	--effect-blur: 0px;
 	--effect-opacity: 1;
-	--effect-shadow-depth: 4px;
+	--effect-shadow-depth: 6px;
 	--effect-glow-opacity: 0;
+	--liquid-frost-blur: 0px;
 	--liquid-tint-opacity: 1;
 	--liquid-backdrop-filter: none;
+	--border-subtle: hsl(var(--color__primary-hue) 12% var(--lightness-border) / 0.5);
+	--border-strong: hsl(var(--color__primary-hue) 30% var(--lightness-border) / 0.8);
 
 	/* Override surfaces to be fully opaque */
 	--surface-base: hsl(

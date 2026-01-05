@@ -33,6 +33,14 @@ pub trait ProgressReporter: Send + Sync {
 
     /// Check if operation has been cancelled
     fn is_cancelled(&self) -> bool;
+
+    /// Check if operation is currently paused
+    fn is_paused(&self) -> bool;
+
+    /// Check if this is a dry run (no disk writes)
+    fn is_dry_run(&self) -> bool {
+        false
+    }
 }
 
 /// Notification action specification
@@ -79,9 +87,32 @@ pub struct InstallSpec {
 
     /// Java installation path (if already known)
     pub java_path: Option<PathBuf>,
+
+    /// If true, don't actually download or write files, just verify what's needed
+    pub dry_run: bool,
+
+    /// Number of concurrent downloads
+    pub concurrency: usize,
 }
 
 impl InstallSpec {
+    pub fn new(
+        version_id: String,
+        data_dir: PathBuf,
+        game_dir: PathBuf,
+    ) -> Self {
+        Self {
+            version_id,
+            modloader: None,
+            modloader_version: None,
+            data_dir,
+            game_dir,
+            java_path: None,
+            dry_run: false,
+            concurrency: 8,
+        }
+    }
+
     /// Get the root data directory
     pub fn data_dir(&self) -> &PathBuf {
         &self.data_dir
@@ -158,6 +189,8 @@ mod tests {
             data_dir: std::path::PathBuf::from("/tmp"),
             game_dir: std::path::PathBuf::from("/tmp/g"),
             java_path: None,
+            dry_run: false,
+            concurrency: 8,
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -172,6 +205,8 @@ mod tests {
             data_dir: std::path::PathBuf::from("/tmp"),
             game_dir: std::path::PathBuf::from("/tmp/g"),
             java_path: None,
+            dry_run: false,
+            concurrency: 8,
         };
 
         assert_eq!(spec.installed_version_id(), "fabric-loader-0.38.2-1.20.1");
@@ -214,6 +249,23 @@ impl OsType {
             OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "natives-linux",
         }
     }
+
+    /// Get the OS name as a string (for rule matching)
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OsType::Windows | OsType::WindowsArm64 => "windows",
+            OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+            OsType::MacOS | OsType::MacOSArm64 => "osx",
+        }
+    }
+
+    /// Get the classpath separator for this OS
+    pub fn classpath_separator(&self) -> &'static str {
+        match self {
+            OsType::Windows | OsType::WindowsArm64 => ";",
+            _ => ":",
+        }
+    }
 }
 
 /// Architecture types
@@ -238,5 +290,13 @@ impl Arch {
 
         #[cfg(not(any(target_arch = "x86_64", target_arch = "aarch64", target_arch = "arm")))]
         compile_error!("Unsupported architecture");
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Arch::X64 => "64",
+            Arch::Arm64 => "arm64",
+            Arch::Arm32 => "arm32",
+        }
     }
 }

@@ -24,6 +24,7 @@ import {
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { lazy, onCleanup, onMount } from "solid-js";
+import { initializeInstances, setupInstanceListeners } from "@stores/instances";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -117,6 +118,12 @@ function Root(props: ChildrenProp) {
 		// Defer non-critical initialization to not block UI render
 		// This allows the window to show immediately while background tasks start
 		setTimeout(() => {
+			// Initialize instance store from backend (non-blocking)
+			setupInstanceListeners();
+			initializeInstances().catch((error) => {
+				console.error("Failed to initialize instance store:", error);
+			});
+
 			// Setup notification system (non-blocking)
 			subscribeToBackendNotifications().catch((error) => {
 				console.error("Failed to initialize notification system:", error);

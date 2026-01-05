@@ -55,16 +55,13 @@ pub async fn install_neoforge(
 
 /// Download NeoForge installer JAR
 async fn download_neoforge_installer(
-    minecraft_version: String,
+    _minecraft_version: String,
     neoforge_version: String,
     data_dir: PathBuf,
 ) -> Result<PathBuf> {
-    // NeoForge version format: 20.4.237-beta (for 1.20.4) or similar
-    let full_version = if neoforge_version.contains('-') {
-        neoforge_version
-    } else {
-        format!("{}-{}", minecraft_version, neoforge_version)
-    };
+    // NeoForge version format: "21.1.65" or "21.0.65-beta"
+    // The version is used directly as-is for NeoForge (not prefixed with MC version)
+    let full_version = neoforge_version;
 
     let installer_filename = format!("neoforge-{}-installer.jar", full_version);
     let cache_dir = data_dir.join("cache").join("neoforge_installers");

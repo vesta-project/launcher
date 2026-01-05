@@ -16,11 +16,19 @@ use crate::tasks::manager::{Task, TaskContext};
 /// Task adapter for game installation
 pub struct InstallInstanceTask {
     instance: Instance,
+    dry_run: bool,
 }
 
 impl InstallInstanceTask {
     pub fn new(instance: Instance) -> Self {
-        Self { instance }
+        Self {
+            instance,
+            dry_run: false,
+        }
+    }
+
+    pub fn set_dry_run(&mut self, dry_run: bool) {
+        self.dry_run = dry_run;
     }
 }
 
@@ -30,6 +38,10 @@ impl Task for InstallInstanceTask {
     }
 
     fn cancellable(&self) -> bool {
+        true
+    }
+
+    fn pausable(&self) -> bool {
         true
     }
 
@@ -65,14 +77,17 @@ impl Task for InstallInstanceTask {
 
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
         let instance = self.instance.clone();
+        let dry_run = self.dry_run;
         let app_handle = ctx.app_handle.clone();
         let cancel_rx = ctx.cancel_rx.clone();
+        let pause_rx = ctx.pause_rx.clone();
         let notification_id = ctx.notification_id.clone();
 
         Box::pin(async move {
             log::info!(
-                "[InstallTask] Starting installation for instance '{}'",
-                instance.name
+                "[InstallTask] Starting installation for instance '{}' (dry_run={})",
+                instance.name,
+                dry_run
             );
             log::info!(
                 "[InstallTask] Version: {}, Modloader: {:?}, Modloader Version: {:?}",
@@ -102,20 +117,76 @@ impl Task for InstallInstanceTask {
                 data_dir: data_dir.clone(),
                 game_dir: game_dir.clone(),
                 java_path: instance.java_path.as_ref().map(PathBuf::from),
+                dry_run,
+                concurrency: 8, // TODO: Make this configurable in app settings
             };
 
-            // Create progress reporter that forwards to NotificationManager
+            // Background task to handle pause/resume UI updates
+            let pause_app_handle = app_handle.clone();
+            let pause_notification_id = notification_id.clone();
+            let mut pause_rx_watcher = pause_rx.clone();
+            let current_step_for_pause = Arc::new(RwLock::new(String::new()));
+            let reporter_current_step = current_step_for_pause.clone();
+
             let reporter: std::sync::Arc<dyn ProgressReporter> =
                 std::sync::Arc::new(TauriProgressReporter {
                     app_handle: app_handle.clone(),
                     notification_id: notification_id.clone(),
                     cancel_token: CancelToken::new(cancel_rx),
-                    current_step: Arc::new(RwLock::new(String::new())),
+                    pause_rx: pause_rx.clone(),
+                    current_step: reporter_current_step,
+                    dry_run,
                     last_emit: Arc::new(std::sync::Mutex::new(
                         std::time::Instant::now() - std::time::Duration::from_secs(1),
                     )),
                     last_percent: std::sync::atomic::AtomicI32::new(-1),
                 });
+
+            tauri::async_runtime::spawn(async move {
+                while pause_rx_watcher.changed().await.is_ok() {
+                    let is_paused = *pause_rx_watcher.borrow();
+                    let manager = pause_app_handle.state::<NotificationManager>();
+
+                    let actions = if is_paused {
+                        vec![
+                            crate::notifications::models::NotificationAction {
+                                action_id: "cancel_task".to_string(),
+                                label: "Cancel".to_string(),
+                                primary: false,
+                            },
+                            crate::notifications::models::NotificationAction {
+                                action_id: "resume_task".to_string(),
+                                label: "Resume".to_string(),
+                                primary: true,
+                            },
+                        ]
+                    } else {
+                        vec![
+                            crate::notifications::models::NotificationAction {
+                                action_id: "cancel_task".to_string(),
+                                label: "Cancel".to_string(),
+                                primary: false,
+                            },
+                            crate::notifications::models::NotificationAction {
+                                action_id: "pause_task".to_string(),
+                                label: "Pause".to_string(),
+                                primary: false,
+                            },
+                        ]
+                    };
+
+                    let _ = manager
+                        .update_notification_actions(pause_notification_id.clone(), actions);
+
+                    if is_paused {
+                        let _ = manager.upsert_description(&pause_notification_id, "Paused");
+                    } else {
+                        // Restore the current step description when resuming
+                        let step = current_step_for_pause.read().await;
+                        let _ = manager.upsert_description(&pause_notification_id, &*step);
+                    }
+                }
+            });
 
             // Run installation in blocking thread (piston-lib handles all progress reporting)
             log::info!("[InstallTask] Dispatching to piston-lib installer");
@@ -183,7 +254,9 @@ struct TauriProgressReporter {
     app_handle: AppHandle,
     notification_id: String,
     cancel_token: CancelToken,
+    pause_rx: tokio::sync::watch::Receiver<bool>,
     current_step: Arc<RwLock<String>>,
+    dry_run: bool,
     // Throttling state for progress events
     last_emit: Arc<std::sync::Mutex<std::time::Instant>>,
     last_percent: std::sync::atomic::AtomicI32,
@@ -276,7 +349,7 @@ impl ProgressReporter for TauriProgressReporter {
             let manager = app_handle.state::<NotificationManager>();
             let _ = manager.update_progress_with_description(
                 notification_id,
-                -1,
+                -1, // use indeterminate progress to avoid showing stale percentages
                 Some(current as i32),
                 total.map(|t| t as i32),
                 String::new(),
@@ -367,6 +440,14 @@ impl ProgressReporter for TauriProgressReporter {
 
     fn is_cancelled(&self) -> bool {
         self.cancel_token.is_cancelled()
+    }
+
+    fn is_paused(&self) -> bool {
+        *self.pause_rx.borrow()
+    }
+
+    fn is_dry_run(&self) -> bool {
+        self.dry_run
     }
 }
 

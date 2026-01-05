@@ -1,6 +1,7 @@
 use crate::game::installer::config::VANILLA_MANIFEST_URL;
+use crate::game::installer::core::batch::{BatchArtifact, BatchDownloader};
 use crate::game::installer::core::downloader::{
-    download_json_with_client, download_to_memory_with_client, download_to_path,
+    download_json_with_client, download_to_path,
 };
 use crate::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
 use crate::game::installer::core::traits::ModloaderInstaller;
@@ -15,7 +16,6 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 
 /// Check if a file is locked by another process (e.g., game is running)
 /// Returns true if the file appears to be locked/in-use
@@ -315,35 +315,33 @@ pub async fn install_vanilla(
         needs_asset_index = false;
     }
 
-    if needs_asset_index {
-        log::info!(
-            "Downloading asset index {} -> {:?}",
-            version_info.asset_index.url,
-            asset_index_path
-        );
-        download_to_path(
-            &client,
-            &version_info.asset_index.url,
-            &asset_index_path,
-            Some(&version_info.asset_index.sha1),
-            &*reporter,
-        )
-        .await?;
-        track_artifact_from_path(
-            asset_index_label,
-            &asset_index_path,
-            None,
-            Some(version_info.asset_index.url.clone()),
-        )
-        .await?;
-    }
-
-    // 5. Download assets (parallel)
-    reporter.start_step("Downloading game assets", None);
-    reporter.set_percent(40);
-
-    let asset_index_file: AssetIndexFile =
-        serde_json::from_slice(&tokio::fs::read(&asset_index_path).await?)?;
+    let asset_index_file: AssetIndexFile = if reporter.is_dry_run() {
+        download_json_with_client(&client, &version_info.asset_index.url).await?
+    } else {
+        if needs_asset_index {
+            log::info!(
+                "Downloading asset index {} -> {:?}",
+                version_info.asset_index.url,
+                asset_index_path
+            );
+            download_to_path(
+                &client,
+                &version_info.asset_index.url,
+                &asset_index_path,
+                Some(&version_info.asset_index.sha1),
+                &*reporter,
+            )
+            .await?;
+            track_artifact_from_path(
+                asset_index_label,
+                &asset_index_path,
+                None,
+                Some(version_info.asset_index.url.clone()),
+            )
+            .await?;
+        }
+        serde_json::from_slice(&tokio::fs::read(&asset_index_path).await?)?
+    };
     let total_assets = asset_index_file.objects.len();
     log::info!(
         "Downloading {} assets with parallel downloads",
@@ -413,108 +411,22 @@ pub async fn install_vanilla(
         cached_assets
     );
 
-    // Track progress using an atomic counter (lower contention for many parallel downloads)
-    let downloaded = Arc::new(AtomicUsize::new(cached_assets));
-    // Report initial counts into the numeric slot (uses unused number next to progress bar)
-    reporter.set_step_count(
-        downloaded.load(Ordering::SeqCst) as u32,
-        Some(total_assets as u32),
-    );
-    // Throttle UI updates so we don't spam progress events for every file
-    let last_update = Arc::new(Mutex::new(
-        std::time::Instant::now() - std::time::Duration::from_secs(1),
-    ));
-
-    // Download assets in parallel with concurrency limit
-    // Lower limit to avoid overwhelming network/firewall (Windows error 10053)
-    const CONCURRENT_DOWNLOADS: usize = 8;
-
-    stream::iter(assets_to_download)
-        .map(|(asset_name, asset_url, asset_path, hash, _size, label)| {
-            let reporter = reporter.clone();
-            let downloaded = Arc::clone(&downloaded);
-            let client = client.clone();
-            let last_update = last_update.clone();
-
-            async move {
-                if reporter.is_cancelled() {
-                    return Err(anyhow::anyhow!("Installation cancelled by user"));
-                }
-
-                // Log start of this asset download
-                log::info!(
-                    "Starting asset download: {} -> {:?}",
-                    asset_name,
-                    asset_path
-                );
-
-                // SAFETY: Reporter is guaranteed to live for the duration of install_instance
-                let result =
-                    download_to_path(&client, &asset_url, &asset_path, Some(&hash), &*reporter)
-                        .await
-                        .context(format!("Failed to download asset: {}", asset_name));
-
-                let result = match result {
-                    Ok(()) => {
-                        track_artifact_from_path(label, &asset_path, None, Some(asset_url.clone()))
-                            .await
-                            .context("Track downloaded asset")
-                    }
-                    Err(err) => Err(err),
-                };
-
-                if result.is_ok() {
-                    // Increment atomically and get the new count
-                    let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
-                    let progress = 40 + ((count as f32 / total_assets as f32) * 20.0) as i32;
-
-                    // update either every 4th asset or at least every 250ms
-                    let mut last = last_update.lock().await;
-                    if (count % 4 == 0) || last.elapsed() > std::time::Duration::from_millis(250) {
-                        // Update reporter and log progress
-                        reporter.set_percent(progress);
-                        // Update numeric count in the UI (unused number slot)
-                        reporter.set_step_count(count as u32, Some(total_assets as u32));
-                        let percent_f = (count as f32 / total_assets as f32) * 100.0;
-                        log::info!(
-                            "Assets: downloaded {}/{} ({:.1}%) -> progress {}",
-                            count,
-                            total_assets,
-                            percent_f,
-                            progress
-                        );
-                        *last = std::time::Instant::now();
-                    } else {
-                        // Occasional per-asset log for visibility
-                        log::debug!(
-                            "Asset downloaded: {} ({}/{})",
-                            asset_name,
-                            count,
-                            total_assets
-                        );
-                    }
-                } else if let Err(ref e) = result {
-                    // Log individual asset failures for easier diagnostics
-                    log::error!("Asset download failed for {}: {:?}", asset_name, e);
-                    // do not change progress on single asset failure
-                }
-
-                result
-            }
-        })
-        .buffer_unordered(CONCURRENT_DOWNLOADS)
-        .collect::<Vec<_>>()
-        .await
+    // Download assets in parallel with BatchDownloader
+    let batch_downloader = BatchDownloader::new(client.clone(), spec.concurrency);
+    let artifacts = assets_to_download
         .into_iter()
-        .collect::<Result<Vec<_>>>()?;
+        .map(|(name, url, path, hash, _size, label)| BatchArtifact {
+            name,
+            url,
+            path,
+            sha1: Some(hash),
+            label,
+        })
+        .collect();
 
-    // Final progress log
-    let final_count = downloaded.load(Ordering::SeqCst);
-    log::info!(
-        "Assets downloaded: {}/{} (final)",
-        final_count,
-        total_assets
-    );
+    batch_downloader
+        .download_all(artifacts, reporter.clone(), 40, 20.0)
+        .await?;
 
     // 6. Download libraries (concurrent)
     reporter.start_step("Downloading libraries", None);
@@ -528,12 +440,15 @@ pub async fn install_vanilla(
         url: String,
         sha1: String,
         path: PathBuf,
+        label: String,
     }
 
     struct NativeTask {
         name: String,
         url: String,
         sha1: String,
+        path: PathBuf,
+        label: String,
         extract: Option<ExtractRules>,
     }
 
@@ -565,6 +480,7 @@ pub async fn install_vanilla(
                     url: artifact.url.clone(),
                     sha1: artifact.sha1.clone(),
                     path: spec.libraries_dir().join(artifact_path),
+                    label: format!("libraries/{}", artifact.path),
                 });
             }
 
@@ -586,6 +502,8 @@ pub async fn install_vanilla(
                                 name: library.name.clone(),
                                 url: native_artifact.url.clone(),
                                 sha1: native_artifact.sha1.clone(),
+                                path: spec.libraries_dir().join(&native_artifact.path),
+                                label: format!("libraries/{}", native_artifact.path),
                                 extract: library.extract.clone(),
                             });
                         }
@@ -603,54 +521,22 @@ pub async fn install_vanilla(
         total_natives
     );
 
-    // Download libraries concurrently
-    let downloaded_libs = Arc::new(AtomicUsize::new(0));
-    let lib_last_update = Arc::new(Mutex::new(
-        std::time::Instant::now() - std::time::Duration::from_secs(1),
-    ));
-
-    reporter.set_step_count(0, Some(total_libs as u32));
-
-    const LIB_CONCURRENT_DOWNLOADS: usize = 8;
-
-    stream::iter(library_tasks)
-        .map(|task| {
-            let reporter = reporter.clone();
-            let downloaded_libs = Arc::clone(&downloaded_libs);
-            let client = client.clone();
-            let lib_last_update = lib_last_update.clone();
-
-            async move {
-                if reporter.is_cancelled() {
-                    return Err(anyhow::anyhow!("Installation cancelled by user"));
-                }
-
-                log::debug!("Downloading library: {} -> {:?}", task.name, task.path);
-
-                download_to_path(&client, &task.url, &task.path, Some(&task.sha1), &*reporter)
-                    .await
-                    .context(format!("Failed to download library: {}", task.name))?;
-
-                // Update progress
-                let count = downloaded_libs.fetch_add(1, Ordering::SeqCst) + 1;
-                let progress = 60 + ((count as f32 / total_libs as f32) * 15.0) as i32;
-
-                let mut last = lib_last_update.lock().await;
-                if (count % 4 == 0) || last.elapsed() > std::time::Duration::from_millis(250) {
-                    reporter.set_percent(progress);
-                    reporter.set_step_count(count as u32, Some(total_libs as u32));
-                    log::info!("Libraries: {}/{} -> {}%", count, total_libs, progress);
-                    *last = std::time::Instant::now();
-                }
-
-                Ok::<(), anyhow::Error>(())
-            }
-        })
-        .buffer_unordered(LIB_CONCURRENT_DOWNLOADS)
-        .collect::<Vec<_>>()
-        .await
+    // Download libraries concurrently with BatchDownloader
+    let batch_downloader = BatchDownloader::new(client.clone(), spec.concurrency);
+    let artifacts = library_tasks
         .into_iter()
-        .collect::<Result<Vec<_>>>()?;
+        .map(|task| BatchArtifact {
+            name: task.name,
+            url: task.url,
+            path: task.path,
+            sha1: Some(task.sha1),
+            label: task.label,
+        })
+        .collect();
+
+    batch_downloader
+        .download_all(artifacts, reporter.clone(), 60, 15.0)
+        .await?;
 
     log::info!("Libraries downloaded: {}", total_libs);
 
@@ -661,8 +547,6 @@ pub async fn install_vanilla(
 
         let natives_dir = spec.natives_dir();
         let downloaded_natives = Arc::new(AtomicUsize::new(0));
-
-        const NATIVE_CONCURRENT_DOWNLOADS: usize = 4;
 
         stream::iter(native_tasks)
             .map(|task| {
@@ -676,14 +560,52 @@ pub async fn install_vanilla(
                         return Err(anyhow::anyhow!("Installation cancelled by user"));
                     }
 
-                    log::debug!("Downloading native: {}", task.name);
+                    while reporter.is_paused() {
+                        if reporter.is_cancelled() {
+                            return Err(anyhow::anyhow!("Installation cancelled by user"));
+                        }
+                        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+                    }
 
-                    let native_bytes =
-                        download_to_memory_with_client(&client, &task.url, Some(&task.sha1))
-                            .await
-                            .context(format!("Failed to download native: {}", task.name))?;
+                    log::debug!("Processing native: {}", task.name);
 
-                    extract_natives(&native_bytes, &natives_dir, &task.extract).await?;
+                    // Try to restore from cache
+                    let mut restored = false;
+                    if try_restore_artifact(&task.label, &task.path).await? {
+                        log::debug!("Restored native jar from cache: {}", task.label);
+                        restored = true;
+                    }
+
+                    if !restored && !reporter.is_dry_run() {
+                        download_to_path(
+                            &client,
+                            &task.url,
+                            &task.path,
+                            Some(&task.sha1),
+                            &*reporter,
+                        )
+                        .await?;
+
+                        // Track it in cache
+                        track_artifact_from_path(
+                            task.label.clone(),
+                            &task.path,
+                            None,
+                            Some(task.url.clone()),
+                        )
+                        .await?;
+                    }
+
+                    // Extract it (skip if dry_run)
+                    if !reporter.is_dry_run() {
+                        let native_bytes = std::fs::read(&task.path)?;
+                        let natives_dir = natives_dir.clone();
+                        let extract_rules = task.extract.clone();
+                        
+                        tokio::task::spawn_blocking(move || {
+                            extract_natives_sync(&native_bytes, &natives_dir, &extract_rules)
+                        }).await??;
+                    }
 
                     let count = downloaded_natives.fetch_add(1, Ordering::SeqCst) + 1;
                     let progress = 75 + ((count as f32 / total_natives as f32) * 5.0) as i32;
@@ -699,7 +621,7 @@ pub async fn install_vanilla(
                     Ok::<(), anyhow::Error>(())
                 }
             })
-            .buffer_unordered(NATIVE_CONCURRENT_DOWNLOADS)
+            .buffer_unordered(spec.concurrency)
             .collect::<Vec<_>>()
             .await
             .into_iter()
@@ -721,7 +643,7 @@ pub async fn install_vanilla(
     };
 
     log::info!("Ensuring Java runtime is available: {}", java_version.major);
-    let _java_path = get_or_install_jre(&spec.jre_dir(), &java_version)
+    let _java_path = get_or_install_jre(&spec.jre_dir(), &java_version, &*reporter)
         .await
         .context("Failed to install JRE")?;
 
@@ -783,7 +705,7 @@ fn arch_bits(os: &OsType) -> &'static str {
     }
 }
 
-async fn extract_natives(
+fn extract_natives_sync(
     zip_bytes: &[u8],
     dest: &PathBuf,
     extract_rules: &Option<ExtractRules>,
@@ -854,6 +776,11 @@ async fn fetch_and_download_version_info(
         version_entry.url,
         version_json_path
     );
+
+    if reporter.is_dry_run() {
+        return download_json_with_client(client, &version_entry.url).await;
+    }
+
     download_to_path(
         client,
         &version_entry.url,

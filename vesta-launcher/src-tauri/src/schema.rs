@@ -107,10 +107,24 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    task_state (id) {
+        id -> Text,
+        task_type -> Text,
+        status -> Text,
+        current_step -> Integer,
+        total_steps -> Integer,
+        data -> Text,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     account,
     app_config,
     instance,
     notification,
+    task_state,
     user_version_tracking,
 );

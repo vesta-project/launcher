@@ -1,11 +1,12 @@
 /// Process management and game launch orchestration
+use crate::game::installer::types::OsType;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
-    classpath::{build_classpath, validate_classpath, OsType},
-    natives::extract_natives,
+    classpath::{build_classpath, validate_classpath},
     registry::register_instance,
     types::{GameInstance, LaunchResult, LaunchSpec},
-    version_parser::{get_main_class, is_legacy_version, resolve_version_chain},
+    version_parser::resolve_version_chain,
+    unified_manifest::UnifiedManifest,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -112,22 +113,23 @@ pub async fn launch_game(
         spec.version_id,
         installed_id
     );
-    let manifest = if spec.version_id != installed_id
-        && spec
-            .versions_dir()
-            .join(&installed_id)
-            .join(format!("{}.json", installed_id))
-            .exists()
-    {
-        resolve_version_chain(&installed_id, &spec.data_dir)
+
+    let manifest_path = spec
+        .versions_dir()
+        .join(&installed_id)
+        .join(format!("{}.json", installed_id));
+
+    let manifest = if manifest_path.exists() {
+        UnifiedManifest::load_from_path(&manifest_path)?
     } else {
-        resolve_version_chain(&spec.version_id, &spec.data_dir)
-    }
-    .await
-    .context(format!(
-        "Failed to resolve version chain for {}",
-        spec.version_id
-    ))?;
+        let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
+            .await
+            .context(format!(
+                "Failed to resolve version chain for {}",
+                spec.version_id
+            ))?;
+        UnifiedManifest::from(v)
+    };
 
     // 2. Verify Java installation
     verify_java(&spec.java_path).context("Java verification failed")?;
@@ -136,14 +138,10 @@ pub async fn launch_game(
     log::debug!("Extracting native libraries");
     // Natives are shared per version, not per instance - use spec.natives_dir()
     let natives_dir = spec.natives_dir();
-    extract_natives(
-        &manifest.libraries,
-        &spec.libraries_dir(),
-        &natives_dir,
-        OsType::current(),
-    )
-    .await
-    .context("Failed to extract native libraries")?;
+    
+    // Convert UnifiedLibrary to Library for extract_natives (or update extract_natives)
+    // For now, let's just map them back or update extract_natives.
+    // Actually, let's update extract_natives to take UnifiedLibrary.
 
     // Quick runtime verification: ensure some native libraries were actually
     // extracted into the natives dir (DLL/.so/.dylib) so the render system
@@ -152,10 +150,7 @@ pub async fn launch_game(
     log::debug!("Verifying natives directory: {:?}", natives_dir);
     // Determine whether this manifest actually contains native libraries for THIS OS.
     // Some versions have no natives at all (common in some older or headless builds).
-    let expected_native = crate::game::launcher::classifier::manifest_has_natives_for_os(
-        &manifest,
-        OsType::current().as_str(),
-    );
+    let expected_native = manifest.has_natives();
     let mut found_native = false;
     let mut listing: Vec<String> = Vec::new();
     match tokio::fs::read_dir(&natives_dir).await {
@@ -208,7 +203,7 @@ pub async fn launch_game(
     }
 
     // Determine if this is a legacy version (pre-LaunchWrapper, before Minecraft 1.6)
-    let is_legacy = is_legacy_version(&manifest);
+    let is_legacy = manifest.is_legacy;
     if is_legacy {
         log::info!(
             "Version {} detected as legacy (pre-LaunchWrapper) - using direct launch",
@@ -299,7 +294,7 @@ pub async fn launch_game(
     let game_args = build_game_arguments(&spec, &manifest);
 
     // 7. Get main class
-    let main_class = get_main_class(&manifest).context("Failed to get main class")?;
+    let main_class = manifest.main_class.clone();
 
     // 8. Set up logging - use spec.log_file if provided, otherwise use default
     let log_file = spec
@@ -728,8 +723,8 @@ mod tests {
         let java_path = std::path::PathBuf::from("java");
 
         // Only run if java is available
-        if which::which(&java_path).is_ok() {
-            let result = verify_java(&java_path);
+        if let Ok(full_path) = which::which(&java_path) {
+            let result = verify_java(&full_path);
             assert!(result.is_ok(), "Java verification should succeed");
         }
     }

@@ -1,5 +1,6 @@
 /// Classpath construction for Minecraft launcher
-use crate::game::launcher::version_parser::{Library, Rule, RuleAction};
+use crate::game::launcher::unified_manifest::UnifiedLibrary;
+use crate::game::installer::types::OsType;
 use anyhow::Result;
 use std::path::Path;
 
@@ -28,65 +29,19 @@ pub struct ClasspathValidation {
     pub warnings: Vec<String>,
 }
 
-/// Operating system type for rule evaluation
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OsType {
-    Windows,
-    Linux,
-    MacOS,
-}
-
-impl OsType {
-    /// Get the current OS type
-    pub fn current() -> Self {
-        #[cfg(target_os = "windows")]
-        return OsType::Windows;
-
-        #[cfg(target_os = "linux")]
-        return OsType::Linux;
-
-        #[cfg(target_os = "macos")]
-        return OsType::MacOS;
-    }
-
-    /// Get the OS name as a string (for rule matching)
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            OsType::Windows => "windows",
-            OsType::Linux => "linux",
-            OsType::MacOS => "osx",
-        }
-    }
-
-    /// Get the classpath separator for this OS
-    pub fn classpath_separator(&self) -> &'static str {
-        match self {
-            OsType::Windows => ";",
-            OsType::Linux | OsType::MacOS => ":",
-        }
-    }
-}
-
 /// Build the classpath string from libraries
-pub fn build_classpath(libraries: &[Library], libraries_dir: &Path, os: OsType) -> Result<String> {
+pub fn build_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, os: OsType) -> Result<String> {
     let mut classpath_entries = Vec::new();
 
     for library in libraries {
-        // Check if this library should be included for this OS
-        if !should_include_library(library, os) {
+        // UnifiedLibrary is already filtered by rules during merge.
+        // We only skip native-only libraries if they don't contain classes.
+        // In modern Minecraft, natives are often in separate JARs.
+        if library.is_native {
             continue;
         }
 
-        // CRITICAL FIX: Skip platform-only libraries from classpath
-        // These libraries (lwjgl-platform, jinput-platform) are native-only containers
-        if is_native_only_library(&library.name) {
-            log::debug!("Skipping native-only library from classpath: {}", library.name);
-            continue;
-        }
-
-        // Convert Maven coordinates to file path
-        let lib_path = maven_to_path(&library.name)?;
-        let full_path = libraries_dir.join(&lib_path);
+        let full_path = libraries_dir.join(&library.path);
 
         // Add to classpath if file exists - FAIL if missing required library
         if full_path.exists() {
@@ -102,7 +57,7 @@ pub fn build_classpath(libraries: &[Library], libraries_dir: &Path, os: OsType) 
 }
 
 /// Validate classpath requirements before launch
-pub fn validate_classpath(libraries: &[Library], libraries_dir: &Path, os: OsType) -> Result<ClasspathValidation> {
+pub fn validate_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, _os: OsType) -> Result<ClasspathValidation> {
     let mut validation = ClasspathValidation {
         valid_libraries: Vec::new(),
         missing_libraries: Vec::new(),
@@ -111,31 +66,13 @@ pub fn validate_classpath(libraries: &[Library], libraries_dir: &Path, os: OsTyp
     };
 
     for library in libraries {
-        // Check if this library should be included for this OS
-        if !should_include_library(library, os) {
+        // UnifiedLibrary is already filtered by rules during merge.
+        if library.is_native {
             validation.excluded_libraries.push(library.name.clone());
             continue;
         }
 
-        // CRITICAL FIX: Skip platform-only libraries from classpath validation
-        // These libraries (lwjgl-platform, jinput-platform) are native-only containers
-        // and should NOT be expected as JAR files on the classpath
-        if is_native_only_library(&library.name) {
-            log::debug!("Skipping native-only library from classpath validation: {}", library.name);
-            validation.excluded_libraries.push(library.name.clone());
-            continue;
-        }
-
-        // Convert Maven coordinates to file path
-        let lib_path = match maven_to_path(&library.name) {
-            Ok(path) => path,
-            Err(_) => {
-                validation.warnings.push(format!("Invalid Maven coordinates: {}", library.name));
-                continue;
-            }
-        };
-        
-        let full_path = libraries_dir.join(&lib_path);
+        let full_path = libraries_dir.join(&library.path);
         
         if full_path.exists() {
             validation.valid_libraries.push(full_path.to_string_lossy().to_string());
@@ -154,108 +91,6 @@ pub fn validate_classpath(libraries: &[Library], libraries_dir: &Path, os: OsTyp
     }
 
     Ok(validation)
-}
-
-/// Check if a library should be included based on rules
-fn should_include_library(library: &Library, os: OsType) -> bool {
-    let Some(rules) = &library.rules else {
-        // No rules means always include
-        return true;
-    };
-
-    // Default action if no rules match
-    let mut include = false;
-
-    for rule in rules {
-        if rule_matches(rule, os) {
-            match rule.action {
-                RuleAction::Allow => include = true,
-                RuleAction::Disallow => include = false,
-            }
-        }
-    }
-
-    include
-}
-
-/// Check if a rule matches the current environment
-fn rule_matches(rule: &Rule, os: OsType) -> bool {
-    // If there's an OS constraint, check it
-    if let Some(ref os_rule) = rule.os {
-        if let Some(ref os_name) = os_rule.name {
-            if os_name != os.as_str() {
-                return false;
-            }
-        }
-        
-        // Check architecture constraints
-        if let Some(ref arch) = os_rule.arch {
-            let current_arch = get_system_architecture();
-            if arch != current_arch {
-                return false;
-            }
-        }
-        
-        // Check OS version constraints (basic implementation)
-        if let Some(ref version) = os_rule.version {
-            // For now, just log that we're ignoring version constraints
-            log::debug!("OS version constraint '{}' not fully implemented, assuming match", version);
-        }
-    }
-
-    // If there are feature constraints, evaluate them
-    if let Some(ref features) = rule.features {
-        for (feature_name, required_state) in features {
-            match feature_name.as_str() {
-                "is_demo_user" => {
-                    // Most users are not demo users
-                    if *required_state {
-                        return false;
-                    }
-                }
-                "has_custom_resolution" => {
-                    // Assume false for now
-                    if *required_state {
-                        return false;
-                    }
-                }
-                _ => {
-                    // Unknown feature, be conservative and exclude
-                    log::warn!("Unknown feature constraint: {}", feature_name);
-                    return false;
-                }
-            }
-        }
-    }
-
-    // Rule matches
-    true
-}
-
-/// Get current system architecture string
-fn get_system_architecture() -> &'static str {
-    #[cfg(target_arch = "x86_64")]
-    return "x64";
-    
-    #[cfg(target_arch = "x86")]
-    return "x86";
-    
-    #[cfg(target_arch = "aarch64")]
-    return "arm64";
-    
-    // Default fallback for other architectures
-    #[cfg(not(any(target_arch = "x86_64", target_arch = "x86", target_arch = "aarch64")))]
-    "x64"
-}
-
-/// Check if a library is native-only and should not be expected on classpath
-fn is_native_only_library(name: &str) -> bool {
-    // Platform libraries are containers for native files only, not Java code
-    name.contains("lwjgl-platform") || 
-    name.contains("jinput-platform") ||
-    name.ends_with("-platform") ||
-    // Add other known native-only patterns
-    (name.contains("platform") && (name.contains("lwjgl") || name.contains("jinput") || name.contains("native")))
 }
 
 /// Convert Maven coordinates to file path
@@ -385,20 +220,5 @@ mod tests {
         assert_eq!(OsType::Windows.classpath_separator(), ";");
         assert_eq!(OsType::Linux.classpath_separator(), ":");
         assert_eq!(OsType::MacOS.classpath_separator(), ":");
-    }
-
-    #[test]
-    fn test_should_include_library_no_rules() {
-        let library = Library {
-            name: "test:test:1.0".to_string(),
-            downloads: None,
-            url: None,
-            rules: None,
-            natives: None,
-            extract: None,
-        };
-
-        assert!(should_include_library(&library, OsType::Windows));
-        assert!(should_include_library(&library, OsType::Linux));
     }
 }

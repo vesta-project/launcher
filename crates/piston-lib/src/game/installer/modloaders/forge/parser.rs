@@ -63,7 +63,7 @@ pub async fn parse_version_json(installer_path: &Path) -> Result<ForgeVersionInf
 }
 
 /// Extract embedded Maven libraries from installer JAR
-pub async fn extract_maven_libraries(
+pub fn extract_maven_libraries_sync(
     installer_path: &Path,
     libraries_dir: &Path,
 ) -> Result<Vec<String>> {

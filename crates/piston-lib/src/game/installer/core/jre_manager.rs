@@ -1,6 +1,6 @@
 use super::downloader::extract_zip;
 use crate::game::installer::track_artifact_from_path;
-use crate::game::installer::types::{Arch, OsType};
+use crate::game::installer::types::{Arch, OsType, ProgressReporter};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::path::{Path, PathBuf};
@@ -51,8 +51,18 @@ struct ZuluPackage {
 
 /// Get or install the required JRE version
 /// Returns the path to the java executable
-pub async fn get_or_install_jre(jre_dir: &Path, required_version: &JavaVersion) -> Result<PathBuf> {
+pub async fn get_or_install_jre(
+    jre_dir: &Path,
+    required_version: &JavaVersion,
+    reporter: &dyn ProgressReporter,
+) -> Result<PathBuf> {
     log::info!("Ensuring JRE {} is available", required_version.major);
+
+    if reporter.is_dry_run() {
+        log::info!("[Dry-Run] Would ensure JRE {} is available", required_version.major);
+        let dummy_path = jre_dir.join(format!("zulu-{}/bin/java.exe", required_version.major));
+        return Ok(dummy_path);
+    }
 
     // Check if already installed
     let install_dir = jre_dir.join(format!("zulu-{}", required_version.major));
@@ -66,11 +76,15 @@ pub async fn get_or_install_jre(jre_dir: &Path, required_version: &JavaVersion) 
 
     // Download and install
     log::info!("Downloading Zulu JRE {}...", required_version.major);
-    install_zulu_jre(jre_dir, required_version).await
+    install_zulu_jre(jre_dir, required_version, reporter).await
 }
 
 /// Install a Zulu JRE
-async fn install_zulu_jre(jre_dir: &Path, required_version: &JavaVersion) -> Result<PathBuf> {
+async fn install_zulu_jre(
+    jre_dir: &Path,
+    required_version: &JavaVersion,
+    reporter: &dyn ProgressReporter,
+) -> Result<PathBuf> {
     let os = OsType::current();
     let arch = Arch::current();
 
@@ -130,9 +144,13 @@ async fn install_zulu_jre(jre_dir: &Path, required_version: &JavaVersion) -> Res
     log::info!("Downloading Zulu JRE from: {}", package.download_url);
 
     // Download archive (reuse the client created above)
-    let archive_bytes =
-        super::downloader::download_to_memory_with_client(&client, &package.download_url, None)
-            .await?;
+    let archive_bytes = super::downloader::download_to_memory_with_client(
+        &client,
+        &package.download_url,
+        None,
+        Some(reporter),
+    )
+    .await?;
 
     // Extract
     let install_dir = jre_dir.join(format!("zulu-{}", required_version.major));

@@ -226,6 +226,8 @@ mod tests {
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -250,6 +252,8 @@ mod tests {
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
         };
 
         assert_eq!(spec.installed_version_id(), "forge-loader-47.2.0-1.20.1");

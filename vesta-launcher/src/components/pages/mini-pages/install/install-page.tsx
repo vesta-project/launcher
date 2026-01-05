@@ -103,6 +103,17 @@ function InstallPage(props: InstallPageProps) {
 	const isMetadataLoading = () => Boolean(metadata.loading);
 	const getMetadataError = () => metadata.error;
 
+	// Initialize selectedVersion with latest stable release after metadata loads
+	createEffect(() => {
+		const meta = metadata();
+		if (meta && !selectedVersion()) {
+			const latestRelease = meta.game_versions.find((v) => v.stable);
+			if (latestRelease) {
+				setSelectedVersion(latestRelease.id);
+			}
+		}
+	});
+
 	// Get stable versions list for dropdown, filtered by modloader
 	const filteredVersions = () => {
 		const loader = selectedModloader();

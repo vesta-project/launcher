@@ -1,7 +1,6 @@
 use super::types::*;
 use anyhow::{Context, Result};
 use chrono::Utc;
-use futures::future::join_all;
 use std::collections::HashMap;
 
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -63,26 +62,54 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
 
     let mut game_versions = build_initial_game_versions(&mojang_manifest);
 
-    // Fetch loader versions sequentially (following Nexus pattern)
-    log::info!("Fabric");
-    add_fabric_modloader(&http_client, "Fabric", FABRIC_META_URL, &mut game_versions).await;
+    // Fetch all loader data in parallel
+    log::info!("Fetching modloader metadata in parallel...");
+    let fabric_fut = fetch_fabric_data(&http_client, FABRIC_META_URL);
+    let quilt_fut = fetch_fabric_data(&http_client, QUILT_META_URL);
+    let forge_fut = fetch_forge_xml(&http_client, FORGE_MAVEN_URL);
+    let neoforge_fut = fetch_neoforge_api_index_with_fallback(&http_client);
 
-    log::info!("Quilt");
-    add_fabric_modloader(&http_client, "Quilt", QUILT_META_URL, &mut game_versions).await;
+    let (fabric_res, quilt_res, forge_res, neoforge_res) =
+        tokio::join!(fabric_fut, quilt_fut, forge_fut, neoforge_fut);
 
-    log::info!("Forge");
-    add_forge_modloader(&http_client, "Forge", FORGE_MAVEN_URL, &mut game_versions).await;
+    // Apply Fabric
+    match fabric_res {
+        Ok((loaders, games)) => {
+            log::info!("Fabric: Found {} loaders for {} game versions", loaders.len(), games.len());
+            apply_fabric_style_loaders(&mut game_versions, ModloaderType::Fabric, loaders, games);
+        }
+        Err(e) => log::error!("Failed to fetch Fabric metadata: {}", e),
+    }
 
-    log::info!("NeoForge");
-    add_neoforge_api_then_maven(
-        &http_client,
-        "NeoForge",
-        NEOFORGE_API_VERSIONS,
-        NEOFORGE_API_FALLBACK_VERSIONS,
-        NEOFORGE_MAVEN_URL,
-        &mut game_versions,
-    )
-    .await;
+    // Apply Quilt
+    match quilt_res {
+        Ok((loaders, games)) => {
+            log::info!("Quilt: Found {} loaders for {} game versions", loaders.len(), games.len());
+            apply_fabric_style_loaders(&mut game_versions, ModloaderType::Quilt, loaders, games);
+        }
+        Err(e) => log::error!("Failed to fetch Quilt metadata: {}", e),
+    }
+
+    // Apply Forge
+    match forge_res {
+        Ok(xml) => {
+            log::info!("Forge: Processing {} total versions", xml.versioning.versions.version.len());
+            process_forge_versions("Forge", &xml, &mut game_versions);
+        }
+        Err(e) => log::error!("Failed to fetch Forge metadata: {}", e),
+    }
+
+    // Apply NeoForge
+    match neoforge_res {
+        Ok(index) => {
+            log::info!("NeoForge: Processing {} game versions from API/Maven", index.len());
+            process_neoforge_api_versions("NeoForge", &index, &mut game_versions);
+        }
+        Err(e) => log::error!("Failed to fetch NeoForge metadata: {}", e),
+    }
+
+    // Sort versions by release date (latest first)
+    game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
 
     let metadata = PistonMetadata {
         last_updated: Utc::now(),
@@ -198,130 +225,111 @@ async fn fetch_mojang_manifest_with_client(client: &reqwest::Client) -> Result<M
     }))
 }
 
-/// Add Fabric-style modloader (Fabric or Quilt) using parallel requests
-async fn add_fabric_modloader(
+/// Fetch Fabric-style modloader data (loaders and supported game versions) in batch
+async fn fetch_fabric_data(
     client: &reqwest::Client,
-    loader_name: &str,
     repo: &str,
-    game_versions: &mut Vec<GameVersionMetadata>,
-) {
-    // Get list of game versions that support this loader
-    let loader_version_list: Vec<String> = match client.get(format!("{}/game", repo)).send().await {
-        Ok(result) => match result.json::<Vec<VersionStruct>>().await {
-            Ok(versions) => versions.iter().map(|v| v.version.clone()).collect(),
-            Err(e) => {
-                log::error!("Error parsing {} versions: {}", loader_name, e);
-                return;
-            }
-        },
-        Err(e) => {
-            log::error!("Error requesting {} versions: {}", loader_name, e);
-            return;
-        }
-    };
+) -> Result<(Vec<LoaderVersionInfo>, Vec<String>)> {
+    let loaders_url = format!("{}/loader", repo);
+    let games_url = format!("{}/game", repo);
 
-    log::info!(
-        "{}: Found {} supported game versions",
-        loader_name,
-        loader_version_list.len()
-    );
+    let loaders_fut = client.get(&loaders_url).send();
+    let games_fut = client.get(&games_url).send();
 
-    // Filter to only game versions that support this loader
-    let supported_versions: Vec<&mut GameVersionMetadata> = game_versions
-        .iter_mut()
-        .filter(|v| loader_version_list.contains(&v.id))
-        .collect();
+    let (loaders_res, games_res) = tokio::join!(loaders_fut, games_fut);
 
-    log::info!(
-        "{}: Processing {} game versions in parallel",
-        loader_name,
-        supported_versions.len()
-    );
-
-    // Fetch loader versions in parallel
-    let futures: Vec<_> = supported_versions
+    let loaders: Vec<LoaderVersionInfo> = loaders_res?
+        .json::<Vec<FabricLoaderMeta>>()
+        .await?
         .into_iter()
-        .map(|version| {
-            let url = format!("{}/loader/{}", repo, version.id);
-            let version_id = version.id.clone();
-            let loader_name_owned = loader_name.to_string();
-            let client_clone = client.clone();
-
-            async move {
-                match client_clone.get(&url).send().await {
-                    Ok(response) if response.status().is_success() => {
-                        match response.json::<Vec<FabricGameMetaVersionInfo>>().await {
-                            Ok(loader_versions) => {
-                                let loader_infos: Vec<LoaderVersionInfo> = loader_versions
-                                    .into_iter()
-                                    .map(|l| LoaderVersionInfo {
-                                        version: l.loader.version.clone(),
-                                        stable: l
-                                            .loader
-                                            .stable
-                                            .unwrap_or_else(|| !l.loader.version.contains("beta")),
-                                        metadata: None,
-                                    })
-                                    .collect();
-
-                                log::info!(
-                                    "{}: {} - {} loaders",
-                                    loader_name_owned,
-                                    version_id,
-                                    loader_infos.len()
-                                );
-                                Some((version_id, loader_infos))
-                            }
-                            Err(e) => {
-                                log::warn!(
-                                    "{}: Error parsing loaders for {}: {}",
-                                    loader_name_owned,
-                                    version_id,
-                                    e
-                                );
-                                None
-                            }
-                        }
-                    }
-                    Ok(response) => {
-                        log::warn!(
-                            "{}: HTTP {} for {}",
-                            loader_name_owned,
-                            response.status(),
-                            version_id
-                        );
-                        None
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "{}: Request error for {}: {}",
-                            loader_name_owned,
-                            version_id,
-                            e
-                        );
-                        None
-                    }
-                }
-            }
+        .map(|l| LoaderVersionInfo {
+            version: l.version.clone(),
+            stable: l.stable.unwrap_or_else(|| !l.version.contains("beta")),
+            metadata: None,
         })
         .collect();
 
-    let results = join_all(futures).await;
+    let games: Vec<String> = games_res?
+        .json::<Vec<VersionStruct>>()
+        .await?
+        .into_iter()
+        .map(|v| v.version)
+        .collect();
 
-    // Apply results back to game_versions
-    let loader_type = match loader_name {
-        "Fabric" => ModloaderType::Fabric,
-        "Quilt" => ModloaderType::Quilt,
-        _ => return,
-    };
+    Ok((loaders, games))
+}
 
-    for result in results.into_iter().flatten() {
-        if let Some(version) = game_versions.iter_mut().find(|v| v.id == result.0) {
-            version.loaders.insert(loader_type.clone(), result.1);
+/// Apply Fabric-style loaders to game versions
+fn apply_fabric_style_loaders(
+    game_versions: &mut [GameVersionMetadata],
+    loader_type: ModloaderType,
+    loaders: Vec<LoaderVersionInfo>,
+    supported_games: Vec<String>,
+) {
+    for version in game_versions.iter_mut() {
+        if supported_games.contains(&version.id) {
+            // Filter out blacklisted versions
+            let filtered_loaders: Vec<LoaderVersionInfo> = loaders
+                .iter()
+                .filter(|l| !super::blacklist::is_blacklisted(loader_type, &version.id, &l.version))
+                .cloned()
+                .collect();
+
+            if !filtered_loaders.is_empty() {
+                version.loaders.insert(loader_type, filtered_loaders);
+            }
+        }
+    }
+}
+
+/// Fetch Forge-style maven metadata XML
+async fn fetch_forge_xml(client: &reqwest::Client, repo: &str) -> Result<ForgeVersionsXml> {
+    let url = format!("{}/maven-metadata.xml", repo);
+    let xml = client.get(&url).send().await?.text().await?;
+    let forge_xml: ForgeVersionsXml = serde_xml_rs::from_str(&xml)?;
+    Ok(forge_xml)
+}
+
+/// Fetch NeoForge API index with fallback logic
+async fn fetch_neoforge_api_index_with_fallback(
+    client: &reqwest::Client,
+) -> Result<HashMap<String, Vec<serde_json::Value>>> {
+    // Try primary API
+    if let Ok(index) = fetch_neoforge_api_index(client, NEOFORGE_API_VERSIONS, NEOFORGE_GAV).await {
+        if !index.is_empty() {
+            return Ok(index);
         }
     }
 
-    log::info!("{}: Complete", loader_name);
+    // Try fallback API
+    if let Ok(index) =
+        fetch_neoforge_api_index(client, NEOFORGE_API_FALLBACK_VERSIONS, NEOFORGE_GAV).await
+    {
+        if !index.is_empty() {
+            return Ok(index);
+        }
+    }
+
+    // Last resort: parse maven metadata XML
+    let xml = fetch_forge_xml(client, NEOFORGE_MAVEN_URL).await?;
+    // Convert ForgeVersionsXml to the HashMap format expected by process_neoforge_api_versions
+    // Actually, it's easier to just return the XML and have a separate path, but let's keep it simple.
+    // Wait, process_neoforge_api_versions expects a HashMap.
+    // Let's just return an error and let the caller handle the maven fallback if needed,
+    // or better, just implement the conversion here.
+
+    let mut index = HashMap::new();
+    for v in xml.versioning.versions.version {
+        // "1.20.2-20.2.16" -> mc="1.20.2", neo="20.2.16"
+        if let Some((mc, neo)) = v.split_once('-') {
+            index
+                .entry(mc.to_string())
+                .or_insert_with(Vec::new)
+                .push(serde_json::Value::String(neo.to_string()));
+        }
+    }
+
+    Ok(index)
 }
 
 fn process_forge_versions(
@@ -361,6 +369,17 @@ fn process_forge_versions(
             // - Otherwise (NeoForge style) take the whole string
             // Use nexus semantics: split on '-' and take the last segment
             let l_version = forge_version.split('-').last().unwrap().to_string();
+
+            // Check blacklist
+            if super::blacklist::is_blacklisted(loader_type, &version.id, &l_version) {
+                log::debug!(
+                    "Skipping blacklisted {} version: {} for MC {}",
+                    loader_name,
+                    l_version,
+                    version.id
+                );
+                continue;
+            }
 
             loader_info.insert(
                 l_version.clone(),
@@ -597,6 +616,16 @@ fn process_neoforge_api_versions(
                 };
 
                 if let Some(neo_version) = neo_version_opt {
+                    // Check blacklist
+                    if super::blacklist::is_blacklisted(loader_type, mc_version, &neo_version) {
+                        log::debug!(
+                            "Skipping blacklisted NeoForge version: {} for MC {}",
+                            neo_version,
+                            mc_version
+                        );
+                        continue;
+                    }
+
                     // TODO: Persist metadata fields like artifact_url/published_at into LoaderVersionInfo.metadata in the future
                     loader_info.insert(
                         neo_version.clone(),
@@ -756,110 +785,3 @@ mod tests {
     }
 }
 
-/// Add Forge-style modloader (Forge or NeoForge)
-async fn add_forge_modloader(
-    client: &reqwest::Client,
-    loader_name: &str,
-    repo: &str,
-    game_versions: &mut Vec<GameVersionMetadata>,
-) {
-    let xml = match client.get(format!("{}/maven-metadata.xml", repo)).send().await {
-        Ok(result) => match result.text().await {
-            Ok(text) => text,
-            Err(e) => {
-                log::error!("Error reading {} XML response: {}", loader_name, e);
-                return;
-            }
-        },
-        Err(e) => {
-            log::error!("Error requesting {} versions: {}", loader_name, e);
-            return;
-        }
-    };
-
-    let forge_xml: ForgeVersionsXml = match serde_xml_rs::from_str(&xml) {
-        Ok(r) => r,
-        Err(e) => {
-            log::error!("Error parsing {} XML: {}", loader_name, e);
-            return;
-        }
-    };
-
-    let _loader_type = match loader_name {
-        "Forge" => ModloaderType::Forge,
-        "NeoForge" => ModloaderType::NeoForge,
-        _ => return,
-    };
-
-    log::info!(
-        "{}: Processing {} total versions",
-        loader_name,
-        forge_xml.versioning.versions.version.len()
-    );
-
-    process_forge_versions(loader_name, &forge_xml, game_versions);
-
-    log::info!("{}: Complete", loader_name);
-}
-
-/// API-first NeoForge fetcher (with API fallback then maven fallback)
-async fn add_neoforge_api_then_maven(
-    client: &reqwest::Client,
-    loader_name: &str,
-    api_base: &str,
-    fallback_api_base: &str,
-    maven_repo: &str,
-    game_versions: &mut Vec<GameVersionMetadata>,
-) {
-    // Try primary API
-    match fetch_neoforge_api_index(client, api_base, NEOFORGE_GAV).await {
-        Ok(index) if !index.is_empty() => {
-            log::info!(
-                "{}: Using API (primary): {} entries",
-                loader_name,
-                index.iter().map(|(_, v)| v.len()).sum::<usize>()
-            );
-            process_neoforge_api_versions(loader_name, &index, game_versions);
-            return;
-        }
-        Ok(_) => {
-            log::warn!(
-                "{}: API returned no entries, trying fallback API...",
-                loader_name
-            );
-        }
-        Err(e) => {
-            log::warn!(
-                "{}: API request failed (primary): {} — trying fallback API...",
-                loader_name,
-                e
-            );
-        }
-    }
-
-    // Try fallback API
-    match fetch_neoforge_api_index(client, fallback_api_base, NEOFORGE_GAV).await {
-        Ok(index) if !index.is_empty() => {
-            log::info!(
-                "{}: Using API (fallback): {} entries",
-                loader_name,
-                index.iter().map(|(_, v)| v.len()).sum::<usize>()
-            );
-            process_neoforge_api_versions(loader_name, &index, game_versions);
-            return;
-        }
-        Ok(_) => log::warn!(
-            "{}: fallback API returned no entries; falling back to maven XML",
-            loader_name
-        ),
-        Err(e) => log::warn!(
-            "{}: fallback API request failed: {} — falling back to maven XML",
-            loader_name,
-            e
-        ),
-    }
-
-    // Last resort: parse maven metadata XML like Forge does
-    log::info!("{}: Falling back to maven XML parsing", loader_name);
-    add_forge_modloader(client, loader_name, maven_repo, game_versions).await;
-}

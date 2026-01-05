@@ -151,16 +151,28 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		customCss: `:root {
 			/* Force truly black surfaces for OLED panels */
 			--surface-base: hsl(0 0% 0%);
-			--surface-raised: hsl(0 0% 0%);
-			--surface-overlay: hsl(0 0% 0%);
+			--surface-raised: hsl(0 0% 2%);
+			--surface-overlay: hsl(0 0% 3%);
+			--surface-sunken: hsl(0 0% 0%);
 			--text-primary: hsl(0 0% 100%);
 			--text-secondary: hsl(0 0% 70%);
+			--text-tertiary: hsl(0 0% 50%);
+			--text-disabled: hsl(0 0% 30%);
 			/* Override interactive/accent colors to neutral greys for OLED */
 			--accent-primary: hsl(0 0% 60%);
 			--accent-primary-hover: hsl(0 0% 70%);
 			--interactive-base: hsl(0 0% 60%);
-			--border-subtle: hsl(0 0% 20% / 0.4);
-			--border-strong: hsl(0 0% 30% / 0.6);
+			--interactive-hover: hsl(0 0% 70%);
+			--border-subtle: hsl(0 0% 15% / 0.5);
+			--border-strong: hsl(0 0% 25% / 0.7);
+			--border-glass: hsl(0 0% 20% / 0.3);
+			/* Remove all blur effects for performance */
+			--liquid-backdrop-filter: none;
+			--effect-blur: 0px;
+			--glass-blur: none;
+			/* OLED-optimized shadows (minimal to avoid grey halos) */
+			--liquid-box-shadow: 0 4px 12px hsl(0 0% 0% / 0.8);
+			--effect-shadow-depth: 2px;
 		}`,
 	},
 	{

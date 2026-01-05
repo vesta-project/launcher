@@ -1,7 +1,9 @@
-use crate::game::installer::types::{InstallSpec, ProgressReporter};
+use crate::game::installer::types::{InstallSpec, ProgressReporter, OsType};
 use crate::game::installer::vanilla::install_vanilla;
 use crate::game::installer::{track_artifact_from_path, try_restore_artifact};
 use crate::game::metadata::{load_or_fetch_metadata, ModloaderType};
+use crate::game::launcher::version_parser::{VersionManifest, Library};
+use crate::game::launcher::unified_manifest::UnifiedManifest;
 use anyhow::{anyhow, Context, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -26,6 +28,7 @@ impl ModloaderInstaller for FabricInstaller {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
+#[allow(dead_code)]
 struct FabricLoaderVersion {
     separator: String,
     build: u32,
@@ -225,8 +228,13 @@ pub async fn install_loader(
     reporter.start_step(&format!("Finalizing {} installation", loader_name), Some(5));
     // Write merged JSON into a new installed-version directory so loader variants
     // live under versions/<installed_id> (e.g. fabric-loader-0.38.2-1.20.1)
-    let installed_id = spec.installed_version_id();
-    let installed_dir = spec.versions_dir().join(&installed_id);
+    let loader_id = format!(
+        "{}-loader-{}-{}",
+        loader_name.to_lowercase(),
+        loader_version,
+        spec.version_id
+    );
+    let installed_dir = spec.versions_dir().join(&loader_id);
     std::fs::create_dir_all(&installed_dir)?;
 
     // Vanilla base JSON is still stored under the vanilla version folder
@@ -234,147 +242,42 @@ pub async fn install_loader(
 
     // Read vanilla version JSON
     let vanilla_json_path = version_dir.join(format!("{}.json", spec.version_id));
-    let vanilla_json: serde_json::Value = serde_json::from_str(
+    let vanilla_manifest: VersionManifest = serde_json::from_str(
         &std::fs::read_to_string(&vanilla_json_path)
             .context("Failed to read vanilla version JSON")?,
     )?;
 
-    // Create loader version JSON (merge profile with vanilla)
-    let loader_id = format!(
-        "{}-loader-{}-{}",
-        loader_name.to_lowercase(),
-        loader_version,
-        spec.version_id
-    );
+    let os = OsType::current();
+    
+    // Convert LoaderProfile to VersionManifest so we can use UnifiedManifest::merge
+    let loader_manifest = VersionManifest {
+        id: loader_id.clone(),
+        main_class: Some(profile.main_class.clone()),
+        inherits_from: Some(spec.version_id.clone()),
+        arguments: profile.arguments.and_then(|v| serde_json::from_value(v).ok()),
+        minecraft_arguments: None,
+        libraries: profile.libraries.into_iter().map(|lib| Library {
+            name: lib.name.clone(),
+            downloads: None,
+            url: lib.url.clone().or_else(|| Some(maven_url.to_string())),
+            rules: None,
+            natives: None,
+            extract: None,
+        }).collect(),
+        asset_index: None,
+        assets: None,
+        java_version: None,
+        version_type: None,
+        release_time: None,
+        time: None,
+    };
+
+    let unified = UnifiedManifest::merge(vanilla_manifest, Some(loader_manifest), os);
+
     let loader_json_path = installed_dir.join(format!("{}.json", loader_id));
-
-    let mut merged_json = vanilla_json
-        .as_object()
-        .ok_or_else(|| anyhow!("Invalid vanilla JSON"))?
-        .clone();
-
-    // Update ID and main class
-    merged_json.insert("id".to_string(), serde_json::json!(loader_id));
-    merged_json.insert(
-        "mainClass".to_string(),
-        serde_json::json!(profile.main_class),
-    );
-
-    // Merge libraries
-    if let Some(vanilla_libs) = merged_json.get("libraries").and_then(|v| v.as_array()) {
-        // Use a map to deduplicate libraries by "group:artifact"
-        // Key: "group:artifact", Value: (version, library_json)
-        let mut lib_map: std::collections::HashMap<String, (String, serde_json::Value)> =
-            std::collections::HashMap::new();
-
-        // Helper to parse "group:artifact:version[:classifier]"
-        let parse_maven = |name: &str| -> Option<(String, String)> {
-            let parts: Vec<&str> = name.split(':').collect();
-            if parts.len() >= 3 {
-                let group = parts[0];
-                let artifact = parts[1];
-                let version = parts[2];
-                let classifier = if parts.len() > 3 {
-                    Some(parts[3])
-                } else {
-                    None
-                };
-
-                let key = if let Some(c) = classifier {
-                    format!("{}:{}:{}", group, artifact, c)
-                } else {
-                    format!("{}:{}", group, artifact)
-                };
-
-                Some((key, version.to_string()))
-            } else {
-                None
-            }
-        };
-
-        // Process vanilla libraries first
-        for lib in vanilla_libs {
-            if let Some(name) = lib.get("name").and_then(|n| n.as_str()) {
-                if let Some((key, version)) = parse_maven(name) {
-                    lib_map.insert(key, (version, lib.clone()));
-                } else {
-                    // If we can't parse the name, just add it with the full name as key to avoid losing it
-                    // (though this shouldn't happen for valid maven coords)
-                    lib_map.insert(name.to_string(), ("".to_string(), lib.clone()));
-                }
-            }
-        }
-
-        // Process Fabric libraries (override vanilla if same artifact)
-        // TODO: Should we compare versions? Usually loader knows best, so we let loader override.
-        // But for ASM, we want to avoid duplicates.
-        for lib in &profile.libraries {
-            let lib_json = serde_json::json!({
-                "name": lib.name,
-                "url": lib.url.as_deref().unwrap_or(maven_url)
-            });
-
-            if let Some((key, version)) = parse_maven(&lib.name) {
-                // Check if we already have this artifact
-                if let Some((existing_ver, _)) = lib_map.get(&key) {
-                    // If versions differ, we need to decide.
-                    // For ASM (org.ow2.asm), duplicates are fatal.
-                    // We'll prefer the one from Fabric profile as it's likely what the loader expects.
-                    log::debug!(
-                        "Overriding library {} version {} with {}",
-                        key,
-                        existing_ver,
-                        version
-                    );
-                }
-                lib_map.insert(key, (version, lib_json));
-            } else {
-                lib_map.insert(lib.name.clone(), ("".to_string(), lib_json));
-            }
-        }
-
-        // Convert map back to list
-        let all_libraries: Vec<serde_json::Value> = lib_map.into_values().map(|(_, v)| v).collect();
-        merged_json.insert("libraries".to_string(), serde_json::json!(all_libraries));
-    }
-
-    // Merge arguments if present
-    if let Some(loader_args) = profile.arguments {
-        // Get existing vanilla arguments
-        let mut merged_args = if let Some(vanilla_args) = merged_json.get("arguments").cloned() {
-            vanilla_args
-        } else {
-            serde_json::json!({
-                "game": [],
-                "jvm": []
-            })
-        };
-
-        // Merge game args
-        if let Some(loader_game) = loader_args.get("game").and_then(|v| v.as_array()) {
-            if let Some(merged_game) = merged_args.get_mut("game").and_then(|v| v.as_array_mut()) {
-                merged_game.extend(loader_game.clone());
-            } else {
-                merged_args["game"] = serde_json::json!(loader_game);
-            }
-        }
-
-        // Merge JVM args
-        if let Some(loader_jvm) = loader_args.get("jvm").and_then(|v| v.as_array()) {
-            if let Some(merged_jvm) = merged_args.get_mut("jvm").and_then(|v| v.as_array_mut()) {
-                merged_jvm.extend(loader_jvm.clone());
-            } else {
-                merged_args["jvm"] = serde_json::json!(loader_jvm);
-            }
-        }
-
-        merged_json.insert("arguments".to_string(), merged_args);
-    }
-
-    // Write loader version JSON into the installed dir
     std::fs::write(
         loader_json_path,
-        serde_json::to_string_pretty(&merged_json)?,
+        serde_json::to_string_pretty(&unified)?,
     )?;
 
     reporter.set_percent(100);

@@ -450,7 +450,19 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .decorations(false);
 
     #[cfg(target_os = "windows")]
-    let version = WindowsVersion::detect().expect("Failed to detect windows version");
+    let version = match WindowsVersion::detect() {
+        Some(v) => v,
+        None => {
+            log::warn!("Failed to detect Windows version. Using fallback window configuration.");
+            // Return a fallback version that will use basic window configuration
+            // TODO: Review this fallback later
+            WindowsVersion {
+                major: 10,
+                minor: 0,
+                build: 19000, // Pre-Windows 11 build number
+            }
+        }
+    };
 
     #[cfg(target_os = "windows")]
     // If on windows 11

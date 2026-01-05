@@ -5,7 +5,7 @@ We welcome contributions. This file captures a short workflow for contributing c
 How to contribute
 1. Fork the repository and create a feature branch.
 2. Implement tests for behavior you change (unit tests or integration tests under the appropriate crate).
-3. Run the relevant test suites locally (see `docs/INSTALLATION.md` for commands).
+3. Run the relevant test suites locally (see `docs/DEVELOPMENT.md` for commands).
 4. Open a pull request describing the change, the motivation, and any breaking changes (migrations required, API changes, etc.).
 
 Notes for maintainers

@@ -88,6 +88,9 @@ function SettingsPage() {
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
 
+	// Debounce timer for hue slider to prevent excessive applyTheme calls
+	let hueDebounceTimer: number | undefined;
+
 	// Permissions helpers based on current theme
 	const canChangeHue = () => {
 		const id = themeId();
@@ -237,15 +240,22 @@ function SettingsPage() {
 		const id = themeId();
 		const currentTheme = id ? getThemeById(id) : undefined;
 		if (currentTheme) {
-			applyTheme(
-				validateTheme({
-					...currentTheme,
-					primaryHue: newHue,
-					style: styleMode(),
-					gradientEnabled: gradientEnabled(),
-					gradientAngle: gradientAngle(),
-				}),
-			);
+			// Clear existing debounce timer
+			if (hueDebounceTimer !== undefined) {
+				clearTimeout(hueDebounceTimer);
+			}
+			// Apply theme after 50ms delay to avoid excessive calls while dragging
+			hueDebounceTimer = setTimeout(() => {
+				applyTheme(
+					validateTheme({
+						...currentTheme,
+						primaryHue: newHue,
+						style: styleMode(),
+						gradientEnabled: gradientEnabled(),
+						gradientAngle: gradientAngle(),
+					}),
+				);
+			}, 50) as unknown as number;
 		}
 	};
 

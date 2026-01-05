@@ -15,16 +15,22 @@ async fn integration_installer_launcher_natives_flow() {
     let natives_dir = natives_tmp.path();
 
     // Build a fake library where the classifier exists in downloads.classifiers
+    let coords = "com.example:libperm:2.0:natives-windows-64";
+    let rel_path = maven_to_path(coords).unwrap();
+
     let mut classifiers = HashMap::new();
     classifiers.insert(
         "natives-windows-64".to_string(),
         Artifact {
-            path: Some("placeholder".to_string()),
+            path: Some(rel_path.clone()),
             url: Some("https://example.com/fake.jar".to_string()),
             sha1: Some("deadbeef".to_string()),
             size: Some(123),
         },
     );
+
+    let mut natives = HashMap::new();
+    natives.insert("windows".to_string(), "natives-windows-64".to_string());
 
     let downloads = LibraryDownloads {
         artifact: None,
@@ -36,14 +42,12 @@ async fn integration_installer_launcher_natives_flow() {
         downloads: Some(downloads),
         url: None,
         rules: None,
-        natives: None,
+        natives: Some(natives),
         extract: Some(ExtractRules { exclude: vec![] }),
     };
 
     // Create the classifier JAR on disk so the launcher can extract it
-    let coords = format!("{}:natives-windows-64", lib.name);
-    let rel = maven_to_path(&coords).unwrap();
-    let full_path = libraries_dir.join(rel);
+    let full_path = libraries_dir.join(&rel_path);
 
     if let Some(p) = full_path.parent() {
         std::fs::create_dir_all(p).unwrap();
@@ -62,7 +66,8 @@ async fn integration_installer_launcher_natives_flow() {
     }
 
     // Run extract_natives which should detect the classifier and extract the contained file
-    extract_natives(&[lib], libraries_dir, natives_dir, OsType::Windows)
+    let unified = piston_lib::game::launcher::unified_manifest::UnifiedLibrary::from_library(&lib, None, OsType::Windows);
+    extract_natives(&unified, libraries_dir, natives_dir, OsType::Windows)
         .await
         .expect("integration extract failed");
 
