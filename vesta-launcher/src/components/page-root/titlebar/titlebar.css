@@ -2,21 +2,19 @@
 	grid-column: 1 / -1;
 	grid-row: 1;
 
-	--color__primary-hue: var(--color__primary-hue);
-
 	padding-left: 12px;
 	width: 100%;
 	height: 32px;
 	display: flex;
 	flex-direction: row;
 
-	--titlebar__opacity: calc(var(--background-opacity) * 1.2);
+	--titlebar__opacity: calc(var(--background-opacity) * 1.5);
 
 	background: linear-gradient(
-		var(--background-angle),
+		var(--rotation, 90deg),
 		hsl(var(--color__primary-hue) 100% 7% / var(--titlebar__opacity)) 10%,
 		hsl(var(--color__primary-hue) 100% 60% / var(--titlebar__opacity)) 50%,
-		hsl(var(--color__secondary-hue) 50% 30% / var(--titlebar__opacity)) 100%
+		hsl(var(--hue-secondary) 50% 30% / var(--titlebar__opacity)) 100%
 	);
 
 	--titlebar__svg--color: var(--icon-primary);
@@ -33,11 +31,11 @@
 	&:is(.titlebar--right) {
 		flex-direction: row-reverse;
 		background: linear-gradient(
-			var(--background-angle),
+			var(--rotation, 90deg),
 			hsl(var(--color__primary-hue) 0% 0% / 0%) 10%,
 			hsl(var(--color__primary-hue) 100% 7% / var(--titlebar__opacity)) 20%,
 			hsl(var(--color__primary-hue) 100% 60% / var(--titlebar__opacity)) 50%,
-			hsl(var(--color__secondary-hue) 50% 30% / var(--titlebar__opacity)) 100%
+			hsl(var(--hue-secondary) 50% 30% / var(--titlebar__opacity)) 100%
 		);
 	}
 
@@ -50,20 +48,20 @@
 @media (prefers-color-scheme: light) {
 	.titlebar {
 		background: linear-gradient(
-			var(--background-angle),
+			var(--rotation, 90deg),
 			hsl(var(--color__primary-hue) 60% 75% / var(--titlebar__opacity)) 10%,
 			hsl(var(--color__primary-hue) 70% 70% / var(--titlebar__opacity)) 50%,
-			hsl(var(--color__secondary-hue) 65% 70% / var(--titlebar__opacity)) 100%
+			hsl(var(--hue-secondary) 65% 70% / var(--titlebar__opacity)) 100%
 		);
 	}
 
 	.titlebar:is(.titlebar--right) {
 		background: linear-gradient(
-			var(--background-angle),
+			var(--rotation, 90deg),
 			hsl(var(--color__primary-hue) 0% 0% / 0%) 10%,
 			hsl(var(--color__primary-hue) 60% 75% / var(--titlebar__opacity)) 20%,
 			hsl(var(--color__primary-hue) 70% 70% / var(--titlebar__opacity)) 50%,
-			hsl(var(--color__secondary-hue) 65% 70% / var(--titlebar__opacity)) 100%
+			hsl(var(--hue-secondary) 65% 70% / var(--titlebar__opacity)) 100%
 		);
 	}
 }
