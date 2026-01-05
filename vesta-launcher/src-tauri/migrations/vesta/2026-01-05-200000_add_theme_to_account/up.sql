@@ -1,0 +1,9 @@
+-- Add theme fields to account table
+ALTER TABLE account ADD COLUMN theme_id TEXT;
+ALTER TABLE account ADD COLUMN theme_primary_hue INTEGER;
+ALTER TABLE account ADD COLUMN theme_style TEXT;
+ALTER TABLE account ADD COLUMN theme_gradient_enabled BOOLEAN;
+ALTER TABLE account ADD COLUMN theme_gradient_angle INTEGER;
+ALTER TABLE account ADD COLUMN theme_gradient_type TEXT;
+ALTER TABLE account ADD COLUMN theme_gradient_harmony TEXT;
+ALTER TABLE account ADD COLUMN theme_advanced_overrides TEXT;

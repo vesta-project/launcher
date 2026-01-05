@@ -14,6 +14,17 @@ diesel::table! {
         cape_url -> Nullable<Text>,
         created_at -> Nullable<Text>,
         updated_at -> Nullable<Text>,
+        theme_id -> Nullable<Text>,
+        theme_mode -> Nullable<Text>,
+        theme_primary_hue -> Nullable<Integer>,
+        theme_primary_sat -> Nullable<Integer>,
+        theme_primary_light -> Nullable<Integer>,
+        theme_style -> Nullable<Text>,
+        theme_gradient_enabled -> Nullable<Bool>,
+        theme_gradient_angle -> Nullable<Integer>,
+        theme_gradient_type -> Nullable<Text>,
+        theme_gradient_harmony -> Nullable<Text>,
+        theme_advanced_overrides -> Nullable<Text>,
     }
 }
 

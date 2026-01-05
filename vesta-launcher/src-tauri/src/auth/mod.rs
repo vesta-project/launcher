@@ -92,7 +92,7 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
         match result {
             Ok(Some(token_response)) => {
                 // Exchange for Minecraft token and save account
-                match process_login_completion(token_response).await {
+                match process_login_completion(app_clone.clone(), token_response).await {
                     Ok((uuid_res, username_res)) => {
                         let _ = app_clone.emit(
                             "vesta://auth",
@@ -184,6 +184,7 @@ async fn poll_with_cancellation(
 
 /// Process successful login: exchange tokens and save account
 async fn process_login_completion(
+    app_handle: AppHandle,
     token_response: oauth2::basic::BasicTokenResponse,
 ) -> Result<(String, String)> {
     let microsoft_access_token = token_response.access_token().secret();
@@ -213,13 +214,16 @@ async fn process_login_completion(
         .await
         .context("Failed to fetch Minecraft profile")?;
 
+    // Normalize UUID
+    let normalized_uuid = profile.id.replace("-", "");
+
     let skin_url_val = profile.skins.first().map(|s| s.url.clone());
     let cape_url_val = profile.capes.first().map(|c| c.url.clone());
 
     log::info!(
         "[auth] Completed token exchange and profile fetch for user {} ({})",
         profile.name,
-        profile.id
+        normalized_uuid
     );
 
     // Save to database
@@ -228,19 +232,20 @@ async fn process_login_completion(
 
     // Check if account already exists
     let existing_count: i64 = account
-        .filter(uuid.eq(&profile.id))
+        .filter(uuid.eq(&normalized_uuid))
         .count()
         .get_result(&mut conn)
         .unwrap_or(0);
 
     let now_str = Utc::now().to_rfc3339();
+    let current_config = get_app_config().unwrap_or_default();
 
     if existing_count == 0 {
         // Insert new account
-        log::info!("[auth] Inserting new account for uuid: {}", profile.id);
+        log::info!("[auth] Inserting new account for uuid: {}", normalized_uuid);
 
         let new_account = NewAccount {
-            uuid: profile.id.clone(),
+            uuid: normalized_uuid.clone(),
             username: profile.name.clone(),
             display_name: Some(profile.name.clone()),
             access_token: Some(minecraft_access_token.into_inner()),
@@ -251,6 +256,17 @@ async fn process_login_completion(
             cape_url: cape_url_val,
             created_at: Some(now_str.clone()),
             updated_at: Some(now_str.clone()),
+            theme_id: Some(current_config.theme_id),
+            theme_mode: Some(current_config.theme_mode),
+            theme_primary_hue: Some(current_config.theme_primary_hue),
+            theme_primary_sat: current_config.theme_primary_sat,
+            theme_primary_light: current_config.theme_primary_light,
+            theme_style: Some(current_config.theme_style),
+            theme_gradient_enabled: Some(current_config.theme_gradient_enabled),
+            theme_gradient_angle: current_config.theme_gradient_angle,
+            theme_gradient_type: current_config.theme_gradient_type,
+            theme_gradient_harmony: current_config.theme_gradient_harmony,
+            theme_advanced_overrides: current_config.theme_advanced_overrides,
         };
 
         diesel::insert_into(account)
@@ -261,7 +277,7 @@ async fn process_login_completion(
         log::info!("[auth] Account inserted successfully");
     } else {
         // Update existing account
-        diesel::update(account.filter(uuid.eq(&profile.id)))
+        diesel::update(account.filter(uuid.eq(&normalized_uuid)))
             .set((
                 username.eq(&profile.name),
                 display_name.eq(&profile.name),
@@ -280,10 +296,19 @@ async fn process_login_completion(
 
     // Update active account in config
     let mut config = get_app_config().context("Failed to get app config")?;
-    config.active_account_uuid = Some(profile.id.clone());
+    config.active_account_uuid = Some(normalized_uuid.clone());
     update_app_config(&config).context("Failed to update app config")?;
 
-    Ok((profile.id, profile.name))
+    // Emit config update event so UI knows active account changed
+    let _ = app_handle.emit(
+        "config-updated",
+        serde_json::json!({
+            "field": "active_account_uuid",
+            "value": normalized_uuid
+        }),
+    );
+
+    Ok((normalized_uuid, profile.name))
 }
 
 /// Get all accounts from database
@@ -306,6 +331,9 @@ pub fn get_active_account() -> Result<Option<Account>, String> {
     if let Some(target_uuid) = config.active_account_uuid {
         let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
+        // Normalize UUID
+        let target_uuid = target_uuid.replace("-", "");
+
         let acct = account
             .filter(uuid.eq(target_uuid))
             .first::<Account>(&mut conn)
@@ -320,6 +348,9 @@ pub fn get_active_account() -> Result<Option<Account>, String> {
 
 /// Ensure account tokens are valid and refresh if they are near expiry
 pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), String> {
+    // Normalize UUID
+    let target_uuid = target_uuid.replace("-", "");
+
     // Load account
     // Use the existing public getter rather than raw DB to avoid duplication
     let accounts = get_accounts().map_err(|e| format!("Failed to get accounts: {}", e))?;
@@ -381,6 +412,9 @@ pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), Stri
 /// Refresh the tokens for the given account
 #[tauri::command]
 pub async fn refresh_account_tokens(target_uuid: String) -> Result<(), String> {
+    // Normalize UUID
+    let target_uuid = target_uuid.replace("-", "");
+
     log::info!("[auth] Refresh requested for account: {}", target_uuid);
 
     // Load account to get refresh token
@@ -486,8 +520,17 @@ pub async fn refresh_account_tokens(target_uuid: String) -> Result<(), String> {
 
 /// Set active account by UUID
 #[tauri::command]
-pub fn set_active_account(target_uuid: String) -> Result<(), String> {
+pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<(), String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    // Normalize UUID
+    let target_uuid = target_uuid.replace("-", "");
+
+    // Fetch the target account to get its theme settings
+    let target_account = account
+        .filter(uuid.eq(&target_uuid))
+        .first::<Account>(&mut conn)
+        .map_err(|e| format!("Failed to find account: {}", e))?;
 
     // Deactivate all accounts
     diesel::update(account)
@@ -503,8 +546,72 @@ pub fn set_active_account(target_uuid: String) -> Result<(), String> {
 
     // Update config
     let mut config = get_app_config().map_err(|e| e.to_string())?;
-    config.active_account_uuid = Some(target_uuid);
+    config.active_account_uuid = Some(target_uuid.clone());
+
+    // Apply account theme settings to global config if they exist
+    let mut updates = std::collections::HashMap::new();
+
+    if let Some(val) = target_account.theme_id {
+        config.theme_id = val.clone();
+        updates.insert("theme_id".to_string(), serde_json::Value::String(val));
+    }
+    if let Some(val) = target_account.theme_mode {
+        config.theme_mode = val.clone();
+        updates.insert("theme_mode".to_string(), serde_json::Value::String(val));
+    }
+    if let Some(val) = target_account.theme_primary_hue {
+        config.theme_primary_hue = val;
+        updates.insert("theme_primary_hue".to_string(), serde_json::Value::Number(val.into()));
+    }
+    if let Some(val) = target_account.theme_primary_sat {
+        config.theme_primary_sat = Some(val);
+        updates.insert("theme_primary_sat".to_string(), serde_json::Value::Number(val.into()));
+    }
+    if let Some(val) = target_account.theme_primary_light {
+        config.theme_primary_light = Some(val);
+        updates.insert("theme_primary_light".to_string(), serde_json::Value::Number(val.into()));
+    }
+    if let Some(val) = target_account.theme_style {
+        config.theme_style = val.clone();
+        updates.insert("theme_style".to_string(), serde_json::Value::String(val));
+    }
+    if let Some(val) = target_account.theme_gradient_enabled {
+        config.theme_gradient_enabled = val;
+        updates.insert("theme_gradient_enabled".to_string(), serde_json::Value::Bool(val));
+    }
+    if let Some(val) = target_account.theme_gradient_angle {
+        config.theme_gradient_angle = Some(val);
+        updates.insert("theme_gradient_angle".to_string(), serde_json::Value::Number(val.into()));
+    }
+    if let Some(val) = target_account.theme_gradient_type {
+        config.theme_gradient_type = Some(val.clone());
+        updates.insert("theme_gradient_type".to_string(), serde_json::Value::String(val));
+    }
+    if let Some(val) = target_account.theme_gradient_harmony {
+        config.theme_gradient_harmony = Some(val.clone());
+        updates.insert("theme_gradient_harmony".to_string(), serde_json::Value::String(val));
+    }
+    if let Some(val) = target_account.theme_advanced_overrides {
+        config.theme_advanced_overrides = Some(val.clone());
+        updates.insert("theme_advanced_overrides".to_string(), serde_json::Value::String(val));
+    }
+
     update_app_config(&config).map_err(|e| e.to_string())?;
+
+    // Emit events for each updated field so the UI updates
+    for (field_name, value) in updates {
+        let event_payload = serde_json::json!({
+            "field": field_name,
+            "value": value,
+        });
+        let _ = app_handle.emit("config-updated", event_payload);
+    }
+
+    // Also emit the active account change
+    let _ = app_handle.emit("config-updated", serde_json::json!({
+        "field": "active_account_uuid",
+        "value": target_uuid
+    }));
 
     Ok(())
 }
@@ -513,6 +620,9 @@ pub fn set_active_account(target_uuid: String) -> Result<(), String> {
 #[tauri::command]
 pub fn remove_account(target_uuid: String) -> Result<(), String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    // Normalize UUID
+    let target_uuid = target_uuid.replace("-", "");
 
     diesel::delete(account.filter(uuid.eq(target_uuid)))
         .execute(&mut conn)
@@ -528,16 +638,19 @@ pub async fn get_player_head_path(
     player_uuid: String,
     force_download: bool,
 ) -> Result<String, String> {
+    // Normalize UUID (remove dashes)
+    let normalized_uuid = player_uuid.replace("-", "");
+
     let cache_dir = app
         .path()
         .app_cache_dir()
         .map_err(|e| e.to_string())?
         .join("player_heads");
 
-    let image_path = cache_dir.join(format!("{}.png", player_uuid));
+    let image_path = cache_dir.join(format!("{}.png", normalized_uuid));
 
     let path = piston_lib::api::player::download_player_head(
-        &player_uuid,
+        &normalized_uuid,
         image_path.clone(),
         128,
         true,
@@ -555,8 +668,13 @@ pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
     let accounts = get_accounts()?;
 
     for acct in accounts {
-        let _ = get_player_head_path(app.clone(), acct.uuid, false).await;
+        // Set force_download to true so skins update on every launch
+        let _ = get_player_head_path(app.clone(), acct.uuid, true).await;
     }
+
+    // Emit event so frontend knows heads might have changed
+    use tauri::Emitter;
+    let _ = app.emit("core://account-heads-updated", ());
 
     Ok(())
 }

@@ -137,12 +137,16 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 	// Extract theme fields for the initial application
 	currentThemeConfig = {
 		theme_id: config.theme_id,
+		theme_mode: config.theme_mode,
 		theme_primary_hue: config.theme_primary_hue,
+		theme_primary_sat: config.theme_primary_sat,
+		theme_primary_light: config.theme_primary_light,
 		theme_style: config.theme_style,
 		theme_gradient_enabled: config.theme_gradient_enabled,
 		theme_gradient_angle: config.theme_gradient_angle,
 		theme_gradient_type: config.theme_gradient_type,
 		theme_gradient_harmony: config.theme_gradient_harmony,
+		theme_advanced_overrides: config.theme_advanced_overrides,
 		background_hue: config.background_hue,
 	};
 

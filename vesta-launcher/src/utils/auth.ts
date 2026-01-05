@@ -60,14 +60,14 @@ export async function getActiveAccount(): Promise<Account | null> {
  * Set active account by UUID
  */
 export async function setActiveAccount(uuid: string): Promise<void> {
-	await invoke("set_active_account", { uuid });
+	await invoke("set_active_account", { targetUuid: uuid });
 }
 
 /**
  * Remove account by UUID
  */
 export async function removeAccount(uuid: string): Promise<void> {
-	await invoke("remove_account", { uuid });
+	await invoke("remove_account", { targetUuid: uuid });
 }
 
 /**

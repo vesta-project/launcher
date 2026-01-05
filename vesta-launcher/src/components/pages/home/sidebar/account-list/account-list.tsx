@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import {
@@ -7,7 +8,15 @@ import {
 	removeAccount,
 	setActiveAccount,
 } from "@utils/auth";
-import { createResource, For, Show } from "solid-js";
+import { onConfigUpdate } from "@utils/config-sync";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+} from "solid-js";
 import "./account-list.css";
 
 interface AccountListProps {
@@ -17,13 +26,36 @@ interface AccountListProps {
 }
 
 function AccountList(props: AccountListProps) {
-	const [accounts, { refetch }] = createResource<Account[]>(getAccounts);
-	const [activeAccount] = createResource(async () => {
+	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
+	const [activeAccount, { refetch: refetchActive }] = createResource(async () => {
 		try {
 			return await invoke<Account | null>("get_active_account");
 		} catch {
 			return null;
 		}
+	});
+
+	const [avatarTimestamp, setAvatarTimestamp] = createSignal(Date.now());
+
+	// Listen for config updates to refetch active account
+	createEffect(() => {
+		const unsubscribe = onConfigUpdate((field) => {
+			if (field === "active_account_uuid") {
+				refetchActive();
+				refetchAccounts();
+			}
+		});
+		onCleanup(unsubscribe);
+	});
+
+	// Listen for head updates from backend
+	createEffect(() => {
+		let unlisten: (() => void) | undefined;
+		listen("core://account-heads-updated", () => {
+			setAvatarTimestamp(Date.now());
+		}).then((fn) => (unlisten = fn));
+
+		onCleanup(() => unlisten?.());
 	});
 
 	const getAvatarUrl = async (uuid: string): Promise<string | null> => {
@@ -32,7 +64,7 @@ function AccountList(props: AccountListProps) {
 				playerUuid: uuid,
 				forceDownload: false,
 			});
-			return convertFileSrc(path);
+			return `${convertFileSrc(path)}?t=${avatarTimestamp()}`;
 		} catch {
 			return null;
 		}
@@ -40,11 +72,14 @@ function AccountList(props: AccountListProps) {
 
 	const handleSwitchAccount = async (uuid: string) => {
 		try {
+			console.log("[AccountList] Switching to account:", uuid);
 			await setActiveAccount(uuid);
-			await refetch();
-			props.onClose();
-			// Reload page to apply changes
-			window.location.reload();
+			
+			// Give the backend a moment to emit events and the UI to react
+			// before we close the modal
+			setTimeout(() => {
+				props.onClose();
+			}, 100);
 		} catch (e) {
 			console.error("Failed to switch account:", e);
 		}
@@ -62,13 +97,10 @@ function AccountList(props: AccountListProps) {
 				await invoke("close_all_windows_and_reset");
 			} else if (isActive) {
 				// Removed active account, switch to the first available account
-				await setActiveAccount(remainingAccounts[0].uuid);
-				await refetch();
-				props.onClose();
-				window.location.reload();
+				await handleSwitchAccount(remainingAccounts[0].uuid);
 			} else {
 				// Removed a non-active account, just refetch
-				await refetch();
+				await refetchAccounts();
 			}
 		} catch (e) {
 			console.error("Failed to remove account:", e);
@@ -93,6 +125,7 @@ function AccountList(props: AccountListProps) {
 								onSwitch={() => handleSwitchAccount(account.uuid)}
 								onRemove={() => handleRemoveAccount(account.uuid)}
 								getAvatarUrl={getAvatarUrl}
+								avatarTimestamp={avatarTimestamp()}
 							/>
 						)}
 					</For>
@@ -115,14 +148,19 @@ interface AccountListItemProps {
 	onSwitch: () => void;
 	onRemove: () => void;
 	getAvatarUrl: (uuid: string) => Promise<string | null>;
+	avatarTimestamp: number;
 }
 
 function AccountListItem(props: AccountListItemProps) {
 	const [avatarUrl] = createResource(
-		() => props.account.uuid,
-		props.getAvatarUrl,
+		() => ({ uuid: props.account.uuid, t: props.avatarTimestamp }),
+		({ uuid }) => props.getAvatarUrl(uuid),
 	);
-	const handleClick = () => {
+	const handleClick = (e: MouseEvent) => {
+		// Don't switch if clicking the remove button
+		if ((e.target as HTMLElement).closest(".account-remove-button")) {
+			return;
+		}
 		if (!props.isActive) {
 			props.onSwitch();
 		}
@@ -132,11 +170,6 @@ function AccountListItem(props: AccountListItemProps) {
 			class="account-list-item"
 			classList={{ "account-list-item--active": props.isActive }}
 			onClick={handleClick}
-			onPointerDown={(e) => {
-				if ((e.target as HTMLElement).closest(".account-remove-button")) {
-					e.stopPropagation();
-				}
-			}}
 		>
 			<div
 				class="account-avatar"
@@ -156,10 +189,14 @@ function AccountListItem(props: AccountListItemProps) {
 			</div>
 			<Button
 				class="account-remove-button"
-				onClick={() => props.onRemove()}
+				onClick={(e) => {
+					e.stopPropagation();
+					props.onRemove();
+				}}
 				variant="ghost"
 				size="sm"
 				icon_only
+				title="Remove Account"
 			>
 				×
 			</Button>

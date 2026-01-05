@@ -87,9 +87,10 @@
 //! - **Frontend Ready**: Automatic JSON serialization via serde
 
 use crate::schema::app_config;
-use crate::utils::db::get_config_conn;
+use crate::utils::db::{get_config_conn, get_vesta_conn};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
+use serde_json;
 use tauri::Emitter;
 
 /// Main application configuration struct
@@ -235,6 +236,91 @@ pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+/// Helper to sync theme-related config changes to the active account's profile
+fn sync_theme_to_account(field: &str, value: &serde_json::Value, account_uuid: &str) -> Result<(), String> {
+    use crate::schema::account::dsl::*;
+    
+    // Normalize UUID
+    let account_uuid = account_uuid.replace("-", "");
+    
+    // Only sync visual aesthetic fields
+    let is_theme_field = match field {
+        "theme_id" | "theme_mode" | "theme_primary_hue" | "theme_primary_sat" | "theme_primary_light" |
+        "theme_style" | "theme_gradient_enabled" | "theme_gradient_angle" | "theme_gradient_type" | 
+        "theme_gradient_harmony" | "theme_advanced_overrides" | "background_hue" => true,
+        _ => false
+    };
+
+    if !is_theme_field {
+        return Ok(());
+    }
+
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    // Map config field names to account table column names if they differ
+    // In this case they match exactly or map to specific columns
+    match field {
+        "theme_id" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_id.eq(value.as_str().unwrap_or("midnight")))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_mode" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_mode.eq(value.as_str().unwrap_or("template")))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_primary_hue" | "background_hue" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_primary_hue.eq(value.as_i64().unwrap_or(220) as i32))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_primary_sat" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_primary_sat.eq(value.as_i64().map(|v| v as i32)))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_primary_light" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_primary_light.eq(value.as_i64().map(|v| v as i32)))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_style" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_style.eq(value.as_str().unwrap_or("glass")))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_gradient_enabled" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_gradient_enabled.eq(value.as_bool().unwrap_or(true)))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_gradient_angle" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_gradient_angle.eq(value.as_i64().map(|v| v as i32)))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_gradient_type" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_gradient_type.eq(value.as_str()))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_gradient_harmony" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_gradient_harmony.eq(value.as_str()))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_advanced_overrides" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_advanced_overrides.eq(value.as_str()))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        _ => {}
+    }
+
+    Ok(())
+}
+
 // ==================== Tauri Commands ====================
 
 /// Tauri command to get the current configuration
@@ -287,6 +373,11 @@ pub fn update_config_field(
     log::info!("Updating config field '{}' via Tauri command", field);
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
 
+    // If an account is active, sync theme changes to its profile
+    if let Some(ref account_uuid) = updated_config.active_account_uuid {
+        let _ = sync_theme_to_account(&field, &value, account_uuid);
+    }
+
     // Emit event to all windows so they can update their state
     let event_payload = serde_json::json!({
         "field": field,
@@ -330,6 +421,13 @@ pub fn update_config_fields(
 
     log::info!("Updating {} config fields via Tauri command", updates.len());
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
+
+    // If an account is active, sync theme changes to its profile
+    if let Some(ref account_uuid) = updated_config.active_account_uuid {
+        for (field, value) in &updates {
+            let _ = sync_theme_to_account(field, value, account_uuid);
+        }
+    }
 
     // Emit events for each updated field
     for (field, value) in updates {

@@ -19,7 +19,7 @@ interface ButtonProps
 	variant?: "solid" | "outline" | "ghost";
 	size?: "sm" | "md" | "lg";
 	icon_only?: boolean;
-	onClick?: () => void;
+	onClick?: (e: MouseEvent) => void;
 	tooltip_text?: string;
 	tooltip_placement?: TooltipPlacement;
 }
@@ -50,7 +50,7 @@ function Button(p: ButtonProps) {
 
 	const handleClick = (e: MouseEvent) => {
 		if (local.onClick) {
-			local.onClick();
+			local.onClick(e);
 		}
 	};
 

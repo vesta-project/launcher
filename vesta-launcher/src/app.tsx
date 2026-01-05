@@ -153,6 +153,12 @@ function Root(props: ChildrenProp) {
 					});
 			}
 
+			// Preload account heads (non-blocking)
+			// This ensures skins are up to date on launch
+			invoke("preload_account_heads").catch((error) => {
+				console.error("Failed to preload account heads:", error);
+			});
+
 			// Preload Minecraft versions metadata in background (non-blocking)
 			// This warms up the cache so install page loads instantly
 			getMinecraftVersions()
