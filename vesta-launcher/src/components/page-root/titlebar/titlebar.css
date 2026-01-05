@@ -31,8 +31,8 @@
 	&:is(.titlebar--right) {
 		flex-direction: row-reverse;
 		background: linear-gradient(
-			var(--rotation, 90deg),
-			hsl(var(--color__primary-hue) 0% 0% / 0%) 10%,
+			90deg,
+			hsla(var(--color__primary-hue) 0% 0% / 0%) 10%,
 			hsl(var(--color__primary-hue) 100% 7% / var(--titlebar__opacity)) 20%,
 			hsl(var(--color__primary-hue) 100% 60% / var(--titlebar__opacity)) 50%,
 			hsl(var(--hue-secondary) 50% 30% / var(--titlebar__opacity)) 100%
