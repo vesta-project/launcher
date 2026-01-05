@@ -21,7 +21,7 @@ import {
 	TabsTrigger,
 } from "@ui/tabs/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
-import { onConfigUpdate } from "@utils/config-sync";
+import { onConfigUpdate, updateThemeConfigLocal } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import {
 	createEffect,
@@ -74,19 +74,22 @@ interface AppConfig {
 	theme_style: StyleMode;
 	theme_gradient_enabled: boolean;
 	theme_gradient_angle?: number;
+	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
 	[key: string]: any;
 }
 
 function SettingsPage() {
-	const [currentTab, setCurrentTab] = createSignal("appearance");
+	const [currentTab, setCurrentTab] = createSignal("general");
 	const [debugLogging, setDebugLogging] = createSignal(false);
 	const [backgroundHue, setBackgroundHue] = createSignal(220);
-	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>();
-	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>();
-	const [gradientAngle, setGradientAngle] = createSignal<number>();
-	const [themeId, setThemeId] = createSignal<string>();
+	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>("glass");
+	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(true);
+	const [rotation, setRotation] = createSignal<number>(135);
+	const [gradientType, setGradientType] = createSignal<"linear" | "radial">("linear");
+	const [gradientHarmony, setGradientHarmony] = createSignal<GradientHarmony>("none");
+	const [themeId, setThemeId] = createSignal<string>("midnight");
 	const [borderThickness, setBorderThickness] = createSignal(1);
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
@@ -108,16 +111,20 @@ function SettingsPage() {
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
-				if (config.theme_primary_hue !== undefined)
+				if (config.theme_primary_hue !== null && config.theme_primary_hue !== undefined)
 					setBackgroundHue(config.theme_primary_hue);
-				else if (config.background_hue !== undefined)
+				else if (config.background_hue !== null && config.background_hue !== undefined)
 					setBackgroundHue(config.background_hue);
 
 				if (config.theme_style) setStyleMode(config.theme_style as ThemeConfig["style"]);
-				if (config.theme_gradient_enabled !== undefined)
+				if (config.theme_gradient_enabled !== null && config.theme_gradient_enabled !== undefined)
 					setGradientEnabled(config.theme_gradient_enabled);
-				if (config.theme_gradient_angle !== undefined)
-					setGradientAngle(config.theme_gradient_angle);
+				if (config.theme_gradient_angle !== null && config.theme_gradient_angle !== undefined)
+					setRotation(config.theme_gradient_angle);
+				if (config.theme_gradient_type)
+					setGradientType(config.theme_gradient_type as "linear" | "radial");
+				if (config.theme_gradient_harmony)
+					setGradientHarmony(config.theme_gradient_harmony as GradientHarmony);
 
 				// Apply current theme using centralized logic
 				applyTheme(configToTheme(config));
@@ -126,12 +133,14 @@ function SettingsPage() {
 			unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
 				if (field === "debug_logging") setDebugLogging(value);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
-				if (field === "theme_id") setThemeId(value);
-				if (field === "theme_primary_hue") setBackgroundHue(value);
-				if (field === "theme_style")
+				if (field === "theme_id" && value) setThemeId(value);
+				if (field === "theme_primary_hue" && value !== null) setBackgroundHue(value);
+				if (field === "theme_style" && value)
 					setStyleMode(value as ThemeConfig["style"]);
-				if (field === "theme_gradient_enabled") setGradientEnabled(value);
-				if (field === "theme_gradient_angle") setGradientAngle(value);
+				if (field === "theme_gradient_enabled" && value !== null) setGradientEnabled(value);
+				if (field === "theme_gradient_angle" && value !== null) setRotation(value);
+				if (field === "theme_gradient_type" && value) setGradientType(value as "linear" | "radial");
+				if (field === "theme_gradient_harmony" && value) setGradientHarmony(value as GradientHarmony);
 			});
 		} catch (error) {
 			console.error("Failed to load settings:", error);
@@ -150,7 +159,9 @@ function SettingsPage() {
 			setThemeId(id);
 			setStyleMode(theme.style);
 			setGradientEnabled(theme.gradientEnabled);
-			setGradientAngle(theme.gradientAngle || 135);
+			setRotation(theme.rotation || 135);
+			setGradientType(theme.gradientType || "linear");
+			setGradientHarmony(theme.gradientHarmony || "none");
 
 			const newHue =
 				theme.allowHueChange === false
@@ -160,28 +171,29 @@ function SettingsPage() {
 				setBackgroundHue(newHue);
 			}
 
+			// Update local config cache to prevent async updates from reverting state
+			updateThemeConfigLocal("theme_id", id);
+			updateThemeConfigLocal("theme_primary_hue", newHue);
+			updateThemeConfigLocal("background_hue", newHue);
+			updateThemeConfigLocal("theme_style", theme.style);
+			updateThemeConfigLocal("theme_gradient_enabled", theme.gradientEnabled);
+			updateThemeConfigLocal("theme_gradient_angle", theme.rotation ?? 135);
+			updateThemeConfigLocal("theme_gradient_type", theme.gradientType || "linear");
+			updateThemeConfigLocal("theme_gradient_harmony", theme.gradientHarmony || "none");
+
 			if (hasTauriRuntime()) {
 				try {
-					await invoke("update_config_field", { field: "theme_id", value: id });
-					await invoke("update_config_field", {
-						field: "theme_primary_hue",
-						value: newHue,
-					});
-					await invoke("update_config_field", {
-						field: "background_hue",
-						value: newHue,
-					});
-					await invoke("update_config_field", {
-						field: "theme_style",
-						value: theme.style,
-					});
-					await invoke("update_config_field", {
-						field: "theme_gradient_enabled",
-						value: theme.gradientEnabled,
-					});
-					await invoke("update_config_field", {
-						field: "theme_gradient_angle",
-						value: theme.gradientAngle ?? 135,
+					await invoke("update_config_fields", {
+						updates: {
+							theme_id: id,
+							theme_primary_hue: newHue,
+							background_hue: newHue,
+							theme_style: theme.style,
+							theme_gradient_enabled: theme.gradientEnabled,
+							theme_gradient_angle: theme.rotation ?? 135,
+							theme_gradient_type: theme.gradientType || "linear",
+							theme_gradient_harmony: theme.gradientHarmony || "none",
+						},
 					});
 				} catch (error) {
 					console.error("Failed to save theme preset selection:", error);
@@ -190,29 +202,30 @@ function SettingsPage() {
 		}
 	};
 
-	const handleHueChange = (values: number[]) => {
+	const handleHueChange = async (values: number[]) => {
 		const newHue = values[0];
 		setBackgroundHue(newHue);
-	};
+		updateThemeConfigLocal("theme_primary_hue", newHue);
+		updateThemeConfigLocal("background_hue", newHue);
 
-	const handleHueCommit = async () => {
-		if (!hasTauriRuntime()) return;
-		try {
-			await invoke("update_config_field", {
-				field: "theme_primary_hue",
-				value: backgroundHue(),
-			});
-			await invoke("update_config_field", {
-				field: "background_hue",
-				value: backgroundHue(),
-			});
-		} catch (error) {
-			console.error("Failed to persist hue on commit:", error);
+		// Save immediately
+		if (hasTauriRuntime()) {
+			try {
+				await invoke("update_config_fields", {
+					updates: {
+						theme_primary_hue: newHue,
+						background_hue: newHue,
+					},
+				});
+			} catch (error) {
+				console.error("Failed to persist hue immediately:", error);
+			}
 		}
 	};
 
 	const handleStyleModeChange = async (mode: ThemeConfig["style"]) => {
 		setStyleMode(mode);
+		updateThemeConfigLocal("theme_style", mode);
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
 				field: "theme_style",
@@ -223,6 +236,7 @@ function SettingsPage() {
 
 	const handleGradientToggle = async (enabled: boolean) => {
 		setGradientEnabled(enabled);
+		updateThemeConfigLocal("theme_gradient_enabled", enabled);
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
 				field: "theme_gradient_enabled",
@@ -231,19 +245,47 @@ function SettingsPage() {
 		}
 	};
 
-	const handleGradientAngleChange = (values: number[]) => {
-		setGradientAngle(values[0]);
+	const handleRotationChange = async (values: number[]) => {
+		const newRotation = Math.round(values[0]);
+		if (newRotation === rotation()) return;
+
+		setRotation(newRotation);
+		updateThemeConfigLocal("theme_gradient_angle", newRotation);
+
+		// Save immediately
+		if (hasTauriRuntime()) {
+			try {
+				await invoke("update_config_field", {
+					field: "theme_gradient_angle",
+					value: newRotation,
+				});
+			} catch (error) {
+				console.error("Failed to persist rotation immediately:", error);
+			}
+		}
 	};
 
-	const handleGradientAngleCommit = async () => {
-		if (!hasTauriRuntime()) return;
-		try {
+	const handleGradientTypeChange = async (type: "linear" | "radial") => {
+		if (type === gradientType()) return;
+
+		setGradientType(type);
+		updateThemeConfigLocal("theme_gradient_type", type);
+		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
-				field: "theme_gradient_angle",
-				value: gradientAngle() ?? 135,
+				field: "theme_gradient_type",
+				value: type,
 			});
-		} catch (error) {
-			console.error("Failed to persist gradient angle on commit:", error);
+		}
+	};
+
+	const handleGradientHarmonyChange = async (harmony: GradientHarmony) => {
+		setGradientHarmony(harmony);
+		updateThemeConfigLocal("theme_gradient_harmony", harmony);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "theme_gradient_harmony",
+				value: harmony,
+			});
 		}
 	};
 
@@ -284,8 +326,12 @@ function SettingsPage() {
 					style: (styleMode() ?? currentTheme.style) as ThemeConfig["style"],
 					gradientEnabled: (gradientEnabled() ??
 						currentTheme.gradientEnabled) as boolean,
-					gradientAngle: (gradientAngle() ??
-						currentTheme.gradientAngle) as number,
+					rotation: (rotation() ??
+						currentTheme.rotation) as number,
+					gradientType: (gradientType() ??
+						currentTheme.gradientType) as "linear" | "radial",
+					gradientHarmony: (gradientHarmony() ??
+						currentTheme.gradientHarmony) as GradientHarmony,
 					borderWidthSubtle: borderThickness(),
 					borderWidthStrong: Math.max(borderThickness() + 1, 1),
 				}),
@@ -324,8 +370,8 @@ function SettingsPage() {
 				<Tabs value={currentTab()} onChange={setCurrentTab}>
 					<TabsList>
 						<TabsIndicator />
-						<TabsTrigger value="appearance">Appearance</TabsTrigger>
 						<TabsTrigger value="general">General</TabsTrigger>
+						<TabsTrigger value="appearance">Appearance</TabsTrigger>
 						<TabsTrigger value="defaults">Defaults</TabsTrigger>
 						<TabsTrigger value="developer">Developer</TabsTrigger>
 					</TabsList>
@@ -360,8 +406,6 @@ function SettingsPage() {
 										<Slider
 											value={[backgroundHue()]}
 											onChange={handleHueChange}
-											onPointerUp={() => handleHueCommit()}
-											onPointerCancel={() => handleHueCommit()}
 											minValue={0}
 											maxValue={360}
 											step={1}
@@ -396,7 +440,7 @@ function SettingsPage() {
 											</span>
 										</div>
 										<ToggleGroup
-											value={styleMode() as string}
+											value={styleMode() ?? "glass"}
 											onChange={(val) => {
 												if (val)
 													handleStyleModeChange(val as ThemeConfig["style"]);
@@ -408,6 +452,7 @@ function SettingsPage() {
 											<ToggleGroupItem value="bordered">
 												Bordered
 											</ToggleGroupItem>
+											<ToggleGroupItem value="solid">Solid</ToggleGroupItem>
 										</ToggleGroup>
 									</div>
 
@@ -430,27 +475,77 @@ function SettingsPage() {
 									</div>
 
 									<Show when={gradientEnabled()}>
-										<Slider
-											value={[gradientAngle() ?? 135]}
-											onChange={handleGradientAngleChange}
-											onPointerUp={() => handleGradientAngleCommit()}
-											onPointerCancel={() => handleGradientAngleCommit()}
-											minValue={0}
-											maxValue={360}
-											step={1}
-											class="slider--angle"
-										>
-											<div class="slider__header">
-												<label class="slider__label">Gradient Angle</label>
-												<div class="slider__value-label">
-													{gradientAngle()}°
-												</div>
+										<div class="settings-row">
+											<div class="settings-info">
+												<span class="settings-label">Gradient Type</span>
+												<span class="settings-description">
+													Linear or circular background
+												</span>
 											</div>
-											<SliderTrack>
-												<SliderFill />
-												<SliderThumb />
-											</SliderTrack>
-										</Slider>
+											<ToggleGroup
+												value={gradientType() ?? "linear"}
+												onChange={(val) => {
+													if (val)
+														handleGradientTypeChange(
+															val as "linear" | "radial",
+														);
+												}}
+											>
+												<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
+												<ToggleGroupItem value="radial">Circular</ToggleGroupItem>
+											</ToggleGroup>
+										</div>
+
+										<div class="settings-row--nested">
+											<Slider
+												value={[rotation() ?? 135]}
+												onChange={handleRotationChange}
+												minValue={0}
+												maxValue={360}
+												step={1}
+												class="slider--angle"
+											>
+												<div class="slider__header">
+													<label class="slider__label">Rotation</label>
+													<div class="slider__value-label">
+														{rotation()}°
+													</div>
+												</div>
+												<SliderTrack>
+													<SliderFill />
+													<SliderThumb />
+												</SliderTrack>
+											</Slider>
+										</div>
+
+										<div class="settings-row">
+											<div class="settings-info">
+												<span class="settings-label">Color Harmony</span>
+												<span class="settings-description">
+													Choose how secondary colors are generated
+												</span>
+											</div>
+											<ToggleGroup
+												value={gradientHarmony() ?? "none"}
+												onChange={(val) => {
+													if (val)
+														handleGradientHarmonyChange(
+															val as GradientHarmony,
+														);
+												}}
+											>
+												<ToggleGroupItem value="none">None</ToggleGroupItem>
+												<ToggleGroupItem value="analogous">
+													Analogous
+												</ToggleGroupItem>
+												<ToggleGroupItem value="complementary">
+													Complementary
+												</ToggleGroupItem>
+												<ToggleGroupItem value="triadic">
+													Triadic
+												</ToggleGroupItem>
+											</ToggleGroup>
+										</div>
 									</Show>
 
 									<Show when={styleMode() === "bordered"}>

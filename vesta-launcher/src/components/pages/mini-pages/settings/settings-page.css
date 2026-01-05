@@ -92,7 +92,13 @@
 	border-bottom: var(--border-width-subtle) solid var(--border-strong);
 }
 
-.settings-row:last-child {
+.settings-row--nested {
+	padding: 0.75rem 0 0.75rem 1.5rem;
+	border-bottom: var(--border-width-subtle) solid var(--border-strong);
+}
+
+.settings-row:last-child,
+.settings-row--nested:last-child {
 	border-bottom: none;
 }
 

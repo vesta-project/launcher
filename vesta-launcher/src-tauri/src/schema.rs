@@ -48,6 +48,7 @@ diesel::table! {
         theme_gradient_angle -> Nullable<Integer>,
         theme_gradient_harmony -> Nullable<Text>,
         theme_advanced_overrides -> Nullable<Text>,
+        theme_gradient_type -> Nullable<Text>,
     }
 }
 
@@ -98,16 +99,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    user_version_tracking (id) {
-        id -> Integer,
-        version_type -> Text,
-        last_seen_version -> Text,
-        last_seen_at -> Text,
-        notified -> Bool,
-    }
-}
-
-diesel::table! {
     task_state (id) {
         id -> Text,
         task_type -> Text,
@@ -120,6 +111,16 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    user_version_tracking (id) {
+        id -> Integer,
+        version_type -> Text,
+        last_seen_version -> Text,
+        last_seen_at -> Text,
+        notified -> Bool,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     account,
     app_config,
@@ -128,3 +129,4 @@ diesel::allow_tables_to_appear_in_same_query!(
     task_state,
     user_version_tracking,
 );
+

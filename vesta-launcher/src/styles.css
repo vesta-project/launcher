@@ -9,7 +9,6 @@
 		var(--color__primary-hue) +
 		180
 	); /* Complementary by default */
-	--hue-accent: calc(var(--color__primary-hue) + 30); /* Analogous */
 
 	/* Semantic Hues (Fixed for consistency) */
 	--hue-success: 140;
@@ -35,8 +34,8 @@
 
 	/* Gradient Configuration */
 	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
-	--gradient-angle: 135deg;
-	--background-opacity: 0.05;
+	--rotation: 135deg;
+	--background-opacity: 0.12;
 
 	/* =============================================================================
 	   THEME SYSTEM - LAYER 2: SEMANTIC TOKENS (Abstract Intent)
@@ -132,7 +131,6 @@
 	--semantic-info-bg: hsl(var(--hue-info) 70% 50% / 0.15);
 
 	/* Effects */
-	--effect-blur-value: var(--effect-blur);
 	--effect-shadow: 0 6px var(--effect-shadow-depth) hsl(0 0% 0% / 0.2);
 	--effect-glow: hsl(
 		var(--color__primary-hue) 60% 80% /
@@ -161,20 +159,24 @@
 	--scrollbar-thumb: hsl(var(--color__primary-hue) 10% var(--lightness-border));
 	--scrollbar-thumb-border: hsl(var(--color__primary-hue) 10% 20%);
 
-	/* Background Gradient */
+	/* Background Gradient Stops */
+	--gradient-stop-1: hsl(var(--color__primary-hue) 80% 5% / var(--background-opacity));
+	--gradient-stop-2: hsl(var(--color__primary-hue) 81% 40% / var(--background-opacity));
+	--gradient-stop-3: hsl(var(--hue-secondary) 100% 50% / var(--background-opacity));
+
+	/* Background Gradient (Default to linear) */
 	--background-color: linear-gradient(
-		var(--gradient-angle),
-		hsl(245deg 100% 7% / var(--background-opacity)) 0%,
-		hsl(var(--color__primary-hue) 81% 40% / var(--background-opacity)) 35%,
-		hsl(var(--hue-secondary) 100% 50% / var(--background-opacity)) 100%
+		var(--rotation, 135deg),
+		var(--gradient-stop-1) 0%,
+		var(--gradient-stop-2) 35%,
+		var(--gradient-stop-3) 100%
 	);
 
-	/* =============================================================================
+/* =============================================================================
 	   LEGACY COMPATIBILITY (Backwards compatibility during migration)
 	   ============================================================================= */
 
 	/* Keep old variable names mapped to new tokens for gradual migration */
-	--color__primary-hue: var(--color__primary-hue);
 	--color__secondary-hue: var(--hue-secondary);
 	--color__error-hue: var(--hue-error);
 	--color__warning-hue: var(--hue-warning);
@@ -183,18 +185,8 @@
 	--text-color: var(--text-primary);
 	--bg-surface: var(--surface-base);
 	--bg-surface-hover: var(--surface-raised);
-	--border-subtle: var(--border-subtle);
 	--sb-track-color: var(--scrollbar-track);
 	--sb-thumb-color: var(--scrollbar-thumb);
-
-	/* Legacy saturation/brightness helpers */
-	--color__sat-20: 20%;
-	--color__sat-50: 50%;
-	--color__sat-70: 70%;
-	--color__br-12: 12%;
-	--color__br-20: 20%;
-	--color__br-50: 50%;
-	--color__br-70: 70%;
 
 	/* =============================================================================
 	   LIQUID GLASS SYSTEM (Updated to use new tokens)
@@ -242,26 +234,30 @@
 	-moz-osx-font-smoothing: grayscale;
 	text-size-adjust: 100%;
 
-	--font-xxsmall: 0.75rem;
-	--font-xsmall: 0.85rem;
-	--font-small: 1rem;
-	--font-medium: 1.25rem;
-	--font-large: 2rem;
-	--font-xlarge: 4rem;
 	--font-min-size: 12px;
 	--sb-size: 14px;
 
 	--kb-menu-content-transform-origin: top center;
 }
 
+/* Radial Gradient Override */
+:root[data-gradient-type="radial"] {
+	--background-color: radial-gradient(
+		farthest-corner at calc(50% + 40% * cos(var(--rotation, 135deg))) calc(50% + 40% * sin(var(--rotation, 135deg))),
+		var(--gradient-stop-2) 0%,
+		var(--gradient-stop-1) 70%,
+		hsl(var(--color__primary-hue) 100% 5% / var(--background-opacity)) 100%
+	);
+}
+
 #app {
 	height: 100%;
 	width: 100%;
-	/* var(--background-color) can be either:
-	   - A gradient (when gradients enabled)
-	   - var(--surface-base) solid color (when gradients disabled, set by JS)
-	   We use 'background' shorthand so it works for both cases */
-	background: var(--background-color);
+	/* Ensure we have a solid base color under the transparent gradient */
+	background-color: var(--surface-base);
+	background-image: var(--background-color);
+	background-attachment: fixed;
+	background-size: cover;
 	min-width: 450px;
 	overflow: hidden;
 }
@@ -276,8 +272,84 @@ body {
 /* =============================================================================
    LIGHT MODE OVERRIDES (Windows Mica support + light theme)
    ============================================================================= */
+:root[data-theme="light"] {
+	/* Override lightness values for light mode */
+	--lightness-surface-base: 85%;
+	--lightness-surface-raised: 90%;
+	--lightness-surface-overlay: 95%;
+	--lightness-surface-sunken: 80%;
+	--lightness-text-primary: 15%;
+	--lightness-text-secondary: 35%;
+	--lightness-text-tertiary: 55%;
+	--lightness-border: 60%;
+
+	/* Make background gradient more visible in light mode */
+	--background-opacity: 0.6;
+
+	/* Override the main background gradient stops for better light mode visibility */
+	--gradient-stop-1: hsl(var(--color__primary-hue) 70% 65% / var(--background-opacity));
+	--gradient-stop-2: hsl(var(--color__primary-hue) 75% 60% / var(--background-opacity));
+	--gradient-stop-3: hsl(var(--hue-secondary) 80% 65% / var(--background-opacity));
+
+	/* Adjust surface colors to have better contrast against light Mica background */
+	--surface-base: hsl(var(--color__primary-hue) 20% 80% / 0.85);
+	--surface-raised: hsl(var(--color__primary-hue) 25% 85% / 0.9);
+	--surface-overlay: hsl(var(--color__primary-hue) 30% 90% / 0.92);
+	--surface-sunken: hsl(var(--color__primary-hue) 15% 75% / 0.8);
+
+	/* Stronger borders for light mode visibility */
+	--border-subtle: hsl(var(--color__primary-hue) 25% 50% / 0.4);
+	--border-strong: hsl(var(--color__primary-hue) 35% 45% / 0.6);
+
+	/* Icon Colors for light mode (DARK icons on light background) */
+	--icon-primary: hsl(var(--color__primary-hue) 20% 25%);
+	--icon-secondary: hsl(var(--color__primary-hue) 15% 35%);
+	--icon-muted: hsl(var(--color__primary-hue) 10% 50%);
+
+	/* Button text/icon colors for light mode */
+	--text-on-accent: hsl(
+		var(--color__primary-hue) 5% 95%
+	); /* Keep light text on accent buttons */
+
+	/* Header and navigation colors for light mode (DARK text/icons) */
+	--page-viewer-nav-color: hsl(var(--color__primary-hue) 30% 25%);
+	--page-viewer-nav-bg: hsl(var(--color__primary-hue) 20% 85% / 0.8);
+
+	/* Sidebar colors for light mode */
+	--sidebar-bg: hsl(var(--color__primary-hue) 15% 82% / 0.9);
+	--sidebar-hover: hsl(var(--color__primary-hue) 20% 75% / 0.95);
+	--sidebar-active: hsl(var(--color__primary-hue) 30% 70% / 1);
+
+	/* Scrollbar for light mode */
+	--scrollbar-track: hsl(var(--color__primary-hue) 15% 85% / 0.5);
+	--scrollbar-thumb: hsl(var(--color__primary-hue) 40% 50%);
+	--scrollbar-thumb-border: hsl(var(--color__primary-hue) 45% 45%);
+
+	/* Adjust shadows for light mode */
+	--effect-shadow: 0 4px var(--effect-shadow-depth) hsl(0 0% 0% / 0.12);
+	--dialog-overlay-bg: hsl(0 0% 0% / 0.35);
+
+	/* Liquid glass adjustments for light mode */
+	--liquid-tint-saturation: 30%;
+	--liquid-tint-lightness: 80%;
+	--liquid-background: hsl(
+		var(--color__primary-hue) var(--liquid-tint-saturation)
+			var(--liquid-tint-lightness) /
+		var(--liquid-tint-opacity)
+	);
+}
+
+:root[data-theme="light"] #app {
+	backdrop-filter: none;
+}
+
+:root[data-theme="light"] #sidebar:is(.sidebar--open) {
+	background: var(--sidebar-bg);
+	box-shadow: hsl(0deg 0% 0% / 0.12) 4px 4px 8px;
+}
+
 @media (prefers-color-scheme: light) {
-	:root {
+	:root:not([data-theme="dark"]) {
 		/* Override lightness values for light mode */
 		--lightness-surface-base: 85%;
 		--lightness-surface-raised: 90%;
@@ -291,14 +363,10 @@ body {
 		/* Make background gradient more visible in light mode */
 		--background-opacity: 0.6;
 
-		/* Override the main background gradient for better light mode visibility */
-		/* Higher saturation and lower lightness so hue is clearly visible */
-		--background-color: linear-gradient(
-			var(--gradient-angle),
-			hsl(var(--color__primary-hue) 70% 65% / var(--background-opacity)) 0%,
-			hsl(var(--color__primary-hue) 75% 60% / var(--background-opacity)) 35%,
-			hsl(var(--hue-secondary) 80% 65% / var(--background-opacity)) 100%
-		);
+		/* Override the main background gradient stops for better light mode visibility */
+		--gradient-stop-1: hsl(var(--color__primary-hue) 70% 65% / var(--background-opacity));
+		--gradient-stop-2: hsl(var(--color__primary-hue) 75% 60% / var(--background-opacity));
+		--gradient-stop-3: hsl(var(--hue-secondary) 80% 65% / var(--background-opacity));
 
 		/* Adjust surface colors to have better contrast against light Mica background */
 		--surface-base: hsl(var(--color__primary-hue) 20% 80% / 0.85);
@@ -357,22 +425,21 @@ body {
 
 	/* Sidebar specific overrides for light mode */
 	#sidebar:is(.sidebar--open) {
-		background: var(--sidebar-bg) var(--bg);
+		background: var(--sidebar-bg);
 		box-shadow: hsl(0deg 0% 0% / 0.12) 4px 4px 8px;
 	}
 }
 
-/* Light mode + Flat style: fully opaque surfaces with hue tint */
-@media (prefers-color-scheme: light) {
-	:root[data-style="flat"] {
-		/* Override surfaces to be fully opaque with light hue tint */
-		--surface-base: hsl(var(--color__primary-hue) 25% 80%);
-		--surface-raised: hsl(var(--color__primary-hue) 30% 85%);
-		--surface-overlay: hsl(var(--color__primary-hue) 35% 90%);
-		--surface-sunken: hsl(var(--color__primary-hue) 20% 75%);
-	}
+/* Light mode + Flat/Bordered style: fully opaque surfaces with hue tint */
+:root[data-theme="light"]:is([data-style="flat"], [data-bordered="true"]) {
+	--surface-base: hsl(var(--color__primary-hue) 25% 80%);
+	--surface-raised: hsl(var(--color__primary-hue) 30% 85%);
+	--surface-overlay: hsl(var(--color__primary-hue) 35% 90%);
+	--surface-sunken: hsl(var(--color__primary-hue) 20% 75%);
+}
 
-	:root[data-style="bordered"] {
+@media (prefers-color-scheme: light) {
+	:root:is([data-style="flat"], [data-bordered="true"]):not([data-theme="dark"]) {
 		/* Override surfaces to be fully opaque with light hue tint */
 		--surface-base: hsl(var(--color__primary-hue) 25% 80%);
 		--surface-raised: hsl(var(--color__primary-hue) 30% 85%);
@@ -433,18 +500,6 @@ button {
 	* {
 		scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 	}
-}
-
-@property --color__primary-hue {
-	syntax: "<integer>";
-	initial-value: 120;
-	inherits: true;
-}
-
-@property --background-angle {
-	syntax: "<angle>";
-	initial-value: 90deg;
-	inherits: true;
 }
 
 :root[data-reduced-motion="true"] * {
@@ -510,6 +565,18 @@ button {
 	--surface-sunken: hsl(
 		var(--color__primary-hue) 5% var(--lightness-surface-sunken)
 	);
+}
+
+/* Solid Mode - Absolute zero transparency, 100% opaque background and surfaces */
+:root[data-style="solid"] {
+	--effect-blur: 0px;
+	--effect-opacity: 1;
+	--effect-shadow-depth: 4px;
+	--effect-glow-opacity: 0;
+	--liquid-frost-blur: 0px;
+	--liquid-tint-opacity: 1;
+	--liquid-backdrop-filter: none;
+	--background-opacity: 1;
 }
 
 /* Bordered Style Mode (no transparency/blur, strong borders) */

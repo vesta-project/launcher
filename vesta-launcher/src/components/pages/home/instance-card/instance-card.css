@@ -393,6 +393,23 @@
 	border: var(--border-width-subtle) solid var(--border-glass);
 }
 
+/* Solid mode uses primary color for the play button to make it pop against the dark background */
+:root[data-style="solid"] .play-button {
+	backdrop-filter: none;
+	background: var(--accent-primary);
+	border: none;
+	box-shadow: 0 4px 12px hsl(var(--color__primary-hue) 70% 20% / 0.4);
+}
+
+:root[data-style="solid"] .play-button svg {
+	fill: var(--text-on-primary);
+}
+
+:root[data-style="solid"] .play-button:hover {
+	background: var(--accent-primary-hover);
+	box-shadow: 0 6px 16px hsl(var(--color__primary-hue) 70% 20% / 0.6);
+}
+
 .instance-card-centered {
 	position: absolute;
 	top: 0;

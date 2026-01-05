@@ -106,6 +106,16 @@ export function unsubscribeFromConfigUpdates(): void {
 let currentThemeConfig: Partial<AppThemeConfig> = {};
 
 /**
+ * Update the local theme config cache without triggering an apply
+ * This is useful for keeping the cache in sync with UI signals before they are committed
+ */
+export function updateThemeConfigLocal(field: string, value: any): void {
+	if (field.startsWith("theme_") || field === "background_hue") {
+		(currentThemeConfig as any)[field] = value;
+	}
+}
+
+/**
  * Apply common config updates (CSS variables, etc.)
  * This is a default handler that can be registered
  */
@@ -131,6 +141,7 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 		theme_style: config.theme_style,
 		theme_gradient_enabled: config.theme_gradient_enabled,
 		theme_gradient_angle: config.theme_gradient_angle,
+		theme_gradient_type: config.theme_gradient_type,
 		theme_gradient_harmony: config.theme_gradient_harmony,
 		background_hue: config.background_hue,
 	};

@@ -23,7 +23,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 				"--preview-hue": props.theme.primaryHue,
 				"--preview-style": props.theme.style,
 				"--preview-gradient": props.theme.gradientEnabled ? "1" : "0",
-				"--preview-angle": props.theme.gradientAngle ?? 135,
+				"--preview-angle": props.theme.rotation ?? 135,
 			}}
 		>
 			{/* Mini UI Preview */}

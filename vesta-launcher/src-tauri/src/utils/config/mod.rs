@@ -130,6 +130,7 @@ pub struct AppConfig {
     pub theme_gradient_angle: Option<i32>,    // Gradient angle in degrees
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
     pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
+    pub theme_gradient_type: Option<String>,   // "linear" or "radial"
 }
 
 impl Default for AppConfig {
@@ -165,8 +166,9 @@ impl Default for AppConfig {
             theme_style: "glass".to_string(),      // theme_style - default glass effect
             theme_gradient_enabled: true,          // theme_gradient_enabled - enable gradients
             theme_gradient_angle: Some(135),       // theme_gradient_angle - diagonal gradient
-            theme_gradient_harmony: Some("complementary".to_string()), // theme_gradient_harmony - complementary colors
+            theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
             theme_advanced_overrides: None,        // theme_advanced_overrides - no custom overrides by default
+            theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
         
         }
     }
@@ -293,6 +295,50 @@ pub fn update_config_field(
 
     // Notify of config update
     let _ = app_handle.emit("config-updated", event_payload);
+
+    Ok(())
+}
+
+/// Tauri command to update multiple config fields at once
+#[tauri::command]
+pub fn update_config_fields(
+    app_handle: tauri::AppHandle,
+    updates: std::collections::HashMap<String, serde_json::Value>,
+) -> Result<(), String> {
+    let config = get_app_config().map_err(|e| e.to_string())?;
+
+    // Convert config to serde_json::Value for manipulation
+    let mut config_value =
+        serde_json::to_value(&config).map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    // Update the fields
+    if let Some(config_obj) = config_value.as_object_mut() {
+        for (field, value) in &updates {
+            if config_obj.contains_key(field) {
+                config_obj.insert(field.clone(), value.clone());
+            } else {
+                return Err(format!("Unknown config field: {}", field));
+            }
+        }
+    } else {
+        return Err("Config is not an object".to_string());
+    }
+
+    // Convert back to AppConfig
+    let updated_config: AppConfig = serde_json::from_value(config_value)
+        .map_err(|e| format!("Failed to deserialize config: {}", e))?;
+
+    log::info!("Updating {} config fields via Tauri command", updates.len());
+    update_app_config(&updated_config).map_err(|e| e.to_string())?;
+
+    // Emit events for each updated field
+    for (field, value) in updates {
+        let event_payload = serde_json::json!({
+            "field": field,
+            "value": value,
+        });
+        let _ = app_handle.emit("config-updated", event_payload);
+    }
 
     Ok(())
 }

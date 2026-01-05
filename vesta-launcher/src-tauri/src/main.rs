@@ -11,7 +11,7 @@ mod setup;
 mod tasks;
 pub mod utils;
 
-use utils::config::{get_config, set_config, update_config_field};
+use utils::config::{get_config, set_config, update_config_field, update_config_fields};
 use utils::windows::launch_new_window;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -45,6 +45,7 @@ fn main() {
             get_config,
             set_config,
             update_config_field,
+            update_config_fields,
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
             commands::app::close_all_windows_and_reset,

@@ -5,7 +5,7 @@
  * Each theme includes complete styling information (hue, style mode, gradient settings).
  */
 
-export type StyleMode = "glass" | "satin" | "flat" | "bordered";
+export type StyleMode = "glass" | "satin" | "flat" | "bordered" | "solid";
 export type GradientHarmony =
 	| "none"
 	| "analogous"
@@ -27,10 +27,14 @@ export interface ThemeConfig {
 	primaryLight?: number;
 	/** Visual style mode */
 	style: StyleMode;
+	/** Preferred color scheme */
+	colorScheme?: "light" | "dark";
 	/** Whether background gradient is enabled */
 	gradientEnabled: boolean;
-	/** Angle of the background gradient (0-360) */
-	gradientAngle?: number;
+	/** Rotation of the background gradient (0-360) */
+	rotation?: number;
+	/** Type of gradient to use */
+	gradientType?: "linear" | "radial";
 	/** Color harmony for the gradient */
 	gradientHarmony?: GradientHarmony;
 	/** Optional thumbnail image URL */
@@ -58,6 +62,7 @@ export interface AppThemeConfig {
 	theme_style: StyleMode;
 	theme_gradient_enabled: boolean;
 	theme_gradient_angle?: number;
+	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
 	background_hue?: number; // Legacy/Fallback
@@ -70,12 +75,16 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 	const themeId = config.theme_id || "midnight";
 	const baseTheme = getThemeById(themeId) || getDefaultTheme();
 
+	// Helper to get a numeric value that might be 0 (so we can't just use ??)
+	const getNum = (val: any) => (typeof val === "number" ? val : undefined);
+
 	return validateTheme({
 		...baseTheme,
-		primaryHue: config.theme_primary_hue ?? config.background_hue ?? baseTheme.primaryHue,
+		primaryHue: getNum(config.theme_primary_hue) ?? getNum(config.background_hue) ?? baseTheme.primaryHue,
 		style: config.theme_style ?? baseTheme.style,
 		gradientEnabled: config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
-		gradientAngle: config.theme_gradient_angle ?? baseTheme.gradientAngle,
+		rotation: getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
+		gradientType: config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony: config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
 	});
 }
@@ -92,7 +101,8 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		primaryHue: 220,
 		style: "glass",
 		gradientEnabled: true,
-		gradientAngle: 135,
+		rotation: 135,
+		gradientType: "linear",
 		gradientHarmony: "complementary",
 		allowHueChange: false, // Locked to signature blue
 		allowStyleChange: false,
@@ -116,7 +126,8 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		primaryHue: 300,
 		style: "glass",
 		gradientEnabled: true,
-		gradientAngle: 135,
+		rotation: 135,
+		gradientType: "linear",
 		gradientHarmony: "complementary",
 		allowHueChange: false, // Locked to signature pink
 		allowStyleChange: false,
@@ -140,7 +151,8 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		primaryHue: 140,
 		style: "satin",
 		gradientEnabled: true,
-		gradientAngle: 90,
+		rotation: 90,
+		gradientType: "linear",
 		gradientHarmony: "analogous",
 		allowHueChange: false, // Locked to signature green
 		allowStyleChange: false,
@@ -149,13 +161,14 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "sunset",
 		name: "Sunset",
-		description: "Signature warm gradient from orange to purple",
-		primaryHue: 30,
+		description: "Signature warm gradient from purple to orange",
+		primaryHue: 270,
 		style: "glass",
 		gradientEnabled: true,
-		gradientAngle: 180,
+		rotation: 180,
+		gradientType: "linear",
 		gradientHarmony: "triadic",
-		allowHueChange: false, // Locked to signature orange/purple
+		allowHueChange: false, // Locked to signature purple/orange
 		allowStyleChange: false,
 		allowBorderChange: false,
 	},
@@ -163,10 +176,11 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		id: "oled",
 		name: "OLED",
 		description: "Ultra-dark OLED mode — pure black surfaces for true blacks",
-		primaryHue: 220, // Neutral hue to avoid colored accents
-		style: "flat",
+		primaryHue: 0, // Neutral
+		style: "solid",
+		colorScheme: "dark",
 		gradientEnabled: false,
-		allowHueChange: false, // Lock hue — OLED is strictly near-black
+		allowHueChange: true, // Allow hue change for accents
 		allowStyleChange: false,
 		allowBorderChange: false,
 		customCss: `:root {
@@ -179,14 +193,18 @@ export const PRESET_THEMES: ThemeConfig[] = [
 			--text-secondary: hsl(0 0% 70%);
 			--text-tertiary: hsl(0 0% 50%);
 			--text-disabled: hsl(0 0% 30%);
-			/* Override interactive/accent colors to neutral greys for OLED */
-			--accent-primary: hsl(0 0% 60%);
-			--accent-primary-hover: hsl(0 0% 70%);
-			--interactive-base: hsl(0 0% 60%);
-			--interactive-hover: hsl(0 0% 70%);
-			--border-subtle: hsl(0 0% 15% / 0.5);
-			--border-strong: hsl(0 0% 25% / 0.7);
-			--border-glass: hsl(0 0% 20% / 0.3);
+			/* Use the primary hue for accents, but keep them somewhat muted for OLED */
+			--accent-primary: hsl(var(--color__primary-hue) 50% 50%);
+			--accent-primary-hover: hsl(var(--color__primary-hue) 60% 60%);
+			--interactive-base: hsl(var(--color__primary-hue) 50% 50%);
+			--interactive-hover: hsl(var(--color__primary-hue) 60% 60%);
+			--border-subtle: hsl(var(--color__primary-hue) 10% 15% / 0.5);
+			--border-strong: hsl(var(--color__primary-hue) 15% 25% / 0.7);
+			--border-glass: hsl(var(--color__primary-hue) 10% 20% / 0.3);
+			/* Remove all blue/hue tints from liquid glass */
+			--liquid-tint-saturation: 0%;
+			--liquid-tint-lightness: 0%;
+			--liquid-background: hsl(0 0% 0% / var(--liquid-tint-opacity));
 			/* Remove all blur effects for performance */
 			--liquid-backdrop-filter: none;
 			--effect-blur: 0px;
@@ -216,8 +234,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		primaryHue: 220,
 		style: "glass",
 		gradientEnabled: true,
-		gradientAngle: 135,
-		gradientHarmony: "complementary",
+		rotation: 135,
+		gradientType: "linear",
+		gradientHarmony: "none",
 		allowHueChange: true,
 		allowStyleChange: true,
 		allowBorderChange: true,
@@ -247,26 +266,32 @@ export function getDefaultTheme(): ThemeConfig {
 export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 	const defaultTheme = getDefaultTheme();
 
+	// Helper to handle null/undefined from backend
+	const getVal = <T>(val: T | null | undefined, fallback: T): T =>
+		val !== null && val !== undefined ? val : fallback;
+
 	return {
 		id: theme.id || "custom",
 		name: theme.name || "Custom Theme",
 		description: theme.description,
-		primaryHue: clamp(theme.primaryHue ?? defaultTheme.primaryHue, 0, 360),
+		primaryHue: clamp(getVal(theme.primaryHue, defaultTheme.primaryHue), 0, 360),
 		primarySat:
-			theme.primarySat !== undefined
+			theme.primarySat !== undefined && theme.primarySat !== null
 				? clamp(theme.primarySat, 0, 100)
 				: undefined,
 		primaryLight:
-			theme.primaryLight !== undefined
+			theme.primaryLight !== undefined && theme.primaryLight !== null
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
 		style: theme.style || defaultTheme.style,
+		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
-		gradientAngle:
-			theme.gradientAngle !== undefined
-				? clamp(theme.gradientAngle, 0, 360)
+		rotation:
+			theme.rotation !== undefined && theme.rotation !== null
+				? clamp(theme.rotation, 0, 360)
 				: undefined,
-		gradientHarmony: theme.gradientHarmony || defaultTheme.gradientHarmony,
+		gradientType: theme.gradientType || "linear",
+		gradientHarmony: theme.gradientHarmony || "none",
 		thumbnail: theme.thumbnail,
 		// Pass-through extras for runtime application
 		borderWidthSubtle: theme.borderWidthSubtle,
@@ -284,10 +309,39 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
 		"--color__primary-hue": theme.primaryHue.toString(),
-		"--gradient-angle": `${theme.gradientAngle || 135}deg`,
+		"--rotation": `${theme.rotation ?? 135}deg`,
+		"--gradient-type": theme.gradientType || "linear",
 		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
 		// Note: --background-opacity is NOT set here so CSS media queries can control it
 	};
+
+	// Calculate harmony hues
+	const primary = theme.primaryHue;
+	let secondary = primary;
+	let accent = primary + 30; // Default analogous-ish accent
+
+	switch (theme.gradientHarmony) {
+		case "analogous":
+			secondary = (primary + 30) % 360;
+			accent = (primary - 30 + 360) % 360;
+			break;
+		case "complementary":
+			secondary = (primary + 180) % 360;
+			accent = (primary + 30) % 360;
+			break;
+		case "triadic":
+			secondary = (primary + 120) % 360;
+			accent = (primary + 240) % 360;
+			break;
+		case "none":
+		default:
+			secondary = primary;
+			accent = primary;
+			break;
+	}
+
+	vars["--hue-secondary"] = secondary.toString();
+	vars["--hue-accent"] = accent.toString();
 
 	// Border widths: only override when style is bordered (custom thickness)
 	if (theme.style === "bordered") {
@@ -326,18 +380,25 @@ export function applyTheme(theme: ThemeConfig): void {
 	const root = document.documentElement;
 	const style = root.style;
 
-	// Skip if theme is already applied (same primary hue)
-	const currentHue = style.getPropertyValue("--color__primary-hue");
+	// Apply CSS variables
+	const vars = themeToCSSVars(theme);
+
+	// Skip if theme is already applied (check all relevant fields)
+	const currentHue = style.getPropertyValue("--color__primary-hue").trim();
+	const currentRotation = style.getPropertyValue("--rotation").trim();
+	const currentSecondaryHue = style.getPropertyValue("--hue-secondary").trim();
+
 	if (
 		currentHue === theme.primaryHue.toString() &&
 		root.getAttribute("data-style") === theme.style &&
-		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0")
+		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0") &&
+		root.getAttribute("data-gradient-type") === (theme.gradientType || "linear") &&
+		currentRotation === vars["--rotation"] &&
+		currentSecondaryHue === vars["--hue-secondary"]
 	) {
 		return;
 	}
 
-	// Apply CSS variables
-	const vars = themeToCSSVars(theme);
 	for (const [key, value] of Object.entries(vars)) {
 		style.setProperty(key, value);
 	}
@@ -357,12 +418,27 @@ export function applyTheme(theme: ThemeConfig): void {
 
 	// Apply style mode attribute
 	root.setAttribute("data-style", theme.style);
+	root.setAttribute("data-gradient-type", theme.gradientType || "linear");
+
+	// Apply color scheme attribute (forces dark/light mode regardless of system)
+	if (theme.colorScheme) {
+		root.setAttribute("data-theme", theme.colorScheme);
+	} else {
+		root.removeAttribute("data-theme");
+	}
 
 	// Apply bordered mode (removes blur/transparency, stronger borders)
 	if (theme.style === "bordered") {
 		root.setAttribute("data-bordered", "true");
 	} else {
 		root.removeAttribute("data-bordered");
+	}
+
+	// Apply solid mode (100% opacity, no blur)
+	if (theme.style === "solid") {
+		root.setAttribute("data-solid", "true");
+	} else {
+		root.removeAttribute("data-solid");
 	}
 
 	// Inject or remove custom CSS for this theme

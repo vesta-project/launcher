@@ -48,7 +48,7 @@
 		transition:
 			background 250ms,
 			grid-gap 200ms;
-		background: var(--surface-base) var(--bg);
+		background: var(--sidebar-bg);
 		box-shadow: hsl(0deg 0% 0% / 32%) 6px 6px 5px;
 		backdrop-filter: blur(var(--blur-base));
 		grid-gap: 16px;
