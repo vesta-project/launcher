@@ -108,10 +108,7 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
         Err(e) => log::error!("Failed to fetch NeoForge metadata: {}", e),
     }
 
-    // Sort versions by release date (latest first)
-    game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
-
-    let metadata = PistonMetadata {
+    let mut metadata = PistonMetadata {
         last_updated: Utc::now(),
         game_versions,
         latest: LatestVersions {
@@ -119,6 +116,9 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
             snapshot: mojang_manifest.latest.snapshot.clone(),
         },
     };
+
+    // Sort versions and loaders correctly
+    metadata.sort_all_versions();
 
     log::info!(
         "PistonMetadata fetched successfully: {} game versions, {} total loader combinations",

@@ -2,6 +2,7 @@ pub mod api;
 pub mod auth;
 pub mod game;
 pub mod models;
+pub mod utils;
 
 pub fn add(left: usize, right: usize) -> usize {
     left + right

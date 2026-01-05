@@ -28,10 +28,8 @@ pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata
             Ok(mut metadata) => {
                 track_metadata_file(&metadata_path).await.ok();
 
-                // Ensure versions are sorted (latest first)
-                metadata
-                    .game_versions
-                    .sort_by(|a, b| b.release_time.cmp(&a.release_time));
+                // Ensure everything is sorted correctly
+                metadata.sort_all_versions();
 
                 // Check if cache is still fresh
                 let age = Utc::now() - metadata.last_updated;
@@ -77,10 +75,8 @@ pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata
                     Ok(mut metadata) => {
                         track_metadata_file(&metadata_path).await.ok();
 
-                        // Ensure versions are sorted (latest first)
-                        metadata
-                            .game_versions
-                            .sort_by(|a, b| b.release_time.cmp(&a.release_time));
+                        // Ensure everything is sorted correctly
+                        metadata.sort_all_versions();
 
                         log::info!(
                             "Using stale cached metadata (age: {} hours)",
@@ -153,6 +149,22 @@ async fn track_metadata_file(path: &PathBuf) -> Result<()> {
 
 /// Query helpers for metadata
 impl PistonMetadata {
+    /// Sort all game versions and their modloaders (latest first)
+    pub fn sort_all_versions(&mut self) {
+        // Sort game versions by release date (latest first)
+        self.game_versions
+            .sort_by(|a, b| b.release_time.cmp(&a.release_time));
+
+        // Sort each modloader's versions (latest first)
+        for gv in self.game_versions.iter_mut() {
+            for loaders in gv.loaders.values_mut() {
+                loaders.sort_by(|a, b| {
+                    crate::utils::version::compare_versions(&b.version, &a.version)
+                });
+            }
+        }
+    }
+
     /// Get metadata for a specific game version
     pub fn get_game_version(
         &self,
