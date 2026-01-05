@@ -31,14 +31,16 @@ tokio::task_local! {
 struct InstallScope {
     cache: Arc<Mutex<ArtifactCache>>,
     artifacts: Arc<Mutex<Vec<InstallArtifactRef>>>,
+    dry_run: bool,
 }
 
 pub(crate) fn install_scope_handles() -> Option<(
     Arc<Mutex<ArtifactCache>>,
     Arc<Mutex<Vec<InstallArtifactRef>>>,
+    bool,
 )> {
     INSTALL_SCOPE
-        .try_with(|scope| (scope.cache.clone(), scope.artifacts.clone()))
+        .try_with(|scope| (scope.cache.clone(), scope.artifacts.clone(), scope.dry_run))
         .ok()
 }
 
@@ -48,7 +50,10 @@ pub(crate) async fn track_artifact_from_path(
     signature: Option<String>,
     source_url: Option<String>,
 ) -> Result<()> {
-    if let Some((cache, artifacts)) = install_scope_handles() {
+    if let Some((cache, artifacts, dry_run)) = install_scope_handles() {
+        if dry_run {
+            return Ok(());
+        }
         let label_str: String = label.into();
         let sha = {
             let mut cache_guard = cache.lock().await;
@@ -63,19 +68,19 @@ pub(crate) async fn track_artifact_from_path(
 }
 
 pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Result<bool> {
-    if let Some((cache, _)) = install_scope_handles() {
-        let restored = {
-            let cache_guard = cache.lock().await;
-            if let Some(sha) = cache_guard.find_component(label) {
-                cache_guard.restore_artifact(&sha, destination)?
-            } else {
-                false
+    if let Some((cache, artifacts, dry_run)) = install_scope_handles() {
+        let cache_guard = cache.lock().await;
+        if let Some(sha) = cache_guard.find_component(label) {
+            if dry_run {
+                return Ok(true);
             }
-        };
 
-        if restored {
-            track_artifact_from_path(label.to_string(), destination, None, None).await?;
-            return Ok(true);
+            if cache_guard.restore_artifact(&sha, destination)? {
+                // Track it without re-hashing since we know the SHA from the cache
+                let mut artifacts_guard = artifacts.lock().await;
+                artifacts_guard.push(InstallArtifactRef::new(label.to_string(), sha));
+                return Ok(true);
+            }
         }
     }
     Ok(false)
@@ -98,18 +103,21 @@ pub async fn install_instance(
     reporter: std::sync::Arc<dyn ProgressReporter>,
 ) -> Result<()> {
     log::info!(
-        "Starting installation: version={}, modloader={:?}",
+        "Starting installation: version={}, modloader={:?} (dry_run={})",
         spec.version_id,
-        spec.modloader
+        spec.modloader,
+        spec.dry_run
     );
 
-    // Ensure base directories exist
-    std::fs::create_dir_all(spec.data_dir())?;
-    std::fs::create_dir_all(spec.libraries_dir())?;
-    std::fs::create_dir_all(spec.assets_dir())?;
-    std::fs::create_dir_all(spec.versions_dir())?;
-    std::fs::create_dir_all(spec.jre_dir())?;
-    std::fs::create_dir_all(&spec.game_dir)?;
+    if !spec.dry_run {
+        // Ensure base directories exist
+        std::fs::create_dir_all(spec.data_dir())?;
+        std::fs::create_dir_all(spec.libraries_dir())?;
+        std::fs::create_dir_all(spec.assets_dir())?;
+        std::fs::create_dir_all(spec.versions_dir())?;
+        std::fs::create_dir_all(spec.jre_dir())?;
+        std::fs::create_dir_all(&spec.game_dir)?;
+    }
 
     // Load cache + transaction state
     let cache = Arc::new(Mutex::new(ArtifactCache::load_with_labels(
@@ -118,8 +126,13 @@ pub async fn install_instance(
     let recorded_artifacts = Arc::new(Mutex::new(Vec::new()));
     let install_id = spec.installed_version_id();
     let loader_label = spec.modloader.map(|m| m.as_str().to_string());
-    let txn = InstallTransaction::new(install_id.clone(), spec.data_dir());
-    txn.begin()?;
+    let txn = if !spec.dry_run {
+        let t = InstallTransaction::new(install_id.clone(), spec.data_dir());
+        t.begin()?;
+        Some(t)
+    } else {
+        None
+    };
 
     reporter.set_message("Starting installation...");
     reporter.set_percent(0);
@@ -128,6 +141,7 @@ pub async fn install_instance(
     let scope = InstallScope {
         cache: cache.clone(),
         artifacts: recorded_artifacts.clone(),
+        dry_run: spec.dry_run,
     };
 
     let install_result = INSTALL_SCOPE
@@ -137,9 +151,16 @@ pub async fn install_instance(
         .await;
 
     if let Err(err) = install_result {
-        let _ = txn.rollback(&err.to_string());
+        if let Some(ref t) = txn {
+            let _ = t.rollback(&err.to_string());
+        }
         reporter.done(false, Some("Installation failed"));
         return Err(err);
+    }
+
+    if spec.dry_run {
+        reporter.done(true, Some("Dry-run completed successfully"));
+        return Ok(());
     }
 
     let finalize_result = async {
@@ -158,13 +179,17 @@ pub async fn install_instance(
         cache_guard.save()?;
         drop(cache_guard);
 
-        txn.commit()?;
+        if let Some(ref txn) = txn {
+            txn.commit()?;
+        }
         Ok::<(), anyhow::Error>(())
     }
     .await;
 
     if let Err(err) = finalize_result {
-        let _ = txn.rollback(&err.to_string());
+        if let Some(ref txn) = txn {
+            let _ = txn.rollback(&err.to_string());
+        }
         reporter.done(false, Some("Installation failed"));
         return Err(err);
     }

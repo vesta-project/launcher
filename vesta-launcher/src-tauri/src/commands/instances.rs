@@ -158,10 +158,12 @@ pub async fn install_instance(
     app_handle: tauri::AppHandle,
     task_manager: State<'_, TaskManager>,
     instance_data: Instance,
+    dry_run: Option<bool>,
 ) -> Result<(), String> {
     log::info!(
-        "[install_instance] Command invoked for instance: {}",
-        instance_data.name
+        "[install_instance] Command invoked for instance: {} (dry_run={:?})",
+        instance_data.name,
+        dry_run
     );
     log::info!(
         "[install_instance] Instance details - version: {}, modloader: {:?}, modloader_version: {:?}",
@@ -171,7 +173,10 @@ pub async fn install_instance(
     );
 
     log::info!("[install_instance] Creating InstallInstanceTask");
-    let task = InstallInstanceTask::new(instance_data.clone());
+    let mut task = InstallInstanceTask::new(instance_data.clone());
+    if let Some(dr) = dry_run {
+        task.set_dry_run(dr);
+    }
 
     log::info!("[install_instance] Submitting task to TaskManager");
     match task_manager.submit(Box::new(task)).await {

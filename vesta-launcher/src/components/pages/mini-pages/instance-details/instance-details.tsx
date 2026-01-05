@@ -140,7 +140,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 				if (running) {
 					// Try to load existing log lines from file
 					const logLines = (await invoke("read_instance_log", {
-						instanceId: slug(),
+						instanceIdSlug: slug(),
 						lastLines: 500,
 					}).catch(() => [])) as string[];
 					if (logLines.length > 0) {
@@ -293,7 +293,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 	const openLogsFolder = async () => {
 		try {
-			await invoke("open_logs_folder", { instanceId: slug() });
+			await invoke("open_logs_folder", { instanceIdSlug: slug() });
 		} catch (e) {
 			console.error("Failed to open logs folder:", e);
 		}

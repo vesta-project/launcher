@@ -25,8 +25,14 @@ pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata
     // Try to load from cache first
     if metadata_path.exists() {
         match load_cached_metadata(&metadata_path).await {
-            Ok(metadata) => {
+            Ok(mut metadata) => {
                 track_metadata_file(&metadata_path).await.ok();
+
+                // Ensure versions are sorted (latest first)
+                metadata
+                    .game_versions
+                    .sort_by(|a, b| b.release_time.cmp(&a.release_time));
+
                 // Check if cache is still fresh
                 let age = Utc::now() - metadata.last_updated;
 
@@ -68,8 +74,14 @@ pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata
             if metadata_path.exists() {
                 log::warn!("Falling back to stale cached metadata due to fetch failure");
                 match load_cached_metadata(&metadata_path).await {
-                    Ok(metadata) => {
+                    Ok(mut metadata) => {
                         track_metadata_file(&metadata_path).await.ok();
+
+                        // Ensure versions are sorted (latest first)
+                        metadata
+                            .game_versions
+                            .sort_by(|a, b| b.release_time.cmp(&a.release_time));
+
                         log::info!(
                             "Using stale cached metadata (age: {} hours)",
                             (Utc::now() - metadata.last_updated).num_hours()

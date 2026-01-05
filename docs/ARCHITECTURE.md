@@ -15,6 +15,6 @@ Key patterns
 - Cross-platform considerations: File canonicalization and path normalization are performed in several places; tests that canonicalize paths may fail in some environments.
 
 Where to look for behavior
-- Installers and preparation: `crates/piston-lib/src/game/installer/` contains per-loader logic and shared helpers in `forge_common.rs`.
-- Processor invocation: `forge_processor.rs` builds processor invocations and normalizes processor-supplied paths.
+- Installers and preparation: `crates/piston-lib/src/game/installer/` contains per-loader logic and shared helpers.
+- Processor invocation: Forge processor logic is integrated into the installer implementation.
 - Database migrations: `src-tauri/src/utils/migrations/definitions.rs`.

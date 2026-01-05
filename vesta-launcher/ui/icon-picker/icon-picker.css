@@ -17,12 +17,12 @@
 	align-items: center;
 	justify-content: center;
 	transition: transform 0.2s, box-shadow 0.2s;
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px rgba(0, 0, 0, 0.08);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
 }
 
 .icon-picker__trigger:hover {
 	transform: translateY(-2px);
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .icon-picker__trigger:focus-visible {
@@ -38,7 +38,7 @@
 	-webkit-backdrop-filter: blur(12px);
 	border: 1px solid var(--border-subtle);
 	border-radius: 12px;
-	box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+	box-shadow: 0 10px 30px hsl(0 0% 0% / 0.5);
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
@@ -65,13 +65,13 @@
 	align-items: center;
 	justify-content: center;
 	/* Match instance-header-image styling */
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px rgba(0, 0, 0, 0.08);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
 	flex-shrink: 0;
 }
 
 .icon-picker__option:hover {
 	transform: scale(1.05);
-	box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+	box-shadow: 0 4px 8px hsl(0 0% 0% / 0.15);
 }
 
 .icon-picker__option:focus-visible {
@@ -83,7 +83,7 @@
 /* Selected state with background filter and tick overlay */
 .icon-picker__option--selected {
 	transform: scale(1.05);
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .icon-picker__option--selected::before {
@@ -93,7 +93,7 @@
 	left: 0;
 	right: 0;
 	bottom: 0;
-	background: rgba(0, 0, 0, 0.3);
+	background: hsl(0 0% 0% / 0.3);
 	border-radius: 12px;
 	pointer-events: none;
 }
@@ -106,7 +106,7 @@
 .icon-picker__tick {
 	position: relative;
 	z-index: 1;
-	drop-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+	drop-shadow: 0 2px 4px hsl(0 0% 0% / 0.5);
 }
 
 /* Upload button styling (plus icon) */
@@ -115,7 +115,7 @@
 	border: 2px dashed var(--border-subtle) !important;
 	color: hsl(var(--color__primary-hue) 10% 70%);
 	transition: all 0.1s;
-	box-shadow: inset 0 0 0 2px transparent, 0 1px 3px rgba(0, 0, 0, 0.08) !important;
+	box-shadow: inset 0 0 0 2px transparent, 0 1px 3px hsl(0 0% 0% / 0.08) !important;
 }
 
 .icon-picker__upload-btn:hover {

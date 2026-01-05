@@ -1,20 +1,19 @@
 //! # Configuration System
 //!
-//! This module provides a Diesel-based configuration system with **automatic schema sync**.
+//! This module provides a Diesel-based configuration system.
 //!
 //! ## Single Source of Truth Architecture
 //!
 //! The `AppConfig` struct with standard Diesel derives is the ONLY place you define the schema.
 //! Everything else is handled automatically:
 //! - ✅ CREATE TABLE SQL (from Diesel schema)
-//! - ✅ **Automatic schema sync** - missing columns are added on startup!
 //! - ✅ INSERT/UPDATE/SELECT queries (from Diesel)
 //! - ✅ Type-safe Rust API (from struct definition)
 //! - ✅ JSON serialization (from serde derives)
 //!
 //! ## Adding a New Config Field
 //!
-//! Only 2 steps needed:
+//! 3 steps needed:
 //!
 //! 1. **Add field to `AppConfig` struct**:
 //!    ```rust
@@ -26,22 +25,42 @@
 //!    }
 //!    ```
 //!
-//! 2. **Update `Default` impl** (in the new() call):
+//! 2. **Update `Default` impl**:
 //!    ```rust
 //!    impl Default for AppConfig {
 //!        fn default() -> Self {
-//!            Self::new(
-//!                // ... existing defaults ...
-//!                default_value,  // ← Add this
-//!            )
+//!            AppConfig {
+//!                // ... existing fields ...
+//!                new_field_name: default_value,  // ← Add this
+//!                // ...
+//!            }
 //!        }
 //!    }
 //!    ```
 //!
-//! That's it! **No migrations needed!** On next app launch:
-//! - `sync_schema::<AppConfig>()` detects the missing column
-//! - Automatically runs `ALTER TABLE ADD COLUMN`
-//! - Your new field is ready to use
+//! 3. **Create a Diesel migration**:
+//!    ```bash
+//!    cd src-tauri
+//!    diesel migration generate add_new_config_field
+//!    ```
+//!
+//!    Then edit the generated `up.sql`:
+//!    ```sql
+//!    ALTER TABLE app_config ADD COLUMN new_field_name TYPE DEFAULT default_value;
+//!    ```
+//!
+//!    And `down.sql` for rollback:
+//!    ```sql
+//!    ALTER TABLE app_config DROP COLUMN new_field_name;
+//!    ```
+//! 
+//! 4. **Run the migration**:
+//! ```bash
+//! $env:DATABASE_URL="sqlite://...\VestaProject\vesta-launcher\src-tauri\vesta.db"
+//! diesel migration run
+//! ```
+//!
+//! That's it! On next app launch, the migration runs automatically.
 //!
 //! ## Example Usage from Frontend
 //!
@@ -63,7 +82,7 @@
 //!
 //! - **No Duplication**: Schema defined once in Rust struct
 //! - **Type Safety**: Compile-time checking for all database operations
-//! - **Zero Migrations**: Schema changes are auto-synced on startup
+//! - **Versioned Schema**: Migrations track all schema changes
 //! - **Zero Boilerplate**: No manual SQL for CRUD operations
 //! - **Frontend Ready**: Automatic JSON serialization via serde
 
@@ -94,12 +113,24 @@ pub struct AppConfig {
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
     pub reduced_motion: bool,
-    pub reduced_effects: bool,
     pub last_window_width: i32,
     pub last_window_height: i32,
     pub debug_logging: bool,
     pub notification_retention_days: i32,
     pub active_account_uuid: Option<String>,
+    
+    // Theme system fields
+    pub theme_id: String,                     // Current theme preset ID (e.g., "midnight", "solar")
+    pub theme_mode: String,                   // "template" or "advanced" 
+    pub theme_primary_hue: i32,               // User-customized primary hue
+    pub theme_primary_sat: Option<i32>,       // Advanced mode: primary saturation
+    pub theme_primary_light: Option<i32>,     // Advanced mode: primary lightness
+    pub theme_style: String,                  // "glass", "satin", "flat", "bordered"
+    pub theme_gradient_enabled: bool,         // Enable background gradient
+    pub theme_gradient_angle: Option<i32>,    // Gradient angle in degrees
+    pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
+    pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
+    pub theme_gradient_type: Option<String>,   // "linear" or "radial"
 }
 
 impl Default for AppConfig {
@@ -119,12 +150,26 @@ impl Default for AppConfig {
             show_tray_icon: true,
             minimize_to_tray: false,
             reduced_motion: false,
-            reduced_effects: false,
             last_window_width: 1200,
             last_window_height: 700,
             debug_logging: false,
             notification_retention_days: 30,
             active_account_uuid: None,
+
+            
+            // Theme system defaults
+            theme_id: "midnight".to_string(),  // theme_id - default to signature theme
+            theme_mode: "template".to_string(),  // theme_mode - start with easy mode  
+            theme_primary_hue: 220,               // theme_primary_hue - default blue
+            theme_primary_sat: None,               // theme_primary_sat - advanced mode only
+            theme_primary_light: None,             // theme_primary_light - advanced mode only
+            theme_style: "glass".to_string(),      // theme_style - default glass effect
+            theme_gradient_enabled: true,          // theme_gradient_enabled - enable gradients
+            theme_gradient_angle: Some(135),       // theme_gradient_angle - diagonal gradient
+            theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
+            theme_advanced_overrides: None,        // theme_advanced_overrides - no custom overrides by default
+            theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
+        
         }
     }
 }
@@ -195,12 +240,16 @@ pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
 /// Tauri command to get the current configuration
 #[tauri::command]
 pub fn get_config() -> Result<AppConfig, String> {
-    get_app_config().map_err(|e| e.to_string())
+    log::info!("Tauri command: get_config called");
+    let cfg = get_app_config().map_err(|e| e.to_string())?;
+    log::info!("Tauri command: get_config returning config id={}, theme_id={}", cfg.id, cfg.theme_id);
+    Ok(cfg)
 }
 
 /// Tauri command to update the configuration
 #[tauri::command]
 pub fn set_config(config: AppConfig) -> Result<(), String> {
+    log::info!("Tauri command: set_config called, id={}, theme_id={}", config.id, config.theme_id);
     update_app_config(&config).map_err(|e| e.to_string())
 }
 
@@ -235,6 +284,7 @@ pub fn update_config_field(
     let updated_config: AppConfig = serde_json::from_value(config_value)
         .map_err(|e| format!("Failed to deserialize config: {}", e))?;
 
+    log::info!("Updating config field '{}' via Tauri command", field);
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
 
     // Emit event to all windows so they can update their state
@@ -245,6 +295,50 @@ pub fn update_config_field(
 
     // Notify of config update
     let _ = app_handle.emit("config-updated", event_payload);
+
+    Ok(())
+}
+
+/// Tauri command to update multiple config fields at once
+#[tauri::command]
+pub fn update_config_fields(
+    app_handle: tauri::AppHandle,
+    updates: std::collections::HashMap<String, serde_json::Value>,
+) -> Result<(), String> {
+    let config = get_app_config().map_err(|e| e.to_string())?;
+
+    // Convert config to serde_json::Value for manipulation
+    let mut config_value =
+        serde_json::to_value(&config).map_err(|e| format!("Failed to serialize config: {}", e))?;
+
+    // Update the fields
+    if let Some(config_obj) = config_value.as_object_mut() {
+        for (field, value) in &updates {
+            if config_obj.contains_key(field) {
+                config_obj.insert(field.clone(), value.clone());
+            } else {
+                return Err(format!("Unknown config field: {}", field));
+            }
+        }
+    } else {
+        return Err("Config is not an object".to_string());
+    }
+
+    // Convert back to AppConfig
+    let updated_config: AppConfig = serde_json::from_value(config_value)
+        .map_err(|e| format!("Failed to deserialize config: {}", e))?;
+
+    log::info!("Updating {} config fields via Tauri command", updates.len());
+    update_app_config(&updated_config).map_err(|e| e.to_string())?;
+
+    // Emit events for each updated field
+    for (field, value) in updates {
+        let event_payload = serde_json::json!({
+            "field": field,
+            "value": value,
+        });
+        let _ = app_handle.emit("config-updated", event_payload);
+    }
 
     Ok(())
 }

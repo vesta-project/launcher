@@ -18,7 +18,7 @@
 	background: var(--bg-surface);
 	border-radius: 24px;
 	border: 1px solid var(--border-subtle);
-	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 8px 32px hsl(0 0% 0% / 0.2);
 }
 
 .login-page__title {
@@ -38,14 +38,14 @@
 }
 
 .login-page__error {
-	color: #ff6b6b;
+	color: var(--semantic-error);
 	text-align: center;
 	margin: 0;
 	padding: 12px;
-	background: rgba(255, 107, 107, 0.1);
+	background: hsl(0 100% 71% / 0.1);
 	border-radius: 12px;
 	font-size: var(--font-xsmall);
-	border: 1px solid rgba(255, 107, 107, 0.2);
+	border: 1px solid hsl(0 100% 71% / 0.2);
 }
 
 .login-page__button {
@@ -60,7 +60,7 @@
 	flex-direction: column;
 	gap: 20px;
 	padding: 24px;
-	background: rgba(0, 0, 0, 0.2);
+	background: hsl(0 0% 0% / 0.2);
 	border-radius: 16px;
 	border: 1px solid var(--border-subtle);
 }
@@ -84,7 +84,7 @@
 	font-size: 24px;
 	font-weight: 700;
 	text-align: center;
-	background: rgba(0, 0, 0, 0.3);
+	background: hsl(0 0% 0% / 0.3);
 	border-radius: 12px;
 	border: 1px solid var(--border-subtle);
 	letter-spacing: 4px;
@@ -109,5 +109,5 @@
 }
 
 .login-page__button--secondary:hover {
-	background: rgba(255, 255, 255, 0.1);
+	background: hsl(0 0% 100% / 0.1);
 }

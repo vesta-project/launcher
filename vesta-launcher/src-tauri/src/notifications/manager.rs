@@ -33,6 +33,34 @@ impl ActionHandler for CancelTaskHandler {
     }
 }
 
+/// Handler that pauses running tasks when the notification action 'pause_task' is invoked.
+struct PauseTaskHandler {}
+
+impl ActionHandler for PauseTaskHandler {
+    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+        let key = match client_key {
+            Some(k) => k,
+            None => anyhow::bail!("Missing client_key for pause_task action"),
+        };
+        let tm = app_handle.state::<TaskManager>();
+        tm.pause_task(&key).map_err(|e: String| anyhow::anyhow!(e))
+    }
+}
+
+/// Handler that resumes paused tasks when the notification action 'resume_task' is invoked.
+struct ResumeTaskHandler {}
+
+impl ActionHandler for ResumeTaskHandler {
+    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+        let key = match client_key {
+            Some(k) => k,
+            None => anyhow::bail!("Missing client_key for resume_task action"),
+        };
+        let tm = app_handle.state::<TaskManager>();
+        tm.resume_task(&key).map_err(|e: String| anyhow::anyhow!(e))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -280,9 +308,6 @@ mod tests {
 pub struct NotificationManager {
     app_handle: AppHandle,
     action_registry: Arc<Mutex<HashMap<String, Arc<dyn ActionHandler>>>>,
-    // In-memory tracking for notifications that should be kept on completion
-    show_on_completion_keys: Arc<Mutex<HashSet<String>>>,
-    show_on_completion_ids: Arc<Mutex<HashSet<i32>>>,
 }
 
 #[allow(dead_code)]
@@ -291,12 +316,12 @@ impl NotificationManager {
         let manager = Self {
             app_handle,
             action_registry: Arc::new(Mutex::new(HashMap::new())),
-            show_on_completion_keys: Arc::new(Mutex::new(HashSet::new())),
-            show_on_completion_ids: Arc::new(Mutex::new(HashSet::new())),
         };
 
         // Register built-in action handlers
         manager.register_action("cancel_task", Arc::new(CancelTaskHandler {}));
+        manager.register_action("pause_task", Arc::new(PauseTaskHandler {}));
+        manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager
@@ -304,13 +329,22 @@ impl NotificationManager {
 
     /// Register an action handler
     pub fn register_action(&self, action_id: &str, handler: Arc<dyn ActionHandler>) {
-        let mut registry = self.action_registry.lock().unwrap();
+        let mut registry = match self.action_registry.lock() {
+            Ok(registry) => registry,
+            Err(e) => {
+                eprintln!("Failed to lock action registry for registration: {}", e);
+                return;
+            }
+        };
         registry.insert(action_id.to_string(), handler);
     }
 
     /// Invoke an action handler
     pub fn invoke_action(&self, action_id: &str, client_key: Option<String>) -> Result<()> {
-        let registry = self.action_registry.lock().unwrap();
+        let registry = self
+            .action_registry
+            .lock()
+            .map_err(|e| anyhow::anyhow!("Failed to lock action registry: {}", e))?;
         if let Some(handler) = registry.get(action_id) {
             handler.handle(&self.app_handle, client_key)?;
         } else {
@@ -360,17 +394,6 @@ impl NotificationManager {
                     // Preserve creation time
                     notification.created_at = existing.created_at;
                     NotificationStore::update(id, &notification)?;
-                    // Track show_on_completion if provided
-                    if let Some(true) = input.show_on_completion {
-                        if let Some(ref key) = notification.client_key {
-                            let mut keys = self.show_on_completion_keys.lock().unwrap();
-                            keys.insert(key.clone());
-                        } else {
-                            let mut ids = self.show_on_completion_ids.lock().unwrap();
-                            ids.insert(id);
-                        }
-                        notification.show_on_completion = Some(true);
-                    }
 
                     self.app_handle.emit("core://notification", &notification)?;
                     return Ok(id);
@@ -380,18 +403,6 @@ impl NotificationManager {
 
         let id = NotificationStore::create(&notification)?;
         notification.id = Some(id);
-        // Track show_on_completion mapping if provided
-        if let Some(true) = input.show_on_completion {
-            if let Some(ref key) = notification.client_key {
-                let mut keys = self.show_on_completion_keys.lock().unwrap();
-                keys.insert(key.clone());
-            } else {
-                let mut ids = self.show_on_completion_ids.lock().unwrap();
-                ids.insert(id);
-            }
-            // copy into outgoing notification so frontend sees it
-            notification.show_on_completion = Some(true);
-        }
 
         self.app_handle.emit("core://notification", &notification)?;
 
@@ -432,8 +443,19 @@ impl NotificationManager {
         if let Some(mut notification) = notification_opt {
             // println!("NotificationManager: Found notification with {} actions", notification.actions.len());
             notification.progress = Some(progress);
-            notification.current_step = current_step;
-            notification.total_steps = total_steps;
+            
+/*
+TODO:
+
+The conditional assignment of current_step and total_steps (lines 444-449) may prevent resetting these values to None when needed. The previous implementation unconditionally assigned these values, which allowed clearing them. If the intent is to preserve existing values when None is passed, this change is correct, but it may break existing behavior that relies on being able to clear these fields.
+*/
+
+            if current_step.is_some() {
+                notification.current_step = current_step;
+            }
+            if total_steps.is_some() {
+                notification.total_steps = total_steps;
+            }
 
             // Update description if provided
             if !description.is_empty() {
@@ -443,17 +465,8 @@ impl NotificationManager {
             notification.updated_at = chrono::Utc::now().to_rfc3339();
 
             // Auto-convert Progress → Patient when complete
-            // ensure we respect any in-memory show_on_completion flags
-            let mut show_flag = notification.show_on_completion.unwrap_or(false);
-            if !show_flag {
-                if let Some(ref key) = notification.client_key {
-                    show_flag = self.show_on_completion_keys.lock().unwrap().contains(key);
-                }
-                if let Some(id) = notification.id {
-                    show_flag =
-                        show_flag || self.show_on_completion_ids.lock().unwrap().contains(&id);
-                }
-            }
+            // Use database field as single source of truth
+            let show_flag = notification.show_on_completion.unwrap_or(false);
 
             if progress >= 100 && notification.notification_type == NotificationType::Progress {
                 // println!("NotificationManager: Converting Progress → Patient (completed), dismissible was: {}, setting to true", notification.dismissible);
@@ -493,6 +506,30 @@ impl NotificationManager {
         } else {
             // println!("NotificationManager: Notification not found for {}", id_or_key);
         }
+        Ok(())
+    }
+
+    pub fn update_notification_actions(
+        &self,
+        id_or_key: String,
+        actions: Vec<crate::notifications::models::NotificationAction>,
+    ) -> Result<()> {
+        let notification_opt = if let Ok(id) = id_or_key.parse::<i32>() {
+            NotificationStore::get_by_id(id)?
+        } else {
+            NotificationStore::get_by_client_key(&id_or_key)?
+        };
+
+        if let Some(mut notification) = notification_opt {
+            notification.actions = actions;
+            notification.updated_at = chrono::Utc::now().to_rfc3339();
+
+            if let Some(id) = notification.id {
+                NotificationStore::update(id, &notification)?;
+                self.app_handle.emit("core://notification", &notification)?;
+            }
+        }
+
         Ok(())
     }
 
@@ -544,31 +581,15 @@ impl NotificationManager {
     }
 
     /// Helper to determine whether a Progress notification should remain persistent on successful
-    /// completion (converted to Patient) based on the notification's own flag or the manager's
-    /// in-memory registry. This is extracted to make the logic unit-testable.
+    /// completion (converted to Patient) based on the notification's show_on_completion flag.
+    /// This is extracted to make the logic unit-testable.
     pub(crate) fn should_persist_on_completion(
         notification: &Notification,
-        keys: &HashSet<String>,
-        ids: &HashSet<i32>,
+        _keys: &HashSet<String>,
+        _ids: &HashSet<i32>,
     ) -> bool {
-        // Explicit field on notification takes precedence
-        if notification.show_on_completion.unwrap_or(false) {
-            return true;
-        }
-
-        if let Some(ref k) = notification.client_key {
-            if keys.contains(k) {
-                return true;
-            }
-        }
-
-        if let Some(id) = notification.id {
-            if ids.contains(&id) {
-                return true;
-            }
-        }
-
-        false
+        // Database field is the single source of truth
+        notification.show_on_completion.unwrap_or(false)
     }
 
     pub fn list(&self, only_persisted: bool, only_unread: bool) -> Result<Vec<Notification>> {
@@ -614,22 +635,9 @@ impl NotificationManager {
             }
         };
 
-        // remove any show_on_completion tracking for this notification
         if id > 0 {
-            // Try to fetch the existing notification and remove any show_on_completion tracking
-            let existing_opt = NotificationStore::get_by_id(id)?;
-            if let Some(existing) = &existing_opt {
-                if let Some(k) = existing.client_key.as_ref() {
-                    let mut keys = self.show_on_completion_keys.lock().unwrap();
-                    keys.remove(k);
-                }
-            }
-
-            let mut ids = self.show_on_completion_ids.lock().unwrap();
-            ids.remove(&id);
-
             // capture client_key to help frontend remove any ephemeral toast for this notification
-            let client_key = existing_opt.and_then(|e| e.client_key);
+            let client_key = NotificationStore::get_by_id(id)?.and_then(|e| e.client_key);
             NotificationStore::delete(id)?;
             self.app_handle.emit(
                 "core://notification-updated",

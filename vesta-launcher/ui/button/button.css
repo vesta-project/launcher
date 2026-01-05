@@ -1,6 +1,6 @@
 .launcher-button {
 	--button-color: hsla(
-		var(--color__primary-hue) 15% 50% 0.2
+		var(--accent-base)  / 1
 	); /* To fix intellisese errors */
 
 	border: 2px solid transparent;
@@ -17,7 +17,7 @@
 	}
 
 	&:active:not(:disabled) {
-		transform: scale(95%);
+			color: var(--text-primary);
 		transition-duration: 50ms;
 	}
 
@@ -52,7 +52,7 @@
 .launcher-button--ghost {
 	background-color: transparent;
 	border: 4px solid transparent;
-	color: #1a1a1a;
+	color: var(--surface-base);
 
 	&:hover {
 		background-color: var(--button-color);
@@ -97,5 +97,12 @@
 
 	& svg {
 		height: 0.8rem;
+	}
+}
+
+/* Light mode: ensure button icons are properly colored */
+@media (prefers-color-scheme: light) {
+	.launcher-button--solid svg {
+		fill: var(--text-on-accent);
 	}
 }

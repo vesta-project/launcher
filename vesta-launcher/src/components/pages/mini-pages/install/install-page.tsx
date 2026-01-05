@@ -103,6 +103,17 @@ function InstallPage(props: InstallPageProps) {
 	const isMetadataLoading = () => Boolean(metadata.loading);
 	const getMetadataError = () => metadata.error;
 
+	// Initialize selectedVersion with latest stable release after metadata loads
+	createEffect(() => {
+		const meta = metadata();
+		if (meta && !selectedVersion()) {
+			const latestRelease = meta.game_versions.find((v) => v.stable);
+			if (latestRelease) {
+				setSelectedVersion(latestRelease.id);
+			}
+		}
+	});
+
 	// Get stable versions list for dropdown, filtered by modloader
 	const filteredVersions = () => {
 		const loader = selectedModloader();
@@ -147,7 +158,7 @@ function InstallPage(props: InstallPageProps) {
 
 	// Reset version if it becomes invalid when switching modloaders
 	createEffect(() => {
-		const versions = filteredVersions();
+		const versions = filteredVersions() || [];
 		const current = selectedVersion();
 		// If we have a selected version, but it's not in the new filtered list
 		if (
@@ -236,7 +247,7 @@ function InstallPage(props: InstallPageProps) {
 
 			// Get full instance and queue installation
 			const fullInstance: Instance = {
-				id: { VALUE: instanceId },
+				id: instanceId,
 				name,
 				minecraft_version: version,
 				modloader: selectedModloader() || "vanilla",
@@ -387,7 +398,7 @@ function InstallPage(props: InstallPageProps) {
 										</LauncherButton>
 									</div>
 									<Combobox
-										options={filteredVersions().map((v) => v.id)}
+										options={(filteredVersions() || []).map((v) => v.id)}
 										value={selectedVersion()}
 										onChange={(val) => val && setSelectedVersion(val)}
 										placeholder="Select version..."

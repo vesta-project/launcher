@@ -1,22 +1,25 @@
-use crate::game::launcher::classpath::OsType;
+use crate::game::installer::types::OsType;
 use anyhow::Result;
 use std::path::Path;
 
 /// Convert OsType to the canonical name used in manifests/rules
+#[allow(dead_code)]
 pub(crate) fn os_name(os: &OsType) -> &'static str {
     match os {
-        OsType::Windows => "windows",
-        OsType::Linux => "linux",
-        OsType::MacOS => "osx",
+        OsType::Windows | OsType::WindowsArm64 => "windows",
+        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+        OsType::MacOS | OsType::MacOSArm64 => "osx",
     }
 }
 
 /// Get arch bits used in manifest templates like ${arch}
+#[allow(dead_code)]
 pub(crate) fn arch_bits(os: &OsType) -> &'static str {
     match os {
-        OsType::Windows => "64",
-        OsType::MacOS => "64",
-        OsType::Linux => "64",
+        OsType::Windows | OsType::WindowsArm64 => "64",
+        OsType::MacOS | OsType::MacOSArm64 => "64",
+        OsType::Linux | OsType::LinuxArm64 => "64",
+        OsType::LinuxArm32 => "32",
     }
 }
 
@@ -160,19 +163,6 @@ pub(crate) fn library_has_natives_for_os(
     false
 }
 
-/// Check whether any library in the manifest includes native artifacts for the given OS
-pub(crate) fn manifest_has_natives_for_os(
-    manifest: &crate::game::launcher::version_parser::VersionManifest,
-    os_name: &str,
-) -> bool {
-    for lib in &manifest.libraries {
-        if library_has_natives_for_os(lib, os_name) {
-            return true;
-        }
-    }
-    false
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,63 +174,5 @@ mod tests {
         assert!(classifier_key_matches_os("natives-osx", "osx"));
         assert!(classifier_key_matches_os("natives-macos", "osx"));
         assert!(!classifier_key_matches_os("something-else", "linux"));
-    }
-
-    #[test]
-    fn test_manifest_has_natives_for_os() {
-        use crate::game::launcher::version_parser::{
-            Artifact, Library, LibraryDownloads, VersionManifest,
-        };
-        use std::collections::HashMap;
-
-        // manifest with no libraries -> false
-        let manifest = VersionManifest {
-            id: "test".to_string(),
-            main_class: None,
-            inherits_from: None,
-            arguments: None,
-            minecraft_arguments: None,
-            libraries: vec![],
-            asset_index: None,
-            assets: None,
-            java_version: None,
-            version_type: None,
-            release_time: None,
-            time: None,
-        };
-
-        assert!(!manifest_has_natives_for_os(&manifest, "windows"));
-
-        // manifest with a library that has a classifier matching windows
-        let mut classifiers = HashMap::new();
-        classifiers.insert(
-            "natives-windows-64".to_string(),
-            Artifact {
-                path: "".to_string(),
-                url: "".to_string(),
-                sha1: "".to_string(),
-                size: 0,
-            },
-        );
-
-        let downloads = LibraryDownloads {
-            artifact: None,
-            classifiers: Some(classifiers),
-        };
-
-        let lib = Library {
-            name: "com.example:lib:1.0".to_string(),
-            downloads: Some(downloads),
-            url: None,
-            rules: None,
-            natives: None,
-            extract: None,
-        };
-
-        let manifest2 = VersionManifest {
-            libraries: vec![lib],
-            ..manifest
-        };
-        assert!(manifest_has_natives_for_os(&manifest2, "windows"));
     }
 }

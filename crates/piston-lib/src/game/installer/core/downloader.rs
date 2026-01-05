@@ -62,6 +62,12 @@ pub async fn download_to_path(
 ) -> Result<()> {
     log::debug!("Downloading: {} -> {:?}", url, path);
 
+    if reporter.is_dry_run() {
+        log::info!("[Dry-Run] Would download {} to {:?}", url, path);
+        reporter.set_message(&format!("[Dry-Run] Would download {} to {:?}", url, path));
+        return Ok(());
+    }
+
     // Check if file exists
     if path.exists() {
         // Check if locked by another process
@@ -231,6 +237,14 @@ async fn download_with_validation(
             anyhow::bail!("Download cancelled by user");
         }
 
+        // Handle pause
+        while reporter.is_paused() {
+            if reporter.is_cancelled() {
+                anyhow::bail!("Download cancelled by user");
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
+
         let chunk = chunk_result?;
         file.write_all(&chunk).await?;
         hasher.update(&chunk);
@@ -328,10 +342,11 @@ pub async fn download_to_memory_with_client(
     client: &Client,
     url: &str,
     expected_sha1: Option<&str>,
+    reporter: Option<&dyn ProgressReporter>,
 ) -> Result<Vec<u8>> {
     let mut retries = 0;
     loop {
-        match download_to_memory_internal(client, url, expected_sha1).await {
+        match download_to_memory_internal(client, url, expected_sha1, reporter).await {
             Ok(bytes) => return Ok(bytes),
             Err(e) => {
                 retries += 1;
@@ -354,6 +369,7 @@ async fn download_to_memory_internal(
     client: &Client,
     url: &str,
     expected_sha1: Option<&str>,
+    reporter: Option<&dyn ProgressReporter>,
 ) -> Result<Vec<u8>> {
     log::debug!("Downloading to memory (reused client): {}", url);
 
@@ -363,12 +379,40 @@ async fn download_to_memory_internal(
         anyhow::bail!("HTTP error {}: {}", response.status(), url);
     }
 
-    let bytes = response.bytes().await?;
+    let total_size = response.content_length();
+    let mut bytes = Vec::with_capacity(total_size.unwrap_or(0) as usize);
+    let mut downloaded: u64 = 0;
+    let mut hasher = Sha1::new();
+
+    let mut stream = response.bytes_stream();
+    use futures::StreamExt;
+
+    while let Some(chunk_result) = stream.next().await {
+        if let Some(rep) = reporter {
+            if rep.is_cancelled() {
+                anyhow::bail!("Download cancelled by user");
+            }
+
+            while rep.is_paused() {
+                if rep.is_cancelled() {
+                    anyhow::bail!("Download cancelled by user");
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+        }
+
+        let chunk = chunk_result?;
+        bytes.extend_from_slice(&chunk);
+        hasher.update(&chunk);
+
+        downloaded += chunk.len() as u64;
+        if let Some(rep) = reporter {
+            rep.update_bytes(downloaded, total_size);
+        }
+    }
 
     // Validate SHA1 if provided
     if let Some(expected) = expected_sha1 {
-        let mut hasher = Sha1::new();
-        hasher.update(&bytes);
         let computed = format!("{:x}", hasher.finalize());
 
         if computed.to_lowercase() != expected.to_lowercase() {
@@ -381,7 +425,7 @@ async fn download_to_memory_internal(
         }
     }
 
-    Ok(bytes.to_vec())
+    Ok(bytes)
 }
 
 /// Download JSON and deserialize
@@ -572,6 +616,9 @@ impl crate::game::installer::types::ProgressReporter for NoopReporter {
     fn is_cancelled(&self) -> bool {
         false
     }
+    fn is_paused(&self) -> bool {
+        false
+    }
 }
 
 #[cfg(test)]
@@ -603,6 +650,8 @@ mod tests {
             data_dir: data_dir.clone(),
             game_dir: tmp.path().join("game"),
             java_path: None,
+            dry_run: false,
+            concurrency: 8,
         };
 
         let installed_id = "forge-loader-47.2.0-1.20.1";
@@ -644,6 +693,8 @@ mod tests {
             data_dir: data_dir.clone(),
             game_dir: tmp.path().join("game"),
             java_path: None,
+            dry_run: false,
+            concurrency: 8,
         };
 
         let installed_id = "forge-loader-47.2.0-1.20.1";

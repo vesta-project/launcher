@@ -1,0 +1,2 @@
+-- This file should undo anything in `up.sql`
+-- ALTER TABLE app_config DROP COLUMN theme_gradient_type; -- SQLite doesn't support DROP COLUMN

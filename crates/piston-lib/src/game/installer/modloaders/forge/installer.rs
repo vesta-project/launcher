@@ -1,12 +1,16 @@
 /// Simplified Forge installer following Modrinth's pattern
 /// This replaces the overcomplicated common.rs (1142 lines) and processor.rs (787 lines)
 /// with a streamlined approach that trusts the Forge manifests.
-use super::parser::{extract_maven_libraries, parse_install_profile, parse_version_json};
+use crate::game::launcher::unified_manifest::{UnifiedManifest, Processor, SidedDataEntry};
+use super::parser::{
+    extract_main_class_from_jar, extract_maven_libraries_sync, parse_install_profile,
+    parse_version_json,
+};
 use crate::game::installer::core::library::LibraryDownloader;
-use crate::game::installer::types::{InstallSpec, ProgressReporter};
+use crate::game::installer::types::{InstallSpec, ProgressReporter, OsType};
 use crate::game::installer::vanilla::install_vanilla;
 use crate::game::launcher::version_parser::{
-    merge_manifests, resolve_version_chain, VersionManifest,
+    resolve_version_chain, VersionManifest, Library,
 };
 use crate::game::metadata::{load_or_fetch_metadata, ModloaderType as MetadataModloaderType};
 use anyhow::{Context, Result};
@@ -59,24 +63,6 @@ pub struct InstallProfile {
     pub libraries: Vec<ForgeLibrary>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SidedDataEntry {
-    pub client: String,
-    pub server: String,
-}
-
-/// Processor to run during installation
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Processor {
-    pub jar: String,
-    pub classpath: Vec<String>,
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub outputs: Option<HashMap<String, String>>,
-    #[serde(default)]
-    pub sides: Option<Vec<String>>,
-}
-
 /// Forge version.json
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -110,6 +96,49 @@ pub struct LegacyInstallSection {
     #[serde(rename = "filePath")]
     pub file_path: Option<String>,
     pub path: Option<String>,
+}
+
+fn forge_info_to_manifest(info: &ForgeVersionInfo) -> VersionManifest {
+    let mut libraries = Vec::new();
+    for lib in &info.libraries {
+        libraries.push(Library {
+            name: lib.name.clone(),
+            downloads: lib.downloads.as_ref().map(|d| crate::game::launcher::version_parser::LibraryDownloads {
+                artifact: d.artifact.as_ref().map(|a| crate::game::launcher::version_parser::Artifact {
+                    path: a.path.clone(),
+                    sha1: Some(a.sha1.clone()),
+                    size: Some(0), // Size not always available in Forge manifest
+                    url: Some(a.url.clone()),
+                }),
+                classifiers: None,
+            }),
+            url: None,
+            natives: None,
+            rules: None,
+            extract: None,
+        });
+    }
+
+    let arguments = if let Some(ref args_val) = info.arguments {
+        serde_json::from_value(args_val.clone()).ok()
+    } else {
+        None
+    };
+
+    VersionManifest {
+        id: info.id.clone(),
+        main_class: info.main_class.clone(),
+        inherits_from: Some(info.inherits_from.clone()),
+        arguments,
+        minecraft_arguments: info.minecraft_arguments.clone(),
+        libraries,
+        asset_index: None,
+        assets: None,
+        java_version: None,
+        version_type: Some("release".to_string()),
+        release_time: None,
+        time: None,
+    }
 }
 
 /// Main simplified Forge installer
@@ -166,6 +195,8 @@ pub async fn install_forge_modloader(
         data_dir: spec.data_dir.clone(),
         game_dir: spec.game_dir.clone(),
         java_path: spec.java_path.clone(),
+        dry_run: spec.dry_run,
+        concurrency: spec.concurrency,
     };
 
     install_vanilla(&vanilla_spec, reporter.clone())
@@ -194,7 +225,12 @@ pub async fn install_forge_modloader(
         reporter.set_message(&format!("Extracting {} libraries...", loader_name));
         reporter.set_percent(40);
 
-        extract_maven_libraries(&installer_path, &spec.libraries_dir()).await?;
+        let installer_path_clone = installer_path.clone();
+        let libraries_dir_clone = spec.libraries_dir();
+        tokio::task::spawn_blocking(move || {
+            extract_maven_libraries_sync(&installer_path_clone, &libraries_dir_clone)
+        })
+        .await??;
 
         // Step 5: Download libraries (concurrent)
         reporter.set_message(&format!("Downloading {} libraries...", loader_name));
@@ -209,15 +245,24 @@ pub async fn install_forge_modloader(
 
         // Collect all library specs for concurrent download
         let mut library_specs: Vec<crate::game::installer::core::library::LibrarySpec> = Vec::new();
+        let mut seen_libs = std::collections::HashSet::new();
 
         // Add install profile libraries
         for lib in &install_profile.libraries {
-            library_specs.push(forge_library_to_spec(lib));
+            if let Some(spec) = forge_library_to_spec(lib) {
+                if seen_libs.insert(spec.name.clone()) {
+                    library_specs.push(spec);
+                }
+            }
         }
 
         // Add version info libraries
         for lib in &version_info.libraries {
-            library_specs.push(forge_library_to_spec(lib));
+            if let Some(spec) = forge_library_to_spec(lib) {
+                if seen_libs.insert(spec.name.clone()) {
+                    library_specs.push(spec);
+                }
+            }
         }
 
         let total_libs = library_specs.len();
@@ -237,7 +282,7 @@ pub async fn install_forge_modloader(
         reporter.set_message(&format!("Running {} processors...", loader_name));
         reporter.set_percent(70);
 
-        execute_processors(&install_profile, spec, &*reporter, &installer_path).await?;
+        execute_processors(&install_profile, &version_info, spec, reporter.clone(), &installer_path, loader_type).await?;
 
         // Step 7: Save (merged) version JSON
         reporter.set_message(&format!("Saving {} version info...", loader_name));
@@ -260,66 +305,19 @@ pub async fn install_forge_modloader(
         tokio::fs::create_dir_all(&version_dir).await?;
 
         let version_json_path = version_dir.join(format!("{}.json", installed_id));
+        
         // Build parent manifest from vanilla
         let parent_manifest = resolve_version_chain(&spec.version_id, &spec.data_dir()).await?;
+        let child_manifest = forge_info_to_manifest(&version_info);
 
-        // Convert ForgeVersionInfo into VersionManifest
-        let child_manifest = VersionManifest {
-            id: version_info.id.clone(),
-            main_class: version_info.main_class.clone(),
-            inherits_from: Some(version_info.inherits_from.clone()),
-            arguments: version_info
-                .arguments
-                .clone()
-                .and_then(|v| serde_json::from_value(v).ok()),
-            minecraft_arguments: version_info.minecraft_arguments.clone(),
-            libraries: version_info
-                .libraries
-                .iter()
-                .map(|l| crate::game::launcher::version_parser::Library {
-                    name: l.name.clone(),
-                    downloads: l.downloads.as_ref().map(|d| {
-                        crate::game::launcher::version_parser::LibraryDownloads {
-                            artifact: d.artifact.as_ref().map(|a| {
-                                crate::game::launcher::version_parser::Artifact {
-                                    path: a.path.clone(),
-                                    url: if a.url.is_empty() {
-                                        None
-                                    } else {
-                                        Some(a.url.clone())
-                                    },
-                                    sha1: if a.sha1.is_empty() {
-                                        None
-                                    } else {
-                                        Some(a.sha1.clone())
-                                    },
-                                    size: None,
-                                }
-                            }),
-                            classifiers: None,
-                        }
-                    }),
-                    url: l.url.clone(),
-                    rules: None,
-                    natives: None,
-                    extract: None,
-                })
-                .collect(),
-            asset_index: None,
-            assets: None,
-            java_version: None,
-            version_type: None,
-            release_time: None,
-            time: None,
-        };
+        let mut unified = UnifiedManifest::merge(parent_manifest, Some(child_manifest), OsType::current());
+        unified = unified.with_forge_profile(install_profile.processors.clone(), install_profile.data.clone());
+        unified.id = installed_id.clone();
 
-        let merged_manifest = merge_manifests(parent_manifest, child_manifest)?;
-        let mut version_json_value: serde_json::Value = serde_json::to_value(&merged_manifest)?;
-        if let Some(obj) = version_json_value.as_object_mut() {
-            obj.insert("id".to_string(), serde_json::json!(installed_id.clone()));
-        }
-        let version_json = serde_json::to_string_pretty(&version_json_value)?;
+        let version_json = serde_json::to_string_pretty(&unified)?;
         tokio::fs::write(&version_json_path, version_json).await?;
+
+        log::info!("Saved unified version JSON to {:?}", version_json_path);
     } else {
         // --- Legacy Forge Installation (1.12.2 and older) ---
         log::info!("Modern install_profile.json not found, checking for legacy format...");
@@ -408,8 +406,8 @@ pub async fn install_forge_modloader(
 
             if needs_extraction {
                 libs_to_extract.push(lib);
-            } else {
-                libs_to_download.push(forge_library_to_spec(lib));
+            } else if let Some(spec) = forge_library_to_spec(lib) {
+                libs_to_download.push(spec);
             }
         }
 
@@ -468,62 +466,12 @@ pub async fn install_forge_modloader(
         // Build parent manifest from vanilla
         let parent_manifest = resolve_version_chain(&spec.version_id, &spec.data_dir()).await?;
 
-        // Convert ForgeVersionInfo into VersionManifest
-        let child_manifest = VersionManifest {
-            id: version_info.id.clone(),
-            main_class: version_info.main_class.clone(),
-            inherits_from: Some(version_info.inherits_from.clone()),
-            arguments: version_info
-                .arguments
-                .clone()
-                .and_then(|v| serde_json::from_value(v).ok()),
-            minecraft_arguments: version_info.minecraft_arguments.clone(),
-            libraries: version_info
-                .libraries
-                .iter()
-                .map(|l| crate::game::launcher::version_parser::Library {
-                    name: l.name.clone(),
-                    downloads: l.downloads.as_ref().map(|d| {
-                        crate::game::launcher::version_parser::LibraryDownloads {
-                            artifact: d.artifact.as_ref().map(|a| {
-                                crate::game::launcher::version_parser::Artifact {
-                                    path: a.path.clone(),
-                                    url: if a.url.is_empty() {
-                                        None
-                                    } else {
-                                        Some(a.url.clone())
-                                    },
-                                    sha1: if a.sha1.is_empty() {
-                                        None
-                                    } else {
-                                        Some(a.sha1.clone())
-                                    },
-                                    size: None,
-                                }
-                            }),
-                            classifiers: None,
-                        }
-                    }),
-                    url: l.url.clone(),
-                    rules: None,
-                    natives: None,
-                    extract: None,
-                })
-                .collect(),
-            asset_index: None,
-            assets: None,
-            java_version: None,
-            version_type: None,
-            release_time: None,
-            time: None,
-        };
+        let child_manifest = forge_info_to_manifest(&version_info);
 
-        let merged_manifest = merge_manifests(parent_manifest, child_manifest)?;
-        let mut version_json_value: serde_json::Value = serde_json::to_value(&merged_manifest)?;
-        if let Some(obj) = version_json_value.as_object_mut() {
-            obj.insert("id".to_string(), serde_json::json!(installed_id.clone()));
-        }
-        let version_json = serde_json::to_string_pretty(&version_json_value)?;
+        let mut unified = UnifiedManifest::merge(parent_manifest, Some(child_manifest), OsType::current());
+        unified.id = installed_id.clone();
+
+        let version_json = serde_json::to_string_pretty(&unified)?;
         tokio::fs::write(&version_json_path, version_json).await?;
     }
 
@@ -592,16 +540,24 @@ async fn extract_legacy_library(
 }
 
 /// Convert a ForgeLibrary to a LibrarySpec for concurrent downloads
-fn forge_library_to_spec(lib: &ForgeLibrary) -> crate::game::installer::core::library::LibrarySpec {
-    let maven_url = lib.url.clone();
+fn forge_library_to_spec(lib: &ForgeLibrary) -> Option<crate::game::installer::core::library::LibrarySpec> {
+    // Extract maven_url from library.url field
+    let mut maven_url = lib.url.clone();
+    
+    // Extract explicit download URL and SHA1 from downloads.artifact
     let (explicit_url, sha1) = if let Some(downloads) = &lib.downloads {
         if let Some(artifact) = &downloads.artifact {
+            // If artifact.url is empty, this library is either:
+            // 1. Embedded in the installer (will be extracted)
+            // 2. Created by processors
+            // In either case, skip downloading
+            if artifact.url.is_empty() {
+                log::debug!("Skipping library {} (empty URL - embedded or processor output)", lib.name);
+                return None;
+            }
+            
             (
-                if artifact.url.is_empty() {
-                    None
-                } else {
-                    Some(artifact.url.clone())
-                },
+                Some(artifact.url.clone()),
                 if artifact.sha1.is_empty() {
                     None
                 } else {
@@ -615,22 +571,39 @@ fn forge_library_to_spec(lib: &ForgeLibrary) -> crate::game::installer::core::li
         (None, None)
     };
 
+    // Use checksums as fallback SHA1
     let sha1 = sha1.or_else(|| lib.checksums.as_ref().and_then(|c| c.first().cloned()));
 
-    crate::game::installer::core::library::LibrarySpec {
+    // If no maven_url is specified at the library level, infer based on artifact coordinates
+    if maven_url.is_none() {
+        maven_url = Some(if lib.name.starts_with("net.minecraftforge") {
+            "https://maven.minecraftforge.net/".to_string()
+        } else if lib.name.starts_with("net.neoforged") {
+            "https://maven.neoforged.net/releases/".to_string()
+        } else if lib.name.starts_with("de.oceanlabs") {
+            "https://maven.minecraftforge.net/".to_string()
+        } else {
+            // Default to Minecraft libraries for everything else
+            "https://libraries.minecraft.net/".to_string()
+        });
+    }
+
+    Some(crate::game::installer::core::library::LibrarySpec {
         name: lib.name.clone(),
         maven_url,
         explicit_url,
         sha1,
-    }
+    })
 }
 
 /// Execute processors for client-side installation
 async fn execute_processors(
     install_profile: &InstallProfile,
+    version_info: &ForgeVersionInfo,
     spec: &InstallSpec,
-    reporter: &dyn ProgressReporter,
+    reporter: std::sync::Arc<dyn ProgressReporter>,
     installer_path: &Path,
+    loader_type: MetadataModloaderType,
 ) -> Result<()> {
     let client_processors: Vec<&Processor> = install_profile
         .processors
@@ -680,6 +653,9 @@ async fn execute_processors(
     }
     tokio::fs::create_dir_all(&installer_data_dir).await?;
 
+    // Collect Maven-coordinated data entries that need downloading
+    let mut maven_data_libs: Vec<crate::game::installer::core::library::LibrarySpec> = Vec::new();
+
     for (key, entry) in &install_profile.data {
         let client_val = &entry.client;
         if client_val.starts_with('/') {
@@ -718,18 +694,131 @@ async fn execute_processors(
             // Update variable with absolute path
             data_variables.insert(key.clone(), dest_path.to_string_lossy().to_string());
             log::debug!("Extracted data file: {} -> {:?}", client_val, dest_path);
+        } else if client_val.starts_with('[') && client_val.ends_with(']') {
+            // It's a Maven coordinate - resolve to path
+            // NOTE: Not all Maven coordinates are downloadable! Some are processor OUTPUTS.
+            // Only coordinates that appear in install_profile.libraries are downloadable.
+            let coords = &client_val[1..client_val.len() - 1];
+            let resolved_path = maven_to_path(coords, &spec.libraries_dir())?;
+            data_variables.insert(key.clone(), resolved_path.to_string_lossy().to_string());
+            log::debug!(
+                "Data entry {} references Maven artifact: {} -> {:?}",
+                key,
+                coords,
+                resolved_path
+            );
+
+            // Check if this coordinate is downloadable:
+            // 1. Must be in install_profile.libraries OR version_info.libraries
+            // 2. If in version_info.libraries, must have a non-empty URL
+            let has_empty_url_in_version_libs = version_info.libraries.iter().any(|lib| {
+                lib.name == coords && 
+                lib.downloads.as_ref()
+                    .and_then(|d| d.artifact.as_ref())
+                    .map(|a| a.url.is_empty())
+                    .unwrap_or(false)
+            });
+            
+            let is_in_install_libraries = install_profile.libraries.iter().any(|lib| {
+                lib.name == coords
+            });
+            
+            // Skip if it has an empty URL in version libs (means it's a processor output)
+            let should_skip = has_empty_url_in_version_libs || (!is_in_install_libraries && !resolved_path.exists());
+            
+            log::debug!(
+                "Data entry {} ({}) - in install libs: {}, has empty URL: {}, exists: {}, skip: {}",
+                key,
+                coords,
+                is_in_install_libraries,
+                has_empty_url_in_version_libs,
+                resolved_path.exists(),
+                should_skip
+            );
+
+            // Only try to download if:
+            // 1. File doesn't exist
+            // 2. Not flagged to skip (has URL and is in libraries)
+            if !resolved_path.exists() && !should_skip {
+                log::info!("Maven data artifact needs download: {}", coords);
+                
+                // Smart Maven URL selection based on artifact coordinates
+                let maven_url = if coords.starts_with("net.neoforged") {
+                    "https://maven.neoforged.net/releases/"
+                } else if coords.starts_with("net.minecraftforge") {
+                    "https://maven.minecraftforge.net/"
+                } else if coords.starts_with("de.oceanlabs") {
+                    // MCPConfig and related tools
+                    "https://maven.minecraftforge.net/"
+                } else if coords.starts_with("net.minecraft") || coords.starts_with("com.mojang") {
+                    "https://libraries.minecraft.net/"
+                } else {
+                    // Default based on loader type
+                    match loader_type {
+                        MetadataModloaderType::NeoForge => "https://maven.neoforged.net/releases/",
+                        MetadataModloaderType::Forge => "https://maven.minecraftforge.net/",
+                        _ => "https://maven.minecraftforge.net/",
+                    }
+                };
+                
+                maven_data_libs.push(crate::game::installer::core::library::LibrarySpec {
+                    name: coords.to_string(),
+                    maven_url: Some(maven_url.to_string()),
+                    explicit_url: None,
+                    sha1: None,
+                });
+            } else if !resolved_path.exists() {
+                log::info!(
+                    "Data entry {} ({}) will be created by processor (not in libraries list)",
+                    key,
+                    coords
+                );
+            } else {
+                log::debug!(
+                    "Data entry {} ({}) already exists at {:?}",
+                    key,
+                    coords,
+                    resolved_path
+                );
+            }
         } else {
             data_variables.insert(key.clone(), client_val.clone());
         }
     }
 
+    // Download any Maven-coordinated data artifacts that are missing
+    if !maven_data_libs.is_empty() {
+        log::info!(
+            "Downloading {} Maven data artifacts for processors...",
+            maven_data_libs.len()
+        );
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(120))
+            .build()?;
+        let libraries_dir = spec.libraries_dir();
+        let lib_downloader = LibraryDownloader::new(&client, &libraries_dir, reporter.clone());
+        lib_downloader
+            .download_libraries_concurrent(maven_data_libs, 4, 65, 5)
+            .await?;
+    }
+
+    let mut skipped = 0;
     for (idx, processor) in client_processors.iter().enumerate() {
         if reporter.is_cancelled() {
             anyhow::bail!("Installation cancelled by user");
         }
 
-        let progress = 70 + ((idx as f32 / client_processors.len() as f32) * 20.0) as i32;
-        reporter.set_percent(progress);
+        // Check if outputs are already valid - skip if so (HMCL pattern)
+        if check_processor_outputs_valid(processor, &data_variables, &spec.libraries_dir())? {
+            log::info!(
+                "Skipping processor {}/{}: {} (outputs already valid)",
+                idx + 1,
+                client_processors.len(),
+                processor.jar
+            );
+            skipped += 1;
+            continue;
+        }
 
         log::info!(
             "Executing processor {}/{}: {}",
@@ -739,6 +828,21 @@ async fn execute_processors(
         );
 
         execute_single_processor(processor, spec, &data_variables).await?;
+
+        // Verify outputs after execution
+        verify_processor_outputs(processor, &data_variables, &spec.libraries_dir())?;
+
+        // Update progress AFTER processor completes
+        let progress = 70 + (((idx + 1) as f32 / client_processors.len() as f32) * 20.0) as i32;
+        reporter.set_percent(progress);
+    }
+
+    if skipped > 0 {
+        log::info!(
+            "Skipped {}/{} processors with valid outputs",
+            skipped,
+            client_processors.len()
+        );
     }
 
     Ok(())
@@ -753,6 +857,150 @@ fn should_run_processor(processor: &Processor) -> bool {
     }
 }
 
+/// Check if processor outputs are valid - returns true if processor can be skipped
+fn check_processor_outputs_valid(
+    processor: &Processor,
+    data_variables: &HashMap<String, String>,
+    libraries_dir: &Path,
+) -> Result<bool> {
+    let outputs = match &processor.outputs {
+        Some(o) if !o.is_empty() => o,
+        _ => return Ok(false), // No outputs to check, must run processor
+    };
+
+    for (key, value) in outputs {
+        // Parse key - can be [artifact] or {variable}
+        let output_path = if key.starts_with('[') && key.ends_with(']') {
+            let coords = &key[1..key.len() - 1];
+            maven_to_path(coords, libraries_dir)?
+        } else if key.starts_with('{') && key.ends_with('}') {
+            let var_name = &key[1..key.len() - 1];
+            let path_str = data_variables.get(var_name).ok_or_else(|| {
+                anyhow::anyhow!("Missing data variable for output key: {}", var_name)
+            })?;
+            std::path::PathBuf::from(path_str)
+        } else {
+            std::path::PathBuf::from(key)
+        };
+
+        if !output_path.exists() {
+            log::debug!(
+                "Processor output missing: {} -> {:?}",
+                key,
+                output_path
+            );
+            return Ok(false); // Output file missing, must run processor
+        }
+
+        // Parse expected SHA1 - can be {variable} or 'literal'
+        let expected_sha1 = if value.starts_with('{') && value.ends_with('}') {
+            let var_name = &value[1..value.len() - 1];
+            data_variables.get(var_name).cloned()
+        } else if value.starts_with('\'') && value.ends_with('\'') {
+            Some(value[1..value.len() - 1].to_string())
+        } else {
+            Some(value.clone())
+        };
+
+        if let Some(expected) = expected_sha1 {
+            use sha1::{Digest, Sha1};
+            let bytes = std::fs::read(&output_path)?;
+            let mut hasher = Sha1::new();
+            hasher.update(&bytes);
+            let computed = format!("{:x}", hasher.finalize());
+
+            if computed.to_lowercase() != expected.to_lowercase() {
+                log::debug!(
+                    "Processor output SHA1 mismatch for {:?}: expected {}, got {}",
+                    output_path,
+                    expected,
+                    computed
+                );
+                // Remove invalid file and mark as needing rebuild
+                let _ = std::fs::remove_file(&output_path);
+                return Ok(false);
+            }
+        }
+    }
+
+    log::info!(
+        "Processor {} outputs already valid, skipping",
+        processor.jar
+    );
+    Ok(true) // All outputs valid
+}
+
+/// Verify processor outputs after execution
+fn verify_processor_outputs(
+    processor: &Processor,
+    data_variables: &HashMap<String, String>,
+    libraries_dir: &Path,
+) -> Result<()> {
+    let outputs = match &processor.outputs {
+        Some(o) if !o.is_empty() => o,
+        _ => return Ok(()), // No outputs to verify
+    };
+
+    for (key, value) in outputs {
+        let output_path = if key.starts_with('[') && key.ends_with(']') {
+            let coords = &key[1..key.len() - 1];
+            maven_to_path(coords, libraries_dir)?
+        } else if key.starts_with('{') && key.ends_with('}') {
+            let var_name = &key[1..key.len() - 1];
+            let path_str = data_variables.get(var_name).ok_or_else(|| {
+                anyhow::anyhow!("Missing data variable for output key: {}", var_name)
+            })?;
+            std::path::PathBuf::from(path_str)
+        } else {
+            std::path::PathBuf::from(key)
+        };
+
+        if !output_path.exists() {
+            anyhow::bail!(
+                "Processor {} failed to create expected output: {:?}",
+                processor.jar,
+                output_path
+            );
+        }
+
+        let expected_sha1 = if value.starts_with('{') && value.ends_with('}') {
+            let var_name = &value[1..value.len() - 1];
+            data_variables.get(var_name).map(|v| {
+                // Strip quotes from variable value if present
+                if v.starts_with('\'') && v.ends_with('\'') && v.len() > 2 {
+                    v[1..v.len() - 1].to_string()
+                } else {
+                    v.clone()
+                }
+            })
+        } else if value.starts_with('\'') && value.ends_with('\'') && value.len() > 2 {
+            Some(value[1..value.len() - 1].to_string())
+        } else {
+            Some(value.clone())
+        };
+
+        if let Some(expected) = expected_sha1 {
+            use sha1::{Digest, Sha1};
+            let bytes = std::fs::read(&output_path)?;
+            let mut hasher = Sha1::new();
+            hasher.update(&bytes);
+            let computed = format!("{:x}", hasher.finalize());
+
+            if computed.to_lowercase() != expected.to_lowercase() {
+                anyhow::bail!(
+                    "Processor {} output {:?} has wrong SHA1: expected {}, got {}",
+                    processor.jar,
+                    output_path,
+                    expected,
+                    computed
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Execute a single processor
 async fn execute_single_processor(
     processor: &Processor,
@@ -764,6 +1012,19 @@ async fn execute_single_processor(
         .as_ref()
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| "java".to_string());
+
+    // Verify Java is available before proceeding
+    let java_check = Command::new(&java_program)
+        .arg("-version")
+        .output()
+        .await;
+    
+    if java_check.is_err() || !java_check.as_ref().unwrap().status.success() {
+        anyhow::bail!(
+            "Java executable not found or not working: {}. Please ensure Java is installed and accessible.",
+            java_program
+        );
+    }
 
     // Build classpath
     let mut classpath_entries = Vec::new();
@@ -793,7 +1054,7 @@ async fn execute_single_processor(
 
     // Extract main class from the processor JAR
     let processor_jar_path = maven_to_path(&processor.jar, &spec.libraries_dir())?;
-    let main_class = super::parser::extract_main_class_from_jar(&processor_jar_path).context(
+    let main_class = extract_main_class_from_jar(&processor_jar_path).context(
         format!("Failed to extract Main-Class from {}", processor.jar),
     )?;
 
@@ -801,9 +1062,11 @@ async fn execute_single_processor(
     log::debug!("Processor main class: {}", main_class);
     log::debug!("Processor args: {:?}", args);
 
-    // Execute Java process: java -cp <classpath> <main_class> <args...>
+    // Execute Java process: java -Xmx2G -cp <classpath> <main_class> <args...>
     let mut command = Command::new(&java_program);
     command
+        .arg("-Xmx2G")  // Set max heap to 2GB for processor execution
+        .arg("-Xms512M") // Set initial heap to 512MB
         .arg("-cp")
         .arg(&classpath)
         .arg(&main_class)
@@ -813,9 +1076,11 @@ async fn execute_single_processor(
 
     log::debug!("Executing: {:?}", command);
 
-    let output = command
-        .output()
+    // Execute with timeout (5 minutes should be enough for most processors)
+    let timeout_duration = std::time::Duration::from_secs(300);
+    let output = tokio::time::timeout(timeout_duration, command.output())
         .await
+        .context("Processor execution timed out after 5 minutes")?
         .context("Failed to spawn processor Java process")?;
 
     if !output.status.success() {

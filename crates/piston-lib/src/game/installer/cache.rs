@@ -311,3 +311,63 @@ fn hash_file(path: &Path) -> Result<(String, u64)> {
 
     Ok((format!("{:x}", hasher.finalize()), total))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    use std::fs::File;
+    use std::io::Write;
+
+    #[test]
+    fn test_cache_ingest_and_restore() {
+        let tmp = tempdir().unwrap();
+        let mut cache = ArtifactCache::load_with_labels(tmp.path()).unwrap();
+
+        // Create a dummy file
+        let file_path = tmp.path().join("test.txt");
+        {
+            let mut f = File::create(&file_path).unwrap();
+            write!(f, "hello world").unwrap();
+        }
+
+        // Ingest it
+        let sha = cache.ingest_file(&file_path, None, None).unwrap();
+        cache.set_label("test-label", sha.clone());
+        cache.save().unwrap();
+
+        // Delete original
+        fs::remove_file(&file_path).unwrap();
+
+        // Restore it
+        let restored_path = tmp.path().join("restored.txt");
+        let found_sha = cache.find_component("test-label").unwrap();
+        assert_eq!(found_sha, sha);
+        
+        let success = cache.restore_artifact(&found_sha, &restored_path).unwrap();
+        assert!(success);
+        assert!(restored_path.exists());
+        
+        let content = fs::read_to_string(restored_path).unwrap();
+        assert_eq!(content, "hello world");
+    }
+
+    #[test]
+    fn test_cache_persistence() {
+        let tmp = tempdir().unwrap();
+        
+        {
+            let mut cache = ArtifactCache::load_with_labels(tmp.path()).unwrap();
+            let file_path = tmp.path().join("test.txt");
+            fs::write(&file_path, "persistent content").unwrap();
+            
+            let sha = cache.ingest_file(&file_path, None, None).unwrap();
+            cache.set_label("p-label", sha);
+            cache.save().unwrap();
+        }
+
+        // Reload cache
+        let cache = ArtifactCache::load_with_labels(tmp.path()).unwrap();
+        assert!(cache.find_component("p-label").is_some());
+    }
+}

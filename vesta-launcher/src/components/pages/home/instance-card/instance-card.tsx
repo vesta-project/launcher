@@ -74,114 +74,127 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const instanceSlug = getInstanceSlug(props.instance);
 
-	onMount(async () => {
-		// Check current running status on mount
-		try {
-			const isCurrentlyRunning = await isInstanceRunning(props.instance);
-			if (isCurrentlyRunning) {
-				setRunningIds((prev) => new Set(prev).add(instanceSlug));
-			}
-		} catch (error) {
-			console.error("Failed to check instance running status:", error);
-		}
+	onMount(() => {
+		const unlisteners: (() => void)[] = [];
 
-		const unlistenLaunch = await listen("core://instance-launched", (event) => {
-			const payload = (event as any).payload as {
-				name: string;
-				instance_id?: string;
-				pid?: number;
-			};
-			const id =
-				payload.instance_id ||
-				getInstanceSlug({
-					id: { INIT: null },
-					name: payload.name,
-					minecraft_version: "",
-					modloader: null,
-					modloader_version: null,
-					java_path: null,
-					java_args: null,
-					game_directory: null,
-					width: 0,
-					height: 0,
-					memory_mb: 0,
-					icon_path: null,
-					last_played: null,
-					total_playtime_minutes: 0,
-					created_at: null,
-					updated_at: null,
-					installation_status: null,
-				});
-			setRunningIds((prev) => new Set(prev).add(id));
-		});
-		const unlistenKill = await listen("core://instance-killed", (event) => {
-			const payload = (event as any).payload as {
-				name: string;
-				instance_id?: string;
-			};
-			const id =
-				payload.instance_id ||
-				getInstanceSlug({
-					id: { INIT: null },
-					name: payload.name,
-					minecraft_version: "",
-					modloader: null,
-					modloader_version: null,
-					java_path: null,
-					java_args: null,
-					game_directory: null,
-					width: 0,
-					height: 0,
-					memory_mb: 0,
-					icon_path: null,
-					last_played: null,
-					total_playtime_minutes: 0,
-					created_at: null,
-					updated_at: null,
-					installation_status: null,
-				});
-			setRunningIds((prev) => {
-				const newSet = new Set(prev);
-				newSet.delete(id);
-				return newSet;
-			});
-		});
-		// Also listen for natural process exit (when game closes normally)
-		const unlistenExited = await listen("core://instance-exited", (event) => {
-			const payload = (event as any).payload as {
-				instance_id?: string;
-				pid?: number;
-				crashed?: boolean;
-			};
-			if (payload.instance_id) {
-				setRunningIds((prev) => {
-					const newSet = new Set(prev);
-					// biome-ignore lint/style/noNonNullAssertion: instance_id is checked above
-					newSet.delete(payload.instance_id!);
-					return newSet;
-				});
+		const setup = async () => {
+			// Check current running status on mount
+			try {
+				const isCurrentlyRunning = await isInstanceRunning(props.instance);
+				if (isCurrentlyRunning) {
+					setRunningIds((prev) => new Set(prev).add(instanceSlug));
+				}
+			} catch (error) {
+				console.error("Failed to check instance running status:", error);
 			}
-		});
 
-		// Listen for crash events
-		const unlistenCrash = await listen("core://instance-crashed", (event) => {
-			const payload = (event as any).payload as {
-				instance_id?: string;
-				crash_type: string;
-				message: string;
-				report_path?: string;
-				timestamp: string;
-			};
-			if (payload.instance_id === instanceSlug) {
-				setHasCrashed(true);
-			}
-		});
+			unlisteners.push(
+				await listen("core://instance-launched", (event) => {
+					const payload = (event as any).payload as {
+						name: string;
+						instance_id?: string;
+						pid?: number;
+					};
+					const id =
+						payload.instance_id ||
+						getInstanceSlug({
+							id: 0,
+							name: payload.name,
+							minecraft_version: "",
+							modloader: null,
+							modloader_version: null,
+							java_path: null,
+							java_args: null,
+							game_directory: null,
+							width: 0,
+							height: 0,
+							memory_mb: 0,
+							icon_path: null,
+							last_played: null,
+							total_playtime_minutes: 0,
+							created_at: null,
+							updated_at: null,
+							installation_status: null,
+						});
+					setRunningIds((prev) => new Set(prev).add(id));
+				}),
+			);
+			unlisteners.push(
+				await listen("core://instance-killed", (event) => {
+					const payload = (event as any).payload as {
+						name: string;
+						instance_id?: string;
+					};
+					const id =
+						payload.instance_id ||
+						getInstanceSlug({
+							id: 0,
+							name: payload.name,
+							minecraft_version: "",
+							modloader: null,
+							modloader_version: null,
+							java_path: null,
+							java_args: null,
+							game_directory: null,
+							width: 0,
+							height: 0,
+							memory_mb: 0,
+							icon_path: null,
+							last_played: null,
+							total_playtime_minutes: 0,
+							created_at: null,
+							updated_at: null,
+							installation_status: null,
+						});
+					setRunningIds((prev) => {
+						const newSet = new Set(prev);
+						newSet.delete(id);
+						return newSet;
+					});
+				}),
+			);
+			// Also listen for natural process exit (when game closes normally)
+			unlisteners.push(
+				await listen("core://instance-exited", (event) => {
+					const payload = (event as any).payload as {
+						instance_id?: string;
+						pid?: number;
+						crashed?: boolean;
+					};
+					if (payload.instance_id) {
+						setRunningIds((prev) => {
+							const newSet = new Set(prev);
+							// biome-ignore lint/style/noNonNullAssertion: instance_id is checked above
+							newSet.delete(payload.instance_id!);
+							return newSet;
+						});
+					}
+				}),
+			);
+
+			// Listen for crash events
+			unlisteners.push(
+				await listen("core://instance-crashed", (event) => {
+					const payload = (event as any).payload as {
+						instance_id?: string;
+						crash_type: string;
+						message: string;
+						report_path?: string;
+						timestamp: string;
+					};
+					if (payload.instance_id === instanceSlug) {
+						setHasCrashed(true);
+					}
+				}),
+			);
+		};
+
+		setup();
+
 		onCleanup(() => {
-			// unlistenLaunch/unlistenKill are actual functions returned by listen (we awaited them above)
-			unlistenLaunch();
-			unlistenKill();
-			unlistenExited();
-			unlistenCrash();
+			for (const unlisten of unlisteners) {
+				unlisten();
+			}
 		});
 
 		// Check for crash status

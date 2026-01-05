@@ -29,7 +29,7 @@ function ContextMenuContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.Content
-				class={clsx("context-menu__content", props.class)}
+				class={clsx("context-menu__content liquid-glass", props.class)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
@@ -124,7 +124,7 @@ function ContextMenuSubContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.SubContent
-				class={"context-menu__sub-content"}
+				class={clsx("context-menu__sub-content liquid-glass", props.class)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
@@ -208,7 +208,7 @@ function ContextMenuRadioItem<T extends ValidComponent = "div">(
 						stroke-linecap="round"
 						stroke-linejoin="round"
 						class="size-2 fill-current"
-						style={"fill: black; width: 8px;"}
+						style={"fill: currentColor; width: 8px;"}
 					>
 						<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" />
 					</svg>

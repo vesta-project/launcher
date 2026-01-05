@@ -4,6 +4,8 @@ import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png
 import PlacehodlerImage4 from "@assets/placeholder-images/placeholder-image4.png";
 import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png";
 import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
+import PlacehodlerImage7 from "@assets/placeholder-images/placeholder-image7.png";
+import PlacehodlerImage8 from "@assets/placeholder-images/placeholder-image8.png";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -15,19 +17,21 @@ export const DEFAULT_ICONS = [
 	PlacehodlerImage4,
 	PlaceholderImage5,
 	PlaceholderImage6,
-	"linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
-	"linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
-	"linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",
-	"linear-gradient(135deg, #FA709A 0%, #FEE140 100%)",
-	"linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
-	"linear-gradient(135deg, #F6D365 0%, #FDA085 100%)",
-	"linear-gradient(135deg, #B721FF 0%, #21D4FD 100%)",
-	"linear-gradient(135deg, #0BA360 0%, #3CBA92 100%)",
+	PlacehodlerImage7,
+	PlacehodlerImage8,
+	// "linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
+	// "linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
+	// "linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",
+	// "linear-gradient(135deg, #FA709A 0%, #FEE140 100%)",
+	// "linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
+	// "linear-gradient(135deg, #F6D365 0%, #FDA085 100%)",
+	// "linear-gradient(135deg, #B721FF 0%, #21D4FD 100%)",
+	// "linear-gradient(135deg, #0BA360 0%, #3CBA92 100%)",
 ];
 
 // Instance type matching Rust struct
 export interface Instance {
-	id: { INIT: null } | { VALUE: number };
+	id: number;
 	name: string;
 	minecraft_version: string;
 	modloader: string | null;
@@ -51,6 +55,7 @@ export interface Instance {
 		| "failed"
 		| null;
 	crashed?: boolean;
+	crash_details?: string | null;
 }
 
 // Simplified version for creating new instances
@@ -102,7 +107,7 @@ export async function createInstance(
 	console.log("[createInstance] Called with data:", data);
 	// Build full instance object with defaults
 	const instance: Instance = {
-		id: { INIT: null },
+		id: 0,
 		name: data.name,
 		minecraft_version: data.minecraft_version,
 		modloader: data.modloader || "vanilla",
@@ -138,22 +143,22 @@ export async function createInstance(
 
 // Update an existing instance
 export async function updateInstance(instance: Instance): Promise<void> {
-	await invoke("update_instance", { instance });
+	await invoke("update_instance", { instanceData: instance });
 }
 
 // Delete an instance
 export async function deleteInstance(id: number): Promise<void> {
-	await invoke("delete_instance", { id });
+	await invoke("delete_instance", { instanceId: id });
 }
 
 // Get a single instance by ID
 export async function getInstance(id: number): Promise<Instance> {
-	return await invoke<Instance>("get_instance", { id });
+	return await invoke<Instance>("get_instance", { instanceId: id });
 }
 
 // Get a single instance by slug (unique instance identifier)
 export async function getInstanceBySlug(slug: string): Promise<Instance> {
-	return await invoke<Instance>("get_instance_by_slug", { slug });
+	return await invoke<Instance>("get_instance_by_slug", { slugVal: slug });
 }
 
 // Install an instance (queues installation task)
@@ -163,7 +168,7 @@ export async function installInstance(instance: Instance): Promise<void> {
 		instance,
 	);
 	try {
-		await invoke("install_instance", { instance });
+		await invoke("install_instance", { instanceData: instance });
 		console.log("[installInstance] Tauri command completed successfully");
 	} catch (error) {
 		console.error("[installInstance] Tauri command failed:", error);
@@ -178,7 +183,7 @@ export async function launchInstance(instance: Instance): Promise<void> {
 		instance,
 	);
 	try {
-		await invoke("launch_instance", { instance });
+		await invoke("launch_instance", { instanceData: instance });
 		console.log("[launchInstance] Launch command completed");
 	} catch (e) {
 		console.error("[launchInstance] Launch command failed:", e);
@@ -191,7 +196,7 @@ export async function killInstance(instance: Instance): Promise<string> {
 		instance,
 	);
 	try {
-		const message = await invoke<string>("kill_instance", { instance });
+		const message = await invoke<string>("kill_instance", { inst: instance });
 		console.log("[killInstance] Kill command completed: ", message);
 		return message;
 	} catch (e) {
@@ -202,7 +207,9 @@ export async function killInstance(instance: Instance): Promise<string> {
 
 export async function isInstanceRunning(instance: Instance): Promise<boolean> {
 	try {
-		const result = await invoke<boolean>("is_instance_running", { instance });
+		const result = await invoke<boolean>("is_instance_running", {
+			instanceData: instance,
+		});
 		return result;
 	} catch (e) {
 		console.error("[isInstanceRunning] Check failed:", e);
@@ -256,10 +263,7 @@ export function unsubscribeFromInstanceUpdates() {
 
 // Helper to extract numeric ID from Instance id field
 export function getInstanceId(instance: Instance): number | null {
-	if ("VALUE" in instance.id) {
-		return instance.id.VALUE;
-	}
-	return null;
+	return instance.id;
 }
 
 // Create a filesystem-safe slug from an instance name — mirrors the backend sanitizer

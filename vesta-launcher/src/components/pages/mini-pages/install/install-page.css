@@ -47,14 +47,14 @@
 	-webkit-backdrop-filter: blur(12px);
 	border-radius: 16px;
 	border: 1px solid var(--border-subtle);
-	box-shadow: 0 4px 24px -8px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 4px 24px -8px hsl(0 0% 0% / 0.2);
 }
 
 .form-section-title {
 	font-size: var(--font-medium);
 	font-weight: 600;
 	margin-bottom: 8px;
-	color: hsl(var(--color__primary-hue) 60% 90%);
+	color: var(--text-primary);
 }
 
 .form-row {
@@ -91,7 +91,7 @@
 	height: 96px;
 	background-image: var(
 		--instance-bg-image,
-		url("@assets/placeholder-images/placeholder-image1.jpg")
+		url("data:image/svg+xml;utf8,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20800%20450%22%3E%3Crect%20width%3D%22100%25%22%20height%3D%22100%25%22%20fill%3D%22%23e6e6e6%22/%3E%3Ctext%20x%3D%2250%25%22%20y%3D%2250%25%22%20font-size%3D%2224%22%20text-anchor%3D%22middle%22%20fill%3D%22%23999%22%20dy%3D%229%22%3ENo%20Image%3C/text%3E%3C/svg%3E")
 	);
 	background-size: cover;
 	background-position: center;
@@ -108,7 +108,7 @@
 
 .instance-icon-placeholder:hover {
 	transform: translateY(-2px);
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	box-shadow: 0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .error-text {

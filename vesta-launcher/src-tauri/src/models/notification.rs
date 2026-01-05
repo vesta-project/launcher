@@ -20,10 +20,10 @@ pub struct Notification {
     pub read: bool,
     pub actions: Option<String>,
     pub metadata: Option<String>,
-    pub show_on_completion: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
     pub expires_at: Option<String>,
+    pub show_on_completion: Option<bool>,
 }
 
 /// New notification (without id for insertion)
@@ -42,8 +42,8 @@ pub struct NewNotification {
     pub read: bool,
     pub actions: Option<String>,
     pub metadata: Option<String>,
-    pub show_on_completion: Option<bool>,
     pub created_at: String,
     pub updated_at: String,
     pub expires_at: Option<String>,
+    pub show_on_completion: Option<bool>,
 }

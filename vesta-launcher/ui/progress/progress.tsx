@@ -79,8 +79,8 @@ export const Progress = <T extends ValidComponent = "div">(
 						)}
 					/>
 				</ProgressPrimitive.Track>
-				{local.current_step !== undefined &&
-					local.total_steps !== undefined && (
+				{local.current_step != null &&
+					local.total_steps != null && (
 						<div class="progress__steps">
 							{local.current_step}/{local.total_steps}
 						</div>

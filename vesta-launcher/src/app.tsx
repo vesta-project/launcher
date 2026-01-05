@@ -24,6 +24,7 @@ import {
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { lazy, onCleanup, onMount } from "solid-js";
+import { initializeInstances, setupInstanceListeners } from "@stores/instances";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -117,6 +118,12 @@ function Root(props: ChildrenProp) {
 		// Defer non-critical initialization to not block UI render
 		// This allows the window to show immediately while background tasks start
 		setTimeout(() => {
+			// Initialize instance store from backend (non-blocking)
+			setupInstanceListeners();
+			initializeInstances().catch((error) => {
+				console.error("Failed to initialize instance store:", error);
+			});
+
 			// Setup notification system (non-blocking)
 			subscribeToBackendNotifications().catch((error) => {
 				console.error("Failed to initialize notification system:", error);
@@ -131,6 +138,20 @@ function Root(props: ChildrenProp) {
 				.catch((error) => {
 					console.error("Failed to initialize crash event listener:", error);
 				});
+
+			// Check DB status (diagnostics)
+			if (hasTauriRuntime()) {
+				invoke("get_db_status")
+					.then((status: any) => {
+						console.group("Database Diagnostic Report");
+						console.log("Vesta DB Tables:", status.vesta?.tables || "NOT FOUND");
+						console.log("Config DB Tables:", status.config?.tables || "NOT FOUND");
+						console.groupEnd();
+					})
+					.catch((err) => {
+						console.error("Failed to get DB status:", err);
+					});
+			}
 
 			// Preload Minecraft versions metadata in background (non-blocking)
 			// This warms up the cache so install page loads instantly
@@ -156,17 +177,8 @@ function Root(props: ChildrenProp) {
 
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()
-				.then(async () => {
+				.then(() => {
 					onConfigUpdate(applyCommonConfigUpdates);
-
-					if (hasTauriRuntime()) {
-						try {
-							const config = await invoke("get_config");
-							applyConfigSnapshot(config as Record<string, any>);
-						} catch (error) {
-							console.error("Failed to apply initial config:", error);
-						}
-					}
 				})
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);

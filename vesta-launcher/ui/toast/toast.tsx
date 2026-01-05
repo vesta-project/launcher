@@ -101,6 +101,10 @@ function showToast(props: {
 	total_steps?: number | null;
 	cancellable?: boolean;
 	onCancel?: () => void;
+	pausable?: boolean;
+	isPaused?: boolean;
+	onPause?: () => void;
+	onResume?: () => void;
 }) {
 	return ToastPrimitive.toaster.show((data) => {
 		const severityColor = () => {
@@ -147,13 +151,8 @@ function showToast(props: {
 							class={"toast__progress"}
 						/>
 					)}
-					<div class="toast__cancel-area">
-						<Show
-							when={props.cancellable}
-							fallback={
-								<div class="toast__cancel-placeholder" aria-hidden="true" />
-							}
-						>
+					<div class="toast__cancel-area" style="display: flex; gap: 8px; margin-top: 8px;">
+						<Show when={props.cancellable}>
 							<button
 								class="toast__cancel-btn"
 								onClick={() => props.onCancel?.()}
@@ -169,6 +168,45 @@ function showToast(props: {
 							>
 								Cancel
 							</button>
+						</Show>
+						<Show when={props.pausable}>
+							<Switch>
+								<Match when={props.isPaused}>
+									<button
+										class="toast__resume-btn"
+										onClick={() => props.onResume?.()}
+										style={{
+											padding: "4px 8px",
+											background: "var(--brand-primary, hsl(210 70% 50%))",
+											color: "white",
+											border: "none",
+											"border-radius": "4px",
+											cursor: "pointer",
+											"font-size": "0.8rem",
+											width: "fit-content",
+										}}
+									>
+										Resume
+									</button>
+								</Match>
+								<Match when={!props.isPaused}>
+									<button
+										class="toast__pause-btn"
+										onClick={() => props.onPause?.()}
+										style={{
+											padding: "4px 8px",
+											background: "rgba(0,0,0,0.1)",
+											border: "1px solid rgba(0,0,0,0.2)",
+											"border-radius": "4px",
+											cursor: "pointer",
+											"font-size": "0.8rem",
+											width: "fit-content",
+										}}
+									>
+										Pause
+									</button>
+								</Match>
+							</Switch>
 						</Show>
 					</div>
 				</div>
@@ -192,6 +230,10 @@ function updateToast(
 		total_steps?: number | null;
 		cancellable?: boolean;
 		onCancel?: () => void;
+		pausable?: boolean;
+		isPaused?: boolean;
+		onPause?: () => void;
+		onResume?: () => void;
 	},
 ) {
 	ToastPrimitive.toaster.update(id, (data) => {
@@ -239,24 +281,64 @@ function updateToast(
 							class={"toast__progress"}
 						/>
 					)}
-					{props.cancellable && (
-						<button
-							class="toast__cancel-btn"
-							onClick={() => props.onCancel?.()}
-							style={{
-								"margin-top": "8px",
-								padding: "4px 8px",
-								background: "rgba(0,0,0,0.1)",
-								border: "1px solid rgba(0,0,0,0.2)",
-								"border-radius": "4px",
-								cursor: "pointer",
-								"font-size": "0.8rem",
-								width: "fit-content",
-							}}
-						>
-							Cancel
-						</button>
-					)}
+					<div class="toast__actions-area" style="display: flex; gap: 8px; margin-top: 8px;">
+						<Show when={props.cancellable}>
+							<button
+								class="toast__cancel-btn"
+								onClick={() => props.onCancel?.()}
+								style={{
+									padding: "4px 8px",
+									background: "rgba(0,0,0,0.1)",
+									border: "1px solid rgba(0,0,0,0.2)",
+									"border-radius": "4px",
+									cursor: "pointer",
+									"font-size": "0.8rem",
+									width: "fit-content",
+								}}
+							>
+								Cancel
+							</button>
+						</Show>
+						<Show when={props.pausable}>
+							<Switch>
+								<Match when={props.isPaused}>
+									<button
+										class="toast__resume-btn"
+										onClick={() => props.onResume?.()}
+										style={{
+											padding: "4px 8px",
+											background: "var(--brand-primary, hsl(210 70% 50%))",
+											color: "white",
+											border: "none",
+											"border-radius": "4px",
+											cursor: "pointer",
+											"font-size": "0.8rem",
+											width: "fit-content",
+										}}
+									>
+										Resume
+									</button>
+								</Match>
+								<Match when={!props.isPaused}>
+									<button
+										class="toast__pause-btn"
+										onClick={() => props.onPause?.()}
+										style={{
+											padding: "4px 8px",
+											background: "rgba(0,0,0,0.1)",
+											border: "1px solid rgba(0,0,0,0.2)",
+											"border-radius": "4px",
+											cursor: "pointer",
+											"font-size": "0.8rem",
+											width: "fit-content",
+										}}
+									>
+										Pause
+									</button>
+								</Match>
+							</Switch>
+						</Show>
+					</div>
 				</div>
 				<ToastClose onClick={() => props.onToastForceClose?.(data.toastId)} />
 			</Toast>

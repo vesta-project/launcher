@@ -10,7 +10,7 @@
 	gap: 12px;
 	font-size: 1.5rem;
 	font-weight: 600;
-	color: #ff4444;
+	color: var(--semantic-error);
 }
 
 .crash-icon {
@@ -28,15 +28,18 @@
 }
 
 .crash-description {
-	background-color: rgba(255, 68, 68, 0.08);
-	border-left: 4px solid #ff4444;
+	background-color: hsl(
+		var(--hue-error) 80% var(--lightness-surface-base) /
+		0.08
+	);
+	border-left: 4px solid var(--semantic-error);
 	padding: 12px 16px;
 	border-radius: 4px;
 }
 
 .crash-description p {
 	margin: 0;
-	color: #333;
+	color: var(--text-primary);
 	line-height: 1.5;
 	font-size: 0.95rem;
 }
@@ -57,30 +60,30 @@
 	margin: 0;
 	font-size: 0.95rem;
 	font-weight: 600;
-	color: #333;
+	color: var(--text-primary);
 	text-transform: uppercase;
 	letter-spacing: 0.5px;
 }
 
 .error-message {
-	background-color: #f5f5f5;
+	background-color: var(--surface-sunken);
 	padding: 12px;
 	border-radius: 4px;
 	font-family: "Courier New", monospace;
 	font-size: 0.85rem;
-	color: #333;
+	color: var(--text-primary);
 	word-break: break-word;
 	max-height: 150px;
 	overflow-y: auto;
-	border: 1px solid #e0e0e0;
+	border: 1px solid var(--border-subtle);
 	line-height: 1.4;
 }
 
 .timestamp {
 	margin: 0;
 	font-size: 0.9rem;
-	color: #666;
-	background-color: #f5f5f5;
+	color: var(--text-secondary);
+	background-color: var(--surface-sunken);
 	padding: 8px 12px;
 	border-radius: 4px;
 }
@@ -88,8 +91,8 @@
 .report-path {
 	margin: 0 0 12px 0;
 	font-size: 0.85rem;
-	color: #666;
-	background-color: #f5f5f5;
+	color: var(--text-secondary);
+	background-color: var(--surface-sunken);
 	padding: 8px 12px;
 	border-radius: 4px;
 	word-break: break-all;
@@ -99,8 +102,11 @@
 }
 
 .crash-actions {
-	background-color: #fffbf0;
-	border-left: 4px solid #ff9800;
+	background-color: hsl(
+		var(--hue-warning) 80% var(--lightness-surface-base) /
+		0.08
+	);
+	border-left: 4px solid var(--semantic-warning);
 	padding: 16px;
 	border-radius: 4px;
 }
@@ -108,7 +114,7 @@
 .action-hint {
 	margin: 0 0 12px 0;
 	font-weight: 600;
-	color: #333;
+	color: var(--text-primary);
 	font-size: 0.95rem;
 }
 
@@ -121,7 +127,7 @@
 }
 
 .crash-actions li {
-	color: #666;
+	color: var(--text-secondary);
 	font-size: 0.9rem;
 	line-height: 1.4;
 }
@@ -131,50 +137,7 @@
 	gap: 12px;
 	justify-content: flex-end;
 	padding-top: 16px;
-	border-top: 1px solid #e0e0e0;
+	border-top: 1px solid var(--border-subtle);
 }
 
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-	.crash-title {
-		color: #ff6666;
-	}
-
-	.crash-description {
-		background-color: rgba(255, 68, 68, 0.12);
-		border-left-color: #ff6666;
-	}
-
-	.crash-description p {
-		color: #e0e0e0;
-	}
-
-	.error-message,
-	.timestamp,
-	.report-path {
-		background-color: #2a2a2a;
-		color: #e0e0e0;
-		border-color: #444;
-	}
-
-	.info-section h3 {
-		color: #e0e0e0;
-	}
-
-	.crash-actions {
-		background-color: rgba(255, 152, 0, 0.1);
-		border-left-color: #ff9800;
-	}
-
-	.action-hint {
-		color: #e0e0e0;
-	}
-
-	.crash-actions li {
-		color: #b0b0b0;
-	}
-
-	.crash-buttons {
-		border-top-color: #444;
-	}
-}
+/* Dark mode support handled automatically by token system */

@@ -60,6 +60,10 @@ impl ProgressReporter for ConsoleReporter {
     fn is_cancelled(&self) -> bool {
         *self.cancel_rx.borrow()
     }
+
+    fn is_paused(&self) -> bool {
+        false
+    }
 }
 
 #[tokio::main]
@@ -81,6 +85,8 @@ async fn main() -> Result<()> {
         data_dir: data_dir.clone(),
         game_dir: game_dir.clone(),
         java_path: None,
+        dry_run: false,
+        concurrency: 8,
     };
 
     let (reporter_impl, _tx) = ConsoleReporter::new();

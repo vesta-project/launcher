@@ -17,7 +17,7 @@ CREATE TABLE instance (
     created_at TEXT,
     updated_at TEXT,
     installation_status TEXT,
-    crashed INTEGER,
+    crashed BOOLEAN,
     crash_details TEXT
 );
 
@@ -33,7 +33,7 @@ CREATE TABLE account (
     access_token TEXT,
     refresh_token TEXT,
     token_expires_at TEXT,
-    is_active INTEGER NOT NULL DEFAULT 1,
+    is_active BOOLEAN NOT NULL DEFAULT 1,
     skin_url TEXT,
     cape_url TEXT,
     created_at TEXT,
@@ -51,11 +51,11 @@ CREATE TABLE notification (
     description TEXT,
     severity TEXT NOT NULL,
     notification_type TEXT NOT NULL,
-    dismissible INTEGER NOT NULL DEFAULT 0,
+    dismissible BOOLEAN NOT NULL DEFAULT 0,
     progress INTEGER,
     current_step INTEGER,
     total_steps INTEGER,
-    read INTEGER NOT NULL DEFAULT 0,
+    read BOOLEAN NOT NULL DEFAULT 0,
     actions TEXT,
     metadata TEXT,
     created_at TEXT NOT NULL,
@@ -73,7 +73,7 @@ CREATE TABLE user_version_tracking (
     version_type TEXT NOT NULL,
     last_seen_version TEXT NOT NULL,
     last_seen_at TEXT NOT NULL,
-    notified INTEGER NOT NULL DEFAULT 0
+    notified BOOLEAN NOT NULL DEFAULT 0
 );
 
 CREATE INDEX idx_user_version_tracking_type ON user_version_tracking(version_type);

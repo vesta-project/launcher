@@ -13,7 +13,7 @@
 }
 
 /* Reduced effects override */
-:root[data-reduced-effects="true"] .standalone-page-viewer {
+:root[data-bordered="true"] .standalone-page-viewer {
 	backdrop-filter: none;
 	-webkit-backdrop-filter: none;
 	background: var(--bg-surface);
@@ -59,7 +59,7 @@
 .standalone-page-viewer__title {
 	grid-column: 2;
 	font-size: var(--font-xsmall);
-	color: hsl(var(--color__primary-hue) 0% 100% / 95%);
+	color: var(--text-primary);
 	font-weight: 500;
 	text-align: center;
 	padding: 0 16px;
@@ -79,11 +79,11 @@
 }
 
 .standalone-page-viewer__controls > * {
-	color: white;
+	color: var(--text-primary);
 }
 
 .standalone-page-viewer__controls .controls-windows > * {
-	color: white;
+	color: var(--text-primary);
 }
 
 .standalone-page-viewer__nav-button {
@@ -143,13 +143,13 @@
 .standalone-page-viewer__nav-button svg {
 	width: 100%;
 	height: 100%;
-	fill: hsl(var(--color__primary-hue) 0% 100% / 95%);
+	fill: var(--icon-primary);
 }
 
 .standalone-page-viewer__title {
 	flex: 1;
 	font-size: var(--font-xsmall);
-	color: hsl(var(--color__primary-hue) 0% 100% / 95%);
+	color: var(--text-primary);
 	font-weight: 500;
 	text-align: center;
 	padding: 0 16px;
@@ -169,9 +169,9 @@
 }
 
 .standalone-page-viewer__controls > * {
-	color: white;
+	color: var(--text-primary);
 }
 
 .standalone-page-viewer__controls .controls-windows > * {
-	color: white;
+	color: var(--text-primary);
 }

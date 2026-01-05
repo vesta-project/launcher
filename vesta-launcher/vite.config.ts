@@ -43,6 +43,10 @@ export default defineConfig(async () => ({
 				replacement: path.resolve(__dirname, "src/utils"),
 			},
 			{
+				find: "@stores",
+				replacement: path.resolve(__dirname, "src/stores"),
+			},
+			{
 				find: "~",
 				replacement: path.resolve(__dirname, "src"),
 			},

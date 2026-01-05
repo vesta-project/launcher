@@ -23,9 +23,9 @@
 	width: 100%;
 	background: linear-gradient(
 		90deg,
-		rgba(255, 255, 255, 0.08) 25%,
-		rgba(255, 255, 255, 0.04) 37%,
-		rgba(255, 255, 255, 0.08) 63%
+		hsl(0 0% 100% / 0.08) 25%,
+		hsl(0 0% 100% / 0.04) 37%,
+		hsl(0 0% 100% / 0.08) 63%
 	);
 	background-size: 200% 100%;
 	animation: progress-pulse 1.4s linear infinite;
@@ -35,9 +35,9 @@
 	width: 100% !important;
 	background: linear-gradient(
 		90deg,
-		rgba(255, 255, 255, 0.08) 25%,
-		rgba(255, 255, 255, 0.04) 37%,
-		rgba(255, 255, 255, 0.08) 63%
+		hsl(0 0% 100% / 0.08) 25%,
+		hsl(0 0% 100% / 0.04) 37%,
+		hsl(0 0% 100% / 0.08) 63%
 	);
 	background-size: 200% 100%;
 	animation: progress-pulse 1.4s linear infinite;

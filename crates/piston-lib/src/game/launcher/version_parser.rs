@@ -229,18 +229,25 @@ fn maven_coords_to_path(coords: &str) -> Result<String> {
 
     let group = parts[0].replace('.', "/");
     let artifact = parts[1];
-    let version = parts[2];
+    let mut version = parts[2];
+    let mut extension = "jar";
+    let mut classifier = None;
 
-    let (classifier, extension) = if parts.len() >= 4 {
-        // Check if there's an @extension
-        if let Some((clf, ext)) = parts[3].split_once('@') {
-            (Some(clf), ext)
-        } else {
-            (Some(parts[3]), "jar")
+    // Handle version@extension if no classifier is present
+    if parts.len() == 3 {
+        if let Some((v, ext)) = version.split_once('@') {
+            version = v;
+            extension = ext;
         }
-    } else {
-        (None, "jar")
-    };
+    } else if parts.len() >= 4 {
+        // Check if there's an @extension in the classifier part
+        if let Some((clf, ext)) = parts[3].split_once('@') {
+            classifier = Some(clf);
+            extension = ext;
+        } else {
+            classifier = Some(parts[3]);
+        }
+    }
 
     let filename = if let Some(clf) = classifier {
         format!("{}-{}-{}.{}", artifact, version, clf, extension)
@@ -704,7 +711,7 @@ mod tests {
         assert!(merged.inherits_from.is_none());
         // merged should contain tokens from parent legacy and child's modern argument
         let game_args = merged.arguments.unwrap().game;
-        let mut strings: Vec<String> = game_args
+        let strings: Vec<String> = game_args
             .iter()
             .map(|a| match a {
                 Argument::Simple(s) => s.clone(),

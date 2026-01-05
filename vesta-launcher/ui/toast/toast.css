@@ -101,12 +101,12 @@
 .toast__title {
 	font-size: 16px;
 	font-weight: 500;
-	color: hsl(var(--color__primary-hue) 5% 90%);
+	color: var(--text-primary);
 }
 
 .toast__description {
 	font-size: 14px;
-	color: hsl(var(--color__primary-hue) 5% 80%);
+	color: var(--text-secondary);
 }
 
 /* Severity-based toast coloring */

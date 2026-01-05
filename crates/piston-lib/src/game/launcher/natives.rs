@@ -1,115 +1,38 @@
 /// Native library extraction for Minecraft launcher
-use crate::game::launcher::classpath::OsType;
-use crate::game::launcher::version_parser::Library;
+use crate::game::installer::types::OsType;
+use crate::game::launcher::unified_manifest::UnifiedLibrary;
 use anyhow::{Context, Result};
-use std::env;
 use std::path::Path;
 
 /// Extract native libraries from JARs
 pub async fn extract_natives(
-    libraries: &[Library],
+    libraries: &[UnifiedLibrary],
     libraries_dir: &Path,
     natives_dir: &Path,
-    os: OsType,
+    _os: OsType,
 ) -> Result<()> {
     // Create natives directory
     tokio::fs::create_dir_all(natives_dir).await?;
 
     for library in libraries {
-        // If there's no natives section and no classifier information at all, skip
-        if library.natives.is_none()
-            && library
-                .downloads
-                .as_ref()
-                .and_then(|d| d.classifiers.as_ref())
-                .is_none()
-        {
+        if !library.is_native {
             continue;
         }
 
-        // Use shared classifier helper to find a classifier jar on disk
-
-        // Helper: arch bits (32/64) based on host arch
-        fn arch_bits() -> String {
-            match env::consts::ARCH {
-                "x86" | "i386" => "32".to_string(),
-                "x86_64" | "aarch64" | "amd64" => "64".to_string(),
-                "arm" | "armv7l" => "32".to_string(),
-                _ => "64".to_string(),
-            }
+        let path = libraries_dir.join(&library.path);
+        if !path.exists() {
+            log::warn!("Native library JAR not found: {:?}", path);
+            continue;
         }
 
-        // Helper: permissive OS match for classifier keys (handles "osx" vs "macos")
-        fn check_native_key(k: &str, os: OsType) -> bool {
-            let key = k.to_lowercase();
-            let os_name = os.as_str();
-
-            if key.contains(os_name) {
-                return true;
-            }
-
-            // Some manifests or classifier names may use "macos" while our OS name is "osx".
-            // Be permissive and consider both forms equivalent.
-            if os_name == "osx" && key.contains("macos") {
-                return true;
-            }
-
-            false
-        }
-
-        // Helper to build a jar path from classifier candidate and test existence
-        fn build_jar_path(
-            libraries_dir: &Path,
-            name: &str,
-            classifier: &str,
-        ) -> Option<std::path::PathBuf> {
-            let coords = format!("{}:{}", name, classifier);
-            if let Ok(p) = super::classpath::maven_to_path(&coords) {
-                return Some(libraries_dir.join(p));
-            }
-            None
-        }
-
-        let arch = if cfg!(target_pointer_width = "32") {
-            "32"
-        } else {
-            "64"
-        };
-
-        match crate::game::launcher::classifier::find_classifier_jar_on_disk(
-            &library.name,
-            library.natives.as_ref(),
-            library
-                .downloads
-                .as_ref()
-                .and_then(|d| d.classifiers.as_ref()),
-            os.as_str(),
-            arch,
-            libraries_dir,
-        )? {
-            Some((classifier, path)) => {
-                log::debug!(
-                    "Resolved classifier '{}' -> {:?}",
-                    classifier,
-                    path.display()
-                );
-                extract_jar(&path, natives_dir, library).await?;
-                continue;
-            }
-            None => {
-                log::warn!(
-                    "Native library not found for {} (no candidate found)",
-                    library.name
-                );
-            }
-        }
+        extract_jar(&path, natives_dir, library).await?;
     }
 
     Ok(())
 }
 
 /// Extract a JAR file to a directory
-async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &Library) -> Result<()> {
+async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &UnifiedLibrary) -> Result<()> {
     log::debug!("Extracting natives from: {:?}", jar_path);
 
     let file =
@@ -120,7 +43,7 @@ async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &Library) -> R
 
     // Get exclusion patterns
     let exclusions = library
-        .extract
+        .extract_rules
         .as_ref()
         .map(|e| &e.exclude)
         .map(|v| v.as_slice())
@@ -245,7 +168,8 @@ mod tests {
         }
 
         // Ensure extraction succeeds
-        extract_natives(&[lib], libraries_dir, natives_dir, OsType::Windows)
+        let unified = UnifiedLibrary::from_library(&lib, None, OsType::Windows);
+        extract_natives(&unified, libraries_dir, natives_dir, OsType::Windows)
             .await
             .expect("extract failed");
 
@@ -275,11 +199,14 @@ mod tests {
         // Library has no direct mapping for Windows in natives, but downloads.classifiers has a key matching windows
         let natives_map: HashMap<String, String> = HashMap::new();
 
+        let coords = "com.example:libperm:2.0:natives-windows-64";
+        let rel_path = crate::game::launcher::classpath::maven_to_path(coords).unwrap();
+
         let mut classifiers = HashMap::new();
         classifiers.insert(
             "natives-windows-64".to_string(),
             Artifact {
-                path: Some("placeholder".to_string()),
+                path: Some(rel_path.clone()),
                 url: Some("https://example.com/fake.jar".to_string()),
                 sha1: Some("deadbeef".to_string()),
                 size: Some(123),
@@ -301,9 +228,7 @@ mod tests {
         };
 
         // Create an actual jar for the permissive classifier so extract_natives can find it
-        let coords = format!("{}:natives-windows-64", lib.name);
-        let rel = crate::game::launcher::classpath::maven_to_path(&coords).unwrap();
-        let full_path = libraries_dir.join(rel);
+        let full_path = libraries_dir.join(&rel_path);
 
         if let Some(p) = full_path.parent() {
             std::fs::create_dir_all(p).unwrap();
@@ -320,7 +245,8 @@ mod tests {
         }
 
         // Should succeed by scanning classifiers map
-        extract_natives(&[lib], libraries_dir, natives_dir, OsType::Windows)
+        let unified = UnifiedLibrary::from_library(&lib, None, OsType::Windows);
+        extract_natives(&unified, libraries_dir, natives_dir, OsType::Windows)
             .await
             .expect("permissive extract failed");
 

@@ -4,7 +4,7 @@
 	transform-origin: var(--kb-tooltip-content-transform-origin);
 	animation: contentHide 150ms ease-in forwards;
 	font-size: var(--font-xsmall);
-	color: hsl(var(--color__primary-hue) 5% 85%);
+	color: var(--text-primary);
 	background-color: hsl(var(--color__primary-hue) 20% 20%);
 	padding: 2px 8px;
 	border-radius: 3px;
@@ -15,7 +15,13 @@
 .tooltip__content[data-expanded] {
 	animation: contentShow 50ms ease-out;
 }
-
+/* Light mode tooltip override */
+@media (prefers-color-scheme: light) {
+	.tooltip__content {
+		background-color: var(--surface-overlay);
+		border: 2px solid var(--border-strong);
+	}
+}
 @keyframes contentShow {
 	from {
 		opacity: 0;

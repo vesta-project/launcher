@@ -1,6 +1,7 @@
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { applyTheme, configToTheme, type AppThemeConfig } from "../themes/presets";
 
 interface ConfigUpdateEvent {
 	field: string;
@@ -36,26 +37,24 @@ export function onConfigUpdate(handler: ConfigUpdateHandler): () => void {
 	};
 }
 
+let setupPromise: Promise<void> | null = null;
+
 /**
  * Subscribe to config updates from other windows
  * Broadcasts errors if updates fail
  */
 export async function subscribeToConfigUpdates(): Promise<void> {
-	if (configUnlisten) {
-		console.warn("Already subscribed to config updates");
-		return;
-	}
+	if (setupPromise) return setupPromise;
 
-	// Get current window label to track update source
-	try {
-		currentWindowLabel = getCurrentWindow().label;
-	} catch (error) {
-		console.error("Failed to get current window label:", error);
-	}
+	setupPromise = (async () => {
+		// Get current window label to track update source
+		try {
+			currentWindowLabel = getCurrentWindow().label;
+		} catch (error) {
+			console.error("Failed to get current window label:", error);
+		}
 
-	configUnlisten = await listen<ConfigUpdateEvent>(
-		"config-updated",
-		(event) => {
+		configUnlisten = await listen<ConfigUpdateEvent>("config-updated", (event) => {
 			const { field, value } = event.payload;
 
 			try {
@@ -85,8 +84,10 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 					});
 				}
 			}
-		},
-	);
+		});
+	})();
+
+	await setupPromise;
 }
 
 /**
@@ -96,8 +97,21 @@ export function unsubscribeFromConfigUpdates(): void {
 	if (configUnlisten) {
 		configUnlisten();
 		configUnlisten = null;
+		setupPromise = null;
 		updateHandlers.clear();
 		console.log("Unsubscribed from config updates");
+	}
+}
+
+let currentThemeConfig: Partial<AppThemeConfig> = {};
+
+/**
+ * Update the local theme config cache without triggering an apply
+ * This is useful for keeping the cache in sync with UI signals before they are committed
+ */
+export function updateThemeConfigLocal(field: string, value: any): void {
+	if (field.startsWith("theme_") || field === "background_hue") {
+		(currentThemeConfig as any)[field] = value;
 	}
 }
 
@@ -106,11 +120,10 @@ export function unsubscribeFromConfigUpdates(): void {
  * This is a default handler that can be registered
  */
 export function applyCommonConfigUpdates(field: string, value: any): void {
-	if (field === "background_hue" && typeof value === "number") {
-		document.documentElement.style.setProperty(
-			"--color__primary-hue",
-			value.toString(),
-		);
+	// Handle theme-related fields
+	if (field.startsWith("theme_") || field === "background_hue") {
+		(currentThemeConfig as any)[field] = value;
+		applyTheme(configToTheme(currentThemeConfig));
 	}
 
 	if (field === "reduced_motion" && typeof value === "boolean") {
@@ -121,9 +134,20 @@ export function applyCommonConfigUpdates(field: string, value: any): void {
 
 /** Apply a full config snapshot (used at startup) */
 export function applyConfigSnapshot(config: Record<string, any>): void {
-	if (typeof config.background_hue === "number") {
-		applyCommonConfigUpdates("background_hue", config.background_hue);
-	}
+	// Extract theme fields for the initial application
+	currentThemeConfig = {
+		theme_id: config.theme_id,
+		theme_primary_hue: config.theme_primary_hue,
+		theme_style: config.theme_style,
+		theme_gradient_enabled: config.theme_gradient_enabled,
+		theme_gradient_angle: config.theme_gradient_angle,
+		theme_gradient_type: config.theme_gradient_type,
+		theme_gradient_harmony: config.theme_gradient_harmony,
+		background_hue: config.background_hue,
+	};
+
+	applyTheme(configToTheme(currentThemeConfig));
+
 	if (typeof config.reduced_motion === "boolean") {
 		applyCommonConfigUpdates("reduced_motion", config.reduced_motion);
 	}
@@ -136,5 +160,5 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 export function getDebugLoggingEnabled(): boolean {
 	// This could be enhanced to actually read from a central config store
 	// For now, return a default or check localStorage/sessionStorage
-	return true; // Default to disabled
+	return false; // Default to disabled
 }
