@@ -65,6 +65,7 @@ export interface AppThemeConfig {
 	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
+	theme_border_width?: number;
 	background_hue?: number; // Legacy/Fallback
 }
 
@@ -86,6 +87,11 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 		rotation: getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
 		gradientType: config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony: config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
+		borderWidthSubtle: getNum(config.theme_border_width) ?? baseTheme.borderWidthSubtle,
+		borderWidthStrong:
+			getNum(config.theme_border_width) !== undefined
+				? Math.max((getNum(config.theme_border_width) as number) + 1, 1)
+				: baseTheme.borderWidthStrong,
 	});
 }
 

@@ -267,6 +267,7 @@ async fn process_login_completion(
             theme_gradient_type: current_config.theme_gradient_type,
             theme_gradient_harmony: current_config.theme_gradient_harmony,
             theme_advanced_overrides: current_config.theme_advanced_overrides,
+            theme_border_width: current_config.theme_border_width,
         };
 
         diesel::insert_into(account)
@@ -594,6 +595,10 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     if let Some(val) = target_account.theme_advanced_overrides {
         config.theme_advanced_overrides = Some(val.clone());
         updates.insert("theme_advanced_overrides".to_string(), serde_json::Value::String(val));
+    }
+    if let Some(val) = target_account.theme_border_width {
+        config.theme_border_width = Some(val);
+        updates.insert("theme_border_width".to_string(), serde_json::Value::Number(val.into()));
     }
 
     update_app_config(&config).map_err(|e| e.to_string())?;

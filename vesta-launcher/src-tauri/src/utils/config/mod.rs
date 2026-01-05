@@ -132,6 +132,7 @@ pub struct AppConfig {
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
     pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
     pub theme_gradient_type: Option<String>,   // "linear" or "radial"
+    pub theme_border_width: Option<i32>,       // Border thickness in pixels
 }
 
 impl Default for AppConfig {
@@ -170,6 +171,7 @@ impl Default for AppConfig {
             theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
             theme_advanced_overrides: None,        // theme_advanced_overrides - no custom overrides by default
             theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
+            theme_border_width: Some(1),           // theme_border_width - default 1px
         
         }
     }
@@ -247,7 +249,7 @@ fn sync_theme_to_account(field: &str, value: &serde_json::Value, account_uuid: &
     let is_theme_field = match field {
         "theme_id" | "theme_mode" | "theme_primary_hue" | "theme_primary_sat" | "theme_primary_light" |
         "theme_style" | "theme_gradient_enabled" | "theme_gradient_angle" | "theme_gradient_type" | 
-        "theme_gradient_harmony" | "theme_advanced_overrides" | "background_hue" => true,
+        "theme_gradient_harmony" | "theme_advanced_overrides" | "background_hue" | "theme_border_width" => true,
         _ => false
     };
 
@@ -313,6 +315,11 @@ fn sync_theme_to_account(field: &str, value: &serde_json::Value, account_uuid: &
         "theme_advanced_overrides" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_advanced_overrides.eq(value.as_str()))
+                .execute(&mut conn).map_err(|e| e.to_string())?;
+        },
+        "theme_border_width" => {
+            diesel::update(account.filter(uuid.eq(account_uuid)))
+                .set(theme_border_width.eq(value.as_i64().map(|v| v as i32)))
                 .execute(&mut conn).map_err(|e| e.to_string())?;
         },
         _ => {}

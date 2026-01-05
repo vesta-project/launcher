@@ -77,6 +77,7 @@ interface AppConfig {
 	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
+	theme_border_width?: number;
 	[key: string]: any;
 }
 
@@ -125,6 +126,8 @@ function SettingsPage() {
 					setGradientType(config.theme_gradient_type as "linear" | "radial");
 				if (config.theme_gradient_harmony)
 					setGradientHarmony(config.theme_gradient_harmony as GradientHarmony);
+				if (config.theme_border_width !== null && config.theme_border_width !== undefined)
+					setBorderThickness(config.theme_border_width);
 
 				// Apply current theme using centralized logic
 				applyTheme(configToTheme(config));
@@ -141,6 +144,7 @@ function SettingsPage() {
 				if (field === "theme_gradient_angle" && value !== null) setRotation(value);
 				if (field === "theme_gradient_type" && value) setGradientType(value as "linear" | "radial");
 				if (field === "theme_gradient_harmony" && value) setGradientHarmony(value as GradientHarmony);
+				if (field === "theme_border_width" && value !== null) setBorderThickness(value);
 			});
 		} catch (error) {
 			console.error("Failed to load settings:", error);
@@ -162,6 +166,9 @@ function SettingsPage() {
 			setRotation(theme.rotation || 135);
 			setGradientType(theme.gradientType || "linear");
 			setGradientHarmony(theme.gradientHarmony || "none");
+			if (theme.borderWidthSubtle !== undefined) {
+				setBorderThickness(theme.borderWidthSubtle);
+			}
 
 			const newHue =
 				theme.allowHueChange === false
@@ -180,20 +187,29 @@ function SettingsPage() {
 			updateThemeConfigLocal("theme_gradient_angle", theme.rotation ?? 135);
 			updateThemeConfigLocal("theme_gradient_type", theme.gradientType || "linear");
 			updateThemeConfigLocal("theme_gradient_harmony", theme.gradientHarmony || "none");
+			if (theme.borderWidthSubtle !== undefined) {
+				updateThemeConfigLocal("theme_border_width", theme.borderWidthSubtle);
+			}
 
 			if (hasTauriRuntime()) {
 				try {
+					const updates: any = {
+						theme_id: id,
+						theme_primary_hue: newHue,
+						background_hue: newHue,
+						theme_style: theme.style,
+						theme_gradient_enabled: theme.gradientEnabled,
+						theme_gradient_angle: theme.rotation ?? 135,
+						theme_gradient_type: theme.gradientType || "linear",
+						theme_gradient_harmony: theme.gradientHarmony || "none",
+					};
+
+					if (theme.borderWidthSubtle !== undefined) {
+						updates.theme_border_width = theme.borderWidthSubtle;
+					}
+
 					await invoke("update_config_fields", {
-						updates: {
-							theme_id: id,
-							theme_primary_hue: newHue,
-							background_hue: newHue,
-							theme_style: theme.style,
-							theme_gradient_enabled: theme.gradientEnabled,
-							theme_gradient_angle: theme.rotation ?? 135,
-							theme_gradient_type: theme.gradientType || "linear",
-							theme_gradient_harmony: theme.gradientHarmony || "none",
-						},
+						updates,
 					});
 				} catch (error) {
 					console.error("Failed to save theme preset selection:", error);
@@ -261,6 +277,26 @@ function SettingsPage() {
 				});
 			} catch (error) {
 				console.error("Failed to persist rotation immediately:", error);
+			}
+		}
+	};
+
+	const handleBorderThicknessChange = async (values: number[]) => {
+		const newThickness = values[0];
+		if (newThickness === borderThickness()) return;
+
+		setBorderThickness(newThickness);
+		updateThemeConfigLocal("theme_border_width", newThickness);
+
+		// Save immediately
+		if (hasTauriRuntime()) {
+			try {
+				await invoke("update_config_field", {
+					field: "theme_border_width",
+					value: newThickness,
+				});
+			} catch (error) {
+				console.error("Failed to persist border thickness immediately:", error);
 			}
 		}
 	};
@@ -551,7 +587,7 @@ function SettingsPage() {
 									<Show when={styleMode() === "bordered"}>
 										<Slider
 											value={[borderThickness()]}
-											onChange={(vals) => setBorderThickness(vals[0])}
+											onChange={handleBorderThicknessChange}
 											minValue={0}
 											maxValue={4}
 											step={1}

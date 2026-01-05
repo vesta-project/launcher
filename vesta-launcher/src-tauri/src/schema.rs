@@ -25,6 +25,7 @@ diesel::table! {
         theme_gradient_type -> Nullable<Text>,
         theme_gradient_harmony -> Nullable<Text>,
         theme_advanced_overrides -> Nullable<Text>,
+        theme_border_width -> Nullable<Integer>,
     }
 }
 
@@ -60,6 +61,7 @@ diesel::table! {
         theme_gradient_harmony -> Nullable<Text>,
         theme_advanced_overrides -> Nullable<Text>,
         theme_gradient_type -> Nullable<Text>,
+        theme_border_width -> Nullable<Integer>,
     }
 }
 
