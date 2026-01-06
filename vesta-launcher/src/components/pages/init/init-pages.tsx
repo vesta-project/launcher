@@ -227,7 +227,6 @@ function InitDataStoragePage(props: InitPagesProps) {
 									"font-size": "13px",
 									"color": "var(--text-primary)",
 									"cursor": "pointer",
-									"ghost": "none",
 									"text-overflow": "ellipsis"
 								}}
 							/>
@@ -438,7 +437,7 @@ function InitInstallationPage(props: InitPagesProps) {
 							<TextFieldLabel class="init-form-label">Instance Name</TextFieldLabel>
 							<TextFieldInput
 								value={instanceName()}
-								onInput={(e) => setInstanceName(e.currentTarget.value)}
+								onInput={(e) => setInstanceName((e.currentTarget as HTMLInputElement).value)}
 								placeholder="Enter instance name..."
 								style={{ "background": "var(--surface-sunken)" }}
 							/>

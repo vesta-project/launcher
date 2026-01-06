@@ -7,7 +7,6 @@ export const startAppTutorial = (onComplete?: () => void) => {
 		showProgress: true,
 		animate: true,
 		allowClose: true,
-		allowInteraction: false,
 		overlayColor: "rgba(0, 0, 0, 0.75)",
 		popoverClass: "driverjs-theme",
 		steps: [

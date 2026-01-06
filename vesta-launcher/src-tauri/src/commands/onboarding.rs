@@ -84,13 +84,13 @@ pub fn detect_java() -> Result<Vec<jre_manager::DetectedJava>, String> {
         if managed_dir.exists() {
             if let Ok(entries) = std::fs::read_dir(&managed_dir) {
                 for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
+                    let entry_path = entry.path();
+                    if entry_path.is_dir() {
                         // Check if it's one of our zulu-XX or java-XX folders
-                        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                        if let Some(name) = entry_path.file_name().and_then(|n| n.to_str()) {
                             if name.starts_with("zulu-") || name.starts_with("java-") {
                                 // find_java_executable is now public in piston-lib
-                                if let Some(java_exe) = jre_manager::find_java_executable(&path) {
+                                if let Some(java_exe) = jre_manager::find_java_executable(&entry_path) {
                                     if let Ok(info) = jre_manager::verify_java(&java_exe) {
                                         // Avoid duplicates
                                         if !javas.iter().any(|j| j.path == info.path) {

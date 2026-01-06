@@ -27,7 +27,7 @@ interface IconPickerProps extends ClassProp {
 export function IconPicker<T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, IconPickerProps>,
 ) {
-	const [local, others] = splitProps(props as IconPickerProps, [
+	const [local, _others] = splitProps(props as IconPickerProps, [
 		"class",
 		"value",
 		"onSelect",
@@ -55,7 +55,6 @@ export function IconPicker<T extends ValidComponent = "button">(
 	
 	// Dynamic grid rows (max 3 rows to avoid scrolling)
 	const maxRows = 3;
-	const iconsPerPage = () => gridColumns() * maxRows;
 	
 	// Determine if an icon is a gradient or image URL
 	const isGradient = (icon: string) => icon.startsWith("linear-gradient");

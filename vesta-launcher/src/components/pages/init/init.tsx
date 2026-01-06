@@ -96,9 +96,6 @@ function InitPage() {
 		}
 	}, 1000);*/
 
-	onCleanup(() => {
-	});
-
 	return (
 		<div id={"init-page__root"}>
 			<TitleBar os={os} />

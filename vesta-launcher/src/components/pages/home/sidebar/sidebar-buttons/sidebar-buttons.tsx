@@ -98,7 +98,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 		let unlisten: (() => void) | undefined;
 		listen("core://account-heads-updated", () => {
 			setAvatarTimestamp(Date.now());
-		}).then((fn) => (unlisten = fn));
+		}).then((fn) => { unlisten = fn; });
 
 		onCleanup(() => unlisten?.());
 	});
