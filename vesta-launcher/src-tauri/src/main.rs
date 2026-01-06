@@ -39,6 +39,7 @@ fn main() {
         .plugin(log_plugin)
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![
             launch_new_window,
@@ -49,6 +50,7 @@ fn main() {
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
             commands::app::close_all_windows_and_reset,
+            commands::app::get_default_instance_dir,
             commands::app::os_type,
             utils::db::get_db_status,
             // create_file_drop_overlay,
@@ -88,7 +90,16 @@ fn main() {
             commands::instances::is_instance_running,
             commands::instances::get_minecraft_versions,
             commands::instances::regenerate_piston_manifest,
-            commands::instances::read_instance_log
+            commands::instances::read_instance_log,
+            commands::onboarding::get_onboarding_requirements,
+            commands::onboarding::detect_java,
+            commands::onboarding::verify_java_path,
+            commands::onboarding::set_global_java_path,
+            commands::onboarding::get_global_java_paths,
+            commands::onboarding::complete_onboarding,
+            commands::onboarding::reset_onboarding,
+            commands::onboarding::set_setup_step,
+            commands::onboarding::download_managed_java
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

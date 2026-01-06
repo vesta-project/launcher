@@ -6,7 +6,7 @@ let osTypePromise: Promise<OsType | undefined> | null = null;
 
 function loadOsType(): Promise<OsType | undefined> {
 	if (!hasTauriRuntime()) {
-		return undefined;
+		return Promise.resolve(undefined);
 	}
 	if (!osTypePromise) {
 		osTypePromise = import("@tauri-apps/plugin-os")

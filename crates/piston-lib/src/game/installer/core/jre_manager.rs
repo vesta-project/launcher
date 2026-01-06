@@ -2,7 +2,7 @@ use super::downloader::extract_zip;
 use crate::game::installer::track_artifact_from_path;
 use crate::game::installer::types::{Arch, OsType, ProgressReporter};
 use anyhow::{Context, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 const ZULU_API_BASE: &str = "https://api.azul.com/metadata/v1/zulu/packages";
@@ -32,6 +32,7 @@ impl JavaVersion {
             "java-runtime-beta" => 16,
             "java-runtime-gamma" => 17,
             "java-runtime-delta" => 21,
+            "java-runtime-epsilon" => 25,
             _ => {
                 // Try to parse as number
                 component.parse().unwrap_or(17)
@@ -202,7 +203,7 @@ async fn extract_tar_gz(data: &[u8], dest: &Path) -> Result<()> {
 }
 
 /// Find the java executable in a JRE installation directory
-fn find_java_executable(dir: &Path) -> Option<PathBuf> {
+pub fn find_java_executable(dir: &Path) -> Option<PathBuf> {
     // Common JRE structures:
     // - zulu-{version}/bin/java (direct extraction)
     // - zulu-{version}/zulu-{full-version}/bin/java (nested)
@@ -243,35 +244,144 @@ fn find_java_executable(dir: &Path) -> Option<PathBuf> {
     None
 }
 
-/// Detect system Java installations
-pub fn detect_system_java() -> Option<PathBuf> {
-    // Try running `java -version` from PATH
-    if let Ok(output) = std::process::Command::new("java").arg("-version").output() {
-        if output.status.success() {
-            // Try to find the java executable path
-            #[cfg(windows)]
-            {
-                if let Ok(output) = std::process::Command::new("where").arg("java").output() {
-                    if let Ok(path_str) = String::from_utf8(output.stdout) {
-                        if let Some(first_line) = path_str.lines().next() {
-                            return Some(PathBuf::from(first_line.trim()));
-                        }
-                    }
-                }
-            }
+/// Information about a detected Java installation
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectedJava {
+    pub path: PathBuf,
+    pub major_version: u32,
+    pub is_64bit: bool,
+}
 
-            #[cfg(not(windows))]
-            {
-                if let Ok(output) = std::process::Command::new("which").arg("java").output() {
-                    if let Ok(path_str) = String::from_utf8(output.stdout) {
-                        return Some(PathBuf::from(path_str.trim()));
+/// Scan for Java installations in common system locations
+pub fn scan_system_javas() -> Vec<DetectedJava> {
+    let mut results = Vec::new();
+    let mut scanned_paths = std::collections::HashSet::new();
+
+    // 1. Check PATH
+    if let Some(path) = detect_system_java_from_path() {
+        if let Ok(info) = verify_java(&path) {
+            if scanned_paths.insert(path.clone()) {
+                results.push(info);
+            }
+        }
+    }
+
+    // 2. common OS-specific directories
+    let mut search_roots = Vec::new();
+
+    #[cfg(windows)]
+    {
+        search_roots.push(PathBuf::from("C:\\Program Files\\Java"));
+        search_roots.push(PathBuf::from("C:\\Program Files (x86)\\Java"));
+        
+        // Also check Eclipse Temurin / Adoptium
+        search_roots.push(PathBuf::from("C:\\Program Files\\Eclipse Foundation"));
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        search_roots.push(PathBuf::from("/Library/Java/JavaVirtualMachines"));
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        search_roots.push(PathBuf::from("/usr/lib/jvm"));
+        search_roots.push(PathBuf::from("/usr/java"));
+    }
+
+    for root in search_roots {
+        if !root.exists() {
+            continue;
+        }
+
+        if let Ok(entries) = std::fs::read_dir(root) {
+            for entry in entries.flatten() {
+                if entry.path().is_dir() {
+                    if let Some(java_path) = find_java_executable(&entry.path()) {
+                        if scanned_paths.insert(java_path.clone()) {
+                            if let Ok(info) = verify_java(&java_path) {
+                                results.push(info);
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
+    results
+}
+
+fn detect_system_java_from_path() -> Option<PathBuf> {
+    // Try to find the java executable path
+    #[cfg(windows)]
+    {
+        if let Ok(output) = std::process::Command::new("where").arg("java").output() {
+            if let Ok(path_str) = String::from_utf8(output.stdout) {
+                if let Some(first_line) = path_str.lines().next() {
+                    return Some(PathBuf::from(first_line.trim()));
+                }
+            }
+        }
+    }
+
+    #[cfg(not(windows))]
+    {
+        if let Ok(output) = std::process::Command::new("which").arg("java").output() {
+            if let Ok(path_str) = String::from_utf8(output.stdout) {
+                return Some(PathBuf::from(path_str.trim()));
+            }
+        }
+    }
     None
+}
+
+/// Verify a Java path and return information about it
+pub fn verify_java(path: &Path) -> Result<DetectedJava> {
+    if !path.exists() {
+        anyhow::bail!("Java path does not exist: {:?}", path);
+    }
+
+    // Run java -version
+    // Note: java -version outputs to STDERR unusually
+    let output = std::process::Command::new(path)
+        .arg("-version")
+        .output()
+        .context("Failed to run java -version")?;
+
+    let version_str = String::from_utf8_lossy(&output.stderr);
+    
+    // Parse version string like 'openjdk version "17.0.1" 2021-10-19' or 'java version "1.8.0_311"'
+    let major_version = parse_major_version(&version_str)
+        .context(format!("Could not parse Java version from: {}", version_str))?;
+
+    // Check if 64-bit
+    let is_64bit = version_str.contains("64-Bit") || version_str.contains("x86_64") || version_str.contains("amd64");
+
+    Ok(DetectedJava {
+        path: path.to_path_buf(),
+        major_version,
+        is_64bit,
+    })
+}
+
+fn parse_major_version(version_output: &str) -> Option<u32> {
+    // Look for patterns like "1.8.0", "17.0.1", "21-ea"
+    let re = regex::Regex::new(r"version\s+?.\s*?(\d+)(\.(\d+))?").ok()?;
+    if let Some(caps) = re.captures(version_output) {
+        let major = caps.get(1)?.as_str().parse::<u32>().ok()?;
+        if major == 1 {
+            // Handle 1.8.x -> 8
+            return caps.get(3)?.as_str().parse::<u32>().ok();
+        }
+        return Some(major);
+    }
+    None
+}
+
+/// Detect system Java installations
+pub fn detect_system_java() -> Option<PathBuf> {
+    detect_system_java_from_path()
 }
 
 fn relative_jre_label(root: &Path, target: &Path) -> Option<String> {

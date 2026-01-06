@@ -8,7 +8,7 @@
 .icon-picker__trigger {
 	all: unset;
 	cursor: pointer;
-	border-radius: 12px;
+	border-radius: 14px;
 	width: 64px;
 	height: 64px;
 	background-size: cover;
@@ -16,13 +16,13 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	transition: transform 0.2s, box-shadow 0.2s;
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
+	transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+	border: 1px solid transparent;
 }
 
 .icon-picker__trigger:hover {
 	transform: translateY(-2px);
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px hsl(0 0% 0% / 0.2);
+	box-shadow: 0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .icon-picker__trigger:focus-visible {
@@ -131,3 +131,56 @@
 }
 
 /* No scrollbar needed - dynamic sizing prevents overflow */
+/* Edit overlay for trigger */
+.icon-picker__edit-overlay {
+position: absolute;
+inset: 0;
+background: rgba(0, 0, 0, 0.4);
+color: white;
+display: flex;
+align-items: center;
+justify-content: center;
+opacity: 0;
+transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+border-radius: 12px;
+pointer-events: none;
+backdrop-filter: blur(2px);
+}
+
+.icon-picker__trigger:hover .icon-picker__edit-overlay {
+opacity: 1;
+}
+
+/* Hint badge for onboarding */
+.icon-picker__trigger--hint {
+border: 2px dashed var(--primary-low);
+animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+0% { border-color: var(--primary-low); }
+50% { border-color: var(--primary); }
+100% { border-color: var(--primary-low); }
+}
+
+.icon-picker__hint-badge {
+position: absolute;
+top: -6px;
+right: -6px;
+background: var(--primary);
+color: white;
+width: 20px;
+height: 20px;
+border-radius: 50%;
+display: flex;
+align-items: center;
+justify-content: center;
+box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+z-index: 1;
+animation: nudge 2s infinite;
+}
+
+@keyframes nudge {
+0%, 100% { transform: scale(1); }
+50% { transform: scale(1.1); }
+}

@@ -13,6 +13,9 @@ pub struct PistonMetadata {
 
     /// Latest release and snapshot versions
     pub latest: LatestVersions,
+
+    /// Unique Java versions required by the latest release, snapshot, and major legacy versions
+    pub required_java_major_versions: Vec<u32>,
 }
 
 /// Latest version information
@@ -127,6 +130,19 @@ pub struct MojangVersion {
     pub release_time: String,
     pub sha1: String,
     pub compliance_level: i32,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MojangVersionDetail {
+    pub java_version: Option<MojangJavaVersion>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MojangJavaVersion {
+    pub major_version: u32,
+    pub component: String,
 }
 
 /// Fabric loader version response

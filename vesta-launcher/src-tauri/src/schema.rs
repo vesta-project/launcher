@@ -62,6 +62,17 @@ diesel::table! {
         theme_advanced_overrides -> Nullable<Text>,
         theme_gradient_type -> Nullable<Text>,
         theme_border_width -> Nullable<Integer>,
+        setup_completed -> Bool,
+        setup_step -> Integer,
+        tutorial_completed -> Bool,
+    }
+}
+
+diesel::table! {
+    global_java_paths (major_version) {
+        major_version -> Integer,
+        path -> Text,
+        is_managed -> Bool,
     }
 }
 
@@ -137,6 +148,7 @@ diesel::table! {
 diesel::allow_tables_to_appear_in_same_query!(
     account,
     app_config,
+    global_java_paths,
     instance,
     notification,
     task_state,

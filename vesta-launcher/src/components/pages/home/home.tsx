@@ -30,6 +30,7 @@ import {
 import "./home.css";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
+import { startAppTutorial } from "@utils/tutorial";
 
 // Module-level signals for page viewer state - exported so child components can open pages
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
@@ -40,6 +41,16 @@ export { setPageViewerOpen };
 const os = getOsType() ?? "windows";
 
 function HomePage() {
+	onMount(async () => {
+		const config = await invoke<any>("get_config");
+		if (!config.tutorial_completed) {
+			// Small delay to ensure UI is ready
+			setTimeout(() => {
+				startAppTutorial();
+			}, 1000);
+		}
+	});
+
 	createEffect(() => {
 		sidebarOpen();
 		clearToasts();

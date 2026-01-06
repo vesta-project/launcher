@@ -49,10 +49,6 @@
 		backdrop-filter: none !important;
 		-webkit-backdrop-filter: none !important;
 	}
-
-	& svg {
-		fill: var(--page-viewer-nav-color);
-	}
 }
 
 .page-viewer-navbar-root {

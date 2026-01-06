@@ -103,7 +103,7 @@ export function unsubscribeFromConfigUpdates(): void {
 	}
 }
 
-let currentThemeConfig: Partial<AppThemeConfig> = {};
+export let currentThemeConfig: Partial<AppThemeConfig> = {};
 
 /**
  * Update the local theme config cache without triggering an apply

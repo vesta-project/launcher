@@ -107,6 +107,12 @@ pub fn close_all_windows_and_reset(app_handle: tauri::AppHandle) -> Result<(), S
 }
 
 #[tauri::command]
+pub fn get_default_instance_dir() -> Result<String, String> {
+    let config_dir = get_app_config_dir().map_err(|e| e.to_string())?;
+    Ok(config_dir.join("instances").to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn os_type() -> String {
     #[cfg(target_os = "windows")]
     return "windows".to_string();

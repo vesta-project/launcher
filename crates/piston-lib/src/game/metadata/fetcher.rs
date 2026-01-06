@@ -115,7 +115,42 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
             release: mojang_manifest.latest.release.clone(),
             snapshot: mojang_manifest.latest.snapshot.clone(),
         },
+        required_java_major_versions: Vec::new(),
     };
+
+    // Detect required Java versions from latest releases/snapshots
+    let mut detected_javas = std::collections::BTreeSet::new();
+    
+    // Always include Java 8 and 17 as baseline for legacy/modding
+    detected_javas.insert(8);
+    detected_javas.insert(17);
+
+    // Fetch Java requirements for latest release and snapshot
+    let latest_release_url = mojang_manifest.versions.iter()
+        .find(|v| v.id == mojang_manifest.latest.release)
+        .map(|v| v.url.clone());
+    
+    let latest_snapshot_url = mojang_manifest.versions.iter()
+        .find(|v| v.id == mojang_manifest.latest.snapshot)
+        .map(|v| v.url.clone());
+
+    if let Some(url) = latest_release_url {
+        if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
+            if let Some(jv) = detail.java_version {
+                detected_javas.insert(jv.major_version);
+            }
+        }
+    }
+
+    if let Some(url) = latest_snapshot_url {
+        if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
+            if let Some(jv) = detail.java_version {
+                detected_javas.insert(jv.major_version);
+            }
+        }
+    }
+
+    metadata.required_java_major_versions = detected_javas.into_iter().rev().collect();
 
     // Sort versions and loaders correctly
     metadata.sort_all_versions();
@@ -223,6 +258,12 @@ async fn fetch_mojang_manifest_with_client(client: &reqwest::Client) -> Result<M
             MAX_RETRIES
         )
     }))
+}
+
+async fn fetch_version_detail(client: &reqwest::Client, url: &str) -> Result<MojangVersionDetail> {
+    let response = client.get(url).send().await?;
+    let detail = response.json::<MojangVersionDetail>().await?;
+    Ok(detail)
 }
 
 /// Fetch Fabric-style modloader data (loaders and supported game versions) in batch

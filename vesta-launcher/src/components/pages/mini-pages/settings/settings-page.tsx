@@ -21,8 +21,9 @@ import {
 	TabsTrigger,
 } from "@ui/tabs/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
-import { onConfigUpdate, updateThemeConfigLocal } from "@utils/config-sync";
+import { onConfigUpdate, updateThemeConfigLocal, currentThemeConfig } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
 	createSignal,
@@ -78,22 +79,30 @@ interface AppConfig {
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
 	theme_border_width?: number;
+	setup_completed: boolean;
+	setup_step: number;
+	tutorial_completed: boolean;
 	[key: string]: any;
 }
 
-function SettingsPage() {
+function SettingsPage(props: { close?: () => void }) {
 	const [currentTab, setCurrentTab] = createSignal("general");
 	const [debugLogging, setDebugLogging] = createSignal(false);
-	const [backgroundHue, setBackgroundHue] = createSignal(220);
-	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>("glass");
-	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(true);
-	const [rotation, setRotation] = createSignal<number>(135);
-	const [gradientType, setGradientType] = createSignal<"linear" | "radial">("linear");
-	const [gradientHarmony, setGradientHarmony] = createSignal<GradientHarmony>("none");
-	const [themeId, setThemeId] = createSignal<string>("midnight");
-	const [borderThickness, setBorderThickness] = createSignal(1);
+	
+	// Initialize from global theme cache to prevent "Midnight Blue" flash
+	const [backgroundHue, setBackgroundHue] = createSignal(currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 220);
+	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>(currentThemeConfig.theme_style as ThemeConfig["style"] ?? "glass");
+	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(currentThemeConfig.theme_gradient_enabled ?? true);
+	const [rotation, setRotation] = createSignal<number>(currentThemeConfig.theme_gradient_angle ?? 135);
+	const [gradientType, setGradientType] = createSignal<"linear" | "radial">(currentThemeConfig.theme_gradient_type as "linear" | "radial" ?? "linear");
+	const [gradientHarmony, setGradientHarmony] = createSignal<GradientHarmony>(currentThemeConfig.theme_gradient_harmony as GradientHarmony ?? "none");
+	const [themeId, setThemeId] = createSignal<string>(currentThemeConfig.theme_id ?? "midnight");
+	const [borderThickness, setBorderThickness] = createSignal(currentThemeConfig.theme_border_width ?? 1);
+	
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
+	const [globalJavas, setGlobalJavas] = createSignal<any[]>([]);
+	const [isScanning, setIsScanning] = createSignal(false);
 
 	// Permissions helpers based on current theme
 	const canChangeHue = () => {
@@ -103,9 +112,23 @@ function SettingsPage() {
 
 	let unsubscribeConfigUpdate: (() => void) | null = null;
 
+	const fetchJavas = async () => {
+		if (!hasTauriRuntime()) return;
+		try {
+			setIsScanning(true);
+			const detected = await invoke<any[]>("detect_java");
+			setGlobalJavas(detected);
+		} catch (e) {
+			console.error("Failed to fetch javas:", e);
+		} finally {
+			setIsScanning(false);
+		}
+	};
+
 	onMount(async () => {
 		try {
 			if (hasTauriRuntime()) {
+				fetchJavas();
 				const config = await invoke<AppConfig>("get_config");
 				setDebugLogging(config.debug_logging);
 				setReducedMotion(config.reduced_motion ?? false);
@@ -128,9 +151,6 @@ function SettingsPage() {
 					setGradientHarmony(config.theme_gradient_harmony as GradientHarmony);
 				if (config.theme_border_width !== null && config.theme_border_width !== undefined)
 					setBorderThickness(config.theme_border_width);
-
-				// Apply current theme using centralized logic
-				applyTheme(configToTheme(config));
 			}
 
 			unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
@@ -352,6 +372,8 @@ function SettingsPage() {
 	};
 
 	createEffect(() => {
+		if (loading()) return;
+		
 		const id = themeId();
 		const currentTheme = id ? getThemeById(id) : undefined;
 		if (currentTheme) {
@@ -376,6 +398,8 @@ function SettingsPage() {
 	});
 
 	createEffect(() => {
+		if (loading()) return;
+		
 		if (styleMode() === "bordered") {
 			document.documentElement.style.setProperty(
 				"--border-width-subtle",
@@ -408,8 +432,10 @@ function SettingsPage() {
 						<TabsIndicator />
 						<TabsTrigger value="general">General</TabsTrigger>
 						<TabsTrigger value="appearance">Appearance</TabsTrigger>
+						<TabsTrigger value="java">Java</TabsTrigger>
 						<TabsTrigger value="defaults">Defaults</TabsTrigger>
 						<TabsTrigger value="developer">Developer</TabsTrigger>
+						<TabsTrigger value="help">Help</TabsTrigger>
 					</TabsList>
 
 					<TabsContent value="appearance">
@@ -610,6 +636,84 @@ function SettingsPage() {
 						</div>
 					</TabsContent>
 
+					<TabsContent value="java">
+						<div class="settings-tab-content">
+							<section class="settings-section">
+								<div class="section-header">
+									<div>
+										<h2>Java Environments</h2>
+										<p class="section-description">
+											Vesta uses these Java installations to run Minecraft.
+										</p>
+									</div>
+									<LauncherButton 
+										onClick={fetchJavas} 
+										disabled={isScanning()}
+										variant="ghost"
+									>
+										{isScanning() ? "Scanning..." : "Rescan System"}
+									</LauncherButton>
+								</div>
+								
+								<div class="java-list">
+									<For each={globalJavas()} fallback={
+										<div class="java-empty">
+											{isScanning() ? "Scanning for Java installations..." : "No Java installations found."}
+										</div>
+									}>
+										{(java) => (
+											<div class="java-item">
+												<div class="java-info">
+													<div class="java-version-row">
+														<span class="java-version">Java {java.major_version}</span>
+														<Show when={java.is_managed}>
+															<span class="managed-badge">Managed</span>
+														</Show>
+													</div>
+													<div class="java-path">{java.path}</div>
+												</div>
+											</div>
+										)}
+									</For>
+								</div>
+							</section>
+						</div>
+					</TabsContent>
+
+					<TabsContent value="help">
+						<div class="settings-tab-content">
+							<section class="settings-section">
+								<h2>App Tutorial</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Guided Walkthrough</span>
+										<span class="settings-description">
+											Run the interactive tutorial to learn how to use Vesta.
+										</span>
+									</div>
+									<LauncherButton onClick={() => {
+										props.close?.();
+										setTimeout(() => startAppTutorial(), 100);
+									}}>
+										Run Tutorial
+									</LauncherButton>
+								</div>
+							</section>
+
+							<section class="settings-section">
+								<h2>Social & Support</h2>
+								<div class="social-links">
+									<LauncherButton variant="ghost" onClick={() => window.open("https://github.com/VestaLauncher/Vesta", "_blank")}>
+										GitHub
+									</LauncherButton>
+									<LauncherButton variant="ghost">
+										Discord Support
+									</LauncherButton>
+								</div>
+							</section>
+						</div>
+					</TabsContent>
+
 					<TabsContent value="general">
 						<div class="settings-tab-content">
 							<section class="settings-section">
@@ -644,6 +748,34 @@ function SettingsPage() {
 									</div>
 									<LauncherButton onClick={handleOpenAppData}>
 										Open Folder
+									</LauncherButton>
+								</div>
+							</section>
+
+							<section class="settings-section">
+								<h2>Troubleshooting</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Reset Onboarding</span>
+										<span class="settings-description">
+											Redo the first-time setup process. This will not delete your accounts or instances.
+										</span>
+									</div>
+									<LauncherButton 
+										variant="shadow" 
+										color="destructive"
+										onClick={async () => {
+											if (await confirm("Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen.")) {
+												try {
+													await invoke("reset_onboarding");
+													window.location.href = "/"; // Force reload to root
+												} catch (e) {
+													console.error("Failed to reset onboarding:", e);
+												}
+											}
+										}}
+									>
+										Redo Setup
 									</LauncherButton>
 								</div>
 							</section>

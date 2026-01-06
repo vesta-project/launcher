@@ -1,7 +1,5 @@
-import {
-	PolymorphicProps,
-	TextField as TextFieldPrimitive,
-} from "@kobalte/core";
+import * as TextFieldPrimitive from "@kobalte/core/text-field";
+import { PolymorphicProps } from "@kobalte/core/polymorphic";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { splitProps, ValidComponent } from "solid-js";

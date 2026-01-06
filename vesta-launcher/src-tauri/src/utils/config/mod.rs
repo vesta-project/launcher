@@ -133,6 +133,11 @@ pub struct AppConfig {
     pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
     pub theme_gradient_type: Option<String>,   // "linear" or "radial"
     pub theme_border_width: Option<i32>,       // Border thickness in pixels
+
+    // Onboarding fields
+    pub setup_completed: bool,
+    pub setup_step: i32,
+    pub tutorial_completed: bool,
 }
 
 impl Default for AppConfig {
@@ -172,6 +177,10 @@ impl Default for AppConfig {
             theme_advanced_overrides: None,        // theme_advanced_overrides - no custom overrides by default
             theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
             theme_border_width: Some(1),           // theme_border_width - default 1px
+
+            setup_completed: false,
+            setup_step: 0,
+            tutorial_completed: false,
         
         }
     }

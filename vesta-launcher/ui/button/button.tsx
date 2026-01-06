@@ -16,7 +16,7 @@ interface ButtonProps
 		ButtonPrimitive.ButtonRootProps & ChildrenProp
 	> {
 	color?: "none" | "primary" | "secondary" | "destructive" | "warning";
-	variant?: "solid" | "outline" | "ghost";
+	variant?: "solid" | "outline" | "ghost" | "shadow";
 	size?: "sm" | "md" | "lg";
 	icon_only?: boolean;
 	onClick?: (e: MouseEvent) => void;
@@ -46,6 +46,7 @@ function Button(p: ButtonProps) {
 		"tooltip_placement",
 		"class",
 		"onClick",
+		"style",
 	]);
 
 	const handleClick = (e: MouseEvent) => {
@@ -66,13 +67,17 @@ function Button(p: ButtonProps) {
 					"launcher-button--solid": local.variant === "solid",
 					"launcher-button--outline": local.variant === "outline",
 					"launcher-button--ghost": local.variant === "ghost",
+					"launcher-button--shadow": local.variant === "shadow",
 					"launcher-button--icon-only": local.icon_only,
 					[local.class ?? ""]: true,
 				}}
-				style={{
-					"--button-color":
-						local.color != "none" ? "var(--" + local.color + ")" : "",
-				}}
+				style={typeof local.style === "string" 
+					? `--button-color: ${local.color != "none" ? "var(--" + local.color + ")" : "hsla(var(--accent-base) / 1)"}; ${local.style}`
+					: {
+						"--button-color": local.color != "none" ? "var(--" + local.color + ")" : "hsla(var(--accent-base) / 1)",
+						...(local.style as any)
+					}
+				}
 				onClick={handleClick}
 				disabled={props.disabled}
 				{...(rest as ButtonPrimitive.ButtonRootProps)}

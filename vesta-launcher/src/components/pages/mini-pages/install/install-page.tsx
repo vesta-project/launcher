@@ -335,12 +335,13 @@ function InstallPage(props: InstallPageProps) {
 					<div class="install-form">
 						{/* Left Column: Identity & Version */}
 						<div class="form-section">
-							<div class="form-row">
+							<div class="form-row" style={{ "align-items": "flex-start" }}>
 								<IconPicker
 									value={iconPath()}
 									onSelect={(icon) => setIconPath(icon)}
 									uploadedIcons={uploadedIcons()}
 									allowUpload={true}
+									showHint={true}
 								/>
 								<TextFieldRoot
 									required={true}

@@ -5,6 +5,8 @@
 
 	/* Base Hues (User Configurable) */
 	--color__primary-hue: 220;
+	--button-lightness: 35%;
+	--accent-base: var(--color__primary-hue) 70% var(--button-lightness);
 	--hue-secondary: calc(
 		var(--color__primary-hue) +
 		180
@@ -93,6 +95,9 @@
 	--interactive-active: hsl(var(--color__primary-hue) 80% 60%);
 	--interactive-disabled: hsl(var(--color__primary-hue) 10% 40% / 0.5);
 
+	/* Z-Index Hierarchy */
+	--z-loader: 9999;
+
 	/* Icon Colors (for SVG fills) */
 	--icon-primary: hsl(var(--color__primary-hue) 5% 90%);
 	--icon-secondary: hsl(var(--color__primary-hue) 5% 70%);
@@ -116,9 +121,17 @@
 	--sidebar-active: var(--surface-overlay);
 
 	/* Accent Colors */
-	--accent-primary: hsl(var(--color__primary-hue) 70% 50%);
-	--accent-primary-hover: hsl(var(--color__primary-hue) 80% 55%);
+	--accent-primary: hsl(var(--color__primary-hue) 70% var(--button-lightness));
+	--accent-primary-hover: hsl(var(--color__primary-hue) 80% calc(var(--button-lightness) + 10%));
 	--accent-secondary: hsl(var(--hue-secondary) 60% 50%);
+
+	--primary: var(--accent-primary);
+	--primary-hover: var(--accent-primary-hover);
+	--secondary: var(--accent-secondary);
+
+	/* Shorthands for Button and other components */
+	--destructive: var(--semantic-error);
+	--warning: var(--semantic-warning);
 
 	/* Semantic States (Fixed hues for recognition) */
 	--semantic-success: hsl(var(--hue-success) 60% 50%);
@@ -274,6 +287,7 @@ body {
    ============================================================================= */
 :root[data-theme="light"] {
 	/* Override lightness values for light mode */
+	--button-lightness: 60%;
 	--lightness-surface-base: 85%;
 	--lightness-surface-raised: 90%;
 	--lightness-surface-overlay: 95%;
@@ -351,6 +365,7 @@ body {
 @media (prefers-color-scheme: light) {
 	:root:not([data-theme="dark"]) {
 		/* Override lightness values for light mode */
+		--button-lightness: 60%;
 		--lightness-surface-base: 85%;
 		--lightness-surface-raised: 90%;
 		--lightness-surface-overlay: 95%;
@@ -622,4 +637,83 @@ button {
 	-webkit-backdrop-filter: none;
 	filter: none;
 	border: var(--border-width-subtle) solid var(--border-strong);
+}
+
+/* Tutorial/Driver.js Theming */
+.driver-popover.driverjs-theme {
+	background-color: var(--surface-overlay) !important;
+	color: var(--text-primary) !important;
+	border: 1px solid var(--border-strong) !important;
+	border-radius: 12px !important;
+	backdrop-filter: blur(16px) !important;
+	-webkit-backdrop-filter: blur(16px) !important;
+	padding: 20px !important;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+}
+
+.driver-popover.driverjs-theme .driver-popover-title {
+	color: var(--text-primary) !important;
+	font-weight: 800 !important;
+	font-size: 18px !important;
+}
+
+.driver-popover.driverjs-theme .driver-popover-description {
+	color: var(--text-secondary) !important;
+	font-size: 14px !important;
+	line-height: 1.5 !important;
+}
+
+.driver-popover.driverjs-theme .driver-popover-progress-text {
+	color: var(--text-tertiary) !important;
+}
+
+.driver-popover.driverjs-theme .driver-popover-arrow {
+	border-color: var(--surface-overlay) !important;
+}
+
+.driver-popover.driverjs-theme button {
+	background-color: var(--interactive-base) !important;
+	color: white !important;
+	text-shadow: none !important;
+	border: none !important;
+	border-radius: 6px !important;
+	font-weight: 600 !important;
+	padding: 6px 14px !important;
+	transition: opacity 0.2s ease !important;
+}
+
+.driver-popover.driverjs-theme button:hover {
+	background-color: var(--interactive-hover) !important;
+}
+
+.driver-popover.driverjs-theme .driver-popover-close-btn {
+	color: var(--text-tertiary) !important;
+	background-color: transparent !important;
+	border: none !important;
+}
+
+.driver-popover.driverjs-theme .driver-popover-close-btn:hover {
+	color: var(--text-primary) !important;
+	background-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.driver-active-element {
+	outline: none !important;
+	box-shadow: none !important;
+}
+
+/* Global Spinner */
+.spinner {
+	width: 24px;
+	height: 24px;
+	border: 2px solid rgba(255, 255, 255, 0.1);
+	border-top: 2px solid white;
+	border-radius: 50%;
+	display: inline-block;
+	animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
 }

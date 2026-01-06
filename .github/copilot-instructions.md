@@ -8,19 +8,25 @@ Vesta Launcher is a Minecraft launcher built with **Tauri (Rust)** for the backe
 ### Backend (Rust/Tauri)
 - **Location:** `vesta-launcher/src-tauri`
 - **Service Model:** Logic is organized into "Managers" (e.g., `NotificationManager`, `TaskManager`) managed by Tauri's state.
-- **Database:** SQLite via `rusqlite`.
-  - **Pattern:** **SqlTable Trait**. Rust structs are the single source of truth for schemas.
-  - **Key File:** `src-tauri/src/utils/sqlite.rs` (SqlTable trait), `crates/piston-macros` (Derive macro).
-  - **Migrations:** Defined in `src-tauri/src/utils/migrations/definitions.rs`. Always add a new migration for schema changes; never edit old ones.
+- **Database:** SQLite via **Diesel ORM** (Primary) and **rusqlite** (Legacy/Specific).
+  - **Pattern:** Diesel schema in `src-tauri/src/schema.rs`. Structs in `src-tauri/src/models` and `utils/config`.
+  - **Connection:** Access via `get_vesta_conn()` and `get_config_conn()` in `utils::db`.
+  - **Migrations:** Managed via Diesel CLI. Located in `src-tauri/migrations/vesta` and `src-tauri/migrations/config`.
 - **Tasks:** `TaskManager` (`src-tauri/src/tasks/manager.rs`) handles async operations. Tasks implement the `Task` trait and report progress via notifications.
 
 ### Frontend (SolidJS)
 - **Location:** `vesta-launcher/src`
 - **Framework:** SolidJS with Vite.
 - **State Management:** Uses SolidJS `createSignal`, `createResource`, and `createStore`.
-- **Communication:**
-  - **Commands:** `invoke('command_name', { payload })` for actions.
-  - **Events:** `listen('core://event-name', callback)` for updates (e.g., notifications).
+- **Theming System:** 
+  - **Central Hub:** `src/themes/presets.ts`.
+  - **Mechanism:** `applyTheme` maps `ThemeConfig` to CSS variables on `:root`.
+  - **Sync:** Theme settings are stored in `AppConfig` and synced to the active `Account` profile.
+  - **Switching:** Changing the active account automatically applies that user's specific theme settings.
+
+### Communication
+- **Commands:** `invoke('command_name', { payload })` for actions.
+- **Events:** `listen('core://event-name', callback)` for updates (e.g., notifications, account-heads-updated).
 
 ## Key Workflows
 
@@ -30,15 +36,16 @@ Vesta Launcher is a Minecraft launcher built with **Tauri (Rust)** for the backe
 - **Backend Build:** `cargo build` in `src-tauri`.
 
 ### Database Changes
-1.  **Define Struct:** Add `#[derive(SqlTable)]` to your Rust struct.
-    ```rust
-    #[derive(Serialize, Deserialize, Debug, Clone, SqlTable)]
-    #[migration_version("0.5.0")]
-    #[migration_description("Description")]
-    pub struct MyTable { ... }
-    ```
-2.  **Create Migration:** Add a function in `src-tauri/src/utils/migrations/definitions.rs` using `MyTable::schema_sql()`.
-3.  **Register:** Add to `get_all_migrations()`.
+1.  **Generate Migration:** `diesel migration generate <name> --migration-dir migrations/<vesta|config>`
+2.  **Define SQL:** Edit `up.sql` and `down.sql`.
+3.  **Update Structs:** Update Rust structs and `schema.rs` (Diesel CLI usually updates `schema.rs` automatically on `migration run`).
+4.  **Run:** Migrations run automatically on app startup via `utils::db::run_migrations`.
+
+### Theming Details (Advanced)
+- **Fields:** `theme_id`, `theme_mode`, `theme_primary_hue`, `theme_style`, `theme_gradient_enabled`, `theme_border_width`, etc.
+- **Mapping:** `configToTheme` in `presets.ts` converts backend model to frontend `ThemeConfig`.
+- **Style Modes:** `glass` (translucent), `satin` (matte), `flat` (no backdrop filter), `bordered` (high contrast), `solid` (opaque).
+- **UUIDs:** Always use **normalized (no-dash)** UUIDs when referencing accounts in the backend or local cache.
 
 ### Notification System
 - **Pattern:** Use `client_key` to track and update notifications (e.g., progress bars).

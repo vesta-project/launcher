@@ -58,7 +58,10 @@ export interface ThemeConfig {
  */
 export interface AppThemeConfig {
 	theme_id: string;
+	theme_mode?: string;
 	theme_primary_hue: number;
+	theme_primary_sat?: number;
+	theme_primary_light?: number;
 	theme_style: StyleMode;
 	theme_gradient_enabled: boolean;
 	theme_gradient_angle?: number;

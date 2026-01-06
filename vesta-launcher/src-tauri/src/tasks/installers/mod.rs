@@ -1,3 +1,5 @@
+pub mod java;
+
 use anyhow::Result;
 use piston_lib::game::installer::install_instance;
 use piston_lib::game::installer::types::{

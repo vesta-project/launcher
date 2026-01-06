@@ -19,7 +19,7 @@ piston-lib = { path = "../../crates/piston-lib" }
 slug = "0.1"
 
 # Database - Diesel ORM
-diesel = { version = "2.1", features = ["sqlite", "r2d2"] }
+diesel = { version = "2.1", features = ["sqlite", "r2d2", "64-column-tables"] }
 diesel_migrations = { version = "2.1", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.26", features = ["bundled"] }
 
@@ -36,6 +36,7 @@ futures = "0.3"
 tauri-plugin-os = "2.3.2"
 tauri-plugin-log = "2.7.1"
 tauri-plugin-shell = "2.3.3"
+tauri-plugin-dialog = "2.3.1"
 tauri-plugin-deep-link = "2"
 
 anyhow = "1.0.100"

@@ -544,12 +544,13 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 												<h2>Instance Settings</h2>
 
 												<div class="settings-field">
-													<div class="form-row" style="align-items: flex-end;">
+													<div class="form-row" style="align-items: flex-start;">
 														<IconPicker
 															value={iconPath()}
 															onSelect={(icon) => setIconPath(icon)}
 															uploadedIcons={uploadedIcons()}
 															allowUpload={true}
+															showHint={true}
 														/>
 														<TextFieldRoot style="flex: 1">
 															<TextFieldLabel>Instance Name</TextFieldLabel>

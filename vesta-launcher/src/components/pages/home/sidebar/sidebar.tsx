@@ -118,12 +118,14 @@ function Sidebar(props: SidebarProps) {
 			<div class={"sidebar__root"}>
 				<div class={"sidebar__section"}>
 					<SidebarProfileButton
+						id={"profile-selector"}
 						tooltip_text={"Profile"}
 						open={accountMenuOpen()}
 						onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
 					/>
 					<div class={"sidebar__section actions"}>
 						<SidebarActionButton
+							id={"sidebar-new"}
 							tooltip_text={"New"}
 							onClick={() => openPage("/install")}
 						>
@@ -131,6 +133,7 @@ function Sidebar(props: SidebarProps) {
 						</SidebarActionButton>
 
 						<SidebarActionButton
+							id={"sidebar-explore"}
 							tooltip_text={"Explore"}
 							onClick={onExploreClicked}
 						>
@@ -178,6 +181,7 @@ function Sidebar(props: SidebarProps) {
 						</div>
 					</SidebarActionButton>
 					<SidebarActionButton
+						id={"sidebar-settings"}
 						tooltip_text={"Settings"}
 						onClick={() => openPage("/config")}
 					>

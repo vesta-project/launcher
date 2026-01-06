@@ -248,13 +248,25 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
     // Make a mutable copy so we can set defaults (game_directory) before inserting
     let mut inst = instance_data;
 
-    // Determine config data dir (use nested data folder when available)
+    // Get app config to check for custom instances directory
+    let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+
+    // Determine config data dir
     let app_config_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-    // Use app config root for instance folders: %APPDATA%/.VestaLauncher/instances
-    let data_dir = app_config_dir.clone();
 
-    // Compute a filesystem-safe slug and ensure uniqueness against existing instances
+    // Use custom directory if set, otherwise default to %APPDATA%/.VestaLauncher/instances
+    let instances_root = if let Some(ref dir) = config.default_game_dir {
+        if !dir.is_empty() && dir != "/" {
+            std::path::PathBuf::from(dir)
+        } else {
+            app_config_dir.join("instances")
+        }
+    } else {
+        app_config_dir.join("instances")
+    };
+
+    log::info!("[create_instance] Using instances root: {:?}", instances_root);
 
     // Fetch existing instance names and compute their slugs
     let existing_names: Vec<String> = instance
@@ -274,10 +286,7 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
     // Check for duplicate name (case-insensitive) and make it unique
     inst.name = crate::utils::instance_helpers::compute_unique_name(&inst.name, &seen_names);
 
-    // Also ensure that the on-disk path doesn't already exist
-    let instances_root = data_dir.join("instances");
-
-    // Use shared helper to compute unique slug (in case the name change wasn't enough)
+    // Fetch existing instance names and compute their slugs
     let slug = crate::utils::instance_helpers::compute_unique_slug(
         &inst.name,
         &seen_slugs,
@@ -394,9 +403,22 @@ pub fn update_instance(
 
     // If slug changes, compute unique slug against other instances and filesystem
     if old_slug != new_slug {
+        // Get app config to check for custom instances directory
+        let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+
         let app_config_dir = crate::utils::db_manager::get_app_config_dir()
             .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-        let instances_root = app_config_dir.join("instances");
+
+        // Use custom directory if set, otherwise default to %APPDATA%/.VestaLauncher/instances
+        let instances_root = if let Some(ref dir) = config.default_game_dir {
+            if !dir.is_empty() && dir != "/" {
+                std::path::PathBuf::from(dir)
+            } else {
+                app_config_dir.join("instances")
+            }
+        } else {
+            app_config_dir.join("instances")
+        };
 
         // Build set of seen slugs excluding current row
         let existing_instances: Vec<(i32, String)> = instance
@@ -631,7 +653,17 @@ pub async fn launch_instance(
     };
 
     // Derive game directory
-    let instances_root = data_dir.join("instances");
+    let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+    let instances_root = if let Some(ref dir) = config.default_game_dir {
+        if !dir.is_empty() && dir != "/" {
+            std::path::PathBuf::from(dir)
+        } else {
+            data_dir.join("instances")
+        }
+    } else {
+        data_dir.join("instances")
+    };
+
     let game_dir = instance_data.game_directory.clone().unwrap_or_else(|| {
         instances_root
             .join(&instance_id)

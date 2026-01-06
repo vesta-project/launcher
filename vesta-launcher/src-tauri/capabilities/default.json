@@ -29,6 +29,7 @@
 		"os:allow-os-type",
 		"log:default",
 		"shell:default",
+		"dialog:default",
 		"deep-link:default"
 	]
 }
