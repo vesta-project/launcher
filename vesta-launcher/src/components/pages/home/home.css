@@ -27,16 +27,16 @@
 		display: flex;
 
 		& > .instance-container {
-			width: 200vw;
+			width: 100%;
 			height: fit-content;
 			display: grid;
-			grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+			grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 			grid-auto-columns: auto;
 			justify-items: center;
 			grid-auto-rows: auto;
 			justify-content: flex-start;
-			grid-gap: clamp(5vh, 10vw, 30px);
-			padding: clamp(6vh, 5vw, 50px) clamp(5vw, 6vh, 50px);
+			grid-gap: 20px;
+			padding: 40px;
 			transition: grid-template-columns 0.5s ease-in-out;
 		}
 	}

@@ -1,10 +1,6 @@
-# Diesel Configuration
-# For documentation, see diesel.rs/guides/configuring-diesel-cli
-
 [print_schema]
 file = "src/schema/vesta.rs"
 custom_type_derives = ["diesel::query_builder::QueryId"]
 
 [migrations_directory]
 dir = "migrations/vesta"
-

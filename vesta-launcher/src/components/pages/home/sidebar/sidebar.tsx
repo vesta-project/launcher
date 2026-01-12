@@ -53,8 +53,8 @@ function Sidebar(props: SidebarProps) {
 		props.setPageViewerOpen(true);
 	};
 
-	const onExploreClicked = async () => {
-		await invoke("test_command");
+	const onExploreClicked = () => {
+		openPage("/resources");
 	};
 
 	// Check for notification counts and active tasks - refetch when trigger changes

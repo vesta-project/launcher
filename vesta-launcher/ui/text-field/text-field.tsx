@@ -83,6 +83,21 @@ function TextFieldErrorMessage<T extends ValidComponent = "div">(
 	);
 }
 
+export type TextFieldProps = TextFieldPrimitive.TextFieldRootProps & {
+	placeholder?: string;
+	onInput?: (e: any) => void;
+	class?: string;
+};
+
+export function TextField(props: TextFieldProps) {
+	const [local, rest] = splitProps(props, ["placeholder", "onInput", "class"]);
+	return (
+		<TextFieldRoot class={local.class} {...rest}>
+			<TextFieldInput placeholder={local.placeholder} onInput={local.onInput} />
+		</TextFieldRoot>
+	);
+}
+
 export {
 	TextFieldRoot,
 	TextFieldInput,

@@ -236,10 +236,10 @@ function InstallPage(props: InstallPageProps) {
 			// Create instance data
 			const instanceData: CreateInstanceData = {
 				name,
-				minecraft_version: version,
+				minecraftVersion: version,
 				modloader: selectedModloader() || "vanilla",
-				modloader_version: selectedModloaderVersion() || undefined,
-				icon_path: iconPath() || undefined,
+				modloaderVersion: selectedModloaderVersion() || undefined,
+				iconPath: iconPath() || undefined,
 			};
 
 			// Create instance in database
@@ -249,20 +249,20 @@ function InstallPage(props: InstallPageProps) {
 			const fullInstance: Instance = {
 				id: instanceId,
 				name,
-				minecraft_version: version,
+				minecraftVersion: version,
 				modloader: selectedModloader() || "vanilla",
-				modloader_version: selectedModloaderVersion() || null,
-				java_path: null,
-				java_args: javaArgs() || null,
-				game_directory: null,
+				modloaderVersion: selectedModloaderVersion() || null,
+				javaPath: null,
+				javaArgs: javaArgs() || null,
+				gameDirectory: null,
 				width: parseInt(resolutionWidth()) || 854,
 				height: parseInt(resolutionHeight()) || 480,
-				memory_mb: memory()[0],
-				icon_path: iconPath(),
-				last_played: null,
-				total_playtime_minutes: 0,
-				created_at: null,
-				updated_at: null,
+				memoryMb: memory()[0],
+				iconPath: iconPath(),
+				lastPlayed: null,
+				totalPlaytimeMinutes: 0,
+				createdAt: null,
+				updatedAt: null,
 			};
 
 			// Close mini-router immediately when installation begins

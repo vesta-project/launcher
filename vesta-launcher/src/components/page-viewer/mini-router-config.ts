@@ -4,6 +4,8 @@ import FileDropPage from "@components/pages/mini-pages/file-drop/file-drop-page"
 import InstallPage from "@components/pages/mini-pages/install/install-page";
 import InstanceDetailsPage from "@components/pages/mini-pages/instance-details/instance-details";
 import LoginPage from "@components/pages/mini-pages/login/login-page";
+import ResourceBrowser from "@components/pages/mini-pages/resources/resource-browser";
+import ResourceDetailsPage from "@components/pages/mini-pages/resources/resource-details";
 import SettingsPage from "@components/pages/mini-pages/settings/settings-page";
 import TaskTestPage from "@components/pages/mini-pages/task-test/task-test-page";
 import NotificationTestPage from "@components/pages/notification-test/notification-test";
@@ -15,6 +17,8 @@ export const miniRouterPaths = {
 	...CreateMiniRouterPath("/instance", InstanceDetailsPage, "Instance Details"),
 	...CreateMiniRouterPath("/file-drop", FileDropPage, "File Drop"),
 	...CreateMiniRouterPath("/login", LoginPage, "Sign In"),
+	...CreateMiniRouterPath("/resources", ResourceBrowser, "Resource Browser"),
+	...CreateMiniRouterPath("/resource-details", ResourceDetailsPage, "Resource Details"),
 	...CreateMiniRouterPath(
 		"/notification-test",
 		NotificationTestPage,

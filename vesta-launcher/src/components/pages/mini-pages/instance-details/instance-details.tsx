@@ -24,6 +24,7 @@ import {
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { resources } from "@stores/resources";
 import {
 	DEFAULT_ICONS,
 	getInstanceBySlug,
@@ -124,9 +125,9 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		const inst = instance();
 		if (inst) {
 			setName(inst.name);
-			setIconPath(inst.icon_path);
-			setJavaArgs(inst.java_args ?? "");
-			setMemoryMb([inst.memory_mb ?? 2048]);
+			setIconPath(inst.iconPath);
+			setJavaArgs(inst.javaArgs ?? "");
+			setMemoryMb([inst.memoryMb ?? 2048]);
 		}
 	});
 
@@ -276,9 +277,9 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		try {
 			const fresh = await getInstanceBySlug(slug());
 			fresh.name = name();
-			fresh.icon_path = iconPath();
-			fresh.java_args = javaArgs() || null;
-			fresh.memory_mb = memoryMb()[0];
+			fresh.iconPath = iconPath();
+			fresh.javaArgs = javaArgs() || null;
+			fresh.memoryMb = memoryMb()[0];
 			await updateInstance(fresh);
 			await refetch();
 		} catch (e) {
@@ -361,13 +362,13 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 										<div
 											class="instance-header-image"
 											style={
-												(inst().icon_path || "").startsWith("linear-gradient")
+												(inst().iconPath || "").startsWith("linear-gradient")
 													? {
-															// biome-ignore lint/style/noNonNullAssertion: icon_path is confirmed to be a gradient string above
-															background: inst().icon_path!,
+															// biome-ignore lint/style/noNonNullAssertion: iconPath is confirmed to be a gradient string above
+															background: inst().iconPath!,
 														}
 													: {
-															"background-image": `url('${inst().icon_path || DEFAULT_ICONS[0]}')`,
+															"background-image": `url('${inst().iconPath || DEFAULT_ICONS[0]}')`,
 														}
 											}
 										/>
@@ -376,7 +377,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 												<h1>{inst().name}</h1>
 												<p class="meta-row">
 													<span class="meta-label">Version:</span>{" "}
-													{inst().minecraft_version}
+													{inst().minecraftVersion}
 													{inst().modloader &&
 														inst().modloader !== "vanilla" && (
 															<span class="modloader-badge">
@@ -387,17 +388,17 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 												<Show when={activeTab() === "home"}>
 													<p class="meta-row">
 														<span class="meta-label">Created:</span>{" "}
-														{inst().created_at
+														{inst().createdAt
 															? new Date(
-																	inst().created_at as string,
+																	inst().createdAt as string,
 																).toLocaleDateString()
 															: "—"}
 													</p>
 													<p class="meta-row">
 														<span class="meta-label">Last Played:</span>{" "}
-														{inst().last_played
+														{inst().lastPlayed
 															? new Date(
-																	inst().last_played as string,
+																	inst().lastPlayed as string,
 																).toLocaleDateString()
 															: "Never"}
 													</p>
@@ -441,7 +442,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 													<div class="info-item">
 														<span class="info-label">Minecraft Version</span>
 														<span class="info-value">
-															{inst().minecraft_version}
+															{inst().minecraftVersion}
 														</span>
 													</div>
 													<div class="info-item">
@@ -453,25 +454,25 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 													<div class="info-item">
 														<span class="info-label">Modloader Version</span>
 														<span class="info-value">
-															{inst().modloader_version || "—"}
+															{inst().modloaderVersion || "—"}
 														</span>
 													</div>
 													<div class="info-item">
 														<span class="info-label">Memory</span>
 														<span class="info-value">
-															{inst().memory_mb} MB
+															{inst().memoryMb} MB
 														</span>
 													</div>
 													<div class="info-item">
 														<span class="info-label">Total Playtime</span>
 														<span class="info-value">
-															{inst().total_playtime_minutes} minutes
+															{inst().totalPlaytimeMinutes ?? 0} minutes
 														</span>
 													</div>
 													<div class="info-item">
 														<span class="info-label">Installation Status</span>
-														<span class="info-value">
-															{inst().installation_status || "Unknown"}
+														<span class="info-value" style={{ "text-transform": "capitalize" }}>
+															{inst().installationStatus || "Unknown"}
 														</span>
 													</div>
 												</div>
@@ -525,10 +526,28 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 									<Show when={activeTab() === "mods"}>
 										<section class="tab-mods">
 											<h2>Mods</h2>
-											<p class="placeholder-text">
-												Mod management is coming soon. You'll be able to browse,
-												install, and manage mods for this instance here.
-											</p>
+											<div class="mods-actions-header">
+												<p>Manage mods for this instance.</p>
+												<LauncherButton 
+													size="sm"
+													onClick={() => {
+														const inst = instance();
+														if (inst) {
+															resources.setInstance(inst.id);
+															resources.setGameVersion(inst.minecraftVersion);
+															resources.setLoader(inst.modloader);
+															router()?.navigate("/resources");
+														}
+													}}
+												>
+													Browse Resources
+												</LauncherButton>
+											</div>
+											<div class="mods-list-placeholder">
+												<p class="placeholder-text">
+													Installed mods list is coming soon. Use the browser to find and install new mods.
+												</p>
+											</div>
 										</section>
 									</Show>
 

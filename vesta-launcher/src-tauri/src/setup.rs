@@ -186,6 +186,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize MetadataCache (in-memory fast path for manifest)
     app.manage(MetadataCache::new());
 
+    // Initialize ResourceManager for external resources (Modrinth, CurseForge)
+    app.manage(crate::resources::ResourceManager::new());
+
     // Reattach to already-running processes on startup
     {
         let app_handle = app.handle().clone();

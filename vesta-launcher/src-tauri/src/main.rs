@@ -6,6 +6,7 @@ mod commands;
 mod metadata_cache;
 pub mod models;
 mod notifications;
+pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod setup;
 mod tasks;
@@ -99,7 +100,11 @@ fn main() {
             commands::onboarding::complete_onboarding,
             commands::onboarding::reset_onboarding,
             commands::onboarding::set_setup_step,
-            commands::onboarding::download_managed_java
+            commands::onboarding::download_managed_java,
+            commands::resources::search_resources,
+            commands::resources::get_resource_project,
+            commands::resources::get_resource_versions,
+            commands::resources::install_resource,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

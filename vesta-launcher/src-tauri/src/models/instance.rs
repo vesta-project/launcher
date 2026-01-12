@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 )]
 #[diesel(table_name = instance)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
+#[serde(rename_all = "camelCase")]
 pub struct Instance {
     pub id: i32,
     pub name: String,
@@ -37,6 +38,7 @@ pub struct Instance {
 /// New instance (without id for insertion)
 #[derive(Insertable, Serialize, Deserialize, Debug, Clone)]
 #[diesel(table_name = instance)]
+#[serde(rename_all = "camelCase")]
 pub struct NewInstance {
     pub name: String,
     pub minecraft_version: String,

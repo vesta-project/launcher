@@ -33,41 +33,41 @@ export const DEFAULT_ICONS = [
 export interface Instance {
 	id: number;
 	name: string;
-	minecraft_version: string;
+	minecraftVersion: string;
 	modloader: string | null;
-	modloader_version: string | null;
-	java_path: string | null;
-	java_args: string | null;
-	game_directory: string | null;
+	modloaderVersion: string | null;
+	javaPath: string | null;
+	javaArgs: string | null;
+	gameDirectory: string | null;
 	width: number;
 	height: number;
-	memory_mb: number;
-	icon_path: string | null;
-	last_played: string | null;
-	total_playtime_minutes: number;
-	created_at: string | null;
-	updated_at: string | null;
+	memoryMb: number;
+	iconPath: string | null;
+	lastPlayed: string | null;
+	totalPlaytimeMinutes: number;
+	createdAt: string | null;
+	updatedAt: string | null;
 	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
-	installation_status?:
+	installationStatus?:
 		| "pending"
 		| "installing"
 		| "installed"
 		| "failed"
 		| null;
 	crashed?: boolean;
-	crash_details?: string | null;
+	crashDetails?: string | null;
 }
 
 // Simplified version for creating new instances
 export interface CreateInstanceData {
 	name: string;
-	minecraft_version: string;
+	minecraftVersion: string;
 	modloader?: string;
-	modloader_version?: string;
+	modloaderVersion?: string;
 	width?: number;
 	height?: number;
-	memory_mb?: number;
-	icon_path?: string;
+	memoryMb?: number;
+	iconPath?: string;
 }
 
 // Metadata types from piston-lib

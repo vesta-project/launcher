@@ -14,11 +14,11 @@ diesel::table! {
         cape_url -> Nullable<Text>,
         created_at -> Nullable<Text>,
         updated_at -> Nullable<Text>,
-        theme_id -> Nullable<Text>,
         theme_mode -> Nullable<Text>,
-        theme_primary_hue -> Nullable<Integer>,
         theme_primary_sat -> Nullable<Integer>,
         theme_primary_light -> Nullable<Integer>,
+        theme_id -> Nullable<Text>,
+        theme_primary_hue -> Nullable<Integer>,
         theme_style -> Nullable<Text>,
         theme_gradient_enabled -> Nullable<Bool>,
         theme_gradient_angle -> Nullable<Integer>,
@@ -30,49 +30,19 @@ diesel::table! {
 }
 
 diesel::table! {
-    app_config (id) {
-        id -> Integer,
-        background_hue -> Integer,
-        theme -> Text,
-        language -> Text,
-        max_download_threads -> Integer,
-        max_memory_mb -> Integer,
-        java_path -> Nullable<Text>,
-        default_game_dir -> Nullable<Text>,
-        auto_update_enabled -> Bool,
-        notification_enabled -> Bool,
-        startup_check_updates -> Bool,
-        show_tray_icon -> Bool,
-        minimize_to_tray -> Bool,
-        reduced_motion -> Bool,
-        last_window_width -> Integer,
-        last_window_height -> Integer,
-        debug_logging -> Bool,
-        notification_retention_days -> Integer,
-        active_account_uuid -> Nullable<Text>,
-        theme_id -> Text,
-        theme_mode -> Text,
-        theme_primary_hue -> Integer,
-        theme_primary_sat -> Nullable<Integer>,
-        theme_primary_light -> Nullable<Integer>,
-        theme_style -> Text,
-        theme_gradient_enabled -> Bool,
-        theme_gradient_angle -> Nullable<Integer>,
-        theme_gradient_harmony -> Nullable<Text>,
-        theme_advanced_overrides -> Nullable<Text>,
-        theme_gradient_type -> Nullable<Text>,
-        theme_border_width -> Nullable<Integer>,
-        setup_completed -> Bool,
-        setup_step -> Integer,
-        tutorial_completed -> Bool,
-    }
-}
-
-diesel::table! {
-    global_java_paths (major_version) {
-        major_version -> Integer,
-        path -> Text,
-        is_managed -> Bool,
+    installed_resource (id) {
+        id -> Nullable<Integer>,
+        instance_id -> Integer,
+        platform -> Text,
+        remote_id -> Text,
+        remote_version_id -> Text,
+        resource_type -> Text,
+        local_path -> Text,
+        display_name -> Text,
+        current_version -> Text,
+        is_manual -> Bool,
+        is_enabled -> Bool,
+        last_updated -> Timestamp,
     }
 }
 
@@ -147,11 +117,9 @@ diesel::table! {
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
-    app_config,
-    global_java_paths,
+    installed_resource,
     instance,
     notification,
     task_state,
     user_version_tracking,
 );
-

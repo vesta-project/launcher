@@ -100,21 +100,21 @@ export default function InstanceCard(props: InstanceCardProps) {
 						getInstanceSlug({
 							id: 0,
 							name: payload.name,
-							minecraft_version: "",
+							minecraftVersion: "",
 							modloader: null,
-							modloader_version: null,
-							java_path: null,
-							java_args: null,
-							game_directory: null,
+							modloaderVersion: null,
+							javaPath: null,
+							javaArgs: null,
+							gameDirectory: null,
 							width: 0,
 							height: 0,
-							memory_mb: 0,
-							icon_path: null,
-							last_played: null,
-							total_playtime_minutes: 0,
-							created_at: null,
-							updated_at: null,
-							installation_status: null,
+							memoryMb: 0,
+							iconPath: null,
+							lastPlayed: null,
+							totalPlaytimeMinutes: 0,
+							createdAt: null,
+							updatedAt: null,
+							installationStatus: null,
 						});
 					setRunningIds((prev) => new Set(prev).add(id));
 				}),
@@ -130,21 +130,21 @@ export default function InstanceCard(props: InstanceCardProps) {
 						getInstanceSlug({
 							id: 0,
 							name: payload.name,
-							minecraft_version: "",
+							minecraftVersion: "",
 							modloader: null,
-							modloader_version: null,
-							java_path: null,
-							java_args: null,
-							game_directory: null,
+							modloaderVersion: null,
+							javaPath: null,
+							javaArgs: null,
+							gameDirectory: null,
 							width: 0,
 							height: 0,
-							memory_mb: 0,
-							icon_path: null,
-							last_played: null,
-							total_playtime_minutes: 0,
-							created_at: null,
-							updated_at: null,
-							installation_status: null,
+							memoryMb: 0,
+							iconPath: null,
+							lastPlayed: null,
+							totalPlaytimeMinutes: 0,
+							createdAt: null,
+							updatedAt: null,
+							installationStatus: null,
 						});
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
@@ -205,13 +205,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	// Installation status checks
 	const isInstalling = () =>
-		props.instance.installation_status === "installing";
-	const isInstalled = () => props.instance.installation_status === "installed";
-	const isFailed = () => props.instance.installation_status === "failed";
+		props.instance.installationStatus === "installing";
+	const isInstalled = () => props.instance.installationStatus === "installed";
+	const isFailed = () => props.instance.installationStatus === "failed";
 	const needsInstallation = () =>
-		!props.instance.installation_status ||
-		props.instance.installation_status === "pending" ||
-		props.instance.installation_status === "failed";
+		!props.instance.installationStatus ||
+		props.instance.installationStatus === "pending" ||
+		props.instance.installationStatus === "failed";
 
 	const [busy, setBusy] = createSignal(false);
 
@@ -314,7 +314,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	// Handler for context-menu Reinstall action
 	const handleReinstall = async () => {
 		if (busy()) return;
-		const confirmReinstall = window.confirm(
+		const confirmReinstall = await window.confirm(
 			`Reinstall instance \"${props.instance.name}\"? This will re-run the installer.`,
 		);
 		if (!confirmReinstall) return;
@@ -339,7 +339,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setBusy(false);
 	};
 
-	console.log("eee Path: ", props.instance.icon_path);
+	console.log("eee Path: ", props.instance.iconPath);
 
 	return (
 		<ContextMenu>
@@ -357,13 +357,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 				}}
 				onClick={openInstanceDetails}
 				style={
-					(props.instance.icon_path || "").startsWith("linear-gradient")
+					(props.instance.iconPath || "").startsWith("linear-gradient")
 						? {
-								// biome-ignore lint/style/noNonNullAssertion: icon_path is confirmed to be a gradient string above
-								background: props.instance.icon_path!,
+								// biome-ignore lint/style/noNonNullAssertion: iconPath is confirmed to be a gradient string above
+								background: props.instance.iconPath!,
 							}
 						: {
-								"background-image": `url('${props.instance.icon_path || DEFAULT_ICONS[0]}')`,
+								"background-image": `url('${props.instance.iconPath || DEFAULT_ICONS[0]}')`,
 							}
 				}
 				data-instance={instanceSlug}
@@ -455,7 +455,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div class="instance-card-bottom">
 							<h1>{props.instance.name}</h1>
 							<div class="instance-card-bottom-version">
-								<p>{props.instance.minecraft_version}</p>
+								<p>{props.instance.minecraftVersion}</p>
 								<div class="instance-card-bottom-version-modloader">
 									<Switch fallback="">
 										<Match when={props.instance.modloader === "forge"}>
