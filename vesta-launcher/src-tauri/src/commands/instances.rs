@@ -745,6 +745,7 @@ pub async fn launch_instance(
             .as_ref()
             .and_then(|a| a.access_token.clone())
             .unwrap_or_else(|| "0".to_string()),
+        xuid: None,
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
         jvm_args: instance_data

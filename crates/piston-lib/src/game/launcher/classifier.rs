@@ -75,6 +75,7 @@ pub(crate) fn resolve_classifier_string<T>(
 
 /// Find a classifier JAR on disk for a library and OS by scanning possible candidates.
 /// Returns (classifier_string, path_to_jar) if found.
+#[allow(dead_code)]
 pub(crate) fn find_classifier_jar_on_disk<T>(
     lib_name: &str,
     natives: Option<&std::collections::HashMap<String, String>>,
@@ -133,6 +134,7 @@ pub(crate) fn find_classifier_jar_on_disk<T>(
 }
 
 /// Determine whether a given library has native artifacts for the supplied OS name
+#[allow(dead_code)]
 pub(crate) fn library_has_natives_for_os(
     library: &crate::game::launcher::version_parser::Library,
     os_name: &str,

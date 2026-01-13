@@ -29,6 +29,7 @@ struct CFModResponse {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct CFMod {
     id: u32,
     name: String,
@@ -42,6 +43,7 @@ struct CFMod {
     class_id: Option<u32>,
     screenshots: Option<Vec<CFScreenshot>>,
     date_created: String,
+    date_modified: String,
 }
 
 #[derive(Deserialize)]
@@ -73,6 +75,7 @@ struct CFCategory {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[allow(dead_code)]
 struct CFPagination {
     index: u32,
     page_size: u32,
@@ -105,6 +108,23 @@ struct CFHash {
 #[derive(Deserialize)]
 struct CFDescriptionResponse {
     data: String,
+}
+
+#[derive(Deserialize)]
+struct CFFingerprintResponse {
+    data: CFFingerprintData,
+}
+
+#[derive(Deserialize)]
+struct CFFingerprintData {
+    #[serde(rename = "exactMatches")]
+    exact_matches: Vec<CFExactMatch>,
+}
+
+#[derive(Deserialize)]
+struct CFExactMatch {
+    id: u32,
+    file: CFFile,
 }
 
 impl CurseForgeSource {
@@ -203,10 +223,13 @@ impl ResourceSource for CurseForgeSource {
             icon_url: item.logo.map(|l| l.thumbnail_url),
             author: item.authors.first().map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
             download_count: item.download_count as u64,
+            follower_count: 0,
             categories: item.categories.into_iter().map(|c| c.name).collect(),
             web_url: item.links.website_url,
+            external_ids: None,
             screenshots: item.screenshots.unwrap_or_default().into_iter().map(|s| s.url).collect(),
             published_at: Some(item.date_created),
+            updated_at: Some(item.date_modified),
         }).collect();
 
         Ok(SearchResponse {
@@ -252,10 +275,13 @@ impl ResourceSource for CurseForgeSource {
             icon_url: item.logo.map(|l| l.thumbnail_url),
             author: item.authors.first().map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
             download_count: item.download_count as u64,
+            follower_count: 0,
             categories: item.categories.into_iter().map(|c| c.name).collect(),
             web_url: item.links.website_url,
+            external_ids: None,
             screenshots: item.screenshots.unwrap_or_default().into_iter().map(|s| s.url).collect(),
             published_at: Some(item.date_created),
+            updated_at: Some(item.date_modified),
         })
     }
 
@@ -303,6 +329,66 @@ impl ResourceSource for CurseForgeSource {
                 hash: sha1,
             }
         }).collect())
+    }
+
+    async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
+        let fingerprint = hash.parse::<u32>().map_err(|_| anyhow!("Invalid fingerprint: {}", hash))?;
+        
+        let url = "https://api.curseforge.com/v1/fingerprints";
+        let body = serde_json::json!({
+            "fingerprints": [fingerprint]
+        });
+
+        let response = self.client.post(url)
+            .json(&body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!("CurseForge fingerprint lookup failed ({}): {}", status, body));
+        }
+
+        let result: CFFingerprintResponse = response.json().await.map_err(|e| {
+            anyhow!("CurseForge fingerprint JSON decode error: {}. Hash: {}", e, hash)
+        })?;
+
+        let match_item = result.data.exact_matches.first()
+            .ok_or_else(|| anyhow!("No match found for fingerprint"))?;
+
+        let project = self.get_project(&match_item.id.to_string()).await?;
+        
+        // Map CFFile to ResourceVersion
+        let file = &match_item.file;
+        let sha1 = file.hashes.iter().find(|h| h.algo == 1).map(|h| h.value.clone()).unwrap_or_default();
+        let mut loaders = Vec::new();
+        let mut game_versions = Vec::new();
+        for v in &file.game_versions {
+            match v.to_lowercase().as_str() {
+                "forge" | "fabric" | "quilt" | "neoforge" => loaders.push(v.clone()),
+                _ => game_versions.push(v.clone()),
+            }
+        }
+
+        let version = ResourceVersion {
+            id: file.id.to_string(),
+            project_id: project.id.clone(),
+            version_number: file.display_name.clone(),
+            game_versions,
+            loaders,
+            download_url: file.download_url.clone().unwrap_or_default(),
+            file_name: file.file_name.clone(),
+            release_type: match file.release_type {
+                1 => ReleaseType::Release,
+                2 => ReleaseType::Beta,
+                3 => ReleaseType::Alpha,
+                _ => ReleaseType::Release,
+            },
+            hash: sha1,
+        };
+
+        Ok((project, version))
     }
 
     fn platform(&self) -> SourcePlatform {

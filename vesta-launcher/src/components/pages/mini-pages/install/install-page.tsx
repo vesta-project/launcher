@@ -351,9 +351,7 @@ function InstallPage(props: InstallPageProps) {
 									<TextFieldInput
 										placeholder="My Awesome Instance"
 										value={instanceName()}
-										onInput={(
-											e: Event & { currentTarget: HTMLInputElement },
-										) => {
+										onInput={(e: any) => {
 											setInstanceName(e.currentTarget.value);
 										}}
 									/>

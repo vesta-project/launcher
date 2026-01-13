@@ -95,6 +95,8 @@ impl Task for ResourceDownloadTask {
 
             let total_size = response.content_length().unwrap_or(0);
             let mut downloaded: u64 = 0;
+            let mut last_update = std::time::Instant::now();
+            let mut last_downloaded: u64 = 0;
             
             let temp_file_path = target_dir.join(format!("{}.tmp", version.file_name));
             let mut file = fs::File::create(&temp_file_path).await.map_err(|e| e.to_string())?;
@@ -109,9 +111,31 @@ impl Task for ResourceDownloadTask {
                 file.write_all(&chunk).await.map_err(|e| e.to_string())?;
                 downloaded += chunk.len() as u64;
 
-                if total_size > 0 {
-                    let percent = (downloaded as f64 / total_size as f64 * 100.0) as i32;
-                    let _ = manager.update_progress(notification_id.clone(), percent, None, None);
+                let now = std::time::Instant::now();
+                if now.duration_since(last_update).as_millis() > 500 {
+                    let elapsed = now.duration_since(last_update).as_secs_f64();
+                    let speed = (downloaded - last_downloaded) as f64 / elapsed; // bytes/sec
+                    
+                    let speed_fmt = if speed > 1024.0 * 1024.0 {
+                        format!("{:.2} MB/s", speed / (1024.0 * 1024.0))
+                    } else {
+                        format!("{:.2} KB/s", speed / 1024.0)
+                    };
+
+                    let downloaded_fmt = format!("{:.1} MB", downloaded as f64 / (1024.0 * 1024.0));
+                    let total_fmt = format!("{:.1} MB", total_size as f64 / (1024.0 * 1024.0));
+
+                    if total_size > 0 {
+                        let percent = (downloaded as f64 / total_size as f64 * 100.0) as i32;
+                        let desc = format!("{} / {} ({})", downloaded_fmt, total_fmt, speed_fmt);
+                        let _ = manager.update_progress_with_description(notification_id.clone(), percent, None, None, desc);
+                    } else {
+                        let desc = format!("{} units downloaded ({})", downloaded, speed_fmt);
+                        let _ = manager.update_progress_with_description(notification_id.clone(), -1, None, None, desc);
+                    }
+
+                    last_update = now;
+                    last_downloaded = downloaded;
                 }
             }
 
@@ -123,6 +147,7 @@ impl Task for ResourceDownloadTask {
 
             // 5. Finalize file placement
             let final_path = target_dir.join(&version.file_name);
+            let final_path_str = final_path.to_string_lossy().to_string();
             
             // Handle existing file (Check if it's the same or different)
             if final_path.exists() {
@@ -145,25 +170,52 @@ impl Task for ResourceDownloadTask {
                 ResourceType::Modpack => "modpack",
             };
 
-            let new_installed = InstalledResource {
-                id: None,
-                instance_id,
-                platform: platform_str.to_string(),
-                remote_id: project_id,
-                remote_version_id: version.id,
-                resource_type: res_type_str.to_string(),
-                local_path: version.file_name,
-                display_name: project_name,
-                current_version: version.version_number,
-                is_manual: false,
-                is_enabled: true,
-                last_updated: Utc::now().naive_utc(),
-            };
+            // Check for existing entry with same remote_id for this instance
+            let existing_id = installed_dsl::installed_resource
+                .filter(installed_dsl::instance_id.eq(instance_id))
+                .filter(installed_dsl::remote_id.eq(&project_id))
+                .select(installed_dsl::id)
+                .first::<Option<i32>>(&mut conn)
+                .optional()
+                .map_err(|e| e.to_string())?
+                .flatten();
 
-            diesel::insert_into(installed_dsl::installed_resource)
-                .values(&new_installed)
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
+            if let Some(eid) = existing_id {
+                diesel::update(installed_dsl::installed_resource.filter(installed_dsl::id.eq(eid)))
+                    .set((
+                        installed_dsl::platform.eq(platform_str),
+                        installed_dsl::remote_version_id.eq(&version.id),
+                        installed_dsl::resource_type.eq(res_type_str),
+                        installed_dsl::local_path.eq(&final_path_str),
+                        installed_dsl::display_name.eq(&project_name),
+                        installed_dsl::current_version.eq(&version.version_number),
+                        installed_dsl::is_manual.eq(false),
+                        installed_dsl::is_enabled.eq(true),
+                        installed_dsl::last_updated.eq(Utc::now().naive_utc()),
+                    ))
+                    .execute(&mut conn)
+                    .map_err(|e| e.to_string())?;
+            } else {
+                let new_installed = InstalledResource {
+                    id: None,
+                    instance_id,
+                    platform: platform_str.to_string(),
+                    remote_id: project_id,
+                    remote_version_id: version.id,
+                    resource_type: res_type_str.to_string(),
+                    local_path: final_path_str,
+                    display_name: project_name,
+                    current_version: version.version_number,
+                    is_manual: false,
+                    is_enabled: true,
+                    last_updated: Utc::now().naive_utc(),
+                };
+
+                diesel::insert_into(installed_dsl::installed_resource)
+                    .values(&new_installed)
+                    .execute(&mut conn)
+                    .map_err(|e| e.to_string())?;
+            }
 
             // 7. Handle dependencies (Special case for Shaders)
             if resource_type == ResourceType::Shader {

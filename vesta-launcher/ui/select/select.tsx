@@ -55,7 +55,7 @@ const SelectContent = <T extends ValidComponent = "div">(
                 {...others}
             >
                 <SelectPrimitive.Listbox class="select__listbox">
-                    {local.children}
+                    {local.children as any}
                 </SelectPrimitive.Listbox>
             </SelectPrimitive.Content>
         </SelectPrimitive.Portal>

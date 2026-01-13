@@ -3,10 +3,11 @@ use crate::game::installer::types::OsType;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
     classpath::{build_classpath, validate_classpath},
+    natives::extract_natives,
     registry::register_instance,
     types::{GameInstance, LaunchResult, LaunchSpec},
     version_parser::resolve_version_chain,
-    unified_manifest::UnifiedManifest,
+    unified_manifest::{UnifiedManifest},
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -119,7 +120,7 @@ pub async fn launch_game(
         .join(&installed_id)
         .join(format!("{}.json", installed_id));
 
-    let manifest = if manifest_path.exists() {
+    let mut manifest = if manifest_path.exists() {
         UnifiedManifest::load_from_path(&manifest_path)?
     } else {
         let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
@@ -131,6 +132,28 @@ pub async fn launch_game(
         UnifiedManifest::from(v)
     };
 
+    // Auto-repair: If manifest claims no natives, but they likely exist (stale cache), try re-resolving
+    if !manifest.has_natives() {
+        log::warn!("Manifest loaded from cache has no natives - checking if this is due to stale cache");
+        
+        let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
+            .await
+            .context(format!(
+                "Failed to resolve version chain for {}",
+                spec.version_id
+            ))?;
+        let fresh_manifest = UnifiedManifest::from(v);
+        
+        if fresh_manifest.has_natives() {
+            log::info!("Stale manifest detected! Replaced with fresh manifest containing natives.");
+            manifest = fresh_manifest;
+            // Optionally save the new manifest back to disk?
+            // For now, let's just use it in memory, it will fix the launch.
+        } else {
+            log::info!("Verified: This version matches expectations (no natives found in fresh resolve either).");
+        }
+    }
+
     // 2. Verify Java installation
     verify_java(&spec.java_path).context("Java verification failed")?;
 
@@ -139,9 +162,15 @@ pub async fn launch_game(
     // Natives are shared per version, not per instance - use spec.natives_dir()
     let natives_dir = spec.natives_dir();
     
-    // Convert UnifiedLibrary to Library for extract_natives (or update extract_natives)
-    // For now, let's just map them back or update extract_natives.
-    // Actually, let's update extract_natives to take UnifiedLibrary.
+    // Perform extraction
+    extract_natives(
+        &manifest.libraries,
+        &spec.libraries_dir(),
+        &natives_dir,
+        OsType::current(),
+    )
+    .await
+    .context("Failed to extract native libraries")?;
 
     // Quick runtime verification: ensure some native libraries were actually
     // extracted into the natives dir (DLL/.so/.dylib) so the render system

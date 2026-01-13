@@ -1,7 +1,7 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import LauncherButton from "@ui/button/button";
+import Button from "@ui/button/button";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
 	Popover,
@@ -23,6 +23,11 @@ import {
 	TextFieldLabel,
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
+import {
+	Switch,
+	SwitchControl,
+	SwitchThumb,
+} from "@ui/switch/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resources } from "@stores/resources";
 import {
@@ -41,9 +46,19 @@ import {
 	onCleanup,
 	onMount,
 	Show,
+	createMemo,
 } from "solid-js";
+import {
+	createColumnHelper,
+	createSolidTable,
+	flexRender,
+	getCoreRowModel,
+	getSortedRowModel,
+	getFilteredRowModel,
+} from "@tanstack/solid-table";
 import "./instance-details.css";
-import Button from "@ui/button/button";
+import { type InstalledResource } from "@stores/resources";
+import { formatDate } from "@utils/date";
 
 type TabType = "home" | "console" | "mods" | "settings";
 
@@ -64,6 +79,11 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	const [instance, { refetch }] = createResource(slug, async (s) => {
 		if (!s) return undefined;
 		return await getInstanceBySlug(s);
+	});
+
+	const [installedResources, { refetch: refetchResources }] = createResource(instance, async (inst) => {
+		if (!inst) return [];
+		return await resources.getInstalled(inst.id);
 	});
 
 	// Register refetch callback with router so reload button can trigger it
@@ -89,6 +109,10 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	// Console state
 	const [lines, setLines] = createSignal<string[]>([]);
 	let consoleRef: HTMLDivElement | undefined;
+
+	// Mods Tab State
+	const [resourceTypeFilter, setResourceTypeFilter] = createSignal<string>("All");
+	const [resourceSearch, setResourceSearch] = createSignal("");
 
 	// Settings form state
 	const [name, setName] = createSignal<string>("");
@@ -129,6 +153,130 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			setJavaArgs(inst.javaArgs ?? "");
 			setMemoryMb([inst.memoryMb ?? 2048]);
 		}
+	});
+
+	// TanStack Table setup for Mods
+	const columnHelper = createColumnHelper<InstalledResource>();
+
+	const columns = [
+		columnHelper.accessor("display_name", {
+			header: "Name",
+			cell: (info) => (
+				<div class="res-info-cell">
+					<span class="res-title">{info.getValue()}</span>
+					<span class="res-path">{info.row.original.local_path.split(/[\\/]/).pop()}</span>
+				</div>
+			),
+		}),
+		columnHelper.accessor("resource_type", {
+			header: "Type",
+			cell: (info) => (
+				<span class={`type-badge ${info.getValue().toLowerCase()}`}>
+					{info.getValue()}
+				</span>
+			),
+		}),
+		columnHelper.accessor("current_version", {
+			header: "Version",
+		}),
+		columnHelper.accessor("platform", {
+			header: "Source",
+			cell: (info) => <span class="capitalize">{info.getValue()}</span>,
+		}),
+		columnHelper.accessor("is_enabled", {
+			header: () => <div style="text-align: right">Enabled</div>,
+			cell: (info) => (
+				<div style="display: flex; justify-content: flex-end; width: 100%;">
+					<Switch
+						checked={info.getValue()}
+						onChange={async (enabled) => {
+							try {
+								await invoke("toggle_resource", {
+									resourceId: info.row.original.id,
+									enabled,
+								});
+								await refetchResources();
+							} catch (e) {
+								console.error("Failed to toggle resource:", e);
+							}
+						}}
+					>
+						<SwitchControl>
+							<SwitchThumb />
+						</SwitchControl>
+					</Switch>
+				</div>
+			),
+		}),
+		columnHelper.display({
+			id: "actions",
+			header: "",
+			cell: (info) => (
+				<div style="display: flex; justify-content: flex-end;">
+					<Button
+						variant="ghost"
+						size="icon"
+						onClick={async () => {
+							if (
+								confirm(
+									`Are you sure you want to delete ${info.row.original.display_name}? This will remove the file from your instance.`,
+								)
+							) {
+								try {
+									await invoke("delete_resource", {
+										instanceId: info.row.original.instance_id,
+										resourceId: info.row.original.id,
+									});
+									await refetchResources();
+								} catch (e) {
+									console.error("Failed to delete resource:", e);
+								}
+							}
+						}}
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<polyline points="3 6 5 6 21 6" />
+							<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+							<line x1="10" y1="11" x2="10" y2="17" />
+							<line x1="14" y1="11" x2="14" y2="17" />
+						</svg>
+					</Button>
+				</div>
+			),
+		}),
+	];
+
+	const filteredData = createMemo(() => {
+		const data = installedResources() || [];
+		return data.filter((res) => {
+			const matchesType =
+				resourceTypeFilter() === "All" ||
+				res.resource_type.toLowerCase() === resourceTypeFilter().toLowerCase();
+			const matchesSearch =
+				res.display_name.toLowerCase().includes(resourceSearch().toLowerCase()) ||
+				res.local_path.toLowerCase().includes(resourceSearch().toLowerCase());
+			return matchesType && matchesSearch;
+		});
+	});
+
+	const table = createSolidTable({
+		get data() {
+			return filteredData();
+		},
+		columns,
+		getCoreRowModel: getCoreRowModel(),
+		getSortedRowModel: getSortedRowModel(),
+		getFilteredRowModel: getFilteredRowModel(),
 	});
 
 	// Subscribe to console logs
@@ -228,8 +376,15 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			}
 		});
 
+		const unlistenResources = await listen("resources-updated", (event) => {
+			if (event.payload === instance()?.id) {
+				refetchResources();
+			}
+		});
+
 		onCleanup(() => {
 			unlisten();
+			unlistenResources();
 			unlistenLaunch();
 			unlistenKill();
 			unlistenExited();
@@ -354,74 +509,48 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 					<Show when={instance()}>
 						{(inst) => (
 							<>
-								<Show when={activeTab() !== "settings"}>
-									<header
-										class="instance-header"
-										classList={{ shrunk: activeTab() !== "home" }}
-									>
-										<div
-											class="instance-header-image"
-											style={
-												(inst().iconPath || "").startsWith("linear-gradient")
-													? {
-															// biome-ignore lint/style/noNonNullAssertion: iconPath is confirmed to be a gradient string above
-															background: inst().iconPath!,
-														}
-													: {
-															"background-image": `url('${inst().iconPath || DEFAULT_ICONS[0]}')`,
-														}
-											}
-										/>
-										<div class="instance-header-content">
-											<div class="instance-header-meta">
+								<header class="instance-details-header" classList={{ shrunk: activeTab() !== "home" }}>
+									<div class="header-background" 
+										style={{ 
+											"background-image": (inst().iconPath || "").startsWith("linear-gradient") 
+												? (inst().iconPath || "")
+												: `url('${inst().iconPath || DEFAULT_ICONS[0]}')`
+										}} 
+									/>
+									<div class="header-content">
+										<div class="header-main-info">
+											<div class="header-icon"
+												style={
+													(inst().iconPath || "").startsWith("linear-gradient")
+														? { background: inst().iconPath || "" }
+														: { "background-image": `url('${inst().iconPath || DEFAULT_ICONS[0]}')` }
+												}
+											/>
+											<div class="header-text">
 												<h1>{inst().name}</h1>
-												<p class="meta-row">
-													<span class="meta-label">Version:</span>{" "}
-													{inst().minecraftVersion}
-													{inst().modloader &&
-														inst().modloader !== "vanilla" && (
-															<span class="modloader-badge">
-																{inst().modloader}
-															</span>
-														)}
+												<p class="header-meta">
+													{inst().minecraftVersion} • {inst().modloader || "Vanilla"}
 												</p>
-												<Show when={activeTab() === "home"}>
-													<p class="meta-row">
-														<span class="meta-label">Created:</span>{" "}
-														{inst().createdAt
-															? new Date(
-																	inst().createdAt as string,
-																).toLocaleDateString()
-															: "—"}
-													</p>
-													<p class="meta-row">
-														<span class="meta-label">Last Played:</span>{" "}
-														{inst().lastPlayed
-															? new Date(
-																	inst().lastPlayed as string,
-																).toLocaleDateString()
-															: "Never"}
-													</p>
-												</Show>
-											</div>
-											<div class="instance-actions">
-												<LauncherButton
-													onClick={isRunning() ? handleKill : handlePlay}
-													disabled={busy()}
-													color={isRunning() ? "destructive" : "primary"}
-													variant="solid"
-													size={activeTab() === "home" ? "lg" : "md"}
-												>
-													{busy()
-														? "Working..."
-														: isRunning()
-															? "Kill Instance"
-															: "Play"}
-												</LauncherButton>
 											</div>
 										</div>
-									</header>{" "}
-								</Show>
+										<div class="header-actions">
+											<Button
+												onClick={isRunning() ? handleKill : handlePlay}
+												disabled={busy()}
+												color={isRunning() ? "destructive" : "primary"}
+												variant="solid"
+												size={activeTab() === "home" ? "lg" : "md"}
+												class="details-play-button"
+											>
+												<Show when={busy()}>
+													<span class="btn-spinner" />
+												</Show>
+												{isRunning() ? "Kill Instance" : "Play Now"}
+											</Button>
+										</div>
+									</div>
+								</header>
+
 								<div class="instance-tab-content">
 									<Show when={activeTab() === "home"}>
 										<Show when={instance.loading}>
@@ -433,47 +562,46 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 										</Show>
 										<Show when={!instance.loading}>
 											<section class="tab-home">
-												<h2>Overview</h2>
-												<div class="info-grid">
-													<div class="info-item">
-														<span class="info-label">Name</span>
-														<span class="info-value">{inst().name}</span>
+												<div class="home-grid">
+													<div class="summary-card">
+														<h3>Statistics</h3>
+														<div class="stat-row">
+															<span class="stat-label">Total Playtime</span>
+															<span class="stat-value">{inst().totalPlaytimeMinutes ?? 0} mins</span>
+														</div>
+														<div class="stat-row">
+															<span class="stat-label">Last Played</span>
+															<span class="stat-value">
+																{inst().lastPlayed ? formatDate(inst().lastPlayed as string) : "Never"}
+															</span>
+														</div>
+														<div class="stat-row">
+															<span class="stat-label">Created</span>
+															<span class="stat-value">
+																{inst().createdAt ? formatDate(inst().createdAt as string) : "—"}
+															</span>
+														</div>
 													</div>
-													<div class="info-item">
-														<span class="info-label">Minecraft Version</span>
-														<span class="info-value">
-															{inst().minecraftVersion}
-														</span>
+
+													<div class="summary-card">
+														<h3>Configuration</h3>
+														<div class="stat-row">
+															<span class="stat-label">Memory</span>
+															<span class="stat-value">{inst().memoryMb} MB</span>
+														</div>
+														<div class="stat-row">
+															<span class="stat-label">Resources</span>
+															<span class="stat-value">{(installedResources() || []).length} items</span>
+														</div>
+														<div class="stat-row">
+															<span class="stat-label">Status</span>
+															<span class="stat-value capitalize">{inst().installationStatus || "Unknown"}</span>
+														</div>
 													</div>
-													<div class="info-item">
-														<span class="info-label">Modloader</span>
-														<span class="info-value">
-															{inst().modloader || "Vanilla"}
-														</span>
-													</div>
-													<div class="info-item">
-														<span class="info-label">Modloader Version</span>
-														<span class="info-value">
-															{inst().modloaderVersion || "—"}
-														</span>
-													</div>
-													<div class="info-item">
-														<span class="info-label">Memory</span>
-														<span class="info-value">
-															{inst().memoryMb} MB
-														</span>
-													</div>
-													<div class="info-item">
-														<span class="info-label">Total Playtime</span>
-														<span class="info-value">
-															{inst().totalPlaytimeMinutes ?? 0} minutes
-														</span>
-													</div>
-													<div class="info-item">
-														<span class="info-label">Installation Status</span>
-														<span class="info-value" style={{ "text-transform": "capitalize" }}>
-															{inst().installationStatus || "Unknown"}
-														</span>
+
+													<div class="summary-card full-width">
+														<h3>Environment</h3>
+														<p class="env-path"><code>{inst().gameDirectory}</code></p>
 													</div>
 												</div>
 											</section>
@@ -525,28 +653,130 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 									<Show when={activeTab() === "mods"}>
 										<section class="tab-mods">
-											<h2>Mods</h2>
-											<div class="mods-actions-header">
-												<p>Manage mods for this instance.</p>
-												<LauncherButton 
-													size="sm"
-													onClick={() => {
-														const inst = instance();
-														if (inst) {
-															resources.setInstance(inst.id);
-															resources.setGameVersion(inst.minecraftVersion);
-															resources.setLoader(inst.modloader);
-															router()?.navigate("/resources");
-														}
-													}}
-												>
-													Browse Resources
-												</LauncherButton>
+											<div class="mods-toolbar">
+												<div class="toolbar-left">
+													<div class="filter-group">
+														<For each={[
+															{ id: "All", label: "All" },
+															{ id: "mod", label: "Mods" },
+															{ id: "resourcepack", label: "Resource Packs" },
+															{ id: "shader", label: "Shaders" }
+														]}>
+															{(option) => (
+																<button
+																	class="filter-btn"
+																	classList={{ active: resourceTypeFilter() === option.id }}
+																	onClick={() => setResourceTypeFilter(option.id)}
+																>
+																	{option.label}
+																</button>
+															)}
+														</For>
+													</div>
+													<div class="search-box">
+														<input 
+															type="text" 
+															placeholder="Search resources..." 
+															value={resourceSearch()}
+															onInput={(e) => setResourceSearch(e.currentTarget.value)}
+														/>
+													</div>
+												</div>
+												<div class="toolbar-actions">
+													<Button 
+														size="sm"
+														variant="outline"
+														onClick={async () => {
+															const inst = instance();
+															if (inst) {
+																setBusy(true);
+																try {
+																	await invoke("sync_instance_resources", {
+																		instanceId: inst.id,
+																		instanceSlug: slug(),
+																		gameDir: inst.gameDirectory
+																	});
+																	await refetchResources();
+																} catch (e) {
+																	console.error("Sync failed:", e);
+																}
+																setBusy(false);
+															}
+														}}
+													>
+														Sync Folders
+													</Button>
+													<Button 
+														size="sm"
+														onClick={() => {
+															const inst = instance();
+															if (inst) {
+																resources.setInstance(inst.id);
+																resources.setGameVersion(inst.minecraftVersion);
+																resources.setLoader(inst.modloader);
+																router()?.navigate("/resources");
+															}
+														}}
+													>
+														Browse More
+													</Button>
+												</div>
 											</div>
-											<div class="mods-list-placeholder">
-												<p class="placeholder-text">
-													Installed mods list is coming soon. Use the browser to find and install new mods.
-												</p>
+
+											<div class="installed-resources-list">
+												<Show when={installedResources.loading}>
+													<Skeleton class="skeleton-mods" />
+												</Show>
+												<Show when={!installedResources.loading}>
+													<div class="tanstack-table-container">
+														<table class="vesta-table">
+															<thead>
+																<For each={table.getHeaderGroups()}>
+																	{(headerGroup) => (
+																		<tr>
+																			<For each={headerGroup.headers}>
+																				{(header) => (
+																					<th>
+																						{header.isPlaceholder
+																							? null
+																							: flexRender(
+																									header.column.columnDef.header,
+																									header.getContext(),
+																								)}
+																					</th>
+																				)}
+																			</For>
+																		</tr>
+																	)}
+																</For>
+															</thead>
+															<tbody>
+																<For each={table.getRowModel().rows}>
+																	{(row) => (
+																		<tr classList={{ "row-disabled": !row.original.is_enabled }}>
+																			<For each={row.getVisibleCells()}>
+																				{(cell) => (
+																					<td>
+																						{flexRender(
+																							cell.column.columnDef.cell,
+																							cell.getContext(),
+																						)}
+																					</td>
+																				)}
+																			</For>
+																		</tr>
+																	)}
+																</For>
+															</tbody>
+														</table>
+														
+														<Show when={table.getRowModel().rows.length === 0}>
+															<div class="mods-empty-state">
+																<p>No {resourceTypeFilter() !== "All" ? resourceTypeFilter().toLowerCase() + "s" : "resources"} found.</p>
+															</div>
+														</Show>
+													</div>
+												</Show>
 											</div>
 										</section>
 									</Show>
@@ -575,11 +805,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 															<TextFieldLabel>Instance Name</TextFieldLabel>
 															<TextFieldInput
 																value={name()}
-																onInput={(
-																	e: InputEvent & {
-																		currentTarget: HTMLInputElement;
-																	},
-																) => setName(e.currentTarget.value)}
+																onInput={(e: any) => setName(e.currentTarget.value)}
 															/>
 														</TextFieldRoot>
 													</div>
@@ -590,11 +816,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 														<TextFieldLabel>Java Arguments</TextFieldLabel>
 														<TextFieldInput
 															value={javaArgs()}
-															onInput={(
-																e: InputEvent & {
-																	currentTarget: HTMLInputElement;
-																},
-															) => setJavaArgs(e.currentTarget.value)}
+															onInput={(e: any) => setJavaArgs(e.currentTarget.value)}
 															placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
 														/>
 													</TextFieldRoot>
@@ -611,8 +833,8 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 														maxValue={16384}
 														step={512}
 													>
-														<div class="slider-header">
-															<SliderLabel>Memory</SliderLabel>
+														<div class="slider__header">
+															<SliderLabel>Memory Allocation</SliderLabel>
 															<SliderValueLabel />
 														</div>
 														<SliderTrack>
@@ -626,12 +848,12 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 												</div>
 
 												<div class="settings-actions">
-													<LauncherButton
+													<Button
 														onClick={handleSave}
 														disabled={saving()}
 													>
 														{saving() ? "Saving…" : "Save Settings"}
-													</LauncherButton>
+													</Button>
 												</div>
 											</section>
 										</Show>

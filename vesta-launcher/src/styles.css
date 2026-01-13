@@ -110,6 +110,7 @@
 	--font-medium: 1.25rem;
 	--font-large: 2rem;
 	--font-xlarge: 4rem;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
 	/* Header/Navigation Colors */
 	--page-viewer-nav-color: hsl(var(--color__primary-hue) 10% 90%);
@@ -198,6 +199,22 @@
 	--text-color: var(--text-primary);
 	--bg-surface: var(--surface-base);
 	--bg-surface-hover: var(--surface-raised);
+
+	/* Shorthand surface tokens */
+	--surface-low: var(--surface-sunken);
+	--surface-medium: var(--surface-base);
+	--surface-high: var(--surface-raised);
+
+	/* Shorthand border tokens */
+	--border: var(--border-subtle);
+
+	/* Shorthand text tokens */
+	--text: var(--text-primary);
+	--text-muted: var(--text-secondary);
+
+	/* Shorthand primary tokens */
+	--primary-low: hsl(var(--color__primary-hue) 70% 50% / 0.15);
+	--primary-rgb: var(--color__primary-hue) 70% 50%;
 	--sb-track-color: var(--scrollbar-track);
 	--sb-thumb-color: var(--scrollbar-thumb);
 

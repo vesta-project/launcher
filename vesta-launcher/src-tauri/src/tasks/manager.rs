@@ -28,6 +28,7 @@ pub trait Task: Send + Sync {
     fn pausable(&self) -> bool {
         false
     }
+    #[allow(dead_code)]
     fn serialize(&self) -> Option<String> {
         None
     }

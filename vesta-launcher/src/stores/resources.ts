@@ -16,10 +16,13 @@ export type ResourceProject = {
     icon_url: string | null;
     author: string;
     download_count: number;
+    follower_count: number;
     categories: string[];
     web_url: string;
+    external_ids?: Record<string, string>;
     screenshots: string[];
     published_at: string | null;
+    updated_at: string | null;
 };
 
 export type SearchResponse = {
@@ -37,6 +40,21 @@ export type ResourceVersion = {
     file_name: string;
     release_type: 'release' | 'beta' | 'alpha';
     hash: string;
+};
+
+export type InstalledResource = {
+    id: number;
+    instance_id: number;
+    platform: string;
+    remote_id: string;
+    remote_version_id: string;
+    resource_type: string;
+    local_path: string;
+    display_name: string;
+    current_version: string;
+    is_manual: boolean;
+    is_enabled: boolean;
+    last_updated: string;
 };
 
 type ResourceStoreState = {
@@ -146,6 +164,10 @@ export const resources = {
             version,
             resourceType: project.resource_type
         });
+    },
+
+    getInstalled: async (instanceId: number) => {
+        return await invoke<InstalledResource[]>("get_installed_resources", { instanceId });
     }
 };
 

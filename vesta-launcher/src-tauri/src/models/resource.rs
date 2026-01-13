@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
+use diesel::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum ResourceType {
     Mod,
@@ -10,11 +11,23 @@ pub enum ResourceType {
     Modpack,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
 #[serde(rename_all = "lowercase")]
 pub enum SourcePlatform {
     Modrinth,
     CurseForge,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable)]
+#[diesel(table_name = crate::schema::vesta::resource_metadata_cache)]
+pub struct ResourceMetadataCacheRecord {
+    pub id: Option<i32>,
+    pub source: String,
+    pub remote_id: String,
+    pub project_data: String,
+    pub versions_data: Option<String>,
+    pub last_updated: chrono::NaiveDateTime,
+    pub expires_at: chrono::NaiveDateTime,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -28,10 +41,13 @@ pub struct ResourceProject {
     pub icon_url: Option<String>,
     pub author: String,
     pub download_count: u64,
+    pub follower_count: u64,
     pub categories: Vec<String>,
     pub web_url: String,
+    pub external_ids: Option<std::collections::HashMap<String, String>>,
     pub screenshots: Vec<String>,
     pub published_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]

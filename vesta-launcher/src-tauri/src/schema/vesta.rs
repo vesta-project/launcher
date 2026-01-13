@@ -93,6 +93,18 @@ diesel::table! {
 }
 
 diesel::table! {
+    resource_metadata_cache (id) {
+        id -> Nullable<Integer>,
+        source -> Text,
+        remote_id -> Text,
+        project_data -> Text,
+        versions_data -> Nullable<Text>,
+        last_updated -> Timestamp,
+        expires_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     task_state (id) {
         id -> Text,
         task_type -> Text,
@@ -115,11 +127,14 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(installed_resource -> instance (instance_id));
+
 diesel::allow_tables_to_appear_in_same_query!(
     account,
     installed_resource,
     instance,
     notification,
+    resource_metadata_cache,
     task_state,
     user_version_tracking,
 );

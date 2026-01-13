@@ -76,12 +76,10 @@ function HomePage() {
 }
 
 function MainMenu() {
-	// createResource returns [resource, { refetch, loading, error, mutate }]
-	// The status signals (loading, error) live on the second item — not
-	// as properties on the resource signal itself. Destructure loading/error
-	// and use them correctly (call them) in JSX.
-	const [instances, { refetch, loading, error }] =
-		createResource(listInstances);
+	// createResource returns [resource, { refetch, mutate }]
+	// The status signals (loading, error) live on the resource signal itself
+	// as properties: instances.loading, instances.error.
+	const [instances, { refetch }] = createResource(listInstances);
 
 	onMount(() => {
 		// Subscribe to instance updates to refetch when instances change
@@ -132,20 +130,19 @@ function MainMenu() {
 		<div class={"main-menu"}>
 			<div class={"instance-wrapper"}>
 				<div class={"instance-container"}>
-					<Show when={typeof loading === "function" ? loading() : !!loading}>
+					<Show when={instances.loading}>
 						<>
 							{Array.from({ length: 8 }).map(() => (
 								<InstanceCardSkeleton />
 							))}
 						</>
 					</Show>
-					<Show when={typeof error === "function" ? error() : !!error}>
+					<Show when={instances.error}>
 						<p style={{ color: "#ff4444", padding: "20px" }}>
-							Failed to load instances:{" "}
-							{String(typeof error === "function" ? error() : error)}
+							Failed to load instances: {String(instances.error)}
 						</p>
 					</Show>
-					<Show when={instances() && instances().length === 0}>
+					<Show when={instances() && (instances() || []).length === 0}>
 						<p style={{ color: "#888", padding: "20px" }}>
 							No instances found. Create one to get started!
 						</p>

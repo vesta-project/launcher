@@ -189,6 +189,38 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
 
+    // Initialize ResourceWatcher
+    let resource_watcher = crate::resources::ResourceWatcher::new(app.handle().clone());
+    app.manage(resource_watcher);
+
+    // Start watching all existing instances
+    {
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            use crate::utils::db::get_vesta_conn;
+            use crate::models::instance::Instance;
+            use crate::schema::instance::dsl::*;
+            use diesel::prelude::*;
+            use crate::resources::ResourceWatcher;
+
+            // Wait a bit to ensure everything is ready
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+            if let Ok(mut conn) = get_vesta_conn() {
+                if let Ok(instances_list) = instance.load::<Instance>(&mut conn) {
+                    if let Some(watcher) = handle.try_state::<ResourceWatcher>() {
+                        for inst in instances_list {
+                            if let Some(game_dir) = &inst.game_directory {
+                                log::info!("[Setup] Starting watcher for instance: {}", inst.name);
+                                let _ = watcher.watch_instance(inst.slug(), inst.id, game_dir.clone()).await;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Reattach to already-running processes on startup
     {
         let app_handle = app.handle().clone();

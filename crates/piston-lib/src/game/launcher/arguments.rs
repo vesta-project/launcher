@@ -420,6 +420,9 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     vars.insert("accessToken".to_string(), spec.access_token.clone());
     vars.insert("auth_session".to_string(), spec.access_token.clone());
     vars.insert("user_type".to_string(), spec.user_type.clone());
+    if let Some(xuid) = &spec.xuid {
+        vars.insert("auth_xuid".to_string(), xuid.clone());
+    }
 
     // Version info
     vars.insert("version_name".to_string(), manifest.id.clone());
@@ -546,6 +549,7 @@ mod tests {
             uuid: "uuid".to_string(),
             access_token: "token".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
@@ -619,6 +623,7 @@ mod tests {
             uuid: "00000000-0000-0000-0000-000000000000".to_string(),
             access_token: "0".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
@@ -684,6 +689,7 @@ mod tests {
             uuid: "00000000-0000-0000-0000-000000000000".to_string(),
             access_token: "0".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,

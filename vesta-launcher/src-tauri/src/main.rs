@@ -105,6 +105,10 @@ fn main() {
             commands::resources::get_resource_project,
             commands::resources::get_resource_versions,
             commands::resources::install_resource,
+            commands::resources::delete_resource,
+            commands::resources::toggle_resource,
+            commands::resources::sync_instance_resources,
+            commands::resources::get_installed_resources,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

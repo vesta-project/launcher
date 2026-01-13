@@ -4,8 +4,10 @@ use crate::utils::db::get_vesta_conn;
 use anyhow::Result;
 use diesel::prelude::*;
 
+#[allow(dead_code)]
 pub struct TaskStore;
 
+#[allow(dead_code)]
 impl TaskStore {
     pub fn save_task(
         task_id: &str,

@@ -151,7 +151,7 @@ function ComboboxContent<T extends ValidComponent = "div">(
 				{...rest}
 			>
 				<ComboboxPrimitive.Listbox class="combobox__listbox">
-					{local.children}
+					{local.children as any}
 				</ComboboxPrimitive.Listbox>
 			</ComboboxPrimitive.Content>
 		</ComboboxPrimitive.Portal>

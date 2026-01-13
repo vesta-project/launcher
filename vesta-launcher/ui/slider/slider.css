@@ -7,6 +7,13 @@
 	touch-action: none;
 }
 
+.slider__header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 0.5rem;
+}
+
 .slider__label {
 	font-size: 0.875rem;
 	font-weight: 500;
@@ -82,14 +89,23 @@
 .slider--hue .slider__track {
 	background: linear-gradient(
 		to right,
-		hsl(0 60% 45%),
-		hsl(60 60% 45%),
-		hsl(120 60% 45%),
-		hsl(180 60% 45%),
-		hsl(240 60% 45%),
-		hsl(300 60% 45%),
-		hsl(360 60% 45%)
+		hsl(0, 70%, 50%),
+		hsl(60, 70%, 50%),
+		hsl(120, 70%, 50%),
+		hsl(180, 70%, 50%),
+		hsl(240, 70%, 50%),
+		hsl(300, 70%, 50%),
+		hsl(360, 70%, 50%)
 	);
+	border-radius: 8px;
+	height: 8px;
+}
+
+.slider--hue .slider__thumb {
+	box-shadow:
+		0 0 0 2px var(--surface-overlay),
+		0 4px 12px rgba(0, 0, 0, 0.3);
+	border: 2px solid white;
 }
 
 .slider--hue .slider__fill {

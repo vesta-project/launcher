@@ -69,13 +69,14 @@
 .subtitle-left {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 16px;
 }
 
 .header-instance-picker {
     display: flex;
     align-items: center;
     gap: 12px;
+    flex-shrink: 0;
 }
 
 .picker-label {
@@ -97,17 +98,25 @@
     font-weight: 600 !important;
 }
 
-.published-date {
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     font-size: 13px;
-    opacity: 0.4;
-    font-weight: 400;
+    opacity: 0.6;
+    font-weight: 500;
+}
+
+.stat-item svg {
+    opacity: 0.8;
 }
 
 .project-header-info .author {
     margin: 0;
-    opacity: 0.7;
+    opacity: 0.9;
     font-size: 14px;
-    font-weight: 500;
+    font-weight: 600;
+    margin-right: 4px;
 }
 
 .project-categories {
@@ -406,11 +415,6 @@
     height: 100% !important;
 }
 
-.screenshot-large-view.zoomed img {
-    width: 100% !important;
-    height: 100% !important;
-}
-
 .screenshot-info-bar {
     position: absolute;
     bottom: 0;
@@ -426,17 +430,6 @@
     backdrop-filter: blur(8px);
 }
 
-
-.description {
-    line-height: 1.6;
-    font-size: 15px;
-}
-
-.description img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 8px;
-}
 
 /* Tabs */
 .details-tabs {
@@ -670,17 +663,39 @@
 .description {
     line-height: 1.6;
     font-size: 15px;
-    color: var(--text-muted);
+    color: var(--text-secondary);
 }
 
 .description h1, .description h2, .description h3 {
-    color: var(--text);
     margin-top: 24px;
     margin-bottom: 12px;
 }
 
 .description p {
-    margin-bottom: 16px;
+    margin-bottom: 1.25rem;
+    margin-top: 1.25rem;
+}
+
+.description hr {
+    margin: 24px 0;
+}
+
+.description a {
+    color: var(--primary);
+    text-decoration: none;
+    display: inline;
+}
+
+.description a:hover {
+    text-decoration: underline;
+}
+
+.description img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 4px;
+    vertical-align: middle;
+    display: inline-block;
 }
 
 .description code {
@@ -698,12 +713,6 @@
     overflow-x: auto;
     margin-bottom: 16px;
     border: 1px solid var(--border);
-}
-
-.description img {
-    max-width: 100%;
-    border-radius: 8px;
-    margin: 16px 0;
 }
 
 .description ul, .description ol {
@@ -818,5 +827,20 @@
     margin-top: 24px;
     display: flex;
     justify-content: center;
+}
+
+.header-link-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.header-external-link.cf {
+    border-color: #f16436;
+    color: #f16436;
+}
+
+.header-external-link.cf:hover {
+    background: rgba(241, 100, 54, 0.1);
 }
 

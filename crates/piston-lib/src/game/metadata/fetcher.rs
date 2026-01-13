@@ -18,11 +18,13 @@ struct VersionStruct {
     version: String,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, serde::Deserialize)]
 struct FabricGameMetaVersionInfo {
     loader: FabricLoaderMeta,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, serde::Deserialize)]
 struct FabricLoaderMeta {
     version: String,

@@ -519,7 +519,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					<ContextMenuItem
 						onSelect={async () => {
 							// confirm uninstall: this removes the instance entry (does not clear shared game files)
-							const confirmUninstall = window.confirm(
+							const confirmUninstall = await window.confirm(
 								`Uninstall instance \"${props.instance.name}\"? This will remove the instance but not shared game assets.`,
 							);
 							if (!confirmUninstall) return;

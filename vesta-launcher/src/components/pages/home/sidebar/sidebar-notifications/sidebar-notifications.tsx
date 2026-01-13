@@ -259,12 +259,7 @@ function NotificationCard(props: {
 					{props.title || "Notification"}
 				</h1>
 				<p
-					style={{
-						"font-size": "13px",
-						color: "hsl(var(--color__primary-hue) 5% 80%)",
-						margin: 0,
-						"word-break": "break-word",
-					}}
+					class={styles["sidebar__notification__description"]}
 				>
 					{props.description}
 				</p>

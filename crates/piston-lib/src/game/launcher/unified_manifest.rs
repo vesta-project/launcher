@@ -246,7 +246,7 @@ impl UnifiedLibrary {
         }
 
         // 2. Check for native classifier
-        let native_classifier = if let Some(natives) = &lib.natives {
+        let mut native_classifier = if let Some(natives) = &lib.natives {
             let os_key = match os {
                 OsType::Windows | OsType::WindowsArm64 => "windows",
                 OsType::MacOS | OsType::MacOSArm64 => "osx",
@@ -256,6 +256,38 @@ impl UnifiedLibrary {
         } else {
             None
         };
+
+        // Fallback: Check downloads.classifiers for OS match if not found in natives map
+        if native_classifier.is_none() {
+            if let Some(downloads) = &lib.downloads {
+                if let Some(classifiers) = &downloads.classifiers {
+                    let os_name = match os {
+                        OsType::Windows | OsType::WindowsArm64 => "windows",
+                        OsType::MacOS | OsType::MacOSArm64 => "osx",
+                        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+                    };
+                    
+                    for key in classifiers.keys() {
+                        if classifier_key_matches_os(key, os_name) {
+                            // On 64-bit systems, avoid "x86" (32-bit) libraries if possible
+                            // Check for "x86" but NOT "x86_64" to identify 32-bit libs
+                            let is_32bit = key.contains("x86") && !key.contains("x86_64");
+                            
+                            if cfg!(target_pointer_width = "64") && is_32bit {
+                                // Only accept as fallback
+                                if native_classifier.is_none() {
+                                    native_classifier = Some(key.clone());
+                                }
+                            } else {
+                                // Prefer non-x86 (or explicit 64-bit) matches immediately
+                                native_classifier = Some(key.clone());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if let Some(classifier) = native_classifier {
             let classifier = classifier.replace("${arch}", Arch::current().as_str());

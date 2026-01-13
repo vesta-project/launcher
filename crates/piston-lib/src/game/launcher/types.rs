@@ -39,6 +39,9 @@ pub struct LaunchSpec {
     /// User type ("msa" or "legacy")
     pub user_type: String,
 
+    /// Xbox User ID (optional, but recommended for MSA)
+    pub xuid: Option<String>,
+
     /// Custom JVM arguments (overrides defaults)
     pub jvm_args: Vec<String>,
 
@@ -221,6 +224,7 @@ mod tests {
             uuid: "0000".to_string(),
             access_token: "tok".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
@@ -247,6 +251,7 @@ mod tests {
             uuid: "0000".to_string(),
             access_token: "tok".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,

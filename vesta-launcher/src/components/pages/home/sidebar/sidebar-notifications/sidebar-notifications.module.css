@@ -164,6 +164,22 @@
 	margin-top: 8px;
 	overflow: hidden;
 }
+
+.sidebar__notification__description {
+	font-size: 11px;
+	color: var(--text-secondary);
+	margin: 0;
+	word-break: break-word;
+	line-height: 1.4;
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	opacity: 0.95;
+	background: hsl(0deg 0% 0% / 15%);
+	padding: 4px 8px;
+	border-radius: 4px;
+	border-left: 2px solid var(--color__primary);
+	white-space: pre-wrap;
+}
+
 .sidebar__notification__progress .progress__track {
 	height: 4px;
 	border-radius: 2px;

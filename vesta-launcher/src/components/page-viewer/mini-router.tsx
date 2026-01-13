@@ -192,14 +192,14 @@ class MiniRouter {
 		};
 
 		// NEW METHOD: Update query params without creating history entry (for component local state like tabs)
-		const updateQuery = (key: string, value: unknown) => {
+		this.updateQuery = (key: string, value: unknown) => {
 			const newParams = { ...this.currentParams.get(), [key]: value };
 			this.currentParams.set(newParams);
 			console.log(`Updated query param ${key}:`, value);
 		};
 
 		// NEW METHOD: Reload current page without creating history entry
-		const reload = async () => {
+		this.reload = async () => {
 			if (this.refetchFn) {
 				try {
 					await this.refetchFn();
@@ -213,22 +213,11 @@ class MiniRouter {
 		};
 
 		// NEW METHOD: Update component-specific state without affecting URL
-		const setState = (state: Record<string, unknown>) => {
+		this.setState = (state: Record<string, unknown>) => {
 			const newProps = { ...this.currentPathProps(), ...state };
 			this.setCurrentPathProps(newProps);
 			console.log("Updated component state:", state);
 		};
-
-		// Expose new methods on the router instance
-		Object.defineProperty(this, "updateQuery", {
-			value: updateQuery,
-			writable: false,
-		});
-		Object.defineProperty(this, "reload", { value: reload, writable: false });
-		Object.defineProperty(this, "setState", {
-			value: setState,
-			writable: false,
-		});
 
 		this.backwards = () => {
 			if (!this.canGoBack()) return;

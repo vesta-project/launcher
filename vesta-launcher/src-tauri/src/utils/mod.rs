@@ -1,5 +1,6 @@
 pub mod config;
 pub mod crash_parser;
+pub mod hash;
 
 pub mod db; // New Diesel connection management
 pub mod db_manager;

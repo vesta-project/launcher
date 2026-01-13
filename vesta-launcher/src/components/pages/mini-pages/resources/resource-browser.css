@@ -200,7 +200,6 @@
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 24px;
 }
 
 .resource-details-header {

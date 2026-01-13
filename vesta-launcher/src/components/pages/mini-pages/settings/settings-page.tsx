@@ -479,7 +479,7 @@ function SettingsPage(props: { close?: () => void }) {
 													{backgroundHue()}°
 												</div>
 											</div>
-											<SliderTrack class="hue-track">
+											<SliderTrack>
 												<SliderFill />
 												<SliderThumb />
 											</SliderTrack>
@@ -528,7 +528,6 @@ function SettingsPage(props: { close?: () => void }) {
 										<Switch
 											checked={gradientEnabled() ?? false}
 											onChange={handleGradientToggle}
-											class="settings-switch"
 										>
 											<SwitchControl>
 												<SwitchThumb />
@@ -728,7 +727,6 @@ function SettingsPage(props: { close?: () => void }) {
 									<Switch
 										checked={reducedMotion()}
 										onChange={handleReducedMotionToggle}
-										class="settings-switch"
 									>
 										<SwitchControl>
 											<SwitchThumb />
@@ -812,7 +810,6 @@ function SettingsPage(props: { close?: () => void }) {
 									<Switch
 										checked={debugLogging()}
 										onChange={handleDebugToggle}
-										class="settings-switch"
 									>
 										<SwitchControl>
 											<SwitchThumb />

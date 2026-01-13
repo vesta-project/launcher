@@ -55,7 +55,7 @@ sysinfo = "0.37.2"
 reqwest = { version = "0.12", features = ["json"] }
 async-trait = "0.1"
 dotenvy = "0.15"
-notify = "6.1"
+notify = "8.1.0"
 sha1 = "0.10"
 sha2 = "0.10"
 
@@ -63,9 +63,15 @@ sha2 = "0.10"
 oauth2 = "4.4.2"
 minecraft-msa-auth = "0.4.0"
 lazy_static = "1.5"
+walkdir = "2.5.0"
+murmur2 = "0.1.0"
+base64 = "0.22.1"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26.1"
 
 [target."cfg(target_os = \"windows\")".dependencies]
 winver = "1.0.0"
+
+[dev-dependencies]
+tempfile = "3.24.0"
