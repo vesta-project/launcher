@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Complete version manifest from version.json
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionManifest {
     /// Version ID (e.g., "1.20.1" or "1.20.1-forge-47.2.0")
@@ -19,6 +19,10 @@ pub struct VersionManifest {
     /// Parent version to inherit from
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherits_from: Option<String>,
+
+    /// Downloads for the client and server JARs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<VersionDownloads>,
 
     /// Game and JVM arguments
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -57,6 +61,22 @@ pub struct VersionManifest {
     pub time: Option<String>,
 }
 
+/// Downloads for the version (client, server, data, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionDownloads {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client: Option<Artifact>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<Artifact>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_mappings: Option<Artifact>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_mappings: Option<Artifact>,
+}
+
 /// Game and JVM arguments
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Arguments {
@@ -90,7 +110,7 @@ pub enum ArgumentValue {
 }
 
 /// Rule for conditional arguments/libraries
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Rule {
     pub action: RuleAction,
 
@@ -101,14 +121,15 @@ pub struct Rule {
     pub features: Option<HashMap<String, bool>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum RuleAction {
+    #[default]
     Allow,
     Disallow,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct OsRule {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -121,7 +142,7 @@ pub struct OsRule {
 }
 
 /// Library definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Library {
     /// Maven coordinates
     pub name: String,
@@ -147,7 +168,7 @@ pub struct Library {
     pub extract: Option<ExtractRules>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct LibraryDownloads {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact: Option<Artifact>,
@@ -156,7 +177,7 @@ pub struct LibraryDownloads {
     pub classifiers: Option<HashMap<String, Artifact>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Artifact {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -180,14 +201,14 @@ impl Artifact {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ExtractRules {
     #[serde(default)]
     pub exclude: Vec<String>,
 }
 
 /// Asset index information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetIndex {
     pub id: String,
@@ -198,7 +219,7 @@ pub struct AssetIndex {
 }
 
 /// Java version requirements
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct JavaVersion {
     pub component: String,

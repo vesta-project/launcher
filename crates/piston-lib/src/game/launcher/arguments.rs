@@ -231,8 +231,15 @@ fn evaluate_rules(
             // OS arch
             if matches {
                 if let Some(ref arch) = os_rule.arch {
-                    // Compare arch literally
-                    if arch != std::env::consts::ARCH {
+                    let host_arch = std::env::consts::ARCH;
+                    let normalized_arch = match arch.as_str() {
+                        "x64" | "amd64" => "x86_64",
+                        "x86" => "x86",
+                        "arm64" => "aarch64",
+                        _ => arch,
+                    };
+
+                    if normalized_arch != host_arch {
                         matches = false;
                     }
                 }
@@ -403,6 +410,7 @@ fn build_jvm_variables(
         "classpath_separator".to_string(),
         OsType::current().classpath_separator().to_string(),
     );
+    vars.insert("arch".to_string(), crate::game::installer::types::Arch::current().as_str().to_string());
 
     vars
 }
@@ -420,9 +428,13 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     vars.insert("accessToken".to_string(), spec.access_token.clone());
     vars.insert("auth_session".to_string(), spec.access_token.clone());
     vars.insert("user_type".to_string(), spec.user_type.clone());
-    if let Some(xuid) = &spec.xuid {
-        vars.insert("auth_xuid".to_string(), xuid.clone());
-    }
+    
+    // Client ID (used in 1.19+)
+    vars.insert("clientid".to_string(), spec.client_id.clone());
+    vars.insert("client_id".to_string(), spec.client_id.clone());
+    
+    // XUID (used in 1.19+ for MSA accounts)
+    vars.insert("auth_xuid".to_string(), spec.xuid.clone().unwrap_or_else(|| "0".to_string()));
 
     // Version info
     vars.insert("version_name".to_string(), manifest.id.clone());

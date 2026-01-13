@@ -205,14 +205,28 @@ impl UnifiedLibrary {
                     }
                 });
 
+                // In modern Minecraft, native libraries are often separate entries with 
+                // ":natives-<os>" in their name. We need to mark them as native so they get extracted.
+                let name_lower = lib.name.to_lowercase();
+                let is_native_by_name = name_lower.contains(":natives-") 
+                    || (name_lower.contains("natives-") && name_lower.split(':').count() > 3);
+                
+                // If it's a separate entry, it might have the classifier in the name
+                let parts: Vec<&str> = lib.name.split(':').collect();
+                let classifier = if parts.len() > 3 {
+                    Some(parts[3].to_string())
+                } else {
+                    None
+                };
+
                 normal_lib = Some(UnifiedLibrary {
                     name: lib.name.clone(),
                     path,
                     download_url: url,
                     sha1: artifact.sha1.clone(),
                     size: artifact.size,
-                    is_native: false,
-                    classifier: None,
+                    is_native: is_native_by_name,
+                    classifier,
                     extract_rules: lib.extract.clone(),
                 });
             }
@@ -362,7 +376,15 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
         }
         
         if let Some(ref arch) = os_rule.arch {
-            if arch != Arch::current().as_str() {
+            let host_arch = std::env::consts::ARCH;
+            let normalized_arch = match arch.as_str() {
+                "x64" | "amd64" => "x86_64",
+                "x86" => "x86",
+                "arm64" => "aarch64",
+                _ => arch.as_str(),
+            };
+
+            if normalized_arch != host_arch {
                 return false;
             }
         }

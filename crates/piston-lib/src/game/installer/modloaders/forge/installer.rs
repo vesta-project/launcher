@@ -138,6 +138,7 @@ fn forge_info_to_manifest(info: &ForgeVersionInfo) -> VersionManifest {
         version_type: Some("release".to_string()),
         release_time: None,
         time: None,
+        ..Default::default()
     }
 }
 

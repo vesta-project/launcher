@@ -14,7 +14,7 @@ struct SqliteCustomizer;
 impl r2d2::CustomizeConnection<SqliteConnection, r2d2::Error> for SqliteCustomizer {
     fn on_acquire(&self, conn: &mut SqliteConnection) -> Result<(), r2d2::Error> {
         use diesel::connection::SimpleConnection;
-        conn.batch_execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;")
+        conn.batch_execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA busy_timeout = 5000;")
             .map_err(r2d2::Error::QueryError)?;
         Ok(())
     }

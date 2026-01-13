@@ -270,6 +270,7 @@ pub async fn install_loader(
         version_type: None,
         release_time: None,
         time: None,
+        ..Default::default()
     };
 
     let unified = UnifiedManifest::merge(vanilla_manifest, Some(loader_manifest), os);

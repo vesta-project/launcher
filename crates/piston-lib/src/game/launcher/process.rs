@@ -307,12 +307,13 @@ pub async fn launch_game(
         vanilla_jar
     };
 
-    if game_jar.exists() {
-        let separator = OsType::current().classpath_separator();
-        classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
-    } else {
-        log::warn!("Game JAR not found: {:?}", game_jar);
+    if !game_jar.exists() {
+        log::error!("Game JAR not found: {:?}", game_jar);
+        return Err(anyhow::anyhow!("Main game JAR not found (looked for {:?}). Please try reinstalling the version.", game_jar));
     }
+
+    let separator = OsType::current().classpath_separator();
+    classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
 
     // 5. Build JVM arguments (substitutes ${classpath} in manifest with our classpath string)
     log::debug!("Building JVM arguments");
