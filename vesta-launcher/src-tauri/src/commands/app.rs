@@ -25,6 +25,40 @@ pub fn open_app_config_dir() -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_instance_folder(instance_id_slug: String) -> Result<(), String> {
+    use crate::schema::instance::dsl::*;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    let instances_list = instance
+        .select((crate::schema::instance::dsl::id, name, game_directory))
+        .load::<(i32, String, Option<String>)>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+
+    let found_dir = instances_list.into_iter().find_map(|(_id, _name, _gd)| {
+        let i_slug = crate::utils::sanitize::sanitize_instance_name(&_name);
+        if i_slug == instance_id_slug {
+            _gd
+        } else {
+            None
+        }
+    });
+
+    if let Some(gd) = found_dir {
+        let path = std::path::PathBuf::from(gd);
+        if !path.exists() {
+            std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create instance directory: {}", e))?;
+        }
+        open::that(&path).map_err(|e| format!("Failed to open instance directory: {}", e))?;
+        Ok(())
+    } else {
+        Err("Instance not found".to_string())
+    }
+}
+
+#[tauri::command]
 pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> {
     let logs_path = if let Some(slug_val) = instance_id_slug {
         // Fetch instance from database to get its game directory

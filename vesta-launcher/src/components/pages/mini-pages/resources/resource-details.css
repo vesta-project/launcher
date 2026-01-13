@@ -39,6 +39,22 @@
     font-weight: 800;
 }
 
+.project-title-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.installed-badge {
+    background: var(--primary-accent);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 4px;
+    text-transform: uppercase;
+}
+
 .project-header-text {
     display: flex;
     flex-direction: column;

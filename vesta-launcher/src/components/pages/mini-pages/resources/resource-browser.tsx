@@ -1,4 +1,4 @@
-import { Component, createEffect, For, Show, createSignal, createResource, createMemo, untrack } from "solid-js";
+import { Component, createEffect, For, Show, createSignal, createResource, createMemo, untrack, onMount } from "solid-js";
 import { resources, ResourceProject, ResourceVersion, findBestVersion } from "@stores/resources";
 import { instancesState } from "@stores/instances";
 import { TextField } from "@ui/text-field/text-field";
@@ -35,6 +35,13 @@ const LOADERS = ["Forge", "Fabric", "Quilt", "NeoForge"];
 
 const ResourceCard: Component<{ project: ResourceProject }> = (props) => {
     const [installing, setInstalling] = createSignal(false);
+
+    const isInstalled = createMemo(() => {
+        return resources.state.installedResources.some(ir => 
+            ir.platform.toLowerCase() === props.project.source.toLowerCase() && 
+            ir.remote_id === props.project.id
+        );
+    });
 
     const navigateToDetails = () => {
         router()?.navigate("/resource-details", { 
@@ -100,17 +107,20 @@ const ResourceCard: Component<{ project: ResourceProject }> = (props) => {
                     <span class="resource-card-author">By {props.project.author}</span>
                     <span class="resource-card-downloads">{props.project.download_count.toLocaleString()} downloads</span>
                     <Show when={props.project.published_at}>
-                        <span class="resource-card-date">• {new Date(props.project.published_at!).toLocaleDateString()}</span>
+                        <span class="resource-card-date">• {new Date(props.project.published_at ?? "").toLocaleDateString()}</span>
                     </Show>
                 </div>
             </div>
             <div class="resource-card-actions">
                 <Button 
                     onClick={handleQuickInstall} 
-                    disabled={!resources.state.selectedInstanceId || installing()}
+                    disabled={!resources.state.selectedInstanceId || installing() || isInstalled()}
                     size="sm"
+                    variant={isInstalled() ? "outline" : "solid"}
                 >
-                    {installing() ? "Installing..." : "Install"}
+                    <Show when={installing()}>Installing...</Show>
+                    <Show when={!installing() && isInstalled()}>Installed</Show>
+                    <Show when={!installing() && !isInstalled()}>Install</Show>
                 </Button>
             </div>
         </div>
@@ -120,6 +130,13 @@ const ResourceCard: Component<{ project: ResourceProject }> = (props) => {
 const ResourceBrowser: Component = () => {
     let debounceTimer: number | undefined;
     const [mcVersions] = createResource(getMinecraftVersions);
+
+    onMount(() => {
+        // Ensure installed resources are loaded for the current instance if one is selected
+        if (resources.state.selectedInstanceId) {
+            resources.fetchInstalled(resources.state.selectedInstanceId);
+        }
+    });
 
     const gameVersions = () => {
         const meta = mcVersions();
@@ -148,11 +165,11 @@ const ResourceBrowser: Component = () => {
     // Re-search when filters or pagination change
     createEffect(() => {
         // Access all dependencies to track them
-        const source = resources.state.activeSource;
-        const type = resources.state.resourceType;
-        const version = resources.state.gameVersion;
-        const loader = resources.state.loader;
-        const offset = resources.state.offset;
+        resources.state.activeSource;
+        resources.state.resourceType;
+        resources.state.gameVersion;
+        resources.state.loader;
+        resources.state.offset;
         
         // Use untrack so the internal property accesses of search() 
         // don't create additional dependencies (or loops)

@@ -152,7 +152,14 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			setIconPath(inst.iconPath);
 			setJavaArgs(inst.javaArgs ?? "");
 			setMemoryMb([inst.memoryMb ?? 2048]);
-		}
+			// Update resource store context
+			resources.setInstance(inst.id);
+			resources.setGameVersion(inst.minecraftVersion);
+			resources.setLoader(inst.modloader);
+			
+			// Initialize resource watcher and fetch installed list
+			resources.sync(inst.id, inst.slug, inst.gameDirectory || "");
+			resources.fetchInstalled(inst.id);		}
 	});
 
 	// TanStack Table setup for Mods
@@ -379,6 +386,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		const unlistenResources = await listen("resources-updated", (event) => {
 			if (event.payload === instance()?.id) {
 				refetchResources();
+				resources.fetchInstalled(instance()!.id);
 			}
 		});
 
@@ -452,6 +460,14 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			await invoke("open_logs_folder", { instanceIdSlug: slug() });
 		} catch (e) {
 			console.error("Failed to open logs folder:", e);
+		}
+	};
+
+	const openInstanceFolder = async () => {
+		try {
+			await invoke("open_instance_folder", { instanceIdSlug: slug() });
+		} catch (e) {
+			console.error("Failed to open instance folder:", e);
 		}
 	};
 
@@ -534,6 +550,27 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 											</div>
 										</div>
 										<div class="header-actions">
+											<Button
+												variant="flat"
+												size="md"
+												onClick={openInstanceFolder}
+												title="Open Folder"
+												class="header-square-button"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="18"
+													height="18"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+												>
+													<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+												</svg>
+											</Button>
 											<Button
 												onClick={isRunning() ? handleKill : handlePlay}
 												disabled={busy()}

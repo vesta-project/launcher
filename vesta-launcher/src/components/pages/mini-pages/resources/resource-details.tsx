@@ -85,7 +85,12 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
     const [selectedScreenshot, setSelectedScreenshot] = createSignal<string | null>(null);
     const [isZoomed, setIsZoomed] = createSignal(false);
     const [versionPage, setVersionPage] = createSignal(1);
+    const [installingVersionId, setInstallingVersionId] = createSignal<string | null>(null);
     const versionsPerPage = 15;
+
+    const isVersionInstalled = (versionId: string) => {
+        return resources.state.installedResources.some(ir => ir.remote_version_id === versionId);
+    };
 
     onMount(() => {
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
@@ -252,7 +257,8 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
                 }
             }
 
-            resources.install(p, version);
+            setInstallingVersionId(version.id);
+            resources.install(p, version).finally(() => setInstallingVersionId(null));
         }
     };
 
@@ -278,7 +284,12 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
                             </Show>
                             <div class="project-header-text">
                                 <div class="project-title-row">
-                                    <h1>{project()?.name}</h1>
+                                    <div class="project-title-group">
+                                        <h1>{project()?.name}</h1>
+                                        <Show when={isVersionInstalled("") || resources.state.installedResources.some(ir => ir.remote_id === project()?.id)}>
+                                            <span class="installed-badge">Installed</span>
+                                        </Show>
+                                    </div>
                                     <div class="header-link-group">
                                         <Show when={project()?.external_ids?.curseforge && project()?.source === 'modrinth'}>
                                             <Button 
@@ -464,12 +475,18 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
                                                                 <span class={`version-tag ${version.release_type}`}>{version.release_type}</span>
                                                                 <Button 
                                                                     size="sm" 
-                                                                    disabled={!resources.state.selectedInstanceId}
+                                                                    disabled={!resources.state.selectedInstanceId || installingVersionId() === version.id || isVersionInstalled(version.id)}
                                                                     onClick={() => handleInstall(version)}
                                                                     style={{ width: '100%' }}
-                                                                    variant={version.download_url ? 'solid' : 'outline'}
+                                                                    variant={isVersionInstalled(version.id) ? 'outline' : (version.download_url ? 'solid' : 'outline')}
                                                                 >
-                                                                    {version.download_url ? 'Install' : 'External'}
+                                                                    <Show when={installingVersionId() === version.id}>Installing...</Show>
+                                                                    <Show when={installingVersionId() !== version.id}>
+                                                                        <Show when={isVersionInstalled(version.id)}>Installed</Show>
+                                                                        <Show when={!isVersionInstalled(version.id)}>
+                                                                            {version.download_url ? 'Install' : 'External'}
+                                                                        </Show>
+                                                                    </Show>
                                                                 </Button>
                                                             </div>
                                                         </div>

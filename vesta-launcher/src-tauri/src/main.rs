@@ -50,6 +50,7 @@ fn main() {
             update_config_fields,
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
+            commands::app::open_instance_folder,
             commands::app::close_all_windows_and_reset,
             commands::app::get_default_instance_dir,
             commands::app::os_type,

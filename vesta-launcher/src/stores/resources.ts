@@ -71,6 +71,7 @@ type ResourceStoreState = {
     loader: string | null;
     selectedProject: ResourceProject | null;
     versions: ResourceVersion[];
+    installedResources: InstalledResource[];
 };
 
 const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
@@ -86,7 +87,8 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     gameVersion: null,
     loader: null,
     selectedProject: null,
-    versions: []
+    versions: [],
+    installedResources: []
 });
 
 export const resources = {
@@ -95,7 +97,14 @@ export const resources = {
     setQuery: (q: string) => setResourceStore("query", q),
     setSource: (s: SourcePlatform) => setResourceStore("activeSource", s),
     setType: (t: ResourceType) => setResourceStore("resourceType", t),
-    setInstance: (id: number | null) => setResourceStore("selectedInstanceId", id),
+    setInstance: (id: number | null) => {
+        setResourceStore("selectedInstanceId", id);
+        if (id) {
+            resources.fetchInstalled(id);
+        } else {
+            setResourceStore("installedResources", []);
+        }
+    },
     setGameVersion: (v: string | null) => setResourceStore("gameVersion", v),
     setLoader: (l: string | null) => setResourceStore("loader", l),
     setOffset: (o: number) => setResourceStore("offset", o),
@@ -156,7 +165,7 @@ export const resources = {
     install: async (project: ResourceProject, version: ResourceVersion) => {
         if (!resourceStore.selectedInstanceId) return;
         
-        return await invoke<string>("install_resource", {
+        const result = await invoke<string>("install_resource", {
             instanceId: resourceStore.selectedInstanceId,
             platform: project.source,
             projectId: project.id,
@@ -164,10 +173,29 @@ export const resources = {
             version,
             resourceType: project.resource_type
         });
+
+        // Refresh installed list after a short delay to allow DB/File system to sync
+        setTimeout(() => {
+            if (resourceStore.selectedInstanceId) {
+                resources.fetchInstalled(resourceStore.selectedInstanceId);
+            }
+        }, 1000);
+
+        return result;
     },
 
     getInstalled: async (instanceId: number) => {
         return await invoke<InstalledResource[]>("get_installed_resources", { instanceId });
+    },
+
+    fetchInstalled: async (instanceId: number) => {
+        const results = await invoke<InstalledResource[]>("get_installed_resources", { instanceId });
+        setResourceStore("installedResources", results);
+        return results;
+    },
+
+    sync: async (instanceId: number, instanceSlug: string, gameDir: string) => {
+        return await invoke<void>("sync_instance_resources", { instanceId, instanceSlug, gameDir });
     }
 };
 

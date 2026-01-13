@@ -4,6 +4,7 @@ use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
+use crate::resources::ResourceWatcher;
 use diesel::prelude::*;
 use std::sync::Arc;
 use tauri::{Manager, State};
@@ -225,7 +226,10 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
 }
 
 #[tauri::command]
-pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
+pub async fn create_instance(
+    instance_data: Instance,
+    resource_watcher: State<'_, ResourceWatcher>,
+) -> Result<i32, String> {
     log::info!(
         "[create_instance] Command invoked for instance: {}",
         instance_data.name
@@ -302,7 +306,19 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
             gd
         );
     }
-    inst.game_directory = Some(gd);
+    inst.game_directory = Some(gd.clone());
+
+    // Ensure common directories exist - specifically "mods" for modloader instances
+    if let Err(e) = std::fs::create_dir_all(&gd) {
+        log::error!("[create_instance] Failed to create game directory: {}", e);
+    } else if inst.modloader.is_some() {
+        let mods_dir = std::path::PathBuf::from(&gd).join("mods");
+        if let Err(e) = std::fs::create_dir_all(&mods_dir) {
+            log::error!("[create_instance] Failed to create mods directory: {}", e);
+        } else {
+            log::info!("[create_instance] Created mods directory for modloader instance: {}", inst.name);
+        }
+    }
 
     log::info!("[create_instance] Inserting instance into database");
 
@@ -345,6 +361,16 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
 
     // Set initial installation_status to "pending"
     let _ = crate::commands::instances::update_installation_status(inserted_id, "pending");
+
+    // Start watching the new instance's folders for mods/packs
+    log::info!(
+        "[create_instance] Initializing resource watcher for instance: {} ({})",
+        slug,
+        inserted_id
+    );
+    if let Err(e) = resource_watcher.watch_instance(slug.clone(), inserted_id, gd).await {
+        log::error!("[create_instance] Failed to start resource watcher: {}", e);
+    }
 
     log::info!(
         "[create_instance] Instance created successfully with ID: {} and slug: {}",
