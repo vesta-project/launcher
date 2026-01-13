@@ -72,6 +72,7 @@ type ResourceStoreState = {
     selectedProject: ResourceProject | null;
     versions: ResourceVersion[];
     installedResources: InstalledResource[];
+    installingVersionIds: string[];
 };
 
 const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
@@ -88,7 +89,8 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     loader: null,
     selectedProject: null,
     versions: [],
-    installedResources: []
+    installedResources: [],
+    installingVersionIds: []
 });
 
 export const resources = {
@@ -165,23 +167,32 @@ export const resources = {
     install: async (project: ResourceProject, version: ResourceVersion) => {
         if (!resourceStore.selectedInstanceId) return;
         
-        const result = await invoke<string>("install_resource", {
-            instanceId: resourceStore.selectedInstanceId,
-            platform: project.source,
-            projectId: project.id,
-            projectName: project.name,
-            version,
-            resourceType: project.resource_type
-        });
+        // Immediate UI feedback
+        setResourceStore("installingVersionIds", ids => [...ids, version.id]);
 
-        // Refresh installed list after a short delay to allow DB/File system to sync
-        setTimeout(() => {
-            if (resourceStore.selectedInstanceId) {
-                resources.fetchInstalled(resourceStore.selectedInstanceId);
-            }
-        }, 1000);
+        try {
+            const result = await invoke<string>("install_resource", {
+                instanceId: resourceStore.selectedInstanceId,
+                platform: project.source,
+                projectId: project.id,
+                projectName: project.name,
+                version,
+                resourceType: project.resource_type
+            });
 
-        return result;
+            // Refresh installed list after a short delay to allow DB/File system to sync
+            setTimeout(() => {
+                if (resourceStore.selectedInstanceId) {
+                    resources.fetchInstalled(resourceStore.selectedInstanceId);
+                }
+            }, 1000);
+
+            return result;
+        } catch (e) {
+            // Remove from installing list on error
+            setResourceStore("installingVersionIds", ids => ids.filter(id => id !== version.id));
+            throw e;
+        }
     },
 
     getInstalled: async (instanceId: number) => {
@@ -191,6 +202,12 @@ export const resources = {
     fetchInstalled: async (instanceId: number) => {
         const results = await invoke<InstalledResource[]>("get_installed_resources", { instanceId });
         setResourceStore("installedResources", results);
+        
+        // Clear any installing IDs that are now in the results or just clear them all for this instance
+        // Best approach: If we fetched new data, we can assume matching IDs are no longer "installing"
+        const installedRemoteVersionIds = results.map(r => r.remote_version_id);
+        setResourceStore("installingVersionIds", ids => ids.filter(id => !installedRemoteVersionIds.includes(id)));
+
         return results;
     },
 

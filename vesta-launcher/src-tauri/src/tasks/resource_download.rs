@@ -149,43 +149,39 @@ impl Task for ResourceDownloadTask {
             let final_path = target_dir.join(&version.file_name);
             let final_path_str = final_path.to_string_lossy().to_string();
             
-            // Handle existing file (Check if it's the same or different)
-            if final_path.exists() {
-                fs::remove_file(&final_path).await.map_err(|e| e.to_string())?;
-            }
-            
-            fs::rename(&temp_file_path, &final_path).await.map_err(|e| e.to_string())?;
-
-            // 6. Update database
-            let platform_str = match platform {
-                SourcePlatform::Modrinth => "modrinth",
-                SourcePlatform::CurseForge => "curseforge",
-            };
-
-            let res_type_str = match resource_type {
-                ResourceType::Mod => "mod",
-                ResourceType::ResourcePack => "resourcepack",
-                ResourceType::Shader => "shader",
-                ResourceType::DataPack => "datapack",
-                ResourceType::Modpack => "modpack",
-            };
-
-            // Check for existing entry with same remote_id for this instance
-            let existing_id = installed_dsl::installed_resource
+            // Check for existing database entry to find old file path
+            let existing_resource = installed_dsl::installed_resource
                 .filter(installed_dsl::instance_id.eq(instance_id))
                 .filter(installed_dsl::remote_id.eq(&project_id))
-                .select(installed_dsl::id)
-                .first::<Option<i32>>(&mut conn)
+                .first::<InstalledResource>(&mut conn)
                 .optional()
-                .map_err(|e| e.to_string())?
-                .flatten();
+                .map_err(|e| e.to_string())?;
 
-            if let Some(eid) = existing_id {
-                diesel::update(installed_dsl::installed_resource.filter(installed_dsl::id.eq(eid)))
+            if let Some(res) = existing_resource {
+                // If the old path is different from new path, delete old file
+                if res.local_path != final_path_str {
+                    let old_path = std::path::PathBuf::from(&res.local_path);
+                    if old_path.exists() {
+                        log::info!("[ResourceDownload] Deleting old version file: {:?}", old_path);
+                        let _ = fs::remove_file(&old_path).await;
+                    }
+                }
+                
+                // Update existing record
+                diesel::update(installed_dsl::installed_resource.filter(installed_dsl::id.eq(res.id)))
                     .set((
-                        installed_dsl::platform.eq(platform_str),
+                        installed_dsl::platform.eq(match platform {
+                            SourcePlatform::Modrinth => "modrinth",
+                            SourcePlatform::CurseForge => "curseforge",
+                        }),
                         installed_dsl::remote_version_id.eq(&version.id),
-                        installed_dsl::resource_type.eq(res_type_str),
+                        installed_dsl::resource_type.eq(match resource_type {
+                            ResourceType::Mod => "mod",
+                            ResourceType::ResourcePack => "resourcepack",
+                            ResourceType::Shader => "shader",
+                            ResourceType::DataPack => "datapack",
+                            ResourceType::Modpack => "modpack",
+                        }),
                         installed_dsl::local_path.eq(&final_path_str),
                         installed_dsl::display_name.eq(&project_name),
                         installed_dsl::current_version.eq(&version.version_number),
@@ -196,13 +192,29 @@ impl Task for ResourceDownloadTask {
                     .execute(&mut conn)
                     .map_err(|e| e.to_string())?;
             } else {
+                // Handle existing file block (pre-existing but not in DB)
+                if final_path.exists() {
+                    fs::remove_file(&final_path).await.map_err(|e| e.to_string())?;
+                }
+                
+                fs::rename(&temp_file_path, &final_path).await.map_err(|e| e.to_string())?;
+
                 let new_installed = InstalledResource {
                     id: None,
                     instance_id,
-                    platform: platform_str.to_string(),
+                    platform: match platform {
+                        SourcePlatform::Modrinth => "modrinth",
+                        SourcePlatform::CurseForge => "curseforge",
+                    }.to_string(),
                     remote_id: project_id,
                     remote_version_id: version.id,
-                    resource_type: res_type_str.to_string(),
+                    resource_type: match resource_type {
+                        ResourceType::Mod => "mod",
+                        ResourceType::ResourcePack => "resourcepack",
+                        ResourceType::Shader => "shader",
+                        ResourceType::DataPack => "datapack",
+                        ResourceType::Modpack => "modpack",
+                    }.to_string(),
                     local_path: final_path_str,
                     display_name: project_name,
                     current_version: version.version_number,
@@ -215,6 +227,11 @@ impl Task for ResourceDownloadTask {
                     .values(&new_installed)
                     .execute(&mut conn)
                     .map_err(|e| e.to_string())?;
+            }
+
+            // Ensure renamed temp file if we didn't do it in the "else" block above
+            if temp_file_path.exists() {
+                let _ = fs::rename(&temp_file_path, &final_path).await;
             }
 
             // 7. Handle dependencies (Special case for Shaders)

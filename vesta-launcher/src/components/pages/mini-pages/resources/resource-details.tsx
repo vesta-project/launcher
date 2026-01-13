@@ -85,11 +85,14 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
     const [selectedScreenshot, setSelectedScreenshot] = createSignal<string | null>(null);
     const [isZoomed, setIsZoomed] = createSignal(false);
     const [versionPage, setVersionPage] = createSignal(1);
-    const [installingVersionId, setInstallingVersionId] = createSignal<string | null>(null);
     const versionsPerPage = 15;
 
     const isVersionInstalled = (versionId: string) => {
         return resources.state.installedResources.some(ir => ir.remote_version_id === versionId);
+    };
+
+    const isVersionInstalling = (versionId: string) => {
+        return resources.state.installingVersionIds.includes(versionId);
     };
 
     onMount(() => {
@@ -257,8 +260,7 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
                 }
             }
 
-            setInstallingVersionId(version.id);
-            resources.install(p, version).finally(() => setInstallingVersionId(null));
+            resources.install(p, version);
         }
     };
 
@@ -286,8 +288,8 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
                                 <div class="project-title-row">
                                     <div class="project-title-group">
                                         <h1>{project()?.name}</h1>
-                                        <Show when={isVersionInstalled("") || resources.state.installedResources.some(ir => ir.remote_id === project()?.id)}>
-                                            <span class="installed-badge">Installed</span>
+                                        <Show when={isVersionInstalled("") || resources.state.installedResources.some(ir => ir.remote_id === project()?.id) || resources.state.installingVersionIds.some(id => resources.state.versions.find(v => v.id === id)?.project_id === project()?.id)}>
+                                            <span class="installed-badge">{resources.state.installingVersionIds.some(id => resources.state.versions.find(v => v.id === id)?.project_id === project()?.id) ? "Installing..." : "Installed"}</span>
                                         </Show>
                                     </div>
                                     <div class="header-link-group">
@@ -475,13 +477,13 @@ const ResourceDetailsPage: Component<{ project?: ResourceProject, projectId?: st
                                                                 <span class={`version-tag ${version.release_type}`}>{version.release_type}</span>
                                                                 <Button 
                                                                     size="sm" 
-                                                                    disabled={!resources.state.selectedInstanceId || installingVersionId() === version.id || isVersionInstalled(version.id)}
+                                                                    disabled={!resources.state.selectedInstanceId || isVersionInstalling(version.id) || isVersionInstalled(version.id)}
                                                                     onClick={() => handleInstall(version)}
                                                                     style={{ width: '100%' }}
                                                                     variant={isVersionInstalled(version.id) ? 'outline' : (version.download_url ? 'solid' : 'outline')}
                                                                 >
-                                                                    <Show when={installingVersionId() === version.id}>Installing...</Show>
-                                                                    <Show when={installingVersionId() !== version.id}>
+                                                                    <Show when={isVersionInstalling(version.id)}>Installing...</Show>
+                                                                    <Show when={!isVersionInstalling(version.id)}>
                                                                         <Show when={isVersionInstalled(version.id)}>Installed</Show>
                                                                         <Show when={!isVersionInstalled(version.id)}>
                                                                             {version.download_url ? 'Install' : 'External'}

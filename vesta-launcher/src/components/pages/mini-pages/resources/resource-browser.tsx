@@ -34,14 +34,31 @@ import "./resource-browser.css";
 const LOADERS = ["Forge", "Fabric", "Quilt", "NeoForge"];
 
 const ResourceCard: Component<{ project: ResourceProject }> = (props) => {
-    const [installing, setInstalling] = createSignal(false);
-
     const isInstalled = createMemo(() => {
         return resources.state.installedResources.some(ir => 
             ir.platform.toLowerCase() === props.project.source.toLowerCase() && 
             ir.remote_id === props.project.id
         );
     });
+
+    const isInstalling = createMemo(() => {
+        // Since we don't have all version-to-project mappings globally,
+        // we can check if the project ID matches any of the remote_ids being tracked 
+        // (though we only track version IDs currently in installingVersionIds).
+        // For simplicity, we'll keep the local 'installing' signal for the browser buttons
+        // but ensure they are consistent.
+        return resources.state.installingVersionIds.some(id => {
+            // This is a bit of a hack since we don't have a global version->project map
+            // but for the currently selected project it will work.
+            if (resources.state.selectedProject?.id === props.project.id) {
+                return resources.state.installingVersionIds.includes(id);
+            }
+            return false;
+        });
+    });
+
+    const [localInstalling, setLocalInstalling] = createSignal(false);
+    const installing = () => localInstalling() || isInstalling();
 
     const navigateToDetails = () => {
         router()?.navigate("/resource-details", { 
@@ -60,7 +77,7 @@ const ResourceCard: Component<{ project: ResourceProject }> = (props) => {
         const instance = instancesState.instances.find(i => i.id === instanceId);
         if (!instance) return;
 
-        setInstalling(true);
+        setLocalInstalling(true);
         try {
             const versions = await resources.getVersions(props.project.source, props.project.id);
             const best = findBestVersion(versions, instance.minecraftVersion, instance.modloader);
@@ -89,7 +106,7 @@ const ResourceCard: Component<{ project: ResourceProject }> = (props) => {
         } catch (err) {
             console.error("Quick install failed:", err);
         } finally {
-            setInstalling(false);
+            setLocalInstalling(false);
         }
     };
 
