@@ -191,34 +191,61 @@ async fn identify_and_link_resource(app: &AppHandle, instance_db_id: i32, path: 
 
     let resource_manager = app.state::<ResourceManager>();
     
-    // Try Modrinth lookup
-    match resource_manager.get_by_hash(SourcePlatform::Modrinth, &hash).await {
-        Ok((project, version)) => {
-            log::info!("[ResourceWatcher] Found Modrinth resource: {} ({})", project.name, version.version_number);
-            link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::Modrinth, Some(hash)).await?;
+    // Check if we HAVE a record in the DB already with a specific platform.
+    // If we installed it from CurseForge, we should prefer checking CurseForge first
+    // so we don't "Modrinth-ify" a CurseForge-provided file.
+    let mut preferred_platform = None;
+    {
+        use crate::utils::db::get_vesta_conn;
+        use diesel::prelude::*;
+        if let Ok(mut conn) = get_vesta_conn() {
+            let path_str = path.to_string_lossy().to_string();
+            if let Ok(Some(existing)) = ir_dsl::installed_resource
+                .filter(ir_dsl::local_path.eq(&path_str))
+                .first::<InstalledResource>(&mut conn)
+                .optional() {
+                    preferred_platform = Some(match existing.platform.as_str() {
+                        "modrinth" => SourcePlatform::Modrinth,
+                        "curseforge" => SourcePlatform::CurseForge,
+                        _ => SourcePlatform::Modrinth,
+                    });
+                }
         }
-        Err(_) => {
-            log::debug!("[ResourceWatcher] No Modrinth match for {:?}, trying CurseForge...", path);
-            
-            // Try CurseForge fingerprint lookup
-            if let Ok(fp) = calculate_curseforge_fingerprint(path) {
-                match resource_manager.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()).await {
-                    Ok((project, version)) => {
+    }
+
+    let search_order = if let Some(pref) = preferred_platform {
+        if pref == SourcePlatform::CurseForge {
+            vec![SourcePlatform::CurseForge, SourcePlatform::Modrinth]
+        } else {
+            vec![SourcePlatform::Modrinth, SourcePlatform::CurseForge]
+        }
+    } else {
+        vec![SourcePlatform::Modrinth, SourcePlatform::CurseForge]
+    };
+
+    for platform in search_order {
+        match platform {
+            SourcePlatform::Modrinth => {
+                if let Ok((project, version)) = resource_manager.get_by_hash(SourcePlatform::Modrinth, &hash).await {
+                    log::info!("[ResourceWatcher] Found Modrinth resource: {} ({})", project.name, version.version_number);
+                    link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::Modrinth, Some(hash)).await?;
+                    return Ok(());
+                }
+            },
+            SourcePlatform::CurseForge => {
+                if let Ok(fp) = calculate_curseforge_fingerprint(path) {
+                    if let Ok((project, version)) = resource_manager.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()).await {
                         log::info!("[ResourceWatcher] Found CurseForge resource: {} ({})", project.name, version.version_number);
                         link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::CurseForge, Some(hash)).await?;
-                    }
-                    Err(e) => {
-                        log::debug!("[ResourceWatcher] No CurseForge match for {:?}: {}", path, e);
-                        // If no match found, link as manual/unknown resource
-                        link_manual_resource_to_db(app, instance_db_id, path, Some(hash)).await?;
+                        return Ok(());
                     }
                 }
-            } else {
-                // Could not even calculate fingerprint, link as manual
-                link_manual_resource_to_db(app, instance_db_id, path, Some(hash)).await?;
             }
         }
     }
+
+    // If no match found, link as manual/unknown resource
+    link_manual_resource_to_db(app, instance_db_id, path, Some(hash)).await?;
 
     Ok(())
 }

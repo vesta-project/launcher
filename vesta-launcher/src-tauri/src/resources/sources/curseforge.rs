@@ -41,13 +41,13 @@ struct CFMod {
     download_count: f64,
     categories: Vec<CFCategory>,
     class_id: Option<u32>,
-    screenshots: Option<Vec<CFScreenshot>>,
+    gallery: Option<Vec<CFGallery>>,
     date_created: String,
     date_modified: String,
 }
 
 #[derive(Deserialize)]
-struct CFScreenshot {
+struct CFGallery {
     url: String,
 }
 
@@ -85,6 +85,7 @@ struct CFPagination {
 #[derive(Deserialize)]
 struct CFFilesResponse {
     data: Vec<CFFile>,
+    pagination: CFPagination,
 }
 
 #[derive(Deserialize)]
@@ -96,6 +97,7 @@ struct CFFile {
     release_type: u8,
     game_versions: Vec<String>,
     hashes: Vec<CFHash>,
+    file_date: String,
     download_url: Option<String>,
     dependencies: Vec<CFDependency>,
 }
@@ -235,6 +237,17 @@ impl ResourceSource for CurseForgeSource {
                     "Adventure and RPG" => 424,
                     "Map and Information" => 425,
                     "Cosmetic" => 419,
+                    "Addons" => 420,
+                    "Thermal Expansion" => 405,
+                    "Tinkers Construct" => 407,
+                    "Industrial Craft" => 404,
+                    "Thaumcraft" => 406,
+                    "Buildcraft" => 408,
+                    "Forestry" => 410,
+                    "Blood Magic" => 414,
+                    "Lucky Blocks" => 415,
+                    "Applied Energistics 2" => 416,
+                    "CraftTweaker" => 418,
                     _ => 0
                 };
                 if category_id > 0 {
@@ -285,7 +298,7 @@ impl ResourceSource for CurseForgeSource {
             categories: item.categories.into_iter().map(|c| c.name).collect(),
             web_url: item.links.website_url,
             external_ids: None,
-            screenshots: item.screenshots.unwrap_or_default().into_iter().map(|s| s.url).collect(),
+            gallery: item.gallery.unwrap_or_default().into_iter().map(|s| s.url).collect(),
             published_at: Some(item.date_created),
             updated_at: Some(item.date_modified),
         }).collect();
@@ -337,26 +350,123 @@ impl ResourceSource for CurseForgeSource {
             categories: item.categories.into_iter().map(|c| c.name).collect(),
             web_url: item.links.website_url,
             external_ids: None,
-            screenshots: item.screenshots.unwrap_or_default().into_iter().map(|s| s.url).collect(),
+            gallery: item.gallery.unwrap_or_default().into_iter().map(|s| s.url).collect(),
             published_at: Some(item.date_created),
             updated_at: Some(item.date_modified),
         })
     }
 
-    async fn get_versions(&self, project_id: &str) -> Result<Vec<ResourceVersion>> {
-        let url = format!("https://api.curseforge.com/v1/mods/{}/files", project_id);
-        let response = self.client.get(&url).send().await?;
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!("CurseForge API error fetching versions ({}): {}", status, body));
+    async fn get_projects(&self, ids: &[String]) -> Result<Vec<ResourceProject>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
         }
 
-        let response: CFFilesResponse = response.json().await.map_err(|e| {
-            anyhow!("CurseForge versions JSON decode error: {}. Project: {}", e, project_id)
-        })?;
+        let url = "https://api.curseforge.com/v1/mods";
+        let mod_ids: Vec<u32> = ids.iter().filter_map(|id| id.parse::<u32>().ok()).collect();
+        
+        if mod_ids.is_empty() {
+            return Ok(Vec::new());
+        }
 
-        Ok(response.data.into_iter().map(|file| {
+        let body = serde_json::json!({
+            "modIds": mod_ids
+        });
+
+        let response = self.client.post(url)
+            .json(&body)
+            .send().await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("CurseForge batch project fetch failed: {}", response.status()));
+        }
+
+        #[derive(Deserialize)]
+        struct CFBatchResponse {
+            data: Vec<CFMod>,
+        }
+
+        let response: CFBatchResponse = response.json().await?;
+        
+        Ok(response.data.into_iter().map(|item| ResourceProject {
+            id: item.id.to_string(),
+            source: SourcePlatform::CurseForge,
+            resource_type: Self::map_class_id_to_type(item.class_id.unwrap_or(6)),
+            name: item.name,
+            summary: item.summary,
+            description: None, // Batch fetch doesn't include full description
+            icon_url: item.logo.map(|l| l.thumbnail_url),
+            author: item.authors.first().map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
+            download_count: item.download_count as u64,
+            follower_count: 0,
+            categories: item.categories.into_iter().map(|c| c.name).collect(),
+            web_url: item.links.website_url,
+            external_ids: None,
+            gallery: item.gallery.unwrap_or_default().into_iter().map(|s| s.url).collect(),
+            published_at: Some(item.date_created),
+            updated_at: Some(item.date_modified),
+        }).collect())
+    }
+
+    async fn get_versions(&self, project_id: &str, game_version: Option<&str>, loader: Option<&str>) -> Result<Vec<ResourceVersion>> {
+        let mut all_files = Vec::new();
+        let mut index = 0;
+        let page_size = 50;
+
+        // CF uses specific IDs for loaders
+        let mod_loader_type = loader.map(|l| match l.to_lowercase().as_str() {
+            "forge" => 1,
+            "fabric" => 4,
+            "quilt" => 5,
+            "neoforge" => 6,
+            _ => 0,
+        });
+
+        // Fetch pages until we have all files
+        // We use a reasonable limit of 20 pages (1000 files) to avoid extreme cases, 
+        // but this is much higher than the previous 200.
+        for page_idx in 0..20 {
+            let mut url = format!("https://api.curseforge.com/v1/mods/{}/files?index={}&pageSize={}", project_id, index, page_size);
+            
+            if let Some(gv) = game_version {
+                url.push_str(&format!("&gameVersion={}", gv));
+            }
+            if let Some(lt) = mod_loader_type {
+                if lt > 0 {
+                    url.push_str(&format!("&modLoaderType={}", lt));
+                }
+            }
+
+            let response = self.client.get(&url).send().await?;
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                return Err(anyhow!("CurseForge API error fetching versions ({}): {}", status, body));
+            }
+
+            let res_data: CFFilesResponse = response.json().await.map_err(|e| {
+                anyhow!("CurseForge versions JSON decode error: {}. Project: {}", e, project_id)
+            })?;
+
+            let count = res_data.data.len();
+            all_files.extend(res_data.data);
+
+            // Optimization: if we are filtering for a specific environment and got results, we likely don't need more
+            if (game_version.is_some() || loader.is_some()) && count > 0 {
+                break;
+            }
+
+            if count < page_size || (index + count as u32) >= res_data.pagination.total_count {
+                break;
+            }
+            index += page_size as u32;
+
+            // Small delay to be nice to the API if fetching many pages
+            if page_idx > 5 {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            }
+        }
+
+        Ok(all_files.into_iter().map(|file| {
             let sha1 = file.hashes.iter().find(|h| h.algo == 1).map(|h| h.value.clone()).unwrap_or_default();
             
             // Extract loaders from gameVersions
@@ -376,7 +486,13 @@ impl ResourceSource for CurseForgeSource {
                 version_number: file.display_name,
                 game_versions,
                 loaders,
-                download_url: file.download_url.unwrap_or_default(),
+                download_url: file.download_url.unwrap_or_else(|| {
+                    // Fallback for hidden CF files (CDN pattern: id/1000/id%1000/filename)
+                    let id = file.id;
+                    let major = id / 1000;
+                    let minor = id % 1000;
+                    format!("https://edge.forgecdn.net/files/{}/{:03}/{}", major, minor, file.file_name)
+                }),
                 file_name: file.file_name,
                 release_type: match file.release_type {
                     1 => ReleaseType::Release,
@@ -389,16 +505,15 @@ impl ResourceSource for CurseForgeSource {
                     .map(|d| ResourceDependency {
                         project_id: d.mod_id.to_string(),
                         version_id: None,
+                        file_name: None,
                         dependency_type: match d.relation_type {
-                            1 => DependencyType::Embedded,
                             2 => DependencyType::Optional,
                             3 => DependencyType::Required,
-                            4 => DependencyType::Optional, // Tool
                             5 => DependencyType::Incompatible,
-                            6 => DependencyType::Embedded, // Include
-                            _ => DependencyType::Optional,
+                            _ => DependencyType::Embedded, // Map 1 (Embedded), 4 (Tool), 6 (Include) to Embedded to skip resolution
                         },
                     }).collect(),
+                published_at: Some(file.file_date),
             }
         }).collect())
     }
@@ -449,7 +564,17 @@ impl ResourceSource for CurseForgeSource {
             version_number: file.display_name.clone(),
             game_versions,
             loaders,
-            download_url: file.download_url.clone().unwrap_or_default(),
+            download_url: file.download_url.clone().unwrap_or_else(|| {
+                // Fallback for hidden CF files
+                let id_str = file.id.to_string();
+                if id_str.len() > 4 {
+                    let start = &id_str[0..4];
+                    let end = &id_str[4..];
+                    format!("https://edge.forgecdn.net/files/{}/{}/{}", start, end, file.file_name)
+                } else {
+                    "".to_string()
+                }
+            }),
             file_name: file.file_name.clone(),
             release_type: match file.release_type {
                 1 => ReleaseType::Release,
@@ -461,16 +586,15 @@ impl ResourceSource for CurseForgeSource {
             dependencies: file.dependencies.iter().map(|d| ResourceDependency {
                 project_id: d.mod_id.to_string(),
                 version_id: None,
+                file_name: None,
                 dependency_type: match d.relation_type {
-                    1 => DependencyType::Embedded,
                     2 => DependencyType::Optional,
                     3 => DependencyType::Required,
-                    4 => DependencyType::Optional,
                     5 => DependencyType::Incompatible,
-                    6 => DependencyType::Embedded,
-                    _ => DependencyType::Optional,
+                    _ => DependencyType::Embedded,
                 },
             }).collect(),
+            published_at: Some(file.file_date.clone()),
         };
 
         Ok((project, version))

@@ -132,7 +132,7 @@
 - [ ] 🤖 ⏳ Filter by modloader (Forge, Fabric, Quilt, NeoForge)
 - [ ] 🤖 ⏳ Filter by category
 - [ ] 🤖 ⏳ Sort by relevance, downloads, updated date, name
-- [ ] 🤖 ⏳ Mod detail view (description, screenshots, changelog)
+- [ ] 🤖 ⏳ Mod detail view (description, gallery, changelog)
 - [ ] 🤖 ⏳ Mod dependency visualization
 - [ ] 🤖 ⏳ Featured mods section
 - [ ] 🤖 ⏳ Popular mods section

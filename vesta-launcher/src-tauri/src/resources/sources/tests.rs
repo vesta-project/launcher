@@ -12,12 +12,7 @@ mod tests {
             text: Some("Abandoned Prismarine Tower".to_string()),
             resource_type: ResourceType::Mod,
             limit: 1,
-            offset: 0,
-            game_version: None,
-            loader: None,
-            categories: None,
-            sort_by: None,
-            sort_order: None,
+            ..Default::default()
         };
 
         let result = source.search(query).await;
@@ -38,12 +33,7 @@ mod tests {
             text: Some("Mouse Tweaks".to_string()),
             resource_type: ResourceType::Mod,
             limit: 1,
-            offset: 0,
-            game_version: None,
-            loader: None,
-            categories: None,
-            sort_by: None,
-            sort_order: None,
+            ..Default::default()
         };
 
         let result = source.search(query).await;
@@ -60,7 +50,7 @@ mod tests {
     async fn test_modrinth_versions() {
         let source = ModrinthSource::new();
         // Use the ID for Abandoned Prismarine Tower if known, or search first
-        let versions = source.get_versions("abandoned-prismarine-tower").await;
+        let versions = source.get_versions("abandoned-prismarine-tower", None, None).await;
         assert!(versions.is_ok(), "Modrinth get_versions failed: {:?}", versions.err());
         let versions = versions.unwrap();
         assert!(!versions.is_empty(), "No versions found for Modrinth project");
@@ -79,12 +69,7 @@ mod tests {
             text: Some("Mouse Tweaks".to_string()),
             resource_type: ResourceType::Mod,
             limit: 1,
-            offset: 0,
-            game_version: None,
-            loader: None,
-            categories: None,
-            sort_by: None,
-            sort_order: None,
+            ..Default::default()
         };
         
         let search_result = source.search(query).await;
@@ -93,7 +78,7 @@ mod tests {
         assert!(!hits.is_empty(), "Could not find Mouse Tweaks to test versions");
         
         let project_id = &hits[0].id;
-        let versions = source.get_versions(project_id).await;
+        let versions = source.get_versions(project_id, None, None).await;
         assert!(versions.is_ok(), "CurseForge get_versions failed for ID {}: {:?}", project_id, versions.err());
         let versions = versions.unwrap();
         assert!(!versions.is_empty(), "No versions found for CurseForge project {}", project_id);

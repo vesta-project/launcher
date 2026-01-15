@@ -46,7 +46,7 @@ pub struct ResourceProject {
     pub categories: Vec<String>,
     pub web_url: String,
     pub external_ids: Option<std::collections::HashMap<String, String>>,
-    pub screenshots: Vec<String>,
+    pub gallery: Vec<String>,
     pub published_at: Option<String>,
     pub updated_at: Option<String>,
 }
@@ -72,6 +72,7 @@ pub enum DependencyType {
 pub struct ResourceDependency {
     pub project_id: String,
     pub version_id: Option<String>,
+    pub file_name: Option<String>,
     pub dependency_type: DependencyType,
 }
 
@@ -87,6 +88,7 @@ pub struct ResourceVersion {
     pub release_type: ReleaseType,
     pub hash: String, // SHA1
     pub dependencies: Vec<ResourceDependency>,
+    pub published_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
@@ -96,6 +98,7 @@ pub struct SearchQuery {
     pub game_version: Option<String>,
     pub loader: Option<String>,
     pub categories: Option<Vec<String>>,
+    pub facets: Option<Vec<String>>,
     pub sort_by: Option<String>,
     pub sort_order: Option<String>,
     pub offset: u32,

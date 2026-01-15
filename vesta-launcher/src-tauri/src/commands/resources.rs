@@ -55,13 +55,22 @@ pub async fn get_resource_project(
 }
 
 #[tauri::command]
+pub async fn get_resource_projects(
+    resource_manager: State<'_, ResourceManager>,
+    platform: SourcePlatform,
+    ids: Vec<String>,
+) -> Result<Vec<ResourceProject>> {
+    Ok(resource_manager.get_projects(platform, &ids).await?)
+}
+
+#[tauri::command]
 pub async fn get_resource_versions(
     resource_manager: State<'_, ResourceManager>,
     platform: SourcePlatform,
     project_id: String,
     ignore_cache: Option<bool>,
 ) -> Result<Vec<ResourceVersion>> {
-    Ok(resource_manager.get_versions(platform, &project_id, ignore_cache.unwrap_or(false)).await?)
+    Ok(resource_manager.get_versions(platform, &project_id, ignore_cache.unwrap_or(false), None, None).await?)
 }
 
 #[tauri::command]
@@ -195,7 +204,7 @@ pub async fn install_resource(
             &version, 
             &instance.minecraft_version, 
             loader
-        ).await.unwrap_or_default()
+        ).await?
     } else {
         Vec::new()
     };

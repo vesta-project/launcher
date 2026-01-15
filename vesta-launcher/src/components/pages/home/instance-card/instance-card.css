@@ -3,7 +3,6 @@
 	font-weight: bold;
 	font-size: var(--font-small);
 	user-select: none;
-	/* Removed invalid tab-index property */
 	display: flex;
 	flex-flow: column;
 	justify-content: space-between;

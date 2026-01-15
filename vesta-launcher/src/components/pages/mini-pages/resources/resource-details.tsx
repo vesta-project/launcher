@@ -83,15 +83,22 @@ const VersionTags = (props: { versions: string[] }) => {
     );
 };
 
-const DependencyItem = (props: { dependency: ResourceDependency, platform: SourcePlatform }) => {
-    const [data] = createResource(() => resources.getProject(props.platform, props.dependency.project_id));
+const DependencyItem = (props: { dependency: ResourceDependency, platform: SourcePlatform, project?: ResourceProject }) => {
+    const [data] = createResource(() => {
+        if (props.project) return null; // already have data
+        return props.dependency.project_id;
+    }, async (id) => {
+        return await resources.getProject(props.platform, id);
+    });
+
+    const displayData = () => props.project || data();
 
     return (
-        <Show when={data()} fallback={<div class="dependency-item skeleton" />}>
+        <Show when={displayData()} fallback={<div class="dependency-item skeleton" />}>
             <div 
                 class="dependency-item" 
                 onClick={() => {
-                    const p = data();
+                    const p = displayData();
                     if (p) {
                         router()?.navigate("/resource-details", { 
                             projectId: p.id, 
@@ -102,15 +109,20 @@ const DependencyItem = (props: { dependency: ResourceDependency, platform: Sourc
                     }
                 }}
             >
-                <img src={data()?.icon_url || "/default-pack.png"} alt={data()?.name} class="dep-icon" />
+                <img src={displayData()?.icon_url || "/default-pack.png"} alt={displayData()?.name} class="dep-icon" />
                 <div class="dep-info">
                     <div class="dep-header">
-                        <span class="dep-name">{data()?.name}</span>
+                        <span class="dep-name">{displayData()?.name}</span>
                         <span class={`dep-type-badge ${props.dependency.dependency_type.toLowerCase()}`}>
                             {props.dependency.dependency_type}
                         </span>
                     </div>
-                    <span class="dep-author">by {data()?.author}</span>
+                    <div class="dep-meta">
+                        <span class="dep-author">by {displayData()?.author}</span>
+                        <Show when={props.dependency.file_name}>
+                            <span class="dep-version-tag"> • {props.dependency.file_name}</span>
+                        </Show>
+                    </div>
                 </div>
                 <div class="dep-action">
                     <RightArrowIcon width={16} height={16} />
@@ -128,13 +140,37 @@ const ResourceDetailsPage: Component<{
 }> = (props) => {
     const [project, setProject] = createSignal<ResourceProject | undefined>(props.project);
     const [loading, setLoading] = createSignal(false);
-    const [activeTab, setActiveTab] = createSignal<'description' | 'versions' | 'screenshots' | 'dependencies'>('description');
+    const [activeTab, setActiveTab] = createSignal<'description' | 'versions' | 'gallery' | 'dependencies'>('description');
     const [versionFilter, setVersionFilter] = createSignal('');
-    const [selectedScreenshot, setSelectedScreenshot] = createSignal<string | null>(null);
+    const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<string | null>(null);
     const [isZoomed, setIsZoomed] = createSignal(false);
     const [versionPage, setVersionPage] = createSignal(1);
     const versionsPerPage = 15;
     const [manualVersionId, setManualVersionId] = createSignal<string | null>(null);
+
+    const bestVersionForCurrent = createMemo(() => {
+        const instId = resources.state.selectedInstanceId;
+        const inst = instancesState.instances.find(i => i.id === instId);
+        if (!inst || !resources.state.versions.length) return null;
+        
+        return findBestVersion(
+            resources.state.versions, 
+            inst.minecraftVersion, 
+            inst.modloader,
+            'release',
+            project()?.resource_type
+        );
+    });
+
+    const primaryVersion = createMemo(() => {
+        const manualId = manualVersionId();
+        if (manualId) {
+            return resources.state.versions.find(v => v.id === manualId) || null;
+        }
+        const best = bestVersionForCurrent();
+        if (best) return best;
+        return resources.state.versions[0] || null;
+    });
 
     const [peerProject] = createResource(project, async (p: ResourceProject) => {
         if (!p) return null;
@@ -145,6 +181,24 @@ const ResourceDetailsPage: Component<{
             return null;
         }
     });
+
+    const [dependencyData] = createResource(
+        () => ({
+            platform: project()?.source,
+            deps: primaryVersion()?.dependencies || []
+        }),
+        async ({ platform, deps }) => {
+            if (!platform || deps.length === 0) return new Map<string, ResourceProject>();
+            const ids = deps.map(d => d.project_id);
+            try {
+                const projects = await resources.getProjects(platform, ids);
+                return new Map(projects.map(p => [p.id, p]));
+            } catch (e) {
+                console.error("Failed to batch fetch dependencies:", e);
+                return new Map<string, ResourceProject>();
+            }
+        }
+    );
 
     const InstanceIcon = (iconProps: { instance?: any }) => {
         const iconPath = () => iconProps.instance?.iconPath || DEFAULT_ICONS[0];
@@ -264,11 +318,11 @@ const ResourceDetailsPage: Component<{
         }
 
         const handleGlobalKeyDown = (e: KeyboardEvent) => {
-            if (e.key === "Escape" && selectedScreenshot()) {
-                // Prevent PageViewer from closing when a screenshot is open
+            if (e.key === "Escape" && selectedGalleryItem()) {
+                // Prevent PageViewer from closing when the gallery is open
                 e.stopImmediatePropagation();
                 e.preventDefault();
-                setSelectedScreenshot(null);
+                setSelectedGalleryItem(null);
                 setIsZoomed(false);
             }
         };
@@ -283,7 +337,7 @@ const ResourceDetailsPage: Component<{
             setActiveTab('description');
             setVersionFilter('');
             setVersionPage(1);
-            setSelectedScreenshot(null);
+            setSelectedGalleryItem(null);
         }
     });
 
@@ -326,30 +380,6 @@ const ResourceDetailsPage: Component<{
 
         return getCompatibilityForInstance(project(), version, instance);
     };
-
-    const bestVersionForCurrent = createMemo(() => {
-        const instId = resources.state.selectedInstanceId;
-        const inst = instancesState.instances.find(i => i.id === instId);
-        if (!inst || !resources.state.versions.length) return null;
-        
-        return findBestVersion(
-            resources.state.versions, 
-            inst.minecraftVersion, 
-            inst.modloader,
-            'release',
-            project()?.resource_type
-        );
-    });
-
-    const primaryVersion = createMemo(() => {
-        const manualId = manualVersionId();
-        if (manualId) {
-            return resources.state.versions.find(v => v.id === manualId) || null;
-        }
-        const best = bestVersionForCurrent();
-        if (best) return best;
-        return resources.state.versions[0] || null;
-    });
 
     const isProjectIncompatible = createMemo(() => {
         const instId = resources.state.selectedInstanceId;
@@ -892,12 +922,12 @@ const ResourceDetailsPage: Component<{
                                 >
                                     Dependencies ({primaryVersion()?.dependencies?.length || 0})
                                 </button>
-                                <Show when={(project()?.screenshots?.length ?? 0) > 0}>
+                                <Show when={(project()?.gallery?.length ?? 0) > 0}>
                                     <button 
-                                        class={`tab-btn ${activeTab() === 'screenshots' ? 'active' : ''}`}
-                                        onClick={() => setActiveTab('screenshots')}
+                                        class={`tab-btn ${activeTab() === 'gallery' ? 'active' : ''}`}
+                                        onClick={() => setActiveTab('gallery')}
                                     >
-                                        Screenshots ({project()?.screenshots?.length})
+                                        Gallery ({project()?.gallery?.length})
                                     </button>
                                 </Show>
                             </div>
@@ -918,12 +948,12 @@ const ResourceDetailsPage: Component<{
                                     />
                                 </Show>
 
-                                <Show when={activeTab() === 'screenshots'}>
-                                    <div class="screenshots-grid">
-                                        <For each={project()?.screenshots}>
-                                            {(screenshot) => (
-                                                <div class="screenshot-container" onClick={() => setSelectedScreenshot(screenshot)}>
-                                                    <img src={screenshot} alt="Screenshot" />
+                                <Show when={activeTab() === 'gallery'}>
+                                    <div class="gallery-grid">
+                                        <For each={project()?.gallery}>
+                                            {(item) => (
+                                                <div class="gallery-item" onClick={() => setSelectedGalleryItem(item)}>
+                                                    <img src={item} alt="Gallery Item" />
                                                 </div>
                                             )}
                                         </For>
@@ -986,7 +1016,13 @@ const ResourceDetailsPage: Component<{
                                                                     <h3 class="group-title required">Required</h3>
                                                                     <div class="dependency-list">
                                                                         <For each={required}>
-                                                                            {(dep) => <DependencyItem dependency={dep} platform={currentProject.source} />}
+                                                                            {(dep) => (
+                                                                                <DependencyItem 
+                                                                                    dependency={dep} 
+                                                                                    platform={currentProject.source} 
+                                                                                    project={dependencyData()?.get(dep.project_id)}
+                                                                                />
+                                                                            )}
                                                                         </For>
                                                                     </div>
                                                                 </div>
@@ -997,7 +1033,13 @@ const ResourceDetailsPage: Component<{
                                                                     <h3 class="group-title optional">Optional / Embedded</h3>
                                                                     <div class="dependency-list">
                                                                         <For each={optional}>
-                                                                            {(dep) => <DependencyItem dependency={dep} platform={currentProject.source} />}
+                                                                            {(dep) => (
+                                                                                <DependencyItem 
+                                                                                    dependency={dep} 
+                                                                                    platform={currentProject.source} 
+                                                                                    project={dependencyData()?.get(dep.project_id)}
+                                                                                />
+                                                                            )}
                                                                         </For>
                                                                     </div>
                                                                 </div>
@@ -1008,7 +1050,13 @@ const ResourceDetailsPage: Component<{
                                                                     <h3 class="group-title incompatible">Incompatible</h3>
                                                                     <div class="dependency-list">
                                                                         <For each={incompatible}>
-                                                                            {(dep) => <DependencyItem dependency={dep} platform={currentProject.source} />}
+                                                                            {(dep) => (
+                                                                                <DependencyItem 
+                                                                                    dependency={dep} 
+                                                                                    platform={currentProject.source} 
+                                                                                    project={dependencyData()?.get(dep.project_id)}
+                                                                                />
+                                                                            )}
                                                                         </For>
                                                                     </div>
                                                                 </div>
@@ -1273,21 +1321,21 @@ const ResourceDetailsPage: Component<{
                         </div>
                     </div>
 
-                    <Show when={selectedScreenshot()}>
-                        <div class="screenshot-overlay" onClick={() => { setSelectedScreenshot(null); setIsZoomed(false); }}>
-                            <button class="screenshot-close-btn" onClick={() => { setSelectedScreenshot(null); setIsZoomed(false); }}>
+                    <Show when={selectedGalleryItem()}>
+                        <div class="gallery-overlay" onClick={() => { setSelectedGalleryItem(null); setIsZoomed(false); }}>
+                            <button class="gallery-close-btn" onClick={() => { setSelectedGalleryItem(null); setIsZoomed(false); }}>
                                 <CloseIcon />
                             </button>
                             <div 
-                                class={`screenshot-large-view ${isZoomed() ? 'zoomed' : ''}`} 
+                                class={`gallery-large-view ${isZoomed() ? 'zoomed' : ''}`} 
                                 onClick={(e) => { 
                                     e.stopPropagation(); 
                                     setIsZoomed(!isZoomed()); 
                                     console.log("Zoom toggled:", !isZoomed());
                                 }}
                             >
-                                <img src={selectedScreenshot() || ""} alt="Project Screenshot Full" />
-                                <div class="screenshot-info-bar">
+                                <img src={selectedGalleryItem() || ""} alt="Project Gallery Full" />
+                                <div class="gallery-info-bar">
                                     <span>Click to {isZoomed() ? 'shrink' : 'zoom'}</span>
                                 </div>
                             </div>

@@ -104,6 +104,7 @@ fn main() {
             commands::onboarding::download_managed_java,
             commands::resources::search_resources,
             commands::resources::get_resource_project,
+            commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
             commands::resources::find_peer_resource,
             commands::resources::install_resource,

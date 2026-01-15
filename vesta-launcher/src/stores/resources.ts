@@ -20,7 +20,7 @@ export type ResourceProject = {
     categories: string[];
     web_url: string;
     external_ids?: Record<string, string>;
-    screenshots: string[];
+    gallery: string[];
     published_at: string | null;
     updated_at: string | null;
 };
@@ -46,6 +46,7 @@ export type ResourceVersion = {
 export type ResourceDependency = {
     project_id: string;
     version_id: string | null;
+    file_name: string | null;
     dependency_type: 'required' | 'optional' | 'incompatible' | 'embedded';
 };
 
@@ -148,9 +149,18 @@ export const resources = {
             setResourceStore("installedResources", []);
         }
     },
-    setGameVersion: (v: string | null) => setResourceStore("gameVersion", v),
-    setLoader: (l: string | null) => setResourceStore("loader", l),
-    setCategories: (c: string[]) => setResourceStore("categories", c),
+    setGameVersion: (v: string | null) => {
+        setResourceStore("gameVersion", v);
+        setResourceStore("offset", 0);
+    },
+    setLoader: (l: string | null) => {
+        setResourceStore("loader", l);
+        setResourceStore("offset", 0);
+    },
+    setCategories: (c: string[]) => {
+        setResourceStore("categories", c);
+        setResourceStore("offset", 0);
+    },
     toggleCategory: (c: string) => {
         const current = resourceStore.categories;
         if (current.includes(c)) {
@@ -158,9 +168,16 @@ export const resources = {
         } else {
             setResourceStore("categories", [...current, c]);
         }
+        setResourceStore("offset", 0);
     },
-    setSortBy: (s: string) => setResourceStore("sortBy", s),
-    setSortOrder: (o: 'asc' | 'desc') => setResourceStore("sortOrder", o),
+    setSortBy: (s: string) => {
+        setResourceStore("sortBy", s);
+        setResourceStore("offset", 0);
+    },
+    setSortOrder: (o: 'asc' | 'desc') => {
+        setResourceStore("sortOrder", o);
+        setResourceStore("offset", 0);
+    },
     setLimit: (l: number) => {
         setResourceStore("limit", l);
         setResourceStore("offset", 0);
@@ -189,7 +206,9 @@ export const resources = {
         if (project) {
             setResourceStore("loading", true);
             try {
-                const versions = await resources.getVersions(project.source, project.id);
+                // Fetch versions - use ignoreCache: true to ensure we get the expanded (>50) list
+                // if we previously only cached 50.
+                const versions = await resources.getVersions(project.source, project.id, true);
                 setResourceStore("versions", versions);
             } catch (e) {
                 console.error("Failed to fetch versions:", e);
@@ -232,6 +251,11 @@ export const resources = {
 
     getProject: async (platform: SourcePlatform, id: string) => {
         return await invoke<ResourceProject>("get_resource_project", { platform, id });
+    },
+
+    getProjects: async (platform: SourcePlatform, ids: string[]) => {
+        if (ids.length === 0) return [];
+        return await invoke<ResourceProject[]>("get_resource_projects", { platform, ids });
     },
 
     getVersions: async (platform: SourcePlatform, projectId: string, ignoreCache: boolean = false) => {
@@ -309,11 +333,27 @@ export function isGameVersionCompatible(supported: string[], target: string): bo
     // Normalize versions to handle 1.21 vs 1.21.0 consistently
     const normalize = (v: string) => v.endsWith(".0") ? v.slice(0, -2) : v;
     const nTarget = normalize(target);
-    const nSupported = supported.map(normalize);
     
-    // Use strict matching. If the version isn't explicitly listed by the platform,
-    // we don't assume compatibility (e.g., 1.21.1 != 1.21.4).
-    return nSupported.includes(nTarget);
+    // Split target into components: [1, 21, 4]
+    const targetParts = nTarget.split('.');
+    const targetMajorMinor = targetParts.slice(0, 2).join('.');
+    
+    for (const s of supported) {
+        const ns = normalize(s);
+        
+        // Exact match
+        if (ns === nTarget) return true;
+        
+        // Major.Minor match (e.g., "1.21" or "1.21.x" matches "1.21.4")
+        if (ns === targetMajorMinor || ns === `${targetMajorMinor}.x`) return true;
+        
+        // If the supported version specifies a patch, it MUST match exactly.
+        // (Handled by the exact match check above).
+        // So if we reached here, and ns has 3 parts (e.g. 1.21.1), 
+        // it's not a match for our target (e.g. 1.21.4).
+    }
+    
+    return false;
 }
 
 export function findBestVersion(

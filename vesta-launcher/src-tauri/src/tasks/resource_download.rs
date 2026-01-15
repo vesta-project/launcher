@@ -27,6 +27,10 @@ impl Task for ResourceDownloadTask {
         format!("Installing {} ({})", self.project_name, self.version.version_number)
     }
 
+    fn id(&self) -> Option<String> {
+        Some(format!("download_{}_{}_{}", self.instance_id, self.project_id, self.version.id))
+    }
+
     fn cancellable(&self) -> bool {
         true
     }

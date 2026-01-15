@@ -80,12 +80,14 @@ struct ModrinthVersion {
     files: Vec<ModrinthFile>,
     version_type: String,
     dependencies: Vec<ModrinthDependency>,
+    date_published: String,
 }
 
 #[derive(Deserialize)]
 struct ModrinthDependency {
     version_id: Option<String>,
     project_id: Option<String>,
+    file_name: Option<String>,
     dependency_type: String,
 }
 
@@ -163,6 +165,12 @@ impl ResourceSource for ModrinthSource {
             }
         }
 
+        if let Some(q_facets) = &query.facets {
+            for facet in q_facets {
+                facets.push(format!("[\"{}\"]", facet));
+            }
+        }
+
         if !facets.is_empty() {
             let facets_json = format!("[{}]", facets.join(","));
             url.push_str(&format!("&facets={}", urlencoding::encode(&facets_json)));
@@ -194,7 +202,7 @@ impl ResourceSource for ModrinthSource {
             categories: hit.categories.unwrap_or_default(),
             web_url: format!("https://modrinth.com/{}/{}", hit.project_type, hit.slug),
             external_ids: None,
-            screenshots: Vec::new(),
+            gallery: Vec::new(),
             published_at: Some(hit.published),
             updated_at: Some(hit.updated),
         }).collect();
@@ -269,15 +277,80 @@ impl ResourceSource for ModrinthSource {
             categories: project.categories,
             web_url: format!("https://modrinth.com/{}/{}", project.project_type, project.slug),
             external_ids: if external_ids.is_empty() { None } else { Some(external_ids) },
-            screenshots: project.gallery.unwrap_or_default().into_iter().map(|i| i.raw_url.unwrap_or(i.url)).collect(),
+            gallery: project.gallery.unwrap_or_default().into_iter().map(|i| i.raw_url.unwrap_or(i.url)).collect(),
             published_at: Some(project.published),
             updated_at: Some(project.updated),
         })
     }
 
-    async fn get_versions(&self, project_id: &str) -> Result<Vec<ResourceVersion>> {
+    async fn get_projects(&self, ids: &[String]) -> Result<Vec<ResourceProject>> {
+        if ids.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let ids_json = serde_json::to_string(ids)?;
+        let response = self.client.get("https://api.modrinth.com/v2/projects")
+            .query(&[("ids", &ids_json)])
+            .send().await?;
+        
+        if !response.status().is_success() {
+            return Err(anyhow!("Modrinth batch project fetch failed: {}", response.status()));
+        }
+
+        let projects: Vec<ModrinthProject> = response.json().await.map_err(|e| {
+            anyhow!("Modrinth batch projects JSON decode error: {}. IDs: {}", e, ids_json)
+        })?;
+        
+        Ok(projects.into_iter().map(|p| {
+            let res_type = match p.project_type.as_str() {
+                "mod" => ResourceType::Mod,
+                "resourcepack" => ResourceType::ResourcePack,
+                "shader" => ResourceType::Shader,
+                "datapack" => ResourceType::DataPack,
+                "modpack" => ResourceType::Modpack,
+                _ => ResourceType::Mod,
+            };
+
+            let mut external_ids = std::collections::HashMap::new();
+            if let Some(cf_id) = p.curseforge_id {
+                external_ids.insert("curseforge".to_string(), cf_id);
+            }
+
+            ResourceProject {
+                id: p.id,
+                source: SourcePlatform::Modrinth,
+                resource_type: res_type,
+                name: p.title,
+                summary: p.description,
+                description: Some(p.body),
+                icon_url: p.icon_url,
+                author: "Unknown".to_string(), // Batch doesn't provide authors in a simple way
+                download_count: p.downloads,
+                follower_count: p.followers,
+                categories: p.categories,
+                web_url: format!("https://modrinth.com/{}/{}", p.project_type, p.slug),
+                external_ids: if external_ids.is_empty() { None } else { Some(external_ids) },
+                gallery: p.gallery.unwrap_or_default().into_iter().map(|i| i.raw_url.unwrap_or(i.url)).collect(),
+                published_at: Some(p.published),
+                updated_at: Some(p.updated),
+            }
+        }).collect())
+    }
+
+    async fn get_versions(&self, project_id: &str, game_version: Option<&str>, loader: Option<&str>) -> Result<Vec<ResourceVersion>> {
         let url = format!("https://api.modrinth.com/v2/project/{}/version", project_id);
-        let response = self.client.get(&url).send().await?;
+        
+        let mut params = Vec::new();
+        if let Some(gv) = game_version {
+            params.push(("game_versions", format!("[\"{}\"]", gv)));
+        }
+        if let Some(l) = loader {
+            params.push(("loaders", format!("[\"{}\"]", l.to_lowercase())));
+        }
+
+        let response = self.client.get(&url)
+            .query(&params)
+            .send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
@@ -312,6 +385,7 @@ impl ResourceSource for ModrinthSource {
                     .map(|d| ResourceDependency {
                         project_id: d.project_id.unwrap(),
                         version_id: d.version_id,
+                        file_name: d.file_name,
                         dependency_type: match d.dependency_type.as_str() {
                             "required" => DependencyType::Required,
                             "optional" => DependencyType::Optional,
@@ -320,6 +394,7 @@ impl ResourceSource for ModrinthSource {
                             _ => DependencyType::Optional,
                         },
                     }).collect(),
+                published_at: Some(v.date_published),
             }
         }).collect())
     }
@@ -362,6 +437,7 @@ impl ResourceSource for ModrinthSource {
                 .map(|d| ResourceDependency {
                     project_id: d.project_id.unwrap(),
                     version_id: d.version_id,
+                    file_name: d.file_name,
                     dependency_type: match d.dependency_type.as_str() {
                         "required" => DependencyType::Required,
                         "optional" => DependencyType::Optional,
@@ -370,6 +446,7 @@ impl ResourceSource for ModrinthSource {
                         _ => DependencyType::Optional,
                     },
                 }).collect(),
+            published_at: Some(v.date_published),
         };
 
         Ok((project, version))
