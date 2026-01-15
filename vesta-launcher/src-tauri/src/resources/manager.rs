@@ -1,11 +1,11 @@
 use std::sync::Arc;
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, SearchResponse, ResourceMetadataCacheRecord};
+use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, SearchResponse, ResourceMetadataCacheRecord, DependencyType};
 use crate::resources::sources::ResourceSource;
 use crate::resources::sources::modrinth::ModrinthSource;
 use crate::resources::sources::curseforge::CurseForgeSource;
 use anyhow::{Result, anyhow};
 use tokio::sync::Mutex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
@@ -30,6 +30,71 @@ impl ResourceManager {
             version_cache: Mutex::new(HashMap::new()),
             hash_cache: Mutex::new(HashMap::new()),
         }
+    }
+
+    pub async fn resolve_dependencies(
+        &self, 
+        platform: SourcePlatform, 
+        version: &ResourceVersion, 
+        mc_version: &str, 
+        loader: &str
+    ) -> Result<Vec<(ResourceProject, ResourceVersion)>> {
+        let mut resolved = Vec::new();
+        let mut visited = HashSet::new();
+        let mut queue = version.dependencies.clone();
+        
+        // Add current project to visited to avoid circularities
+        visited.insert(version.project_id.clone());
+
+        while let Some(dep) = queue.pop() {
+            if dep.dependency_type != DependencyType::Required {
+                continue;
+            }
+            if visited.contains(&dep.project_id) {
+                continue;
+            }
+            visited.insert(dep.project_id.clone());
+
+            // 1. Get project
+            let project = match self.get_project(platform, &dep.project_id).await {
+                Ok(p) => p,
+                Err(e) => {
+                    log::warn!("Failed to fetch project for dependency {}: {}", dep.project_id, e);
+                    continue;
+                }
+            };
+            
+            // 2. Find best version for environment
+            let versions = self.get_versions(platform, &dep.project_id, false).await?;
+            
+            // If dep specifies a version, try to find it first
+            let best_version = if let Some(vid) = &dep.version_id {
+                versions.iter().find(|v| &v.id == vid).cloned()
+            } else {
+                None
+            };
+
+            // Otherwise find best compatible version
+            let best_version = best_version.or_else(|| {
+                versions.into_iter()
+                    .filter(|v| {
+                        let mc_match = v.game_versions.contains(&mc_version.to_string());
+                        let loader_match = v.loaders.iter().any(|l| l.to_lowercase() == loader.to_lowercase());
+                        mc_match && loader_match
+                    })
+                    .max_by_key(|v| v.id.clone()) // Newest version (string sort usually works for IDs if they are sequential or timestamps)
+            });
+
+            if let Some(v) = best_version {
+                // Add to queue for transitive dependencies
+                queue.extend(v.dependencies.clone());
+                resolved.push((project, v));
+            } else {
+                log::warn!("Could not find compatible version for dependency {} ({} for {})", dep.project_id, mc_version, loader);
+            }
+        }
+
+        Ok(resolved)
     }
 
     pub async fn search(&self, platform: SourcePlatform, query: SearchQuery) -> Result<SearchResponse> {

@@ -298,6 +298,17 @@ export const resources = {
     }
 };
 
+export function isGameVersionCompatible(supported: string[], target: string): boolean {
+    // Normalize versions to handle 1.21 vs 1.21.0 consistently
+    const normalize = (v: string) => v.endsWith(".0") ? v.slice(0, -2) : v;
+    const nTarget = normalize(target);
+    const nSupported = supported.map(normalize);
+    
+    // Use strict matching. If the version isn't explicitly listed by the platform,
+    // we don't assume compatibility (e.g., 1.21.1 != 1.21.4).
+    return nSupported.includes(nTarget);
+}
+
 export function findBestVersion(
     versions: ResourceVersion[], 
     gameVersion: string, 
@@ -306,33 +317,27 @@ export function findBestVersion(
     resourceType?: ResourceType
 ): ResourceVersion | null {
     // Filter by game version and loader
-    // Some platforms use different casing, lower-case for comparison
     const instLoader = modloader?.toLowerCase() || "";
     
-    // If currentReleaseType is unknown, we default to only looking for releases to be safe
     const allowedReleaseTypes = (currentReleaseType === 'release' || !currentReleaseType) 
         ? ['release'] 
         : (currentReleaseType === 'beta' ? ['release', 'beta'] : ['release', 'beta', 'alpha']);
 
     const compatible = versions.filter(v => {
-        const matchesVersion = v.game_versions.includes(gameVersion);
+        const matchesVersion = isGameVersionCompatible(v.game_versions, gameVersion);
         
         // Loader logic
         const normalizedLoaders = v.loaders.map(l => l.toLowerCase());
         let matchesLoader = false;
         
         if (resourceType === 'shader' || resourceType === 'resourcepack' || resourceType === 'datapack') {
-            matchesLoader = true; // Universal
-            
-            // Shaders require a loader (Iris/Oculus) so they are NOT compatible with vanilla
+            matchesLoader = true;
             if (resourceType === 'shader' && (instLoader === "" || instLoader === "vanilla")) {
                 matchesLoader = false;
             }
         } else {
-            // For mods, vanilla does NOT match unless it's a specific "minecraft" engine mod
             const isVanilla = instLoader === "" || instLoader === "vanilla";
             if (isVanilla) {
-                // True mods (jar mods) are not compatible with Vanilla
                 if (resourceType === 'mod') {
                     matchesLoader = false;
                 } else {
@@ -342,12 +347,9 @@ export function findBestVersion(
                 matchesLoader = normalizedLoaders.some(l => l === instLoader);
             }
             
-            // Quilt can run Fabric mods
             if (!matchesLoader && instLoader === "quilt") {
                 matchesLoader = normalizedLoaders.includes("fabric");
             }
-
-            // NeoForge can run Forge mods
             if (!matchesLoader && instLoader === "neoforge") {
                 matchesLoader = normalizedLoaders.includes("forge");
             }
@@ -360,16 +362,29 @@ export function findBestVersion(
 
     if (compatible.length === 0) return null;
 
-    // The API normally returns versions newest -> oldest. 
-    // We want the newest one that fits our criteria.
-    // If not on 'release' mode, we still prefer 'release' over 'beta' if both are compatible.
+    // Sort compatible versions:
+    // 1. Prefer explicit version match over fuzzy prefix match
+    // 2. Prefer release over beta/alpha
+    // 3. Prefer most recent version (by ID or list order)
     
-    const releases = compatible.filter(v => v.release_type === 'release');
-    if (releases.length > 0) return releases[0];
-    
-    const betas = compatible.filter(v => v.release_type === 'beta');
-    if (betas.length > 0) return betas[0];
+    const sorted = [...compatible].sort((a, b) => {
+        const aExplicit = a.game_versions.includes(gameVersion);
+        const bExplicit = b.game_versions.includes(gameVersion);
+        
+        if (aExplicit && !bExplicit) return -1;
+        if (!aExplicit && bExplicit) return 1;
+        
+        // Then by stability
+        const stabilityOrder = { 'release': 0, 'beta': 1, 'alpha': 2 };
+        const aStab = stabilityOrder[a.release_type] ?? 99;
+        const bStab = stabilityOrder[b.release_type] ?? 99;
+        
+        if (aStab !== bStab) return aStab - bStab;
+        
+        // Same stability and explicit/fuzzy status, stick with original order (usually newest first from API)
+        return 0;
+    });
 
-    return compatible[0] || null;
+    return sorted[0] || null;
 }
 

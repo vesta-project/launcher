@@ -1,4 +1,4 @@
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse};
+use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse, ResourceDependency, DependencyType};
 use crate::resources::sources::ResourceSource;
 use async_trait::async_trait;
 use anyhow::{Result, anyhow};
@@ -97,6 +97,14 @@ struct CFFile {
     game_versions: Vec<String>,
     hashes: Vec<CFHash>,
     download_url: Option<String>,
+    dependencies: Vec<CFDependency>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CFDependency {
+    mod_id: u32,
+    relation_type: u8,
 }
 
 #[derive(Deserialize)]
@@ -377,6 +385,20 @@ impl ResourceSource for CurseForgeSource {
                     _ => ReleaseType::Release,
                 },
                 hash: sha1,
+                dependencies: file.dependencies.into_iter()
+                    .map(|d| ResourceDependency {
+                        project_id: d.mod_id.to_string(),
+                        version_id: None,
+                        dependency_type: match d.relation_type {
+                            1 => DependencyType::Embedded,
+                            2 => DependencyType::Optional,
+                            3 => DependencyType::Required,
+                            4 => DependencyType::Optional, // Tool
+                            5 => DependencyType::Incompatible,
+                            6 => DependencyType::Embedded, // Include
+                            _ => DependencyType::Optional,
+                        },
+                    }).collect(),
             }
         }).collect())
     }
@@ -436,6 +458,19 @@ impl ResourceSource for CurseForgeSource {
                 _ => ReleaseType::Release,
             },
             hash: sha1,
+            dependencies: file.dependencies.iter().map(|d| ResourceDependency {
+                project_id: d.mod_id.to_string(),
+                version_id: None,
+                dependency_type: match d.relation_type {
+                    1 => DependencyType::Embedded,
+                    2 => DependencyType::Optional,
+                    3 => DependencyType::Required,
+                    4 => DependencyType::Optional,
+                    5 => DependencyType::Incompatible,
+                    6 => DependencyType::Embedded,
+                    _ => DependencyType::Optional,
+                },
+            }).collect(),
         };
 
         Ok((project, version))

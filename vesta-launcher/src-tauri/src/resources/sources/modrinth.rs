@@ -1,4 +1,4 @@
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse};
+use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse, ResourceDependency, DependencyType};
 use crate::resources::sources::ResourceSource;
 use async_trait::async_trait;
 use anyhow::Result;
@@ -79,6 +79,14 @@ struct ModrinthVersion {
     loaders: Vec<String>,
     files: Vec<ModrinthFile>,
     version_type: String,
+    dependencies: Vec<ModrinthDependency>,
+}
+
+#[derive(Deserialize)]
+struct ModrinthDependency {
+    version_id: Option<String>,
+    project_id: Option<String>,
+    dependency_type: String,
 }
 
 #[derive(Deserialize)]
@@ -299,6 +307,19 @@ impl ResourceSource for ModrinthSource {
                     _ => ReleaseType::Release,
                 },
                 hash: primary_file.hashes.sha1.clone(),
+                dependencies: v.dependencies.into_iter()
+                    .filter(|d| d.project_id.is_some())
+                    .map(|d| ResourceDependency {
+                        project_id: d.project_id.unwrap(),
+                        version_id: d.version_id,
+                        dependency_type: match d.dependency_type.as_str() {
+                            "required" => DependencyType::Required,
+                            "optional" => DependencyType::Optional,
+                            "incompatible" => DependencyType::Incompatible,
+                            "embedded" => DependencyType::Embedded,
+                            _ => DependencyType::Optional,
+                        },
+                    }).collect(),
             }
         }).collect())
     }
@@ -336,6 +357,19 @@ impl ResourceSource for ModrinthSource {
                 _ => ReleaseType::Release,
             },
             hash: primary_file.hashes.sha1.clone(),
+            dependencies: v.dependencies.into_iter()
+                .filter(|d| d.project_id.is_some())
+                .map(|d| ResourceDependency {
+                    project_id: d.project_id.unwrap(),
+                    version_id: d.version_id,
+                    dependency_type: match d.dependency_type.as_str() {
+                        "required" => DependencyType::Required,
+                        "optional" => DependencyType::Optional,
+                        "incompatible" => DependencyType::Incompatible,
+                        "embedded" => DependencyType::Embedded,
+                        _ => DependencyType::Optional,
+                    },
+                }).collect(),
         };
 
         Ok((project, version))

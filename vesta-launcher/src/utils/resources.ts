@@ -1,4 +1,4 @@
-import { ResourceProject, ResourceVersion } from "@stores/resources";
+import { ResourceProject, ResourceVersion, isGameVersionCompatible } from "@stores/resources";
 import { Instance } from "@stores/instances";
 
 export interface CompatibilityResult {
@@ -13,6 +13,15 @@ export const getCompatibilityForInstance = (
 ): CompatibilityResult => {
     const instLoader = instance.modloader?.toLowerCase() || "";
     const resType = project?.resource_type;
+
+    // 1. Version check (Most important)
+    const matchesVersion = isGameVersionCompatible(version.game_versions, instance.minecraftVersion);
+    if (!matchesVersion) {
+        return {
+            type: 'incompatible',
+            reason: `Version ${version.version_number} is not compatible with ${instance.minecraftVersion}.`
+        };
+    }
 
     // Vanilla restriction
     if (instLoader === "" || instLoader === "vanilla") {

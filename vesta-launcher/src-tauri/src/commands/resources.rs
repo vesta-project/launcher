@@ -165,6 +165,7 @@ pub async fn toggle_resource(
 
 #[tauri::command]
 pub async fn install_resource(
+    resource_manager: State<'_, ResourceManager>,
     task_manager: State<'_, TaskManager>,
     instance_id: i32,
     platform: SourcePlatform,
@@ -173,7 +174,41 @@ pub async fn install_resource(
     version: ResourceVersion,
     resource_type: ResourceType,
 ) -> Result<String> {
-    let task = ResourceDownloadTask {
+    use crate::utils::db::get_vesta_conn;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use diesel::prelude::*;
+
+    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+    // 1. Get instance info for context
+    let instance = inst_dsl::instance
+        .filter(inst_dsl::id.eq(instance_id))
+        .first::<crate::models::instance::Instance>(&mut conn)
+        .map_err(|e| anyhow::anyhow!("Instance not found: {}", e))?;
+
+    // 2. Resolve dependencies
+    let loader = instance.modloader.as_deref().unwrap_or("vanilla");
+    let dependencies = if resource_type == ResourceType::Mod {
+        resource_manager.resolve_dependencies(
+            platform, 
+            &version, 
+            &instance.minecraft_version, 
+            loader
+        ).await.unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    // 3. Get currently installed resources to skip duplicates
+    let installed = ir_dsl::installed_resource
+        .filter(ir_dsl::instance_id.eq(instance_id))
+        .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
+        .unwrap_or_default();
+
+    // 4. Submit tasks
+    // Main resource
+    let main_task = ResourceDownloadTask {
         instance_id,
         platform,
         project_id,
@@ -181,7 +216,55 @@ pub async fn install_resource(
         version,
         resource_type,
     };
-    
-    task_manager.submit(Box::new(task)).await.map_err(|e| anyhow::anyhow!(e))?;
-    Ok("Task submitted".to_string())
+    task_manager.submit(Box::new(main_task)).await.map_err(|e| anyhow::anyhow!(e))?;
+
+    // Dependencies
+    for (dep_project, dep_version) in dependencies {
+        // Check if already installed (by ID or Peer ID)
+        let mut is_installed = false;
+        let dep_platform_str = format!("{:?}", dep_project.source).to_lowercase();
+        
+        for ins in &installed {
+            // Direct ID match
+            if ins.platform == dep_platform_str && ins.remote_id == dep_project.id {
+                is_installed = true;
+                break;
+            }
+            
+            // External ID match
+            if let Some(ref external_ids) = dep_project.external_ids {
+                for (ext_plat, ext_id) in external_ids {
+                    if ins.platform == ext_plat.to_lowercase() && ins.remote_id == *ext_id {
+                        is_installed = true;
+                        break;
+                    }
+                }
+            }
+            if is_installed { break; }
+
+            // Name match as fallback
+            if ins.display_name.to_lowercase() == dep_project.name.to_lowercase() {
+                is_installed = true;
+                break;
+            }
+        }
+
+        if is_installed {
+            log::info!("Skipping dependency {} as it is already installed (matched by ID, peer ID, or name)", dep_project.name);
+            continue;
+        }
+
+        let dep_task = ResourceDownloadTask {
+            instance_id,
+            platform: dep_project.source,
+            project_id: dep_project.id.clone(),
+            project_name: dep_project.name,
+            version: dep_version,
+            resource_type: ResourceType::Mod,
+        };
+        
+        task_manager.submit(Box::new(dep_task)).await.map_err(|e| anyhow::anyhow!(e))?;
+    }
+
+    Ok("Tasks submitted".to_string())
 }

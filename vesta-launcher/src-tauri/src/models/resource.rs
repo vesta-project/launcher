@@ -59,6 +59,22 @@ pub enum ReleaseType {
     Alpha,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum DependencyType {
+    Required,
+    Optional,
+    Incompatible,
+    Embedded,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceDependency {
+    pub project_id: String,
+    pub version_id: Option<String>,
+    pub dependency_type: DependencyType,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResourceVersion {
     pub id: String,
@@ -70,6 +86,7 @@ pub struct ResourceVersion {
     pub file_name: String,
     pub release_type: ReleaseType,
     pub hash: String, // SHA1
+    pub dependencies: Vec<ResourceDependency>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
