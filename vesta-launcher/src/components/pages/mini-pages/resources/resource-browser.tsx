@@ -271,7 +271,7 @@ const ResourceCard: Component<{ project: ResourceProject; viewMode: 'grid' | 'li
                     const versions = await resources.getVersions(project.source, project.id);
                     const best = findBestVersion(versions, inst.minecraftVersion, inst.modloader, 'release', project.resource_type);
                     setLatestCompatibleVersion(best);
-                } catch (e) {
+                } catch (_) {
                     // Silently fail update check
                 }
             }
@@ -382,13 +382,14 @@ const ResourceCard: Component<{ project: ResourceProject; viewMode: 'grid' | 'li
         
         if (isInstalled()) {
             // Check for update first
-            if (isUpdateAvailable() && latestCompatibleVersion()) {
+            const latest = latestCompatibleVersion();
+            if (isUpdateAvailable() && latest) {
                 const instanceId = resources.state.selectedInstanceId;
                 if (!instanceId) return;
 
                 setLocalInstalling(true);
                 try {
-                    await resources.install(props.project, latestCompatibleVersion()!);
+                    await resources.install(props.project, latest);
                     showToast({
                         title: "Updated",
                         description: `${props.project.name} has been updated.`,

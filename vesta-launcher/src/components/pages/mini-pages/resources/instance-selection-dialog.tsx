@@ -32,7 +32,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
     createEffect(async () => {
         if (props.isOpen && props.project) {
             const instances = sortedInstances();
-            const newMap: Record<number, {id: string, name: string, type: string}[]> = {};
+            const newMap: Record<number, {id: string, name: string, type: string, versionId: string, hash: string | null}[]> = {};
             
             await Promise.all(instances.map(async (inst) => {
                 try {

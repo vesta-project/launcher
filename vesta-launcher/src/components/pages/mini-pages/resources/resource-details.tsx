@@ -1,5 +1,5 @@
 import { Component, createEffect, For, Show, createSignal, onMount, createMemo, untrack, onCleanup, createResource } from "solid-js";
-import { resources, ResourceProject, ResourceVersion, SourcePlatform, findBestVersion } from "@stores/resources";
+import { resources, ResourceProject, ResourceVersion, SourcePlatform, findBestVersion, ResourceDependency } from "@stores/resources";
 import { instancesState, Instance } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
@@ -33,6 +33,7 @@ import { getCompatibilityForInstance, getShaderEnginesInOrder, type ShaderEngine
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import CloseIcon from "@assets/close.svg";
 import HeartIcon from "@assets/heart.svg";
+import RightArrowIcon from "@assets/right-arrow.svg";
 import "./resource-details.css";
 
 // Configure marked for GFM
@@ -82,6 +83,43 @@ const VersionTags = (props: { versions: string[] }) => {
     );
 };
 
+const DependencyItem = (props: { dependency: ResourceDependency, platform: SourcePlatform }) => {
+    const [data] = createResource(() => resources.getProject(props.platform, props.dependency.project_id));
+
+    return (
+        <Show when={data()} fallback={<div class="dependency-item skeleton" />}>
+            <div 
+                class="dependency-item" 
+                onClick={() => {
+                    const p = data();
+                    if (p) {
+                        router()?.navigate("/resource-details", { 
+                            projectId: p.id, 
+                            platform: p.source 
+                        }, { 
+                            project: p 
+                        });
+                    }
+                }}
+            >
+                <img src={data()?.icon_url || "/default-pack.png"} alt={data()?.name} class="dep-icon" />
+                <div class="dep-info">
+                    <div class="dep-header">
+                        <span class="dep-name">{data()?.name}</span>
+                        <span class={`dep-type-badge ${props.dependency.dependency_type.toLowerCase()}`}>
+                            {props.dependency.dependency_type}
+                        </span>
+                    </div>
+                    <span class="dep-author">by {data()?.author}</span>
+                </div>
+                <div class="dep-action">
+                    <RightArrowIcon width={16} height={16} />
+                </div>
+            </div>
+        </Show>
+    );
+};
+
 const ResourceDetailsPage: Component<{ 
     project?: ResourceProject, 
     projectId?: string, 
@@ -90,12 +128,13 @@ const ResourceDetailsPage: Component<{
 }> = (props) => {
     const [project, setProject] = createSignal<ResourceProject | undefined>(props.project);
     const [loading, setLoading] = createSignal(false);
-    const [activeTab, setActiveTab] = createSignal<'description' | 'versions' | 'screenshots'>('description');
+    const [activeTab, setActiveTab] = createSignal<'description' | 'versions' | 'screenshots' | 'dependencies'>('description');
     const [versionFilter, setVersionFilter] = createSignal('');
     const [selectedScreenshot, setSelectedScreenshot] = createSignal<string | null>(null);
     const [isZoomed, setIsZoomed] = createSignal(false);
     const [versionPage, setVersionPage] = createSignal(1);
     const versionsPerPage = 15;
+    const [manualVersionId, setManualVersionId] = createSignal<string | null>(null);
 
     const [peerProject] = createResource(project, async (p: ResourceProject) => {
         if (!p) return null;
@@ -302,6 +341,16 @@ const ResourceDetailsPage: Component<{
         );
     });
 
+    const primaryVersion = createMemo(() => {
+        const manualId = manualVersionId();
+        if (manualId) {
+            return resources.state.versions.find(v => v.id === manualId) || null;
+        }
+        const best = bestVersionForCurrent();
+        if (best) return best;
+        return resources.state.versions[0] || null;
+    });
+
     const isProjectIncompatible = createMemo(() => {
         const instId = resources.state.selectedInstanceId;
         if (!instId || isModpack()) return false;
@@ -344,7 +393,7 @@ const ResourceDetailsPage: Component<{
     const handleQuickAction = () => {
         if (isProjectInstalled()) {
             if (isUpdateAvailable()) {
-                const best = bestVersionForCurrent();
+                const best = primaryVersion();
                 if (best) {
                     handleInstall(best);
                     return;
@@ -362,8 +411,9 @@ const ResourceDetailsPage: Component<{
         }
 
         if (isModpack()) {
-            if (resources.state.versions.length > 0) {
-                handleInstall(resources.state.versions[0]);
+            const best = primaryVersion();
+            if (best) {
+                handleInstall(best);
             }
             return;
         }
@@ -379,7 +429,7 @@ const ResourceDetailsPage: Component<{
             return;
         }
 
-        const best = bestVersionForCurrent();
+        const best = primaryVersion();
         if (best) {
             handleInstall(best);
         } else {
@@ -836,6 +886,12 @@ const ResourceDetailsPage: Component<{
                                 >
                                     Versions ({resources.state.versions.length})
                                 </button>
+                                <button 
+                                    class={`tab-btn ${activeTab() === 'dependencies' ? 'active' : ''}`}
+                                    onClick={() => setActiveTab('dependencies')}
+                                >
+                                    Dependencies ({primaryVersion()?.dependencies?.length || 0})
+                                </button>
                                 <Show when={(project()?.screenshots?.length ?? 0) > 0}>
                                     <button 
                                         class={`tab-btn ${activeTab() === 'screenshots' ? 'active' : ''}`}
@@ -871,6 +927,97 @@ const ResourceDetailsPage: Component<{
                                                 </div>
                                             )}
                                         </For>
+                                    </div>
+                                </Show>
+
+                                <Show when={activeTab() === 'dependencies'}>
+                                    <div class="dependencies-tab">
+                                        <div class="dependency-info-notice">
+                                            <span>Showing dependencies for version:</span>
+                                            <Select<ResourceVersion>
+                                                options={resources.state.versions}
+                                                value={primaryVersion() || undefined}
+                                                onChange={(v) => v && setManualVersionId(v.id)}
+                                                optionValue="id"
+                                                optionTextValue="version_number"
+                                                placeholder="Select version..."
+                                                itemComponent={(props) => (
+                                                    <SelectItem item={props.item}>
+                                                        <div class="version-select-item">
+                                                            <span class="version-name">{props.item.rawValue.version_number}</span>
+                                                            <div class="version-badges">
+                                                                <span class={`release-type-badge ${props.item.rawValue.release_type}`}>
+                                                                    {props.item.rawValue.release_type}
+                                                                </span>
+                                                                <For each={props.item.rawValue.loaders.slice(0, 2)}>
+                                                                    {(loader) => <span class="loader-badge">{loader}</span>}
+                                                                </For>
+                                                            </div>
+                                                        </div>
+                                                    </SelectItem>
+                                                )}
+                                            >
+                                                <SelectTrigger class="version-select-trigger">
+                                                    <SelectValue<ResourceVersion>>
+                                                        {(s) => s.selectedOption()?.version_number || "Select version..."}
+                                                    </SelectValue>
+                                                </SelectTrigger>
+                                                <SelectContent />
+                                            </Select>
+                                        </div>
+                                        
+                                        <Show when={(primaryVersion()?.dependencies?.length ?? 0) > 0} fallback={
+                                            <div class="empty-state">No dependencies listed for this version.</div>
+                                        }>
+                                            <div class="dependency-groups">
+                                                {(() => {
+                                                    const deps = primaryVersion()?.dependencies || [];
+                                                    const required = deps.filter(d => d.dependency_type === 'required');
+                                                    const optional = deps.filter(d => d.dependency_type === 'optional' || d.dependency_type === 'embedded');
+                                                    const incompatible = deps.filter(d => d.dependency_type === 'incompatible');
+                                                    
+                                                    const currentProject = project();
+                                                    if (!currentProject) return null;
+
+                                                    return (
+                                                        <>
+                                                            <Show when={required.length > 0}>
+                                                                <div class="dependency-group">
+                                                                    <h3 class="group-title required">Required</h3>
+                                                                    <div class="dependency-list">
+                                                                        <For each={required}>
+                                                                            {(dep) => <DependencyItem dependency={dep} platform={currentProject.source} />}
+                                                                        </For>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            <Show when={optional.length > 0}>
+                                                                <div class="dependency-group">
+                                                                    <h3 class="group-title optional">Optional / Embedded</h3>
+                                                                    <div class="dependency-list">
+                                                                        <For each={optional}>
+                                                                            {(dep) => <DependencyItem dependency={dep} platform={currentProject.source} />}
+                                                                        </For>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+
+                                                            <Show when={incompatible.length > 0}>
+                                                                <div class="dependency-group">
+                                                                    <h3 class="group-title incompatible">Incompatible</h3>
+                                                                    <div class="dependency-list">
+                                                                        <For each={incompatible}>
+                                                                            {(dep) => <DependencyItem dependency={dep} platform={currentProject.source} />}
+                                                                        </For>
+                                                                    </div>
+                                                                </div>
+                                                            </Show>
+                                                        </>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </Show>
                                     </div>
                                 </Show>
 

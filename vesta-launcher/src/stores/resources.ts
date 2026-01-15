@@ -40,6 +40,13 @@ export type ResourceVersion = {
     file_name: string;
     release_type: 'release' | 'beta' | 'alpha';
     hash: string;
+    dependencies: ResourceDependency[];
+};
+
+export type ResourceDependency = {
+    project_id: string;
+    version_id: string | null;
+    dependency_type: 'required' | 'optional' | 'incompatible' | 'embedded';
 };
 
 export type InstalledResource = {
