@@ -236,10 +236,7 @@ const ResourceCard: Component<{ project: ResourceProject; viewMode: 'grid' | 'li
     });
 
     const isInstallingProject = createMemo(() => {
-        if (resources.state.selectedProject?.id === props.project.id) {
-            return resources.state.installingVersionIds.length > 0;
-        }
-        return false;
+        return resources.state.installingProjectIds.includes(props.project.id);
     });
 
     const [localInstalling, setLocalInstalling] = createSignal(false);

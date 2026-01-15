@@ -1,5 +1,6 @@
 import { createStore } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Instance } from "./instances";
 
 export type ResourceType = 'mod' | 'resourcepack' | 'shader' | 'datapack' | 'modpack';
@@ -86,6 +87,7 @@ type ResourceStoreState = {
     versions: ResourceVersion[];
     installedResources: InstalledResource[];
     installingVersionIds: string[];
+    installingProjectIds: string[];
     viewMode: 'grid' | 'list';
     showFilters: boolean;
     requestInstallProject: ResourceProject | null;
@@ -111,6 +113,7 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     versions: [],
     installedResources: [],
     installingVersionIds: [],
+    installingProjectIds: [],
     viewMode: 'grid',
     showFilters: true,
     requestInstallProject: null,
@@ -274,6 +277,7 @@ export const resources = {
         
         // Immediate UI feedback
         setResourceStore("installingVersionIds", ids => [...ids, version.id]);
+        setResourceStore("installingProjectIds", ids => [...ids, project.id]);
 
         try {
             const result = await invoke<string>("install_resource", {
@@ -285,10 +289,12 @@ export const resources = {
                 resourceType: project.resource_type
             });
 
-            // Remove from installing list on success
-            setResourceStore("installingVersionIds", ids => ids.filter(id => id !== version.id));
+            // We DO NOT clear the installing IDs here anymore.
+            // They will be cleared by fetchInstalled once the ResourceWatcher
+            // detects the new file and updates the database.
 
-            // Refresh installed list after a short delay to allow DB/File system to sync
+            // Request an initial refresh after a short delay, but the event listener
+            // will handle the real completion signal.
             setTimeout(() => {
                 if (instanceId) {
                     resources.fetchInstalled(instanceId);
@@ -297,8 +303,9 @@ export const resources = {
 
             return result;
         } catch (e) {
-            // Remove from installing list on error
+            // Remove from installing list ONLY on error
             setResourceStore("installingVersionIds", ids => ids.filter(id => id !== version.id));
+            setResourceStore("installingProjectIds", ids => ids.filter(id => id !== project.id));
             throw e;
         }
     },
@@ -311,10 +318,13 @@ export const resources = {
         const results = await invoke<InstalledResource[]>("get_installed_resources", { instanceId });
         setResourceStore("installedResources", results);
         
-        // Clear any installing IDs that are now in the results or just clear them all for this instance
-        // Best approach: If we fetched new data, we can assume matching IDs are no longer "installing"
+        // Clear any installing IDs that are now in the results.
+        // This is the source of truth for when an installation is "finished".
         const installedRemoteVersionIds = results.map(r => r.remote_version_id);
+        const installedRemoteIds = results.map(r => r.remote_id.toLowerCase());
+
         setResourceStore("installingVersionIds", ids => ids.filter(id => !installedRemoteVersionIds.includes(id)));
+        setResourceStore("installingProjectIds", ids => ids.filter(id => !installedRemoteIds.includes(id.toLowerCase())));
 
         return results;
     },
@@ -329,28 +339,54 @@ export const resources = {
     }
 };
 
+// Listen for resource updates from the backend (watcher)
+if (typeof window !== 'undefined') {
+    listen("resources-updated", (event) => {
+        const instanceId = event.payload as number;
+        if (resourceStore.selectedInstanceId === instanceId) {
+            resources.fetchInstalled(instanceId);
+        }
+    });
+
+    listen("resource-install-error", (event) => {
+        const taskId = event.payload as string;
+        // Format: download_{instance_id}_{project_id}_{version_id}
+        const parts = taskId.split('_');
+        if (parts.length >= 4 && parts[0] === 'download') {
+            const projectId = parts[2];
+            const versionId = parts[3];
+
+            setResourceStore("installingProjectIds", ids => ids.filter(id => id !== projectId));
+            setResourceStore("installingVersionIds", ids => ids.filter(id => id !== versionId));
+        }
+    });
+}
+
 export function isGameVersionCompatible(supported: string[], target: string): boolean {
     // Normalize versions to handle 1.21 vs 1.21.0 consistently
+    // We normalize both to X.Y for comparison, but we must be careful with patches.
     const normalize = (v: string) => v.endsWith(".0") ? v.slice(0, -2) : v;
     const nTarget = normalize(target);
-    
-    // Split target into components: [1, 21, 4]
     const targetParts = nTarget.split('.');
+    
+    // Major.Minor group of the target (e.g., "1.21" from "1.21.4")
     const targetMajorMinor = targetParts.slice(0, 2).join('.');
     
     for (const s of supported) {
         const ns = normalize(s);
         
-        // Exact match
+        // 1. Exact match (including normalized 1.21 vs 1.21.0)
         if (ns === nTarget) return true;
         
-        // Major.Minor match (e.g., "1.21" or "1.21.x" matches "1.21.4")
-        if (ns === targetMajorMinor || ns === `${targetMajorMinor}.x`) return true;
+        // 2. Explicit wildcard match (e.g., "1.21.x")
+        if (ns === `${targetMajorMinor}.x`) return true;
         
-        // If the supported version specifies a patch, it MUST match exactly.
-        // (Handled by the exact match check above).
-        // So if we reached here, and ns has 3 parts (e.g. 1.21.1), 
-        // it's not a match for our target (e.g. 1.21.4).
+        // 3. Range support (if we implement it later, e.g., "[1.21, 1.21.2]")
+        // (Not implemented yet)
+
+        // Note: We NO LONGER allow a bare "1.21" to match "1.21.4" by default.
+        // If a mod supports "1.21.x", it should be tagged as such or list all patches.
+        // This prevents the "mod for 1.21 and 1.21.1 doesn't match 1.21.11" issue.
     }
     
     return false;

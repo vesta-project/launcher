@@ -283,9 +283,7 @@ const ResourceDetailsPage: Component<{
     const isProjectInstalling = createMemo(() => {
         const p = project();
         if (!p) return false;
-        return resources.state.installingVersionIds.some(id => 
-            resources.state.versions.find(v => v.id === id)?.project_id === p.id
-        );
+        return resources.state.installingProjectIds.includes(p.id);
     });
 
     const handleUninstall = async () => {
@@ -402,6 +400,18 @@ const ResourceDetailsPage: Component<{
         return false;
     });
 
+    const hasAnyCompatibleVersion = createMemo(() => {
+        const instId = resources.state.selectedInstanceId;
+        if (!instId) return false;
+        const inst = instancesState.instances.find(i => i.id === instId);
+        if (!inst) return false;
+
+        return resources.state.versions.some(v => {
+            const comp = getCompatibilityForInstance(project(), v, inst);
+            return comp.type !== 'incompatible';
+        });
+    });
+
     const isUpdateAvailable = createMemo(() => {
         const installed = installedResource();
         const best = bestVersionForCurrent();
@@ -421,6 +431,13 @@ const ResourceDetailsPage: Component<{
     });
 
     const handleQuickAction = () => {
+        if (isProjectIncompatible() && !isProjectInstalled()) {
+            if (hasAnyCompatibleVersion()) {
+                setActiveTab('versions');
+            }
+            return;
+        }
+
         if (isProjectInstalled()) {
             if (isUpdateAvailable()) {
                 const best = primaryVersion();
@@ -867,7 +884,9 @@ const ResourceDetailsPage: Component<{
                                                                 Install
                                                             </>
                                                         }>
-                                                            Unsupported
+                                                            <Show when={hasAnyCompatibleVersion()} fallback="Unsupported">
+                                                                Check Versions
+                                                            </Show>
                                                         </Show>
                                                     </Show>
                                                 </Show>

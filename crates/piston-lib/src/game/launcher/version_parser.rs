@@ -661,6 +661,7 @@ mod tests {
             version_type: Some("release".to_string()),
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let child = VersionManifest {
@@ -679,6 +680,7 @@ mod tests {
             version_type: None,
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let merged = merge_manifests(parent, child).unwrap();
@@ -707,6 +709,7 @@ mod tests {
             version_type: Some("release".to_string()),
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let child = VersionManifest {
@@ -725,6 +728,7 @@ mod tests {
             version_type: None,
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let merged = merge_manifests(parent, child).unwrap();

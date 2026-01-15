@@ -5,7 +5,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, watch, Semaphore};
 
 pub struct TaskContext {
@@ -186,6 +186,14 @@ impl TaskManager {
                             metadata: None,
                             show_on_completion: None,
                         });
+
+                        // Notify frontend about failure if it's a resource download
+                        if let Some(task_id) = task.id() {
+                            if task_id.starts_with("download_") {
+                                let _ = app.emit("resource-install-error", task_id);
+                            }
+                        }
+
                         // Cleanup tokens
                         if is_cancellable {
                             tokens.lock().unwrap().remove(&key_clone);
@@ -233,6 +241,14 @@ impl TaskManager {
                         }
                         Err(e) => {
                             eprintln!("Task execution failed: {}", e);
+
+                            // Notify frontend about failure if it follows the resource download pattern
+                            if let Some(task_id) = task.id() {
+                                if task_id.starts_with("download_") {
+                                    let _ = app.emit("resource-install-error", task_id);
+                                }
+                            }
+
                             // Convert progress notification to Patient failure
                             let _ = manager.create(CreateNotificationInput {
                                 client_key: Some(key_clone.clone()),

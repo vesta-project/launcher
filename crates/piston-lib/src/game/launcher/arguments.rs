@@ -584,6 +584,7 @@ mod tests {
             version_type: None,
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let unified = UnifiedManifest::from(manifest);
