@@ -471,8 +471,7 @@ function InitInstallationPage(props: InitPagesProps) {
 									placeholder="Select version..."
 									itemComponent={(itemProps) => (
 										<ComboboxItem item={itemProps.item}>
-											<ComboboxItemLabel>{itemProps.item.rawValue}</ComboboxItemLabel>
-											<ComboboxItemIndicator />
+											{itemProps.item.rawValue}
 										</ComboboxItem>
 									)}
 								>
@@ -494,8 +493,7 @@ function InitInstallationPage(props: InitPagesProps) {
 										placeholder={`Select ${selectedModloader()} version...`}
 										itemComponent={(itemProps) => (
 											<ComboboxItem item={itemProps.item}>
-												<ComboboxItemLabel>{itemProps.item.rawValue}</ComboboxItemLabel>
-												<ComboboxItemIndicator />
+												{itemProps.item.rawValue}
 											</ComboboxItem>
 										)}
 									>

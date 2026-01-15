@@ -1,4 +1,4 @@
-import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.jpg";
+import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.png";
 import PlaceholderImage2 from "@assets/placeholder-images/placeholder-image2.png";
 import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png";
 import PlaceholderImage4 from "@assets/placeholder-images/placeholder-image4.png";
@@ -6,6 +6,8 @@ import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png
 import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
 import PlaceholderImage7 from "@assets/placeholder-images/placeholder-image7.png";
 import PlaceholderImage8 from "@assets/placeholder-images/placeholder-image8.png";
+import PlaceholderImage9 from "@assets/placeholder-images/placeholder-image9.png";
+import PlaceholderImage10 from "@assets/placeholder-images/placeholder-image10.png";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -19,6 +21,8 @@ export const DEFAULT_ICONS = [
 	PlaceholderImage6,
 	PlaceholderImage7,
 	PlaceholderImage8,
+	PlaceholderImage9,
+	PlaceholderImage10,
 	// "linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
 	// "linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
 	// "linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",

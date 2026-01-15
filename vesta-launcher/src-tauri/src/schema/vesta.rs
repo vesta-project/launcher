@@ -40,9 +40,11 @@ diesel::table! {
         local_path -> Text,
         display_name -> Text,
         current_version -> Text,
+        release_type -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
         last_updated -> Timestamp,
+        hash -> Nullable<Text>,
     }
 }
 

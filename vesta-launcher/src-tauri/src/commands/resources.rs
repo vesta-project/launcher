@@ -59,8 +59,17 @@ pub async fn get_resource_versions(
     resource_manager: State<'_, ResourceManager>,
     platform: SourcePlatform,
     project_id: String,
+    ignore_cache: Option<bool>,
 ) -> Result<Vec<ResourceVersion>> {
-    Ok(resource_manager.get_versions(platform, &project_id).await?)
+    Ok(resource_manager.get_versions(platform, &project_id, ignore_cache.unwrap_or(false)).await?)
+}
+
+#[tauri::command]
+pub async fn find_peer_resource(
+    resource_manager: State<'_, ResourceManager>,
+    project: ResourceProject,
+) -> Result<Option<ResourceProject>> {
+    Ok(resource_manager.find_peer_project(&project).await?)
 }
 
 #[tauri::command]

@@ -52,9 +52,11 @@ export type InstalledResource = {
     local_path: string;
     display_name: string;
     current_version: string;
+    release_type: 'release' | 'beta' | 'alpha';
     is_manual: boolean;
     is_enabled: boolean;
     last_updated: string;
+    hash?: string;
 };
 
 type ResourceStoreState = {
@@ -69,10 +71,17 @@ type ResourceStoreState = {
     limit: number;
     gameVersion: string | null;
     loader: string | null;
+    categories: string[];
+    sortBy: string;
+    sortOrder: 'asc' | 'desc';
     selectedProject: ResourceProject | null;
     versions: ResourceVersion[];
     installedResources: InstalledResource[];
     installingVersionIds: string[];
+    viewMode: 'grid' | 'list';
+    showFilters: boolean;
+    requestInstallProject: ResourceProject | null;
+    requestInstallVersions: ResourceVersion[];
 };
 
 const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
@@ -87,18 +96,43 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     limit: 20,
     gameVersion: null,
     loader: null,
+    categories: [],
+    sortBy: 'relevance',
+    sortOrder: 'desc',
     selectedProject: null,
     versions: [],
     installedResources: [],
-    installingVersionIds: []
+    installingVersionIds: [],
+    viewMode: 'grid',
+    showFilters: true,
+    requestInstallProject: null,
+    requestInstallVersions: []
 });
 
 export const resources = {
     state: resourceStore,
 
+    setRequestInstall: (p: ResourceProject | null, versions: ResourceVersion[] = []) => {
+        setResourceStore("requestInstallProject", p);
+        setResourceStore("requestInstallVersions", versions);
+    },
+
     setQuery: (q: string) => setResourceStore("query", q),
-    setSource: (s: SourcePlatform) => setResourceStore("activeSource", s),
-    setType: (t: ResourceType) => setResourceStore("resourceType", t),
+    setSource: (s: SourcePlatform) => {
+        setResourceStore("activeSource", s);
+        setResourceStore("sortBy", s === 'modrinth' ? 'relevance' : 'featured');
+        setResourceStore("categories", []);
+        setResourceStore("offset", 0);
+    },
+    setType: (t: ResourceType) => {
+        setResourceStore("resourceType", t);
+        setResourceStore("offset", 0);
+        setResourceStore("categories", []);
+        // Clear loader if not on 'mod' as it doesn't apply to resourcepacks/shaders
+        if (t !== 'mod') {
+            setResourceStore("loader", null);
+        }
+    },
     setInstance: (id: number | null) => {
         setResourceStore("selectedInstanceId", id);
         if (id) {
@@ -109,8 +143,39 @@ export const resources = {
     },
     setGameVersion: (v: string | null) => setResourceStore("gameVersion", v),
     setLoader: (l: string | null) => setResourceStore("loader", l),
+    setCategories: (c: string[]) => setResourceStore("categories", c),
+    toggleCategory: (c: string) => {
+        const current = resourceStore.categories;
+        if (current.includes(c)) {
+            setResourceStore("categories", current.filter(cat => cat !== c));
+        } else {
+            setResourceStore("categories", [...current, c]);
+        }
+    },
+    setSortBy: (s: string) => setResourceStore("sortBy", s),
+    setSortOrder: (o: 'asc' | 'desc') => setResourceStore("sortOrder", o),
+    setLimit: (l: number) => {
+        setResourceStore("limit", l);
+        setResourceStore("offset", 0);
+    },
+    toggleSortOrder: () => setResourceStore("sortOrder", o => o === 'asc' ? 'desc' : 'asc'),
+    setViewMode: (m: 'grid' | 'list') => setResourceStore("viewMode", m),
+    toggleFilters: () => setResourceStore("showFilters", show => !show),
     setOffset: (o: number) => setResourceStore("offset", o),
     setPage: (p: number) => setResourceStore("offset", (p - 1) * resourceStore.limit),
+
+    resetFilters: () => {
+        setResourceStore({
+            query: "",
+            categories: [],
+            gameVersion: null,
+            loader: null,
+            offset: 0,
+            sortBy: resourceStore.activeSource === 'modrinth' ? 'relevance' : 'featured',
+            sortOrder: 'desc'
+        });
+        resources.search();
+    },
 
     selectProject: async (project: ResourceProject | null) => {
         setResourceStore("selectedProject", project);
@@ -142,7 +207,9 @@ export const resources = {
                     limit: resourceStore.limit,
                     game_version: resourceStore.gameVersion,
                     loader: resourceStore.loader,
-                    category: null
+                    categories: resourceStore.categories.length > 0 ? resourceStore.categories : null,
+                    sort_by: resourceStore.sortBy,
+                    sort_order: resourceStore.sortOrder
                 }
             });
             setResourceStore({
@@ -160,19 +227,26 @@ export const resources = {
         return await invoke<ResourceProject>("get_resource_project", { platform, id });
     },
 
-    getVersions: async (platform: SourcePlatform, projectId: string) => {
-        return await invoke<ResourceVersion[]>("get_resource_versions", { platform, projectId });
+    getVersions: async (platform: SourcePlatform, projectId: string, ignoreCache: boolean = false) => {
+        return await invoke<ResourceVersion[]>("get_resource_versions", { 
+            platform, 
+            projectId,
+            ignoreCache 
+        });
     },
 
-    install: async (project: ResourceProject, version: ResourceVersion) => {
-        if (!resourceStore.selectedInstanceId) return;
+    install: async (project: ResourceProject, version: ResourceVersion, targetInstanceId?: number | null) => {
+        const isModpack = project.resource_type === 'modpack';
+        const instanceId = targetInstanceId !== undefined ? targetInstanceId : resourceStore.selectedInstanceId;
+        
+        if (!instanceId && !isModpack) return;
         
         // Immediate UI feedback
         setResourceStore("installingVersionIds", ids => [...ids, version.id]);
 
         try {
             const result = await invoke<string>("install_resource", {
-                instanceId: resourceStore.selectedInstanceId,
+                instanceId: instanceId || 0,
                 platform: project.source,
                 projectId: project.id,
                 projectName: project.name,
@@ -180,10 +254,13 @@ export const resources = {
                 resourceType: project.resource_type
             });
 
+            // Remove from installing list on success
+            setResourceStore("installingVersionIds", ids => ids.filter(id => id !== version.id));
+
             // Refresh installed list after a short delay to allow DB/File system to sync
             setTimeout(() => {
-                if (resourceStore.selectedInstanceId) {
-                    resources.fetchInstalled(resourceStore.selectedInstanceId);
+                if (instanceId) {
+                    resources.fetchInstalled(instanceId);
                 }
             }, 1000);
 
@@ -213,38 +290,80 @@ export const resources = {
 
     sync: async (instanceId: number, instanceSlug: string, gameDir: string) => {
         return await invoke<void>("sync_instance_resources", { instanceId, instanceSlug, gameDir });
+    },
+
+    uninstall: async (instanceId: number, resourceId: number) => {
+        await invoke("delete_resource", { instanceId, resourceId });
+        await resources.fetchInstalled(instanceId);
     }
 };
 
-export function findBestVersion(versions: ResourceVersion[], gameVersion: string, modloader: string | null): ResourceVersion | null {
+export function findBestVersion(
+    versions: ResourceVersion[], 
+    gameVersion: string, 
+    modloader: string | null,
+    currentReleaseType?: 'release' | 'beta' | 'alpha',
+    resourceType?: ResourceType
+): ResourceVersion | null {
     // Filter by game version and loader
     // Some platforms use different casing, lower-case for comparison
     const instLoader = modloader?.toLowerCase() || "";
     
-    console.log(`Finding best version for MC: ${gameVersion}, Loader: ${instLoader}`);
-    console.log(`Available versions: ${versions.length}`);
+    // If currentReleaseType is unknown, we default to only looking for releases to be safe
+    const allowedReleaseTypes = (currentReleaseType === 'release' || !currentReleaseType) 
+        ? ['release'] 
+        : (currentReleaseType === 'beta' ? ['release', 'beta'] : ['release', 'beta', 'alpha']);
 
     const compatible = versions.filter(v => {
         const matchesVersion = v.game_versions.includes(gameVersion);
         
-        let matchesLoader = instLoader === "" || v.loaders.some(l => l.toLowerCase() === instLoader);
+        // Loader logic
+        const normalizedLoaders = v.loaders.map(l => l.toLowerCase());
+        let matchesLoader = false;
         
-        // Quilt can run Fabric mods
-        if (!matchesLoader && instLoader === "quilt") {
-            matchesLoader = v.loaders.some(l => l.toLowerCase() === "fabric");
+        if (resourceType === 'shader' || resourceType === 'resourcepack' || resourceType === 'datapack') {
+            matchesLoader = true; // Universal
+            
+            // Shaders require a loader (Iris/Oculus) so they are NOT compatible with vanilla
+            if (resourceType === 'shader' && (instLoader === "" || instLoader === "vanilla")) {
+                matchesLoader = false;
+            }
+        } else {
+            // For mods, vanilla does NOT match unless it's a specific "minecraft" engine mod
+            const isVanilla = instLoader === "" || instLoader === "vanilla";
+            if (isVanilla) {
+                // True mods (jar mods) are not compatible with Vanilla
+                if (resourceType === 'mod') {
+                    matchesLoader = false;
+                } else {
+                    matchesLoader = normalizedLoaders.length === 0 || normalizedLoaders.includes("minecraft");
+                }
+            } else {
+                matchesLoader = normalizedLoaders.some(l => l === instLoader);
+            }
+            
+            // Quilt can run Fabric mods
+            if (!matchesLoader && instLoader === "quilt") {
+                matchesLoader = normalizedLoaders.includes("fabric");
+            }
+
+            // NeoForge can run Forge mods
+            if (!matchesLoader && instLoader === "neoforge") {
+                matchesLoader = normalizedLoaders.includes("forge");
+            }
         }
         
-        // Debug first few versions
-        if (versions.indexOf(v) < 3) {
-            console.log(`Version ${v.version_number}: matchesVersion=${matchesVersion}, matchesLoader=${matchesLoader} (v.loaders: ${v.loaders})`);
-        }
+        const matchesStability = allowedReleaseTypes.includes(v.release_type);
         
-        return matchesVersion && matchesLoader;
+        return matchesVersion && matchesLoader && matchesStability;
     });
 
-    console.log(`Compatible versions found: ${compatible.length}`);
+    if (compatible.length === 0) return null;
+
+    // The API normally returns versions newest -> oldest. 
+    // We want the newest one that fits our criteria.
+    // If not on 'release' mode, we still prefer 'release' over 'beta' if both are compatible.
     
-    // Sort by release type (Release > Beta > Alpha)
     const releases = compatible.filter(v => v.release_type === 'release');
     if (releases.length > 0) return releases[0];
     

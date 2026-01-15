@@ -29,7 +29,7 @@ import {
 	SwitchThumb,
 } from "@ui/switch/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { resources } from "@stores/resources";
+import { resources, findBestVersion, type ResourceVersion, type InstalledResource } from "@stores/resources";
 import {
 	DEFAULT_ICONS,
 	getInstanceBySlug,
@@ -57,16 +57,15 @@ import {
 	getFilteredRowModel,
 } from "@tanstack/solid-table";
 import "./instance-details.css";
-import { type InstalledResource } from "@stores/resources";
 import { formatDate } from "@utils/date";
 
-type TabType = "home" | "console" | "mods" | "settings";
+type TabType = "home" | "console" | "resources" | "settings";
 
 interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
 }
 
-export default function InstanceDetails(props: InstanceDetailsProps) {
+export default function InstanceDetails(props: InstanceDetailsProps & { setRefetch?: (fn: () => Promise<void>) => void }) {
 	// Get slug from props first, then fallback to router params
 	const getSlug = () => {
 		if (props.slug) return props.slug;
@@ -88,19 +87,34 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 
 	// Register refetch callback with router so reload button can trigger it
 	const handleRefetch = async () => {
-		await refetch();
+		await Promise.all([refetch(), refetchResources()]);
 	};
 
 	onMount(() => {
 		router()?.setRefetch(handleRefetch);
+		if (props.setRefetch) {
+			props.setRefetch(handleRefetch);
+		}
 	});
 
 	onCleanup(() => {
 		router()?.setRefetch(() => Promise.resolve());
 	});
 
-	// Local tab state - no longer synced with router props
+	// Tab state - initialized from query param if available
 	const [activeTab, setActiveTab] = createSignal<TabType>("home");
+
+	// Sync tab state with router params
+	createEffect(() => {
+		const params = router()?.currentParams.get();
+		const tab = params?.activeTab as TabType | undefined;
+		if (tab && ["home", "console", "resources", "settings"].includes(tab)) {
+			setActiveTab(tab);
+		} else {
+			// Default to home if no tab specified
+			setActiveTab("home");
+		}
+	});
 
 	// Running state
 	const [isRunning, setIsRunning] = createSignal(false);
@@ -110,11 +124,113 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 	const [lines, setLines] = createSignal<string[]>([]);
 	let consoleRef: HTMLDivElement | undefined;
 
-	// Mods Tab State
+	// Resources Tab State
 	const [resourceTypeFilter, setResourceTypeFilter] = createSignal<string>("All");
 	const [resourceSearch, setResourceSearch] = createSignal("");
+	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>({});
+	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
+	const [lastCheckTime, setLastCheckTime] = createSignal<number>(0);
 
-	// Settings form state
+	// Auto-resync and check updates when entering resources tab
+	createEffect(async () => {
+		const tab = activeTab();
+		const inst = instance();
+		if (tab === "resources" && inst && !busy()) {
+			// Always sync folders when switching to resources tab
+			try {
+				await invoke("sync_instance_resources", {
+					instanceId: inst.id,
+					instanceSlug: slug(),
+					gameDir: inst.gameDirectory
+				});
+				await refetchResources();
+			} catch (e) {
+				console.error("Auto-sync failed:", e);
+			}
+
+			// Then check for updates if needed
+			const now = Date.now();
+			if (!installedResources.loading && !checkingUpdates() && (now - lastCheckTime() > 5 * 60 * 1000)) {
+				checkUpdates();
+			}
+		}
+	});
+
+	const checkUpdates = async () => {
+		const inst = instance();
+		const resourcesList = installedResources();
+		if (!inst || !resourcesList || checkingUpdates()) return;
+
+		setLastCheckTime(Date.now());
+		console.log(`[InstanceDetails] Checking updates for ${resourcesList.length} resources on MC ${inst.minecraftVersion} (${inst.modloader})`);
+		setCheckingUpdates(true);
+		const newUpdates: Record<number, ResourceVersion> = {};
+		
+		for (const res of resourcesList) {
+			if (res.is_manual || res.platform === 'manual') continue;
+			try {
+				// We ignore cache here because the user explicitly asked to check for updates
+				const versions = await resources.getVersions(res.platform as any, res.remote_id, true);
+				const best = findBestVersion(
+					versions, 
+					inst.minecraftVersion, 
+					inst.modloader,
+					res.release_type
+				);
+				
+				if (best) {
+					// Some platforms return versions in slightly different formats (string vs number)
+					// Compare as strings to be safe
+					if (String(best.id) !== String(res.remote_version_id)) {
+						console.log(`[InstanceDetails] Update found for ${res.display_name}: ${res.current_version} -> ${best.version_number}`);
+						newUpdates[res.id] = best;
+					}
+				}
+			} catch (e) {
+				console.error(`Failed to check updates for ${res.display_name}:`, e);
+			}
+		}
+		
+		console.log(`[InstanceDetails] Finished check. Found ${Object.keys(newUpdates).length} updates.`);
+		setUpdates(newUpdates);
+		setCheckingUpdates(false);
+	};
+
+	const handleUpdate = async (resource: InstalledResource, version: ResourceVersion) => {
+		const inst = instance();
+		if (!inst) return;
+		
+		try {
+			const project = await resources.getProject(resource.platform as any, resource.remote_id);
+			await resources.install(project, version, inst.id);
+			
+			setUpdates(prev => {
+				const next = { ...prev };
+				delete next[resource.id];
+				return next;
+			});
+		} catch (e) {
+			console.error("Update failed:", e);
+		}
+	};
+
+	const updateAll = async () => {
+		const available = updates();
+		const ids = Object.keys(available).map(Number);
+		if (ids.length === 0) return;
+
+		setBusy(true);
+		for (const id of ids) {
+			const res = (installedResources() || []).find(r => r.id === id);
+			const version = available[id];
+			if (res && version) {
+				await handleUpdate(res, version);
+			}
+		}
+		setBusy(false);
+	};
+
+	// Settings form state (existing code continues...)
 	const [name, setName] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [javaArgs, setJavaArgs] = createSignal<string>("");
@@ -152,17 +268,13 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			setIconPath(inst.iconPath);
 			setJavaArgs(inst.javaArgs ?? "");
 			setMemoryMb([inst.memoryMb ?? 2048]);
-			// Update resource store context
-			resources.setInstance(inst.id);
-			resources.setGameVersion(inst.minecraftVersion);
-			resources.setLoader(inst.modloader);
 			
-			// Initialize resource watcher and fetch installed list
-			resources.sync(inst.id, inst.slug, inst.gameDirectory || "");
-			resources.fetchInstalled(inst.id);		}
+			// Initialize resource watcher but don't set as globally "selected" yet
+			resources.sync(inst.id, slug(), inst.gameDirectory || "");
+		}
 	});
 
-	// TanStack Table setup for Mods
+	// TanStack Table setup for Resources
 	const columnHelper = createColumnHelper<InstalledResource>();
 
 	const columns = [
@@ -185,6 +297,34 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		}),
 		columnHelper.accessor("current_version", {
 			header: "Version",
+			cell: (info) => {
+				const currentUpdate = () => updates()[info.row.original.id];
+				return (
+					<div class="version-cell">
+						<span>{info.getValue()}</span>
+						<Show when={currentUpdate()}>
+							<Tooltip placement="top">
+								<TooltipTrigger
+									as={Button}
+									variant="ghost"
+									class="update-btn"
+									disabled={busy()}
+									onClick={(e: MouseEvent) => {
+										e.stopPropagation();
+										const u = currentUpdate();
+										if (u) handleUpdate(info.row.original, u);
+									}}
+								>
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+								</TooltipTrigger>
+								<TooltipContent>
+									Update to {currentUpdate()?.version_number}
+								</TooltipContent>
+							</Tooltip>
+						</Show>
+					</div>
+				);
+			},
 		}),
 		columnHelper.accessor("platform", {
 			header: "Source",
@@ -193,7 +333,10 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		columnHelper.accessor("is_enabled", {
 			header: () => <div style="text-align: right">Enabled</div>,
 			cell: (info) => (
-				<div style="display: flex; justify-content: flex-end; width: 100%;">
+				<div 
+					style="display: flex; justify-content: flex-end; width: 100%;"
+					onClick={(e) => e.stopPropagation()}
+				>
 					<Switch
 						checked={info.getValue()}
 						onChange={async (enabled) => {
@@ -219,13 +362,16 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 			id: "actions",
 			header: "",
 			cell: (info) => (
-				<div style="display: flex; justify-content: flex-end;">
+				<div 
+					style="display: flex; justify-content: flex-end;"
+					onClick={(e) => e.stopPropagation()}
+				>
 					<Button
 						variant="ghost"
 						size="icon"
 						onClick={async () => {
 							if (
-								confirm(
+								await confirm(
 									`Are you sure you want to delete ${info.row.original.display_name}? This will remove the file from your instance.`,
 								)
 							) {
@@ -384,9 +530,10 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		});
 
 		const unlistenResources = await listen("resources-updated", (event) => {
-			if (event.payload === instance()?.id) {
+			const inst = instance();
+			if (inst && event.payload === inst.id) {
 				refetchResources();
-				resources.fetchInstalled(instance()!.id);
+				resources.fetchInstalled(inst.id);
 			}
 		});
 
@@ -471,10 +618,14 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 		}
 	};
 
-	// Handle tab changes - use updateQuery to avoid creating history entries
+	// Handle tab changes - use navigate to support history (back/forward)
 	const handleTabChange = (tab: TabType) => {
-		setActiveTab(tab);
-		router()?.updateQuery("activeTab", tab);
+		if (tab === activeTab()) return;
+
+		router()?.navigate("/instance", { 
+			...router()?.currentParams.get(),
+			activeTab: tab 
+		});
 	};
 
 	return (
@@ -494,10 +645,10 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 						Console
 					</button>
 					<button
-						classList={{ active: activeTab() === "mods" }}
-						onClick={() => handleTabChange("mods")}
+						classList={{ active: activeTab() === "resources" }}
+						onClick={() => handleTabChange("resources")}
 					>
-						Mods
+						Resources
 					</button>
 					<button
 						classList={{ active: activeTab() === "settings" }}
@@ -551,7 +702,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 										</div>
 										<div class="header-actions">
 											<Button
-												variant="flat"
+												variant="ghost"
 												size="md"
 												onClick={openInstanceFolder}
 												title="Open Folder"
@@ -688,15 +839,15 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 										</Show>
 									</Show>
 
-									<Show when={activeTab() === "mods"}>
-										<section class="tab-mods">
-											<div class="mods-toolbar">
-												<div class="toolbar-left">
+									<Show when={activeTab() === "resources"}>
+										<section class="tab-resources">
+											<div class="resources-toolbar-v2">
+												<div class="toolbar-search-filter">
 													<div class="filter-group">
 														<For each={[
 															{ id: "All", label: "All" },
 															{ id: "mod", label: "Mods" },
-															{ id: "resourcepack", label: "Resource Packs" },
+															{ id: "resourcepack", label: "Packs" },
 															{ id: "shader", label: "Shaders" }
 														]}>
 															{(option) => (
@@ -713,38 +864,49 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 													<div class="search-box">
 														<input 
 															type="text" 
-															placeholder="Search resources..." 
+															placeholder="Search installed..." 
 															value={resourceSearch()}
 															onInput={(e) => setResourceSearch(e.currentTarget.value)}
 														/>
 													</div>
 												</div>
-												<div class="toolbar-actions">
+
+												<div class="toolbar-actions-v2">
+													<Button 
+														size="sm"
+														variant="ghost"
+														class="check-updates-btn"
+														onClick={checkUpdates}
+														disabled={checkingUpdates() || busy()}
+													>
+														<Show when={checkingUpdates()} fallback={
+															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" classList={{ "animate-spin": checkingUpdates() }}><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+														}>
+															<span class="checking-updates-spinner" />
+														</Show>
+														{checkingUpdates() ? "Checking..." : "Check for Updates"}
+													</Button>
+
+													<Show when={Object.keys(updates()).length > 0}>
+														<Button 
+															size="sm"
+															color="primary"
+															variant="solid"
+															class="update-all-btn"
+															onClick={updateAll}
+															disabled={busy()}
+														>
+															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+															Update All ({Object.keys(updates()).length})
+														</Button>
+													</Show>
+
+													<div class="spacer" style={{ flex: 1 }} />
+
 													<Button 
 														size="sm"
 														variant="outline"
-														onClick={async () => {
-															const inst = instance();
-															if (inst) {
-																setBusy(true);
-																try {
-																	await invoke("sync_instance_resources", {
-																		instanceId: inst.id,
-																		instanceSlug: slug(),
-																		gameDir: inst.gameDirectory
-																	});
-																	await refetchResources();
-																} catch (e) {
-																	console.error("Sync failed:", e);
-																}
-																setBusy(false);
-															}
-														}}
-													>
-														Sync Folders
-													</Button>
-													<Button 
-														size="sm"
+														class="browse-resources-btn"
 														onClick={() => {
 															const inst = instance();
 															if (inst) {
@@ -755,14 +917,15 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 															}
 														}}
 													>
-														Browse More
+														<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+														Browse Resources
 													</Button>
 												</div>
 											</div>
 
 											<div class="installed-resources-list">
 												<Show when={installedResources.loading}>
-													<Skeleton class="skeleton-mods" />
+													<Skeleton class="skeleton-resources" />
 												</Show>
 												<Show when={!installedResources.loading}>
 													<div class="tanstack-table-container">
@@ -790,7 +953,30 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 															<tbody>
 																<For each={table.getRowModel().rows}>
 																	{(row) => (
-																		<tr classList={{ "row-disabled": !row.original.is_enabled }}>
+																		<tr
+																			classList={{ "row-disabled": !row.original.is_enabled }}
+																			onClick={() => {
+																				if (row.original.remote_id && row.original.platform !== 'manual' && row.original.platform !== 'unknown') {
+																					// Select instance context when navigating to details from here
+																					const inst = instance();
+																					if (inst) {
+																						resources.setInstance(inst.id);
+																						resources.setGameVersion(inst.minecraftVersion);
+																						resources.setLoader(inst.modloader);
+																					}
+
+																					router()?.navigate("/resource-details", { 
+																						projectId: row.original.remote_id, 
+																						platform: row.original.platform 
+																					});
+																				}
+																			}}
+																			style={{
+																				cursor: (row.original.remote_id && row.original.platform !== 'manual' && row.original.platform !== 'unknown')
+																					? 'pointer'
+																					: 'default'
+																			}}
+																		>
 																			<For each={row.getVisibleCells()}>
 																				{(cell) => (
 																					<td>
@@ -808,7 +994,7 @@ export default function InstanceDetails(props: InstanceDetailsProps) {
 														</table>
 														
 														<Show when={table.getRowModel().rows.length === 0}>
-															<div class="mods-empty-state">
+															<div class="resources-empty-state">
 																<p>No {resourceTypeFilter() !== "All" ? resourceTypeFilter().toLowerCase() + "s" : "resources"} found.</p>
 															</div>
 														</Show>

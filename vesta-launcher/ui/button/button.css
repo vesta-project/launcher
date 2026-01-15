@@ -6,6 +6,11 @@
 	border: 2px solid transparent;
 	border-radius: 0.5rem;
 	user-select: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	white-space: nowrap;
 
 	&:hover:not(:disabled) {
 		filter: brightness(110%);

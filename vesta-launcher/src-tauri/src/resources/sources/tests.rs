@@ -15,7 +15,9 @@ mod tests {
             offset: 0,
             game_version: None,
             loader: None,
-            category: None,
+            categories: None,
+            sort_by: None,
+            sort_order: None,
         };
 
         let result = source.search(query).await;
@@ -39,7 +41,9 @@ mod tests {
             offset: 0,
             game_version: None,
             loader: None,
-            category: None,
+            categories: None,
+            sort_by: None,
+            sort_order: None,
         };
 
         let result = source.search(query).await;
@@ -78,7 +82,9 @@ mod tests {
             offset: 0,
             game_version: None,
             loader: None,
-            category: None,
+            categories: None,
+            sort_by: None,
+            sort_order: None,
         };
         
         let search_result = source.search(query).await;

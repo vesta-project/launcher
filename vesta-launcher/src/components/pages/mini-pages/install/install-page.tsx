@@ -39,6 +39,7 @@ import {
 } from "@utils/instances";
 import {
 	createEffect,
+	createMemo,
 	createResource,
 	createSignal,
 	For,
@@ -48,9 +49,16 @@ import {
 import "./install-page.css";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
+import { router } from "@components/page-viewer/page-viewer";
+import { resources } from "@stores/resources";
 
 interface InstallPageProps {
 	close?: () => void;
+	projectId?: string;
+	platform?: string;
+	projectName?: string;
+	projectIcon?: string;
+	resourceType?: string;
 }
 
 function InstallPage(props: InstallPageProps) {
@@ -66,13 +74,37 @@ function InstallPage(props: InstallPageProps) {
 
 	// Basic State
 	const [activeTab, setActiveTab] = createSignal("basic");
-	const [instanceName, setInstanceName] = createSignal("");
+	const [instanceName, setInstanceName] = createSignal(props.projectName || "");
 	const [selectedVersion, setSelectedVersion] = createSignal<string>("");
-	const [selectedModloader, setSelectedModloader] =
-		createSignal<string>("vanilla");
+	const [selectedModloader, setSelectedModloader] = createSignal<string>("vanilla");
+
+	// Initial modloader selection effect
+	createEffect(() => {
+		const supported = supportedLoaders();
+		const resType = props.resourceType;
+		
+		if (supported) {
+			if (resType === 'mod') {
+				// Pick first supported loader that isn't vanilla if possible
+				const preferred = ["fabric", "neoforge", "forge", "quilt"];
+				const firstAvailable = preferred.find(p => supported.has(p)) || Array.from(supported)[0];
+				if (firstAvailable) {
+					setSelectedModloader(firstAvailable);
+				}
+			} else if (resType === 'shader' || resType === 'resourcepack') {
+				// These work on vanilla, but iris/oculus might be better. 
+				// We'll stick to vanilla as default for simplicity.
+				setSelectedModloader("vanilla");
+			}
+		} else {
+			// No restriction, use default
+			setSelectedModloader(resType === "mod" ? "fabric" : "vanilla");
+		}
+	});
+
 	const [selectedModloaderVersion, setSelectedModloaderVersion] =
 		createSignal<string>("");
-	const [iconPath, setIconPath] = createSignal<string | null>(null);
+	const [iconPath, setIconPath] = createSignal<string | null>(props.projectIcon || null);
 	const _effectiveIcon = () => iconPath() || DEFAULT_ICONS[0];
 
 	// Create uploadedIcons array that includes current iconPath if it's an uploaded image (base64 or custom URL)
@@ -96,6 +128,38 @@ function InstallPage(props: InstallPageProps) {
 	const [isInstalling, setIsInstalling] = createSignal(false);
 	const [isReloading, setIsReloading] = createSignal(false);
 
+	// Fetch Resource versions for compatibility if provided
+	const [projectVersions] = createResource(() => props.projectId && props.platform, async () => {
+		if (!props.projectId || !props.platform) return null;
+		return await resources.getVersions(props.platform as any, props.projectId);
+	});
+
+	const supportedGameVersions = createMemo(() => {
+		const versions = projectVersions();
+		if (!versions) return null;
+		const set = new Set<string>();
+		versions.forEach(v => v.game_versions.forEach(gv => set.add(gv)));
+		return set;
+	});
+
+	const supportedLoaders = createMemo(() => {
+		const versions = projectVersions();
+		if (!versions) return null;
+		const set = new Set<string>();
+		versions.forEach(v => v.loaders.forEach(l => set.add(l.toLowerCase())));
+		
+		// If it's a shader/resourcepack, vanilla is also supported
+		const resType = props.resourceType;
+		if (resType === 'shader' || resType === 'resourcepack' || resType === 'datapack') {
+			set.add("vanilla");
+		} else if (resType === 'mod') {
+			// Some "mods" might be for vanilla (e.g. data packs disguised as mods)
+			// but generally mods need a loader.
+		}
+		
+		return set;
+	});
+
 	// Fetch Minecraft versions
 	const [metadata, { refetch: refetchVersions }] =
 		createResource<PistonMetadata>(getMinecraftVersions);
@@ -106,10 +170,17 @@ function InstallPage(props: InstallPageProps) {
 	// Initialize selectedVersion with latest stable release after metadata loads
 	createEffect(() => {
 		const meta = metadata();
+		const supported = supportedGameVersions();
+		
 		if (meta && !selectedVersion()) {
-			const latestRelease = meta.game_versions.find((v) => v.stable);
-			if (latestRelease) {
-				setSelectedVersion(latestRelease.id);
+			let bestVersion = meta.game_versions.find((v) => {
+				if (!v.stable && !includeUnstableVersions()) return false;
+				if (supported && !supported.has(v.id)) return false;
+				return true;
+			});
+
+			if (bestVersion) {
+				setSelectedVersion(bestVersion.id);
 			}
 		}
 	});
@@ -117,11 +188,16 @@ function InstallPage(props: InstallPageProps) {
 	// Get stable versions list for dropdown, filtered by modloader
 	const filteredVersions = () => {
 		const loader = selectedModloader();
-		if (!metadata()) return [];
+		const supported = supportedGameVersions();
+		const meta = metadata();
+		if (!meta) return [];
 
-		return metadata()?.game_versions.filter((v) => {
+		return meta.game_versions.filter((v) => {
 			// Filter by stability (only show unstable if enabled)
 			if (!includeUnstableVersions() && !v.stable) return false;
+
+			// Filter by project compatibility if applicable
+			if (supported && !supported.has(v.id)) return false;
 
 			// If vanilla, show all versions (stable or unstable based on setting)
 			if (loader === "vanilla") return true;
@@ -133,12 +209,24 @@ function InstallPage(props: InstallPageProps) {
 
 	// Get all unique modloaders across all versions
 	const uniqueModloaders = () => {
-		if (!metadata()) return ["vanilla"];
+		const meta = metadata();
+		const supported = supportedLoaders();
+		if (!meta) return ["vanilla"];
 
 		const loaders = new Set<string>(["vanilla"]);
-		metadata()?.game_versions.forEach((v) => {
-			Object.keys(v.loaders).forEach((l) => loaders.add(l));
+		meta.game_versions.forEach((v) => {
+			// If we are restricted by a project, only consider loaders supported by the project
+			Object.keys(v.loaders).forEach((l) => {
+				if (!supported || supported.has(l.toLowerCase())) {
+					loaders.add(l);
+				}
+			});
 		});
+
+		// Remove vanilla if the project explicitly requires a loader and doesn't support vanilla
+		if (supported && !supported.has("vanilla")) {
+			loaders.delete("vanilla");
+		}
 
 		return Array.from(loaders);
 	};
@@ -276,6 +364,30 @@ function InstallPage(props: InstallPageProps) {
 
 			await installInstance(fullInstance);
 
+			// Handle auto-installing the resource if we came from a resource page
+			if (props.projectId && props.platform) {
+				try {
+					// We need to wait a bit or ensure the instance is "knowable" by the resource store
+					const platform = props.platform as any;
+					const project = await resources.getProject(platform, props.projectId);
+					if (project) {
+						const versions = await resources.getVersions(platform, project.id);
+						// Find best version for this new instance
+						const bestVersion = versions.find(v => 
+							v.game_versions.includes(version) && 
+							v.loaders.some(l => l.toLowerCase() === (selectedModloader()?.toLowerCase() || "vanilla"))
+						) || versions[0];
+						
+						if (bestVersion) {
+							console.log("[Install] Auto-installing resource:", project.name, "version:", bestVersion.version_number);
+							await resources.install(project, bestVersion, instanceId);
+						}
+					}
+				} catch (e) {
+					console.error("[Install] Failed to auto-install resource:", e);
+				}
+			}
+
 			// // Close standalone windows after installation completes
 			// if (label.startsWith("page-viewer-")) {
 			// 	await currentWindow.close();
@@ -305,6 +417,33 @@ function InstallPage(props: InstallPageProps) {
 	return (
 		<div class={"page-root"}>
 			<div class="header-container">
+				<Show when={props.projectId && props.projectName}>
+					<div 
+						class="quick-install-pill" 
+						onClick={() => router()?.navigate("/resources")}
+						title="Go back to browse"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="16"
+							height="16"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<line x1="19" y1="12" x2="5" y2="12"></line>
+							<polyline points="12 19 5 12 12 5"></polyline>
+						</svg>
+						<div class="pill-divider" />
+						<Show when={props.projectIcon}>
+							<img src={props.projectIcon} alt={props.projectName} class="pill-icon" />
+						</Show>
+						<span class="pill-text">New Instance with <span class="pill-accent">{props.projectName}</span></span>
+					</div>
+				</Show>
 				<ToggleGroup
 					value={activeTab()}
 					onChange={(val) => val && setActiveTab(val)}
@@ -403,10 +542,7 @@ function InstallPage(props: InstallPageProps) {
 										placeholder="Select version..."
 										itemComponent={(props) => (
 											<ComboboxItem item={props.item}>
-												<ComboboxItemLabel>
-													{props.item.rawValue}
-												</ComboboxItemLabel>
-												<ComboboxItemIndicator />
+												{props.item.rawValue}
 											</ComboboxItem>
 										)}
 									>
@@ -464,10 +600,7 @@ function InstallPage(props: InstallPageProps) {
 												placeholder="Select loader version..."
 												itemComponent={(props) => (
 													<ComboboxItem item={props.item}>
-														<ComboboxItemLabel>
-															{props.item.rawValue}
-														</ComboboxItemLabel>
-														<ComboboxItemIndicator />
+														{props.item.rawValue}
 													</ComboboxItem>
 												)}
 											>

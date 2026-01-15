@@ -1,9 +1,10 @@
 use serde::{Deserialize, Serialize};
 use diesel::prelude::*;
 
-#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum ResourceType {
+    #[default]
     Mod,
     ResourcePack,
     Shader,
@@ -71,13 +72,15 @@ pub struct ResourceVersion {
     pub hash: String, // SHA1
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SearchQuery {
     pub text: Option<String>,
     pub resource_type: ResourceType,
     pub game_version: Option<String>,
     pub loader: Option<String>,
-    pub category: Option<String>,
+    pub categories: Option<Vec<String>>,
+    pub sort_by: Option<String>,
+    pub sort_order: Option<String>,
     pub offset: u32,
     pub limit: u32,
 }

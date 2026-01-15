@@ -195,7 +195,7 @@ async fn identify_and_link_resource(app: &AppHandle, instance_db_id: i32, path: 
     match resource_manager.get_by_hash(SourcePlatform::Modrinth, &hash).await {
         Ok((project, version)) => {
             log::info!("[ResourceWatcher] Found Modrinth resource: {} ({})", project.name, version.version_number);
-            link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::Modrinth).await?;
+            link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::Modrinth, Some(hash)).await?;
         }
         Err(_) => {
             log::debug!("[ResourceWatcher] No Modrinth match for {:?}, trying CurseForge...", path);
@@ -205,17 +205,17 @@ async fn identify_and_link_resource(app: &AppHandle, instance_db_id: i32, path: 
                 match resource_manager.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()).await {
                     Ok((project, version)) => {
                         log::info!("[ResourceWatcher] Found CurseForge resource: {} ({})", project.name, version.version_number);
-                        link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::CurseForge).await?;
+                        link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::CurseForge, Some(hash)).await?;
                     }
                     Err(e) => {
                         log::debug!("[ResourceWatcher] No CurseForge match for {:?}: {}", path, e);
                         // If no match found, link as manual/unknown resource
-                        link_manual_resource_to_db(app, instance_db_id, path).await?;
+                        link_manual_resource_to_db(app, instance_db_id, path, Some(hash)).await?;
                     }
                 }
             } else {
                 // Could not even calculate fingerprint, link as manual
-                link_manual_resource_to_db(app, instance_db_id, path).await?;
+                link_manual_resource_to_db(app, instance_db_id, path, Some(hash)).await?;
             }
         }
     }
@@ -227,6 +227,7 @@ async fn link_manual_resource_to_db(
     app: &AppHandle,
     instance_id: i32,
     path: &Path,
+    hash: Option<String>,
 ) -> Result<()> {
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
@@ -250,6 +251,7 @@ async fn link_manual_resource_to_db(
             .set((
                 ir_dsl::is_enabled.eq(is_enabled),
                 ir_dsl::last_updated.eq(chrono::Utc::now().naive_utc()),
+                ir_dsl::hash.eq(hash),
             ))
             .execute(&mut conn)?;
         return Ok(());
@@ -265,9 +267,11 @@ async fn link_manual_resource_to_db(
             ir_dsl::local_path.eq(&path_str),
             ir_dsl::display_name.eq(&file_name),
             ir_dsl::current_version.eq("unknown"),
+            ir_dsl::release_type.eq("release"),
             ir_dsl::is_manual.eq(true),
             ir_dsl::is_enabled.eq(is_enabled),
             ir_dsl::last_updated.eq(chrono::Utc::now().naive_utc()),
+            ir_dsl::hash.eq(hash),
         ))
         .execute(&mut conn)?;
 
@@ -282,7 +286,8 @@ async fn link_resource_to_db(
     path: &Path, 
     project: crate::models::resource::ResourceProject, 
     version: crate::models::resource::ResourceVersion,
-    platform: SourcePlatform
+    platform: SourcePlatform,
+    hash: Option<String>,
 ) -> Result<()> {
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
@@ -294,6 +299,7 @@ async fn link_resource_to_db(
         SourcePlatform::CurseForge => "curseforge",
     };
 
+    let release_type_str = format!("{:?}", version.release_type).to_lowercase();
     let res_type_str = format!("{:?}", project.resource_type);
     let is_enabled = is_enabled_path(path);
 
@@ -327,9 +333,11 @@ async fn link_resource_to_db(
                 ir_dsl::local_path.eq(&path_str),
                 ir_dsl::display_name.eq(&project.name),
                 ir_dsl::current_version.eq(&version.version_number),
+                ir_dsl::release_type.eq(&release_type_str),
                 ir_dsl::is_manual.eq(false),
                 ir_dsl::is_enabled.eq(is_enabled),
                 ir_dsl::last_updated.eq(chrono::Utc::now().naive_utc()),
+                ir_dsl::hash.eq(hash),
             ))
             .execute(&mut conn)?;
     } else {
@@ -344,9 +352,11 @@ async fn link_resource_to_db(
                 ir_dsl::local_path.eq(path_str),
                 ir_dsl::display_name.eq(&project.name),
                 ir_dsl::current_version.eq(&version.version_number),
+                ir_dsl::release_type.eq(&release_type_str),
                 ir_dsl::is_manual.eq(false),
                 ir_dsl::is_enabled.eq(is_enabled),
                 ir_dsl::last_updated.eq(chrono::Utc::now().naive_utc()),
+                ir_dsl::hash.eq(hash),
             ))
             .execute(&mut conn)?;
     }

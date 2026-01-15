@@ -112,10 +112,14 @@ impl ModrinthSource {
 impl ResourceSource for ModrinthSource {
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
         let mut url = format!("https://api.modrinth.com/v2/search?query={}&limit={}&offset={}", 
-            query.text.as_deref().unwrap_or(""),
+            urlencoding::encode(query.text.as_deref().unwrap_or("")),
             query.limit,
             query.offset
         );
+
+        if let Some(sort) = &query.sort_by {
+            url.push_str(&format!("&index={}", sort));
+        }
 
         // Add facets for filtering
         let mut facets = Vec::new();
@@ -135,11 +139,25 @@ impl ResourceSource for ModrinthSource {
         }
 
         if let Some(loader) = query.loader {
-            facets.push(format!("[\"categories:{}\"]", loader));
+            // Only apply loader filter for mods
+            if query.resource_type == ResourceType::Mod {
+                if loader.to_lowercase() == "quilt" {
+                    facets.push("[\"categories:quilt\", \"categories:fabric\"]".to_string());
+                } else {
+                    facets.push(format!("[\"categories:{}\"]", loader.to_lowercase()));
+                }
+            }
+        }
+
+        if let Some(categories) = &query.categories {
+            for category in categories {
+                facets.push(format!("[\"categories:{}\"]", category));
+            }
         }
 
         if !facets.is_empty() {
-            url.push_str(&format!("&facets=[{}]", facets.join(",")));
+            let facets_json = format!("[{}]", facets.join(","));
+            url.push_str(&format!("&facets={}", urlencoding::encode(&facets_json)));
         }
 
         let response = self.client.get(&url).send().await?;
@@ -154,7 +172,7 @@ impl ResourceSource for ModrinthSource {
             anyhow!("Modrinth search JSON decode error: {}. URL: {}", e, url)
         })?;
 
-        let hits = result.hits.into_iter().map(|hit| ResourceProject {
+        let hits: Vec<ResourceProject> = result.hits.into_iter().map(|hit| ResourceProject {
             id: hit.project_id,
             source: SourcePlatform::Modrinth,
             resource_type: query.resource_type,

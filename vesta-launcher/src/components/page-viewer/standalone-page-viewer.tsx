@@ -7,6 +7,7 @@ import {
 	miniRouterInvalidPage,
 	miniRouterPaths,
 } from "@components/page-viewer/mini-router-config";
+import { router, setRouter } from "@components/page-viewer/page-viewer";
 import { useSearchParams } from "@solidjs/router";
 import { WindowControls } from "@tauri-controls/solid";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
@@ -16,7 +17,6 @@ import "./standalone-page-viewer.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
-	const [router, setRouter] = createSignal<MiniRouter>();
 	const [osType, setOsType] = createSignal<string>("windows");
 	const [refetchFn, setRefetchFn] = createSignal<
 		(() => Promise<void>) | undefined
@@ -28,7 +28,7 @@ function StandalonePageViewer() {
 
 		const initialPath = searchParams.path || "/config";
 
-		// Separate route params (like slug) from component props (like activeTab)
+		// Separate route params (like slug) from component props
 		const initialParams: Record<string, unknown> = {};
 		const initialProps: Record<string, unknown> = {};
 
@@ -72,8 +72,8 @@ function StandalonePageViewer() {
 
 		for (const [key, value] of Object.entries(searchParams)) {
 			if (key !== "path" && key !== "history" && value !== undefined) {
-				// Route params: slug, id, etc
-				if (["slug", "id"].includes(key)) {
+				// Common route params across all pages
+				if (["slug", "id", "projectId", "platform", "activeTab"].includes(key)) {
 					initialParams[key] = value;
 				} else {
 					// Everything else is component state
@@ -94,6 +94,8 @@ function StandalonePageViewer() {
 		if (Object.keys(initialParams).length > 0) {
 			mini_router.currentParams.set(initialParams);
 		}
+
+		setRouter(mini_router);
 
 		// Restore history stacks from main window
 		if (historyPast.length > 0 || historyFuture.length > 0) {

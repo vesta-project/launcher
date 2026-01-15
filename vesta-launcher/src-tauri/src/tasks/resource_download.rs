@@ -185,6 +185,7 @@ impl Task for ResourceDownloadTask {
                         installed_dsl::local_path.eq(&final_path_str),
                         installed_dsl::display_name.eq(&project_name),
                         installed_dsl::current_version.eq(&version.version_number),
+                        installed_dsl::release_type.eq(format!("{:?}", version.release_type).to_lowercase()),
                         installed_dsl::is_manual.eq(false),
                         installed_dsl::is_enabled.eq(true),
                         installed_dsl::last_updated.eq(Utc::now().naive_utc()),
@@ -218,9 +219,11 @@ impl Task for ResourceDownloadTask {
                     local_path: final_path_str,
                     display_name: project_name,
                     current_version: version.version_number,
+                    release_type: format!("{:?}", version.release_type).to_lowercase(),
                     is_manual: false,
                     is_enabled: true,
                     last_updated: Utc::now().naive_utc(),
+                    hash: Some(version.hash.clone()),
                 };
 
                 diesel::insert_into(installed_dsl::installed_resource)

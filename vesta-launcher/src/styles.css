@@ -89,6 +89,9 @@
 	--text-on-primary: hsl(var(--color__primary-hue) 5% 95%);
 	--text-on-accent: hsl(var(--color__primary-hue) 5% 95%);
 
+	--primary-low: hsl(var(--color__primary-hue) 70% 50% / 0.15);
+	--primary-accent: hsl(var(--color__primary-hue) 80% 60%);
+
 	/* Interactive States */
 	--interactive-base: hsl(var(--color__primary-hue) 60% 50%);
 	--interactive-hover: hsl(var(--color__primary-hue) 70% 55%);
@@ -214,6 +217,7 @@
 
 	/* Shorthand primary tokens */
 	--primary-low: hsl(var(--color__primary-hue) 70% 50% / 0.15);
+	--primary-accent: hsl(var(--color__primary-hue) 80% 60%);
 	--primary-rgb: var(--color__primary-hue) 70% 50%;
 	--sb-track-color: var(--scrollbar-track);
 	--sb-thumb-color: var(--scrollbar-thumb);

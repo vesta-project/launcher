@@ -95,6 +95,50 @@
     flex-shrink: 0;
 }
 
+.source-toggle {
+    display: flex;
+    background: var(--surface-medium);
+    border-radius: 6px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.source-btn {
+    padding: 4px 12px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.source-btn:hover:not(.active) {
+    color: var(--text-primary);
+    background: var(--surface-high);
+}
+
+.source-btn.active {
+    background: var(--accent-primary);
+    color: white;
+}
+
+.source-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.modpack-instance-notice {
+    background: var(--surface-medium);
+    border: 1px dashed var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
 .picker-label {
     font-size: 11px;
     font-weight: 700;
@@ -151,6 +195,17 @@
     color: var(--text-muted);
     font-weight: 500;
     text-transform: capitalize;
+    transition: all 0.2s ease;
+}
+
+.category-pill.clickable {
+    cursor: pointer;
+}
+
+.category-pill.clickable:hover {
+    background: var(--surface-high);
+    color: var(--text-primary);
+    border-color: var(--accent-primary);
 }
 
 .resource-details-layout {
@@ -255,6 +310,12 @@
 
 .sidebar-metadata .meta-item .value {
     font-weight: 500;
+}
+
+.value-group {
+    display: flex;
+    align-items: center;
+    gap: 0px;
 }
 
 .view-all-link {
@@ -476,7 +537,7 @@
 .sidebar-version-list {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 /* Custom scrollbar for sidebar scrollable area */
@@ -714,6 +775,20 @@
     display: inline-block;
 }
 
+.description video,
+.description iframe,
+.description object,
+.description embed {
+    max-width: 100%;
+    height: auto;
+    border-radius: 6px;
+}
+
+.description iframe {
+    aspect-ratio: 16 / 9;
+    width: 100%;
+}
+
 .description code {
     background: var(--surface-high);
     padding: 2px 6px;
@@ -741,7 +816,14 @@
 }
 
 /* Main Version List Improvements */
+.version-list.full-width {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
 .version-list.full-width .version-item {
+    display: grid;
     grid-template-columns: 1fr 1fr 180px;
     padding: 16px;
     gap: 20px;
@@ -858,5 +940,21 @@
 
 .header-external-link.cf:hover {
     background: rgba(241, 100, 54, 0.1);
+}
+
+.instance-item-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.instance-item-icon-placeholder {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    background: var(--surface-low);
+    flex-shrink: 0;
 }
 

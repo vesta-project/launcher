@@ -188,17 +188,67 @@ impl ResourceSource for CurseForgeSource {
             url.push_str(&format!("&gameVersion={}", version));
         }
 
+        let sort_field = if let Some(sort) = &query.sort_by {
+            match sort.to_lowercase().as_str() {
+                "featured" => Some(1),
+                "popularity" | "downloads" => Some(2),
+                "last_updated" | "updated" => Some(3),
+                "name" => Some(4),
+                "author" => Some(5),
+                "total_downloads" => Some(6),
+                "category" => Some(7),
+                "game_version" => Some(8),
+                "early_access" => Some(9),
+                "featured_released" => Some(10),
+                "released_date" | "newest" => Some(11),
+                "rating" => Some(12),
+                _ => Some(1), // Default to featured
+            }
+        } else {
+            Some(1) // Default to featured
+        };
+
+        if let Some(field) = sort_field {
+            let order = query.sort_order.as_deref().unwrap_or("desc");
+            url.push_str(&format!("&sortField={}&sortOrder={}", field, order));
+        }
+
+        if let Some(categories) = &query.categories {
+            if let Some(category) = categories.first() {
+                // We need to map category names to IDs. This is a simplified map.
+                let category_id = match category.as_str() {
+                    "World Gen" => 409,
+                    "Technology" => 403,
+                    "Magic" => 411,
+                    "Storage" => 417,
+                    "Food" => 422,
+                    "Mobs" => 412,
+                    "Armor, Tools, and Weapons" => 423,
+                    "Adventure and RPG" => 424,
+                    "Map and Information" => 425,
+                    "Cosmetic" => 419,
+                    _ => 0
+                };
+                if category_id > 0 {
+                    url.push_str(&format!("&categoryId={}", category_id));
+                }
+            }
+        }
+
         // Loader mapping for CF (1=Forge, 4=Fabric, 5=Quilt, 6=NeoForge)
         if let Some(loader) = query.loader {
-            let mod_loader_type = match loader.to_lowercase().as_str() {
-                "forge" => 1,
-                "fabric" => 4,
-                "quilt" => 5,
-                "neoforge" => 6,
-                _ => 0,
-            };
-            if mod_loader_type > 0 {
-                url.push_str(&format!("&modLoaderType={}", mod_loader_type));
+            // Only apply loader filter for mods on CurseForge
+            if query.resource_type == ResourceType::Mod {
+                let mod_loader_type = match loader.to_lowercase().as_str() {
+                    "forge" => 1,
+                    "fabric" => 4,
+                    "quilt" => 5,
+                    "neoforge" => 6,
+                    _ => 0,
+                };
+                if mod_loader_type > 0 {
+                    url.push_str(&format!("&modLoaderType={}", mod_loader_type));
+                }
             }
         }
 

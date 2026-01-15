@@ -105,6 +105,7 @@ fn main() {
             commands::resources::search_resources,
             commands::resources::get_resource_project,
             commands::resources::get_resource_versions,
+            commands::resources::find_peer_resource,
             commands::resources::install_resource,
             commands::resources::delete_resource,
             commands::resources::toggle_resource,

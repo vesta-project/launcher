@@ -48,12 +48,14 @@
 
 .select__content {
 	background-color: var(--surface-overlay);
+    backdrop-filter: var(--liquid-backdrop-filter);
+    -webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	border-radius: 6px;
 	border: 1px solid var(--border-subtle);
 	box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
 	transform-origin: var(--kb-select-content-transform-origin);
 	animation: select__content-hide 200ms ease-in forwards;
-    z-index: 100;
+    z-index: 1000;
 }
 
 .select__content[data-expanded] {
@@ -91,8 +93,17 @@
 
 .select__item[data-highlighted] {
 	outline: none;
-	background-color: var(--accent-primary);
-	color: white;
+	background-color: var(--interactive-base);
+	color: var(--text-on-accent) !important;
+}
+
+.select__item[data-selected] {
+    color: var(--interactive-base);
+    font-weight: 600;
+}
+
+.select__item[data-highlighted][data-selected] {
+    color: var(--text-on-accent) !important;
 }
 
 .select__item-indicator {

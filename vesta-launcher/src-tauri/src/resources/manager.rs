@@ -69,21 +69,23 @@ impl ResourceManager {
         Ok(project)
     }
 
-    pub async fn get_versions(&self, platform: SourcePlatform, project_id: &str) -> Result<Vec<ResourceVersion>> {
-        // 1. Check in-memory cache
-        {
+    pub async fn get_versions(&self, platform: SourcePlatform, project_id: &str, ignore_cache: bool) -> Result<Vec<ResourceVersion>> {
+        // 1. Check in-memory cache if not ignoring
+        if !ignore_cache {
             let cache = self.version_cache.lock().await;
             if let Some(versions) = cache.get(&(platform, project_id.to_string())) {
                 return Ok(versions.clone());
             }
         }
 
-        // 2. Check DB cache
-        if let Ok(Some(versions)) = self.get_cached_versions(platform, project_id).await {
-            // Update in-memory cache
-            let mut cache = self.version_cache.lock().await;
-            cache.insert((platform, project_id.to_string()), versions.clone());
-            return Ok(versions);
+        // 2. Check DB cache if not ignoring
+        if !ignore_cache {
+            if let Ok(Some(versions)) = self.get_cached_versions(platform, project_id).await {
+                // Update in-memory cache
+                let mut cache = self.version_cache.lock().await;
+                cache.insert((platform, project_id.to_string()), versions.clone());
+                return Ok(versions);
+            }
         }
 
         // 3. Fetch from source
@@ -99,6 +101,69 @@ impl ResourceManager {
         let _ = self.save_versions_to_cache(platform, project_id, &versions).await;
 
         Ok(versions)
+    }
+
+    pub async fn find_peer_project(&self, current: &ResourceProject) -> Result<Option<ResourceProject>> {
+        let other_platform = match current.source {
+            SourcePlatform::Modrinth => SourcePlatform::CurseForge,
+            SourcePlatform::CurseForge => SourcePlatform::Modrinth,
+        };
+
+        // 1. Check external_ids (Direct Link)
+        if let Some(ref external_ids) = current.external_ids {
+            let key = match other_platform {
+                SourcePlatform::Modrinth => "modrinth",
+                SourcePlatform::CurseForge => "curseforge",
+            };
+            if let Some(id) = external_ids.get(key) {
+                if let Ok(p) = self.get_project(other_platform, id).await {
+                    return Ok(Some(p));
+                }
+            }
+        }
+
+        // 2. Fuzzy search by name
+        let query = SearchQuery {
+            text: Some(current.name.clone()),
+            resource_type: current.resource_type,
+            limit: 10,
+            ..Default::default()
+        };
+
+        if let Ok(results) = self.search(other_platform, query).await {
+            for hit in results.hits {
+                let name_match = hit.name.to_lowercase() == current.name.to_lowercase();
+                let author_match = hit.author.to_lowercase() == current.author.to_lowercase();
+
+                if name_match && author_match {
+                    return Ok(Some(hit));
+                }
+                
+                // If only name matches, check if we can verify via slugs or something
+                // For now, let's treat exact name + author as high confidence.
+            }
+        }
+
+        // 3. Hash matching (Expensive but accurate)
+        if other_platform == SourcePlatform::Modrinth {
+            // Modrinth supports SHA1 lookup. We can use hashes from CurseForge versions.
+            if let Ok(versions) = self.get_versions(current.source, &current.id, false).await {
+                // Try the 3 most recent versions
+                for v in versions.iter().take(3) {
+                    if v.hash.len() == 40 { // Likely SHA1
+                        if let Ok((project, _)) = self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await {
+                            return Ok(Some(project));
+                        }
+                    }
+                }
+            }
+        } else {
+            // CurseForge to Modrinth is handled above.
+            // Modrinth to CurseForge using hashes is harder because CF needs Murmur2.
+            // But we can check if CF has a SHA1 search? (They don't officially via fingerprints)
+        }
+
+        Ok(None)
     }
 
     pub async fn get_by_hash(&self, platform: SourcePlatform, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {

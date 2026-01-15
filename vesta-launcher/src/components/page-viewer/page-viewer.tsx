@@ -70,7 +70,9 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 
 		const stringProps: Record<string, string> | undefined = currentProps
 			? Object.fromEntries(
-					Object.entries(currentProps).map(([k, v]) => [k, String(v)]),
+					Object.entries(currentProps)
+						.filter(([_, v]) => typeof v !== "object" || v === null)
+						.map(([k, v]) => [k, String(v)]),
 				)
 			: undefined;
 
@@ -253,4 +255,4 @@ function PageViewer(props: PageViewerProps) {
 	);
 }
 
-export { PageViewer, router };
+export { PageViewer, router, setRouter };

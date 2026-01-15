@@ -105,7 +105,7 @@
 		0 2px 4px -2px rgb(0 0 0 / 30%);
 	transform-origin: var(--kb-combobox-content-transform-origin);
 	animation: contentHide 250ms ease-in forwards;
-	z-index: 50;
+	z-index: 1000;
 
 	& svg {
 		height: 20px;
@@ -152,8 +152,17 @@
 
 .combobox__item[data-highlighted] {
 	outline: none;
-	background-color: hsl(var(--color__primary-hue) 58% 55% / 20%);
-	color: white;
+	background-color: var(--interactive-base);
+	color: var(--text-on-accent) !important;
+}
+
+.combobox__item[data-selected] {
+    color: var(--interactive-base);
+    font-weight: 600;
+}
+
+.combobox__item[data-highlighted][data-selected] {
+    color: var(--text-on-accent) !important;
 }
 
 .combobox__section {
