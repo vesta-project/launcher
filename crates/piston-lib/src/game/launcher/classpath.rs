@@ -31,6 +31,16 @@ pub struct ClasspathValidation {
 
 /// Build the classpath string from libraries
 pub fn build_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, os: OsType) -> Result<String> {
+    build_classpath_filtered(libraries, libraries_dir, os, &[])
+}
+
+/// Build the classpath string from libraries, excluding specific relative paths
+pub fn build_classpath_filtered(
+    libraries: &[UnifiedLibrary],
+    libraries_dir: &Path,
+    os: OsType,
+    exclude_relative_paths: &[String],
+) -> Result<String> {
     let mut classpath_entries = Vec::new();
 
     for library in libraries {
@@ -38,6 +48,11 @@ pub fn build_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, os: O
         // We only skip native-only libraries if they don't contain classes.
         // In modern Minecraft, natives are often in separate JARs.
         if library.is_native {
+            continue;
+        }
+
+        // Skip libraries explicitly excluded (e.g. they are in the module path)
+        if exclude_relative_paths.contains(&library.path) {
             continue;
         }
 
@@ -105,18 +120,25 @@ pub fn maven_to_path(coords: &str) -> Result<String> {
 
     let group = parts[0].replace('.', "/");
     let artifact = parts[1];
-    let version = parts[2];
+    let mut version = parts[2];
+    let mut classifier = None;
+    let mut extension = "jar";
 
-    let (classifier, extension) = if parts.len() >= 4 {
-        // Check if there's an @extension
-        if let Some((clf, ext)) = parts[3].split_once('@') {
-            (Some(clf), ext)
-        } else {
-            (Some(parts[3]), "jar")
+    if parts.len() == 3 {
+        // group:artifact:version@extension
+        if let Some((v, ext)) = version.split_once('@') {
+            version = v;
+            extension = ext;
         }
-    } else {
-        (None, "jar")
-    };
+    } else if parts.len() >= 4 {
+        // group:artifact:version:classifier[@extension]
+        if let Some((clf, ext)) = parts[3].split_once('@') {
+            classifier = Some(clf);
+            extension = ext;
+        } else {
+            classifier = Some(parts[3]);
+        }
+    }
 
     let filename = if let Some(clf) = classifier {
         format!("{}-{}-{}.{}", artifact, version, clf, extension)
@@ -203,6 +225,12 @@ mod tests {
     fn test_maven_to_path_with_extension() {
         let path = maven_to_path("com.example:lib:1.0:sources@zip").unwrap();
         assert_eq!(path, "com/example/lib/1.0/lib-1.0-sources.zip");
+    }
+
+    #[test]
+    fn test_maven_to_path_forge_style() {
+        let path = maven_to_path("de.oceanlabs.mcp:mcp_config:1.20.1-20230612.114412@zip").unwrap();
+        assert_eq!(path, "de/oceanlabs/mcp/mcp_config/1.20.1-20230612.114412/mcp_config-1.20.1-20230612.114412.zip");
     }
 
     #[test]

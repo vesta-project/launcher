@@ -319,6 +319,27 @@ pub fn substitute_variables(text: &str, variables: &HashMap<String, String>) -> 
         result = result.replace(&placeholder, value);
     }
 
+    // Modern Forge (1.13+) ModLauncher can be over-aggressive when scanning the library directory.
+    // Since we use a shared global libraries folder, it may find "extra" JARs (like slim/srg variants) 
+    // that exist in the same version folder but are not part of the current manifest.
+    // 
+    // We prepend common variant patterns and the vanilla game JAR to the ignoreList to prevent 
+    // ModLauncher from attempting to load them as modules, which would cause package collisions.
+    // This is done after variable substitution to ensure we can use dynamic values if needed.
+    if result.contains("-DignoreList=") {
+        let mc_version_jar = variables
+            .get("mc_version_name")
+            .map(|v| format!("{}.jar", v))
+            .unwrap_or_else(|| "vanilla.jar".to_string());
+
+        // Prepend common problematic patterns. ModLauncher treats these as prefixes.
+        let patterns = format!(
+            "-DignoreList=client-srg,client-slim,client-extra,extra,slim,srg,{},",
+            mc_version_jar
+        );
+        result = result.replace("-DignoreList=", &patterns);
+    }
+
     result
 }
 
@@ -386,7 +407,7 @@ pub(crate) fn split_preserving_quotes(s: &str) -> Vec<String> {
 /// Build JVM variable map
 fn build_jvm_variables(
     spec: &LaunchSpec,
-    _manifest: &UnifiedManifest,
+    manifest: &UnifiedManifest,
     natives_dir: &Path,
     classpath: &str,
 ) -> HashMap<String, String> {
@@ -411,6 +432,8 @@ fn build_jvm_variables(
         OsType::current().classpath_separator().to_string(),
     );
     vars.insert("arch".to_string(), crate::game::installer::types::Arch::current().as_str().to_string());
+    vars.insert("version_name".to_string(), manifest.id.clone());
+    vars.insert("mc_version_name".to_string(), spec.version_id.clone());
 
     vars
 }

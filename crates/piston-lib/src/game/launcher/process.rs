@@ -2,12 +2,12 @@
 use crate::game::installer::types::OsType;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
-    classpath::{build_classpath, validate_classpath},
+    classpath::{build_classpath_filtered, validate_classpath},
     natives::extract_natives,
     registry::register_instance,
     types::{GameInstance, LaunchResult, LaunchSpec},
     version_parser::resolve_version_chain,
-    unified_manifest::{UnifiedManifest},
+    unified_manifest::UnifiedManifest,
 };
 use anyhow::{Context, Result};
 use std::path::Path;
@@ -172,47 +172,46 @@ pub async fn launch_game(
     .await
     .context("Failed to extract native libraries")?;
 
-    // Quick runtime verification: ensure some native libraries were actually
-    // extracted into the natives dir (DLL/.so/.dylib) so the render system
-    // and LWJGL can initialize. If none are present, abort with an error that
-    // includes directory diagnostics to make debugging easier.
+    // Quick runtime verification: ensure native libraries were actually
+    // extracted into the natives dir (DLL/.so/.dylib/.jnilib) so the render system
+    // and LWJGL can initialize.
     log::debug!("Verifying natives directory: {:?}", natives_dir);
     // Determine whether this manifest actually contains native libraries for THIS OS.
-    // Some versions have no natives at all (common in some older or headless builds).
-    let expected_native = manifest.has_natives();
+    let expected_native_jars = manifest.libraries.iter().filter(|l| l.is_native).count();
     let mut found_native = false;
-    let mut listing: Vec<String> = Vec::new();
-    match tokio::fs::read_dir(&natives_dir).await {
-        Ok(mut rdr) => {
-            while let Ok(Some(entry)) = rdr.next_entry().await {
-                let fname = entry.file_name().to_string_lossy().to_string();
-                listing.push(fname.clone());
-                let lower = fname.to_lowercase();
-                if cfg!(target_os = "windows") {
-                    if lower.ends_with(".dll") {
-                        found_native = true;
-                    }
-                } else if cfg!(target_os = "macos") {
-                    if lower.ends_with(".dylib") {
-                        found_native = true;
-                    }
-                } else {
-                    // assume unix-like
-                    if lower.ends_with(".so") {
-                        found_native = true;
+    let mut native_files: Vec<String> = Vec::new();
+
+    // Use a recursive check because some versions (especially Forge/Legacy) 
+    // extract into subdirectories which must be scanned.
+    fn check_natives_recursive(dir: &Path, files: &mut Vec<String>, found: &mut bool) {
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    check_natives_recursive(&path, files, found);
+                } else if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+                    let lower = fname.to_lowercase();
+                    let is_native_ext = if cfg!(target_os = "windows") {
+                        lower.ends_with(".dll")
+                    } else if cfg!(target_os = "macos") {
+                        lower.ends_with(".dylib") || lower.ends_with(".jnilib")
+                    } else {
+                        lower.ends_with(".so")
+                    };
+
+                    if is_native_ext {
+                        files.push(path.to_string_lossy().to_string());
+                        *found = true;
                     }
                 }
             }
         }
-        Err(e) => {
-            log::warn!("Failed to read natives folder {:?}: {}", natives_dir, e);
-        }
     }
 
-    log::debug!("Natives ({:?}) contents: {:?}", natives_dir, listing);
+    check_natives_recursive(&natives_dir, &mut native_files, &mut found_native);
 
     if !found_native {
-        if !expected_native {
+        if expected_native_jars == 0 {
             // Nothing found and nothing expected — normal for versions with no natives
             log::info!(
                 "No native library files were found, but manifest indicates no natives are required for version {} — continuing",
@@ -220,15 +219,22 @@ pub async fn launch_game(
             );
         } else {
             log::error!(
-                "No native library files found in natives directory {:?} — this will likely cause RenderSystem failures. Aborting launch",
-                natives_dir
+                "No native library files found in natives directory {:?} (expected contents from {} native JARs). This will likely cause RenderSystem failures.",
+                natives_dir, expected_native_jars
             );
 
             anyhow::bail!(
-                "No native library files in {:?} — check extraction logs and verify platform natives are present",
+                "No native library files found in {:?} — verify platform natives were correctly extracted",
                 natives_dir
             );
         }
+    } else {
+        log::info!(
+            "Verified natives: Found {} platform-specific library files (from {} expected native JARs) in {:?}",
+            native_files.len(),
+            expected_native_jars,
+            natives_dir
+        );
     }
 
     // Determine if this is a legacy version (pre-LaunchWrapper, before Minecraft 1.6)
@@ -280,10 +286,48 @@ pub async fn launch_game(
 
     // 5. Build classpath (now guaranteed to succeed)
     log::debug!("Building classpath");
-    let mut classpath = build_classpath(
+
+    // Identify libraries that are already explicitly mentioned in JVM arguments
+    // (common in modern Forge for --module-path) to avoid "ResolutionException: Module ... reads more than one module"
+    let mut excluded_from_classpath = Vec::new();
+    for arg in &manifest.jvm_arguments {
+        match arg {
+            crate::game::launcher::version_parser::Argument::Simple(s) => {
+                for lib in &libraries_for_classpath {
+                    if s.contains(&lib.path) {
+                        excluded_from_classpath.push(lib.path.clone());
+                    }
+                }
+            }
+            crate::game::launcher::version_parser::Argument::Conditional { value, .. } => {
+                let values = match value {
+                    crate::game::launcher::version_parser::ArgumentValue::Single(s) => vec![s],
+                    crate::game::launcher::version_parser::ArgumentValue::Multiple(v) => v.iter().collect(),
+                };
+                for s in values {
+                    for lib in &libraries_for_classpath {
+                        if s.contains(&lib.path) {
+                            excluded_from_classpath.push(lib.path.clone());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if !excluded_from_classpath.is_empty() {
+        log::debug!(
+            "Excluding {} libraries from classpath that are already in JVM arguments: {:?}",
+            excluded_from_classpath.len(),
+            excluded_from_classpath
+        );
+    }
+
+    let mut classpath = build_classpath_filtered(
         &libraries_for_classpath,
         &spec.libraries_dir(),
         OsType::current(),
+        &excluded_from_classpath,
     )
     .context("Failed to build classpath")?;
 
@@ -313,11 +357,43 @@ pub async fn launch_game(
     }
 
     let separator = OsType::current().classpath_separator();
-    classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
+    
+    // Check if the manifest libraries already include the game's JAR (common in modern Forge).
+    // If it's already there, we SHOULD NOT add the vanilla/installed JAR manually 
+    // to avoid "ResolutionException: Module ... reads more than one module" errors.
+    let installed_id = spec.installed_version_id();
+    let already_has_game_jar = installed_id.contains("forge-loader") || libraries_for_classpath.iter().any(|lib| {
+        let name = lib.name.to_lowercase();
+        // Modern Forge (1.13+) uses net.minecraftforge:forge:...:client
+        // NeoForge uses net.neoforged:neoforge
+        // Also check if the path contains forge or neoforge as a library
+        (name.contains("net.minecraftforge:forge") && lib.classifier.as_deref() == Some("client"))
+        || (name.contains("net.neoforged:neoforge"))
+        || (lib.path.contains("net/minecraftforge/forge/") && lib.path.contains("-client.jar"))
+        || (lib.path.contains("net/neoforged/neoforge/"))
+    });
+
+    // Detect if we are running modern Forge/NeoForge to apply special classpath rules
+    let is_modern_forge = manifest.main_class.contains("cpw.mods.bootstraplauncher") 
+                       || manifest.main_class.contains("net.minecraftforge.fml")
+                       || manifest.main_class.contains("net.neoforged.fml");
+
+    if already_has_game_jar {
+        log::info!("Detected game JAR in libraries list, skipping manual game_jar addition to classpath.");
+    } else if is_modern_forge {
+        // For modern forge, if it's NOT in the libraries list, we still add it,
+        // but we need to be very careful about conflicts.
+        log::debug!("Modern Forge detected - adding vanilla game JAR to classpath");
+        classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
+    } else {
+        // Standard behavior for vanilla/fabric/legacy
+        classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
+    }
 
     // 5. Build JVM arguments (substitutes ${classpath} in manifest with our classpath string)
     log::debug!("Building JVM arguments");
     let jvm_args = build_jvm_arguments(&spec, &manifest, &natives_dir, &classpath);
+    log::info!("Launch JVM arguments: {:?}", jvm_args);
 
     // 6. Build game arguments
     log::debug!("Building game arguments");

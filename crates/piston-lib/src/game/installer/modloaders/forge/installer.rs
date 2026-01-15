@@ -1107,17 +1107,26 @@ fn maven_to_path(coords: &str, libraries_dir: &Path) -> Result<PathBuf> {
 
     let group = parts[0].replace('.', "/");
     let artifact = parts[1];
-    let version = parts[2];
-    let (classifier, extension) = if parts.len() >= 4 {
-        let classifier_ext = parts[3];
-        if let Some((classifier, ext)) = classifier_ext.split_once('@') {
-            (Some(classifier), ext)
-        } else {
-            (Some(classifier_ext), "jar")
+    let mut version = parts[2];
+    let mut classifier = None;
+    let mut extension = "jar";
+
+    if parts.len() == 3 {
+        // group:artifact:version@extension
+        if let Some((v, ext)) = version.split_once('@') {
+            version = v;
+            extension = ext;
         }
-    } else {
-        (None, "jar")
-    };
+    } else if parts.len() >= 4 {
+        // group:artifact:version:classifier[@extension]
+        let classifier_ext = parts[3];
+        if let Some((clf, ext)) = classifier_ext.split_once('@') {
+            classifier = Some(clf);
+            extension = ext;
+        } else {
+            classifier = Some(classifier_ext);
+        }
+    }
 
     let filename = if let Some(clf) = classifier {
         format!("{}-{}-{}.{}", artifact, version, clf, extension)

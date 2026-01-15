@@ -404,35 +404,25 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
 }
 
 fn name_to_path_with_classifier(name: &str, classifier: &str) -> String {
-    let parts: Vec<&str> = name.split(':').collect();
-    if parts.len() < 3 {
-        return name.replace('.', "/").replace(':', "/");
-    }
-
-    let group = parts[0].replace('.', "/");
-    let artifact = parts[1];
-    let version = parts[2];
+    // If we have a classifier, we can just append it to the name and use the standard parser
+    let coords = if name.contains('@') {
+        let (base, ext) = name.split_once('@').unwrap();
+        format!("{}:{}@{}", base, classifier, ext)
+    } else {
+        format!("{}:{}", name, classifier)
+    };
     
-    format!("{}/{}/{}/{}-{}-{}.jar", group, artifact, version, artifact, version, classifier)
+    crate::game::launcher::maven_to_path(&coords).unwrap_or_else(|_| {
+        let parts: Vec<&str> = name.split(':').collect();
+        let group = parts[0].replace('.', "/");
+        let artifact = parts.get(1).unwrap_or(&"");
+        let version = parts.get(2).unwrap_or(&"");
+        format!("{}/{}/{}/{}-{}-{}.jar", group, artifact, version, artifact, version, classifier)
+    })
 }
 
 fn name_to_path(name: &str) -> String {
-    let parts: Vec<&str> = name.split(':').collect();
-    if parts.len() < 3 {
-        return name.replace('.', "/").replace(':', "/");
-    }
-
-    let group = parts[0].replace('.', "/");
-    let artifact = parts[1];
-    let version = parts[2];
-    
-    let classifier = if parts.len() > 3 {
-        format!("-{}", parts[3])
-    } else {
-        "".to_string()
-    };
-
-    format!("{}/{}/{}/{}-{}{}.jar", group, artifact, version, artifact, version, classifier)
+    crate::game::launcher::maven_to_path(name).unwrap_or_else(|_| name.replace('.', "/").replace(':', "/"))
 }
 
 fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
