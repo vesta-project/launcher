@@ -8,6 +8,13 @@ use reqwest::Client;
 use std::path::Path;
 use std::sync::Arc;
 
+pub struct ModpackResolvedCF {
+    pub url: String,
+    pub filename: String,
+    pub subfolder: String,
+    pub sha1: Option<String>,
+}
+
 pub trait ModpackResolver: Send + Sync {
     /// Resolve a CurseForge mod to a download URL and filename
     fn resolve_curseforge(
@@ -15,7 +22,7 @@ pub trait ModpackResolver: Send + Sync {
         project_id: Option<u32>,
         file_id: u32,
         hash: Option<String>
-    ) -> futures::future::BoxFuture<'static, Result<(String, String)>>;
+    ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedCF>>;
 }
 
 /// Installer for local ZIP modpacks
@@ -108,14 +115,14 @@ impl ModpackInstaller {
                     ModpackMod::CurseForge { project_id, file_id, required: _, hash } => {
                         if let Some(resolver) = &resolver {
                             match resolver.resolve_curseforge(project_id, file_id, hash).await {
-                                Ok((url, filename)) => {
-                                    let target_path = game_dir.join("mods").join(filename);
+                                Ok(resolved) => {
+                                    let target_path = game_dir.join(&resolved.subfolder).join(&resolved.filename);
                                     let pid_str = project_id.map(|id| id.to_string()).unwrap_or_else(|| "unknown".to_string());
                                     artifacts.push(BatchArtifact {
                                         name: target_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string(),
-                                        url,
+                                        url: resolved.url,
                                         path: target_path,
-                                        sha1: None,
+                                        sha1: resolved.sha1,
                                         label: format!("mod-cf-{}-{}", pid_str, file_id),
                                     });
                                 }

@@ -1,5 +1,6 @@
 /// Process management and game launch orchestration
-use crate::game::installer::types::OsType;
+use crate::game::installer::types::{OsType, InstallSpec, SilentProgressReporter};
+use crate::game::installer::install_instance;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
     classpath::{build_classpath_filtered, validate_classpath},
@@ -119,6 +120,9 @@ pub async fn launch_game(
         .versions_dir()
         .join(&installed_id)
         .join(format!("{}.json", installed_id));
+
+    // TODO: Implement a lighter-weight check here. 
+    // For now, we assume the manifest exists or resolve_version_chain will fail appropriately.
 
     let mut manifest = if manifest_path.exists() {
         log::info!("Found loader manifest at: {:?}", manifest_path);
@@ -294,8 +298,13 @@ pub async fn launch_game(
         &libraries_for_classpath,
         &spec.libraries_dir(),
         OsType::current(),
-    )
-    .context("Classpath validation failed - missing required libraries")?;
+    ).context("Classpath validation failed")?;
+
+    if !validation.missing_libraries.is_empty() {
+        log::warn!("Missing {} libraries: {:?}", validation.missing_libraries.len(), validation.missing_libraries);
+        // TODO: Silent repair is disabled for now as it re-runs the full installation process.
+        // We should implement a "repair-only" mode for the installer that skips metadata/cache work.
+    }
     
     log::info!(
         "Classpath validation: {} valid, {} excluded libraries", 

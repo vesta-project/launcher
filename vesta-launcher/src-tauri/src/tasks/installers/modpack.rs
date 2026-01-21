@@ -9,7 +9,7 @@ use crate::resources::ResourceManager;
 use crate::tasks::installers::{ProgressReporter, TauriProgressReporter};
 use crate::tasks::manager::{Task, TaskContext};
 
-use piston_lib::game::installer::core::modpack_installer::{ModpackInstaller, ModpackResolver};
+use piston_lib::game::installer::core::modpack_installer::{ModpackInstaller, ModpackResolver, ModpackResolvedCF};
 use piston_lib::game::installer::types::CancelToken;
 use anyhow::Result;
 use tokio::fs;
@@ -35,32 +35,49 @@ impl ModpackResolver for PistonModpackResolver {
         project_id: Option<u32>,
         file_id: u32,
         hash: Option<String>
-    ) -> futures::future::BoxFuture<'static, anyhow::Result<(String, String)>> {
+    ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedCF>> {
         let handle = self.app_handle.clone();
         Box::pin(async move {
             let rm = handle.state::<ResourceManager>();
             
             // If we have a hash, we can try to find the project_id via fingerprint API first
-            let mut resolved_pid = project_id;
+            let mut resolved_pid_str = project_id.map(|id| id.to_string());
             
-            if resolved_pid.is_none() {
+            if resolved_pid_str.is_none() {
                 if let Some(h) = hash {
                     // Try to resolve by hash
                     if let Ok((project, _version)) = rm.get_by_hash(SourcePlatform::CurseForge, &h).await {
-                        resolved_pid = Some(project.id.parse().unwrap_or(0));
+                        resolved_pid_str = Some(project.id);
                     }
                 }
             }
             
-            let pid_str = resolved_pid.map(|id| id.to_string()).unwrap_or_else(|| "".to_string());
+            let pid_str = resolved_pid_str.unwrap_or_else(|| "".to_string());
             
             let version = rm.get_version(
                 SourcePlatform::CurseForge,
                 &pid_str,
                 &file_id.to_string()
-            ).await.map_err(|e| anyhow::anyhow!("Failed to resolve CF mod {:?} {}: {}", resolved_pid, file_id, e))?;
+            ).await.map_err(|e| anyhow::anyhow!("Failed to resolve CF mod {} {}: {}", pid_str, file_id, e))?;
             
-            Ok((version.download_url, version.file_name))
+            // Re-fetch project to get its resource type (to determine folder)
+            let project = rm.get_project(SourcePlatform::CurseForge, &version.project_id).await
+                .map_err(|e| anyhow::anyhow!("Failed to fetch project for CF resource type: {}", e))?;
+
+            let subfolder = match project.resource_type {
+                crate::models::resource::ResourceType::Mod => "mods",
+                crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
+                crate::models::resource::ResourceType::Shader => "shaderpacks",
+                crate::models::resource::ResourceType::DataPack => "datapacks",
+                _ => "mods",
+            }.to_string();
+
+            Ok(ModpackResolvedCF {
+                url: version.download_url,
+                filename: version.file_name,
+                subfolder,
+                sha1: Some(version.hash),
+            })
         })
     }
 }
@@ -287,7 +304,14 @@ impl Task for InstallModpackTask {
                             if let Ok(version) = rm.get_version(crate::models::SourcePlatform::CurseForge, &pid_str, &fid_str).await {
                                 // We might need the project info too
                                 if let Ok(project) = rm.get_project(crate::models::SourcePlatform::CurseForge, &version.project_id).await {
-                                    let local_path = game_dir_clone.join("mods").join(&version.file_name);
+                                    let subfolder = match project.resource_type {
+                                        crate::models::resource::ResourceType::Mod => "mods",
+                                        crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
+                                        crate::models::resource::ResourceType::Shader => "shaderpacks",
+                                        crate::models::resource::ResourceType::DataPack => "datapacks",
+                                        _ => "mods",
+                                    };
+                                    let local_path = game_dir_clone.join(subfolder).join(&version.file_name);
                                     if local_path.exists() {
                                         let meta = if let Ok(m) = std::fs::metadata(&local_path) {
                                             (m.len() as i64, m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))

@@ -165,6 +165,7 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
+                quick: false,
                 concurrency: 8,
             };
 
@@ -208,7 +209,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -248,7 +250,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -291,7 +294,8 @@ mod tests {
             game_dir: game_dir.clone(),
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter1 = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path1)));
@@ -354,6 +358,7 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
+                quick: false,
                 concurrency: 8,
             };
 
@@ -397,7 +402,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -437,7 +443,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -488,6 +495,7 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
+                quick: false,
                 concurrency: 8,
             };
 
@@ -531,7 +539,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -582,6 +591,7 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
+                quick: false,
                 concurrency: 8,
             };
 
@@ -625,7 +635,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -665,7 +676,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -705,7 +717,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -763,6 +776,7 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
+                quick: false,
                 concurrency: 8,
             };
 
@@ -806,7 +820,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -846,7 +861,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -897,6 +913,7 @@ mod tests {
                 game_dir: game_dir.clone(),
                 java_path: None,
                 dry_run: false,
+                quick: false,
                 concurrency: 8,
             };
 
@@ -949,7 +966,8 @@ mod tests {
                     game_dir: game_dir,
                     java_path: None,
                     dry_run: false,
-                    concurrency: 8,
+                    quick: false,
+                concurrency: 8,
                 };
 
                 let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)));
@@ -1018,7 +1036,8 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let log_path = create_log_path(&root_dir, "partial_recovery");
@@ -1061,7 +1080,8 @@ mod tests {
             game_dir: game_dir.clone(),
             java_path: None,
             dry_run: true,
-            concurrency: 8,
+            quick: false,
+                concurrency: 8,
         };
 
         let reporter = std::sync::Arc::new(MockProgressReporter::new(Some(&log_path)).with_dry_run(true));

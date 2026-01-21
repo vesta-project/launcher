@@ -81,28 +81,17 @@ pub fn validate_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, _o
     };
 
     for library in libraries {
-        // UnifiedLibrary is already filtered by rules during merge.
-        if library.is_native {
-            validation.excluded_libraries.push(library.name.clone());
-            continue;
-        }
-
         let full_path = libraries_dir.join(&library.path);
         
         if full_path.exists() {
-            validation.valid_libraries.push(full_path.to_string_lossy().to_string());
+            if library.is_native {
+                validation.excluded_libraries.push(library.name.clone());
+            } else {
+                validation.valid_libraries.push(full_path.to_string_lossy().to_string());
+            }
         } else {
             validation.missing_libraries.push(full_path.to_string_lossy().to_string());
         }
-    }
-
-    // Fail if any required libraries are missing
-    if !validation.missing_libraries.is_empty() {
-        return Err(anyhow::anyhow!(
-            "Missing {} required libraries: {}", 
-            validation.missing_libraries.len(),
-            validation.missing_libraries.join(", ")
-        ));
     }
 
     Ok(validation)

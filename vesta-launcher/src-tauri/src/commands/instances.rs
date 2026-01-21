@@ -1,7 +1,7 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::schema::instance::dsl::*;
 use crate::tasks::installers::InstallInstanceTask;
-use crate::tasks::maintenance::{CloneInstanceTask, ResetInstanceTask, RepairInstanceTask, StrictSyncTask};
+use crate::tasks::maintenance::{CloneInstanceTask, ResetInstanceTask, RepairInstanceTask};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
@@ -799,22 +799,6 @@ pub async fn launch_instance(
     // Derive a filesystem-safe runtime instance id (slug) from the instance name
     let instance_id = instance_data.slug();
 
-    // Perform Strict Sync for linked modpacks before launching
-    if instance_data.modpack_id.is_some() {
-        log::info!("[launch_instance] Performing strict sync for modpack: {}", instance_data.id);
-        let task = StrictSyncTask::new(instance_data.id);
-        let task_manager = app_handle.state::<TaskManager>();
-        
-        // We submit the task so the user sees progress in the sidebar
-        // We then wait for it to finish before proceeding to launch
-        let _ = task_manager.submit(Box::new(task)).await;
-        
-        // Note: For now we don't block launch since submit is async 
-        // but doesn't wait for completion. In a real scenario we'd want to 
-        // wait for the 'completed' state of that specific task.
-        // TODO: Implement task completion waiting if safety is critical.
-    }
-
     // Get app config directory
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
@@ -954,30 +938,6 @@ pub async fn launch_instance(
         spec.instance_id,
         spec.version_id
     );
-
-    // Verify manifest exists
-    let installed_id = spec.installed_version_id();
-    let installed_manifest = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.json", installed_id));
-    let vanilla_manifest = spec
-        .versions_dir()
-        .join(&spec.version_id)
-        .join(format!("{}.json", spec.version_id));
-
-    let manifest_path = if installed_manifest.exists() {
-        installed_manifest
-    } else {
-        vanilla_manifest
-    };
-
-    if !manifest_path.exists() {
-        return Err(format!(
-            "Version {} is not installed (missing manifest)",
-            spec.version_id
-        ));
-    }
 
     // Log batching setup
     let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String, String)>();
