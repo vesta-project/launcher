@@ -287,40 +287,112 @@ impl Task for StrictSyncTask {
             let engine_task = InstallInstanceTask::new(inst.clone());
             engine_task.run(ctx.clone()).await?;
 
-            // 3. Strict: Remove extra files in 'mods'
+            // 3. Strict: Identity-backed cleanup
             let mods_dir = gd_path.join("mods");
             if mods_dir.exists() {
                 ctx.update_description("Cleaning non-manifest mods...".to_string());
-                let mut allowed_files = HashSet::new();
                 
+                let mut allowed_hashes = HashSet::new();
+                let mut allowed_cf_identities = HashSet::new(); // (project_id, file_id)
+
                 for m in &metadata.mods {
                     match m {
-                        ModpackMod::Modrinth { path, .. } => {
-                            let p: String = path.replace("\\", "/");
-                            if p.starts_with("mods/") {
-                                allowed_files.insert(p.strip_prefix("mods/").unwrap().to_string());
+                        ModpackMod::Modrinth { hashes, .. } => {
+                            if let Some(sha1) = hashes.get("sha1") {
+                                allowed_hashes.insert(sha1.clone());
                             }
                         }
-                        ModpackMod::CurseForge { .. } => {
-                            // CurseForge manifest doesn't store target path/filename usually.
-                            // We would need to resolve filenames or store them in our metadata.
-                            // For now, we skip strict deletion for CF-originated packs to avoid deleting everything.
+                        ModpackMod::CurseForge { project_id, file_id, .. } => {
+                            allowed_cf_identities.insert((project_id.unwrap_or(0), *file_id));
                         }
                     }
                 }
 
-                // Scan mods directory
+                // Get all installed resources for this instance
+                use crate::schema::installed_resource::dsl as ir_dsl;
+                use crate::models::installed_resource::InstalledResource;
+                let installed: Vec<InstalledResource> = ir_dsl::installed_resource
+                    .filter(ir_dsl::instance_id.eq(inst_id))
+                    .load::<InstalledResource>(&mut conn)
+                    .map_err(|e| e.to_string())?;
+
+                let mut protected_paths = HashSet::new();
+                let mut db_ids_to_delete = Vec::new();
+
+                for res in installed {
+                    let mut is_allowed = false;
+                    
+                    if res.platform == "modpack" {
+                        is_allowed = true; // Protect files that were part of modpack overrides
+                    } else if res.platform == "modrinth" {
+                        if let Some(h) = &res.hash {
+                            if allowed_hashes.contains(h) {
+                                is_allowed = true;
+                            }
+                        }
+                    } else if res.platform == "curseforge" {
+                        let pid = res.remote_id.parse::<u32>().unwrap_or(0);
+                        let fid = res.remote_version_id.parse::<u32>().unwrap_or(0);
+                        
+                        // Check exact (pid, fid)
+                        if allowed_cf_identities.contains(&(pid, fid)) {
+                            is_allowed = true;
+                        } 
+                        // Fallback: Check just fid if pid is 0 in manifest or db
+                        else if allowed_cf_identities.iter().any(|(_, mfid)| *mfid == fid) {
+                             is_allowed = true;
+                             log::debug!("[StrictSync] Allowed CF mod {} (RemoteID: {}) via file_id match", res.display_name, res.remote_id);
+                        }
+                    }
+
+                    if is_allowed {
+                        let p = PathBuf::from(&res.local_path);
+                        protected_paths.insert(p.clone());
+                        
+                        // Also protect the toggled variant (e.g. .jar <-> .jar.disabled)
+                        let p_str = res.local_path.clone();
+                        if p_str.ends_with(".disabled") {
+                            protected_paths.insert(PathBuf::from(&p_str[..p_str.len() - 9]));
+                        } else {
+                            protected_paths.insert(PathBuf::from(format!("{}.disabled", p_str)));
+                        }
+                    } else {
+                        log::info!("[StrictSync] Resource {} (ID: {}) not in manifest, marking for deletion", res.display_name, res.remote_id);
+                        db_ids_to_delete.push(res.id.unwrap());
+                        let path = PathBuf::from(&res.local_path);
+                        if path.exists() {
+                            let _ = std::fs::remove_file(&path);
+                        }
+                    }
+                }
+
+                // Final filesystem sweep for untracked files in mods/
                 if let Ok(entries) = std::fs::read_dir(&mods_dir) {
                     for entry in entries.filter_map(|e| e.ok()) {
                         let path = entry.path();
                         if path.is_file() {
-                            let filename = path.file_name().unwrap_or_default().to_string_lossy().to_string();
-                            if !allowed_files.contains(&filename) {
-                                log::info!("[StrictSync] Deleting non-manifest mod: {}", filename);
+                            // Check if this file path is protected
+                            let is_protected = protected_paths.iter().any(|pp| {
+                                // Try to match by canonical path or simple string equality
+                                if let (Ok(p1), Ok(p2)) = (std::fs::canonicalize(&path), std::fs::canonicalize(pp)) {
+                                    p1 == p2
+                                } else {
+                                    path == *pp
+                                }
+                            });
+
+                            if !is_protected {
+                                log::info!("[StrictSync] Deleting untracked mod file: {:?}", path.file_name().unwrap_or_default());
                                 let _ = std::fs::remove_file(path);
                             }
                         }
                     }
+                }
+
+                // Cleanup database
+                if !db_ids_to_delete.is_empty() {
+                    let _ = diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq_any(db_ids_to_delete)))
+                        .execute(&mut conn);
                 }
             }
 

@@ -6,16 +6,30 @@ use crate::tasks::resource_download::ResourceDownloadTask;
 use anyhow_tauri::TAResult as Result;
 
 #[tauri::command]
-pub async fn sync_instance_resources(
-    watcher: State<'_, ResourceWatcher>,
+pub async fn check_resource_updates(
+    resource_manager: State<'_, ResourceManager>,
     instance_id: i32,
-    instance_slug: String,
+    mc_version: String,
+    loader: String,
+) -> Result<()> {
+    // Run in background
+    let rm = resource_manager.inner().clone();
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = rm.refresh_resources_for_instance(instance_id, &mc_version, &loader).await {
+            log::error!("[check_resource_updates] Failed to refresh resources: {}", e);
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn sync_instance_resources(
+    resource_watcher: State<'_, ResourceWatcher>,
+    instance_id: i32,
     game_dir: String,
 ) -> Result<()> {
-    // Start watching if not already
-    watcher.watch_instance(instance_slug, instance_id, game_dir.clone()).await?;
-    // Always force a scan/cleanup when manually requested
-    watcher.refresh_instance(instance_id, game_dir).await?;
+    resource_watcher.watch_instance("sync".to_string(), instance_id, game_dir).await
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(())
 }
 

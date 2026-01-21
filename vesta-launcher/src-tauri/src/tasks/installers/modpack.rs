@@ -169,7 +169,7 @@ impl Task for InstallModpackTask {
 
             let java_path = instance.java_path.as_ref().map(PathBuf::from);
 
-            let metadata = ModpackInstaller::install_from_zip(
+            let (metadata, override_mods) = ModpackInstaller::install_from_zip(
                 &modpack_path,
                 &game_dir,
                 &data_dir,
@@ -209,6 +209,111 @@ impl Task for InstallModpackTask {
             // Emit update event
             use tauri::Emitter;
             let _ = app_handle.emit("core://instance-updated", final_instance);
+
+            // POST-INSTALL: Link resources to database automatically
+            // This prevents the ResourceWatcher from needing to hit the network for every mod
+            let mc_ver = metadata.minecraft_version.clone();
+            let loader_type = metadata.modloader_type.clone();
+            let mods = metadata.mods.clone();
+            let instance_id = instance.id;
+            let game_dir_clone = game_dir.clone();
+            let app_handle_clone = app_handle.clone();
+            
+            tauri::async_runtime::spawn(async move {
+                let rm = app_handle_clone.state::<ResourceManager>();
+                log::info!("[ModpackTask] Background linking {} mods and {} overrides for instance {}", mods.len(), override_mods.len(), instance_id);
+                
+                // Handle Overrides first (local files from ZIP)
+                for override_path in override_mods {
+                    // Only link resources in known directories
+                    let is_resource = override_path.starts_with("mods") || 
+                                     override_path.starts_with("resourcepacks") || 
+                                     override_path.starts_with("shaderpacks");
+                    
+                    if !is_resource {
+                        continue;
+                    }
+
+                    let local_path = game_dir_clone.join(&override_path);
+                    if local_path.exists() {
+                        let hash = crate::utils::hash::calculate_sha1(&local_path).ok();
+                        let meta = if let Ok(m) = std::fs::metadata(&local_path) {
+                            (m.len() as i64, m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+                        } else { (0, 0) };
+
+                        let _ = crate::resources::watcher::link_manual_resource_to_db(
+                            &app_handle_clone, 
+                            instance_id, 
+                            &local_path, 
+                            hash, 
+                            meta,
+                            "modpack"
+                        ).await;
+                    }
+                }
+
+                for mod_entry in mods {
+                    match mod_entry {
+                        piston_lib::game::modpack::types::ModpackMod::Modrinth { path, hashes, .. } => {
+                            if let Some(sha1) = hashes.get("sha1") {
+                                let local_path = game_dir_clone.join(path.replace("\\", "/"));
+                                if local_path.exists() {
+                                    if let Ok((project, version)) = rm.get_by_hash(crate::models::SourcePlatform::Modrinth, sha1).await {
+                                        let meta = if let Ok(m) = std::fs::metadata(&local_path) {
+                                            (m.len() as i64, m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+                                        } else { (0, 0) };
+                                        
+                                        let _ = crate::resources::watcher::link_resource_to_db(
+                                            &app_handle_clone, 
+                                            instance_id, 
+                                            &local_path, 
+                                            project, 
+                                            version, 
+                                            crate::models::SourcePlatform::Modrinth, 
+                                            Some(sha1.clone()),
+                                            meta
+                                        ).await;
+                                    }
+                                }
+                            }
+                        }
+                        piston_lib::game::modpack::types::ModpackMod::CurseForge { project_id, file_id, hash, .. } => {
+                            // Resolver might have already cached this, or we fetch it now
+                            // Typically CurseForge mods from modpacks end up in "mods/" with the filename from the API
+                            // We need both project and version to link
+                            let pid_str = project_id.map(|id| id.to_string()).unwrap_or_default();
+                            let fid_str = file_id.to_string();
+                            
+                            if let Ok(version) = rm.get_version(crate::models::SourcePlatform::CurseForge, &pid_str, &fid_str).await {
+                                // We might need the project info too
+                                if let Ok(project) = rm.get_project(crate::models::SourcePlatform::CurseForge, &version.project_id).await {
+                                    let local_path = game_dir_clone.join("mods").join(&version.file_name);
+                                    if local_path.exists() {
+                                        let meta = if let Ok(m) = std::fs::metadata(&local_path) {
+                                            (m.len() as i64, m.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+                                        } else { (0, 0) };
+
+                                        let _ = crate::resources::watcher::link_resource_to_db(
+                                            &app_handle_clone, 
+                                            instance_id, 
+                                            &local_path, 
+                                            project, 
+                                            version, 
+                                            crate::models::SourcePlatform::CurseForge, 
+                                            hash,
+                                            meta
+                                        ).await;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
+                // Finally, refresh latest version statuses in background
+                let _ = rm.refresh_resources_for_instance(instance_id, &mc_ver, &loader_type).await;
+                log::info!("[ModpackTask] Finished linking resources for instance {}", instance_id);
+            });
 
             // Step 6: Save manifest for future syncs
             let vesta_dir = game_dir.join(".vesta");

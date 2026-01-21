@@ -35,7 +35,7 @@ impl ModpackInstaller {
         reporter: Arc<dyn ProgressReporter>,
         resolver: Option<Arc<dyn ModpackResolver>>,
         java_path: Option<std::path::PathBuf>,
-    ) -> Result<crate::game::modpack::types::ModpackMetadata> {
+    ) -> Result<(crate::game::modpack::types::ModpackMetadata, Vec<std::path::PathBuf>)> {
         log::info!("Installing modpack from ZIP: {:?}", zip_path);
 
         // Step 1: Parse metadata
@@ -75,8 +75,9 @@ impl ModpackInstaller {
         // Step 4: Extract overrides
         reporter.start_step("Extracting modpack files", None);
         log::info!("[ModpackInstaller] Extracting overrides with prefix: {:?}", metadata.root_prefix);
+        let mut override_files = Vec::new();
         if !reporter.is_dry_run() {
-            extract_overrides(zip_path, game_dir, metadata.format, metadata.root_prefix.clone())
+            override_files = extract_overrides(zip_path, game_dir, metadata.format, metadata.root_prefix.clone())
                 .context("Failed to extract modpack overrides")?;
         }
 
@@ -135,6 +136,6 @@ impl ModpackInstaller {
         }
 
         reporter.done(true, Some("Modpack installation complete"));
-        Ok(metadata)
+        Ok((metadata, override_files))
     }
 }

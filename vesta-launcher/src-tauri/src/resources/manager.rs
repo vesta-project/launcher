@@ -1,4 +1,10 @@
-use std::sync::Arc;
+﻿use std::sync::Arc;
+use tokio::sync::Mutex;
+use std::collections::{HashMap, HashSet};
+use diesel::prelude::*;
+use anyhow::{Result, anyhow};
+use chrono::NaiveDateTime;
+
 use crate::models::resource::{
     ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, 
     SearchResponse, ResourceMetadataCacheRecord, DependencyType, ReleaseType
@@ -6,19 +12,18 @@ use crate::models::resource::{
 use crate::resources::sources::ResourceSource;
 use crate::resources::sources::modrinth::ModrinthSource;
 use crate::resources::sources::curseforge::CurseForgeSource;
-use anyhow::{Result, anyhow};
-use tokio::sync::Mutex;
-use std::collections::{HashMap, HashSet};
 use crate::utils::db::get_vesta_conn;
-use diesel::prelude::*;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
+use crate::models::installed_resource::InstalledResource;
+use crate::schema::vesta::installed_resource::dsl as ir_dsl;
 
+#[derive(Clone)]
 pub struct ResourceManager {
-    sources: Vec<Arc<dyn ResourceSource>>,
-    project_cache: Mutex<HashMap<(SourcePlatform, String), ResourceProject>>,
-    version_cache: Mutex<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>,
-    hash_cache: Mutex<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>,
-    search_cache: Mutex<HashMap<String, (SearchResponse, chrono::NaiveDateTime)>>,
+    sources: Arc<Mutex<Vec<Arc<dyn ResourceSource>>>>,
+    project_cache: Arc<Mutex<HashMap<(SourcePlatform, String), ResourceProject>>>,
+    version_cache: Arc<Mutex<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>>,
+    hash_cache: Arc<Mutex<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
+    search_cache: Arc<Mutex<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
 }
 
 impl ResourceManager {
@@ -29,11 +34,11 @@ impl ResourceManager {
         ];
         
         Self { 
-            sources,
-            project_cache: Mutex::new(HashMap::new()),
-            version_cache: Mutex::new(HashMap::new()),
-            hash_cache: Mutex::new(HashMap::new()),
-            search_cache: Mutex::new(HashMap::new()),
+            sources: Arc::new(Mutex::new(sources)),
+            project_cache: Arc::new(Mutex::new(HashMap::new())),
+            version_cache: Arc::new(Mutex::new(HashMap::new())),
+            hash_cache: Arc::new(Mutex::new(HashMap::new())),
+            search_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -92,7 +97,6 @@ impl ResourceManager {
                 };
 
                 // 2. Find best version for environment
-                // Use API filters to get target versions directly
                 let versions = match self.get_versions(platform, &dep.project_id, false, Some(mc_version), Some(loader)).await {
                     Ok(v) => v,
                     Err(e) => {
@@ -102,8 +106,6 @@ impl ResourceManager {
                 };
                 
                 // 3. Find compatible version
-                // We PRIORITIZE the pinned version ID IF it is compatible.
-                // If it's NOT compatible with our environment (loader/MC), we fallback to search.
                 let mut best_version = None;
                 if let Some(vid) = &dep.version_id {
                     if let Some(v) = versions.iter().find(|v| &v.id == vid) {
@@ -119,7 +121,6 @@ impl ResourceManager {
 
                 // Otherwise find best compatible version
                 if best_version.is_none() {
-                    // Filter compatible ones
                     let mut compatible: Vec<ResourceVersion> = versions.into_iter()
                         .filter(|v| {
                             is_game_version_compatible(&v.game_versions, mc_version) && 
@@ -127,20 +128,14 @@ impl ResourceManager {
                         })
                         .collect();
 
-                    // Sorting Strategy:
-                    // 1. Exact Minecraft version match (e.g. 1.21.4 instance vs 1.21.4 tagged file)
-                    // 2. Stability (Release > Beta > Alpha)
-                    // 3. Recency (Newest first)
                     compatible.sort_by(|a, b| {
-                        // 1. Exactness match
                         let target_norm = normalize_mc_version(mc_version);
                         let a_exact = a.game_versions.iter().any(|gv| normalize_mc_version(gv) == target_norm);
                         let b_exact = b.game_versions.iter().any(|gv| normalize_mc_version(gv) == target_norm);
                         if a_exact != b_exact {
-                            return b_exact.cmp(&a_exact); // true (1) > false (0)
+                            return b_exact.cmp(&a_exact);
                         }
 
-                        // 2. Stability match (Release=0, Beta=1, Alpha=2)
                         let stability_rank = |r: ReleaseType| match r {
                             ReleaseType::Release => 0,
                             ReleaseType::Beta => 1,
@@ -152,7 +147,6 @@ impl ResourceManager {
                             return a_stable.cmp(&b_stable);
                         }
 
-                        // 3. Recency (published_at descending)
                         match (&b.published_at, &a.published_at) {
                             (Some(pb), Some(pa)) => pb.cmp(pa),
                             _ => std::cmp::Ordering::Equal,
@@ -164,7 +158,6 @@ impl ResourceManager {
 
                 if let Some(v) = best_version {
                     log::info!("[DependencyResolution] Resolved {:?}/{} to version {}", platform, dep.project_id, v.version_number);
-                    // Collect dependencies for next level
                     next_level_deps.extend(v.dependencies.clone());
                     resolved.push((project, v));
                 } else {
@@ -192,7 +185,7 @@ impl ResourceManager {
             }
         }
 
-        let source = self.get_source(platform)?;
+        let source = self.get_source(platform).await?;
         let response = source.search(query).await?;
 
         {
@@ -208,7 +201,6 @@ impl ResourceManager {
         let mut results = Vec::new();
         let mut missing_ids = Vec::new();
 
-        // 1. Check caches
         for id in ids {
             if let Ok(Some(cached)) = self.get_cached_project(platform, id).await {
                 results.push(cached);
@@ -221,12 +213,10 @@ impl ResourceManager {
             return Ok(results);
         }
 
-        // 2. Fetch missing from source in bulk
-        let source = self.get_source(platform)?;
+        let source = self.get_source(platform).await?;
         let fetched = source.get_projects(&missing_ids).await?;
 
         for project in fetched {
-            // Update caches
             {
                 let mut cache = self.project_cache.lock().await;
                 cache.insert((platform, project.id.clone()), project.clone());
@@ -239,7 +229,6 @@ impl ResourceManager {
     }
 
     pub async fn get_project(&self, platform: SourcePlatform, id: &str) -> Result<ResourceProject> {
-        // 1. Check in-memory cache
         {
             let cache = self.project_cache.lock().await;
             if let Some(project) = cache.get(&(platform, id.to_string())) {
@@ -247,19 +236,15 @@ impl ResourceManager {
             }
         }
 
-        // 2. Check DB cache
         if let Ok(Some(cached)) = self.get_cached_project(platform, id).await {
-            // Update in-memory cache
             let mut cache = self.project_cache.lock().await;
             cache.insert((platform, id.to_string()), cached.clone());
             return Ok(cached);
         }
 
-        // 3. Fetch from source
-        let source = self.get_source(platform)?;
+        let source = self.get_source(platform).await?;
         let project = source.get_project(id).await?;
         
-        // 4. Update caches
         {
             let mut cache = self.project_cache.lock().await;
             cache.insert((platform, id.to_string()), project.clone());
@@ -278,8 +263,6 @@ impl ResourceManager {
         mc_version: Option<&str>,
         loader: Option<&str>
     ) -> Result<Vec<ResourceVersion>> {
-        // 1. Check in-memory cache if not ignoring AND no specific filters are applied
-        // (Filters bypass cache to ensure fresh results for that environment)
         if !ignore_cache && mc_version.is_none() && loader.is_none() {
             let cache = self.version_cache.lock().await;
             if let Some(versions) = cache.get(&(platform, project_id.to_string())) {
@@ -287,21 +270,17 @@ impl ResourceManager {
             }
         }
 
-        // 2. Check DB cache if not ignoring AND no specific filters
         if !ignore_cache && mc_version.is_none() && loader.is_none() {
             if let Ok(Some(versions)) = self.get_cached_versions(platform, project_id).await {
-                // Update in-memory cache
                 let mut cache = self.version_cache.lock().await;
                 cache.insert((platform, project_id.to_string()), versions.clone());
                 return Ok(versions);
             }
         }
 
-        // 3. Fetch from source
-        let source = self.get_source(platform)?;
+        let source = self.get_source(platform).await?;
         let versions = source.get_versions(project_id, mc_version, loader).await?;
 
-        // 4. Update caches only if no filters were applied (to keep general cache clean)
         if mc_version.is_none() && loader.is_none() {
             {
                 let mut cache = self.version_cache.lock().await;
@@ -320,7 +299,6 @@ impl ResourceManager {
             SourcePlatform::CurseForge => SourcePlatform::Modrinth,
         };
 
-        // 1. Check external_ids (Direct Link)
         if let Some(ref external_ids) = current.external_ids {
             let key = match other_platform {
                 SourcePlatform::Modrinth => "modrinth",
@@ -333,9 +311,7 @@ impl ResourceManager {
             }
         }
 
-        // 2. Source-specific specialized lookups
         if current.source == SourcePlatform::CurseForge && other_platform == SourcePlatform::Modrinth {
-            // Try to find Modrinth project using CurseForge ID
             let facet_query = SearchQuery {
                 facets: Some(vec![format!("curseforge_id:{}", current.id)]),
                 resource_type: current.resource_type,
@@ -350,7 +326,6 @@ impl ResourceManager {
             }
         }
 
-        // 3. Fuzzy search by name
         let query = SearchQuery {
             text: Some(current.name.clone()),
             resource_type: current.resource_type,
@@ -367,9 +342,6 @@ impl ResourceManager {
                 let h_author = hit.author.to_lowercase();
 
                 let name_match = h_name == c_name || h_name.contains(&c_name) || c_name.contains(&h_name);
-                
-                // Authors often differ significantly between platforms (Slug vs Name vs Team)
-                // So let's be more lenient if the name is an exact match
                 let exact_name = h_name == c_name;
                 let author_match = h_author.contains(&c_author) || c_author.contains(&h_author) || 
                                  (c_author.starts_with("yung") && h_author.starts_with("yung"));
@@ -380,23 +352,16 @@ impl ResourceManager {
             }
         }
 
-        // 3. Hash matching (Expensive but accurate)
         if other_platform == SourcePlatform::Modrinth {
-            // Modrinth supports SHA1 lookup. We can use hashes from CurseForge versions.
             if let Ok(versions) = self.get_versions(current.source, &current.id, false, None, None).await {
-                // Try the 3 most recent versions
                 for v in versions.iter().take(3) {
-                    if v.hash.len() == 40 { // Likely SHA1
+                    if v.hash.len() == 40 {
                         if let Ok((project, _)) = self.get_by_hash(SourcePlatform::Modrinth, &v.hash).await {
                             return Ok(Some(project));
                         }
                     }
                 }
             }
-        } else {
-            // CurseForge to Modrinth is handled above.
-            // Modrinth to CurseForge using hashes is harder because CF needs Murmur2.
-            // But we can check if CF has a SHA1 search? (They don't officially via fingerprints)
         }
 
         Ok(None)
@@ -408,7 +373,7 @@ impl ResourceManager {
         project_id: &str,
         version_id: &str
     ) -> Result<ResourceVersion> {
-        let source = self.get_source(platform)?;
+        let source = self.get_source(platform).await?;
         source.get_version(project_id, version_id).await
     }
 
@@ -420,7 +385,7 @@ impl ResourceManager {
             }
         }
 
-        let source = self.get_source(platform)?;
+        let source = self.get_source(platform).await?;
         let (project, version) = source.get_by_hash(hash).await?;
 
         {
@@ -431,13 +396,40 @@ impl ResourceManager {
             p_cache.insert((platform, project.id.clone()), project.clone());
         }
 
-        // Also save to DB cache if we got full project info
         let _ = self.save_project_to_cache(platform, &project.id, &project).await;
 
         Ok((project, version))
     }
 
-    // --- Private DB Cache Helpers ---
+    pub async fn refresh_resources_for_instance(
+        &self,
+        instance_id: i32,
+        mc_version: &str,
+        loader: &str
+    ) -> Result<()> {
+        log::info!("[ResourceManager] Refreshing resources for instance {} (MC {}, {})", instance_id, mc_version, loader);
+        
+        let resources = {
+            let mut conn = get_vesta_conn()?;
+            ir_dsl::installed_resource
+                .filter(ir_dsl::instance_id.eq(instance_id))
+                .filter(ir_dsl::is_manual.eq(false))
+                .load::<InstalledResource>(&mut conn)?
+        };
+
+        for res in resources {
+            let platform = match res.platform.as_str() {
+                "curseforge" => SourcePlatform::CurseForge,
+                "modrinth" => SourcePlatform::Modrinth,
+                _ => continue,
+            };
+
+            let _ = self.get_project(platform, &res.remote_id).await;
+            let _ = self.get_versions(platform, &res.remote_id, true, Some(mc_version), Some(loader)).await;
+        }
+
+        Ok(())
+    }
 
     async fn get_cached_project(&self, platform: SourcePlatform, id: &str) -> Result<Option<ResourceProject>> {
         let platform_str = format!("{:?}", platform).to_lowercase();
@@ -515,9 +507,6 @@ impl ResourceManager {
         let now = chrono::Utc::now().naive_utc();
         let expires = now + chrono::Duration::hours(24);
 
-        // We assume project data already exists or we'll insert a placeholder if it doesn't (though usually we fetch project first)
-        // To be safe, let's use a specialized update if it exists or error
-        
         let affected = diesel::update(rmc_dsl::resource_metadata_cache
             .filter(rmc_dsl::source.eq(&platform_str))
             .filter(rmc_dsl::remote_id.eq(id)))
@@ -529,23 +518,22 @@ impl ResourceManager {
             .execute(&mut conn)?;
 
         if affected == 0 {
-            // Need to insert with dummy project data? Actually, let's just not cache versions without a project.
-            // But we can try to fetch the project if needed. For now, just skip if no project record.
             log::warn!("Tried to cache versions for {}/{} but no project record exists", platform_str, id);
         }
 
         Ok(())
     }
 
-    fn get_source(&self, platform: SourcePlatform) -> Result<Arc<dyn ResourceSource>> {
-        self.sources.iter()
+    async fn get_source(&self, platform: SourcePlatform) -> Result<Arc<dyn ResourceSource>> {
+        let sources = self.sources.lock().await;
+        sources.iter()
             .find(|s| s.platform() == platform)
             .cloned()
             .ok_or_else(|| anyhow!("Source platform not supported: {:?}", platform))
     }
 }
 
-fn normalize_mc_version(v: &str) -> String {
+pub fn normalize_mc_version(v: &str) -> String {
     if v.ends_with(".0") {
         v[..v.len() - 2].to_string()
     } else {
@@ -553,50 +541,32 @@ fn normalize_mc_version(v: &str) -> String {
     }
 }
 
-fn is_game_version_compatible(supported: &[String], target: &str) -> bool {
+pub fn is_game_version_compatible(supported: &[String], target: &str) -> bool {
     let n_target = normalize_mc_version(target);
     
-    // 1. Exact or normalized match (e.g. 1.21.0 == 1.21)
     if supported.iter().any(|v| normalize_mc_version(v) == n_target) {
         return true;
     }
 
-    // 2. Fuzzy match logic
     let target_parts: Vec<&str> = n_target.split('.').collect();
     if target_parts.len() >= 2 {
         let major_minor = format!("{}.{}", target_parts[0], target_parts[1]);
         
         for v in supported {
             let sv = normalize_mc_version(v);
-            
-            // Match major_minor exact (e.g. mod says "1.21" but instance is "1.21.4")
-            // This is generally safe.
-            if sv == major_minor {
+            if sv == major_minor || sv == format!("{}.x", major_minor) {
                 return true;
             }
-
-            // Wildcard matching (e.g. "1.21.x")
-            if sv == format!("{}.x", major_minor) {
-                return true;
-            }
-
-            // DANGER AREA: prevent patch-version drift.
-            // If instance is 1.21.4, do NOT match 1.21.1 or 1.21.2.
-            // Only allow matching if the mod's patch version is LESS THAN OR EQUAL 
-            // to target if it's a very simple mod, but for now we'll be strict.
-            // If the mod specifies a DIFFERENT patch version, it's likely incompatible.
         }
     }
 
     false
 }
 
-fn is_loader_compatible(supported: &[String], target: &str) -> bool {
+pub fn is_loader_compatible(supported: &[String], target: &str) -> bool {
     let t = target.to_lowercase();
-    let is_vanilla = t == "vanilla" || t == "";
+    let is_vanilla = t == "vanilla" || t.is_empty();
     
-    // Mods are never compatible with vanilla
-    // (In the future we might handle datapacks/resourcepacks here, but they skip resolve_dependencies for now)
     if is_vanilla {
         return false;
     }

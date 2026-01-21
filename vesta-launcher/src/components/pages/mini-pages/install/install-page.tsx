@@ -345,7 +345,7 @@ function InstallPage(props: InstallPageProps) {
 						</button>
 						<div class="resource-pill">
 							<Show when={props.projectIcon || modpackInfo()?.iconUrl}>
-								<img src={props.projectIcon || modpackInfo()?.iconUrl} alt="" />
+								<img src={(props.projectIcon || modpackInfo()?.iconUrl) ?? undefined} alt="" />
 							</Show>
 							<div class="resource-info">
 								<span class="resource-label">

@@ -1,6 +1,6 @@
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use zip::ZipArchive;
 use anyhow::{Result, anyhow};
 
@@ -230,17 +230,17 @@ pub fn extract_overrides<P: AsRef<Path>, D: AsRef<Path>>(
     destination: D,
     format: ModpackFormat,
     root_prefix: Option<String>,
-) -> Result<()> {
+) -> Result<Vec<PathBuf>> {
     let file = File::open(zip_path)?;
     let mut archive = ZipArchive::new(file)?;
     let destination = destination.as_ref();
-
     let prefix = root_prefix.unwrap_or_default();
+    let mut extracted_files = Vec::new();
 
     match format {
         ModpackFormat::Modrinth => {
-            extract_folder_to_root(&mut archive, &format!("{}overrides", prefix), destination)?;
-            extract_folder_to_root(&mut archive, &format!("{}client-overrides", prefix), destination)?;
+            extracted_files.extend(extract_folder_to_root(&mut archive, &format!("{}overrides", prefix), destination)?);
+            extracted_files.extend(extract_folder_to_root(&mut archive, &format!("{}client-overrides", prefix), destination)?);
         }
         ModpackFormat::CurseForge => {
             let overrides_folder = if let Ok(mut manifest_file) = archive.by_name(&format!("{}manifest.json", prefix)) {
@@ -252,27 +252,29 @@ pub fn extract_overrides<P: AsRef<Path>, D: AsRef<Path>>(
                 "overrides".to_string()
             };
 
-            extract_folder_to_root(&mut archive, &format!("{}{}", prefix, overrides_folder), destination)?;
+            extracted_files.extend(extract_folder_to_root(&mut archive, &format!("{}{}", prefix, overrides_folder), destination)?);
         }
     }
 
-    Ok(())
+    Ok(extracted_files)
 }
 
 fn extract_folder_to_root<R: Read + std::io::Seek>(
     archive: &mut ZipArchive<R>,
     folder_name: &str,
     destination: &Path,
-) -> Result<()> {
+) -> Result<Vec<PathBuf>> {
     let folder_prefix = format!("{}/", folder_name);
+    let mut extracted = Vec::new();
     
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         let name = file.name().to_owned();
 
         if name.starts_with(&folder_prefix) && name != folder_prefix {
-            let relative_path = name.strip_prefix(&folder_prefix).unwrap();
-            let target_path = destination.join(relative_path.replace("\\", "/"));
+            let relative_path_str = name.strip_prefix(&folder_prefix).unwrap();
+            let relative_path = PathBuf::from(relative_path_str.replace("\\", "/"));
+            let target_path = destination.join(&relative_path);
 
             if file.is_dir() {
                 std::fs::create_dir_all(&target_path)?;
@@ -282,9 +284,10 @@ fn extract_folder_to_root<R: Read + std::io::Seek>(
                 }
                 let mut outfile = File::create(&target_path)?;
                 std::io::copy(&mut file, &mut outfile)?;
+                extracted.push(relative_path);
             }
         }
     }
 
-    Ok(())
+    Ok(extracted)
 }

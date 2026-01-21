@@ -153,6 +153,13 @@ impl Task for ResourceDownloadTask {
             let final_path = target_dir.join(&version.file_name);
             let final_path_str = final_path.to_string_lossy().to_string();
             
+            // Get metadata from temp file before move
+            let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&temp_file_path) {
+                (meta.len() as i64, meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+            } else {
+                (0, 0)
+            };
+
             // Check for existing database entry to find old file path
             let existing_resource = installed_dsl::installed_resource
                 .filter(installed_dsl::instance_id.eq(instance_id))
@@ -193,6 +200,8 @@ impl Task for ResourceDownloadTask {
                         installed_dsl::is_manual.eq(false),
                         installed_dsl::is_enabled.eq(true),
                         installed_dsl::last_updated.eq(Utc::now().naive_utc()),
+                        installed_dsl::file_size.eq(file_size),
+                        installed_dsl::file_mtime.eq(file_mtime),
                     ))
                     .execute(&mut conn)
                     .map_err(|e| e.to_string())?;
@@ -228,6 +237,8 @@ impl Task for ResourceDownloadTask {
                     is_enabled: true,
                     last_updated: Utc::now().naive_utc(),
                     hash: Some(version.hash.clone()),
+                    file_size,
+                    file_mtime,
                 };
 
                 diesel::insert_into(installed_dsl::installed_resource)

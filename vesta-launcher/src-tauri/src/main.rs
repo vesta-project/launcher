@@ -136,6 +136,7 @@ fn main() {
             commands::resources::toggle_resource,
             commands::resources::sync_instance_resources,
             commands::resources::get_installed_resources,
+            commands::resources::check_resource_updates,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

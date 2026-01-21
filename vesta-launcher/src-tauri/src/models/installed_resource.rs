@@ -21,4 +21,6 @@ pub struct InstalledResource {
     pub last_updated: NaiveDateTime,
     pub release_type: String,
     pub hash: Option<String>,
+    pub file_size: i64,
+    pub file_mtime: i64,
 }

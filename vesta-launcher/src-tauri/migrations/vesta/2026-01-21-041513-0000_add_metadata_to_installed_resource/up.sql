@@ -1,0 +1,2 @@
+﻿ALTER TABLE installed_resource ADD COLUMN file_size BIGINT NOT NULL DEFAULT 0;
+ALTER TABLE installed_resource ADD COLUMN file_mtime BIGINT NOT NULL DEFAULT 0;

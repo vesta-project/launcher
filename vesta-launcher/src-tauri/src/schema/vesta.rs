@@ -45,6 +45,8 @@ diesel::table! {
         last_updated -> Timestamp,
         release_type -> Text,
         hash -> Nullable<Text>,
+        file_size -> BigInt,
+        file_mtime -> BigInt,
     }
 }
 
