@@ -217,7 +217,11 @@ function Root(props: ChildrenProp) {
 		}
 	});
 
-	return <>{props.children}</>;
+	return (
+		<>
+			{props.children}
+		</>
+	);
 }
 
 export default App;

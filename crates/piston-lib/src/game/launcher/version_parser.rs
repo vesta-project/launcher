@@ -28,6 +28,14 @@ pub struct VersionManifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Arguments>,
 
+    /// Top-level JVM arguments (seen in some modded versions like Fabric)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "jvmArguments")]
+    pub jvm_arguments: Option<Vec<Argument>>,
+
+    /// Top-level game arguments (seen in some modded versions)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "gameArguments")]
+    pub game_arguments: Option<Vec<Argument>>,
+
     /// Legacy arguments (pre-1.13)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub minecraft_arguments: Option<String>,
@@ -411,6 +419,28 @@ pub(crate) fn merge_manifests(
         }
     }
 
+    // Merge top-level jvmArguments if they exist
+    if let Some(child_jvm_top) = child.jvm_arguments {
+        if let Some(ref mut parent_jvm_top) = parent.jvm_arguments {
+            let mut new_jvm = child_jvm_top;
+            new_jvm.extend(parent_jvm_top.clone());
+            parent.jvm_arguments = Some(new_jvm);
+        } else {
+            parent.jvm_arguments = Some(child_jvm_top);
+        }
+    }
+
+    // Merge top-level gameArguments if they exist
+    if let Some(child_game_top) = child.game_arguments {
+        if let Some(ref mut parent_game_top) = parent.game_arguments {
+            let mut new_game = child_game_top;
+            new_game.extend(parent_game_top.clone());
+            parent.game_arguments = Some(new_game);
+        } else {
+            parent.game_arguments = Some(child_game_top);
+        }
+    }
+
     // Handle legacy minecraft_arguments
     if child.minecraft_arguments.is_some() {
         parent.minecraft_arguments = child.minecraft_arguments;
@@ -653,6 +683,8 @@ mod tests {
                 game: vec![Argument::Simple("--version".to_string())],
                 jvm: vec![],
             }),
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -672,6 +704,8 @@ mod tests {
                 game: vec![Argument::Simple("--fml.forgeVersion".to_string())],
                 jvm: vec![],
             }),
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -701,6 +735,8 @@ mod tests {
             main_class: Some("net.minecraft.launchwrapper.Launch".to_string()),
             inherits_from: None,
             arguments: None,
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: Some("--username ${auth_player_name} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker --versionType Forge".to_string()),
             libraries: vec![],
             asset_index: None,
@@ -720,6 +756,8 @@ mod tests {
                 game: vec![Argument::Simple("--fml.forgeVersion".to_string())],
                 jvm: vec![],
             }),
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,

@@ -8,11 +8,25 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, watch, Semaphore};
 
+#[derive(Clone)]
 pub struct TaskContext {
     pub app_handle: AppHandle,
     pub notification_id: String,
     pub cancel_rx: watch::Receiver<bool>,
     pub pause_rx: watch::Receiver<bool>,
+}
+
+impl TaskContext {
+    pub fn update_description(&self, description: String) {
+        let manager = self.app_handle.state::<NotificationManager>();
+        let _ = manager.update_progress_with_description(
+            self.notification_id.clone(),
+            0, // We keep it at indeterminate if we don't know the exact progress
+            None,
+            None,
+            description,
+        );
+    }
 }
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;

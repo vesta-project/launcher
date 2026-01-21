@@ -402,6 +402,16 @@ impl ResourceManager {
         Ok(None)
     }
 
+    pub async fn get_version(
+        &self,
+        platform: SourcePlatform,
+        project_id: &str,
+        version_id: &str
+    ) -> Result<ResourceVersion> {
+        let source = self.get_source(platform)?;
+        source.get_version(project_id, version_id).await
+    }
+
     pub async fn get_by_hash(&self, platform: SourcePlatform, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
         {
             let cache = self.hash_cache.lock().await;

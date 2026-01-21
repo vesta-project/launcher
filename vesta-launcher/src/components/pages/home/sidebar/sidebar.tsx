@@ -20,6 +20,8 @@ import {
 	persistentNotificationTrigger,
 	showAlert,
 } from "@utils/notifications";
+import { openModpackInstall } from "@stores/modpack-install";
+import { open } from "@tauri-apps/plugin-dialog";
 import {
 	createEffect,
 	createResource,
@@ -48,8 +50,8 @@ function Sidebar(props: SidebarProps) {
 		setTimeout(() => setReady(true), 1000);
 	});
 
-	const openPage = (path: string) => {
-		router()?.navigate(path);
+	const openPage = (path: string, routeProps?: Record<string, any>) => {
+		router()?.navigate(path, {}, routeProps);
 		props.setPageViewerOpen(true);
 	};
 
@@ -126,7 +128,7 @@ function Sidebar(props: SidebarProps) {
 					<div class={"sidebar__section actions"}>
 						<SidebarActionButton
 							id={"sidebar-new"}
-							tooltip_text={"New"}
+							tooltip_text={"New Instance"}
 							onClick={() => openPage("/install")}
 						>
 							<PlusIcon />

@@ -34,6 +34,9 @@
 	--effect-shadow-depth: 24px;
 	--effect-glow-opacity: 0.7;
 
+	/* Animation Tokens */
+	--animate-spin-duration: 1s;
+
 	/* Gradient Configuration */
 	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
 	--rotation: 135deg;
@@ -737,4 +740,16 @@ button {
 @keyframes spin {
 	from { transform: rotate(0deg); }
 	to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+	animation: spin var(--animate-spin-duration, 1s) linear infinite;
+}
+
+.field-label-manual {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
 }

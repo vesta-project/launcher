@@ -45,7 +45,8 @@ export interface Instance {
 	gameDirectory: string | null;
 	width: number;
 	height: number;
-	memoryMb: number;
+	minMemory: number;
+	maxMemory: number;
 	iconPath: string | null;
 	lastPlayed: string | null;
 	totalPlaytimeMinutes: number;
@@ -60,6 +61,11 @@ export interface Instance {
 		| null;
 	crashed?: boolean;
 	crashDetails?: string | null;
+	modpackId: string | null;
+	modpackVersionId: string | null;
+	modpackPlatform: string | null;
+	modpackIconUrl: string | null;
+	iconData: Uint8Array | null;
 }
 
 // Simplified version for creating new instances
@@ -70,8 +76,14 @@ export interface CreateInstanceData {
 	modloaderVersion?: string;
 	width?: number;
 	height?: number;
-	memoryMb?: number;
+	minMemory?: number;
+	maxMemory?: number;
 	iconPath?: string;
+	modpackId?: string;
+	modpackVersionId?: string;
+	modpackPlatform?: string;
+	modpackIconUrl?: string;
+	iconData?: Uint8Array;
 }
 
 // Metadata types from piston-lib
@@ -114,19 +126,25 @@ export async function createInstance(
 		id: 0,
 		name: data.name,
 		minecraftVersion: data.minecraftVersion,
-		modloader: data.modloader || "vanilla",
+		modloader: (data.modloader === "vanilla" ? null : data.modloader) || null,
 		modloaderVersion: data.modloaderVersion || null,
 		javaPath: null,
 		javaArgs: null,
 		gameDirectory: null,
 		width: data.width || 854,
 		height: data.height || 480,
-		memoryMb: data.memoryMb || 2048,
+		minMemory: data.minMemory || 2048,
+		maxMemory: data.maxMemory || 4096,
 		iconPath: data.iconPath || null,
 		lastPlayed: null,
 		totalPlaytimeMinutes: 0,
 		createdAt: null,
 		updatedAt: null,
+		modpackId: data.modpackId || null,
+		modpackVersionId: data.modpackVersionId || null,
+		modpackPlatform: data.modpackPlatform || null,
+		modpackIconUrl: data.modpackIconUrl || null,
+		iconData: data.iconData || null,
 	};
 
 	console.log(
@@ -148,6 +166,52 @@ export async function createInstance(
 // Update an existing instance
 export async function updateInstance(instance: Instance): Promise<void> {
 	await invoke("update_instance", { instanceData: instance });
+}
+
+// Unlink instance from modpack
+export async function unlinkInstance(instance: Instance): Promise<void> {
+	const updated = {
+		...instance,
+		modpackId: null,
+		modpackVersionId: null,
+		modpackPlatform: null,
+		modpackIconUrl: null,
+		// We keep the iconData if it exists, as that's the "offline" version of the modpack icon
+		// which the user might want to keep or change later.
+	};
+	await updateInstance(updated);
+}
+
+// Update instance modpack version
+export async function updateInstanceModpackVersion(
+	id: number,
+	versionId: string,
+): Promise<void> {
+	await invoke("update_instance_modpack_version", {
+		instanceId: id,
+		versionId,
+	});
+}
+
+// Duplicate an instance
+export async function duplicateInstance(
+	id: number,
+	newName?: string,
+): Promise<void> {
+	await invoke("duplicate_instance", {
+		instanceId: id,
+		newName: newName || null,
+	});
+}
+
+// Repair an instance
+export async function repairInstance(id: number): Promise<void> {
+	await invoke("repair_instance", { instanceId: id });
+}
+
+// Reset an instance (Hard Reset)
+export async function resetInstance(id: number): Promise<void> {
+	await invoke("reset_instance", { instanceId: id });
 }
 
 // Delete an instance
@@ -234,6 +298,7 @@ export async function reloadMinecraftVersions(): Promise<void> {
 // Event listener for instance updates
 let unsubscribeInstanceUpdate: (() => void) | null = null;
 let unsubscribeInstanceInstalled: (() => void) | null = null;
+let unsubscribeInstanceDeleted: (() => void) | null = null;
 
 export async function subscribeToInstanceUpdates(callback: () => void) {
 	// Listen for instance updates (DB changes) and instance-installed (installer finished)
@@ -252,6 +317,14 @@ export async function subscribeToInstanceUpdates(callback: () => void) {
 			callback();
 		},
 	);
+
+	// Listen for instance deletion to remove it from UI
+	unsubscribeInstanceDeleted = await listen<{ id: number }>(
+		"core://instance-deleted",
+		() => {
+			callback();
+		},
+	);
 }
 
 export function unsubscribeFromInstanceUpdates() {
@@ -262,6 +335,10 @@ export function unsubscribeFromInstanceUpdates() {
 	if (unsubscribeInstanceInstalled) {
 		unsubscribeInstanceInstalled();
 		unsubscribeInstanceInstalled = null;
+	}
+	if (unsubscribeInstanceDeleted) {
+		unsubscribeInstanceDeleted();
+		unsubscribeInstanceDeleted = null;
 	}
 }
 

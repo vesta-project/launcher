@@ -40,10 +40,10 @@ diesel::table! {
         local_path -> Text,
         display_name -> Text,
         current_version -> Text,
-        release_type -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
         last_updated -> Timestamp,
+        release_type -> Text,
         hash -> Nullable<Text>,
     }
 }
@@ -60,7 +60,6 @@ diesel::table! {
         game_directory -> Nullable<Text>,
         width -> Integer,
         height -> Integer,
-        memory_mb -> Integer,
         icon_path -> Nullable<Text>,
         last_played -> Nullable<Text>,
         total_playtime_minutes -> Integer,
@@ -69,6 +68,13 @@ diesel::table! {
         installation_status -> Nullable<Text>,
         crashed -> Nullable<Bool>,
         crash_details -> Nullable<Text>,
+        min_memory -> Integer,
+        max_memory -> Integer,
+        modpack_id -> Nullable<Text>,
+        modpack_version_id -> Nullable<Text>,
+        modpack_platform -> Nullable<Text>,
+        modpack_icon_url -> Nullable<Text>,
+        icon_data -> Nullable<Binary>,
     }
 }
 

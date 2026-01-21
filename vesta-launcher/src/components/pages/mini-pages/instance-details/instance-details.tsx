@@ -1,6 +1,7 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { ask, confirm } from "@tauri-apps/plugin-dialog";
 import Button from "@ui/button/button";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
@@ -9,6 +10,14 @@ import {
 	PopoverContent,
 	PopoverTrigger,
 } from "@ui/popover/popover";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxItem,
+	ComboboxInput,
+	ComboboxControl,
+	ComboboxTrigger,
+} from "@ui/combobox/combobox";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import {
 	Slider,
@@ -32,13 +41,23 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resources, findBestVersion, type ResourceVersion, type InstalledResource } from "@stores/resources";
 import {
 	DEFAULT_ICONS,
+	duplicateInstance,
 	getInstanceBySlug,
+	getMinecraftVersions,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
+	repairInstance,
+	resetInstance,
 	updateInstance,
+	updateInstanceModpackVersion,
+	unlinkInstance,
+	type PistonMetadata,
+	type GameVersionMetadata,
+	type LoaderVersionInfo,
 } from "@utils/instances";
 import {
+	batch,
 	createEffect,
 	createResource,
 	createSignal,
@@ -58,15 +77,24 @@ import {
 } from "@tanstack/solid-table";
 import "./instance-details.css";
 import { formatDate } from "@utils/date";
+import { ExportDialog } from "./components/ExportDialog";
 
-type TabType = "home" | "console" | "resources" | "settings";
+type TabType = "home" | "console" | "resources" | "settings" | "versioning";
 
 interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
 }
 
 export default function InstanceDetails(props: InstanceDetailsProps & { setRefetch?: (fn: () => Promise<void>) => void }) {
-	// Get slug from props first, then fallback to router params
+	const loadersList = [
+		{ label: "Vanilla", value: "vanilla" },
+		{ label: "Fabric", value: "fabric" },
+		{ label: "Forge", value: "forge" },
+		{ label: "NeoForge", value: "neoforge" },
+		{ label: "Quilt", value: "quilt" }
+	];
+
+	// Handle slug from props first, then fallback to router params
 	const getSlug = () => {
 		if (props.slug) return props.slug;
 		const params = router()?.currentParams.get();
@@ -80,7 +108,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		return await getInstanceBySlug(s);
 	});
 
-	const [installedResources, { refetch: refetchResources }] = createResource(instance, async (inst) => {
+	const [installedResources, { refetch: refetchResources, mutate: mutateResources }] = createResource(instance, async (inst) => {
 		if (!inst) return [];
 		return await resources.getInstalled(inst.id);
 	});
@@ -103,12 +131,13 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 	// Tab state - initialized from query param if available
 	const [activeTab, setActiveTab] = createSignal<TabType>("home");
+	const [showExportDialog, setShowExportDialog] = createSignal(false);
 
 	// Sync tab state with router params
 	createEffect(() => {
 		const params = router()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
-		if (tab && ["home", "console", "resources", "settings"].includes(tab)) {
+		if (tab && ["home", "console", "resources", "settings", "versioning"].includes(tab)) {
 			setActiveTab(tab);
 		} else {
 			// Default to home if no tab specified
@@ -130,6 +159,151 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>({});
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
 	const [lastCheckTime, setLastCheckTime] = createSignal<number>(0);
+
+	// Modpack versions for picker
+	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<string | null>(null);
+	const [mcVersions] = createResource(getMinecraftVersions);
+	const [selectedMcVersion, setSelectedMcVersion] = createSignal("");
+	const [selectedLoader, setSelectedLoader] = createSignal("vanilla");
+	const [selectedLoaderVersion, setSelectedLoaderVersion] = createSignal("");
+
+	const [modpackVersions, { refetch: refetchModpackVersions }] = createResource(
+		() => {
+			const inst = instance();
+			return { 
+				active: activeTab() === "versioning" || activeTab() === "resources", 
+				id: inst?.modpackId, 
+				platform: inst?.modpackPlatform 
+			};
+		},
+		async (params) => {
+			if (!params.active || !params.id || !params.platform) return [];
+			try {
+				const vs = await resources.getVersions(params.platform as any, params.id);
+				// If we don't have a selected ID yet, set it to the installed one
+				if (activeTab() === "versioning" && !selectedModpackVersionId()) {
+					const installedVid = instance()?.modpackVersionId;
+					const match = vs.find(v => v.id === installedVid || v.version_number === installedVid);
+					setSelectedModpackVersionId(match ? match.id : installedVid || null);
+				}
+				return vs;
+			} catch (e) {
+				console.error("Failed to fetch modpack versions:", e);
+				return [];
+			}
+		}
+	);
+
+	const selectedModpackVersion = () => 
+		modpackVersions()?.find(v => v.id === selectedModpackVersionId() || v.version_number === selectedModpackVersionId());
+
+	const searchableModpackVersions = createMemo(() => {
+		return (modpackVersions() || []).map((v) => ({
+			...v,
+			searchString: `${v.version_number} ${v.game_versions.join(" ")} ${v.loaders.join(" ")} ${v.id}`,
+		}));
+	});
+
+	const searchableMcVersions = createMemo(() => {
+		return (mcVersions()?.game_versions || []).map((v) => ({
+			...v,
+			searchString: v.id,
+		}));
+	});
+
+	// Initialize standard version picks
+	createEffect(() => {
+		const inst = instance();
+		const tab = activeTab();
+		if (inst && tab === "versioning") {
+			// If mc version isn't set yet (initial load of tab for this instance), set it
+			if (!selectedMcVersion()) {
+				batch(() => {
+					setSelectedMcVersion(inst.minecraftVersion);
+					setSelectedLoader((inst.modloader || "vanilla").toLowerCase());
+					setSelectedLoaderVersion(inst.modloaderVersion || "");
+					
+					if (inst.modpackId && !selectedModpackVersionId()) {
+						setSelectedModpackVersionId(inst.modpackVersionId || null);
+					}
+				});
+			}
+		}
+	});
+
+	// Reset selections when switching instances
+	createEffect(() => {
+		const slug = router()?.currentParams.get()?.slug;
+		if (slug) {
+			setSelectedMcVersion("");
+			setSelectedLoader("vanilla");
+			setSelectedLoaderVersion("");
+			setSelectedModpackVersionId(null);
+		}
+	});
+
+	const updateModpackVersion = async (versionId: string) => {
+		const inst = instance();
+		if (!inst) return;
+		
+		setBusy(true);
+		try {
+			await updateInstanceModpackVersion(inst.id, versionId);
+			// Repair fetches the files for the newly set version
+			await repairInstance(inst.id);
+			await refetch();
+		} catch (e) {
+			console.error("Failed to update modpack version:", e);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const rolloutModpackUpdate = async () => {
+		const vid = selectedModpackVersionId();
+		if (!vid) return;
+		await updateModpackVersion(vid);
+	};
+
+	const handleUnlink = async () => {
+		const inst = instance();
+		if (!inst) return;
+
+		const confirmed = await confirm("Are you sure you want to unlink this instance from the modpack? You will no longer receive updates from the platform, but your files will remain intact.");
+		if (!confirmed) return;
+
+		setBusy(true);
+		try {
+			await unlinkInstance(inst);
+			await refetch();
+		} catch (e) {
+			console.error("Failed to unlink instance:", e);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const handleStandardUpdate = async () => {
+		const inst = instance();
+		if (!inst) return;
+		
+		setBusy(true);
+		try {
+			// updateInstance expects full Instance object
+			await updateInstance({
+				...inst,
+				minecraftVersion: selectedMcVersion(),
+				modloader: selectedLoader().toLowerCase() === "vanilla" ? null : selectedLoader(),
+				modloaderVersion: selectedLoader().toLowerCase() === "vanilla" ? null : selectedLoaderVersion()
+			});
+			await repairInstance(inst.id);
+			await refetch();
+		} catch (e) {
+			console.error("Failed to update instance version:", e);
+		} finally {
+			setBusy(false);
+		}
+	}
 
 	// Auto-resync and check updates when entering resources tab
 	createEffect(async () => {
@@ -158,12 +332,26 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 	const checkUpdates = async () => {
 		const inst = instance();
+		if (!inst || checkingUpdates()) return;
+
+		setCheckingUpdates(true);
+		
+		// If modpack is linked, refresh versions resource
+		if (inst.modpackId) {
+			console.log(`[InstanceDetails] Refreshing modpack versions for ${inst.modpackId}`);
+			// Resource handles its own refetching if we just trigger it
+			await refetchModpackVersions();
+		}
+
 		const resourcesList = installedResources();
-		if (!inst || !resourcesList || checkingUpdates()) return;
+		if (!resourcesList) {
+			setCheckingUpdates(false);
+			return;
+		}
 
 		setLastCheckTime(Date.now());
 		console.log(`[InstanceDetails] Checking updates for ${resourcesList.length} resources on MC ${inst.minecraftVersion} (${inst.modloader})`);
-		setCheckingUpdates(true);
+		
 		const newUpdates: Record<number, ResourceVersion> = {};
 		
 		for (const res of resourcesList) {
@@ -234,7 +422,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [name, setName] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [javaArgs, setJavaArgs] = createSignal<string>("");
-	const [memoryMb, setMemoryMb] = createSignal<number[]>([2048]);
+	const [minMemory, setMinMemory] = createSignal<number[]>([2048]);
+	const [maxMemory, setMaxMemory] = createSignal<number[]>([4096]);
 	const [saving, setSaving] = createSignal(false);
 
 	// Create uploadedIcons array that includes current iconPath if it's an uploaded image
@@ -267,7 +456,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			setName(inst.name);
 			setIconPath(inst.iconPath);
 			setJavaArgs(inst.javaArgs ?? "");
-			setMemoryMb([inst.memoryMb ?? 2048]);
+			setMinMemory([inst.minMemory ?? 2048]);
+			setMaxMemory([inst.maxMemory ?? 4096]);
 			
 			// Initialize resource watcher but don't set as globally "selected" yet
 			resources.sync(inst.id, slug(), inst.gameDirectory || "");
@@ -326,10 +516,6 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 				);
 			},
 		}),
-		columnHelper.accessor("platform", {
-			header: "Source",
-			cell: (info) => <span class="capitalize">{info.getValue()}</span>,
-		}),
 		columnHelper.accessor("is_enabled", {
 			header: () => <div style="text-align: right">Enabled</div>,
 			cell: (info) => (
@@ -340,14 +526,23 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 					<Switch
 						checked={info.getValue()}
 						onChange={async (enabled) => {
+							const previous = installedResources.latest;
+							// Optimistic update
+							mutateResources((prev) => 
+								prev?.map(r => r.id === info.row.original.id ? { ...r, is_enabled: enabled } : r)
+							);
+
 							try {
 								await invoke("toggle_resource", {
 									resourceId: info.row.original.id,
 									enabled,
 								});
-								await refetchResources();
+								// Silently refetch in background to stay in sync
+								refetchResources();
 							} catch (e) {
 								console.error("Failed to toggle resource:", e);
+								// Rollback
+								mutateResources(previous);
 							}
 						}}
 					>
@@ -375,14 +570,22 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 									`Are you sure you want to delete ${info.row.original.display_name}? This will remove the file from your instance.`,
 								)
 							) {
+								const previous = installedResources.latest;
+								// Optimistic remove
+								mutateResources((prev) => 
+									prev?.filter(r => r.id !== info.row.original.id)
+								);
+
 								try {
 									await invoke("delete_resource", {
 										instanceId: info.row.original.instance_id,
 										resourceId: info.row.original.id,
 									});
-									await refetchResources();
+									refetchResources();
 								} catch (e) {
 									console.error("Failed to delete resource:", e);
+									// Rollback
+									mutateResources(previous);
 								}
 							}
 						}}
@@ -411,13 +614,15 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 	const filteredData = createMemo(() => {
 		const data = installedResources() || [];
+		const search = resourceSearch().toLowerCase();
 		return data.filter((res) => {
 			const matchesType =
 				resourceTypeFilter() === "All" ||
 				res.resource_type.toLowerCase() === resourceTypeFilter().toLowerCase();
 			const matchesSearch =
-				res.display_name.toLowerCase().includes(resourceSearch().toLowerCase()) ||
-				res.local_path.toLowerCase().includes(resourceSearch().toLowerCase());
+				res.display_name.toLowerCase().includes(search) ||
+				res.local_path.toLowerCase().includes(search) ||
+				res.resource_type.toLowerCase().includes(search);
 			return matchesType && matchesSearch;
 		});
 	});
@@ -427,6 +632,9 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			return filteredData();
 		},
 		columns,
+		initialState: {
+			sorting: [{ id: "display_name", desc: false }]
+		},
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getFilteredRowModel: getFilteredRowModel(),
@@ -589,7 +797,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			fresh.name = name();
 			fresh.iconPath = iconPath();
 			fresh.javaArgs = javaArgs() || null;
-			fresh.memoryMb = memoryMb()[0];
+			fresh.minMemory = minMemory()[0];
+			fresh.maxMemory = maxMemory()[0];
 			await updateInstance(fresh);
 			await refetch();
 		} catch (e) {
@@ -651,6 +860,12 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 						Resources
 					</button>
 					<button
+						classList={{ active: activeTab() === "versioning" }}
+						onClick={() => handleTabChange("versioning")}
+					>
+						Version
+					</button>
+					<button
 						classList={{ active: activeTab() === "settings" }}
 						onClick={() => handleTabChange("settings")}
 					>
@@ -661,7 +876,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 			<main class="instance-details-content">
 				<div class="content-wrapper">
-					<Show when={instance.loading}>
+					<Show when={instance.loading && !instance.latest}>
 						<div class="instance-loading">
 							<Skeleton class="skeleton-header" />
 							<Skeleton class="skeleton-content" />
@@ -673,7 +888,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 						</div>
 					</Show>
 
-					<Show when={instance()}>
+					<Show when={instance.latest}>
 						{(inst) => (
 							<>
 								<header class="instance-details-header" classList={{ shrunk: activeTab() !== "home" }}>
@@ -697,6 +912,12 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												<h1>{inst().name}</h1>
 												<p class="header-meta">
 													{inst().minecraftVersion} • {inst().modloader || "Vanilla"}
+													<Show when={inst().modpackId}>
+														<span class="linkage-badge" title={`Linked to ${inst().modpackPlatform} modpack`}>
+															<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px; opacity: 0.8;"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+															Linked
+														</span>
+													</Show>
 												</p>
 											</div>
 										</div>
@@ -775,7 +996,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 														<h3>Configuration</h3>
 														<div class="stat-row">
 															<span class="stat-label">Memory</span>
-															<span class="stat-value">{inst().memoryMb} MB</span>
+															<span class="stat-value">{inst().minMemory}/{inst().maxMemory} MB</span>
 														</div>
 														<div class="stat-row">
 															<span class="stat-label">Resources</span>
@@ -797,11 +1018,11 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 									</Show>
 
 									<Show when={activeTab() === "console"}>
-										<Show when={instance.loading}>
+										<Show when={instance.loading && !instance.latest}>
 											<Skeleton class="skeleton-console" />
 										</Show>
-										<Show when={!instance.loading}>
-											<section class="tab-console">
+										<Show when={instance.latest}>
+											<section class={`tab-console ${instance.loading ? "refetching" : ""}`}>
 												<div class="console-toolbar">
 													<span class="console-title">Game Console</span>
 													<div class="console-toolbar-buttons">
@@ -848,7 +1069,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															{ id: "All", label: "All" },
 															{ id: "mod", label: "Mods" },
 															{ id: "resourcepack", label: "Packs" },
-															{ id: "shader", label: "Shaders" }
+															{ id: "shader", label: "Shaders" },
+															{ id: "datapack", label: "Datapacks" }
 														]}>
 															{(option) => (
 																<button
@@ -924,11 +1146,11 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 											</div>
 
 											<div class="installed-resources-list">
-												<Show when={installedResources.loading}>
+												<Show when={installedResources.loading && !installedResources.latest}>
 													<Skeleton class="skeleton-resources" />
 												</Show>
-												<Show when={!installedResources.loading}>
-													<div class="tanstack-table-container">
+												<Show when={installedResources.latest}>
+													<div class={`tanstack-table-container ${installedResources.loading ? "refetching" : ""}`}>
 														<table class="vesta-table">
 															<thead>
 																<For each={table.getHeaderGroups()}>
@@ -1004,15 +1226,284 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 										</section>
 									</Show>
 
+									<Show when={activeTab() === "versioning"}>
+										<div class="versioning-tab">
+											<div class="version-info-card">
+												<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+													<h3 style="margin: 0;">{inst().modpackId ? "Modpack Management" : "Instance Management"}</h3>
+												</div>
+												<p class="section-desc">Manage the core game version and engine for this instance.</p>
+												
+												<div class="management-grid">
+													{/* Linked Modpack Section */}
+													<Show when={inst().modpackId}>
+														<div class="mgmt-action version-management">
+															<div class="mgmt-text" style="display: flex; flex-direction: column; gap: 12px; flex: 1;">
+																<div style="display: flex; justify-content: space-between; align-items: center;">
+																	<div style="display: flex; gap: 12px; align-items: center;">
+																		<Show when={inst().modpackIconUrl}>
+																			<img 
+																				src={inst().modpackIconUrl || undefined} 
+																				alt="Modpack Icon"
+																				style="width: 32px; height: 32px; border-radius: 8px; background: rgba(0,0,0,0.2);" 
+																			/>
+																		</Show>
+																		<div style="display: flex; flex-direction: column;">
+																			<h4 style="margin: 0">Linked Modpack: {inst().modpackPlatform === "modrinth" ? "Modrinth" : "CurseForge"}</h4>
+																			<p style="margin: 0; font-size: 0.8rem; opacity: 0.7;">Project ID: {inst().modpackId}</p>
+																		</div>
+																	</div>
+																	<div style="display: flex; gap: 8px;">
+																		<Button 
+																			variant="ghost" 
+																			size="sm"
+																			onClick={() => checkUpdates()} 
+																			disabled={checkingUpdates()}
+																		>
+																			{checkingUpdates() ? "Checking..." : "Refresh"}
+																		</Button>
+																		<Button 
+																			variant="ghost" 
+																			size="sm"
+																			onClick={() => handleUnlink()}
+																			disabled={busy()}
+																			color="destructive"
+																		>
+																			Unlink
+																		</Button>
+																	</div>
+																</div>
+
+																<div class="version-pickers" style="display: flex; gap: 16px; margin-top: 8px;">
+																	<div class="picker-group">
+																		<span class="picker-label">Modpack Version</span>
+																		<Show when={!modpackVersions.loading} fallback={<div class="skeleton-picker" />}>
+																			<Combobox<any>
+																				options={searchableModpackVersions()}
+																				value={searchableModpackVersions().find(v => v.id === selectedModpackVersionId() || v.version_number === selectedModpackVersionId())}
+																				onChange={(v) => {
+																					if (v && v.id) setSelectedModpackVersionId(v.id);
+																				}}
+																				optionValue="id"
+																				optionTextValue="searchString"
+																				placeholder="Select version..."
+																				itemComponent={(p) => (
+																					<ComboboxItem item={p.item}>
+																						<div style="display: flex; flex-direction: column; gap: 2px;">
+																							<span style="font-weight: 500;">{p.item.rawValue.version_number} ({p.item.rawValue.release_type})</span>
+																							<span style="font-size: 0.75rem; opacity: 0.7;">
+																								MC {p.item.rawValue.game_versions[0]} • {p.item.rawValue.loaders.join(", ")}
+																							</span>
+																						</div>
+																					</ComboboxItem>
+																				)}
+																			>
+																				<ComboboxControl aria-label="Modpack Version Selection" style="min-width: 220px;">
+																					<ComboboxInput
+																						as="input"
+																						value={(() => {
+																							const selected = selectedModpackVersion();
+																							if (!selected) return "";
+																							const mcV = selected.game_versions?.[0];
+																							return mcV
+																								? `${selected.version_number} (MC ${mcV})`
+																								: selected.version_number;
+																						})()}
+																					/>
+																					<ComboboxTrigger />
+																				</ComboboxControl>
+																				<ComboboxContent />
+																			</Combobox>
+																		</Show>
+																	</div>
+																	
+																	<div class="picker-group">
+																		<span class="picker-label">Effective Engine</span>
+																		<Show when={selectedModpackVersion()} fallback={<span class="value" style="padding: 6px 0;">—</span>}>
+																			{(v) => (
+																				<span class="value" style="padding: 6px 0; font-family: var(--font-mono); font-size: 0.85rem;">
+																					{v().game_versions[0]} • {v().loaders?.[0] || "Vanilla"}
+																				</span>
+																			)}
+																		</Show>
+																	</div>
+																</div>
+															</div>
+
+															<Show when={selectedModpackVersionId() !== inst().modpackVersionId && selectedModpackVersion()?.version_number !== inst().modpackVersionId}>
+																<Button 
+																	onClick={() => rolloutModpackUpdate()} 
+																	disabled={busy()}
+																	color="primary"
+																	size="sm"
+																>
+																	Update Instance
+																</Button>
+															</Show>
+														</div>
+													</Show>
+
+													{/* Version Selectors for Standard Instances */}
+													<Show when={!inst().modpackId}>
+														<div class="mgmt-action version-management">
+															<div class="mgmt-text" style="display: flex; flex-direction: column; gap: 12px;">
+																<h4 style="margin: 0">Minecraft & Modloader</h4>
+																<p style="margin: 0">Change the base game version or switch between Forge/Fabric/Vanilla.</p>
+																
+																<div class="version-pickers" style="display: flex; gap: 16px; margin-top: 8px;">
+																	<div class="picker-group">
+																		<span class="picker-label">Game Version</span>
+																		<Combobox<any>
+																			options={searchableMcVersions()}
+																			optionValue="id"
+																			optionTextValue="searchString"
+																			value={searchableMcVersions().find(gv => gv.id === selectedMcVersion())}
+																			onChange={(val) => {
+																				if (!val) return;
+																				setSelectedMcVersion(val.id);
+																				// Refresh loaders if needed
+																				const vMeta = mcVersions()?.game_versions.find(gv => gv.id === val.id);
+																				if (vMeta) {
+																					setSelectedLoader("vanilla");
+																					setSelectedLoaderVersion("");
+																				}
+																			}}
+																			placeholder="Select version..."
+																			itemComponent={(props) => (
+																				<ComboboxItem item={props.item}>
+																					{props.item.rawValue.id}
+																				</ComboboxItem>
+																			)}
+																		>
+																			<ComboboxControl aria-label="Version Picker" style="width: 156px;">
+																				<ComboboxInput 
+																					as="input" 
+																					value={selectedMcVersion()} 
+																				/>
+																				<ComboboxTrigger />
+																			</ComboboxControl>
+																			<ComboboxContent />
+																		</Combobox>
+																	</div>
+																	
+																	<div class="picker-group">
+																		<span class="picker-label">Modloader</span>
+																		<Combobox<any>
+																			options={loadersList}
+																			optionValue="value"
+																			optionTextValue="label"
+																			value={loadersList.find(l => l.value === selectedLoader())}
+																			onChange={(val) => {
+																				if (!val) return;
+																				setSelectedLoader(val.value);
+																				// Pick default version for new loader
+																				const vMeta = mcVersions()?.game_versions.find(gv => gv.id === selectedMcVersion());
+																				if (vMeta) {
+																					const loaders = vMeta.loaders[val.value] || [];
+																					if (loaders.length > 0) setSelectedLoaderVersion(loaders[0].version);
+																					else setSelectedLoaderVersion("");
+																				}
+																			}}
+																			itemComponent={(props) => (
+																				<ComboboxItem item={props.item}>
+																					{props.item.rawValue.label}
+																				</ComboboxItem>
+																			)}
+																		>
+																			<ComboboxControl aria-label="Modloader Picker" style="width: 140px;">
+																				<ComboboxInput 
+																					as="input" 
+																					value={loadersList.find(l => l.value === selectedLoader())?.label || selectedLoader()} 
+																				/>
+																				<ComboboxTrigger />
+																			</ComboboxControl>
+																			<ComboboxContent />
+																		</Combobox>
+																	</div>
+
+																	<Show when={selectedLoader().toLowerCase() !== "vanilla"}>
+																		<div class="picker-group">
+																			<span class="picker-label">Loader Version</span>
+																			<Combobox<any>
+																				options={mcVersions()?.game_versions.find(gv => gv.id === selectedMcVersion())?.loaders[selectedLoader()] || []}
+																				optionValue="version"
+																				optionTextValue="version"
+																				value={(mcVersions()?.game_versions.find(gv => gv.id === selectedMcVersion())?.loaders[selectedLoader()] || []).find(v => v.version === selectedLoaderVersion())}
+																				onChange={(val) => val && setSelectedLoaderVersion(val.version)}
+																				itemComponent={(props) => (
+																					<ComboboxItem item={props.item}>
+																						{props.item.rawValue.version}
+																					</ComboboxItem>
+																				)}
+																			>
+																				<ComboboxControl aria-label="Loader Version Picker" style="width: 164px;">
+																					<ComboboxInput 
+																						as="input" 
+																						value={selectedLoaderVersion()} 
+																					/>
+																					<ComboboxTrigger />
+																				</ComboboxControl>
+																				<ComboboxContent />
+																			</Combobox>
+																		</div>
+																	</Show>
+																</div>
+															</div>
+															
+															<Show when={
+																selectedMcVersion() !== inst().minecraftVersion || 
+																selectedLoader().toLowerCase() !== (inst().modloader || "vanilla").toLowerCase() || 
+																(selectedLoader().toLowerCase() !== "vanilla" && selectedLoaderVersion() !== (inst().modloaderVersion || ""))
+															}>
+																<Button onClick={handleStandardUpdate} disabled={busy()} color="primary" size="sm">Save & Reinstall</Button>
+															</Show>
+														</div>
+													</Show>
+
+													<div class="mgmt-action">
+														<div class="mgmt-text">
+															<h4>Duplicate</h4>
+															<p>Create a full copy of this instance, including all files and settings.</p>
+														</div>
+														<Button onClick={() => {
+															const name = window.prompt("Enter name for the copy:", `${inst().name} (Copy)`);
+															if (name) duplicateInstance(inst().id, name);
+														}}>Duplicate</Button>
+													</div>
+
+													<div class="mgmt-action">
+														<div class="mgmt-text">
+															<h4>Repair</h4>
+															<p>Verify all game files and mods. Missing or corrupted files will be redownloaded.</p>
+														</div>
+														<Button onClick={() => repairInstance(inst().id)}>Repair</Button>
+													</div>
+
+													<div class="mgmt-action danger">
+														<div class="mgmt-text">
+															<h4>Hard Reset</h4>
+															<p>Wipe the instance directory and reinstall from scratch. <strong style="color: var(--color-danger)">Deletes all local data!</strong></p>
+														</div>
+														<Button variant="outline" color="destructive" onClick={async () => {
+															if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. Your worlds, screenshots, and configs will be DELETED.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
+																resetInstance(inst().id);
+															}
+														}}>Reset</Button>
+													</div>
+												</div>
+											</div>
+										</div>
+									</Show>
+
 									<Show when={activeTab() === "settings"}>
-										<Show when={instance.loading}>
+										<Show when={instance.loading && !instance.latest}>
 											<div class="skeleton-settings">
 												<Skeleton class="skeleton-field" />
 												<Skeleton class="skeleton-field" />
 											</div>
 										</Show>
-										<Show when={!instance.loading}>
-											<section class="tab-settings">
+										<Show when={instance.latest}>
+											<section class={`tab-settings ${instance.loading ? "refetching" : ""}`}>
 												<h2>Instance Settings</h2>
 
 												<div class="settings-field">
@@ -1021,6 +1512,11 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															value={iconPath()}
 															onSelect={(icon) => setIconPath(icon)}
 															uploadedIcons={uploadedIcons()}
+															suggestedIcon={instance()?.modpackIconUrl}
+															isSuggestedSelected={
+																!!(instance()?.modpackIconUrl && 
+																(iconPath() === instance()?.modpackIconUrl || iconPath() === "internal://icon"))
+															}
 															allowUpload={true}
 															showHint={true}
 														/>
@@ -1050,14 +1546,14 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 												<div class="settings-field">
 													<Slider
-														value={memoryMb()}
-														onChange={setMemoryMb}
+														value={minMemory()}
+														onChange={setMinMemory}
 														minValue={512}
 														maxValue={16384}
 														step={512}
 													>
 														<div class="slider__header">
-															<SliderLabel>Memory Allocation</SliderLabel>
+															<SliderLabel>Minimum Memory</SliderLabel>
 															<SliderValueLabel />
 														</div>
 														<SliderTrack>
@@ -1066,16 +1562,45 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 														</SliderTrack>
 													</Slider>
 													<p class="field-hint">
-														Amount of RAM allocated to this instance (MB).
+														Initial RAM allocated (-Xms).
 													</p>
 												</div>
 
-												<div class="settings-actions">
+												<div class="settings-field">
+													<Slider
+														value={maxMemory()}
+														onChange={setMaxMemory}
+														minValue={512}
+														maxValue={16384}
+														step={512}
+													>
+														<div class="slider__header">
+															<SliderLabel>Maximum Memory</SliderLabel>
+															<SliderValueLabel />
+														</div>
+														<SliderTrack>
+															<SliderFill />
+															<SliderThumb />
+														</SliderTrack>
+													</Slider>
+													<p class="field-hint">
+														Maximum RAM allocated (-Xmx).
+													</p>
+												</div>
+
+												<div class="settings-actions" style="display: flex; gap: 12px;">
 													<Button
 														onClick={handleSave}
 														disabled={saving()}
 													>
 														{saving() ? "Saving…" : "Save Settings"}
+													</Button>
+
+													<Button
+														variant="outline"
+														onClick={() => setShowExportDialog(true)}
+													>
+														Export Instance...
 													</Button>
 												</div>
 											</section>
@@ -1087,6 +1612,17 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 					</Show>
 				</div>
 			</main>
+
+			<Show when={instance()}>
+				{(inst) => (
+					<ExportDialog
+						isOpen={showExportDialog()}
+						onClose={() => setShowExportDialog(false)}
+						instanceId={inst().id}
+						instanceName={inst().name}
+					/>
+				)}
+			</Show>
 		</div>
 	);
 }

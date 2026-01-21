@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 #[serde(rename_all = "camelCase")]
 pub struct Instance {
+    #[serde(default)]
     pub id: i32,
     pub name: String,
     pub minecraft_version: String,
@@ -24,7 +25,6 @@ pub struct Instance {
     pub game_directory: Option<String>,
     pub width: i32,
     pub height: i32,
-    pub memory_mb: i32,
     pub icon_path: Option<String>,
     pub last_played: Option<String>,
     pub total_playtime_minutes: i32,
@@ -33,6 +33,13 @@ pub struct Instance {
     pub installation_status: Option<String>,
     pub crashed: Option<bool>,
     pub crash_details: Option<String>,
+    pub min_memory: i32,
+    pub max_memory: i32,
+    pub modpack_id: Option<String>,
+    pub modpack_version_id: Option<String>,
+    pub modpack_platform: Option<String>,
+    pub modpack_icon_url: Option<String>,
+    pub icon_data: Option<Vec<u8>>,
 }
 
 /// New instance (without id for insertion)
@@ -49,7 +56,8 @@ pub struct NewInstance {
     pub game_directory: Option<String>,
     pub width: i32,
     pub height: i32,
-    pub memory_mb: i32,
+    pub min_memory: i32,
+    pub max_memory: i32,
     pub icon_path: Option<String>,
     pub last_played: Option<String>,
     pub total_playtime_minutes: i32,
@@ -58,6 +66,11 @@ pub struct NewInstance {
     pub installation_status: Option<String>,
     pub crashed: Option<bool>,
     pub crash_details: Option<String>,
+    pub modpack_id: Option<String>,
+    pub modpack_version_id: Option<String>,
+    pub modpack_platform: Option<String>,
+    pub modpack_icon_url: Option<String>,
+    pub icon_data: Option<Vec<u8>>,
 }
 
 impl Default for Instance {
@@ -73,7 +86,8 @@ impl Default for Instance {
             game_directory: None,
             width: 854,
             height: 480,
-            memory_mb: 2048,
+            min_memory: 2048,
+            max_memory: 4096,
             icon_path: None,
             last_played: None,
             total_playtime_minutes: 0,
@@ -82,6 +96,11 @@ impl Default for Instance {
             installation_status: Some("pending".to_string()),
             crashed: None,
             crash_details: None,
+            modpack_id: None,
+            modpack_version_id: None,
+            modpack_platform: None,
+            modpack_icon_url: None,
+            icon_data: None,
         }
     }
 }
@@ -107,7 +126,8 @@ impl NewInstance {
         game_directory: Option<String>,
         width: i32,
         height: i32,
-        memory_mb: i32,
+        min_memory: i32,
+        max_memory: i32,
         icon_path: Option<String>,
         last_played: Option<String>,
         total_playtime_minutes: i32,
@@ -116,6 +136,11 @@ impl NewInstance {
         installation_status: Option<String>,
         crashed: Option<bool>,
         crash_details: Option<String>,
+        modpack_id: Option<String>,
+        modpack_version_id: Option<String>,
+        modpack_platform: Option<String>,
+        modpack_icon_url: Option<String>,
+        icon_data: Option<Vec<u8>>,
     ) -> Self {
         NewInstance {
             name,
@@ -127,7 +152,8 @@ impl NewInstance {
             game_directory,
             width,
             height,
-            memory_mb,
+            min_memory,
+            max_memory,
             icon_path,
             last_played,
             total_playtime_minutes,
@@ -136,6 +162,11 @@ impl NewInstance {
             installation_status,
             crashed,
             crash_details,
+            modpack_id,
+            modpack_version_id,
+            modpack_platform,
+            modpack_icon_url,
+            icon_data,
         }
     }
 }
@@ -152,7 +183,8 @@ impl Default for NewInstance {
             game_directory: None,
             width: 854,
             height: 480,
-            memory_mb: 2048,
+            min_memory: 2048,
+            max_memory: 4096,
             icon_path: None,
             last_played: None,
             total_playtime_minutes: 0,
@@ -161,6 +193,11 @@ impl Default for NewInstance {
             installation_status: Some("pending".to_string()),
             crashed: None,
             crash_details: None,
+            modpack_id: None,
+            modpack_version_id: None,
+            modpack_platform: None,
+            modpack_icon_url: None,
+            icon_data: None,
         }
     }
 }
@@ -182,12 +219,18 @@ mod tests {
             854,
             480,
             2048,
+            4096,
             None,
             None,
             0,
             None,
             None,
             Some("pending".to_string()),
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
         );

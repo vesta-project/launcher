@@ -5,12 +5,14 @@ import FabricLogo from "@assets/fabric-logo.svg";
 import ForgeLogo from "@assets/forge-logo.svg";
 import NeoForgeLogo from "@assets/neoforge-logo.svg";
 import PlayIcon from "@assets/play.svg";
+import RefreshIcon from "@assets/refresh.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router } from "@components/page-viewer/page-viewer";
 import { setPageViewerOpen } from "@components/pages/home/home";
 import { listen } from "@tauri-apps/api/event";
+import { ask } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import {
 	ContextMenu,
@@ -42,12 +44,15 @@ import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
 	deleteInstance,
+	duplicateInstance,
 	getInstanceId,
 	getInstanceSlug,
 	installInstance,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
+	repairInstance,
+	resetInstance,
 } from "@utils/instances";
 import {
 	createSignal,
@@ -108,13 +113,19 @@ export default function InstanceCard(props: InstanceCardProps) {
 							gameDirectory: null,
 							width: 0,
 							height: 0,
-							memoryMb: 0,
+							minMemory: 2048,
+							maxMemory: 4096,
 							iconPath: null,
 							lastPlayed: null,
 							totalPlaytimeMinutes: 0,
 							createdAt: null,
 							updatedAt: null,
 							installationStatus: null,
+							modpackId: null,
+							modpackVersionId: null,
+							modpackPlatform: null,
+							modpackIconUrl: null,
+							iconData: null,
 						});
 					setRunningIds((prev) => new Set(prev).add(id));
 				}),
@@ -138,19 +149,42 @@ export default function InstanceCard(props: InstanceCardProps) {
 							gameDirectory: null,
 							width: 0,
 							height: 0,
-							memoryMb: 0,
+							minMemory: 2048,
+							maxMemory: 4096,
 							iconPath: null,
 							lastPlayed: null,
 							totalPlaytimeMinutes: 0,
 							createdAt: null,
 							updatedAt: null,
 							installationStatus: null,
+							modpackId: null,
+							modpackVersionId: null,
+							modpackPlatform: null,
+							modpackIconUrl: null,
+							iconData: null,
 						});
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(id);
 						return newSet;
 					});
+				}),
+			);
+			// Listen for instance launched (notifies that process successfully started)
+			unlisteners.push(
+				await listen("core://instance-launched", (event) => {
+					const payload = (event as any).payload as {
+						instance_id?: string;
+						pid?: number;
+					};
+					if (payload.instance_id === instanceSlug) {
+						setLaunching(false);
+						setRunningIds((prev) => {
+							const newSet = new Set(prev);
+							newSet.add(instanceSlug);
+							return newSet;
+						});
+					}
 				}),
 			);
 			// Also listen for natural process exit (when game closes normally)
@@ -162,6 +196,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 						crashed?: boolean;
 					};
 					if (payload.instance_id) {
+						if (payload.instance_id === instanceSlug) {
+							setLaunching(false);
+						}
 						setRunningIds((prev) => {
 							const newSet = new Set(prev);
 							// biome-ignore lint/style/noNonNullAssertion: instance_id is checked above
@@ -210,26 +247,29 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const isFailed = () => props.instance.installationStatus === "failed";
 	const needsInstallation = () =>
 		!props.instance.installationStatus ||
-		props.instance.installationStatus === "pending" ||
-		props.instance.installationStatus === "failed";
+		isFailed();
 
 	const [busy, setBusy] = createSignal(false);
+	const [launching, setLaunching] = createSignal(false);
 
 	// Can only launch if installed and not busy/installing/running
 	const _canLaunch = () =>
-		!busy() && !isInstalling() && isInstalled() && !isRunning();
+		!busy() && !launching() && !isInstalling() && isInstalled() && !isRunning();
 
 	const playButtonTooltip = () =>
 		needsInstallation()
 			? "Needs Installation"
 			: isRunning()
 				? "Running (click to stop)"
-				: "Launch";
+				: launching()
+					? "Launching..."
+					: "Launch";
 
 	const toggleRun = async () => {
-		if (busy()) return;
-		setBusy(true);
+		if (busy() || launching()) return;
+		
 		if (isRunning()) {
+			setBusy(true);
 			try {
 				await killInstance(props.instance);
 				showToast({
@@ -247,7 +287,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 					duration: 5000,
 				});
 			}
+			setBusy(false);
 		} else {
+			setLaunching(true);
 			try {
 				// Clear crash flag when attempting to launch
 				clearCrashDetails(instanceSlug);
@@ -268,16 +310,20 @@ export default function InstanceCard(props: InstanceCardProps) {
 					severity: "Error",
 					duration: 5000,
 				});
+				setLaunching(false);
 			}
+			// Note: launching state is cleared when core://instance-launched or core://instance-exited occurs, 
+			// but we can also clear it if launchInstance returns (meaning it's 'started') 
+			// or if it fails immediately above.
+			// Let's keep it until either event or if it takes too long.
 		}
-		setBusy(false);
 	};
 
 	const handleClick = async (e: MouseEvent) => {
 		e.stopPropagation();
 
 		// Prevent double-actions
-		if (busy()) return;
+		if (busy() || launching()) return;
 
 		// If currently installing, just notify user
 		if (isInstalling()) {
@@ -311,26 +357,27 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setPageViewerOpen(true);
 	};
 
-	// Handler for context-menu Reinstall action
-	const handleReinstall = async () => {
+	// Handler for context-menu Repair action
+	const handleRepair = async () => {
 		if (busy()) return;
-		const confirmReinstall = await window.confirm(
-			`Reinstall instance \"${props.instance.name}\"? This will re-run the installer.`,
+		const confirmRepair = await window.confirm(
+			`Repair instance \"${props.instance.name}\"? This will verify and redownload missing or corrupted files.`,
 		);
-		if (!confirmReinstall) return;
+		if (!confirmRepair) return;
 		setBusy(true);
 		try {
-			await installInstance(props.instance);
+			const idNum = getInstanceId(props.instance);
+			if (idNum) await repairInstance(idNum);
 			showToast({
-				title: "Reinstall started",
-				description: `Reinstalling \"${props.instance.name}\"`,
+				title: "Repair started",
+				description: `Repairing \"${props.instance.name}\"`,
 				severity: "Info",
 				duration: 3000,
 			});
 		} catch (err) {
-			console.error("Reinstall failed", err);
+			console.error("Repair failed", err);
 			showToast({
-				title: "Reinstall failed",
+				title: "Repair failed",
 				description: String(err),
 				severity: "Error",
 				duration: 5000,
@@ -378,6 +425,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 									padding: 0,
 									"line-height": "16px",
 									"font-weight": "bold",
+									"text-align": "center",
 								}}
 							>
 								{props.instance.name}
@@ -431,16 +479,20 @@ export default function InstanceCard(props: InstanceCardProps) {
 								<TooltipTrigger>
 									<button
 										class={`play-button ${
-											needsInstallation()
-												? "install"
-												: isRunning()
-													? "kill"
-													: "launch"
+											isInstalling() || launching()
+												? "installing"
+												: needsInstallation()
+													? "install"
+													: isRunning()
+														? "kill"
+														: "launch"
 										}`}
 										onClick={handleClick}
-										disabled={isInstalling()}
+										disabled={isInstalling() || launching()}
 									>
-										{needsInstallation() ? (
+										{isInstalling() || launching() ? (
+											<div class="instance-card-spinner" />
+										) : needsInstallation() ? (
 											<ErrorIcon />
 										) : isRunning() ? (
 											<KillIcon />
@@ -509,12 +561,38 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 					<ContextMenuItem
 						onSelect={() => {
-							void handleReinstall();
+							void handleRepair();
 						}}
 					>
-						Reinstall
+						Repair
 						<ContextMenuShortcut>Ctrl-R</ContextMenuShortcut>
 					</ContextMenuItem>
+
+					<ContextMenuItem
+						onSelect={async () => {
+							const name = window.prompt("Enter name for the copy:", `${props.instance.name} (Copy)`);
+							if (name) {
+								const idNum = getInstanceId(props.instance);
+								if (idNum) await duplicateInstance(idNum, name);
+							}
+						}}
+					>
+						Duplicate
+					</ContextMenuItem>
+
+					<ContextMenuItem
+						onSelect={async () => {
+							const idNum = getInstanceId(props.instance);
+							if (!idNum) return;
+							if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. Your worlds, screenshots, and configs will be DELETED.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
+								await resetInstance(idNum);
+							}
+						}}
+					>
+						Hard Reset
+					</ContextMenuItem>
+
+					<ContextMenuSeparator />
 
 					<ContextMenuItem
 						onSelect={async () => {

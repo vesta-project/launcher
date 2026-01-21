@@ -92,6 +92,7 @@ struct CFFilesResponse {
 #[serde(rename_all = "camelCase")]
 struct CFFile {
     id: u32,
+    mod_id: u32,
     display_name: String,
     file_name: String,
     release_type: u8,
@@ -113,6 +114,11 @@ struct CFDependency {
 struct CFHash {
     value: String,
     algo: u8, // 1 = Sha1, 2 = Md5
+}
+
+#[derive(Deserialize)]
+struct CFFileResponse {
+    data: CFFile,
 }
 
 #[derive(Deserialize)]
@@ -212,10 +218,16 @@ impl ResourceSource for CurseForgeSource {
                 "featured_released" => Some(10),
                 "released_date" | "newest" => Some(11),
                 "rating" => Some(12),
-                _ => Some(1), // Default to featured
+                _ => Some(1), 
             }
         } else {
-            Some(1) // Default to featured
+            // Favor popularity (2) for modpacks to find primary packs, 
+            // otherwise featured (1) for general browsing.
+            if query.resource_type == ResourceType::Modpack {
+                Some(2) 
+            } else {
+                Some(1)
+            }
         };
 
         if let Some(field) = sort_field {
@@ -516,6 +528,73 @@ impl ResourceSource for CurseForgeSource {
                 published_at: Some(file.file_date),
             }
         }).collect())
+    }
+
+    async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion> {
+        let url = if project_id.is_empty() {
+            format!("https://api.curseforge.com/v1/mods/files/{}", version_id)
+        } else {
+            format!("https://api.curseforge.com/v1/mods/{}/files/{}", project_id, version_id)
+        };
+        let response = self.client.get(&url).send().await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("CurseForge version fetch failed: {}. URL: {}", response.status(), url));
+        }
+
+        let res_data: CFFileResponse = response.json().await?;
+        let file = res_data.data;
+        let sha1 = file.hashes.iter().find(|h| h.algo == 1).map(|h| h.value.clone()).unwrap_or_default();
+        
+        let mut loaders = Vec::new();
+        let mut game_versions = Vec::new();
+        for v in &file.game_versions {
+            match v.to_lowercase().as_str() {
+                "forge" | "fabric" | "quilt" | "neoforge" => loaders.push(v.clone()),
+                _ => game_versions.push(v.clone()),
+            }
+        }
+
+        let resolved_project_id = if project_id.is_empty() {
+            file.mod_id.to_string()
+        } else {
+            project_id.to_string()
+        };
+
+        Ok(ResourceVersion {
+            id: file.id.to_string(),
+            project_id: resolved_project_id,
+            version_number: file.display_name,
+            game_versions,
+            loaders,
+            download_url: file.download_url.unwrap_or_else(|| {
+                let id = file.id;
+                let major = id / 1000;
+                let minor = id % 1000;
+                format!("https://edge.forgecdn.net/files/{}/{:03}/{}", major, minor, file.file_name)
+            }),
+            file_name: file.file_name,
+            release_type: match file.release_type {
+                1 => ReleaseType::Release,
+                2 => ReleaseType::Beta,
+                3 => ReleaseType::Alpha,
+                _ => ReleaseType::Release,
+            },
+            hash: sha1,
+            dependencies: file.dependencies.into_iter()
+                .map(|d| ResourceDependency {
+                    project_id: d.mod_id.to_string(),
+                    version_id: None,
+                    file_name: None,
+                    dependency_type: match d.relation_type {
+                        2 => DependencyType::Optional,
+                        3 => DependencyType::Required,
+                        5 => DependencyType::Incompatible,
+                        _ => DependencyType::Embedded,
+                    },
+                }).collect(),
+            published_at: Some(file.file_date),
+        })
     }
 
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {

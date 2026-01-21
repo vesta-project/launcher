@@ -106,7 +106,24 @@
 .icon-picker__tick {
 	position: relative;
 	z-index: 1;
-	drop-shadow: 0 2px 4px hsl(0 0% 0% / 0.5);
+	filter: drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5));
+}
+
+.icon-picker__option-badge {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	width: 18px;
+	height: 18px;
+	background: hsl(var(--color__primary-hue) 80% 60%);
+	color: white;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 3;
+	border: 2px solid var(--bg-surface);
+	box-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
 /* Upload button styling (plus icon) */
@@ -153,31 +170,32 @@ opacity: 1;
 
 /* Hint badge for onboarding */
 .icon-picker__trigger--hint {
-border: 2px dashed var(--primary-low);
-animation: pulse-border 2s infinite;
+	border: 2px dashed var(--primary) !important;
+	animation: pulse-border 2s infinite;
 }
 
 @keyframes pulse-border {
-0% { border-color: var(--primary-low); }
-50% { border-color: var(--primary); }
-100% { border-color: var(--primary-low); }
+	0% { border-color: var(--primary-low); }
+	50% { border-color: var(--primary); }
+	100% { border-color: var(--primary-low); }
 }
 
 .icon-picker__hint-badge {
-position: absolute;
-top: -6px;
-right: -6px;
-background: var(--primary);
-color: white;
-width: 20px;
-height: 20px;
-border-radius: 50%;
-display: flex;
-align-items: center;
-justify-content: center;
-box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-z-index: 1;
-animation: nudge 2s infinite;
+	position: absolute;
+	top: -8px;
+	right: -8px;
+	background: var(--primary);
+	color: white;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+	border: 2px solid var(--bg-surface);
+	z-index: 10;
+	animation: nudge 2s infinite;
 }
 
 @keyframes nudge {

@@ -575,6 +575,12 @@ fn forge_library_to_spec(lib: &ForgeLibrary) -> Option<crate::game::installer::c
     // Use checksums as fallback SHA1
     let sha1 = sha1.or_else(|| lib.checksums.as_ref().and_then(|c| c.first().cloned()));
 
+    // Priority 1: Minecraft standard libraries should ALWAYS come from Mojang
+    // regardless of what the modloader manifest says.
+    if lib.name.starts_with("org.lwjgl") || lib.name.starts_with("com.mojang") || lib.name.starts_with("net.minecraft") {
+        maven_url = Some("https://libraries.minecraft.net/".to_string());
+    }
+
     // If no maven_url is specified at the library level, infer based on artifact coordinates
     if maven_url.is_none() {
         maven_url = Some(if lib.name.starts_with("net.minecraftforge") {

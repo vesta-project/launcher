@@ -16,8 +16,12 @@ interface IconPickerProps extends ClassProp {
 	onSelect?: (icon: string) => void;
 	/** Array of uploaded custom icons (stored separately from defaults) */
 	uploadedIcons?: string[];
+	/** A suggested icon (e.g. from a modpack) that stays even if another is picked */
+	suggestedIcon?: string | null;
+	/** Whether the current value correctly represents the suggested icon (even if it's internal://icon) */
+	isSuggestedSelected?: boolean;
 	/** Props to pass to the trigger button */
-	triggerProps?: ButtonPrimitive.ButtonRootProps;
+	triggerProps?: any;
 	/** Whether to allow custom image upload (default: true) */
 	allowUpload?: boolean;
 	/** Whether to show a "click to change" hint (useful for onboarding) */
@@ -32,6 +36,8 @@ export function IconPicker<T extends ValidComponent = "button">(
 		"value",
 		"onSelect",
 		"uploadedIcons",
+		"suggestedIcon",
+		"isSuggestedSelected",
 		"triggerProps",
 		"allowUpload",
 		"showHint",
@@ -46,15 +52,13 @@ export function IconPicker<T extends ValidComponent = "button">(
 	const totalIcons = () => {
 		const uploaded = uploadedIcons().length;
 		const defaults = DEFAULT_ICONS.length;
+		const suggested = local.suggestedIcon ? 1 : 0;
 		const uploadBtn = allowUpload() ? 1 : 0;
-		return uploaded + defaults + uploadBtn;
+		return uploaded + defaults + suggested + uploadBtn;
 	};
 	
 	// Dynamic grid columns (max 4, adjust based on icon count)
 	const gridColumns = () => Math.min(4, totalIcons());
-	
-	// Dynamic grid rows (max 3 rows to avoid scrolling)
-	const maxRows = 3;
 	
 	// Determine if an icon is a gradient or image URL
 	const isGradient = (icon: string) => icon.startsWith("linear-gradient");
@@ -89,6 +93,13 @@ export function IconPicker<T extends ValidComponent = "button">(
 		setIsOpen(false);
 	};
 
+	// Determine if the suggested icon is selected
+	const isSuggestedSelected = () => {
+		if (local.isSuggestedSelected) return true;
+		if (local.suggestedIcon && local.value === local.suggestedIcon) return true;
+		return false;
+	};
+
 	// Get current icon style for trigger display
 	const getTriggerStyle = () => {
 		const icon = local.value || DEFAULT_ICONS[0];
@@ -103,13 +114,17 @@ export function IconPicker<T extends ValidComponent = "button">(
 			<PopoverAnchor as="div" class="icon-picker__anchor">
 				<PopoverTrigger
 					as={ButtonPrimitive.Root}
+					{...local.triggerProps}
 					class={clsx(
 						"icon-picker__trigger", 
 						local.class,
-						local.showHint && "icon-picker__trigger--hint"
+						local.showHint && "icon-picker__trigger--hint",
+						local.triggerProps?.class
 					)}
-					style={getTriggerStyle()}
-					{...local.triggerProps}
+					style={{
+						...getTriggerStyle(),
+						...(local.triggerProps?.style as any)
+					}}
 				>
 					<div class="icon-picker__edit-overlay">
 						<svg
@@ -186,81 +201,150 @@ export function IconPicker<T extends ValidComponent = "button">(
 						</Tooltip>
 					</Show>
 
+					{/* Suggested/Modpack icon */}
+					<Show when={local.suggestedIcon}>
+						<Tooltip placement="top">
+							<TooltipTrigger>
+								<button
+									class={clsx(
+										"icon-picker__option",
+										isSuggestedSelected() && "icon-picker__option--selected",
+									)}
+									style={{
+										"background-image": `url('${local.suggestedIcon}')`,
+										"background-size": "cover",
+										"background-position": "center",
+									}}
+									onClick={() => local.suggestedIcon && handleSelect(local.suggestedIcon)}
+								>
+									<Show when={isSuggestedSelected()}>
+										<svg
+											class="icon-picker__tick"
+											width="20"
+											height="20"
+											viewBox="0 0 24 24"
+											fill="none"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path
+												d="M20 6L9 17L4 12"
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</Show>
+									{/* Badge for suggested icon */}
+									<div class="icon-picker__option-badge">
+										<svg 
+											width="10" 
+											height="10" 
+											viewBox="0 0 24 24" 
+											fill="none" 
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path 
+												d="M19.42 15.635C19.79 15.135 20 14.515 20 13.845V10.845C20 10.125 19.5 9.125 18.89 8.625L14.11 4.635C13.5 4.135 12.5 4.135 11.89 4.635L7.11 8.625C6.5 9.125 6 10.125 6 10.845V13.845C6 14.565 6.5 15.565 7.11 16.065L11.89 20.055C12.5 20.555 13.5 20.555 14.11 20.055L14.75 19.515" 
+												stroke="currentColor" 
+												stroke-width="2" 
+												stroke-linecap="round" 
+												stroke-linejoin="round"
+											/>
+											<path 
+												d="M15 12V22M15 12C15 10.3431 16.3431 9 18 9C19.6569 9 21 10.3431 21 12C21 13.6569 19.6569 15 18 15C16.3431 15 15 13.6569 15 12ZM15 12L12 12" 
+												stroke="currentColor" 
+												stroke-width="2" 
+												stroke-linecap="round" 
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</div>
+								</button>
+							</TooltipTrigger>
+							<TooltipContent>Original Modpack Icon</TooltipContent>
+						</Tooltip>
+					</Show>
+
 					{/* Uploaded icons (displayed first after upload button) */}
 					<For each={uploadedIcons()}>
 						{(icon) => (
-							<button
-								class={clsx(
-									"icon-picker__option",
-									local.value === icon && "icon-picker__option--selected",
-								)}
-								style={{
-									"background-image": `url('${icon}')`,
-									"background-size": "cover",
-									"background-position": "center",
-								}}
-								onClick={() => handleSelect(icon)}
-							>
-								<Show when={local.value === icon}>
-									<svg
-										class="icon-picker__tick"
-										width="20"
-										height="20"
-										viewBox="0 0 24 24"
-										fill="none"
-										xmlns="http://www.w3.org/2000/svg"
-									>
-										<path
-											d="M20 6L9 17L4 12"
-											stroke="white"
-											stroke-width="3"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								</Show>
-							</button>
+							<Show when={icon !== local.suggestedIcon}>
+								<button
+									class={clsx(
+										"icon-picker__option",
+										!isSuggestedSelected() && local.value === icon && "icon-picker__option--selected",
+									)}
+									style={{
+										"background-image": `url('${icon}')`,
+										"background-size": "cover",
+										"background-position": "center",
+									}}
+									onClick={() => handleSelect(icon)}
+								>
+									<Show when={!isSuggestedSelected() && local.value === icon}>
+										<svg
+											class="icon-picker__tick"
+											width="20"
+											height="20"
+											viewBox="0 0 24 24"
+											fill="none"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path
+												d="M20 6L9 17L4 12"
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</Show>
+								</button>
+							</Show>
 						)}
 					</For>
 
 					{/* Default icons */}
 					<For each={DEFAULT_ICONS}>
 						{(icon) => (
-							<button
-								class={clsx(
-									"icon-picker__option",
-									local.value === icon && "icon-picker__option--selected",
-								)}
-								style={
-									isGradient(icon)
-										? { background: icon }
-										: {
-												"background-image": `url('${icon}')`,
-												"background-size": "cover",
-												"background-position": "center",
-											}
-								}
-								onClick={() => handleSelect(icon)}
-							>
-								<Show when={local.value === icon}>
-									<svg
-										class="icon-picker__tick"
-										width="20"
-										height="20"
-										viewBox="0 0 24 24"
-										fill="none"
-										xmlns="http://www.w3.org/2000/svg"
-									>
-										<path
-											d="M20 6L9 17L4 12"
-											stroke="white"
-											stroke-width="3"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								</Show>
-							</button>
+							<Show when={icon !== local.suggestedIcon}>
+								<button
+									class={clsx(
+										"icon-picker__option",
+										!isSuggestedSelected() && local.value === icon && "icon-picker__option--selected",
+									)}
+									style={
+										isGradient(icon)
+											? { background: icon }
+											: {
+													"background-image": `url('${icon}')`,
+													"background-size": "cover",
+													"background-position": "center",
+												}
+									}
+									onClick={() => handleSelect(icon)}
+								>
+									<Show when={!isSuggestedSelected() && local.value === icon}>
+										<svg
+											class="icon-picker__tick"
+											width="20"
+											height="20"
+											viewBox="0 0 24 24"
+											fill="none"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path
+												d="M20 6L9 17L4 12"
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</Show>
+								</button>
+							</Show>
 						)}
 					</For>
 				</div>

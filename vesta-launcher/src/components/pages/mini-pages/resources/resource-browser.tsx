@@ -31,6 +31,7 @@ import { getMinecraftVersions, DEFAULT_ICONS } from "@utils/instances";
 import { getShaderEnginesInOrder, type ShaderEngineInfo } from "@utils/resources";
 import { router } from "@components/page-viewer/page-viewer";
 import InstanceSelectionDialog from "./instance-selection-dialog";
+import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import "./resource-browser.css";
 
 import HeartIcon from "@assets/heart.svg";
@@ -376,7 +377,20 @@ const ResourceCard: Component<{ project: ResourceProject; viewMode: 'grid' | 'li
 
     const handleQuickInstall = async (e: MouseEvent) => {
         e.stopPropagation();
-        
+
+        if (props.project.resource_type === 'modpack') {
+            router()?.navigate("/install", {
+                projectId: props.project.id,
+                platform: props.project.source,
+                isModpack: true,
+                resourceType: 'modpack',
+                projectName: props.project.name,
+                projectIcon: props.project.icon_url || undefined,
+                projectAuthor: props.project.author,
+            });
+            return;
+        }
+
         if (isInstalled()) {
             // Check for update first
             const latest = latestCompatibleVersion();
@@ -884,6 +898,7 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
         router()?.navigate("/install", { 
             projectId: project.id, 
             platform: project.source,
+            isModpack: project.resource_type === 'modpack',
             projectName: project.name,
             projectIcon: project.icon_url || "",
             resourceType: project.resource_type

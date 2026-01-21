@@ -52,7 +52,8 @@ open = "5.3.1"
 urlencoding = "2.1"
 which = "6.0"
 sysinfo = "0.37.2"
-reqwest = { version = "0.12", features = ["json"] }
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
 async-trait = "0.1"
 dotenvy = "0.15"
 notify = "8.1.0"
@@ -66,6 +67,8 @@ lazy_static = "1.5"
 walkdir = "2.5.0"
 murmur2 = "0.1.0"
 base64 = "0.22.1"
+tempfile = "3.24.0"
+uuid = { version = "1.19.0", features = ["v4"] }
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26.1"

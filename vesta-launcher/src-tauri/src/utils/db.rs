@@ -2,11 +2,76 @@
 
 use diesel::prelude::*;
 use diesel::r2d2::{self, ConnectionManager, Pool};
+use diesel::result::{DatabaseErrorKind, Error as DieselError};
 use diesel_migrations::{embed_migrations, EmbeddedMigrations, MigrationHarness};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::Duration;
 
 pub type DbPool = Pool<ConnectionManager<SqliteConnection>>;
+
+/// Helper to retry database operations when locked.
+/// For use in tasks, use `with_retry_cancellable`.
+pub fn with_retry<T, F>(op: F) -> Result<T, anyhow::Error>
+where
+    F: FnMut() -> Result<T, diesel::result::Error>,
+{
+    with_retry_cancellable::<T, F, fn() -> bool>(None, op)
+}
+
+/// Helper to retry database operations when locked, with cancellation support.
+pub fn with_retry_cancellable<T, F, C>(cancel_check: Option<C>, mut op: F) -> Result<T, anyhow::Error>
+where
+    F: FnMut() -> Result<T, diesel::result::Error>,
+    C: Fn() -> bool,
+{
+    let mut attempts = 0;
+    let max_attempts = 5;
+    let mut backoff = 100; // ms
+
+    loop {
+        match op() {
+            Ok(val) => return Ok(val),
+            Err(e) => {
+                attempts += 1;
+
+                let is_busy = match &e {
+                    DieselError::DatabaseError(DatabaseErrorKind::ReadOnlyTransaction, _) => true,
+                    _ => {
+                        let msg = e.to_string();
+                        msg.contains("database is locked") || msg.contains("SQLITE_BUSY")
+                    }
+                };
+
+                if is_busy && attempts < max_attempts {
+                    // Check for cancellation if provided
+                    if let Some(ref check) = cancel_check {
+                        if check() {
+                            return Err(anyhow::anyhow!("Database operation cancelled during retry"));
+                        }
+                    }
+
+                    log::warn!(
+                        "Database busy, retrying in {}ms (attempt {}/{})",
+                        backoff,
+                        attempts,
+                        max_attempts
+                    );
+                    thread::sleep(Duration::from_millis(backoff));
+                    backoff *= 2;
+                    continue;
+                }
+
+                return Err(anyhow::anyhow!(
+                    "Database operation failed after {} attempts: {}",
+                    attempts,
+                    e
+                ));
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 struct SqliteCustomizer;

@@ -109,7 +109,7 @@ pub async fn launch_game(
     // Prefer a loader-specific manifest (installed id) when available and
     // fall back to the vanilla manifest to preserve backward compatibility.
     let installed_id = spec.installed_version_id();
-    log::debug!(
+    log::info!(
         "Resolving version chain for: {} (installed id: {})",
         spec.version_id,
         installed_id
@@ -121,20 +121,39 @@ pub async fn launch_game(
         .join(format!("{}.json", installed_id));
 
     let mut manifest = if manifest_path.exists() {
-        UnifiedManifest::load_from_path(&manifest_path)?
+        log::info!("Found loader manifest at: {:?}", manifest_path);
+        
+        // Try to load as a pre-resolved UnifiedManifest first (this is what our installer writes)
+        match UnifiedManifest::load_from_path(&manifest_path) {
+            Ok(m) => {
+                log::info!("Successfully loaded pre-resolved UnifiedManifest");
+                m
+            },
+            Err(e) => {
+                log::info!("File at {:?} is not a UnifiedManifest, trying to resolve version chain: {}", manifest_path, e);
+                let v = resolve_version_chain(&installed_id, &spec.data_dir)
+                    .await
+                    .context(format!(
+                        "Failed to resolve version chain for loader version {}",
+                        installed_id
+                    ))?;
+                UnifiedManifest::from(v)
+            }
+        }
     } else {
+        log::info!("No loader manifest found at {:?}, falling back to vanilla: {}", manifest_path, spec.version_id);
         let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
             .await
             .context(format!(
-                "Failed to resolve version chain for {}",
+                "Failed to resolve version chain for vanilla version {}",
                 spec.version_id
             ))?;
         UnifiedManifest::from(v)
     };
 
     // Auto-repair: If manifest claims no natives, but they likely exist (stale cache), try re-resolving
-    if !manifest.has_natives() {
-        log::warn!("Manifest loaded from cache has no natives - checking if this is due to stale cache");
+    if !manifest.has_natives() && spec.modloader.is_none() {
+        log::warn!("Vanilla manifest loaded from cache has no natives - checking if this is due to stale cache");
         
         let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
             .await
@@ -145,13 +164,13 @@ pub async fn launch_game(
         let fresh_manifest = UnifiedManifest::from(v);
         
         if fresh_manifest.has_natives() {
-            log::info!("Stale manifest detected! Replaced with fresh manifest containing natives.");
+            log::info!("Stale vanilla manifest detected! Replaced with fresh manifest containing natives.");
             manifest = fresh_manifest;
-            // Optionally save the new manifest back to disk?
-            // For now, let's just use it in memory, it will fix the launch.
         } else {
-            log::info!("Verified: This version matches expectations (no natives found in fresh resolve either).");
+            log::info!("Verified: This vanilla versionlegitimately has no natives.");
         }
+    } else if !manifest.has_natives() {
+        log::debug!("Modded manifest has no natives. This is common for modern versions (1.19+) or specialized loaders.");
     }
 
     // 2. Verify Java installation

@@ -1,6 +1,7 @@
 pub mod installer;
 pub mod launcher;
 pub mod metadata;
+pub mod modpack;
 
 // Re-export commonly used types
 pub use launcher::{GameInstance, LaunchResult, LaunchSpec};

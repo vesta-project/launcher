@@ -96,6 +96,7 @@ struct ModrinthFile {
     url: String,
     filename: String,
     hashes: ModrinthHashes,
+    primary: bool,
 }
 
 #[derive(Deserialize)]
@@ -363,7 +364,18 @@ impl ResourceSource for ModrinthSource {
         })?;
 
         Ok(versions.into_iter().map(|v| {
-            let primary_file = v.files.iter().find(|f| f.url.ends_with(".jar") || f.url.ends_with(".zip")).unwrap_or(&v.files[0]);
+            let primary_file = v.files.iter().find(|f| f.primary)
+                .or_else(|| v.files.iter().find(|f| {
+                    let url = f.url.to_lowercase();
+                    // Prioritize actual game files and exclude metadata/signatures
+                    (url.ends_with(".mrpack") || url.ends_with(".jar") || url.ends_with(".zip")) 
+                    && !url.contains("cosign-bundle")
+                    && !url.ends_with(".asc")
+                }))
+                .unwrap_or(&v.files[0]);
+
+            log::debug!("[Modrinth] Selected version file: {} (primary: {}) for version {}", 
+                primary_file.filename, primary_file.primary, v.version_number);
             
             ResourceVersion {
                 id: v.id,
@@ -399,6 +411,55 @@ impl ResourceSource for ModrinthSource {
         }).collect())
     }
 
+    async fn get_version(&self, _project_id: &str, version_id: &str) -> Result<ResourceVersion> {
+        let url = format!("https://api.modrinth.com/v2/version/{}", version_id);
+        let response = self.client.get(&url).send().await?;
+
+        if !response.status().is_success() {
+            return Err(anyhow!("Modrinth version fetch failed: {}", response.status()));
+        }
+
+        let v: ModrinthVersion = response.json().await?;
+        let primary_file = v.files.iter().find(|f| f.primary)
+            .or_else(|| v.files.iter().find(|f| {
+                let url = f.url.to_lowercase();
+                (url.ends_with(".mrpack") || url.ends_with(".jar") || url.ends_with(".zip")) 
+                && !url.ends_with(".cosign-bundle.json")
+            }))
+            .unwrap_or_else(|| v.files.first().expect("No files in version"));
+
+        log::info!("[Modrinth] get_version: Selected {} (primary: {})", primary_file.filename, primary_file.primary);
+
+        Ok(ResourceVersion {
+            id: v.id,
+            project_id: v.project_id,
+            version_number: v.version_number,
+            game_versions: v.game_versions,
+            loaders: v.loaders,
+            download_url: primary_file.url.clone(),
+            file_name: primary_file.filename.clone(),
+            release_type: match v.version_type.as_str() {
+                "release" => ReleaseType::Release,
+                "beta" => ReleaseType::Beta,
+                "alpha" => ReleaseType::Alpha,
+                _ => ReleaseType::Release,
+            },
+            hash: primary_file.hashes.sha1.clone(),
+            dependencies: v.dependencies.into_iter().map(|d| ResourceDependency {
+                project_id: d.project_id.unwrap_or_default(),
+                version_id: d.version_id,
+                file_name: d.file_name,
+                dependency_type: match d.dependency_type.as_str() {
+                    "required" => DependencyType::Required,
+                    "optional" => DependencyType::Optional,
+                    "incompatible" => DependencyType::Incompatible,
+                    _ => DependencyType::Embedded,
+                },
+            }).collect(),
+            published_at: Some(v.date_published),
+        })
+    }
+
     async fn get_by_hash(&self, hash: &str) -> Result<(ResourceProject, ResourceVersion)> {
         let url = format!("https://api.modrinth.com/v2/version_file/{}?algorithm=sha1", hash);
         let response = self.client.get(&url).send().await?;
@@ -415,7 +476,16 @@ impl ResourceSource for ModrinthSource {
 
         let project = self.get_project(&v.project_id).await?;
         
-        let primary_file = v.files.iter().find(|f| f.url.ends_with(".jar") || f.url.ends_with(".zip")).unwrap_or(&v.files[0]);
+        let primary_file = v.files.iter().find(|f| f.primary)
+            .or_else(|| v.files.iter().find(|f| {
+                let url = f.url.to_lowercase();
+                (url.ends_with(".mrpack") || url.ends_with(".jar") || url.ends_with(".zip")) 
+                && !url.ends_with(".cosign-bundle.json")
+            }))
+            .unwrap_or(&v.files[0]);
+
+        log::info!("[Modrinth] get_by_hash: Selected project {} version {}, file: {} (primary: {})", 
+            project.name, v.version_number, primary_file.filename, primary_file.primary);
         
         let version = ResourceVersion {
             id: v.id,

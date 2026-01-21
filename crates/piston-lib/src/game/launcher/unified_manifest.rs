@@ -103,10 +103,38 @@ impl UnifiedManifest {
             };
 
             // Merge libraries
-            for lib in ml.libraries {
-                for unified in UnifiedLibrary::from_library(&lib, ml_type, os) {
-                    libraries_map.insert(get_lib_key(&unified), unified);
+            let mut ml_unified_libraries = Vec::new();
+            let mut ml_base_prefixes = std::collections::HashSet::new();
+
+            for ml_lib in ml.libraries {
+                let unified_list = UnifiedLibrary::from_library(&ml_lib, ml_type, os);
+                if unified_list.is_empty() {
+                    continue;
                 }
+
+                let parts: Vec<&str> = ml_lib.name.split(':').collect();
+                if parts.len() >= 2 {
+                    ml_base_prefixes.insert(format!("{}:{}", parts[0], parts[1]));
+                }
+                
+                ml_unified_libraries.extend(unified_list);
+            }
+
+            // Wipe vanilla variants first
+            for prefix in ml_base_prefixes {
+                let keys_to_remove: Vec<String> = libraries_map.keys()
+                    .filter(|k| k.starts_with(&prefix))
+                    .map(|k| k.clone())
+                    .collect();
+                
+                for k in keys_to_remove {
+                    libraries_map.remove(&k);
+                }
+            }
+
+            // Insert modloader libraries
+            for unified in ml_unified_libraries {
+                libraries_map.insert(get_lib_key(&unified), unified);
             }
 
             if ml.java_version.is_some() {
@@ -179,6 +207,19 @@ fn get_lib_key(lib: &UnifiedLibrary) -> String {
 impl From<VersionManifest> for UnifiedManifest {
     fn from(v: VersionManifest) -> Self {
         UnifiedManifest::merge(v, None, OsType::current())
+    }
+}
+
+fn is_known_native_library(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("org.lwjgl") || n.contains("ca.weblite:java-objc-bridge") || n.contains("com.mojang:text2speech") || n.contains("com.mojang:jtracy")
+}
+
+fn get_default_classifier_for_os(os: OsType) -> &'static str {
+    match os {
+        OsType::Windows | OsType::WindowsArm64 => "windows",
+        OsType::MacOS | OsType::MacOSArm64 => "osx",
+        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
     }
 }
 
@@ -271,7 +312,13 @@ impl UnifiedLibrary {
             None
         };
 
-        // Fallback: Check downloads.classifiers for OS match if not found in natives map
+        // Fallback: If it's a known native-using library but lacks an explicit natives map,
+        // or if it's not found in the manifest's native map, try to infer it.
+        if native_classifier.is_none() && is_known_native_library(&lib.name) {
+            native_classifier = Some(get_default_classifier_for_os(os).to_string());
+        }
+
+        // Fallback: Check downloads.classifiers for OS match if not found in natives map or inferred
         if native_classifier.is_none() {
             if let Some(downloads) = &lib.downloads {
                 if let Some(classifiers) = &downloads.classifiers {
@@ -283,19 +330,17 @@ impl UnifiedLibrary {
                     
                     for key in classifiers.keys() {
                         if classifier_key_matches_os(key, os_name) {
-                            // On 64-bit systems, avoid "x86" (32-bit) libraries if possible
-                            // Check for "x86" but NOT "x86_64" to identify 32-bit libs
-                            let is_32bit = key.contains("x86") && !key.contains("x86_64");
-                            
-                            if cfg!(target_pointer_width = "64") && is_32bit {
-                                // Only accept as fallback
-                                if native_classifier.is_none() {
-                                    native_classifier = Some(key.clone());
-                                }
-                            } else {
-                                // Prefer non-x86 (or explicit 64-bit) matches immediately
+                            let host_arch = std::env::consts::ARCH;
+                            // Prioritize exact architecture matches
+                            let is_exact_arch = key.contains(host_arch)
+                                || (host_arch == "x86_64" && (key.contains("x64") || key.contains("amd64")));
+
+                            if is_exact_arch {
                                 native_classifier = Some(key.clone());
-                                break;
+                                break; // Found exact match, stop searching
+                            } else if native_classifier.is_none() {
+                                // Store compatible fallback (e.g. x86 on x64) but keep looking for exact match
+                                native_classifier = Some(key.clone());
                             }
                         }
                     }
@@ -385,6 +430,10 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
             };
 
             if normalized_arch != host_arch {
+                // Allow x86 on x86_64 as a fallback
+                if host_arch == "x86_64" && normalized_arch == "x86" {
+                    return true;
+                }
                 return false;
             }
         }
@@ -464,18 +513,32 @@ fn resolve_maven_url_with_classifier(name: &str, classifier: &str, ml_type: Opti
 fn classifier_key_matches_os(key: &str, os_name: &str) -> bool {
     let key = key.to_lowercase();
     let os_name = os_name.to_lowercase();
+    let host_arch = std::env::consts::ARCH;
 
-    if key.contains(&os_name) {
-        return true;
+    let os_match = key.contains(&os_name)
+        || (os_name == "osx" && key.contains("macos"))
+        || (os_name == "macos" && key.contains("osx"));
+
+    if !os_match {
+        return false;
     }
 
-    // Special case for macOS/OSX
-    if os_name == "osx" && key.contains("macos") {
-        return true;
+    // Strict architecture matching for ARM
+    if key.contains("arm64") || key.contains("aarch64") {
+        return host_arch == "aarch64";
     }
-    if os_name == "macos" && key.contains("osx") {
-        return true;
+    if key.contains("arm32") || key.contains("armv7") || key.contains("armhf") {
+        return host_arch == "arm";
     }
 
-    false
+    // Allow x86 on x86_64 as fallback
+    if key.contains("x86") && !key.contains("x86_64") {
+        return host_arch == "x86" || host_arch == "x86_64";
+    }
+
+    if key.contains("x86_64") || key.contains("x64") || key.contains("amd64") {
+        return host_arch == "x86_64";
+    }
+
+    true
 }

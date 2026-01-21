@@ -22,6 +22,18 @@ fn main() {
         println!("Vesta Launcher closed unexpectedly: {e:?}");
     }));
 
+    // Early check for debug logging setting
+    let mut log_level = log::LevelFilter::Info;
+    if let Ok(config_dir) = utils::db_manager::get_app_config_dir() {
+        // Try to init pool early to check setting. setup::init will safely re-init or handle it.
+        let _ = utils::db::init_config_pool(config_dir);
+        if let Ok(config) = utils::config::get_app_config() {
+            if config.debug_logging {
+                log_level = log::LevelFilter::Debug;
+            }
+        }
+    }
+
     // Configure logging with 30-day retention in %appdata%/.VestaLauncher/logs/
     let log_plugin = tauri_plugin_log::Builder::new()
         .targets([
@@ -29,7 +41,7 @@ fn main() {
             tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
             tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
         ])
-        .level(log::LevelFilter::Info)
+        .level(log_level)
         .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
         .max_file_size(10_000_000) // 10MB per file
@@ -90,9 +102,21 @@ fn main() {
             commands::instances::kill_instance,
             commands::instances::get_running_instances,
             commands::instances::is_instance_running,
+            commands::instances::update_instance_modpack_version,
             commands::instances::get_minecraft_versions,
             commands::instances::regenerate_piston_manifest,
             commands::instances::read_instance_log,
+            commands::instances::duplicate_instance,
+            commands::instances::repair_instance,
+            commands::instances::reset_instance,
+            commands::modpacks::get_modpack_info,
+            commands::modpacks::get_modpack_info_from_url,
+            commands::modpacks::get_system_memory_mb,
+            commands::modpacks::get_hardware_info,
+            commands::modpacks::install_modpack_from_zip,
+            commands::modpacks::install_modpack_from_url,
+            commands::modpacks::get_instance_export_files,
+            commands::modpacks::export_instance_to_modpack,
             commands::onboarding::get_onboarding_requirements,
             commands::onboarding::detect_java,
             commands::onboarding::verify_java_path,

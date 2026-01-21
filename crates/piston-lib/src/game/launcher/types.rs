@@ -54,6 +54,12 @@ pub struct LaunchSpec {
     /// Window height (optional)
     pub window_height: Option<u32>,
 
+    /// Minimum memory in MB (optional)
+    pub min_memory: Option<u32>,
+
+    /// Maximum memory in MB (optional)
+    pub max_memory: Option<u32>,
+
     /// Client ID (used by OAuth flows / launcher arguments)
     pub client_id: String,
 
@@ -229,6 +235,8 @@ mod tests {
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
@@ -255,8 +263,8 @@ mod tests {
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
-            window_height: None,
-            client_id: "cid".to_string(),
+            window_height: None,            min_memory: None,
+            max_memory: None,            client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
         };

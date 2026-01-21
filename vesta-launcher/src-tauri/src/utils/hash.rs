@@ -26,6 +26,15 @@ pub fn calculate_curseforge_fingerprint(path: &Path) -> Result<u32> {
     Ok(murmur2::murmur2(&data, 1))
 }
 
+/// Calculates a raw MurmurHash2 32-bit (no bytes skipped)
+pub fn calculate_murmur2_raw(path: &Path) -> Result<u32> {
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut data = Vec::new();
+    reader.read_to_end(&mut data)?;
+    Ok(murmur2::murmur2(&data, 1))
+}
+
 pub fn calculate_sha1(path: &Path) -> Result<String> {
     use sha1::{Sha1, Digest};
     let mut file = File::open(path)?;

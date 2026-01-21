@@ -13,7 +13,8 @@ export type Instance = {
 	javaPath: string | null;
 	javaArgs: string | null;
 	gameArgs: string | null;
-	memoryMb: number | null;
+	minMemory: number;
+	maxMemory: number;
 	windowWidth: number | null;
 	windowHeight: number | null;
 	iconPath: string | null;

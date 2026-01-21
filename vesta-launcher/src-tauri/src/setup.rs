@@ -21,6 +21,7 @@ struct ExitStatus {
 
 /// Update playtime for an instance in the database
 fn update_instance_playtime(
+    app_handle: &tauri::AppHandle,
     instance_id_slug: &str,
     started_at_str: &str,
     exited_at_str: &str,
@@ -28,6 +29,7 @@ fn update_instance_playtime(
     use crate::schema::instance::dsl::*;
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
+    use crate::models::instance::Instance;
 
     // Parse timestamps
     let started = chrono::DateTime::parse_from_rfc3339(started_at_str)
@@ -51,18 +53,18 @@ fn update_instance_playtime(
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     // Find instance by slug
+    // We need to fetch the whole instance to emit later anyway, but let's stick to the logic for now
     let instances_list = instance
-        .select((id, name, total_playtime_minutes))
-        .load::<(i32, String, i32)>(&mut conn)
+        .load::<Instance>(&mut conn)
         .map_err(|e| format!("Failed to query instances: {}", e))?;
 
-    for (inst_id, inst_name, current_playtime) in instances_list {
-        let slug = crate::utils::sanitize::sanitize_instance_name(&inst_name);
-        if slug == instance_id_slug {
-            let new_playtime = current_playtime + minutes;
+    for inst in instances_list {
+        let slug_name = crate::utils::sanitize::sanitize_instance_name(&inst.name);
+        if slug_name == instance_id_slug {
+            let new_playtime = inst.total_playtime_minutes + minutes;
             let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
 
-            diesel::update(instance.filter(id.eq(inst_id)))
+            diesel::update(instance.filter(id.eq(inst.id)))
                 .set((
                     total_playtime_minutes.eq(new_playtime),
                     last_played.eq(&now),
@@ -74,10 +76,17 @@ fn update_instance_playtime(
             log::info!(
                 "Updated playtime for instance {} (id {}): {} -> {} minutes",
                 instance_id_slug,
-                inst_id,
-                current_playtime,
+                inst.id,
+                inst.total_playtime_minutes,
                 new_playtime
             );
+
+            // Fetch the updated instance to emit
+            if let Ok(updated_inst) = instance.find(inst.id).first::<Instance>(&mut conn) {
+                use tauri::Emitter;
+                let _ = app_handle.emit("core://instance-updated", updated_inst);
+            }
+
             return Ok(());
         }
     }
@@ -376,6 +385,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                 // Update playtime in database (only if not crashed)
                                                 if !crashed {
                                                     if let Err(e) = update_instance_playtime(
+                                                        &app_handle,
                                                         &run_state.instance_id,
                                                         &run_state.started_at,
                                                         &exit_status.exited_at,
@@ -430,6 +440,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                     .to_rfc3339();
 
                                             if let Err(e) = update_instance_playtime(
+                                                &app_handle,
                                                 &run_state.instance_id,
                                                 &run_state.started_at,
                                                 &exited_at,

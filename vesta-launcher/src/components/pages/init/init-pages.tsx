@@ -362,8 +362,10 @@ function InitInstallationPage(props: InitPagesProps) {
 				name,
 				minecraftVersion: version,
 				iconPath: iconPath() || undefined,
-				modloader: selectedModloader() || "vanilla",
+				modloader: (selectedModloader() === "vanilla" ? undefined : selectedModloader()) || undefined,
 				modloaderVersion: selectedModloaderVersion() || undefined,
+				minMemory: 2048,
+				maxMemory: 4096,
 			};
 
 			const instanceId = await createInstance(instanceData);
@@ -372,19 +374,26 @@ function InitInstallationPage(props: InitPagesProps) {
 				id: instanceId,
 				name,
 				minecraftVersion: version,
-				modloader: selectedModloader() || "vanilla",
+				modloader: (selectedModloader() === "vanilla" ? null : selectedModloader()) || null,
 				modloaderVersion: selectedModloaderVersion() || null,
 				javaPath: null,
 				javaArgs: null,
 				gameDirectory: null,
 				width: 854,
 				height: 480,
-				memoryMb: 4096,
+				minMemory: 2048,
+				maxMemory: 4096,
 				iconPath: iconPath(),
 				lastPlayed: null,
 				totalPlaytimeMinutes: 0,
 				createdAt: null,
 				updatedAt: null,
+				installationStatus: "pending",
+				modpackId: null,
+				modpackVersionId: null,
+				modpackPlatform: null,
+				modpackIconUrl: null,
+				iconData: null,
 			};
 
 			await installInstance(fullInstance);

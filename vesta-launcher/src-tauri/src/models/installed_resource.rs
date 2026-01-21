@@ -16,9 +16,9 @@ pub struct InstalledResource {
     pub local_path: String,
     pub display_name: String,
     pub current_version: String,
-    pub release_type: String,
     pub is_manual: bool,
     pub is_enabled: bool,
     pub last_updated: NaiveDateTime,
+    pub release_type: String,
     pub hash: Option<String>,
 }

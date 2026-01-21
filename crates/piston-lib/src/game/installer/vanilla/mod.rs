@@ -642,10 +642,14 @@ pub async fn install_vanilla(
         JavaVersion::new(8) // Default to Java 8 for old versions
     };
 
-    log::info!("Ensuring Java runtime is available: {}", java_version.major);
-    let _java_path = get_or_install_jre(&spec.jre_dir(), &java_version, &*reporter)
-        .await
-        .context("Failed to install JRE")?;
+    if spec.java_path.is_none() {
+        log::info!("Ensuring Java runtime is available: {}", java_version.major);
+        let _java_path = get_or_install_jre(&spec.jre_dir(), &java_version, &*reporter)
+            .await
+            .context("Failed to install JRE")?;
+    } else {
+        log::info!("Java path already provided, skipping JRE installation: {:?}", spec.java_path);
+    }
 
     log::info!("JRE ready");
 

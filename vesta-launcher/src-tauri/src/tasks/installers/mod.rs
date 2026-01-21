@@ -1,4 +1,5 @@
 pub mod java;
+pub mod modpack;
 
 use anyhow::Result;
 use piston_lib::game::installer::install_instance;
@@ -217,19 +218,14 @@ impl Task for InstallInstanceTask {
                     // Update database status to 'installed'
                     if instance.id > 0 {
                         if let Err(e) = crate::commands::instances::update_installation_status(
-                            instance.id, "installed",
+                            &app_handle, instance.id, "installed",
                         ) {
                             log::error!("[InstallTask] Failed to update status: {}", e);
                         }
                     }
 
                     // Emit installed event for frontend
-                    use tauri::Emitter;
-                    log::info!("[InstallTask] Emitting core://instance-installed event");
-                    let _ = app_handle.emit(
-                        "core://instance-installed",
-                        serde_json::json!({"name": instance.name, "instance_id": instance.slug()}),
-                    );
+                    // (Note: update_installation_status already emits core://instance-updated)
                     Ok(())
                 }
                 Err(e) => {
@@ -238,7 +234,7 @@ impl Task for InstallInstanceTask {
                     // Update database status to 'failed'
                     if instance.id > 0 {
                         if let Err(status_err) = crate::commands::instances::update_installation_status(
-                            instance.id, "failed",
+                            &app_handle, instance.id, "failed",
                         ) {
                             log::error!("[InstallTask] Failed to update error status: {}", status_err);
                         }
@@ -252,16 +248,16 @@ impl Task for InstallInstanceTask {
 }
 
 /// Progress reporter implementation that forwards to NotificationManager
-struct TauriProgressReporter {
-    app_handle: AppHandle,
-    notification_id: String,
-    cancel_token: CancelToken,
-    pause_rx: tokio::sync::watch::Receiver<bool>,
-    current_step: Arc<RwLock<String>>,
-    dry_run: bool,
+pub struct TauriProgressReporter {
+    pub app_handle: AppHandle,
+    pub notification_id: String,
+    pub cancel_token: CancelToken,
+    pub pause_rx: tokio::sync::watch::Receiver<bool>,
+    pub current_step: Arc<RwLock<String>>,
+    pub dry_run: bool,
     // Throttling state for progress events
-    last_emit: Arc<std::sync::Mutex<std::time::Instant>>,
-    last_percent: std::sync::atomic::AtomicI32,
+    pub last_emit: Arc<std::sync::Mutex<std::time::Instant>>,
+    pub last_percent: std::sync::atomic::AtomicI32,
 }
 
 impl ProgressReporter for TauriProgressReporter {

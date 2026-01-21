@@ -31,6 +31,7 @@ import { formatDate } from "@utils/date";
 import { DEFAULT_ICONS } from "@utils/instances";
 import { getCompatibilityForInstance, getShaderEnginesInOrder, type ShaderEngineInfo } from "@utils/resources";
 import InstanceSelectionDialog from "./instance-selection-dialog";
+import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import CloseIcon from "@assets/close.svg";
 import HeartIcon from "@assets/heart.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
@@ -576,6 +577,23 @@ const ResourceDetailsPage: Component<{
 
     const handleInstall = async (version: ResourceVersion, targetInstance?: Instance) => {
         const p = project();
+
+        if (p?.resource_type === 'modpack') {
+            router()?.navigate("/install", {
+                projectId: p.id,
+                platform: p.source,
+                isModpack: true,
+                resourceType: 'modpack',
+                projectName: p.name,
+                projectIcon: p.icon_url || undefined,
+                projectAuthor: p.author,
+                initialVersion: version.id,
+                initialModloader: version.loaders[0],
+                modpackUrl: version.download_url
+            });
+            return;
+        }
+
         const instId = targetInstance?.id || resources.state.selectedInstanceId;
         const inst = targetInstance || instancesState.instances.find(i => i.id === instId);
 
@@ -678,6 +696,7 @@ const ResourceDetailsPage: Component<{
             router()?.navigate("/install", { 
                 projectId: p.id, 
                 platform: p.source,
+                isModpack: p.resource_type === 'modpack',
                 projectName: p.name,
                 projectIcon: p.icon_url || "",
                 resourceType: p.resource_type

@@ -16,12 +16,38 @@ pub fn build_jvm_arguments(
 ) -> Vec<String> {
     let mut args = Vec::new();
 
-    // Add custom JVM args first (if provided)
-    if !spec.jvm_args.is_empty() {
-        args.extend(spec.jvm_args.clone());
-    } else {
-        // Use default JVM args
-        args.extend(get_default_jvm_args());
+    // 1. Handle Memory Arguments
+    let has_ms = spec.jvm_args.iter().any(|a| a.starts_with("-Xms"));
+    let has_mx = spec.jvm_args.iter().any(|a| a.starts_with("-Xmx"));
+
+    if !has_ms {
+        let min = spec.min_memory.unwrap_or(2048);
+        args.push(format!("-Xms{}M", min));
+    }
+
+    if !has_mx {
+        let max = spec.max_memory.unwrap_or(4096);
+        args.push(format!("-Xmx{}M", max));
+    }
+
+    // 2. Add Default G1GC settings if not present
+    let has_gc = spec.jvm_args.iter().any(|a| a.contains("GC"));
+    if !has_gc {
+        args.extend(vec![
+            "-XX:+UseG1GC".to_string(),
+            "-XX:+UnlockExperimentalVMOptions".to_string(),
+            "-XX:G1NewSizePercent=20".to_string(),
+            "-XX:G1ReservePercent=20".to_string(),
+            "-XX:MaxGCPauseMillis=50".to_string(),
+            "-XX:G1HeapRegionSize=32M".to_string(),
+        ]);
+    }
+
+    // 3. Add Custom JVM args
+    for arg in &spec.jvm_args {
+        // Skip memory flags we already handled via spec.min/max (if they were somehow passed in both)
+        // Though the logic above already avoids duplicates if they were in spec.jvm_args
+        args.push(arg.clone());
     }
 
     // Collect manifest JVM arguments first to check for duplicates
@@ -590,6 +616,8 @@ mod tests {
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            min_memory: None,
+            max_memory: None,
             exit_handler_jar: None,
             log_file: None,
         };
@@ -599,6 +627,8 @@ mod tests {
             main_class: None,
             inherits_from: None,
             arguments: None,
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -664,6 +694,8 @@ mod tests {
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
@@ -730,6 +762,8 @@ mod tests {
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,

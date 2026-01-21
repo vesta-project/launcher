@@ -88,6 +88,8 @@ impl BatchDownloader {
                     }
 
                     if !restored {
+                        log::info!("Downloading: {} from {}", artifact.name, artifact.url);
+                        reporter.set_message(&format!("Downloading {}", artifact.name));
                         download_to_path(
                             &client,
                             &artifact.url,
