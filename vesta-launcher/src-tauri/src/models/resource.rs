@@ -91,6 +91,19 @@ pub struct ResourceVersion {
     pub published_at: Option<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable, AsChangeset)]
+#[diesel(table_name = crate::schema::vesta::resource_project)]
+pub struct ResourceProjectRecord {
+    pub id: String,
+    pub source: String,
+    pub name: String,
+    pub summary: String,
+    pub icon_url: Option<String>,
+    pub icon_data: Option<Vec<u8>>,
+    pub project_type: String,
+    pub last_updated: chrono::NaiveDateTime,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]
 pub struct SearchQuery {
     pub text: Option<String>,

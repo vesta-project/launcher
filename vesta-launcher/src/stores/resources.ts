@@ -1,4 +1,4 @@
-import { createStore } from "solid-js/store";
+import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Instance } from "./instances";
@@ -92,6 +92,8 @@ type ResourceStoreState = {
     showFilters: boolean;
     requestInstallProject: ResourceProject | null;
     requestInstallVersions: ResourceVersion[];
+    selection: Record<string, boolean>;
+    sorting: { id: string; desc: boolean }[];
 };
 
 const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
@@ -117,7 +119,9 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     viewMode: 'grid',
     showFilters: true,
     requestInstallProject: null,
-    requestInstallVersions: []
+    requestInstallVersions: [],
+    selection: {},
+    sorting: [{ id: 'display_name', desc: false }],
 });
 
 export const resources = {
@@ -190,6 +194,22 @@ export const resources = {
     toggleFilters: () => setResourceStore("showFilters", show => !show),
     setOffset: (o: number) => setResourceStore("offset", o),
     setPage: (p: number) => setResourceStore("offset", (p - 1) * resourceStore.limit),
+    
+    toggleSelection: (id: string) => setResourceStore("selection", id, (s) => !s),
+    batchSetSelection: (selection: Record<string, boolean>) => {
+        setResourceStore("selection", reconcile(selection));
+    },
+    clearSelection: () => setResourceStore("selection", reconcile({})),
+    setSorting: (sorting: { id: string; desc: boolean }[]) => setResourceStore("sorting", sorting),
+    
+    // Legacy helper if needed elsewhere
+    setBatchSelected: (ids: string[], selected: boolean) => {
+        const newSelection = { ...resourceStore.selection };
+        for (const id of ids) {
+            newSelection[id] = selected;
+        }
+        setResourceStore("selection", newSelection);
+    },
 
     resetFilters: () => {
         setResourceStore({
@@ -280,6 +300,12 @@ export const resources = {
         setResourceStore("installingProjectIds", ids => [...ids, project.id]);
 
         try {
+            // Cache project metadata for future offline/icon use
+            await invoke("cache_resource_metadata", {
+                platform: resourceStore.activeSource,
+                project: project
+            });
+
             const result = await invoke<string>("install_resource", {
                 instanceId: instanceId || 0,
                 platform: project.source,

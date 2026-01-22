@@ -37,6 +37,9 @@ import {
 	SwitchControl,
 	SwitchThumb,
 } from "@ui/switch/switch";
+import {
+	Checkbox,
+} from "@ui/checkbox/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resources, findBestVersion, type ResourceVersion, type InstalledResource } from "@stores/resources";
 import {
@@ -85,6 +88,43 @@ interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
 }
 
+const ResourceIcon = (props: { record?: any, name: string }) => {
+	const [iconUrl, setIconUrl] = createSignal<string | null>(null);
+	
+	const displayChar = createMemo(() => {
+		const match = props.name.match(/[a-zA-Z]/);
+		return match ? match[0].toUpperCase() : props.name.charAt(0).toUpperCase() || "?";
+	});
+
+	createEffect(() => {
+		if (props.record?.icon_data) {
+			const blob = new Blob([new Uint8Array(props.record.icon_data)]);
+			const url = URL.createObjectURL(blob);
+			setIconUrl(url);
+			onCleanup(() => URL.revokeObjectURL(url));
+		} else if (props.record?.icon_url) {
+			setIconUrl(props.record.icon_url);
+		} else {
+			setIconUrl(null);
+		}
+	});
+
+	return (
+		<Show 
+			when={iconUrl()} 
+			fallback={<div class="res-icon-placeholder">{displayChar()}</div>}
+		>
+			{(url) => (
+				<img 
+					src={url()} 
+					alt={props.name || "Resource Icon"} 
+					class="res-icon" 
+				/>
+			)}
+		</Show>
+	);
+};
+
 export default function InstanceDetails(props: InstanceDetailsProps & { setRefetch?: (fn: () => Promise<void>) => void }) {
 	const loadersList = [
 		{ label: "Vanilla", value: "vanilla" },
@@ -111,6 +151,27 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [installedResources, { refetch: refetchResources, mutate: mutateResources }] = createResource(instance, async (inst) => {
 		if (!inst) return [];
 		return await resources.getInstalled(inst.id);
+	});
+
+	const [projectRecords] = createResource(installedResources, async (resourcesList) => {
+		if (!resourcesList || resourcesList.length === 0) return {};
+		const ids = resourcesList
+			.filter(r => r.remote_id && r.platform !== 'manual' && r.platform !== 'unknown')
+			.map(r => r.remote_id);
+		
+		if (ids.length === 0) return {};
+		
+		try {
+			const records: any[] = await invoke("get_cached_resource_projects", { ids });
+			const map: Record<string, any> = {};
+			for (const r of records) {
+				map[r.id] = r;
+			}
+			return map;
+		} catch (e) {
+			console.error("Failed to fetch project records:", e);
+			return {};
+		}
 	});
 
 	// Register refetch callback with router so reload button can trigger it
@@ -148,6 +209,96 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	// Running state
 	const [isRunning, setIsRunning] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
+	let lastSelectedRowId: string | null = null;
+
+	const handleRowClick = (row: any, event: MouseEvent) => {
+		const rowId = row.id;
+
+		if (event.shiftKey && lastSelectedRowId) {
+			const rows = table.getRowModel().rows;
+			const lastIndex = rows.findIndex(r => r.id === lastSelectedRowId);
+			const currentIndex = rows.findIndex(r => r.id === rowId);
+
+			if (lastIndex !== -1 && currentIndex !== -1) {
+				const start = Math.min(lastIndex, currentIndex);
+				const end = Math.max(lastIndex, currentIndex);
+				const rowSelection: Record<string, boolean> = { ...resources.state.selection };
+
+				for (let i = start; i <= end; i++) {
+					rowSelection[rows[i].id] = true;
+				}
+				resources.batchSetSelection(rowSelection);
+			}
+		} else if (event.ctrlKey || event.metaKey) {
+			row.toggleSelected();
+		} else {
+			// Normal click - navigate
+			if (row.original.remote_id && row.original.platform !== 'manual' && row.original.platform !== 'unknown') {
+				const inst = instance();
+				if (inst) {
+					resources.setInstance(inst.id);
+					resources.setGameVersion(inst.minecraftVersion);
+					resources.setLoader(inst.modloader);
+				}
+
+				router()?.navigate("/resource-details", {
+					projectId: row.original.remote_id,
+					platform: row.original.platform
+				});
+			}
+		}
+
+		lastSelectedRowId = rowId;
+	};
+
+	const handleBatchDelete = async () => {
+		const selectedCount = Object.keys(resources.state.selection).length;
+		const inst = instance();
+		if (selectedCount === 0 || !inst) return;
+
+		const confirmed = await confirm(`Are you sure you want to delete ${selectedCount} selected resources?`);
+		if (!confirmed) return;
+
+		setBusy(true);
+		try {
+			const selectedIds = Object.keys(resources.state.selection).map(Number);
+			for (const id of selectedIds) {
+				await invoke("delete_resource", { instanceId: inst.id, resourceId: id });
+			}
+			resources.clearSelection();
+			await refetchResources();
+		} catch (e) {
+			console.error("Batch delete failed:", e);
+		} finally {
+			setBusy(false);
+		}
+	};
+
+	const handleBatchUpdate = async () => {
+		const selectedCount = Object.keys(resources.state.selection).length;
+		if (selectedCount === 0) return;
+
+		const selectedIds = Object.keys(resources.state.selection).map(Number);
+		const toUpdate = selectedIds.filter(id => updates()[id]);
+
+		if (toUpdate.length === 0) return;
+
+		setBusy(true);
+		try {
+			for (const id of toUpdate) {
+				const res = (installedResources() || []).find(r => r.id === id);
+				const update = updates()[id];
+				if (res && update) {
+					await handleUpdate(res, update);
+				}
+			}
+			resources.clearSelection();
+		} catch (e) {
+			console.error("Batch update failed:", e);
+		} finally {
+			setBusy(false);
+		}
+	};
 
 	// Console state
 	const [lines, setLines] = createSignal<string[]>([]);
@@ -426,6 +577,12 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [maxMemory, setMaxMemory] = createSignal<number[]>([4096]);
 	const [saving, setSaving] = createSignal(false);
 
+	const selectedToUpdateCount = createMemo(() => {
+		const sel = resources.state.selection;
+		const ups = updates();
+		return Object.keys(sel).filter(id => sel[id] && ups[Number(id)]).length;
+	});
+
 	// Create uploadedIcons array that includes current iconPath if it's an uploaded image
 	const uploadedIcons = () => {
 		const current = iconPath();
@@ -460,20 +617,61 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			setMaxMemory([inst.maxMemory ?? 4096]);
 			
 			// Initialize resource watcher but don't set as globally "selected" yet
+			resources.clearSelection();
 			resources.sync(inst.id, slug(), inst.gameDirectory || "");
 		}
 	});
+
+	// Clear selection on unmount
+	onCleanup(() => resources.clearSelection());
 
 	// TanStack Table setup for Resources
 	const columnHelper = createColumnHelper<InstalledResource>();
 
 	const columns = [
+		columnHelper.display({
+			id: "select",
+			size: 64, // Sync with CSS
+			header: ({ table }) => (
+				<div class="col-selection-wrapper header" onClick={(e) => e.stopPropagation()}>
+					<Checkbox
+						class="header-checkbox"
+						checked={table.getIsAllPageRowsSelected()}
+						indeterminate={table.getIsSomePageRowsSelected()}
+						onChange={(checked) => {
+							table.toggleAllPageRowsSelected(!!checked);
+						}}
+					/>
+				</div>
+			),
+			cell: (info) => (
+				<div class="col-selection-wrapper" onClick={(e) => e.stopPropagation()}>
+					<div class="select-icon-container">
+						<ResourceIcon 
+							record={projectRecords()?.[info.row.original.remote_id]} 
+							name={info.row.original.display_name} 
+						/>
+						<Checkbox
+							class="row-checkbox"
+							checked={info.row.getIsSelected()}
+							disabled={!info.row.getCanSelect()}
+							onChange={(checked) => {
+								info.row.toggleSelected(!!checked);
+							}}
+						/>
+					</div>
+				</div>
+			),
+		}),
 		columnHelper.accessor("display_name", {
 			header: "Name",
+			size: 250, // Updated to match CSS precisely
 			cell: (info) => (
 				<div class="res-info-cell">
-					<span class="res-title">{info.getValue()}</span>
-					<span class="res-path">{info.row.original.local_path.split(/[\\/]/).pop()}</span>
+					<div class="res-title-group">
+						<span class="res-title">{info.getValue()}</span>
+						<span class="res-path">{info.row.original.local_path.split(/[\\/]/).pop()}</span>
+					</div>
 				</div>
 			),
 		}),
@@ -632,12 +830,37 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			return filteredData();
 		},
 		columns,
-		initialState: {
-			sorting: [{ id: "display_name", desc: false }]
+		state: {
+			get rowSelection() {
+				return resources.state.selection;
+			},
+			get sorting() {
+				return resources.state.sorting;
+			},
+		},
+		onRowSelectionChange: (updater) => {
+			batch(() => {
+				if (typeof updater === 'function') {
+					const result = updater(resources.state.selection);
+					resources.batchSetSelection(result);
+				} else {
+					resources.batchSetSelection(updater);
+				}
+			});
+		},
+		onSortingChange: (updater) => {
+			if (typeof updater === 'function') {
+				const result = updater(resources.state.sorting);
+				resources.setSorting(result);
+			} else {
+				resources.setSorting(updater);
+			}
 		},
 		getCoreRowModel: getCoreRowModel(),
 		getSortedRowModel: getSortedRowModel(),
 		getFilteredRowModel: getFilteredRowModel(),
+		getRowId: (row) => row.id.toString(),
+		enableRowSelection: true,
 	});
 
 	// Subscribe to console logs
@@ -837,6 +1060,15 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		});
 	};
 
+	const [isScrolled, setIsScrolled] = createSignal(false);
+
+	const handleScroll = (e: Event) => {
+		const target = e.currentTarget as HTMLElement;
+		// Detect exactly when the toolbar hits the top (approx 115-120px) 
+		// depending on header shrunk height (80) + padding (24) + margin (16)
+		setIsScrolled(target.scrollTop > 115);
+	};
+
 	return (
 		<div class="instance-details-page">
 			<aside class="instance-details-sidebar">
@@ -874,7 +1106,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 				</nav>
 			</aside>
 
-			<main class="instance-details-content">
+			<main class="instance-details-content" onScroll={handleScroll}>
 				<div class="content-wrapper">
 					<Show when={instance.loading && !instance.latest}>
 						<div class="instance-loading">
@@ -1062,7 +1294,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 									<Show when={activeTab() === "resources"}>
 										<section class="tab-resources">
-											<div class="resources-toolbar-v2">
+											<div class="resources-toolbar-v2" classList={{ "is-stuck": isScrolled() }}>
 												<div class="toolbar-search-filter">
 													<div class="filter-group">
 														<For each={[
@@ -1093,56 +1325,77 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 													</div>
 												</div>
 
-												<div class="toolbar-actions-v2">
-													<Button 
-														size="sm"
-														variant="ghost"
-														class="check-updates-btn"
-														onClick={checkUpdates}
-														disabled={checkingUpdates() || busy()}
-													>
-														<Show when={checkingUpdates()} fallback={
-															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" classList={{ "animate-spin": checkingUpdates() }}><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
-														}>
-															<span class="checking-updates-spinner" />
-														</Show>
-														{checkingUpdates() ? "Checking..." : "Check for Updates"}
-													</Button>
-
-													<Show when={Object.keys(updates()).length > 0}>
+												<Show when={Object.values(resources.state.selection).some(v => v)} fallback={
+													<div class="toolbar-actions-v2">
 														<Button 
 															size="sm"
-															color="primary"
-															variant="solid"
-															class="update-all-btn"
-															onClick={updateAll}
-															disabled={busy()}
+															variant="ghost"
+															class="check-updates-btn"
+															onClick={checkUpdates}
+															disabled={checkingUpdates() || busy()}
 														>
-															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-															Update All ({Object.keys(updates()).length})
+															<Show when={checkingUpdates()} fallback={
+																<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" classList={{ "animate-spin": checkingUpdates() }}><path d="M21 2v6h-6"></path><path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path><path d="M3 22v-6h6"></path><path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path></svg>
+															}>
+																<span class="checking-updates-spinner" />
+															</Show>
+															{checkingUpdates() ? "Checking..." : "Check for Updates"}
 														</Button>
-													</Show>
 
-													<div class="spacer" style={{ flex: 1 }} />
+														<Show when={Object.keys(updates()).length > 0}>
+															<Button 
+																size="sm"
+																color="primary"
+																variant="solid"
+																class="update-all-btn"
+																onClick={updateAll}
+																disabled={busy()}
+															>
+																<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+																Update All ({Object.keys(updates()).length})
+															</Button>
+														</Show>
 
-													<Button 
-														size="sm"
-														variant="outline"
-														class="browse-resources-btn"
-														onClick={() => {
-															const inst = instance();
-															if (inst) {
-																resources.setInstance(inst.id);
-																resources.setGameVersion(inst.minecraftVersion);
-																resources.setLoader(inst.modloader);
-																router()?.navigate("/resources");
-															}
-														}}
-													>
-														<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
-														Browse Resources
-													</Button>
-												</div>
+														<div class="spacer" style={{ flex: 1 }} />
+
+														<Button 
+															size="sm"
+															variant="outline"
+															class="browse-resources-btn"
+															onClick={() => {
+																const inst = instance();
+																if (inst) {
+																	resources.setInstance(inst.id);
+																	resources.setGameVersion(inst.minecraftVersion);
+																	resources.setLoader(inst.modloader);
+																	router()?.navigate("/resources");
+																}
+															}}
+														>
+															<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="8" y1="11" x2="14" y2="11"></line></svg>
+															Browse Resources
+														</Button>
+													</div>
+												}>
+													<div class="selection-action-bar">
+														<div class="selection-info">
+															<button class="clear-selection" onClick={() => resources.clearSelection()}>
+																<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+															</button>
+															<span class="selection-count">{Object.values(resources.state.selection).filter(v => v).length} items selected</span>
+														</div>
+														<div class="selection-actions">
+															<Button size="sm" variant="ghost" onClick={handleBatchUpdate} disabled={busy() || selectedToUpdateCount() === 0}>
+																<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+																Update Selected ({selectedToUpdateCount()})
+															</Button>
+															<Button size="sm" variant="ghost" class="delete-selected" onClick={handleBatchDelete} disabled={busy()}>
+																<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+																Delete Selected
+															</Button>
+														</div>
+													</div>
+												</Show>
 											</div>
 
 											<div class="installed-resources-list">
@@ -1150,15 +1403,21 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 													<Skeleton class="skeleton-resources" />
 												</Show>
 												<Show when={installedResources.latest}>
-													<div class={`tanstack-table-container ${installedResources.loading ? "refetching" : ""}`}>
+													<div class={`vesta-table-container ${installedResources.loading ? "refetching" : ""}`}>
 														<table class="vesta-table">
 															<thead>
 																<For each={table.getHeaderGroups()}>
 																	{(headerGroup) => (
 																		<tr>
 																			<For each={headerGroup.headers}>
-																				{(header) => (
-																					<th>
+																	{(header) => (
+																					<th 
+																						style={{ 
+																							width: header.getSize() === 150 ? "auto" : `${header.getSize()}px`,
+																							"min-width": `${header.column.columnDef.minSize || 0}px`,
+																							"max-width": header.column.columnDef.maxSize ? `${header.column.columnDef.maxSize}px` : "none"
+																						}}
+																					>
 																						{header.isPlaceholder
 																							? null
 																							: flexRender(
@@ -1176,23 +1435,11 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																<For each={table.getRowModel().rows}>
 																	{(row) => (
 																		<tr
-																			classList={{ "row-disabled": !row.original.is_enabled }}
-																			onClick={() => {
-																				if (row.original.remote_id && row.original.platform !== 'manual' && row.original.platform !== 'unknown') {
-																					// Select instance context when navigating to details from here
-																					const inst = instance();
-																					if (inst) {
-																						resources.setInstance(inst.id);
-																						resources.setGameVersion(inst.minecraftVersion);
-																						resources.setLoader(inst.modloader);
-																					}
-
-																					router()?.navigate("/resource-details", { 
-																						projectId: row.original.remote_id, 
-																						platform: row.original.platform 
-																					});
-																				}
+																			classList={{ 
+																				"row-disabled": !row.original.is_enabled,
+																				"row-selected": row.getIsSelected() 
 																			}}
+																			onClick={(e) => handleRowClick(row, e)}
 																			style={{
 																				cursor: (row.original.remote_id && row.original.platform !== 'manual' && row.original.platform !== 'unknown')
 																					? 'pointer'

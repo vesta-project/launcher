@@ -69,6 +69,31 @@ pub async fn get_resource_project(
 }
 
 #[tauri::command]
+pub async fn cache_resource_metadata(
+    resource_manager: State<'_, ResourceManager>,
+    platform: SourcePlatform,
+    project: ResourceProject,
+) -> Result<()> {
+    Ok(resource_manager.cache_project_metadata(platform, &project).await?)
+}
+
+#[tauri::command]
+pub async fn get_cached_resource_project(
+    resource_manager: State<'_, ResourceManager>,
+    id: String,
+) -> Result<Option<crate::models::resource::ResourceProjectRecord>> {
+    Ok(resource_manager.get_project_record(&id).await?)
+}
+
+#[tauri::command]
+pub async fn get_cached_resource_projects(
+    resource_manager: State<'_, ResourceManager>,
+    ids: Vec<String>,
+) -> Result<Vec<crate::models::resource::ResourceProjectRecord>> {
+    Ok(resource_manager.get_project_records(&ids)?)
+}
+
+#[tauri::command]
 pub async fn get_resource_projects(
     resource_manager: State<'_, ResourceManager>,
     platform: SourcePlatform,
@@ -231,6 +256,12 @@ pub async fn install_resource(
 
     // 4. Submit tasks
     // Main resource
+    
+    // Fetch and cache main project metadata (including icon)
+    if let Ok(project) = resource_manager.get_project(platform, &project_id).await {
+        let _ = resource_manager.cache_project_metadata(platform, &project).await;
+    }
+
     let main_task = ResourceDownloadTask {
         instance_id,
         platform,
@@ -243,6 +274,9 @@ pub async fn install_resource(
 
     // Dependencies
     for (dep_project, dep_version) in dependencies {
+        // Cache dependency metadata (including icon)
+        let _ = resource_manager.cache_project_metadata(dep_project.source, &dep_project).await;
+
         // Check if already installed (by ID or Peer ID)
         let mut is_installed = false;
         let dep_platform_str = format!("{:?}", dep_project.source).to_lowercase();

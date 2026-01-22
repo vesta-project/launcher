@@ -1,4 +1,4 @@
-/* Instance Details Mini Page - Using Vesta CSS Variables */
+﻿/* Instance Details Mini Page - Using Vesta CSS Variables */
 
 .instance-details-page {
 	display: flex;
@@ -25,6 +25,8 @@
 	box-shadow:
 		2px 0 20px hsl(0 0% 0% / 0.4), /* Strong shadow border on right */
 		inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2); /* Subtle inner highlight */
+    z-index: 500; /* Stays above sticky table content */
+    position: relative;
 }
 
 .instance-tabs {
@@ -74,18 +76,44 @@
 /* Main content area */
 .instance-details-content {
 	flex: 1;
-	overflow-y: auto;
+	overflow-y: auto; /* Holistic scrolling for the entire page */
+    overflow-x: hidden;
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-glass);
 	color: var(--text-primary);
 }
 
-.content-wrapper {
-	padding: 24px;
+.instance-tab-content {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+/* Common tab layout */
+.tab-home, .tab-settings, .tab-versioning {
 	display: flex;
 	flex-direction: column;
 	gap: 24px;
+}
+
+.tab-resources {
+	display: flex;
+	flex-direction: column;
+}
+
+.tab-console {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	min-height: 400px; /* Console needs its own height in the flow */
+}
+
+.content-wrapper {
+	padding: 24px; /* Unified padding for all content */
+	display: flex;
+	flex-direction: column;
 }
 
 .instance-loading,
@@ -514,31 +542,98 @@
 	flex-direction: column;
 	width: 100%;
 	height: 100%;
+    --toolbar-height: 110px; /* Increased to prevent clipping of action bar */
 }
 
 /* Resources Toolbar V2 */
 .resources-toolbar-v2 {
 	display: flex;
 	flex-direction: column;
-	background: hsl(var(--color__primary-hue) 10% 15% / 0.8);
-	backdrop-filter: blur(12px);
-	padding: 16px;
-	border-radius: 12px;
+	background: var(--bg-surface);
+	padding: 12px 16px;
+	border-radius: 12px 12px 0 0; /* Rounded when not stuck */
 	border: 1px solid var(--border-subtle);
-	gap: 16px;
-	margin-bottom: 24px;
-	box-shadow: 0 4px 12px hsl(0 0% 0% / 0.1);
+	border-bottom: none;
+	gap: 12px;
+	margin-bottom: 0;
 	position: sticky;
-	top: -24px; /* Account for parent padding if needed, or just 0 */
-	z-index: 50;
+	top: 0;
+	z-index: 2000;
+	height: var(--toolbar-height);
+	box-sizing: border-box;
+	opacity: 1 !important;
+	transition: border-radius 0.2s ease, box-shadow 0.2s ease;
+}
+
+.resources-toolbar-v2.is-stuck {
+    border-radius: 0; /* Square corners when stuck to the titlebar */
 }
 
 .toolbar-search-filter {
 	display: flex;
 	justify-content: space-between;
 	align-items: center;
-	gap: 16px;
+	gap: 12px;
 	flex-wrap: wrap;
+}
+
+.selection-action-bar {
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 12px;
+	background: var(--surface-raised);
+	border-radius: 8px;
+	border: 1px solid var(--border-subtle);
+	animation: none;
+}
+
+@keyframes slideDown {
+	from { transform: translateY(-10px); opacity: 0; }
+	to { transform: translateY(0); opacity: 1; }
+}
+
+.selection-info {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.clear-selection {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	padding: 4px;
+	border-radius: 4px;
+	transition: all 0.2s;
+}
+
+.clear-selection:hover {
+	background: hsl(0 0% 100% / 0.1);
+	color: var(--text-primary);
+}
+
+.selection-count {
+	font-weight: 500;
+	font-size: 0.9rem;
+}
+
+.selection-actions {
+	display: flex;
+	gap: 8px;
+}
+
+.selection-actions .delete-selected {
+	color: var(--status-error);
+}
+
+.selection-actions .delete-selected:hover {
+	background: hsl(0 80% 50% / 0.1) !important;
 }
 
 .toolbar-actions-v2 {
@@ -663,59 +758,16 @@
 	max-width: 100%;
 }
 
-.vesta-table {
-	width: 100%;
-	min-width: 800px; /* Ensure table has enough width to require scrolling if needed */
-	border-collapse: separate; /* Required for sticky */
-	border-spacing: 0;
-	font-size: 0.95rem;
+.table-outer-wrapper {
+	flex: 1;
+	overflow: auto;
+	position: relative;
+	border-radius: 8px;
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.vesta-table th {
-	position: sticky;
-	top: 0;
-	z-index: 10;
-	text-align: left;
-	padding: 16px;
-	background: hsl(var(--color__primary-hue) 10% 12% / 0.9);
-	backdrop-filter: blur(10px);
-	color: var(--text-secondary);
-	font-weight: 700;
-	font-size: 0.8rem;
-	text-transform: uppercase;
-	letter-spacing: 0.05em;
-	border-bottom: 1px solid var(--border-subtle);
-}
 
-/* Sticky first column (Name) */
-.vesta-table th:first-child,
-.vesta-table td:first-child {
-	position: sticky;
-	left: 0;
-	z-index: 20;
-	background: hsl(var(--color__primary-hue) 10% 14% / 0.95);
-	backdrop-filter: blur(10px);
-	border-right: 1px solid var(--border-subtle);
-	min-width: 250px;
-}
-
-.vesta-table th:first-child {
-	z-index: 30; /* Higher than other headers */
-}
-
-.vesta-table td {
-	padding: 12px 16px;
-	border-bottom: 1px solid var(--border-subtle);
-	background: transparent;
-}
-
-.vesta-table tr:hover td {
-	background: hsl(var(--color__primary-hue) 50% 50% / 0.05);
-}
-
-.vesta-table tr:hover td:first-child {
-	background: hsl(var(--color__primary-hue) 50% 50% / 0.08);
-}
 
 .row-disabled td {
 	opacity: 0.5;
@@ -723,13 +775,25 @@
 
 .res-info-cell {
 	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 12px;
+	overflow: hidden;
+}
+
+.res-title-group {
+	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	overflow: hidden;
+	min-width: 0;
 }
 
 .res-title {
 	font-weight: 600;
 	color: var(--text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .res-path {
@@ -1215,4 +1279,398 @@ text-transform: uppercase;
 letter-spacing: 0.05em;
 margin-left: 10px;
 vertical-align: middle;
+}
+
+/* 
+ * MODERN RESOURCE TABLE SYSTEM
+ * Fixed header/column "merging system" with correct z-index hierarchy
+ */
+.installed-resources-list {
+    flex: 1;
+    min-height: 0; /* Important for flex-child scrolling */
+    display: flex;
+    flex-direction: column;
+}
+
+.vesta-table-container {
+    width: 100%;
+    position: relative;
+    border: 1px solid var(--border-subtle);
+    border-top: none;
+    border-radius: 0 0 12px 12px; /* Keep bottom corners rounded */
+    background: var(--bg-surface-subtle);
+    margin-top: 0;
+    overflow: clip; /* Fix: 'clip' allows sticky to work unlike 'hidden' in some browsers, but keeps radius active */
+}
+
+.vesta-table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    min-width: 800px;
+    table-layout: fixed; /* Improved precision for sticky columns */
+    contain: paint; /* Optimize performance */
+}
+
+/* 
+ * STATIC HEADER SYSTEM 
+ * th elements are sticky to the top. Intersections are sticky to both top and left.
+ */
+.vesta-table th {
+    position: sticky;
+    top: var(--toolbar-height);
+    z-index: 1500;
+    background: var(--bg-surface) !important;
+    text-align: left;
+    padding: 12px 16px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    border-bottom: 2px solid var(--border-subtle);
+}
+
+.vesta-table th:first-child {
+    left: 0;
+    top: var(--toolbar-height);
+    z-index: 1600;
+    width: 64px;
+    min-width: 64px;
+    padding: 0;
+    text-align: center;
+    background: var(--bg-surface) !important;
+}
+
+.vesta-table th:nth-child(2) {
+    left: 64px;
+    top: var(--toolbar-height);
+    z-index: 1600;
+    width: 250px;
+    background: var(--bg-surface) !important;
+}
+
+/* Sticky Columns (Horizontal static, Vertical scroll) */
+.vesta-table td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 50;
+    background: var(--bg-surface) !important;
+    width: 64px;
+    padding: 0;
+    text-align: center;
+}
+
+.vesta-table td:nth-child(2) {
+    position: sticky;
+    left: 64px;
+    z-index: 50;
+    background: var(--bg-surface) !important;
+    border-right: 1px solid var(--border-subtle);
+    padding: 12px 16px;
+    width: 250px;
+}
+
+.vesta-table tr {
+    /* Performance optimization: reduce repaint work on hover */
+    contain: layout style;
+    height: 56px; /* Fixed row height improves scroll consistency */
+}
+
+.vesta-table td {
+    padding: 12px 16px;
+    border-bottom: 1px solid hsl(0 0% 100% / 0.05);
+    font-size: 0.9rem;
+    background: var(--bg-surface); /* Opaque background for scrolling rows */
+    transition: none !important; /* Eliminate transition recalculations during scroll */
+}
+
+.vesta-table tr:hover td {
+    background: hsl(var(--color__primary-hue) 10% 25%) !important;
+}
+
+.vesta-table tr.row-selected td {
+    background: hsl(var(--color__primary-hue) 60% 50% / 0.12) !important;
+}
+
+.vesta-table tr:hover.row-selected td {
+    background: hsl(var(--color__primary-hue) 60% 50% / 0.2) !important;
+}
+
+.vesta-table tr.row-selected td {
+    background: hsl(var(--color__primary-hue) 60% 50% / 0.08);
+}
+
+.col-selection-wrapper {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+}
+
+.select-icon-container {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.select-icon-container .res-icon,
+.select-icon-container .res-icon-placeholder {
+    transition: none; /* Make it immediate */
+}
+
+.select-icon-container .row-checkbox {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    opacity: 0;
+    pointer-events: none;
+    transition: none; /* Make it immediate */
+    z-index: 2;
+}
+
+/* Show checkbox on hover or when selected */
+.vesta-table tr:hover .select-icon-container .row-checkbox,
+.vesta-table tr.row-selected .select-icon-container .row-checkbox {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Hide icon on hover or when selected */
+.vesta-table tr:hover .select-icon-container .res-icon,
+.vesta-table tr:hover .select-icon-container .res-icon-placeholder,
+.vesta-table tr.row-selected .select-icon-container .res-icon,
+.vesta-table tr.row-selected .select-icon-container .res-icon-placeholder {
+    opacity: 0;
+}
+
+.vesta-table .checkbox {
+    background: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    color: inherit !important;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.vesta-table .checkbox__control {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.vesta-table tr.row-selected .checkbox__control {
+    background: var(--accent-primary);
+    border-color: var(--accent-primary);
+}
+
+.res-info-cell {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+    overflow: hidden;
+}
+
+.res-title-group {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+
+.res-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.res-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: hsl(0 0% 100% / 0.05);
+}
+
+.res-icon-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: hsl(var(--color__primary-hue) 40% 30%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1rem;
+}
+
+.res-title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.res-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.res-path {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.7;
+    font-family: var(--font-mono, monospace);
+}
+
+.selection-action-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+    height: 48px;
+    background: hsl(var(--color__primary-hue) 60% 40% / 0.15);
+    border: 1px solid hsl(var(--color__primary-hue) 60% 50% / 0.3);
+    border-radius: 8px;
+    margin-bottom: 2px;
+    animation: barSlideIn 0.2s cubic-bezier(0, 0, 0.2, 1);
+}
+
+@keyframes barSlideIn {
+    from { transform: translateY(-10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.selection-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.clear-selection {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.clear-selection:hover {
+    background: hsl(0 0% 100% / 0.1);
+    color: var(--text-primary);
+}
+
+.selection-count {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.action-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.action-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: 1px solid transparent;
+}
+
+.action-btn.delete {
+    background: hsl(0 80% 50% / 0.15);
+    color: hsl(0 80% 70%);
+    border-color: hsl(0 80% 50% / 0.3);
+}
+
+.action-btn.delete:hover {
+    background: hsl(0 80% 50% / 0.25);
+    border-color: hsl(0 80% 50% / 0.5);
+}
+
+.action-btn.update {
+    background: hsl(var(--color__primary-hue) 60% 50% / 0.15);
+    color: hsl(var(--color__primary-hue) 60% 80%);
+    border-color: hsl(var(--color__primary-hue) 60% 50% / 0.3);
+}
+
+.action-btn.update:hover {
+    background: hsl(var(--color__primary-hue) 60% 50% / 0.25);
+    border-color: hsl(var(--color__primary-hue) 60% 50% / 0.5);
+}
+
+/* Table Checkbox Overrides - Removal of all transitions and specific styling */
+.header-checkbox,
+.row-checkbox {
+    background-color: transparent !important;
+    padding: 0 !important;
+    border: none !important;
+    transition: none !important;
+    margin: 0 !important;
+    height: auto !important;
+}
+
+.header-checkbox .checkbox__control,
+.row-checkbox .checkbox__control {
+    width: 32px !important;
+    height: 32px !important;
+    transition: none !important;
+    background: var(--surface-base) !important;
+    border: 2px solid var(--border-subtle) !important;
+}
+
+.header-checkbox .checkbox__icon,
+.row-checkbox .checkbox__icon {
+    width: 20px !important;
+    height: 20px !important;
+    transition: none !important;
+}
+
+.header-checkbox[data-checked] .checkbox__control,
+.row-checkbox[data-checked] .checkbox__control,
+.header-checkbox[data-indeterminate] .checkbox__control,
+.row-checkbox[data-indeterminate] .checkbox__control {
+    background: var(--accent-primary) !important;
+    border-color: var(--accent-primary) !important;
+    color: white !important;
+}
+
+.header-checkbox[data-checked],
+.row-checkbox[data-checked],
+.header-checkbox[data-indeterminate],
+.row-checkbox[data-indeterminate] {
+    background-color: transparent !important;
+    border: none !important;
+}
+
+.header-checkbox .checkbox__icon,
+.row-checkbox .checkbox__icon {
+    transition: none !important;
 }

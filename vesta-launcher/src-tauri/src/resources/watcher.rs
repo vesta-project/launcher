@@ -11,6 +11,7 @@ use crate::models::resource::SourcePlatform;
 use anyhow::Result;
 use crate::schema::installed_resource::dsl as ir_dsl;
 use crate::utils::hash::{calculate_sha1, calculate_curseforge_fingerprint};
+use crate::utils::instance_helpers::normalize_path;
 
 pub struct ResourceWatcher {
     app_handle: AppHandle,
@@ -35,7 +36,7 @@ impl ResourceWatcher {
         }
 
         let game_path = PathBuf::from(&game_dir);
-        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks"];
+        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
         
         let app_handle = self.app_handle.clone();
         let watchers_ptr = self.watchers.clone();
@@ -137,7 +138,7 @@ impl ResourceWatcher {
         use diesel::prelude::*;
         
         let mut conn = get_vesta_conn()?;
-        let folder_prefix = folder_path.to_string_lossy().to_string();
+        let folder_prefix = normalize_path(folder_path);
 
         log::debug!("[ResourceWatcher] Cleaning up missing resources in: {:?}", folder_path);
 
@@ -151,7 +152,7 @@ impl ResourceWatcher {
             if res.local_path.starts_with(&folder_prefix) {
                 if !Path::new(&res.local_path).exists() {
                     log::info!("[ResourceWatcher] Removing dead resource from DB: {}", res.local_path);
-                    diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id.unwrap())))
+                    diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
                         .execute(&mut conn)?;
                 }
             }
@@ -167,7 +168,7 @@ impl ResourceWatcher {
 
     pub async fn refresh_instance(&self, db_id: i32, game_dir: String) -> anyhow::Result<()> {
         let game_path = PathBuf::from(&game_dir);
-        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks"];
+        let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
 
         for folder in folders_to_watch {
             let path = game_path.join(folder);
@@ -273,7 +274,7 @@ async fn identify_and_link_resource(
         }
     };
 
-    let path_str = path.to_string_lossy().to_string();
+    let path_str = normalize_path(path);
     let is_enabled = is_enabled_path(path);
 
     // 1. FAST CHECK: Metadata Skip
@@ -282,7 +283,6 @@ async fn identify_and_link_resource(
         use diesel::prelude::*;
         if let Ok(mut conn) = get_vesta_conn() {
             let existing = ir_dsl::installed_resource
-                .filter(ir_dsl::instance_id.eq(instance_db_id))
                 .filter(ir_dsl::local_path.eq(&path_str))
                 .first::<InstalledResource>(&mut conn)
                 .optional()?;
@@ -324,7 +324,6 @@ async fn identify_and_link_resource(
             }
 
             if let Ok(Some(existing)) = ir_dsl::installed_resource
-                .filter(ir_dsl::instance_id.eq(instance_db_id))
                 .filter(ir_dsl::local_path.eq(&path_str))
                 .first::<InstalledResource>(&mut conn)
                 .optional() {
@@ -391,10 +390,12 @@ pub async fn link_manual_resource_to_db(
     use crate::models::installed_resource::InstalledResource;
 
     let mut conn = get_vesta_conn()?;
-    let path_str = path.to_string_lossy().to_string();
+    let path_str = normalize_path(path);
     let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("Unknown Resource").to_string();
     let is_enabled = is_enabled_path(path);
     let (file_size_val, file_mtime_val) = metadata;
+
+    log::debug!("[ResourceWatcher] Linking manual resource: {} (path: {})", file_name, path_str);
 
     // Infer type from folder
     let inferred_type = if let Some(parent) = path.parent() {
@@ -402,6 +403,7 @@ pub async fn link_manual_resource_to_db(
             Some("mods") => "Mod",
             Some("resourcepacks") => "ResourcePack",
             Some("shaderpacks") => "ShaderPack",
+            Some("datapacks") => "DataPack",
             _ => "unknown",
         }
     } else {
@@ -414,13 +416,13 @@ pub async fn link_manual_resource_to_db(
 
     // Check if path already exists
     let existing = ir_dsl::installed_resource
-        .filter(ir_dsl::instance_id.eq(instance_id))
         .filter(ir_dsl::local_path.eq(&path_str))
         .first::<InstalledResource>(&mut conn)
         .optional()?;
 
     if let Some(res) = existing {
-        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id.unwrap())))
+        log::debug!("[ResourceWatcher] Updating existing record for manual resource: {}", res.display_name);
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
             .set((
                 ir_dsl::is_enabled.eq(is_enabled),
                 ir_dsl::last_updated.eq(chrono::Utc::now().naive_utc()),
@@ -433,6 +435,8 @@ pub async fn link_manual_resource_to_db(
             .execute(&mut conn)?;
         return Ok(());
     }
+
+    log::info!("[ResourceWatcher] Creating new database record for manual resource: {}", file_name);
 
     diesel::insert_into(ir_dsl::installed_resource)
         .values((
@@ -473,7 +477,12 @@ pub async fn link_resource_to_db(
     use diesel::prelude::*;
 
     let mut conn = get_vesta_conn()?;
-    let path_str = path.to_string_lossy().to_string();
+
+    // Cache project metadata (including icon) beforehand
+    let rm = app.state::<ResourceManager>();
+    let _ = rm.cache_project_metadata(platform, &project).await;
+
+    let path_str = normalize_path(path);
     let platform_str = match platform {
         SourcePlatform::Modrinth => "modrinth",
         SourcePlatform::CurseForge => "curseforge",
@@ -486,7 +495,6 @@ pub async fn link_resource_to_db(
 
     // 1. Try to find by path first (exact file match)
     let existing_by_path = ir_dsl::installed_resource
-        .filter(ir_dsl::instance_id.eq(instance_db_id))
         .filter(ir_dsl::local_path.eq(&path_str))
         .first::<InstalledResource>(&mut conn)
         .optional()?;
@@ -507,7 +515,7 @@ pub async fn link_resource_to_db(
 
     if let Some(res) = existing {
         // Update
-        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id.unwrap())))
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
             .set((
                 ir_dsl::platform.eq(platform_str),
                 ir_dsl::remote_id.eq(&project.id),
@@ -562,7 +570,7 @@ async fn unlink_resource_from_db(
     use diesel::prelude::*;
 
     let mut conn = get_vesta_conn()?;
-    let path_str = path.to_string_lossy().to_string();
+    let path_str = normalize_path(path);
 
     diesel::delete(ir_dsl::installed_resource
         .filter(ir_dsl::instance_id.eq(instance_db_id))

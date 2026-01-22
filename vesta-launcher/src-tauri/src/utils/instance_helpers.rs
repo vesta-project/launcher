@@ -48,6 +48,15 @@ pub fn compute_unique_slug(
     slug
 }
 
+pub fn normalize_path(path: &Path) -> String {
+    let s = path.to_string_lossy().to_string();
+    if cfg!(windows) {
+        s.replace("/", "\\")
+    } else {
+        s.replace("\\", "/")
+    }
+}
+
 /// Ensure the instance directory exists.
 pub fn ensure_instance_directory(instances_root: &Path, slug: &str) -> Result<PathBuf> {
     let path = instances_root.join(slug);

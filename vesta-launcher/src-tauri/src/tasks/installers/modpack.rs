@@ -238,14 +238,15 @@ impl Task for InstallModpackTask {
             
             tauri::async_runtime::spawn(async move {
                 let rm = app_handle_clone.state::<ResourceManager>();
-                log::info!("[ModpackTask] Background linking {} mods and {} overrides for instance {}", mods.len(), override_mods.len(), instance_id);
+                log::info!("[ModpackTask] Background linking {} resources and {} overrides for instance {}", mods.len(), override_mods.len(), instance_id);
                 
                 // Handle Overrides first (local files from ZIP)
                 for override_path in override_mods {
                     // Only link resources in known directories
                     let is_resource = override_path.starts_with("mods") || 
                                      override_path.starts_with("resourcepacks") || 
-                                     override_path.starts_with("shaderpacks");
+                                     override_path.starts_with("shaderpacks") ||
+                                     override_path.starts_with("datapacks");
                     
                     if !is_resource {
                         continue;
@@ -269,8 +270,8 @@ impl Task for InstallModpackTask {
                     }
                 }
 
-                for mod_entry in mods {
-                    match mod_entry {
+                for res_entry in mods {
+                    match res_entry {
                         piston_lib::game::modpack::types::ModpackMod::Modrinth { path, hashes, .. } => {
                             if let Some(sha1) = hashes.get("sha1") {
                                 let local_path = game_dir_clone.join(path.replace("\\", "/"));

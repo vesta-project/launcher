@@ -31,7 +31,7 @@ diesel::table! {
 
 diesel::table! {
     installed_resource (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         instance_id -> Integer,
         platform -> Text,
         remote_id -> Text,
@@ -115,6 +115,19 @@ diesel::table! {
 }
 
 diesel::table! {
+    resource_project (id) {
+        id -> Text,
+        source -> Text,
+        name -> Text,
+        summary -> Text,
+        icon_url -> Nullable<Text>,
+        icon_data -> Nullable<Binary>,
+        project_type -> Text,
+        last_updated -> Timestamp,
+    }
+}
+
+diesel::table! {
     task_state (id) {
         id -> Text,
         task_type -> Text,
@@ -145,6 +158,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     instance,
     notification,
     resource_metadata_cache,
+    resource_project,
     task_state,
     user_version_tracking,
 );

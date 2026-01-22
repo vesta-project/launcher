@@ -7,13 +7,15 @@ use chrono::NaiveDateTime;
 
 use crate::models::resource::{
     ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, 
-    SearchResponse, ResourceMetadataCacheRecord, DependencyType, ReleaseType
+    SearchResponse, ResourceMetadataCacheRecord, DependencyType, ReleaseType,
+    ResourceProjectRecord
 };
 use crate::resources::sources::ResourceSource;
 use crate::resources::sources::modrinth::ModrinthSource;
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::utils::db::get_vesta_conn;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
+use crate::schema::vesta::resource_project::dsl as rp_dsl;
 use crate::models::installed_resource::InstalledResource;
 use crate::schema::vesta::installed_resource::dsl as ir_dsl;
 
@@ -222,6 +224,7 @@ impl ResourceManager {
                 cache.insert((platform, project.id.clone()), project.clone());
             }
             let _ = self.save_project_to_cache(platform, &project.id, &project).await;
+            let _ = self.cache_project_metadata(platform, &project).await;
             results.push(project);
         }
 
@@ -251,6 +254,7 @@ impl ResourceManager {
         }
         
         let _ = self.save_project_to_cache(platform, id, &project).await;
+        let _ = self.cache_project_metadata(platform, &project).await;
 
         Ok(project)
     }
@@ -530,6 +534,72 @@ impl ResourceManager {
             .find(|s| s.platform() == platform)
             .cloned()
             .ok_or_else(|| anyhow!("Source platform not supported: {:?}", platform))
+    }
+
+    pub async fn cache_project_metadata(&self, platform: SourcePlatform, project: &ResourceProject) -> Result<()> {
+        let mut conn = get_vesta_conn()?;
+        let now = chrono::Utc::now().naive_utc();
+        
+        // 1. Check if we have an existing record with icon_data
+        let existing: Option<ResourceProjectRecord> = rp_dsl::resource_project
+            .filter(rp_dsl::id.eq(&project.id))
+            .first(&mut conn)
+            .optional()?;
+
+        let mut icon_data = existing.as_ref().and_then(|e| e.icon_data.clone());
+
+        // 2. If we have a URL but no data, download it
+        if icon_data.is_none() {
+            if let Some(url) = &project.icon_url {
+                if !url.is_empty() {
+                    match reqwest::get(url).await {
+                        Ok(resp) => {
+                            if let Ok(bytes) = resp.bytes().await {
+                                icon_data = Some(bytes.to_vec());
+                            }
+                        }
+                        Err(e) => log::warn!("Failed to download icon for {}: {}", project.id, e),
+                    }
+                }
+            }
+        }
+
+        let record = ResourceProjectRecord {
+            id: project.id.clone(),
+            source: format!("{:?}", platform).to_lowercase(),
+            name: project.name.clone(),
+            summary: project.summary.clone(),
+            icon_url: project.icon_url.clone(),
+            icon_data,
+            project_type: format!("{:?}", project.resource_type).to_lowercase(),
+            last_updated: now,
+        };
+
+        diesel::insert_into(rp_dsl::resource_project)
+            .values(&record)
+            .on_conflict(rp_dsl::id)
+            .do_update()
+            .set(&record)
+            .execute(&mut conn)?;
+
+        Ok(())
+    }
+
+    pub async fn get_project_record(&self, id: &str) -> Result<Option<ResourceProjectRecord>> {
+        let mut conn = get_vesta_conn()?;
+        let record = rp_dsl::resource_project
+            .filter(rp_dsl::id.eq(id))
+            .first::<ResourceProjectRecord>(&mut conn)
+            .optional()?;
+        Ok(record)
+    }
+
+    pub fn get_project_records(&self, ids: &[String]) -> Result<Vec<ResourceProjectRecord>> {
+        let mut conn = get_vesta_conn()?;
+        let records = rp_dsl::resource_project
+            .filter(rp_dsl::id.eq_any(ids))
+            .load::<ResourceProjectRecord>(&mut conn)?;
+        Ok(records)
     }
 }
 

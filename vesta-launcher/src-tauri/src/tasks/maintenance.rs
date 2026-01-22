@@ -358,7 +358,7 @@ impl Task for StrictSyncTask {
                         }
                     } else {
                         log::info!("[StrictSync] Resource {} (ID: {}) not in manifest, marking for deletion", res.display_name, res.remote_id);
-                        db_ids_to_delete.push(res.id.unwrap());
+                        db_ids_to_delete.push(res.id);
                         let path = PathBuf::from(&res.local_path);
                         if path.exists() {
                             let _ = std::fs::remove_file(&path);

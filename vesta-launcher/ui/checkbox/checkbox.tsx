@@ -27,7 +27,7 @@ export function Checkbox<T extends ValidComponent = "div">(
 								class="checkbox__icon"
 								aria-hidden="true"
 							>
-								<rect x="5" y="11" width="14" height="2" rx="1" />
+								<rect x="5" y="11" width="14" height="2" rx="1" fill="currentColor" />
 							</svg>
 						</Match>
 						<Match when={others.checked}>

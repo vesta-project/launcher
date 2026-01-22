@@ -1,8 +1,9 @@
 use crate::models::resource::{ResourceType, SourcePlatform, ResourceVersion};
-use crate::models::InstalledResource;
+use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
 use crate::notifications::manager::NotificationManager;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::{get_vesta_conn};
+use crate::utils::instance_helpers::normalize_path;
 use crate::schema::instance::dsl as instances_dsl;
 use crate::schema::installed_resource::dsl as installed_dsl;
 use diesel::prelude::*;
@@ -151,7 +152,7 @@ impl Task for ResourceDownloadTask {
 
             // 5. Finalize file placement
             let final_path = target_dir.join(&version.file_name);
-            let final_path_str = final_path.to_string_lossy().to_string();
+            let final_path_str = normalize_path(&final_path);
             
             // Get metadata from temp file before move
             let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&temp_file_path) {
@@ -213,8 +214,7 @@ impl Task for ResourceDownloadTask {
                 
                 fs::rename(&temp_file_path, &final_path).await.map_err(|e| e.to_string())?;
 
-                let new_installed = InstalledResource {
-                    id: None,
+                let new_installed = NewInstalledResource {
                     instance_id,
                     platform: match platform {
                         SourcePlatform::Modrinth => "modrinth",
