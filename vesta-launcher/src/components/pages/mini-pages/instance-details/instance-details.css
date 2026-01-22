@@ -545,8 +545,8 @@
     --toolbar-height: 110px; /* Increased to prevent clipping of action bar */
 }
 
-/* Resources Toolbar V2 */
-.resources-toolbar-v2 {
+/* Resources Toolbar */
+.resources-toolbar {
 	display: flex;
 	flex-direction: column;
 	background: var(--bg-surface);
@@ -565,7 +565,7 @@
 	transition: border-radius 0.2s ease, box-shadow 0.2s ease;
 }
 
-.resources-toolbar-v2.is-stuck {
+.resources-toolbar.is-stuck {
     border-radius: 0; /* Square corners when stuck to the titlebar */
 }
 
@@ -636,7 +636,7 @@
 	background: hsl(0 80% 50% / 0.1) !important;
 }
 
-.toolbar-actions-v2 {
+.toolbar-actions {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -645,7 +645,7 @@
 	border-top: 1px solid var(--border-subtle);
 }
 
-.toolbar-actions-v2 button {
+.toolbar-actions button {
 	display: inline-flex !important;
 	align-items: center !important;
 	justify-content: center !important;
@@ -653,7 +653,7 @@
 	white-space: nowrap !important;
 }
 
-.toolbar-actions-v2 button svg {
+.toolbar-actions button svg {
 	flex-shrink: 0;
 }
 
@@ -706,12 +706,12 @@
 	box-shadow: 0 0 0 2px hsl(var(--color__primary-hue) 60% 50% / 0.2);
 }
 
-.toolbar-icon-btn-v2 {
+.toolbar-icon-btn {
 	color: var(--text-secondary) !important;
 	opacity: 0.7;
 }
 
-.toolbar-icon-btn-v2:hover {
+.toolbar-icon-btn:hover {
 	opacity: 1;
 	color: var(--text-primary) !important;
 }

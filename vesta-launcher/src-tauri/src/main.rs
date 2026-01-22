@@ -13,7 +13,7 @@ mod tasks;
 pub mod utils;
 
 use utils::config::{get_config, set_config, update_config_field, update_config_fields};
-use utils::windows::launch_new_window;
+use utils::windows::launch_window;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 
@@ -55,7 +55,7 @@ fn main() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
         .invoke_handler(tauri::generate_handler![
-            launch_new_window,
+            launch_window,
             get_config,
             set_config,
             update_config_field,

@@ -503,11 +503,11 @@ fn get_recommended_java_version(mc_version: &str) -> i32 {
     8
 }
 
-async fn prepare_new_instance(
+async fn prepare_instance(
     conn: &mut SqliteConnection,
     instance_data: &Instance,
 ) -> Result<NewInstance, String> {
-    log::info!("[prepare_new_instance] Incoming instance data: name={}, mc={}, pack_id={:?}, version_id={:?}", 
+    log::info!("[prepare_instance] Incoming instance data: name={}, mc={}, pack_id={:?}, version_id={:?}", 
         instance_data.name, instance_data.minecraft_version, instance_data.modpack_id, instance_data.modpack_version_id);
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -550,7 +550,7 @@ async fn prepare_new_instance(
 
     // Ensure the game directory exists
     if let Err(e) = std::fs::create_dir_all(&gd_str) {
-        log::error!("[prepare_new_instance] Failed to create game directory: {}", e);
+        log::error!("[prepare_instance] Failed to create game directory: {}", e);
     }
 
     let mut current_java_path = instance_data.java_path.clone();
@@ -565,12 +565,12 @@ async fn prepare_new_instance(
                 .ok();
             
             if let Some(gp) = global_path {
-                log::info!("[prepare_new_instance] Found recommended Java {} path: {}", gp.major_version, gp.path);
+                log::info!("[prepare_instance] Found recommended Java {} path: {}", gp.major_version, gp.path);
                 current_java_path = Some(gp.path);
             } else {
                 // Fallback to any Java version if the specific one isn't found?
                 // Or just let it be None and have the installer download Zulu
-                log::info!("[prepare_new_instance] No recommended Java {} found in global config", reco_version);
+                log::info!("[prepare_instance] No recommended Java {} found in global config", reco_version);
             }
         }
     }
@@ -581,7 +581,7 @@ async fn prepare_new_instance(
 
     if let Some(ref path) = final_icon_path {
         if path.starts_with("data:image/") {
-            log::info!("[prepare_new_instance] Converting base64 icon to binary data");
+            log::info!("[prepare_instance] Converting base64 icon to binary data");
             if let Some(base64_part) = path.split(",").collect::<Vec<&str>>().get(1) {
                 use base64::{Engine as _, engine::general_purpose};
                 if let Ok(bytes) = general_purpose::STANDARD.decode(base64_part) {
@@ -594,7 +594,7 @@ async fn prepare_new_instance(
 
     if instance_data.modpack_icon_url.is_some() && final_icon_data.is_none() {
         if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(instance_data.modpack_icon_url.as_ref().unwrap()).await {
-            log::info!("[prepare_new_instance] Successfully downloaded icon for offline use ({} bytes)", bytes.len());
+            log::info!("[prepare_instance] Successfully downloaded icon for offline use ({} bytes)", bytes.len());
             final_icon_data = Some(bytes);
         }
     }
@@ -645,7 +645,7 @@ pub async fn install_modpack_from_zip(
 
     let mut conn = get_vesta_conn().map_err(|e| format!("DB Error: {}", e))?;
 
-    let new_inst = prepare_new_instance(&mut conn, &instance_data).await?;
+    let new_inst = prepare_instance(&mut conn, &instance_data).await?;
 
     diesel::insert_into(instance)
         .values(&new_inst)
@@ -802,7 +802,7 @@ pub async fn install_modpack_from_url(
 
     let mut conn = get_vesta_conn().map_err(|e| format!("DB Error: {}", e))?;
 
-    let new_inst = prepare_new_instance(&mut conn, &instance_data).await?;
+    let new_inst = prepare_instance(&mut conn, &instance_data).await?;
     log::info!("[install_modpack_from_url] Prepared instance: {} (dir: {:?})", new_inst.name, new_inst.game_directory);
 
     diesel::insert_into(instance)

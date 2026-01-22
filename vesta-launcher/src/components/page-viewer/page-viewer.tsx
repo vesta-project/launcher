@@ -120,7 +120,7 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 			historyJsonString.length,
 		);
 
-		invoke("launch_new_window", {
+		invoke("launch_window", {
 			path: currentPath,
 			props: allData,
 			history: historyJsonString,

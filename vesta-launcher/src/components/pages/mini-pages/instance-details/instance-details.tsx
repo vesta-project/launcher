@@ -1294,7 +1294,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 									<Show when={activeTab() === "resources"}>
 										<section class="tab-resources">
-											<div class="resources-toolbar-v2" classList={{ "is-stuck": isScrolled() }}>
+											<div class="resources-toolbar" classList={{ "is-stuck": isScrolled() }}>
 												<div class="toolbar-search-filter">
 													<div class="filter-group">
 														<For each={[
@@ -1326,7 +1326,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												</div>
 
 												<Show when={Object.values(resources.state.selection).some(v => v)} fallback={
-													<div class="toolbar-actions-v2">
+													<div class="toolbar-actions">
 														<Button 
 															size="sm"
 															variant="ghost"

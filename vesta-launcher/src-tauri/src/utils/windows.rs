@@ -5,7 +5,7 @@ use winver::WindowsVersion;
 static WINDOW_ID: Mutex<i32> = Mutex::new(0);
 
 #[tauri::command]
-pub async fn launch_new_window(
+pub async fn launch_window(
     app_handle: tauri::AppHandle,
     path: Option<String>,
     props: Option<HashMap<String, String>>,
