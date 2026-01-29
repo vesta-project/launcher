@@ -417,7 +417,7 @@ pub async fn install_vanilla(
         .into_iter()
         .map(|(name, url, path, hash, _size, label)| BatchArtifact {
             name,
-            url,
+            urls: vec![url],
             path,
             sha1: Some(hash),
             label,
@@ -527,7 +527,7 @@ pub async fn install_vanilla(
         .into_iter()
         .map(|task| BatchArtifact {
             name: task.name,
-            url: task.url,
+            urls: vec![task.url],
             path: task.path,
             sha1: Some(task.sha1),
             label: task.label,

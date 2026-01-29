@@ -21,9 +21,12 @@ export interface ModpackInfo {
 export interface ExportCandidate {
     path: string;
     isMod: boolean;
+    size: number;
     platform?: string;
     projectId?: string;
     versionId?: string;
+    hash?: string;
+    downloadUrl?: string;
 }
 
 export async function getModpackInfo(path: string): Promise<ModpackInfo> {
@@ -100,10 +103,28 @@ export async function installModpackFromUrl(url: string, data: Partial<Instance>
     return await invoke("install_modpack_from_url", { url, instanceData });
 }
 
-export async function getInstanceExportFiles(instanceId: number): Promise<ExportCandidate[]> {
-    return await invoke("get_instance_export_files", { instanceId });
+export async function listExportCandidates(instanceId: number): Promise<ExportCandidate[]> {
+    return await invoke("list_export_candidates", { instanceId });
 }
 
-export async function exportInstanceToModpack(instanceId: number, outputPath: string, format: string, selections: ExportCandidate[]): Promise<void> {
-    return await invoke("export_instance_to_modpack", { instanceId, outputPath, formatStr: format, selections });
+export async function exportInstanceToModpack(
+    instanceId: number, 
+    outputPath: string, 
+    format: string, 
+    selections: ExportCandidate[],
+    modpackName: string,
+    version: string,
+    author: string,
+    description: string
+): Promise<void> {
+    return await invoke("export_instance_to_modpack", { 
+        instanceId, 
+        outputPath, 
+        formatStr: format, 
+        selections,
+        modpackName,
+        version,
+        author,
+        description
+    });
 }

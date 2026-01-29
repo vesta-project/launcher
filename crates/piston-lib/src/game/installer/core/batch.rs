@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 pub struct BatchArtifact {
     pub name: String,
-    pub url: String,
+    pub urls: Vec<String>,
     pub path: PathBuf,
     pub sha1: Option<String>,
     pub label: String,
@@ -88,17 +88,34 @@ impl BatchDownloader {
                     }
 
                     if !restored {
-                        log::info!("Downloading: {} from {}", artifact.name, artifact.url);
-                        reporter.set_message(&format!("Downloading {}", artifact.name));
-                        download_to_path(
-                            &client,
-                            &artifact.url,
-                            &artifact.path,
-                            artifact.sha1.as_deref(),
-                            &*reporter,
-                        )
-                        .await
-                        .context(format!("Failed to download artifact: {}", artifact.name))?;
+                        let mut success = false;
+                        let mut last_err = None;
+
+                        for url in &artifact.urls {
+                            log::info!("Downloading: {} from {}", artifact.name, url);
+                            reporter.set_message(&format!("Downloading {}", artifact.name));
+                            
+                            match download_to_path(
+                                &client,
+                                url,
+                                &artifact.path,
+                                artifact.sha1.as_deref(),
+                                &*reporter,
+                            ).await {
+                                Ok(_) => {
+                                    success = true;
+                                    break;
+                                }
+                                Err(e) => {
+                                    log::warn!("Failed to download {} from {}: {}", artifact.name, url, e);
+                                    last_err = Some(e);
+                                }
+                            }
+                        }
+
+                        if !success {
+                            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("No download URLs provided for {}", artifact.name)));
+                        }
                     }
 
                     let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;

@@ -98,17 +98,17 @@ impl ModpackInstaller {
             for mod_entry in metadata.mods.clone() {
                 match mod_entry {
                     ModpackMod::Modrinth { path, urls, hashes, size: _ } => {
-                        if let Some(url) = urls.first() {
+                        if !urls.is_empty() {
                             let sha1 = hashes.get("sha1").cloned();
                             // Path is relative to game_dir
                             let target_path = game_dir.join(path.replace("\\", "/"));
                             
                             artifacts.push(BatchArtifact {
                                 name: target_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string(),
-                                url: url.clone(),
+                                label: format!("mod-modrinth-{}", urls[0]), // Use primary URL for cache label
+                                urls,
                                 path: target_path,
                                 sha1,
-                                label: format!("mod-modrinth-{}", url), // Simple label for caching
                             });
                         }
                     }
@@ -120,10 +120,10 @@ impl ModpackInstaller {
                                     let pid_str = project_id.map(|id| id.to_string()).unwrap_or_else(|| "unknown".to_string());
                                     artifacts.push(BatchArtifact {
                                         name: target_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string(),
-                                        url: resolved.url,
+                                        label: format!("mod-cf-{}-{}", pid_str, file_id),
+                                        urls: vec![resolved.url],
                                         path: target_path,
                                         sha1: resolved.sha1,
-                                        label: format!("mod-cf-{}-{}", pid_str, file_id),
                                     });
                                 }
                                 Err(e) => {

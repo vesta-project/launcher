@@ -188,7 +188,7 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 			<div class={"page-viewer-navbar-right"}>
 				<PageViewerNavbarButton
 					onClick={props.closeClicked}
-					text={"Close (esc)"}
+					text={"Close (ctrl+w)"}
 				>
 					<CloseIcon />
 				</PageViewerNavbarButton>
@@ -225,7 +225,8 @@ function PageViewer(props: PageViewerProps) {
 	setRouter(mini_router);
 
 	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.key === "Escape") {
+		if ((event.ctrlKey || event.metaKey) && event.key === "w") {
+			event.preventDefault();
 			props.viewChanged?.(false);
 		}
 	};

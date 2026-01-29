@@ -157,6 +157,11 @@
 		var(--effect-glow-opacity)
 	);
 
+	/* Blur Variables - Inherited by children */
+	--blur-base: var(--effect-blur);
+	--blur-overlay: 12px;
+	--blur-subtle: 4px;
+
 	/* =============================================================================
 	   THEME SYSTEM - LAYER 3: COMPONENT TOKENS (Specific Use)
 	   ============================================================================= */

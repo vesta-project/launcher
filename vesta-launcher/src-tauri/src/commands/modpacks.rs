@@ -1,11 +1,12 @@
 use tauri::{command, State, AppHandle};
 use std::path::{Path, PathBuf};
 use piston_lib::game::modpack::parser::get_modpack_metadata;
-use piston_lib::game::modpack::exporter::{export_modpack, ExportSpec, ExportEntry};
+use piston_lib::game::modpack::exporter::{ExportSpec, ExportEntry};
 use piston_lib::game::modpack::types::ModpackFormat;
+use crate::models::resource::SourcePlatform;
 use crate::tasks::manager::TaskManager;
 use crate::models::instance::{Instance, NewInstance};
-use crate::schema::instance::dsl::*;
+use crate::schema::vesta::instance::dsl::*;
 use crate::utils::db::{get_vesta_conn, get_config_conn};
 use crate::models::java::GlobalJavaPath;
 use crate::schema::global_java_paths::dsl::{global_java_paths, major_version};
@@ -14,6 +15,7 @@ use crate::utils::instance_helpers::{compute_unique_name, compute_unique_slug};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::config::get_app_config;
 use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_murmur2_raw, calculate_sha1};
+use crate::tasks::modpack_export::ModpackExportTask;
 use diesel::prelude::*;
 use anyhow::Result;
 use tempfile::NamedTempFile;
@@ -669,18 +671,21 @@ pub async fn install_modpack_from_zip(
     Ok(saved_instance.id)
 }
 
-#[derive(serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExportCandidate {
     pub path: String, // Relative
     pub is_mod: bool,
+    pub size: u64,
     pub platform: Option<String>,
     pub project_id: Option<String>,
     pub version_id: Option<String>,
+    pub hash: Option<String>,
+    pub download_url: Option<String>,
 }
 
 #[command]
-pub async fn get_instance_export_files(instance_id: i32) -> Result<Vec<ExportCandidate>, String> {
+pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandidate>, String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let inst = instance.filter(id.eq(instance_id))
         .first::<Instance>(&mut conn)
@@ -693,40 +698,113 @@ pub async fn get_instance_export_files(instance_id: i32) -> Result<Vec<ExportCan
 
     let mut candidates = Vec::new();
 
-    // 1. Scan mods folder
-    let mods_dir = game_dir.join("mods");
-    if mods_dir.exists() {
-        use crate::schema::installed_resource::dsl as res_dsl;
-        use crate::models::InstalledResource;
+    // 1. Scan installed resources (mods, resource packs, shaders, etc.)
+    use crate::schema::installed_resource::dsl as res_dsl;
+    use crate::models::InstalledResource;
 
-        let installed_mods = res_dsl::installed_resource
-            .filter(res_dsl::instance_id.eq(instance_id))
-            .load::<InstalledResource>(&mut conn)
-            .map_err(|e| e.to_string())?;
+    let installed_resources = res_dsl::installed_resource
+        .filter(res_dsl::instance_id.eq(instance_id))
+        .load::<InstalledResource>(&mut conn)
+        .map_err(|e| e.to_string())?;
 
-        for m in installed_mods {
-            candidates.push(ExportCandidate {
-                path: format!("mods/{}", Path::new(&m.local_path).file_name().unwrap().to_string_lossy()),
-                is_mod: true,
-                platform: Some(m.platform),
-                project_id: Some(m.remote_id),
-                version_id: Some(m.remote_version_id),
-            });
+    for m in installed_resources {
+        let mut rel_path = m.local_path.clone().replace("\\", "/");
+        
+        // Ensure path is relative to game_dir
+        if let Some(game_dir_str) = game_dir.to_str() {
+            let normalized_game_dir = game_dir_str.replace("\\", "/");
+            if rel_path.starts_with(&normalized_game_dir) {
+                rel_path = rel_path.strip_prefix(&normalized_game_dir)
+                    .unwrap_or(&rel_path)
+                    .trim_start_matches('/')
+                    .to_string();
+            }
         }
+
+        candidates.push(ExportCandidate {
+            path: rel_path,
+            is_mod: true, // "Resource" in modpack terms
+            size: m.file_size as u64,
+            platform: Some(m.platform),
+            project_id: Some(m.remote_id),
+            version_id: Some(m.remote_version_id),
+            hash: m.hash,
+            download_url: None,
+        });
     }
 
-    // 2. Scan for other common folders as overrides
-    let common_folders = ["config", "shaderpacks", "resourcepacks", "scripts", "blueprints"];
-    for folder in &common_folders {
-        let folder_path = game_dir.join(folder);
-        if folder_path.exists() {
-            candidates.push(ExportCandidate {
-                path: folder.to_string(),
-                is_mod: false,
-                platform: None,
-                project_id: None,
-                version_id: None,
-            });
+    // 2. Scan all folders in game_dir except standard Minecraft internals
+    if let Ok(entries) = std::fs::read_dir(&game_dir) {
+        let skip_folders = [
+            "logs", "backups", "crash-reports", "temp", "bin", "natives", 
+            "assets", "libraries", "versions", ".mixin.out", "runtime", 
+            "cache", "mod-cache", "web-cache", "patchy", ".vesta"
+        ];
+        
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let dir_name = path.file_name().unwrap_or_default().to_string_lossy();
+                
+                // Skip blacklisted folders
+                if skip_folders.contains(&dir_name.as_ref()) {
+                    continue;
+                }
+
+                // Recursively add files
+                let mut stack = vec![path];
+                while let Some(current) = stack.pop() {
+                    if let Ok(sub_entries) = std::fs::read_dir(&current) {
+                        for sub_entry in sub_entries.flatten() {
+                            let sub_path = sub_entry.path();
+                            if sub_path.is_dir() {
+                                let sub_dir_name = sub_path.file_name().unwrap_or_default().to_string_lossy();
+                                if !skip_folders.contains(&sub_dir_name.as_ref()) {
+                                    stack.push(sub_path.clone());
+                                }
+                            } else {
+                                if let Ok(rel_path) = sub_path.strip_prefix(&game_dir) {
+                                    let rel_str = rel_path.to_string_lossy().to_string().replace("\\", "/");
+                                    let size = sub_path.metadata().map(|m| m.len()).unwrap_or(0);
+                                    
+                                    // Avoid duplicates from resources scan
+                                    if !candidates.iter().any(|c| c.path == rel_str) {
+                                        candidates.push(ExportCandidate {
+                                            path: rel_str,
+                                            is_mod: false,
+                                            size,
+                                            platform: None,
+                                            project_id: None,
+                                            version_id: None,
+                                            hash: None,
+                                            download_url: None,
+                                        });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            } else if path.is_file() {
+                // Add files in the root (options.txt, servers.dat, etc.)
+                if let Ok(rel_path) = path.strip_prefix(&game_dir) {
+                    let rel_str = rel_path.to_string_lossy().to_string().replace("\\", "/");
+                    let size = path.metadata().map(|m| m.len()).unwrap_or(0);
+                    
+                    if !candidates.iter().any(|c| c.path == rel_str) {
+                        candidates.push(ExportCandidate {
+                            path: rel_str,
+                            is_mod: false,
+                            size,
+                            platform: None,
+                            project_id: None,
+                            version_id: None,
+                            hash: None,
+                            download_url: None,
+                        });
+                    }
+                }
+            }
         }
     }
 
@@ -739,9 +817,15 @@ pub async fn export_instance_to_modpack(
     output_path: String,
     format_str: String,
     selections: Vec<ExportCandidate>,
+    modpack_name: String,
+    version: String,
+    author: String,
+    description: String,
+    task_manager: State<'_, TaskManager>,
+    resource_manager: State<'_, crate::resources::ResourceManager>,
 ) -> Result<(), String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-    let inst = instance.filter(id.eq(instance_id))
+    let inst = crate::schema::vesta::instance::table.filter(id.eq(instance_id))
         .first::<Instance>(&mut conn)
         .map_err(|e| format!("Instance not found: {}", e))?;
 
@@ -750,16 +834,65 @@ pub async fn export_instance_to_modpack(
         _ => ModpackFormat::CurseForge,
     };
 
-    let entries = selections.into_iter().map(|s| {
+    // Group mods by platform for batch metadata fetching
+    let mut mr_ids = Vec::new();
+    let mut cf_ids = Vec::new();
+    
+    for s in &selections {
         if s.is_mod {
+            if let Some(ref pid) = s.project_id {
+                match s.platform.as_deref() {
+                    Some("modrinth") => mr_ids.push(pid.clone()),
+                    Some("curseforge") => cf_ids.push(pid.clone()),
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    let mr_projects = if !mr_ids.is_empty() {
+        resource_manager.get_projects(SourcePlatform::Modrinth, &mr_ids).await.unwrap_or_default()
+    } else { Vec::new() };
+
+    let cf_projects = if !cf_ids.is_empty() {
+        resource_manager.get_projects(SourcePlatform::CurseForge, &cf_ids).await.unwrap_or_default()
+    } else { Vec::new() };
+
+    let mut project_meta = std::collections::HashMap::new();
+    for p in mr_projects { project_meta.insert((SourcePlatform::Modrinth, p.id.clone()), p); }
+    for p in cf_projects { project_meta.insert((SourcePlatform::CurseForge, p.id.clone()), p); }
+
+    let entries = selections.into_iter().map(|s| {
+        let has_ids = s.project_id.is_some() && s.version_id.is_some();
+        let has_hash = s.hash.is_some();
+        
+        if s.is_mod && (has_ids || has_hash) {
+            let mut ext_ids = None;
+            if let (Some(ref platform_str), Some(ref pid)) = (&s.platform, &s.project_id) {
+                let platform = match platform_str.as_str() {
+                    "modrinth" => Some(SourcePlatform::Modrinth),
+                    "curseforge" => Some(SourcePlatform::CurseForge),
+                    _ => None,
+                };
+                
+                if let Some(p) = platform {
+                    if let Some(meta) = project_meta.get(&(p, pid.clone())) {
+                        ext_ids = meta.external_ids.clone();
+                    }
+                }
+            }
+
             ExportEntry::Mod {
                 path: PathBuf::from(s.path),
                 source_id: s.project_id.unwrap_or_default(),
                 version_id: s.version_id.unwrap_or_default(),
                 platform: match s.platform.as_deref() {
-                    Some("modrinth") => ModpackFormat::Modrinth,
-                    _ => ModpackFormat::CurseForge,
+                    Some("modrinth") => Some(ModpackFormat::Modrinth),
+                    Some("curseforge") => Some(ModpackFormat::CurseForge),
+                    _ => None,
                 },
+                download_url: s.download_url,
+                external_ids: ext_ids,
             }
         } else {
             ExportEntry::Override {
@@ -769,18 +902,29 @@ pub async fn export_instance_to_modpack(
     }).collect();
 
     let spec = ExportSpec {
-        name: inst.name.clone(),
-        version: "1.0.0".to_string(), // TODO: Make configurable
-        author: "Vesta User".to_string(),
+        name: modpack_name.clone(),
+        version: version.clone(),
+        author: author.clone(),
+        description: if description.is_empty() { None } else { Some(description) },
         minecraft_version: inst.minecraft_version.clone(),
         modloader_type: inst.modloader.clone().unwrap_or("vanilla".to_string()),
         modloader_version: inst.modloader_version.clone().unwrap_or_default(),
         entries,
     };
 
-    let game_dir = inst.game_directory.as_ref().ok_or("No game directory")?;
-    export_modpack(game_dir, spec, &output_path, format)
-        .map_err(|e| format!("Export failed: {}", e))?;
+    let game_dir = inst.game_directory.as_ref().ok_or("No game directory")?.clone();
+    
+    let task = ModpackExportTask {
+        instance_name: modpack_name,
+        game_dir,
+        output_path,
+        format,
+        spec,
+        resource_manager: resource_manager.inner().clone(),
+    };
+
+    task_manager.submit(Box::new(task)).await
+        .map_err(|e| format!("Failed to submit export task: {}", e))?;
 
     Ok(())
 }

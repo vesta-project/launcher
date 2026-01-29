@@ -289,9 +289,13 @@ async fn identify_and_link_resource(
 
             if let Some(res) = existing {
                 // If metadata matches AND enabled status matches, we can skip everything
+                // EXCEPT if the resource is currently marked as a "modpack" override with no remote ID.
+                // In that case, we want to try identifying it at least once to see if it can be linked.
                 if res.file_size == file_size && res.file_mtime == file_mtime && res.is_enabled == is_enabled {
-                    log::debug!("[ResourceWatcher] Metadata match for {}, skipping scan", path_str);
-                    return Ok(());
+                    if res.platform != "modpack" || !res.remote_id.is_empty() {
+                        log::debug!("[ResourceWatcher] Metadata match for {}, skipping scan", path_str);
+                        return Ok(());
+                    }
                 }
             }
         }

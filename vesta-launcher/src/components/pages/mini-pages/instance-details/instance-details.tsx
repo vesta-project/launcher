@@ -1478,6 +1478,15 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 											<div class="version-info-card">
 												<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
 													<h3 style="margin: 0;">{inst().modpackId ? "Modpack Management" : "Instance Management"}</h3>
+													<Show when={!inst()?.modpackPlatform}>
+														<Button
+															variant="outline"
+															size="sm"
+															onClick={() => setShowExportDialog(true)}
+														>
+															Export Instance...
+														</Button>
+													</Show>
 												</div>
 												<p class="section-desc">Manage the core game version and engine for this instance.</p>
 												
@@ -1841,13 +1850,6 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 														disabled={saving()}
 													>
 														{saving() ? "Saving…" : "Save Settings"}
-													</Button>
-
-													<Button
-														variant="outline"
-														onClick={() => setShowExportDialog(true)}
-													>
-														Export Instance...
 													</Button>
 												</div>
 											</section>

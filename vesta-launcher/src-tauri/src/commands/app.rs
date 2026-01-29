@@ -157,3 +157,8 @@ pub fn os_type() -> String {
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     return "unknown".to_string();
 }
+
+#[tauri::command]
+pub fn path_exists(path: String) -> bool {
+    std::path::Path::new(&path).exists()
+}
