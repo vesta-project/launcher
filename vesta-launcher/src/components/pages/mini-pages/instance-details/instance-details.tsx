@@ -44,6 +44,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resources, findBestVersion, type ResourceVersion, type InstalledResource } from "@stores/resources";
 import {
 	DEFAULT_ICONS,
+	deleteInstance,
 	duplicateInstance,
 	getInstanceBySlug,
 	getMinecraftVersions,
@@ -209,6 +210,12 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	// Running state
 	const [isRunning, setIsRunning] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
+
+	// Check if instance is currently being installed/repaired/updated
+	const isInstalling = createMemo(() => {
+		const inst = instance();
+		return inst?.installationStatus === "installing";
+	});
 	let lastSelectedRowId: string | null = null;
 
 	const handleRowClick = (row: any, event: MouseEvent) => {
@@ -1192,7 +1199,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 											</Button>
 											<Button
 												onClick={isRunning() ? handleKill : handlePlay}
-												disabled={busy()}
+												disabled={busy() || isInstalling()}
 												color={isRunning() ? "destructive" : "primary"}
 												variant="solid"
 												size={activeTab() === "home" ? "lg" : "md"}
@@ -1201,7 +1208,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												<Show when={busy()}>
 													<span class="btn-spinner" />
 												</Show>
-												{isRunning() ? "Kill Instance" : "Play Now"}
+												<Show when={isInstalling() && !busy()}>
+													<span class="btn-spinner" />
+												</Show>
+												{isRunning() ? "Kill Instance" : isInstalling() ? "Installing..." : "Play Now"}
 											</Button>
 										</div>
 									</div>
@@ -1537,7 +1547,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			variant="ghost" 
 																			size="sm"
 																			onClick={() => handleUnlink()}
-																			disabled={busy()}
+																			disabled={busy() || isInstalling()}
 																			color="destructive"
 																		>
 																			Unlink
@@ -1604,7 +1614,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<Show when={selectedModpackVersionId() !== inst().modpackVersionId && selectedModpackVersion()?.version_number !== inst().modpackVersionId}>
 																<Button 
 																	onClick={() => rolloutModpackUpdate()} 
-																	disabled={busy()}
+																	disabled={busy() || isInstalling()}
 																	color="primary"
 																	size="sm"
 																>
@@ -1726,7 +1736,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																selectedLoader().toLowerCase() !== (inst().modloader || "vanilla").toLowerCase() || 
 																(selectedLoader().toLowerCase() !== "vanilla" && selectedLoaderVersion() !== (inst().modloaderVersion || ""))
 															}>
-																<Button onClick={handleStandardUpdate} disabled={busy()} color="primary" size="sm">Save & Reinstall</Button>
+																<Button onClick={handleStandardUpdate} disabled={busy() || isInstalling()} color="primary" size="sm">Save & Reinstall</Button>
 															</Show>
 														</div>
 													</Show>
@@ -1736,7 +1746,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Duplicate</h4>
 															<p>Create a full copy of this instance, including all files and settings.</p>
 														</div>
-														<Button onClick={() => {
+														<Button disabled={isInstalling()} onClick={() => {
 															const name = window.prompt("Enter name for the copy:", `${inst().name} (Copy)`);
 															if (name) duplicateInstance(inst().id, name);
 														}}>Duplicate</Button>
@@ -1747,7 +1757,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Repair</h4>
 															<p>Verify all game files and mods. Missing or corrupted files will be redownloaded.</p>
 														</div>
-														<Button onClick={() => repairInstance(inst().id)}>Repair</Button>
+														<Button onClick={() => repairInstance(inst().id)} disabled={isInstalling()}>Repair</Button>
 													</div>
 
 													<div class="mgmt-action danger">
@@ -1755,11 +1765,29 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Hard Reset</h4>
 															<p>Wipe the instance directory and reinstall from scratch. <strong style="color: var(--color-danger)">Deletes all local data!</strong></p>
 														</div>
-														<Button variant="outline" color="destructive" onClick={async () => {
+														<Button variant="outline" color="destructive" disabled={isInstalling()} onClick={async () => {
 															if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. Your worlds, screenshots, and configs will be DELETED.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
 																resetInstance(inst().id);
 															}
 														}}>Reset</Button>
+													</div>
+
+													<div class="mgmt-action danger">
+														<div class="mgmt-text">
+															<h4>Uninstall Instance</h4>
+															<p>Remove this instance from Vesta Launcher. <strong style="color: var(--color-danger)">Deletes all files and data!</strong></p>
+														</div>
+														<Button variant="outline" color="destructive" disabled={isInstalling()} onClick={async () => {
+															if (await ask("Are you sure you want to uninstall this instance? This will permanently delete the instance and ALL its files from your computer. This action cannot be undone.", { title: "Vesta Launcher - Uninstall Instance", kind: "error" })) {
+																try {
+																	await deleteInstance(inst().id);
+																	// Navigate back to home since instance is gone
+																	router()?.navigate("/");
+																} catch (e) {
+																	console.error("Failed to delete instance:", e);
+																}
+															}
+														}}>Uninstall</Button>
 													</div>
 												</div>
 											</div>
@@ -1796,6 +1824,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<TextFieldInput
 																value={name()}
 																onInput={(e: any) => setName(e.currentTarget.value)}
+																disabled={isInstalling()}
 															/>
 														</TextFieldRoot>
 													</div>
@@ -1862,9 +1891,9 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												<div class="settings-actions" style="display: flex; gap: 12px;">
 													<Button
 														onClick={handleSave}
-														disabled={saving()}
+														disabled={saving() || isInstalling()}
 													>
-														{saving() ? "Saving…" : "Save Settings"}
+														{saving() ? "Saving…" : isInstalling() ? "Installing..." : "Save Settings"}
 													</Button>
 												</div>
 											</section>

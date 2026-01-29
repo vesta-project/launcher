@@ -1418,10 +1418,17 @@ pub async fn duplicate_instance(
 
 #[tauri::command]
 pub async fn repair_instance(
-    _app_handle: tauri::AppHandle,
+    app_handle: tauri::AppHandle,
     task_manager: tauri::State<'_, TaskManager>,
     instance_id: i32,
 ) -> Result<(), String> {
+    // Set status to 'installing' so UI shows progress
+    let _ = crate::commands::instances::update_installation_status(
+        &app_handle,
+        instance_id,
+        "installing",
+    );
+
     let task = RepairInstanceTask::new(instance_id);
     let _ = task_manager.submit(Box::new(task)).await;
     Ok(())
@@ -1429,10 +1436,17 @@ pub async fn repair_instance(
 
 #[tauri::command]
 pub async fn reset_instance(
-    _app_handle: tauri::AppHandle,
+    app_handle: tauri::AppHandle,
     task_manager: tauri::State<'_, TaskManager>,
     instance_id: i32,
 ) -> Result<(), String> {
+    // Set status to 'installing' so UI shows progress
+    let _ = crate::commands::instances::update_installation_status(
+        &app_handle,
+        instance_id,
+        "installing",
+    );
+
     let task = ResetInstanceTask::new(instance_id);
     let _ = task_manager.submit(Box::new(task)).await;
     Ok(())
