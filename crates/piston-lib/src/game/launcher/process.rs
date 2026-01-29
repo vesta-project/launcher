@@ -171,7 +171,7 @@ pub async fn launch_game(
             log::info!("Stale vanilla manifest detected! Replaced with fresh manifest containing natives.");
             manifest = fresh_manifest;
         } else {
-            log::info!("Verified: This vanilla versionlegitimately has no natives.");
+            log::info!("Verified: This vanilla version legitimately has no natives.");
         }
     } else if !manifest.has_natives() {
         log::debug!("Modded manifest has no natives. This is common for modern versions (1.19+) or specialized loaders.");

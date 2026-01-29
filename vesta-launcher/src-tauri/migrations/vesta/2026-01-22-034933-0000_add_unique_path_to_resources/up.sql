@@ -1,8 +1,6 @@
 -- Your SQL goes here
--- Normalize existing paths to use backslashes (Windows standard)
-UPDATE installed_resource SET local_path = REPLACE(local_path, '/', '\');
 
--- Remove duplicates by normalized local_path, keeping the most recently updated record
+-- Remove duplicates by local_path, keeping the most recently updated record
 DELETE FROM installed_resource
 WHERE id NOT IN (
     SELECT id FROM (

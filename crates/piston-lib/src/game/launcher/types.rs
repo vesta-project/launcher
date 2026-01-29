@@ -263,8 +263,10 @@ mod tests {
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
-            window_height: None,            min_memory: None,
-            max_memory: None,            client_id: "cid".to_string(),
+            window_height: None,
+            min_memory: None,
+            max_memory: None,
+            client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
         };
