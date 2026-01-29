@@ -17,7 +17,7 @@ interface ButtonProps
 	> {
 	color?: "none" | "primary" | "secondary" | "destructive" | "warning";
 	variant?: "solid" | "outline" | "ghost" | "shadow";
-	size?: "sm" | "md" | "lg";
+	size?: "sm" | "md" | "lg" | "icon";
 	icon_only?: boolean;
 	onClick?: (e: MouseEvent) => void;
 	tooltip_text?: string;

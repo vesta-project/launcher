@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { clsx } from "clsx";
 import { createSignal, For, Show, splitProps, ValidComponent } from "solid-js";
 import { DEFAULT_ICONS } from "@utils/instances";
+import CubeIcon from "@assets/cube.svg";
 import "./icon-picker.css";
 
 // Icon picker props interface
@@ -16,8 +17,12 @@ interface IconPickerProps extends ClassProp {
 	onSelect?: (icon: string) => void;
 	/** Array of uploaded custom icons (stored separately from defaults) */
 	uploadedIcons?: string[];
+	/** A suggested icon (e.g. from a modpack) that stays even if another is picked */
+	suggestedIcon?: string | null;
+	/** Whether the current value correctly represents the suggested icon (even if it's internal://icon) */
+	isSuggestedSelected?: boolean;
 	/** Props to pass to the trigger button */
-	triggerProps?: ButtonPrimitive.ButtonRootProps;
+	triggerProps?: any;
 	/** Whether to allow custom image upload (default: true) */
 	allowUpload?: boolean;
 	/** Whether to show a "click to change" hint (useful for onboarding) */
@@ -32,6 +37,8 @@ export function IconPicker<T extends ValidComponent = "button">(
 		"value",
 		"onSelect",
 		"uploadedIcons",
+		"suggestedIcon",
+		"isSuggestedSelected",
 		"triggerProps",
 		"allowUpload",
 		"showHint",
@@ -46,20 +53,18 @@ export function IconPicker<T extends ValidComponent = "button">(
 	const totalIcons = () => {
 		const uploaded = uploadedIcons().length;
 		const defaults = DEFAULT_ICONS.length;
+		const suggested = local.suggestedIcon ? 1 : 0;
 		const uploadBtn = allowUpload() ? 1 : 0;
-		return uploaded + defaults + uploadBtn;
+		return uploaded + defaults + suggested + uploadBtn;
 	};
 	
 	// Dynamic grid columns (max 4, adjust based on icon count)
 	const gridColumns = () => Math.min(4, totalIcons());
 	
-	// Dynamic grid rows (max 3 rows to avoid scrolling)
-	const maxRows = 3;
-	
 	// Determine if an icon is a gradient or image URL
 	const isGradient = (icon: string) => icon.startsWith("linear-gradient");
 	
-	// Handle file upload
+	// Handle file upload with resizing and compression
 	const handleFileUpload = () => {
 		const input = document.createElement("input");
 		input.type = "file";
@@ -69,11 +74,45 @@ export function IconPicker<T extends ValidComponent = "button">(
 			if (file) {
 				const reader = new FileReader();
 				reader.onload = (event) => {
-					const base64 = event.target?.result as string;
-					if (base64 && local.onSelect) {
-						local.onSelect(base64);
-						setIsOpen(false);
-					}
+					const img = new Image();
+					img.onload = () => {
+						const canvas = document.createElement("canvas");
+						const ctx = canvas.getContext("2d");
+						
+						// Launcher icons don't need to be massive. 512x512 is plenty.
+						const MAX_SIZE = 512;
+						let width = img.width;
+						let height = img.height;
+
+						if (width > height) {
+							if (width > MAX_SIZE) {
+								height *= MAX_SIZE / width;
+								width = MAX_SIZE;
+							}
+						} else {
+							if (height > MAX_SIZE) {
+								width *= MAX_SIZE / height;
+								height = MAX_SIZE;
+							}
+						}
+						
+						canvas.width = width;
+						canvas.height = height;
+						
+						if (ctx) {
+							ctx.imageSmoothingEnabled = true;
+							ctx.imageSmoothingQuality = "high";
+							ctx.drawImage(img, 0, 0, width, height);
+							
+							// Export as high-quality PNG to preserve transparency
+							const compressedBase64 = canvas.toDataURL("image/png");
+							if (compressedBase64 && local.onSelect) {
+								local.onSelect(compressedBase64);
+								setIsOpen(false);
+							}
+						}
+					};
+					img.src = event.target?.result as string;
 				};
 				reader.readAsDataURL(file);
 			}
@@ -87,6 +126,13 @@ export function IconPicker<T extends ValidComponent = "button">(
 			local.onSelect(icon);
 		}
 		setIsOpen(false);
+	};
+
+	// Determine if the suggested icon is selected
+	const isSuggestedSelected = () => {
+		if (local.isSuggestedSelected) return true;
+		if (local.suggestedIcon && local.value === local.suggestedIcon) return true;
+		return false;
 	};
 
 	// Get current icon style for trigger display
@@ -103,13 +149,17 @@ export function IconPicker<T extends ValidComponent = "button">(
 			<PopoverAnchor as="div" class="icon-picker__anchor">
 				<PopoverTrigger
 					as={ButtonPrimitive.Root}
+					{...local.triggerProps}
 					class={clsx(
 						"icon-picker__trigger", 
 						local.class,
-						local.showHint && "icon-picker__trigger--hint"
+						local.showHint && "icon-picker__trigger--hint",
+						local.triggerProps?.class
 					)}
-					style={getTriggerStyle()}
-					{...local.triggerProps}
+					style={{
+						...getTriggerStyle(),
+						...(local.triggerProps?.style as any)
+					}}
 				>
 					<div class="icon-picker__edit-overlay">
 						<svg
@@ -186,81 +236,139 @@ export function IconPicker<T extends ValidComponent = "button">(
 						</Tooltip>
 					</Show>
 
+					{/* Suggested/Modpack icon */}
+					<Show when={local.suggestedIcon}>
+						<Tooltip placement="top">
+							<TooltipTrigger>
+								<button
+									class={clsx(
+										"icon-picker__option",
+										isSuggestedSelected() && "icon-picker__option--selected",
+									)}
+									style={{
+										"background-image": `url('${local.suggestedIcon}')`,
+										"background-size": "cover",
+										"background-position": "center",
+									}}
+									onClick={() => local.suggestedIcon && handleSelect(local.suggestedIcon)}
+								>
+									<Show when={isSuggestedSelected()}>
+										<svg
+											class="icon-picker__tick"
+											width="20"
+											height="20"
+											viewBox="0 0 24 24"
+											fill="none"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path
+												d="M20 6L9 17L4 12"
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</Show>
+									{/* Badge for suggested icon */}
+									<div class="icon-picker__option-badge">
+										<CubeIcon fill="currentColor" width="12" height="12" />
+									</div>
+								</button>
+							</TooltipTrigger>
+							<TooltipContent>Original Modpack Icon</TooltipContent>
+						</Tooltip>
+					</Show>
+
 					{/* Uploaded icons (displayed first after upload button) */}
 					<For each={uploadedIcons()}>
 						{(icon) => (
-							<button
-								class={clsx(
-									"icon-picker__option",
-									local.value === icon && "icon-picker__option--selected",
-								)}
-								style={{
-									"background-image": `url('${icon}')`,
-									"background-size": "cover",
-									"background-position": "center",
-								}}
-								onClick={() => handleSelect(icon)}
+							<Show 
+								when={
+									icon !== local.suggestedIcon && 
+									!(isSuggestedSelected() && (icon === local.value || icon === local.suggestedIcon))
+								}
 							>
-								<Show when={local.value === icon}>
-									<svg
-										class="icon-picker__tick"
-										width="20"
-										height="20"
-										viewBox="0 0 24 24"
-										fill="none"
-										xmlns="http://www.w3.org/2000/svg"
-									>
-										<path
-											d="M20 6L9 17L4 12"
-											stroke="white"
-											stroke-width="3"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								</Show>
-							</button>
+								<button
+									class={clsx(
+										"icon-picker__option",
+										!isSuggestedSelected() && local.value === icon && "icon-picker__option--selected",
+									)}
+									style={{
+										"background-image": `url('${icon}')`,
+										"background-size": "cover",
+										"background-position": "center",
+									}}
+									onClick={() => handleSelect(icon)}
+								>
+									<Show when={!isSuggestedSelected() && local.value === icon}>
+										<svg
+											class="icon-picker__tick"
+											width="20"
+											height="20"
+											viewBox="0 0 24 24"
+											fill="none"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path
+												d="M20 6L9 17L4 12"
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</Show>
+								</button>
+							</Show>
 						)}
 					</For>
 
 					{/* Default icons */}
 					<For each={DEFAULT_ICONS}>
 						{(icon) => (
-							<button
-								class={clsx(
-									"icon-picker__option",
-									local.value === icon && "icon-picker__option--selected",
-								)}
-								style={
-									isGradient(icon)
-										? { background: icon }
-										: {
-												"background-image": `url('${icon}')`,
-												"background-size": "cover",
-												"background-position": "center",
-											}
+							<Show 
+								when={
+									icon !== local.suggestedIcon && 
+									!(isSuggestedSelected() && (icon === local.value || icon === local.suggestedIcon))
 								}
-								onClick={() => handleSelect(icon)}
 							>
-								<Show when={local.value === icon}>
-									<svg
-										class="icon-picker__tick"
-										width="20"
-										height="20"
-										viewBox="0 0 24 24"
-										fill="none"
-										xmlns="http://www.w3.org/2000/svg"
-									>
-										<path
-											d="M20 6L9 17L4 12"
-											stroke="white"
-											stroke-width="3"
-											stroke-linecap="round"
-											stroke-linejoin="round"
-										/>
-									</svg>
-								</Show>
-							</button>
+								<button
+									class={clsx(
+										"icon-picker__option",
+										!isSuggestedSelected() && local.value === icon && "icon-picker__option--selected",
+									)}
+									style={
+										isGradient(icon)
+											? { background: icon }
+											: {
+													"background-image": `url('${icon}')`,
+													"background-size": "cover",
+													"background-position": "center",
+												}
+									}
+									onClick={() => handleSelect(icon)}
+								>
+									<Show when={!isSuggestedSelected() && local.value === icon}>
+										<svg
+											class="icon-picker__tick"
+											width="20"
+											height="20"
+											viewBox="0 0 24 24"
+											fill="none"
+											xmlns="http://www.w3.org/2000/svg"
+										>
+											<path
+												d="M20 6L9 17L4 12"
+												stroke="white"
+												stroke-width="3"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											/>
+										</svg>
+									</Show>
+								</button>
+							</Show>
 						)}
 					</For>
 				</div>

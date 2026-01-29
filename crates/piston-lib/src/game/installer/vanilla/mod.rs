@@ -417,7 +417,7 @@ pub async fn install_vanilla(
         .into_iter()
         .map(|(name, url, path, hash, _size, label)| BatchArtifact {
             name,
-            url,
+            urls: vec![url],
             path,
             sha1: Some(hash),
             label,
@@ -527,7 +527,7 @@ pub async fn install_vanilla(
         .into_iter()
         .map(|task| BatchArtifact {
             name: task.name,
-            url: task.url,
+            urls: vec![task.url],
             path: task.path,
             sha1: Some(task.sha1),
             label: task.label,
@@ -642,10 +642,14 @@ pub async fn install_vanilla(
         JavaVersion::new(8) // Default to Java 8 for old versions
     };
 
-    log::info!("Ensuring Java runtime is available: {}", java_version.major);
-    let _java_path = get_or_install_jre(&spec.jre_dir(), &java_version, &*reporter)
-        .await
-        .context("Failed to install JRE")?;
+    if spec.java_path.is_none() {
+        log::info!("Ensuring Java runtime is available: {}", java_version.major);
+        let _java_path = get_or_install_jre(&spec.jre_dir(), &java_version, &*reporter)
+            .await
+            .context("Failed to install JRE")?;
+    } else {
+        log::info!("Java path already provided, skipping JRE installation: {:?}", spec.java_path);
+    }
 
     log::info!("JRE ready");
 

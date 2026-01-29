@@ -7,18 +7,21 @@ import "./combobox.css";
 
 const Combobox = ComboboxPrimitive.Combobox;
 
-type ComboboxItemProps = ComboboxPrimitive.ComboboxItemProps & ClassProp;
+type ComboboxItemProps<T extends ValidComponent = "li"> = ComboboxPrimitive.ComboboxItemProps<T> & ClassProp & ChildrenProp;
 
 function ComboboxItem<T extends ValidComponent = "li">(
-	props: PolymorphicProps<T, ComboboxItemProps>,
+	props: PolymorphicProps<T, ComboboxItemProps<T>>,
 ) {
-	const [_, rest] = splitProps(props as ComboboxItemProps, ["class"]);
+	const [local, rest] = splitProps(props as ComboboxItemProps, ["class", "children"]);
 
 	return (
 		<ComboboxPrimitive.Item
-			class={clsx("combobox__item", props.class)}
+			class={clsx("combobox__item", local.class)}
 			{...rest}
-		/>
+		>
+			<ComboboxPrimitive.ItemLabel>{local.children}</ComboboxPrimitive.ItemLabel>
+			<ComboboxItemIndicator />
+		</ComboboxPrimitive.Item>
 	);
 }
 
@@ -135,19 +138,21 @@ function ComboboxTrigger<T extends ValidComponent = "button">(
 	);
 }
 
-type ComboboxContentProps = ComboboxPrimitive.ComboboxContentProps & ClassProp;
+type ComboboxContentProps<T extends ValidComponent = "div"> = ComboboxPrimitive.ComboboxContentProps<T> & ClassProp & ChildrenProp;
 
 function ComboboxContent<T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, ComboboxContentProps>,
+	props: PolymorphicProps<T, ComboboxContentProps<T>>,
 ) {
-	const [, rest] = splitProps(props as ComboboxContentProps, ["class"]);
+	const [local, rest] = splitProps(props as ComboboxContentProps, ["class", "children"]);
 	return (
 		<ComboboxPrimitive.Portal>
 			<ComboboxPrimitive.Content
-				class={clsx("combobox__content", props.class)}
+				class={clsx("combobox__content relative z-50", local.class)}
 				{...rest}
 			>
-				<ComboboxPrimitive.Listbox class="combobox__listbox" />
+				<ComboboxPrimitive.Listbox class="combobox__listbox">
+					{local.children as any}
+				</ComboboxPrimitive.Listbox>
 			</ComboboxPrimitive.Content>
 		</ComboboxPrimitive.Portal>
 	);

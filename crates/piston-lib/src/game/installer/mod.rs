@@ -117,6 +117,11 @@ pub async fn install_instance(
         std::fs::create_dir_all(spec.versions_dir())?;
         std::fs::create_dir_all(spec.jre_dir())?;
         std::fs::create_dir_all(&spec.game_dir)?;
+
+        // Ensure mods directory exists for modded installations
+        if spec.modloader.is_some() && spec.modloader != Some(ModloaderType::Vanilla) {
+            std::fs::create_dir_all(spec.game_dir.join("mods"))?;
+        }
     }
 
     // Load cache + transaction state

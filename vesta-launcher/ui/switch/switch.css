@@ -30,14 +30,15 @@
 	height: 24px;
 	flex-shrink: 0;
 	border-radius: 9999px;
-	border: 2px solid transparent;
-	background-color: var(--interactive-muted);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	background-color: var(--surface-sunken);
 	cursor: pointer;
 	transition: background-color 150ms ease-in-out;
 }
 
 .switch__control[data-checked] {
-	background-color: var(--accent-base);
+	background-color: var(--accent-primary);
+	border-color: var(--accent-primary);
 }
 
 .switch__control[data-disabled] {
@@ -79,9 +80,10 @@
 
 /* Optional: Add hover state for non-disabled switches */
 .switch__control:not([data-disabled]):hover {
-	background-color: var(--interactive-muted);
+	background-color: var(--surface-raised);
 }
 
 .switch__control[data-checked]:not([data-disabled]):hover {
-	background-color: var(--accent-subtle);
+	background-color: var(--accent-primary-hover);
+	border-color: var(--accent-primary-hover);
 }

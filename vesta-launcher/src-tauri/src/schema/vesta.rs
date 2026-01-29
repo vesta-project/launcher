@@ -14,11 +14,11 @@ diesel::table! {
         cape_url -> Nullable<Text>,
         created_at -> Nullable<Text>,
         updated_at -> Nullable<Text>,
-        theme_id -> Nullable<Text>,
         theme_mode -> Nullable<Text>,
-        theme_primary_hue -> Nullable<Integer>,
         theme_primary_sat -> Nullable<Integer>,
         theme_primary_light -> Nullable<Integer>,
+        theme_id -> Nullable<Text>,
+        theme_primary_hue -> Nullable<Integer>,
         theme_style -> Nullable<Text>,
         theme_gradient_enabled -> Nullable<Bool>,
         theme_gradient_angle -> Nullable<Integer>,
@@ -30,49 +30,23 @@ diesel::table! {
 }
 
 diesel::table! {
-    app_config (id) {
+    installed_resource (id) {
         id -> Integer,
-        background_hue -> Integer,
-        theme -> Text,
-        language -> Text,
-        max_download_threads -> Integer,
-        max_memory_mb -> Integer,
-        java_path -> Nullable<Text>,
-        default_game_dir -> Nullable<Text>,
-        auto_update_enabled -> Bool,
-        notification_enabled -> Bool,
-        startup_check_updates -> Bool,
-        show_tray_icon -> Bool,
-        minimize_to_tray -> Bool,
-        reduced_motion -> Bool,
-        last_window_width -> Integer,
-        last_window_height -> Integer,
-        debug_logging -> Bool,
-        notification_retention_days -> Integer,
-        active_account_uuid -> Nullable<Text>,
-        theme_id -> Text,
-        theme_mode -> Text,
-        theme_primary_hue -> Integer,
-        theme_primary_sat -> Nullable<Integer>,
-        theme_primary_light -> Nullable<Integer>,
-        theme_style -> Text,
-        theme_gradient_enabled -> Bool,
-        theme_gradient_angle -> Nullable<Integer>,
-        theme_gradient_harmony -> Nullable<Text>,
-        theme_advanced_overrides -> Nullable<Text>,
-        theme_gradient_type -> Nullable<Text>,
-        theme_border_width -> Nullable<Integer>,
-        setup_completed -> Bool,
-        setup_step -> Integer,
-        tutorial_completed -> Bool,
-    }
-}
-
-diesel::table! {
-    global_java_paths (major_version) {
-        major_version -> Integer,
-        path -> Text,
-        is_managed -> Bool,
+        instance_id -> Integer,
+        platform -> Text,
+        remote_id -> Text,
+        remote_version_id -> Text,
+        resource_type -> Text,
+        local_path -> Text,
+        display_name -> Text,
+        current_version -> Text,
+        is_manual -> Bool,
+        is_enabled -> Bool,
+        last_updated -> Timestamp,
+        release_type -> Text,
+        hash -> Nullable<Text>,
+        file_size -> BigInt,
+        file_mtime -> BigInt,
     }
 }
 
@@ -88,7 +62,6 @@ diesel::table! {
         game_directory -> Nullable<Text>,
         width -> Integer,
         height -> Integer,
-        memory_mb -> Integer,
         icon_path -> Nullable<Text>,
         last_played -> Nullable<Text>,
         total_playtime_minutes -> Integer,
@@ -97,6 +70,13 @@ diesel::table! {
         installation_status -> Nullable<Text>,
         crashed -> Nullable<Bool>,
         crash_details -> Nullable<Text>,
+        min_memory -> Integer,
+        max_memory -> Integer,
+        modpack_id -> Nullable<Text>,
+        modpack_version_id -> Nullable<Text>,
+        modpack_platform -> Nullable<Text>,
+        modpack_icon_url -> Nullable<Text>,
+        icon_data -> Nullable<Binary>,
     }
 }
 
@@ -123,6 +103,31 @@ diesel::table! {
 }
 
 diesel::table! {
+    resource_metadata_cache (id) {
+        id -> Nullable<Integer>,
+        source -> Text,
+        remote_id -> Text,
+        project_data -> Text,
+        versions_data -> Nullable<Text>,
+        last_updated -> Timestamp,
+        expires_at -> Timestamp,
+    }
+}
+
+diesel::table! {
+    resource_project (id) {
+        id -> Text,
+        source -> Text,
+        name -> Text,
+        summary -> Text,
+        icon_url -> Nullable<Text>,
+        icon_data -> Nullable<Binary>,
+        project_type -> Text,
+        last_updated -> Timestamp,
+    }
+}
+
+diesel::table! {
     task_state (id) {
         id -> Text,
         task_type -> Text,
@@ -145,13 +150,15 @@ diesel::table! {
     }
 }
 
+diesel::joinable!(installed_resource -> instance (instance_id));
+
 diesel::allow_tables_to_appear_in_same_query!(
     account,
-    app_config,
-    global_java_paths,
+    installed_resource,
     instance,
     notification,
+    resource_metadata_cache,
+    resource_project,
     task_state,
     user_version_tracking,
 );
-

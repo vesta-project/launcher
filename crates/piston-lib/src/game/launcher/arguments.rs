@@ -16,12 +16,38 @@ pub fn build_jvm_arguments(
 ) -> Vec<String> {
     let mut args = Vec::new();
 
-    // Add custom JVM args first (if provided)
-    if !spec.jvm_args.is_empty() {
-        args.extend(spec.jvm_args.clone());
-    } else {
-        // Use default JVM args
-        args.extend(get_default_jvm_args());
+    // 1. Handle Memory Arguments
+    let has_ms = spec.jvm_args.iter().any(|a| a.starts_with("-Xms"));
+    let has_mx = spec.jvm_args.iter().any(|a| a.starts_with("-Xmx"));
+
+    if !has_ms {
+        let min = spec.min_memory.unwrap_or(2048);
+        args.push(format!("-Xms{}M", min));
+    }
+
+    if !has_mx {
+        let max = spec.max_memory.unwrap_or(4096);
+        args.push(format!("-Xmx{}M", max));
+    }
+
+    // 2. Add Default G1GC settings if not present
+    let has_gc = spec.jvm_args.iter().any(|a| a.contains("GC"));
+    if !has_gc {
+        args.extend(vec![
+            "-XX:+UseG1GC".to_string(),
+            "-XX:+UnlockExperimentalVMOptions".to_string(),
+            "-XX:G1NewSizePercent=20".to_string(),
+            "-XX:G1ReservePercent=20".to_string(),
+            "-XX:MaxGCPauseMillis=50".to_string(),
+            "-XX:G1HeapRegionSize=32M".to_string(),
+        ]);
+    }
+
+    // 3. Add Custom JVM args
+    for arg in &spec.jvm_args {
+        // Skip memory flags we already handled via spec.min/max (if they were somehow passed in both)
+        // Though the logic above already avoids duplicates if they were in spec.jvm_args
+        args.push(arg.clone());
     }
 
     // Collect manifest JVM arguments first to check for duplicates
@@ -231,8 +257,15 @@ fn evaluate_rules(
             // OS arch
             if matches {
                 if let Some(ref arch) = os_rule.arch {
-                    // Compare arch literally
-                    if arch != std::env::consts::ARCH {
+                    let host_arch = std::env::consts::ARCH;
+                    let normalized_arch = match arch.as_str() {
+                        "x64" | "amd64" => "x86_64",
+                        "x86" => "x86",
+                        "arm64" => "aarch64",
+                        _ => arch,
+                    };
+
+                    if normalized_arch != host_arch {
                         matches = false;
                     }
                 }
@@ -312,6 +345,27 @@ pub fn substitute_variables(text: &str, variables: &HashMap<String, String>) -> 
         result = result.replace(&placeholder, value);
     }
 
+    // Modern Forge (1.13+) ModLauncher can be over-aggressive when scanning the library directory.
+    // Since we use a shared global libraries folder, it may find "extra" JARs (like slim/srg variants) 
+    // that exist in the same version folder but are not part of the current manifest.
+    // 
+    // We prepend common variant patterns and the vanilla game JAR to the ignoreList to prevent 
+    // ModLauncher from attempting to load them as modules, which would cause package collisions.
+    // This is done after variable substitution to ensure we can use dynamic values if needed.
+    if result.contains("-DignoreList=") {
+        let mc_version_jar = variables
+            .get("mc_version_name")
+            .map(|v| format!("{}.jar", v))
+            .unwrap_or_else(|| "vanilla.jar".to_string());
+
+        // Prepend common problematic patterns. ModLauncher treats these as prefixes.
+        let patterns = format!(
+            "-DignoreList=client-srg,client-slim,client-extra,extra,slim,srg,{},",
+            mc_version_jar
+        );
+        result = result.replace("-DignoreList=", &patterns);
+    }
+
     result
 }
 
@@ -379,7 +433,7 @@ pub(crate) fn split_preserving_quotes(s: &str) -> Vec<String> {
 /// Build JVM variable map
 fn build_jvm_variables(
     spec: &LaunchSpec,
-    _manifest: &UnifiedManifest,
+    manifest: &UnifiedManifest,
     natives_dir: &Path,
     classpath: &str,
 ) -> HashMap<String, String> {
@@ -403,6 +457,9 @@ fn build_jvm_variables(
         "classpath_separator".to_string(),
         OsType::current().classpath_separator().to_string(),
     );
+    vars.insert("arch".to_string(), crate::game::installer::types::Arch::current().as_str().to_string());
+    vars.insert("version_name".to_string(), manifest.id.clone());
+    vars.insert("mc_version_name".to_string(), spec.version_id.clone());
 
     vars
 }
@@ -420,6 +477,13 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     vars.insert("accessToken".to_string(), spec.access_token.clone());
     vars.insert("auth_session".to_string(), spec.access_token.clone());
     vars.insert("user_type".to_string(), spec.user_type.clone());
+    
+    // Client ID (used in 1.19+)
+    vars.insert("clientid".to_string(), spec.client_id.clone());
+    vars.insert("client_id".to_string(), spec.client_id.clone());
+    
+    // XUID (used in 1.19+ for MSA accounts)
+    vars.insert("auth_xuid".to_string(), spec.xuid.clone().unwrap_or_else(|| "0".to_string()));
 
     // Version info
     vars.insert("version_name".to_string(), manifest.id.clone());
@@ -546,11 +610,14 @@ mod tests {
             uuid: "uuid".to_string(),
             access_token: "token".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
             window_height: None,
             client_id: "cid".to_string(),
+            min_memory: None,
+            max_memory: None,
             exit_handler_jar: None,
             log_file: None,
         };
@@ -560,6 +627,8 @@ mod tests {
             main_class: None,
             inherits_from: None,
             arguments: None,
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -568,6 +637,7 @@ mod tests {
             version_type: None,
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let unified = UnifiedManifest::from(manifest);
@@ -619,10 +689,13 @@ mod tests {
             uuid: "00000000-0000-0000-0000-000000000000".to_string(),
             access_token: "0".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
@@ -684,10 +757,13 @@ mod tests {
             uuid: "00000000-0000-0000-0000-000000000000".to_string(),
             access_token: "0".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,

@@ -39,6 +39,9 @@ pub struct LaunchSpec {
     /// User type ("msa" or "legacy")
     pub user_type: String,
 
+    /// Xbox User ID (optional, but recommended for MSA)
+    pub xuid: Option<String>,
+
     /// Custom JVM arguments (overrides defaults)
     pub jvm_args: Vec<String>,
 
@@ -50,6 +53,12 @@ pub struct LaunchSpec {
 
     /// Window height (optional)
     pub window_height: Option<u32>,
+
+    /// Minimum memory in MB (optional)
+    pub min_memory: Option<u32>,
+
+    /// Maximum memory in MB (optional)
+    pub max_memory: Option<u32>,
 
     /// Client ID (used by OAuth flows / launcher arguments)
     pub client_id: String,
@@ -221,10 +230,13 @@ mod tests {
             uuid: "0000".to_string(),
             access_token: "tok".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
@@ -247,10 +259,13 @@ mod tests {
             uuid: "0000".to_string(),
             access_token: "tok".to_string(),
             user_type: "msa".to_string(),
+            xuid: None,
             jvm_args: vec![],
             game_args: vec![],
             window_width: None,
             window_height: None,
+            min_memory: None,
+            max_memory: None,
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,

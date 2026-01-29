@@ -9,6 +9,8 @@ build/
 .output/
 .vercel/
 .netlify/
+.idea/
+crates/*
 coverage/
 *.tsbuildinfo
 *.d.ts

@@ -51,6 +51,23 @@ pub struct NotificationActionSpec {
     pub action_type: String, // "primary", "secondary", "destructive"
 }
 
+/// A progress reporter that does nothing (silent).
+/// Useful for background verification or tests.
+pub struct SilentProgressReporter;
+
+impl ProgressReporter for SilentProgressReporter {
+    fn start_step(&self, _name: &str, _total_steps: Option<u32>) {}
+    fn update_bytes(&self, _transferred: u64, _total: Option<u64>) {}
+    fn set_percent(&self, _percent: i32) {}
+    fn set_message(&self, _message: &str) {}
+    fn set_step_count(&self, _current: u32, _total: Option<u32>) {}
+    fn set_substep(&self, _name: Option<&str>, _current: Option<u32>, _total: Option<u32>) {}
+    fn set_actions(&self, _actions: Option<Vec<NotificationActionSpec>>) {}
+    fn done(&self, _success: bool, _message: Option<&str>) {}
+    fn is_cancelled(&self) -> bool { false }
+    fn is_paused(&self) -> bool { false }
+}
+
 /// Cancellation token wrapper
 #[derive(Clone)]
 pub struct CancelToken {

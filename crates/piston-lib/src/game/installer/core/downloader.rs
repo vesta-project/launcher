@@ -133,6 +133,10 @@ pub async fn download_to_path(
                         );
                     }
                 }
+            } else {
+                // No hash provided, but file exists and is not locked.
+                log::debug!("File exists and no hash provided, assuming valid and skipping: {:?}", path);
+                return Ok(());
             }
 
             // If we're here, we need to overwrite the file.

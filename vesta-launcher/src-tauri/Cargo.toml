@@ -8,18 +8,18 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-
 tauri-build = { version = "2.5.3", features = [] }
 diesel = { version = "2.1", features = ["sqlite", "r2d2"] }
 diesel_migrations = "2.1"
 libsqlite3-sys = { version = "0.26", features = ["bundled"] }
+dotenvy = "0.15"
 
 [dependencies]
 piston-lib = { path = "../../crates/piston-lib" }
 slug = "0.1"
 
 # Database - Diesel ORM
-diesel = { version = "2.1", features = ["sqlite", "r2d2", "64-column-tables"] }
+diesel = { version = "2.1", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
 diesel_migrations = { version = "2.1", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.26", features = ["bundled"] }
 
@@ -52,14 +52,29 @@ open = "5.3.1"
 urlencoding = "2.1"
 which = "6.0"
 sysinfo = "0.37.2"
+reqwest = { version = "0.12", features = ["json", "stream"] }
+futures-util = "0.3"
+async-trait = "0.1"
+dotenvy = "0.15"
+notify = "8.1.0"
+sha1 = "0.10"
+sha2 = "0.10"
 
 # OAuth2 and Microsoft authentication
 oauth2 = "4.4.2"
 minecraft-msa-auth = "0.4.0"
 lazy_static = "1.5"
+walkdir = "2.5.0"
+murmur2 = "0.1.0"
+base64 = "0.22.1"
+tempfile = "3.24.0"
+uuid = { version = "1.19.0", features = ["v4"] }
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26.1"
 
 [target."cfg(target_os = \"windows\")".dependencies]
 winver = "1.0.0"
+
+[dev-dependencies]
+tempfile = "3.24.0"

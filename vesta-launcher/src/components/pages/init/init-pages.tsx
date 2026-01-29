@@ -289,6 +289,28 @@ function InitInstallationPage(props: InitPagesProps) {
 	const [selectedModloaderVersion, setSelectedModloaderVersion] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [isInstalling, setIsInstalling] = createSignal(false);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+
+	// Create uploadedIcons array that includes all custom icons seen this session
+	const uploadedIcons = createMemo(() => {
+		const result = [...customIconsThisSession()];
+		const current = iconPath();
+		if (current && !DEFAULT_ICONS.includes(current) && !result.includes(current)) {
+			return [current, ...result];
+		}
+		return result;
+	});
+
+	// Track custom icons in session list
+	createEffect(() => {
+		const current = iconPath();
+		if (current && !DEFAULT_ICONS.includes(current)) {
+			setCustomIconsThisSession((prev) => {
+				if (prev.includes(current)) return prev;
+				return [current, ...prev];
+			});
+		}
+	});
 
 	const [metadata] = createResource<PistonMetadata>(getMinecraftVersions);
 
@@ -360,10 +382,12 @@ function InitInstallationPage(props: InitPagesProps) {
 		try {
 			const instanceData: CreateInstanceData = {
 				name,
-				minecraft_version: version,
-				icon_path: iconPath() || undefined,
-				modloader: selectedModloader() || "vanilla",
-				modloader_version: selectedModloaderVersion() || undefined,
+				minecraftVersion: version,
+				iconPath: iconPath() || undefined,
+				modloader: (selectedModloader() === "vanilla" ? undefined : selectedModloader()) || undefined,
+				modloaderVersion: selectedModloaderVersion() || undefined,
+				minMemory: 2048,
+				maxMemory: 4096,
 			};
 
 			const instanceId = await createInstance(instanceData);
@@ -371,20 +395,27 @@ function InitInstallationPage(props: InitPagesProps) {
 			const fullInstance: Instance = {
 				id: instanceId,
 				name,
-				minecraft_version: version,
-				modloader: selectedModloader() || "vanilla",
-				modloader_version: selectedModloaderVersion() || null,
-				java_path: null,
-				java_args: null,
-				game_directory: null,
+				minecraftVersion: version,
+				modloader: (selectedModloader() === "vanilla" ? null : selectedModloader()) || null,
+				modloaderVersion: selectedModloaderVersion() || null,
+				javaPath: null,
+				javaArgs: null,
+				gameDirectory: null,
 				width: 854,
 				height: 480,
-				memory_mb: 4096,
-				icon_path: iconPath(),
-				last_played: null,
-				total_playtime_minutes: 0,
-				created_at: null,
-				updated_at: null,
+				minMemory: 2048,
+				maxMemory: 4096,
+				iconPath: iconPath(),
+				lastPlayed: null,
+				totalPlaytimeMinutes: 0,
+				createdAt: null,
+				updatedAt: null,
+				installationStatus: "pending",
+				modpackId: null,
+				modpackVersionId: null,
+				modpackPlatform: null,
+				modpackIconUrl: null,
+				iconData: null,
 			};
 
 			await installInstance(fullInstance);
@@ -429,6 +460,7 @@ function InitInstallationPage(props: InitPagesProps) {
 						<IconPicker
 							value={iconPath() || DEFAULT_ICONS[0]}
 							onSelect={setIconPath}
+							uploadedIcons={uploadedIcons()}
 							showHint={true}
 						/>
 					</div>
@@ -471,8 +503,7 @@ function InitInstallationPage(props: InitPagesProps) {
 									placeholder="Select version..."
 									itemComponent={(itemProps) => (
 										<ComboboxItem item={itemProps.item}>
-											<ComboboxItemLabel>{itemProps.item.rawValue}</ComboboxItemLabel>
-											<ComboboxItemIndicator />
+											{itemProps.item.rawValue}
 										</ComboboxItem>
 									)}
 								>
@@ -494,8 +525,7 @@ function InitInstallationPage(props: InitPagesProps) {
 										placeholder={`Select ${selectedModloader()} version...`}
 										itemComponent={(itemProps) => (
 											<ComboboxItem item={itemProps.item}>
-												<ComboboxItemLabel>{itemProps.item.rawValue}</ComboboxItemLabel>
-												<ComboboxItemIndicator />
+												{itemProps.item.rawValue}
 											</ComboboxItem>
 										)}
 									>

@@ -70,7 +70,9 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 
 		const stringProps: Record<string, string> | undefined = currentProps
 			? Object.fromEntries(
-					Object.entries(currentProps).map(([k, v]) => [k, String(v)]),
+					Object.entries(currentProps)
+						.filter(([_, v]) => typeof v !== "object" || v === null)
+						.map(([k, v]) => [k, String(v)]),
 				)
 			: undefined;
 
@@ -118,7 +120,7 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 			historyJsonString.length,
 		);
 
-		invoke("launch_new_window", {
+		invoke("launch_window", {
 			path: currentPath,
 			props: allData,
 			history: historyJsonString,
@@ -186,7 +188,7 @@ function PageViewerNavbar(props: { closeClicked?: () => void }) {
 			<div class={"page-viewer-navbar-right"}>
 				<PageViewerNavbarButton
 					onClick={props.closeClicked}
-					text={"Close (esc)"}
+					text={"Close (ctrl+w)"}
 				>
 					<CloseIcon />
 				</PageViewerNavbarButton>
@@ -223,7 +225,8 @@ function PageViewer(props: PageViewerProps) {
 	setRouter(mini_router);
 
 	const handleKeyDown = (event: KeyboardEvent) => {
-		if (event.key === "Escape") {
+		if ((event.ctrlKey || event.metaKey) && event.key === "w") {
+			event.preventDefault();
 			props.viewChanged?.(false);
 		}
 	};
@@ -253,4 +256,4 @@ function PageViewer(props: PageViewerProps) {
 	);
 }
 
-export { PageViewer, router };
+export { PageViewer, router, setRouter };

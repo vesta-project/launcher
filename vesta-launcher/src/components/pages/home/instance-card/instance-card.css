@@ -3,7 +3,6 @@
 	font-weight: bold;
 	font-size: var(--font-small);
 	user-select: none;
-	/* Removed invalid tab-index property */
 	display: flex;
 	flex-flow: column;
 	justify-content: space-between;
@@ -218,15 +217,17 @@
 .instance-card-bottom {
 	display: flex;
 	flex-flow: column;
-	justify-content: space-between;
+	align-items: flex-start;
+	text-align: left;
 	font-weight: normal;
 	gap: 4px;
 	background: linear-gradient(
 		to top,
-		hsl(0 0% 0% / 0.7) 0%,
-		hsl(0 0% 0% / 0.3) 50%,
+		hsl(0 0% 0% / 0.8) 0%,
+		hsl(0 0% 0% / 0.4) 50%,
 		transparent 100%
 	);
+	backdrop-filter: blur(var(--blur-medium));
 	padding: 24px 16px 16px 16px;
 	margin: 0 -16px -16px -16px;
 	border-radius: 0 0 6px 6px;
@@ -235,34 +236,41 @@
 	h1 {
 		margin: 0;
 		padding: 0;
+		width: 100%;
 	}
 
 	& p {
-		font-size: var(--font-xsmall);
+		font-size: var(--font-xxsmall);
+		opacity: 0.7;
 	}
 
 	& h1 {
-		line-height: 16px;
-		font-weight: bold;
+		line-height: 1.2;
+		font-weight: 800;
+		font-size: var(--font-small);
+		overflow-wrap: break-word;
+		word-break: break-word;
+		white-space: normal;
 	}
 
 	& .instance-card-bottom-version {
 		display: flex;
-		justify-content: space-between;
+		justify-content: flex-start;
+		align-items: center;
+		gap: 8px;
 		height: fit-content;
-		line-height: var(--font-small);
+		font-size: var(--font-xxsmall);
 
 		& .instance-card-bottom-version-modloader {
 			display: flex;
-			gap: 5px;
+			gap: 4px;
 			align-items: center;
 
 			& svg {
 				display: block;
-				fill: var(--icon-primary);
-				width: auto;
-				height: 100%;
-				max-height: 16px;
+				fill: var(--icon-secondary);
+				width: 12px;
+				height: 12px;
 			}
 		}
 	}

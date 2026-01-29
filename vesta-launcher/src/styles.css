@@ -34,6 +34,9 @@
 	--effect-shadow-depth: 24px;
 	--effect-glow-opacity: 0.7;
 
+	/* Animation Tokens */
+	--animate-spin-duration: 1s;
+
 	/* Gradient Configuration */
 	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
 	--rotation: 135deg;
@@ -89,6 +92,9 @@
 	--text-on-primary: hsl(var(--color__primary-hue) 5% 95%);
 	--text-on-accent: hsl(var(--color__primary-hue) 5% 95%);
 
+	--primary-low: hsl(var(--color__primary-hue) 70% 50% / 0.15);
+	--primary-accent: hsl(var(--color__primary-hue) 80% 60%);
+
 	/* Interactive States */
 	--interactive-base: hsl(var(--color__primary-hue) 60% 50%);
 	--interactive-hover: hsl(var(--color__primary-hue) 70% 55%);
@@ -110,6 +116,7 @@
 	--font-medium: 1.25rem;
 	--font-large: 2rem;
 	--font-xlarge: 4rem;
+	--font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
 	/* Header/Navigation Colors */
 	--page-viewer-nav-color: hsl(var(--color__primary-hue) 10% 90%);
@@ -149,6 +156,11 @@
 		var(--color__primary-hue) 60% 80% /
 		var(--effect-glow-opacity)
 	);
+
+	/* Blur Variables - Inherited by children */
+	--blur-base: var(--effect-blur);
+	--blur-overlay: 12px;
+	--blur-subtle: 4px;
 
 	/* =============================================================================
 	   THEME SYSTEM - LAYER 3: COMPONENT TOKENS (Specific Use)
@@ -198,6 +210,23 @@
 	--text-color: var(--text-primary);
 	--bg-surface: var(--surface-base);
 	--bg-surface-hover: var(--surface-raised);
+
+	/* Shorthand surface tokens */
+	--surface-low: var(--surface-sunken);
+	--surface-medium: var(--surface-base);
+	--surface-high: var(--surface-raised);
+
+	/* Shorthand border tokens */
+	--border: var(--border-subtle);
+
+	/* Shorthand text tokens */
+	--text: var(--text-primary);
+	--text-muted: var(--text-secondary);
+
+	/* Shorthand primary tokens */
+	--primary-low: hsl(var(--color__primary-hue) 70% 50% / 0.15);
+	--primary-accent: hsl(var(--color__primary-hue) 80% 60%);
+	--primary-rgb: var(--color__primary-hue) 70% 50%;
 	--sb-track-color: var(--scrollbar-track);
 	--sb-thumb-color: var(--scrollbar-thumb);
 
@@ -716,4 +745,16 @@ button {
 @keyframes spin {
 	from { transform: rotate(0deg); }
 	to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+	animation: spin var(--animate-spin-duration, 1s) linear infinite;
+}
+
+.field-label-manual {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: var(--text-secondary);
 }

@@ -7,22 +7,24 @@ export type Instance = {
 	slug: string;
 	name: string;
 	gameDirectory: string;
-	version: string;
+	minecraftVersion: string;
 	modloader: string | null;
 	modloaderVersion: string | null;
 	javaPath: string | null;
 	javaArgs: string | null;
 	gameArgs: string | null;
-	memoryMin: number | null;
-	memoryMax: number | null;
+	minMemory: number;
+	maxMemory: number;
 	windowWidth: number | null;
 	windowHeight: number | null;
 	iconPath: string | null;
-	createdAt: string;
+	createdAt: string | null;
+	updatedAt: string | null;
 	lastPlayed: string | null;
-	playtime: number;
-	installationStatus: string;
-	lastCrashed: boolean;
+	totalPlaytimeMinutes: number;
+	installationStatus: string | null;
+	crashed: boolean | null;
+	crashDetails: string | null;
 };
 
 type InstancesState = {
@@ -42,7 +44,7 @@ const [instancesState, setInstancesState] = createStore<InstancesState>({
 export async function initializeInstances() {
 	setInstancesState({ loading: true, error: null });
 	try {
-		const instances = await invoke<Instance[]>("get_all_instances");
+		const instances = await invoke<Instance[]>("list_instances");
 		setInstancesState({
 			instances: instances,
 			loading: false,

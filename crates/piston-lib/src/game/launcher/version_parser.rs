@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::path::Path;
 
 /// Complete version manifest from version.json
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionManifest {
     /// Version ID (e.g., "1.20.1" or "1.20.1-forge-47.2.0")
@@ -20,9 +20,21 @@ pub struct VersionManifest {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub inherits_from: Option<String>,
 
+    /// Downloads for the client and server JARs
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub downloads: Option<VersionDownloads>,
+
     /// Game and JVM arguments
     #[serde(skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Arguments>,
+
+    /// Top-level JVM arguments (seen in some modded versions like Fabric)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "jvmArguments")]
+    pub jvm_arguments: Option<Vec<Argument>>,
+
+    /// Top-level game arguments (seen in some modded versions)
+    #[serde(skip_serializing_if = "Option::is_none", rename = "gameArguments")]
+    pub game_arguments: Option<Vec<Argument>>,
 
     /// Legacy arguments (pre-1.13)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -55,6 +67,22 @@ pub struct VersionManifest {
     /// Time
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<String>,
+}
+
+/// Downloads for the version (client, server, data, etc.)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VersionDownloads {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client: Option<Artifact>,
+
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server: Option<Artifact>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_mappings: Option<Artifact>,
+    
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub server_mappings: Option<Artifact>,
 }
 
 /// Game and JVM arguments
@@ -90,7 +118,7 @@ pub enum ArgumentValue {
 }
 
 /// Rule for conditional arguments/libraries
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Rule {
     pub action: RuleAction,
 
@@ -101,14 +129,15 @@ pub struct Rule {
     pub features: Option<HashMap<String, bool>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum RuleAction {
+    #[default]
     Allow,
     Disallow,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct OsRule {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
@@ -121,7 +150,7 @@ pub struct OsRule {
 }
 
 /// Library definition
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Library {
     /// Maven coordinates
     pub name: String,
@@ -147,7 +176,7 @@ pub struct Library {
     pub extract: Option<ExtractRules>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct LibraryDownloads {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub artifact: Option<Artifact>,
@@ -156,7 +185,7 @@ pub struct LibraryDownloads {
     pub classifiers: Option<HashMap<String, Artifact>>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Artifact {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -180,14 +209,14 @@ impl Artifact {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct ExtractRules {
     #[serde(default)]
     pub exclude: Vec<String>,
 }
 
 /// Asset index information
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct AssetIndex {
     pub id: String,
@@ -198,7 +227,7 @@ pub struct AssetIndex {
 }
 
 /// Java version requirements
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct JavaVersion {
     pub component: String,
@@ -387,6 +416,28 @@ pub(crate) fn merge_manifests(
             parent_args.jvm = new_jvm_args;
         } else {
             parent.arguments = Some(child_args);
+        }
+    }
+
+    // Merge top-level jvmArguments if they exist
+    if let Some(child_jvm_top) = child.jvm_arguments {
+        if let Some(ref mut parent_jvm_top) = parent.jvm_arguments {
+            let mut new_jvm = child_jvm_top;
+            new_jvm.extend(parent_jvm_top.clone());
+            parent.jvm_arguments = Some(new_jvm);
+        } else {
+            parent.jvm_arguments = Some(child_jvm_top);
+        }
+    }
+
+    // Merge top-level gameArguments if they exist
+    if let Some(child_game_top) = child.game_arguments {
+        if let Some(ref mut parent_game_top) = parent.game_arguments {
+            let mut new_game = child_game_top;
+            new_game.extend(parent_game_top.clone());
+            parent.game_arguments = Some(new_game);
+        } else {
+            parent.game_arguments = Some(child_game_top);
         }
     }
 
@@ -632,6 +683,8 @@ mod tests {
                 game: vec![Argument::Simple("--version".to_string())],
                 jvm: vec![],
             }),
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -640,6 +693,7 @@ mod tests {
             version_type: Some("release".to_string()),
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let child = VersionManifest {
@@ -650,6 +704,8 @@ mod tests {
                 game: vec![Argument::Simple("--fml.forgeVersion".to_string())],
                 jvm: vec![],
             }),
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -658,6 +714,7 @@ mod tests {
             version_type: None,
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let merged = merge_manifests(parent, child).unwrap();
@@ -678,6 +735,8 @@ mod tests {
             main_class: Some("net.minecraft.launchwrapper.Launch".to_string()),
             inherits_from: None,
             arguments: None,
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: Some("--username ${auth_player_name} --tweakClass net.minecraftforge.fml.common.launcher.FMLTweaker --versionType Forge".to_string()),
             libraries: vec![],
             asset_index: None,
@@ -686,6 +745,7 @@ mod tests {
             version_type: Some("release".to_string()),
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let child = VersionManifest {
@@ -696,6 +756,8 @@ mod tests {
                 game: vec![Argument::Simple("--fml.forgeVersion".to_string())],
                 jvm: vec![],
             }),
+            jvm_arguments: None,
+            game_arguments: None,
             minecraft_arguments: None,
             libraries: vec![],
             asset_index: None,
@@ -704,6 +766,7 @@ mod tests {
             version_type: None,
             release_time: None,
             time: None,
+            downloads: None,
         };
 
         let merged = merge_manifests(parent, child).unwrap();

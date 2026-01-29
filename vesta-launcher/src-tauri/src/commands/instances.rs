@@ -1,9 +1,11 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::schema::instance::dsl::*;
 use crate::tasks::installers::InstallInstanceTask;
+use crate::tasks::maintenance::{CloneInstanceTask, ResetInstanceTask, RepairInstanceTask};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
+use crate::resources::ResourceWatcher;
 use diesel::prelude::*;
 use std::sync::Arc;
 use tauri::{Manager, State};
@@ -15,10 +17,12 @@ fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
 
 /// Update playtime for an instance in the database
 fn update_instance_playtime(
+    app_handle: &tauri::AppHandle,
     instance_id_slug: &str,
     started_at_str: &str,
     exited_at_str: &str,
 ) -> Result<(), String> {
+    use crate::schema::instance::dsl::*;
     // Parse timestamps
     let started = chrono::DateTime::parse_from_rfc3339(started_at_str)
         .map_err(|e| format!("Failed to parse started_at: {}", e))?;
@@ -66,6 +70,13 @@ fn update_instance_playtime(
                 inst.total_playtime_minutes,
                 new_playtime
             );
+
+            // Fetch the updated instance to emit
+            if let Ok(updated_inst) = instance.find(inst.id).first::<Instance>(&mut conn) {
+                use tauri::Emitter;
+                let _ = app_handle.emit("core://instance-updated", updated_inst);
+            }
+
             return Ok(());
         }
     }
@@ -184,16 +195,13 @@ pub async fn install_instance(
             // Immediately update DB to 'installing' so UI shows progress without waiting
             if instance_data.id > 0 {
                 let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
                     instance_data.id,
                     "installing",
                 );
             }
             // Emit an early update so UI homescreen refreshes as soon as installation starts
-            use tauri::Emitter;
-            let _ = app_handle.emit(
-                "core://instance-updated",
-                serde_json::json!({ "name": instance_data.name, "instance_id": instance_data.slug() }),
-            );
+            // (Note: update_installation_status already emits core://instance-updated now)
 
             log::info!(
                 "[install_instance] Task submitted successfully for: {}",
@@ -206,6 +214,24 @@ pub async fn install_instance(
             Err(e)
         }
     }
+}
+
+fn process_instance_icon(mut inst: Instance) -> Instance {
+    // If we have icon_data, we should prefer serving it via base64 for offline compatibility,
+    // unless the icon_path is a gradient (which doesn't use icon_data).
+    let is_gradient = inst.icon_path.as_ref().map(|p| p.starts_with("linear-gradient")).unwrap_or(false);
+    
+    if !is_gradient {
+        if let Some(ref data) = inst.icon_data {
+            use base64::{Engine as _, engine::general_purpose};
+            let b64 = general_purpose::STANDARD.encode(data);
+            inst.icon_path = Some(format!("data:image/png;base64,{}", b64));
+        } else if let Some(ref url) = inst.modpack_icon_url {
+             // Fallback to URL if we have one but no data yet
+             inst.icon_path = Some(url.clone());
+        }
+    }
+    inst
 }
 
 #[tauri::command]
@@ -221,11 +247,17 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
         .map_err(|e| format!("Failed to query instances: {}", e))?;
 
     log::info!("Retrieved {} instances", instances.len());
-    Ok(instances)
+    
+    let processed = instances.into_iter().map(process_instance_icon).collect();
+    Ok(processed)
 }
 
 #[tauri::command]
-pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
+pub async fn create_instance(
+    app_handle: tauri::AppHandle,
+    instance_data: Instance,
+    resource_watcher: State<'_, ResourceWatcher>,
+) -> Result<i32, String> {
     log::info!(
         "[create_instance] Command invoked for instance: {}",
         instance_data.name
@@ -286,6 +318,35 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
     // Check for duplicate name (case-insensitive) and make it unique
     inst.name = crate::utils::instance_helpers::compute_unique_name(&inst.name, &seen_names);
 
+    // Handle Icon: If it's a base64 data URL, convert to icon_data and set icon_path to reflect it's stored
+    if let Some(ref path) = inst.icon_path {
+        if path.starts_with("data:image/") {
+            log::info!("[create_instance] Converting base64 icon to binary data");
+            if let Some(base64_part) = path.split(",").collect::<Vec<&str>>().get(1) {
+                use base64::{Engine as _, engine::general_purpose};
+                if let Ok(bytes) = general_purpose::STANDARD.decode(base64_part) {
+                    inst.icon_data = Some(bytes);
+                    inst.icon_path = Some("internal://icon".to_string());
+                }
+            }
+        } else if !path.starts_with("internal://") && !path.starts_with("linear-gradient") {
+            log::debug!("[create_instance] Setting preset icon, ensuring icon_data is fresh if modpack icon exists");
+            // If it's a preset, we don't clear icon_data YET because it might be the modpack icon being downloaded.
+            // But if it's NOT a modpack, we should clear it.
+            if inst.modpack_icon_url.is_none() {
+                inst.icon_data = None;
+            }
+        }
+    }
+
+    // If we have a modpack icon URL but no bytes, try to download them now
+    if inst.modpack_icon_url.is_some() && inst.icon_data.is_none() {
+        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(inst.modpack_icon_url.as_ref().unwrap()).await {
+            log::info!("[create_instance] Successfully downloaded icon for offline use ({} bytes)", bytes.len());
+            inst.icon_data = Some(bytes);
+        }
+    }
+
     // Fetch existing instance names and compute their slugs
     let slug = crate::utils::instance_helpers::compute_unique_slug(
         &inst.name,
@@ -302,7 +363,19 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
             gd
         );
     }
-    inst.game_directory = Some(gd);
+    inst.game_directory = Some(gd.clone());
+
+    // Ensure common directories exist - specifically "mods" for modloader instances
+    if let Err(e) = std::fs::create_dir_all(&gd) {
+        log::error!("[create_instance] Failed to create game directory: {}", e);
+    } else if inst.modloader.is_some() {
+        let mods_dir = std::path::PathBuf::from(&gd).join("mods");
+        if let Err(e) = std::fs::create_dir_all(&mods_dir) {
+            log::error!("[create_instance] Failed to create mods directory: {}", e);
+        } else {
+            log::info!("[create_instance] Created mods directory for modloader instance: {}", inst.name);
+        }
+    }
 
     log::info!("[create_instance] Inserting instance into database");
 
@@ -317,15 +390,21 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
         game_directory: inst.game_directory,
         width: inst.width,
         height: inst.height,
-        memory_mb: inst.memory_mb,
+        min_memory: inst.min_memory,
+        max_memory: inst.max_memory,
         icon_path: inst.icon_path,
         last_played: inst.last_played,
         total_playtime_minutes: inst.total_playtime_minutes,
         created_at: Some(chrono::Utc::now().to_rfc3339()),
         updated_at: Some(chrono::Utc::now().to_rfc3339()),
-        installation_status: Some("ready".to_string()),
+        installation_status: Some("installed".to_string()),
         crashed: None,
         crash_details: None,
+        modpack_id: inst.modpack_id,
+        modpack_version_id: inst.modpack_version_id,
+        modpack_platform: inst.modpack_platform,
+        modpack_icon_url: inst.modpack_icon_url,
+        icon_data: inst.icon_data,
     };
 
     diesel::insert_into(instance)
@@ -344,7 +423,17 @@ pub fn create_instance(instance_data: Instance) -> Result<i32, String> {
         .map_err(|e| format!("Failed to get inserted instance ID: {}", e))?;
 
     // Set initial installation_status to "pending"
-    let _ = crate::commands::instances::update_installation_status(inserted_id, "pending");
+    let _ = crate::commands::instances::update_installation_status(&app_handle, inserted_id, "installing");
+
+    // Start watching the new instance's folders for mods/packs
+    log::info!(
+        "[create_instance] Initializing resource watcher for instance: {} ({})",
+        slug,
+        inserted_id
+    );
+    if let Err(e) = resource_watcher.watch_instance(slug.clone(), inserted_id, gd).await {
+        log::error!("[create_instance] Failed to start resource watcher: {}", e);
+    }
 
     log::info!(
         "[create_instance] Instance created successfully with ID: {} and slug: {}",
@@ -370,14 +459,43 @@ mod tests {
 }
 
 #[tauri::command]
-pub fn update_instance(
+pub async fn update_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
+    resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
 ) -> Result<(), String> {
     log::info!(
         "[update_instance] Updating instance: {:?}",
         instance_data.id
     );
+
+    let mut final_instance = instance_data.clone();
+
+    // Handle Icon: If it's a base64 data URL, convert to icon_data and set icon_path to reflect it's stored
+    if let Some(ref path) = final_instance.icon_path {
+        if path.starts_with("data:image/") {
+            log::info!("[update_instance] Converting base64 icon to binary data");
+            if let Some(base64_part) = path.split(",").collect::<Vec<&str>>().get(1) {
+                use base64::{Engine as _, engine::general_purpose};
+                if let Ok(bytes) = general_purpose::STANDARD.decode(base64_part) {
+                    final_instance.icon_data = Some(bytes);
+                    final_instance.icon_path = Some("internal://icon".to_string());
+                }
+            }
+        } else if !path.starts_with("internal://") && !path.starts_with("linear-gradient") {
+            // If it's a preset or something else, clear the custom icon data
+            log::debug!("[update_instance] Clearing binary icon data as path is now a preset: {}", path);
+            final_instance.icon_data = None;
+        }
+    }
+
+    // Download icon for offline use if we have a URL but no bytes (e.g. newly linked or recently updated)
+    if final_instance.modpack_icon_url.is_some() && final_instance.icon_data.is_none() {
+        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(final_instance.modpack_icon_url.as_ref().unwrap()).await {
+            log::info!("[update_instance] Successfully downloaded icon for offline use ({} bytes)", bytes.len());
+            final_instance.icon_data = Some(bytes);
+        }
+    }
 
     let mut conn =
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
@@ -398,8 +516,6 @@ pub fn update_instance(
 
     let old_slug = crate::utils::sanitize::sanitize_instance_name(&old_name);
     let mut new_slug = instance_data.slug();
-
-    let mut final_instance = instance_data.clone();
 
     // If slug changes, compute unique slug against other instances and filesystem
     if old_slug != new_slug {
@@ -517,6 +633,16 @@ pub fn update_instance(
             old_slug,
             new_slug
         );
+
+        // Restart watcher for new path
+        if let Err(e) = resource_watcher.unwatch_instance(update_id).await {
+            log::warn!("[update_instance] Failed to unwatch during rename: {}", e);
+        }
+        if let Some(ref gd) = final_instance.game_directory {
+            if let Err(e) = resource_watcher.watch_instance(new_slug, update_id, gd.clone()).await {
+                log::warn!("[update_instance] Failed to re-watch after rename: {}", e);
+            }
+        }
     }
 
     // Perform Update
@@ -533,10 +659,17 @@ pub fn update_instance(
             game_directory.eq(&final_instance.game_directory),
             width.eq(final_instance.width),
             height.eq(final_instance.height),
-            memory_mb.eq(final_instance.memory_mb),
+            min_memory.eq(final_instance.min_memory),
+            max_memory.eq(final_instance.max_memory),
             icon_path.eq(&final_instance.icon_path),
+            icon_data.eq(&final_instance.icon_data),
             last_played.eq(&final_instance.last_played),
             total_playtime_minutes.eq(final_instance.total_playtime_minutes),
+            modpack_id.eq(&final_instance.modpack_id),
+            modpack_version_id.eq(&final_instance.modpack_version_id),
+            modpack_platform.eq(&final_instance.modpack_platform),
+            modpack_icon_url.eq(&final_instance.modpack_icon_url),
+            icon_data.eq(&final_instance.icon_data),
             updated_at.eq(&now),
         ))
         .execute(&mut conn)
@@ -544,34 +677,66 @@ pub fn update_instance(
 
     log::info!("Updated instance ID: {}", update_id);
 
+    // Fetch the full updated instance to emit it
+    let updated: crate::models::instance::Instance = instance
+        .find(update_id)
+        .first(&mut conn)
+        .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
+
     // Notify frontend
     use tauri::Emitter;
-    let _ = app_handle.emit(
-        "core://instance-updated",
-        serde_json::json!({ "instance_id": update_id }),
-    );
+    let _ = app_handle.emit("core://instance-updated", updated);
 
     Ok(())
 }
 
 #[tauri::command]
-pub fn delete_instance(app_handle: tauri::AppHandle, instance_id: i32) -> Result<(), String> {
+pub async fn delete_instance(
+    app_handle: tauri::AppHandle, 
+    instance_id: i32,
+    resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
+) -> Result<(), String> {
     log::info!("Deleting instance ID: {}", instance_id);
 
     let mut conn =
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
+    // 1. Fetch instance to get slug and directory before deleting
+    let inst = instance.find(instance_id)
+        .first::<Instance>(&mut conn)
+        .map_err(|e| format!("Instance not found: {}", e))?;
+
+    let slug_val = inst.slug();
+    let game_dir = inst.game_directory.clone();
+
+    // 2. Unwatch from resource watcher
+    if let Err(e) = resource_watcher.unwatch_instance(instance_id).await {
+        log::error!("Failed to unwatch instance {}: {}", instance_id, e);
+    }
+
+    // 3. Delete from database
     diesel::delete(instance.find(instance_id))
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to delete instance: {}", e))?;
+        .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
 
-    log::info!("Deleted instance ID: {}", instance_id);
+    // 4. Clean up files on disk (optional but recommended since user asked)
+    if let Some(gd) = game_dir {
+        let gd_path = std::path::PathBuf::from(gd);
+        if gd_path.exists() {
+            log::info!("Removing instance directory: {:?}", gd_path);
+            if let Err(e) = std::fs::remove_dir_all(&gd_path) {
+                log::error!("Failed to delete instance directory at {:?}: {}", gd_path, e);
+            }
+        }
+    }
+
+    log::info!("Deleted instance ID: {} (slug: {})", instance_id, slug_val);
 
     // Notify frontend
     use tauri::Emitter;
     let _ = app_handle.emit(
-        "core://instance-updated",
-        serde_json::json!({ "instance_id": instance_id }),
+        "core://instance-deleted",
+        serde_json::json!({ "id": instance_id }),
     );
     Ok(())
 }
@@ -589,7 +754,7 @@ pub fn get_instance(instance_id: i32) -> Result<Instance, String> {
         .map_err(|e| format!("Failed to fetch instance: {}", e))?;
 
     log::info!("Retrieved instance: {}", fetched_instance.name);
-    Ok(fetched_instance)
+    Ok(process_instance_icon(fetched_instance))
 }
 
 #[tauri::command]
@@ -607,7 +772,7 @@ pub fn get_instance_by_slug(slug_val: String) -> Result<Instance, String> {
     for inst in instances_list {
         if inst.slug() == slug_val {
             log::info!("Found instance by slug {}: {}", slug_val, inst.name);
-            return Ok(inst);
+            return Ok(process_instance_icon(inst));
         }
     }
 
@@ -620,8 +785,15 @@ pub async fn launch_instance(
     instance_data: Instance,
 ) -> Result<(), String> {
     log::info!(
-        "[launch_instance] Launch requested for instance: {}",
-        instance_data.name
+        "[launch_instance] Launch requested for instance: {} (ID: {})",
+        instance_data.name,
+        instance_data.id
+    );
+    log::info!(
+        "[launch_instance] Instance data: MC: {}, Loader: {:?}, Loader Version: {:?}",
+        instance_data.minecraft_version,
+        instance_data.modloader,
+        instance_data.modloader_version
     );
 
     // Derive a filesystem-safe runtime instance id (slug) from the instance name
@@ -733,6 +905,8 @@ pub async fn launch_instance(
         data_dir: spec_data_dir.clone(),
         game_dir: std::path::PathBuf::from(&game_dir),
         java_path: std::path::PathBuf::from(&java_path_str),
+        min_memory: Some(instance_data.min_memory as u32),
+        max_memory: Some(instance_data.max_memory as u32),
         username: active_account
             .as_ref()
             .map(|a| a.username.clone())
@@ -745,6 +919,7 @@ pub async fn launch_instance(
             .as_ref()
             .and_then(|a| a.access_token.clone())
             .unwrap_or_else(|| "0".to_string()),
+        xuid: None,
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
         jvm_args: instance_data
@@ -763,30 +938,6 @@ pub async fn launch_instance(
         spec.instance_id,
         spec.version_id
     );
-
-    // Verify manifest exists
-    let installed_id = spec.installed_version_id();
-    let installed_manifest = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.json", installed_id));
-    let vanilla_manifest = spec
-        .versions_dir()
-        .join(&spec.version_id)
-        .join(format!("{}.json", spec.version_id));
-
-    let manifest_path = if installed_manifest.exists() {
-        installed_manifest
-    } else {
-        vanilla_manifest
-    };
-
-    if !manifest_path.exists() {
-        return Err(format!(
-            "Version {} is not installed (missing manifest)",
-            spec.version_id
-        ));
-    }
 
     // Log batching setup
     let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String, String)>();
@@ -941,6 +1092,7 @@ pub async fn launch_instance(
                         // Update playtime in database (only if not crashed)
                         if !is_crashed {
                             if let Err(e) = update_instance_playtime(
+                                &app_handle_monitor,
                                 &instance_id_monitor,
                                 &started_at_monitor,
                                 &exited_at_ts,
@@ -1085,7 +1237,11 @@ pub async fn regenerate_piston_manifest(app_handle: tauri::AppHandle) -> Result<
 }
 
 /// Update the installation status for an instance
-pub fn update_installation_status(instance_id: i32, status: &str) -> Result<(), String> {
+pub fn update_installation_status(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    status: &str,
+) -> Result<(), String> {
     log::info!(
         "Updating installation status for instance {} to: {}",
         instance_id,
@@ -1099,6 +1255,16 @@ pub fn update_installation_status(instance_id: i32, status: &str) -> Result<(), 
         .set((installation_status.eq(status), updated_at.eq(now)))
         .execute(&mut conn)
         .map_err(|e| format!("Failed to update installation status: {}", e))?;
+
+    // Fetch the updated instance to emit it
+    let updated: crate::models::instance::Instance = instance
+        .find(instance_id)
+        .first(&mut conn)
+        .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
+
+    use tauri::Emitter;
+    let _ = app_handle.emit("core://instance-updated", updated);
+
     Ok(())
 }
 
@@ -1237,3 +1403,60 @@ async fn create_version_notification(
     );
     Ok(())
 }
+
+#[tauri::command]
+pub async fn duplicate_instance(
+    _app_handle: tauri::AppHandle,
+    task_manager: tauri::State<'_, TaskManager>,
+    instance_id: i32,
+    new_name: Option<String>,
+) -> Result<(), String> {
+    let task = CloneInstanceTask::new(instance_id, new_name);
+    let _ = task_manager.submit(Box::new(task)).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn repair_instance(
+    _app_handle: tauri::AppHandle,
+    task_manager: tauri::State<'_, TaskManager>,
+    instance_id: i32,
+) -> Result<(), String> {
+    let task = RepairInstanceTask::new(instance_id);
+    let _ = task_manager.submit(Box::new(task)).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reset_instance(
+    _app_handle: tauri::AppHandle,
+    task_manager: tauri::State<'_, TaskManager>,
+    instance_id: i32,
+) -> Result<(), String> {
+    let task = ResetInstanceTask::new(instance_id);
+    let _ = task_manager.submit(Box::new(task)).await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn update_instance_modpack_version(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+    version_id: String,
+) -> Result<(), String> {
+    use crate::schema::instance::dsl::*;
+    use tauri::Emitter;
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    diesel::update(instance.filter(id.eq(instance_id)))
+        .set(modpack_version_id.eq(Some(version_id)))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    // Fetch updated instance to notify UI
+    let updated: Instance = instance.find(instance_id).first(&mut conn).map_err(|e| e.to_string())?;
+    let _ = app_handle.emit("core://instance-updated", updated);
+
+    Ok(())
+}
+

@@ -86,7 +86,7 @@
 //! - **Zero Boilerplate**: No manual SQL for CRUD operations
 //! - **Frontend Ready**: Automatic JSON serialization via serde
 
-use crate::schema::app_config;
+use crate::schema::config::app_config;
 use crate::utils::db::{get_config_conn, get_vesta_conn};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -195,7 +195,7 @@ impl Default for AppConfig {
 ///
 /// Returns error if database cannot be accessed or insert fails
 pub fn init_config_db() -> Result<(), anyhow::Error> {
-    use crate::schema::app_config::dsl::*;
+    use crate::schema::config::app_config::dsl::*;
 
     let mut conn = get_config_conn()?;
 
@@ -220,7 +220,7 @@ pub fn init_config_db() -> Result<(), anyhow::Error> {
 ///
 /// Returns error if database cannot be accessed or config row doesn't exist
 pub fn get_app_config() -> Result<AppConfig, anyhow::Error> {
-    use crate::schema::app_config::dsl::*;
+    use crate::schema::config::app_config::dsl::*;
 
     let mut conn = get_config_conn()?;
 
@@ -236,7 +236,7 @@ pub fn get_app_config() -> Result<AppConfig, anyhow::Error> {
 ///
 /// Returns error if database cannot be accessed or update fails
 pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
-    use crate::schema::app_config::dsl::*;
+    use crate::schema::config::app_config::dsl::*;
 
     let mut conn = get_config_conn()?;
 

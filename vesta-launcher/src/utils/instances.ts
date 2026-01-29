@@ -1,4 +1,4 @@
-import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.jpg";
+import PlaceholderImage1 from "@assets/placeholder-images/placeholder-image1.png";
 import PlaceholderImage2 from "@assets/placeholder-images/placeholder-image2.png";
 import PlaceholderImage3 from "@assets/placeholder-images/placeholder-image3.png";
 import PlaceholderImage4 from "@assets/placeholder-images/placeholder-image4.png";
@@ -6,6 +6,8 @@ import PlaceholderImage5 from "@assets/placeholder-images/placeholder-image5.png
 import PlaceholderImage6 from "@assets/placeholder-images/placeholder-image6.png";
 import PlaceholderImage7 from "@assets/placeholder-images/placeholder-image7.png";
 import PlaceholderImage8 from "@assets/placeholder-images/placeholder-image8.png";
+import PlaceholderImage9 from "@assets/placeholder-images/placeholder-image9.png";
+import PlaceholderImage10 from "@assets/placeholder-images/placeholder-image10.png";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -19,6 +21,8 @@ export const DEFAULT_ICONS = [
 	PlaceholderImage6,
 	PlaceholderImage7,
 	PlaceholderImage8,
+	PlaceholderImage9,
+	PlaceholderImage10,
 	// "linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
 	// "linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
 	// "linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",
@@ -33,41 +37,53 @@ export const DEFAULT_ICONS = [
 export interface Instance {
 	id: number;
 	name: string;
-	minecraft_version: string;
+	minecraftVersion: string;
 	modloader: string | null;
-	modloader_version: string | null;
-	java_path: string | null;
-	java_args: string | null;
-	game_directory: string | null;
+	modloaderVersion: string | null;
+	javaPath: string | null;
+	javaArgs: string | null;
+	gameDirectory: string | null;
 	width: number;
 	height: number;
-	memory_mb: number;
-	icon_path: string | null;
-	last_played: string | null;
-	total_playtime_minutes: number;
-	created_at: string | null;
-	updated_at: string | null;
+	minMemory: number;
+	maxMemory: number;
+	iconPath: string | null;
+	lastPlayed: string | null;
+	totalPlaytimeMinutes: number;
+	createdAt: string | null;
+	updatedAt: string | null;
 	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
-	installation_status?:
+	installationStatus?:
 		| "pending"
 		| "installing"
 		| "installed"
 		| "failed"
 		| null;
 	crashed?: boolean;
-	crash_details?: string | null;
+	crashDetails?: string | null;
+	modpackId: string | null;
+	modpackVersionId: string | null;
+	modpackPlatform: string | null;
+	modpackIconUrl: string | null;
+	iconData: Uint8Array | null;
 }
 
 // Simplified version for creating new instances
 export interface CreateInstanceData {
 	name: string;
-	minecraft_version: string;
+	minecraftVersion: string;
 	modloader?: string;
-	modloader_version?: string;
+	modloaderVersion?: string;
 	width?: number;
 	height?: number;
-	memory_mb?: number;
-	icon_path?: string;
+	minMemory?: number;
+	maxMemory?: number;
+	iconPath?: string;
+	modpackId?: string;
+	modpackVersionId?: string;
+	modpackPlatform?: string;
+	modpackIconUrl?: string;
+	iconData?: Uint8Array;
 }
 
 // Metadata types from piston-lib
@@ -109,20 +125,26 @@ export async function createInstance(
 	const instance: Instance = {
 		id: 0,
 		name: data.name,
-		minecraft_version: data.minecraft_version,
-		modloader: data.modloader || "vanilla",
-		modloader_version: data.modloader_version || null,
-		java_path: null,
-		java_args: null,
-		game_directory: null,
+		minecraftVersion: data.minecraftVersion,
+		modloader: (data.modloader === "vanilla" ? null : data.modloader) || null,
+		modloaderVersion: data.modloaderVersion || null,
+		javaPath: null,
+		javaArgs: null,
+		gameDirectory: null,
 		width: data.width || 854,
 		height: data.height || 480,
-		memory_mb: data.memory_mb || 2048,
-		icon_path: data.icon_path || null,
-		last_played: null,
-		total_playtime_minutes: 0,
-		created_at: null,
-		updated_at: null,
+		minMemory: data.minMemory || 2048,
+		maxMemory: data.maxMemory || 4096,
+		iconPath: data.iconPath || null,
+		lastPlayed: null,
+		totalPlaytimeMinutes: 0,
+		createdAt: null,
+		updatedAt: null,
+		modpackId: data.modpackId || null,
+		modpackVersionId: data.modpackVersionId || null,
+		modpackPlatform: data.modpackPlatform || null,
+		modpackIconUrl: data.modpackIconUrl || null,
+		iconData: data.iconData || null,
 	};
 
 	console.log(
@@ -144,6 +166,52 @@ export async function createInstance(
 // Update an existing instance
 export async function updateInstance(instance: Instance): Promise<void> {
 	await invoke("update_instance", { instanceData: instance });
+}
+
+// Unlink instance from modpack
+export async function unlinkInstance(instance: Instance): Promise<void> {
+	const updated = {
+		...instance,
+		modpackId: null,
+		modpackVersionId: null,
+		modpackPlatform: null,
+		modpackIconUrl: null,
+		// We keep the iconData if it exists, as that's the "offline" version of the modpack icon
+		// which the user might want to keep or change later.
+	};
+	await updateInstance(updated);
+}
+
+// Update instance modpack version
+export async function updateInstanceModpackVersion(
+	id: number,
+	versionId: string,
+): Promise<void> {
+	await invoke("update_instance_modpack_version", {
+		instanceId: id,
+		versionId,
+	});
+}
+
+// Duplicate an instance
+export async function duplicateInstance(
+	id: number,
+	newName?: string,
+): Promise<void> {
+	await invoke("duplicate_instance", {
+		instanceId: id,
+		newName: newName || null,
+	});
+}
+
+// Repair an instance
+export async function repairInstance(id: number): Promise<void> {
+	await invoke("repair_instance", { instanceId: id });
+}
+
+// Reset an instance (Hard Reset)
+export async function resetInstance(id: number): Promise<void> {
+	await invoke("reset_instance", { instanceId: id });
 }
 
 // Delete an instance
@@ -230,6 +298,7 @@ export async function reloadMinecraftVersions(): Promise<void> {
 // Event listener for instance updates
 let unsubscribeInstanceUpdate: (() => void) | null = null;
 let unsubscribeInstanceInstalled: (() => void) | null = null;
+let unsubscribeInstanceDeleted: (() => void) | null = null;
 
 export async function subscribeToInstanceUpdates(callback: () => void) {
 	// Listen for instance updates (DB changes) and instance-installed (installer finished)
@@ -248,6 +317,14 @@ export async function subscribeToInstanceUpdates(callback: () => void) {
 			callback();
 		},
 	);
+
+	// Listen for instance deletion to remove it from UI
+	unsubscribeInstanceDeleted = await listen<{ id: number }>(
+		"core://instance-deleted",
+		() => {
+			callback();
+		},
+	);
 }
 
 export function unsubscribeFromInstanceUpdates() {
@@ -258,6 +335,10 @@ export function unsubscribeFromInstanceUpdates() {
 	if (unsubscribeInstanceInstalled) {
 		unsubscribeInstanceInstalled();
 		unsubscribeInstanceInstalled = null;
+	}
+	if (unsubscribeInstanceDeleted) {
+		unsubscribeInstanceDeleted();
+		unsubscribeInstanceDeleted = null;
 	}
 }
 

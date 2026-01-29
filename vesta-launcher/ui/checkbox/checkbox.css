@@ -49,9 +49,14 @@
 
 .checkbox[data-checked],
 .checkbox[data-indeterminate] {
+	/* Just background on hover/base, don't force accent color on the whole wrapper */
+}
+
+.checkbox[data-checked] .checkbox__control,
+.checkbox[data-indeterminate] .checkbox__control {
 	background-color: var(--accent-primary);
-	color: var(--text-on-primary);
-	border: 2px solid var(--accent-primary);
+	border-color: var(--accent-primary);
+	color: var(--text-on-accent);
 }
 
 .checkbox-group {

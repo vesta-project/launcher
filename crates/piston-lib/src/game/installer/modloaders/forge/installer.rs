@@ -138,6 +138,7 @@ fn forge_info_to_manifest(info: &ForgeVersionInfo) -> VersionManifest {
         version_type: Some("release".to_string()),
         release_time: None,
         time: None,
+        ..Default::default()
     }
 }
 
@@ -573,6 +574,12 @@ fn forge_library_to_spec(lib: &ForgeLibrary) -> Option<crate::game::installer::c
 
     // Use checksums as fallback SHA1
     let sha1 = sha1.or_else(|| lib.checksums.as_ref().and_then(|c| c.first().cloned()));
+
+    // Priority 1: Minecraft standard libraries should ALWAYS come from Mojang
+    // regardless of what the modloader manifest says.
+    if lib.name.starts_with("org.lwjgl") || lib.name.starts_with("com.mojang") || lib.name.starts_with("net.minecraft") {
+        maven_url = Some("https://libraries.minecraft.net/".to_string());
+    }
 
     // If no maven_url is specified at the library level, infer based on artifact coordinates
     if maven_url.is_none() {
@@ -1106,17 +1113,26 @@ fn maven_to_path(coords: &str, libraries_dir: &Path) -> Result<PathBuf> {
 
     let group = parts[0].replace('.', "/");
     let artifact = parts[1];
-    let version = parts[2];
-    let (classifier, extension) = if parts.len() >= 4 {
-        let classifier_ext = parts[3];
-        if let Some((classifier, ext)) = classifier_ext.split_once('@') {
-            (Some(classifier), ext)
-        } else {
-            (Some(classifier_ext), "jar")
+    let mut version = parts[2];
+    let mut classifier = None;
+    let mut extension = "jar";
+
+    if parts.len() == 3 {
+        // group:artifact:version@extension
+        if let Some((v, ext)) = version.split_once('@') {
+            version = v;
+            extension = ext;
         }
-    } else {
-        (None, "jar")
-    };
+    } else if parts.len() >= 4 {
+        // group:artifact:version:classifier[@extension]
+        let classifier_ext = parts[3];
+        if let Some((clf, ext)) = classifier_ext.split_once('@') {
+            classifier = Some(clf);
+            extension = ext;
+        } else {
+            classifier = Some(classifier_ext);
+        }
+    }
 
     let filename = if let Some(clf) = classifier {
         format!("{}-{}-{}.{}", artifact, version, clf, extension)

@@ -103,10 +103,38 @@ impl UnifiedManifest {
             };
 
             // Merge libraries
-            for lib in ml.libraries {
-                for unified in UnifiedLibrary::from_library(&lib, ml_type, os) {
-                    libraries_map.insert(get_lib_key(&unified), unified);
+            let mut ml_unified_libraries = Vec::new();
+            let mut ml_base_prefixes = std::collections::HashSet::new();
+
+            for ml_lib in ml.libraries {
+                let unified_list = UnifiedLibrary::from_library(&ml_lib, ml_type, os);
+                if unified_list.is_empty() {
+                    continue;
                 }
+
+                let parts: Vec<&str> = ml_lib.name.split(':').collect();
+                if parts.len() >= 2 {
+                    ml_base_prefixes.insert(format!("{}:{}", parts[0], parts[1]));
+                }
+                
+                ml_unified_libraries.extend(unified_list);
+            }
+
+            // Wipe vanilla variants first
+            for prefix in ml_base_prefixes {
+                let keys_to_remove: Vec<String> = libraries_map.keys()
+                    .filter(|k| k.starts_with(&prefix))
+                    .map(|k| k.clone())
+                    .collect();
+                
+                for k in keys_to_remove {
+                    libraries_map.remove(&k);
+                }
+            }
+
+            // Insert modloader libraries
+            for unified in ml_unified_libraries {
+                libraries_map.insert(get_lib_key(&unified), unified);
             }
 
             if ml.java_version.is_some() {
@@ -182,6 +210,19 @@ impl From<VersionManifest> for UnifiedManifest {
     }
 }
 
+fn is_known_native_library(name: &str) -> bool {
+    let n = name.to_lowercase();
+    n.contains("org.lwjgl") || n.contains("ca.weblite:java-objc-bridge") || n.contains("com.mojang:text2speech") || n.contains("com.mojang:jtracy")
+}
+
+fn get_default_classifier_for_os(os: OsType) -> &'static str {
+    match os {
+        OsType::Windows | OsType::WindowsArm64 => "windows",
+        OsType::MacOS | OsType::MacOSArm64 => "osx",
+        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+    }
+}
+
 impl UnifiedLibrary {
     pub fn from_library(lib: &Library, ml_type: Option<&str>, os: OsType) -> Vec<Self> {
         // Check if library should be included based on rules
@@ -205,14 +246,28 @@ impl UnifiedLibrary {
                     }
                 });
 
+                // In modern Minecraft, native libraries are often separate entries with 
+                // ":natives-<os>" in their name. We need to mark them as native so they get extracted.
+                let name_lower = lib.name.to_lowercase();
+                let is_native_by_name = name_lower.contains(":natives-") 
+                    || (name_lower.contains("natives-") && name_lower.split(':').count() > 3);
+                
+                // If it's a separate entry, it might have the classifier in the name
+                let parts: Vec<&str> = lib.name.split(':').collect();
+                let classifier = if parts.len() > 3 {
+                    Some(parts[3].to_string())
+                } else {
+                    None
+                };
+
                 normal_lib = Some(UnifiedLibrary {
                     name: lib.name.clone(),
                     path,
                     download_url: url,
                     sha1: artifact.sha1.clone(),
                     size: artifact.size,
-                    is_native: false,
-                    classifier: None,
+                    is_native: is_native_by_name,
+                    classifier,
                     extract_rules: lib.extract.clone(),
                 });
             }
@@ -246,7 +301,7 @@ impl UnifiedLibrary {
         }
 
         // 2. Check for native classifier
-        let native_classifier = if let Some(natives) = &lib.natives {
+        let mut native_classifier = if let Some(natives) = &lib.natives {
             let os_key = match os {
                 OsType::Windows | OsType::WindowsArm64 => "windows",
                 OsType::MacOS | OsType::MacOSArm64 => "osx",
@@ -256,6 +311,42 @@ impl UnifiedLibrary {
         } else {
             None
         };
+
+        // Fallback: If it's a known native-using library but lacks an explicit natives map,
+        // or if it's not found in the manifest's native map, try to infer it.
+        if native_classifier.is_none() && is_known_native_library(&lib.name) {
+            native_classifier = Some(get_default_classifier_for_os(os).to_string());
+        }
+
+        // Fallback: Check downloads.classifiers for OS match if not found in natives map or inferred
+        if native_classifier.is_none() {
+            if let Some(downloads) = &lib.downloads {
+                if let Some(classifiers) = &downloads.classifiers {
+                    let os_name = match os {
+                        OsType::Windows | OsType::WindowsArm64 => "windows",
+                        OsType::MacOS | OsType::MacOSArm64 => "osx",
+                        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+                    };
+                    
+                    for key in classifiers.keys() {
+                        if classifier_key_matches_os(key, os_name) {
+                            let host_arch = std::env::consts::ARCH;
+                            // Prioritize exact architecture matches
+                            let is_exact_arch = key.contains(host_arch)
+                                || (host_arch == "x86_64" && (key.contains("x64") || key.contains("amd64")));
+
+                            if is_exact_arch {
+                                native_classifier = Some(key.clone());
+                                break; // Found exact match, stop searching
+                            } else if native_classifier.is_none() {
+                                // Store compatible fallback (e.g. x86 on x64) but keep looking for exact match
+                                native_classifier = Some(key.clone());
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         if let Some(classifier) = native_classifier {
             let classifier = classifier.replace("${arch}", Arch::current().as_str());
@@ -330,7 +421,19 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
         }
         
         if let Some(ref arch) = os_rule.arch {
-            if arch != Arch::current().as_str() {
+            let host_arch = std::env::consts::ARCH;
+            let normalized_arch = match arch.as_str() {
+                "x64" | "amd64" => "x86_64",
+                "x86" => "x86",
+                "arm64" => "aarch64",
+                _ => arch.as_str(),
+            };
+
+            if normalized_arch != host_arch {
+                // Allow x86 on x86_64 as a fallback
+                if host_arch == "x86_64" && normalized_arch == "x86" {
+                    return true;
+                }
                 return false;
             }
         }
@@ -350,35 +453,25 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
 }
 
 fn name_to_path_with_classifier(name: &str, classifier: &str) -> String {
-    let parts: Vec<&str> = name.split(':').collect();
-    if parts.len() < 3 {
-        return name.replace('.', "/").replace(':', "/");
-    }
-
-    let group = parts[0].replace('.', "/");
-    let artifact = parts[1];
-    let version = parts[2];
+    // If we have a classifier, we can just append it to the name and use the standard parser
+    let coords = if name.contains('@') {
+        let (base, ext) = name.split_once('@').unwrap();
+        format!("{}:{}@{}", base, classifier, ext)
+    } else {
+        format!("{}:{}", name, classifier)
+    };
     
-    format!("{}/{}/{}/{}-{}-{}.jar", group, artifact, version, artifact, version, classifier)
+    crate::game::launcher::maven_to_path(&coords).unwrap_or_else(|_| {
+        let parts: Vec<&str> = name.split(':').collect();
+        let group = parts[0].replace('.', "/");
+        let artifact = parts.get(1).unwrap_or(&"");
+        let version = parts.get(2).unwrap_or(&"");
+        format!("{}/{}/{}/{}-{}-{}.jar", group, artifact, version, artifact, version, classifier)
+    })
 }
 
 fn name_to_path(name: &str) -> String {
-    let parts: Vec<&str> = name.split(':').collect();
-    if parts.len() < 3 {
-        return name.replace('.', "/").replace(':', "/");
-    }
-
-    let group = parts[0].replace('.', "/");
-    let artifact = parts[1];
-    let version = parts[2];
-    
-    let classifier = if parts.len() > 3 {
-        format!("-{}", parts[3])
-    } else {
-        "".to_string()
-    };
-
-    format!("{}/{}/{}/{}-{}{}.jar", group, artifact, version, artifact, version, classifier)
+    crate::game::launcher::maven_to_path(name).unwrap_or_else(|_| name.replace('.', "/").replace(':', "/"))
 }
 
 fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
@@ -420,18 +513,32 @@ fn resolve_maven_url_with_classifier(name: &str, classifier: &str, ml_type: Opti
 fn classifier_key_matches_os(key: &str, os_name: &str) -> bool {
     let key = key.to_lowercase();
     let os_name = os_name.to_lowercase();
+    let host_arch = std::env::consts::ARCH;
 
-    if key.contains(&os_name) {
-        return true;
+    let os_match = key.contains(&os_name)
+        || (os_name == "osx" && key.contains("macos"))
+        || (os_name == "macos" && key.contains("osx"));
+
+    if !os_match {
+        return false;
     }
 
-    // Special case for macOS/OSX
-    if os_name == "osx" && key.contains("macos") {
-        return true;
+    // Strict architecture matching for ARM
+    if key.contains("arm64") || key.contains("aarch64") {
+        return host_arch == "aarch64";
     }
-    if os_name == "macos" && key.contains("osx") {
-        return true;
+    if key.contains("arm32") || key.contains("armv7") || key.contains("armhf") {
+        return host_arch == "arm";
     }
 
-    false
+    // Allow x86 on x86_64 as fallback
+    if key.contains("x86") && !key.contains("x86_64") {
+        return host_arch == "x86" || host_arch == "x86_64";
+    }
+
+    if key.contains("x86_64") || key.contains("x64") || key.contains("amd64") {
+        return host_arch == "x86_64";
+    }
+
+    true
 }
