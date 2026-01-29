@@ -13,7 +13,7 @@ pub struct ModpackExportTask {
     pub instance_name: String,
     pub game_dir: String,
     pub output_path: String,
-    pub format: ModpackFormat,
+    pub modpack_format: ModpackFormat,
     pub spec: ExportSpec,
     pub resource_manager: ResourceManager,
 }
@@ -37,7 +37,7 @@ impl Task for ModpackExportTask {
 
     fn starting_description(&self) -> String {
         format!("Creating {} modpack for {}...", 
-            match self.format {
+            match self.modpack_format {
                 ModpackFormat::Modrinth => "Modrinth",
                 ModpackFormat::CurseForge => "CurseForge",
             },
@@ -52,7 +52,7 @@ impl Task for ModpackExportTask {
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let game_dir = self.game_dir.clone();
         let output_path = self.output_path.clone();
-        let format = self.format;
+        let format = self.modpack_format;
         let mut spec = self.spec.clone();
         let rm = self.resource_manager.clone();
 

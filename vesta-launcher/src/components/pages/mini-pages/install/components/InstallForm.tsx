@@ -128,11 +128,11 @@ export function InstallForm(props: InstallFormProps) {
 	// Flag to track if the user has manually changed the name
 	const [isNameDirty, setIsNameDirty] = createSignal(false);
 	const [isIconDirty, setIsIconDirty] = createSignal(false);
-	const [sessionUploadedIcons, setSessionUploadedIcons] = createSignal<string[]>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
 	// Create uploadedIcons array that includes all custom icons seen this session
 	const uploadedIcons = createMemo(() => {
-		const result = [...sessionUploadedIcons()];
+		const result = [...customIconsThisSession()];
 		const current = icon();
 		if (
 			current &&
@@ -153,7 +153,7 @@ export function InstallForm(props: InstallFormProps) {
 			!DEFAULT_ICONS.includes(current) &&
 			current !== props.initialIcon
 		) {
-			setSessionUploadedIcons((prev) => {
+			setCustomIconsThisSession((prev) => {
 				if (prev.includes(current)) return prev;
 				return [current, ...prev];
 			});

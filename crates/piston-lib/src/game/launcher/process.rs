@@ -121,8 +121,11 @@ pub async fn launch_game(
         .join(&installed_id)
         .join(format!("{}.json", installed_id));
 
-    // TODO: Implement a lighter-weight check here. 
-    // For now, we assume the manifest exists or resolve_version_chain will fail appropriately.
+    // TODO: Implement a lighter-weight preflight check for the loader manifest.
+    // This should cheaply verify that `manifest_path` points to a readable JSON file and
+    // emit a clear, user-facing error if the loader manifest is missing or obviously corrupt,
+    // instead of relying solely on `resolve_version_chain` to fail later. For now, we only
+    // check for existence here and assume `resolve_version_chain` will handle any deeper issues.
 
     let mut manifest = if manifest_path.exists() {
         log::info!("Found loader manifest at: {:?}", manifest_path);

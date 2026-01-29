@@ -388,8 +388,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setBusy(false);
 	};
 
-	console.log("eee Path: ", props.instance.iconPath);
-
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger

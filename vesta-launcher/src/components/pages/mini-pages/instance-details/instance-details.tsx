@@ -583,11 +583,11 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		return Object.keys(sel).filter(id => sel[id] && ups[Number(id)]).length;
 	});
 
-	const [sessionUploadedIcons, setSessionUploadedIcons] = createSignal<string[]>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
 	// Create uploadedIcons array that includes all custom icons seen this session
 	const uploadedIcons = createMemo(() => {
-		const result = [...sessionUploadedIcons()];
+		const result = [...customIconsThisSession()];
 		const current = iconPath();
 		if (current && !DEFAULT_ICONS.includes(current) && !result.includes(current)) {
 			return [current, ...result];
@@ -599,7 +599,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	createEffect(() => {
 		const current = iconPath();
 		if (current && !DEFAULT_ICONS.includes(current)) {
-			setSessionUploadedIcons((prev) => {
+			setCustomIconsThisSession((prev) => {
 				if (prev.includes(current)) return prev;
 				return [current, ...prev];
 			});
@@ -1037,7 +1037,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			fresh.maxMemory = maxMemory()[0];
 			await updateInstance(fresh);
 			// Clear temporary session icons once we've successfully saved to the backend
-			setSessionUploadedIcons([]);
+			setCustomIconsThisSession([]);
 			await refetch();
 		} catch (e) {
 			console.error("Failed to save instance settings:", e);

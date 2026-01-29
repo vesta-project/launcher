@@ -918,7 +918,7 @@ pub async fn export_instance_to_modpack(
         instance_name: modpack_name,
         game_dir,
         output_path,
-        format,
+        modpack_format: format,
         spec,
         resource_manager: resource_manager.inner().clone(),
     };

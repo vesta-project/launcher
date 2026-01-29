@@ -13,7 +13,8 @@ fn main() {
     let dest_path = Path::new(&out_dir).join("curseforge_key.rs");
     
     // Simple XOR obfuscation
-    let seed: u8 = 0x55; 
+    const XOR_OBFUSCATION_SEED: u8 = 0x55; 
+    let seed = XOR_OBFUSCATION_SEED;
     let obfuscated: Vec<u8> = api_key.as_bytes().iter().map(|b| b ^ seed).collect();
     
     let content = format!(

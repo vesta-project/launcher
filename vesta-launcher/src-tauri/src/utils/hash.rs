@@ -3,6 +3,8 @@ use std::fs::File;
 use std::path::Path;
 use anyhow::Result;
 
+const READ_CHUNK_SIZE: usize = 16384;
+
 /// Calculates a CurseForge fingerprint (MurmurHash2 32-bit)
 /// It skips whitespace bytes: 9 (TAB), 10 (LF), 13 (CR), 32 (SPACE)
 pub fn calculate_curseforge_fingerprint(path: &Path) -> Result<u32> {
@@ -11,7 +13,7 @@ pub fn calculate_curseforge_fingerprint(path: &Path) -> Result<u32> {
     let mut reader = BufReader::new(file);
     let mut data = Vec::with_capacity(metadata.len() as usize);
     
-    let mut buffer = [0u8; 16384];
+    let mut buffer = [0u8; READ_CHUNK_SIZE];
     loop {
         let n = reader.read(&mut buffer)?;
         if n == 0 { break; }

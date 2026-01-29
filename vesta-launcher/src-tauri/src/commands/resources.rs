@@ -141,7 +141,8 @@ pub async fn delete_resource(
 
     // Delete the file
     if fs::metadata(&res.local_path).is_ok() {
-        fs::remove_file(&res.local_path).map_err(|e| anyhow::anyhow!("Failed to delete file: {}", e))?;
+        fs::remove_file(&res.local_path)
+            .map_err(|e| anyhow::anyhow!("Failed to delete file at {}: {}", res.local_path, e))?;
     }
 
     // Remove from database

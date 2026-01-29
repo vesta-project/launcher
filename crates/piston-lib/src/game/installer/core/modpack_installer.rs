@@ -131,7 +131,7 @@ impl ModpackInstaller {
                                 }
                             }
                         } else {
-                            log::warn!("CurseForge mod downloading is not yet implemented (project: {:?}, file: {}) - no resolver", project_id, file_id);
+                            log::warn!("Skipping CurseForge mod (project: {:?}, file: {}) - no resolver provided", project_id, file_id);
                         }
                     }
                 }

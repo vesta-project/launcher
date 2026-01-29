@@ -289,11 +289,11 @@ function InitInstallationPage(props: InitPagesProps) {
 	const [selectedModloaderVersion, setSelectedModloaderVersion] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [isInstalling, setIsInstalling] = createSignal(false);
-	const [sessionUploadedIcons, setSessionUploadedIcons] = createSignal<string[]>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
 	// Create uploadedIcons array that includes all custom icons seen this session
 	const uploadedIcons = createMemo(() => {
-		const result = [...sessionUploadedIcons()];
+		const result = [...customIconsThisSession()];
 		const current = iconPath();
 		if (current && !DEFAULT_ICONS.includes(current) && !result.includes(current)) {
 			return [current, ...result];
@@ -305,7 +305,7 @@ function InitInstallationPage(props: InitPagesProps) {
 	createEffect(() => {
 		const current = iconPath();
 		if (current && !DEFAULT_ICONS.includes(current)) {
-			setSessionUploadedIcons((prev) => {
+			setCustomIconsThisSession((prev) => {
 				if (prev.includes(current)) return prev;
 				return [current, ...prev];
 			});
