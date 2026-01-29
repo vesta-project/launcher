@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { clsx } from "clsx";
 import { createSignal, For, Show, splitProps, ValidComponent } from "solid-js";
 import { DEFAULT_ICONS } from "@utils/instances";
+import CubeIcon from "@assets/cube.svg";
 import "./icon-picker.css";
 
 // Icon picker props interface
@@ -63,7 +64,7 @@ export function IconPicker<T extends ValidComponent = "button">(
 	// Determine if an icon is a gradient or image URL
 	const isGradient = (icon: string) => icon.startsWith("linear-gradient");
 	
-	// Handle file upload
+	// Handle file upload with resizing and compression
 	const handleFileUpload = () => {
 		const input = document.createElement("input");
 		input.type = "file";
@@ -73,11 +74,45 @@ export function IconPicker<T extends ValidComponent = "button">(
 			if (file) {
 				const reader = new FileReader();
 				reader.onload = (event) => {
-					const base64 = event.target?.result as string;
-					if (base64 && local.onSelect) {
-						local.onSelect(base64);
-						setIsOpen(false);
-					}
+					const img = new Image();
+					img.onload = () => {
+						const canvas = document.createElement("canvas");
+						const ctx = canvas.getContext("2d");
+						
+						// Launcher icons don't need to be massive. 512x512 is plenty.
+						const MAX_SIZE = 512;
+						let width = img.width;
+						let height = img.height;
+
+						if (width > height) {
+							if (width > MAX_SIZE) {
+								height *= MAX_SIZE / width;
+								width = MAX_SIZE;
+							}
+						} else {
+							if (height > MAX_SIZE) {
+								width *= MAX_SIZE / height;
+								height = MAX_SIZE;
+							}
+						}
+						
+						canvas.width = width;
+						canvas.height = height;
+						
+						if (ctx) {
+							ctx.imageSmoothingEnabled = true;
+							ctx.imageSmoothingQuality = "high";
+							ctx.drawImage(img, 0, 0, width, height);
+							
+							// Export as high-quality PNG to preserve transparency
+							const compressedBase64 = canvas.toDataURL("image/png");
+							if (compressedBase64 && local.onSelect) {
+								local.onSelect(compressedBase64);
+								setIsOpen(false);
+							}
+						}
+					};
+					img.src = event.target?.result as string;
 				};
 				reader.readAsDataURL(file);
 			}
@@ -237,28 +272,7 @@ export function IconPicker<T extends ValidComponent = "button">(
 									</Show>
 									{/* Badge for suggested icon */}
 									<div class="icon-picker__option-badge">
-										<svg 
-											width="10" 
-											height="10" 
-											viewBox="0 0 24 24" 
-											fill="none" 
-											xmlns="http://www.w3.org/2000/svg"
-										>
-											<path 
-												d="M19.42 15.635C19.79 15.135 20 14.515 20 13.845V10.845C20 10.125 19.5 9.125 18.89 8.625L14.11 4.635C13.5 4.135 12.5 4.135 11.89 4.635L7.11 8.625C6.5 9.125 6 10.125 6 10.845V13.845C6 14.565 6.5 15.565 7.11 16.065L11.89 20.055C12.5 20.555 13.5 20.555 14.11 20.055L14.75 19.515" 
-												stroke="currentColor" 
-												stroke-width="2" 
-												stroke-linecap="round" 
-												stroke-linejoin="round"
-											/>
-											<path 
-												d="M15 12V22M15 12C15 10.3431 16.3431 9 18 9C19.6569 9 21 10.3431 21 12C21 13.6569 19.6569 15 18 15C16.3431 15 15 13.6569 15 12ZM15 12L12 12" 
-												stroke="currentColor" 
-												stroke-width="2" 
-												stroke-linecap="round" 
-												stroke-linejoin="round"
-											/>
-										</svg>
+										<CubeIcon fill="currentColor" width="12" height="12" />
 									</div>
 								</button>
 							</TooltipTrigger>
@@ -269,7 +283,12 @@ export function IconPicker<T extends ValidComponent = "button">(
 					{/* Uploaded icons (displayed first after upload button) */}
 					<For each={uploadedIcons()}>
 						{(icon) => (
-							<Show when={icon !== local.suggestedIcon}>
+							<Show 
+								when={
+									icon !== local.suggestedIcon && 
+									!(isSuggestedSelected() && (icon === local.value || icon === local.suggestedIcon))
+								}
+							>
 								<button
 									class={clsx(
 										"icon-picker__option",
@@ -308,7 +327,12 @@ export function IconPicker<T extends ValidComponent = "button">(
 					{/* Default icons */}
 					<For each={DEFAULT_ICONS}>
 						{(icon) => (
-							<Show when={icon !== local.suggestedIcon}>
+							<Show 
+								when={
+									icon !== local.suggestedIcon && 
+									!(isSuggestedSelected() && (icon === local.value || icon === local.suggestedIcon))
+								}
+							>
 								<button
 									class={clsx(
 										"icon-picker__option",

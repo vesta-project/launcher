@@ -63,6 +63,7 @@ import {
 	Switch,
 } from "solid-js";
 import "./instance-card.css";
+import { ExportDialog } from "@components/pages/mini-pages/instance-details/components/ExportDialog";
 
 // getInstanceSlug now imported above
 
@@ -76,6 +77,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
 	const [hasCrashed, setHasCrashed] = createSignal(false);
 	const [showCrashModal, setShowCrashModal] = createSignal(false);
+	const [showExportDialog, setShowExportDialog] = createSignal(false);
 
 	const instanceSlug = getInstanceSlug(props.instance);
 
@@ -581,6 +583,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 					</ContextMenuItem>
 
 					<ContextMenuItem
+						onSelect={() => setShowExportDialog(true)}
+					>
+						Export Instance
+					</ContextMenuItem>
+
+					<ContextMenuItem
 						onSelect={async () => {
 							const idNum = getInstanceId(props.instance);
 							if (!idNum) return;
@@ -640,6 +648,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 				instanceId={instanceSlug}
 				isOpen={showCrashModal()}
 				onClose={() => setShowCrashModal(false)}
+			/>
+			<ExportDialog
+				isOpen={showExportDialog()}
+				onClose={() => setShowExportDialog(false)}
+				instanceId={props.instance.id}
+				instanceName={props.instance.name}
 			/>
 		</ContextMenu>
 	);

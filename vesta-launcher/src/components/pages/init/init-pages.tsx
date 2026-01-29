@@ -289,6 +289,28 @@ function InitInstallationPage(props: InitPagesProps) {
 	const [selectedModloaderVersion, setSelectedModloaderVersion] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [isInstalling, setIsInstalling] = createSignal(false);
+	const [sessionUploadedIcons, setSessionUploadedIcons] = createSignal<string[]>([]);
+
+	// Create uploadedIcons array that includes all custom icons seen this session
+	const uploadedIcons = createMemo(() => {
+		const result = [...sessionUploadedIcons()];
+		const current = iconPath();
+		if (current && !DEFAULT_ICONS.includes(current) && !result.includes(current)) {
+			return [current, ...result];
+		}
+		return result;
+	});
+
+	// Track custom icons in session list
+	createEffect(() => {
+		const current = iconPath();
+		if (current && !DEFAULT_ICONS.includes(current)) {
+			setSessionUploadedIcons((prev) => {
+				if (prev.includes(current)) return prev;
+				return [current, ...prev];
+			});
+		}
+	});
 
 	const [metadata] = createResource<PistonMetadata>(getMinecraftVersions);
 
@@ -438,6 +460,7 @@ function InitInstallationPage(props: InitPagesProps) {
 						<IconPicker
 							value={iconPath() || DEFAULT_ICONS[0]}
 							onSelect={setIconPath}
+							uploadedIcons={uploadedIcons()}
 							showHint={true}
 						/>
 					</div>

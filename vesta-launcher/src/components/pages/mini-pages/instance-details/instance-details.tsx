@@ -583,15 +583,28 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		return Object.keys(sel).filter(id => sel[id] && ups[Number(id)]).length;
 	});
 
-	// Create uploadedIcons array that includes current iconPath if it's an uploaded image
-	const uploadedIcons = () => {
+	const [sessionUploadedIcons, setSessionUploadedIcons] = createSignal<string[]>([]);
+
+	// Create uploadedIcons array that includes all custom icons seen this session
+	const uploadedIcons = createMemo(() => {
+		const result = [...sessionUploadedIcons()];
 		const current = iconPath();
-		// Check if current icon is uploaded (not null, not a default gradient/image)
-		if (current && !DEFAULT_ICONS.includes(current)) {
-			return [current];
+		if (current && !DEFAULT_ICONS.includes(current) && !result.includes(current)) {
+			return [current, ...result];
 		}
-		return [];
-	};
+		return result;
+	});
+
+	// Track custom icons in session list
+	createEffect(() => {
+		const current = iconPath();
+		if (current && !DEFAULT_ICONS.includes(current)) {
+			setSessionUploadedIcons((prev) => {
+				if (prev.includes(current)) return prev;
+				return [current, ...prev];
+			});
+		}
+	});
 
 	// Check running state on mount and when instance changes
 	createEffect(async () => {
@@ -1023,6 +1036,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			fresh.minMemory = minMemory()[0];
 			fresh.maxMemory = maxMemory()[0];
 			await updateInstance(fresh);
+			// Clear temporary session icons once we've successfully saved to the backend
+			setSessionUploadedIcons([]);
 			await refetch();
 		} catch (e) {
 			console.error("Failed to save instance settings:", e);
