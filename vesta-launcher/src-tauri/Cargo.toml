@@ -9,9 +9,9 @@ edition = "2021"
 
 [build-dependencies]
 tauri-build = { version = "2.5.3", features = [] }
-diesel = { version = "2.1", features = ["sqlite", "r2d2"] }
-diesel_migrations = "2.1"
-libsqlite3-sys = { version = "0.26", features = ["bundled"] }
+diesel = { version = "2.3.6", features = ["sqlite", "r2d2"] }
+diesel_migrations = "2.3.1"
+libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
 dotenvy = "0.15"
 
 [dependencies]
@@ -19,9 +19,9 @@ piston-lib = { path = "../../crates/piston-lib" }
 slug = "0.1"
 
 # Database - Diesel ORM
-diesel = { version = "2.1", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
-diesel_migrations = { version = "2.1", features = ["sqlite"] }
-libsqlite3-sys = { version = "0.26", features = ["bundled"] }
+diesel = { version = "2.3.6", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
+diesel_migrations = { version = "2.3.1", features = ["sqlite"] }
+libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
 
 tauri = { version = "2.9.5", features = [
     "protocol-asset",
@@ -50,8 +50,8 @@ directories = "6.0.0"
 version-compare = "0.2.0"
 open = "5.3.1"
 urlencoding = "2.1"
-which = "6.0"
-sysinfo = "0.37.2"
+which = "8.0.0"
+sysinfo = "0.38.0"
 reqwest = { version = "0.12", features = ["json", "stream"] }
 futures-util = "0.3"
 async-trait = "0.1"

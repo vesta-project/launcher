@@ -10,6 +10,7 @@ pub enum ResourceType {
     Shader,
     DataPack,
     Modpack,
+    World,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Hash)]
@@ -122,4 +123,14 @@ pub struct SearchQuery {
 pub struct SearchResponse {
     pub hits: Vec<ResourceProject>,
     pub total_hits: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ResourceCategory {
+    pub id: String,
+    pub name: String,
+    pub icon_url: Option<String>,
+    pub project_type: Option<ResourceType>,
+    pub parent_id: Option<String>,
+    pub display_index: Option<i32>,
 }

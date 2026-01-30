@@ -1,10 +1,18 @@
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse, ResourceDependency, DependencyType};
+use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse, ResourceDependency, DependencyType, ResourceCategory};
 use crate::resources::sources::ResourceSource;
 use async_trait::async_trait;
 use anyhow::Result;
 use anyhow::anyhow;
 use serde::Deserialize;
 use reqwest::Client;
+
+#[derive(Deserialize)]
+struct ModrinthCategory {
+    icon: String,
+    name: String,
+    project_type: String,
+    header: String,
+}
 
 #[derive(Deserialize)]
 struct ModrinthSearchResult {
@@ -142,6 +150,7 @@ impl ResourceSource for ModrinthSource {
             ResourceType::Shader => "shader",
             ResourceType::DataPack => "datapack",
             ResourceType::Modpack => "modpack",
+            ResourceType::World => "world",
         };
         facets.push(format!("[\"project_type:{}\"]", mr_type));
 
@@ -150,8 +159,8 @@ impl ResourceSource for ModrinthSource {
         }
 
         if let Some(loader) = query.loader {
-            // Only apply loader filter for mods
-            if query.resource_type == ResourceType::Mod {
+            // Apply loader filter for mods and modpacks
+            if query.resource_type == ResourceType::Mod || query.resource_type == ResourceType::Modpack {
                 if loader.to_lowercase() == "quilt" {
                     facets.push("[\"categories:quilt\", \"categories:fabric\"]".to_string());
                 } else {
@@ -520,6 +529,33 @@ impl ResourceSource for ModrinthSource {
         };
 
         Ok((project, version))
+    }
+
+    async fn get_categories(&self) -> Result<Vec<ResourceCategory>> {
+        let url = "https://api.modrinth.com/v2/tag/category";
+        let response = self.client.get(url).send().await?;
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!("Modrinth categories fetch failed ({}): {}", status, body));
+        }
+
+        let cats: Vec<ModrinthCategory> = response.json().await?;
+        Ok(cats.into_iter().map(|c| ResourceCategory {
+            id: c.name.to_lowercase(),
+            name: c.name,
+            icon_url: Some(c.icon), // Modrinth icon is SVG string (raw SVG)
+            parent_id: Some(c.header),
+            display_index: None,
+            project_type: match c.project_type.as_str() {
+                "mod" => Some(ResourceType::Mod),
+                "modpack" => Some(ResourceType::Modpack),
+                "resourcepack" => Some(ResourceType::ResourcePack),
+                "shader" => Some(ResourceType::Shader),
+                "datapack" => Some(ResourceType::DataPack),
+                _ => None,
+            }
+        }).collect())
     }
 
     fn platform(&self) -> SourcePlatform {

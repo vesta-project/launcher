@@ -1,4 +1,4 @@
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse, ResourceDependency, DependencyType};
+use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, ReleaseType, SearchResponse, ResourceDependency, DependencyType, ResourceCategory};
 use crate::resources::sources::ResourceSource;
 use async_trait::async_trait;
 use anyhow::{Result, anyhow};
@@ -31,7 +31,7 @@ struct CFModResponse {
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 struct CFMod {
-    id: u32,
+    id: i64,
     name: String,
     summary: String,
     description: Option<String>,
@@ -40,7 +40,7 @@ struct CFMod {
     authors: Vec<CFAuthor>,
     download_count: f64,
     categories: Vec<CFCategory>,
-    class_id: Option<u32>,
+    class_id: Option<i64>,
     gallery: Option<Vec<CFGallery>>,
     date_created: String,
     date_modified: String,
@@ -75,6 +75,28 @@ struct CFCategory {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct CFCategoryFull {
+    id: i64,
+    name: String,
+    #[serde(default)]
+    icon_url: Option<String>,
+    #[serde(default)]
+    class_id: Option<i64>,
+    #[serde(default)]
+    parent_category_id: Option<i64>,
+    #[serde(default)]
+    is_class: Option<bool>,
+    #[serde(default)]
+    display_index: Option<i32>,
+}
+
+#[derive(Deserialize)]
+struct CFAllCategoriesResponse {
+    data: Vec<CFCategoryFull>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
 struct CFPagination {
     index: u32,
@@ -91,8 +113,8 @@ struct CFFilesResponse {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CFFile {
-    id: u32,
-    mod_id: u32,
+    id: i64,
+    mod_id: i64,
     display_name: String,
     file_name: String,
     release_type: u8,
@@ -106,7 +128,7 @@ struct CFFile {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CFDependency {
-    mod_id: u32,
+    mod_id: i64,
     relation_type: u8,
 }
 
@@ -157,37 +179,111 @@ impl CurseForgeSource {
         
         Self {
             client: Client::builder()
-                .user_agent("VestaLauncher/0.1.0")
+                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .default_headers(headers)
                 .build()
                 .unwrap(),
         }
     }
 
-    fn map_class_id_to_type(class_id: u32) -> ResourceType {
+    pub fn map_class_id_to_type(class_id: i64) -> ResourceType {
         match class_id {
             6 => ResourceType::Mod,
             12 => ResourceType::ResourcePack,
             6552 => ResourceType::Shader,
-            17 => ResourceType::DataPack, // This might vary or be under custom classes
+            17 => ResourceType::World,
             4471 => ResourceType::Modpack,
+            6945 => ResourceType::DataPack,
+            4546 => ResourceType::DataPack, // Customization often contains datapacks/scripts
             _ => ResourceType::Mod,
         }
     }
 
-    fn map_type_to_class_id(res_type: ResourceType) -> u32 {
+    pub fn map_type_to_class_id(res_type: ResourceType) -> i64 {
         match res_type {
             ResourceType::Mod => 6,
             ResourceType::ResourcePack => 12,
             ResourceType::Shader => 6552,
-            ResourceType::DataPack => 17,
+            ResourceType::DataPack => 6945,
+            ResourceType::World => 17,
             ResourceType::Modpack => 4471,
+        }
+    }
+
+    pub async fn fetch_categories_direct(&self) -> Result<Vec<CFCategoryFull>> {
+        let url = "https://api.curseforge.com/v1/categories?gameId=432";
+        let response = self.client.get(url).send().await?;
+        
+        let status = response.status();
+        if !status.is_success() {
+             let body = response.text().await.unwrap_or_default();
+             return Err(anyhow!("CurseForge API error fetching categories ({}): {}", status, body));
+        }
+
+        let body = response.text().await?;
+        match serde_json::from_str::<CFAllCategoriesResponse>(&body) {
+            Ok(res) => Ok(res.data),
+            Err(e) => {
+                log::error!("Failed to decode CurseForge categories JSON: {}. Body length: {}", e, body.len());
+                // If it's too large, don't log the whole thing, but maybe the start
+                if body.len() > 500 {
+                    log::error!("Body start: {}", &body[..500]);
+                } else {
+                    log::error!("Body: {}", body);
+                }
+                Err(anyhow!("CurseForge categories decode error: {}", e))
+            }
         }
     }
 }
 
 #[async_trait]
 impl ResourceSource for CurseForgeSource {
+    async fn get_categories(&self) -> Result<Vec<ResourceCategory>> {
+        let categories = self.fetch_categories_direct().await?;
+
+        Ok(categories.into_iter()
+            .filter(|c| {
+                // Filter out the root category and specific categories we handle via resource_type
+                if c.id == c.class_id.unwrap_or(0) {
+                    return false;
+                }
+
+                // Filter out Bukkit Plugins (Class ID 5), Shaders (6552), and Data Packs (6945)
+                if c.class_id == Some(5) || c.id == 6552 || c.id == 6945 {
+                    return false;
+                }
+
+                // Filter out Customization (4550, 4547, 4552) for Data Packs
+                // These are often incorrectly tagged or refer to a type we don't support as Datapacks
+                if c.class_id == Some(6945) && (c.id == 4550 || c.id == 4547 || c.id == 4552 || c.parent_category_id == Some(4550) || c.parent_category_id == Some(4547) || c.parent_category_id == Some(4552)) {
+                    return false;
+                }
+
+                // Also filter by name for safety
+                let name = c.name.to_lowercase();
+                if name.contains("bukkit") || name.contains("spigot") || name.contains("paper") {
+                    return false;
+                }
+                
+                !matches!(name.as_str(), "mods" | "worlds" | "resource packs" | "modpacks" | "customization" | "addons")
+            })
+            .map(|c| ResourceCategory {
+                id: c.id.to_string(),
+                name: c.name,
+                icon_url: c.icon_url,
+                parent_id: match c.parent_category_id {
+                    Some(0) | None => None,
+                    Some(id) => Some(id.to_string()),
+                },
+                display_index: Some(c.display_index.unwrap_or(0)),
+                project_type: match c.class_id {
+                    Some(0) | None => None,
+                    Some(id) => Some(Self::map_class_id_to_type(id)),
+                },
+            }).collect())
+    }
+
     async fn search(&self, query: SearchQuery) -> Result<SearchResponse> {
         let class_id = Self::map_type_to_class_id(query.resource_type);
         let mut url = format!("https://api.curseforge.com/v1/mods/search?gameId=432&classId={}&index={}&pageSize={}", 
@@ -237,32 +333,8 @@ impl ResourceSource for CurseForgeSource {
 
         if let Some(categories) = &query.categories {
             if let Some(category) = categories.first() {
-                // We need to map category names to IDs. This is a simplified map.
-                let category_id = match category.as_str() {
-                    "World Gen" => 409,
-                    "Technology" => 403,
-                    "Magic" => 411,
-                    "Storage" => 417,
-                    "Food" => 422,
-                    "Mobs" => 412,
-                    "Armor, Tools, and Weapons" => 423,
-                    "Adventure and RPG" => 424,
-                    "Map and Information" => 425,
-                    "Cosmetic" => 419,
-                    "Addons" => 420,
-                    "Thermal Expansion" => 405,
-                    "Tinkers Construct" => 407,
-                    "Industrial Craft" => 404,
-                    "Thaumcraft" => 406,
-                    "Buildcraft" => 408,
-                    "Forestry" => 410,
-                    "Blood Magic" => 414,
-                    "Lucky Blocks" => 415,
-                    "Applied Energistics 2" => 416,
-                    "CraftTweaker" => 418,
-                    _ => 0
-                };
-                if category_id > 0 {
+                // Try to parse as ID first (preferred for dynamic categories)
+                if let Ok(category_id) = category.parse::<u32>() {
                     url.push_str(&format!("&categoryId={}", category_id));
                 }
             }
@@ -270,8 +342,8 @@ impl ResourceSource for CurseForgeSource {
 
         // Loader mapping for CF (1=Forge, 4=Fabric, 5=Quilt, 6=NeoForge)
         if let Some(loader) = query.loader {
-            // Only apply loader filter for mods on CurseForge
-            if query.resource_type == ResourceType::Mod {
+            // Apply loader filter for mods and modpacks
+            if query.resource_type == ResourceType::Mod || query.resource_type == ResourceType::Modpack {
                 let mod_loader_type = match loader.to_lowercase().as_str() {
                     "forge" => 1,
                     "fabric" => 4,
@@ -284,6 +356,8 @@ impl ResourceSource for CurseForgeSource {
                 }
             }
         }
+
+        log::debug!("[CurseForge] Search URL: {}", url);
 
         let response = self.client.get(&url).send().await?;
         if !response.status().is_success() {
@@ -348,6 +422,9 @@ impl ResourceSource for CurseForgeSource {
             None
         };
 
+        // Fetch all categories for this game to find parent names if needed
+        let all_categories = self.fetch_categories_direct().await.unwrap_or_default();
+
         Ok(ResourceProject {
             id: item.id.to_string(),
             source: SourcePlatform::CurseForge,
@@ -359,7 +436,13 @@ impl ResourceSource for CurseForgeSource {
             author: item.authors.first().map(|a| a.name.clone()).unwrap_or_else(|| "Unknown".to_string()),
             download_count: item.download_count as u64,
             follower_count: 0,
-            categories: item.categories.into_iter().map(|c| c.name).collect(),
+            categories: item.categories.into_iter().map(|c| {
+                if let Some(cat_full) = all_categories.iter().find(|cf| cf.name == c.name) {
+                    cat_full.id.to_string()
+                } else {
+                    c.name
+                }
+            }).collect(),
             web_url: item.links.website_url,
             external_ids: None,
             gallery: item.gallery.unwrap_or_default().into_iter().map(|s| s.url).collect(),
@@ -487,7 +570,7 @@ impl ResourceSource for CurseForgeSource {
             
             for v in &file.game_versions {
                 match v.to_lowercase().as_str() {
-                    "forge" | "fabric" | "quilt" | "neoforge" => loaders.push(v.clone()),
+                    "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => loaders.push(v.clone()),
                     _ => game_versions.push(v.clone()),
                 }
             }
@@ -550,7 +633,7 @@ impl ResourceSource for CurseForgeSource {
         let mut game_versions = Vec::new();
         for v in &file.game_versions {
             match v.to_lowercase().as_str() {
-                "forge" | "fabric" | "quilt" | "neoforge" => loaders.push(v.clone()),
+                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => loaders.push(v.clone()),
                 _ => game_versions.push(v.clone()),
             }
         }
@@ -632,7 +715,7 @@ impl ResourceSource for CurseForgeSource {
         let mut game_versions = Vec::new();
         for v in &file.game_versions {
             match v.to_lowercase().as_str() {
-                "forge" | "fabric" | "quilt" | "neoforge" => loaders.push(v.clone()),
+                "forge" | "fabric" | "quilt" | "neoforge" | "optifine" | "iris" => loaders.push(v.clone()),
                 _ => game_versions.push(v.clone()),
             }
         }
@@ -645,14 +728,10 @@ impl ResourceSource for CurseForgeSource {
             loaders,
             download_url: file.download_url.clone().unwrap_or_else(|| {
                 // Fallback for hidden CF files
-                let id_str = file.id.to_string();
-                if id_str.len() > 4 {
-                    let start = &id_str[0..4];
-                    let end = &id_str[4..];
-                    format!("https://edge.forgecdn.net/files/{}/{}/{}", start, end, file.file_name)
-                } else {
-                    "".to_string()
-                }
+                let id = file.id;
+                let major = id / 1000;
+                let minor = id % 1000;
+                format!("https://edge.forgecdn.net/files/{}/{:03}/{}", major, minor, file.file_name)
             }),
             file_name: file.file_name.clone(),
             release_type: match file.release_type {

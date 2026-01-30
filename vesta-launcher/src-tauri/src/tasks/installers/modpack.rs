@@ -64,13 +64,22 @@ impl ModpackResolver for PistonModpackResolver {
             let project = rm.get_project(SourcePlatform::CurseForge, &version.project_id).await
                 .map_err(|e| anyhow::anyhow!("Failed to fetch project for CF resource type: {}", e))?;
 
+            log::debug!("[PistonModpackResolver] Resolved CF project {}: {:?} (Class ID logic)", 
+                project.name, project.resource_type);
+
             let subfolder = match project.resource_type {
                 crate::models::resource::ResourceType::Mod => "mods",
                 crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
                 crate::models::resource::ResourceType::Shader => "shaderpacks",
                 crate::models::resource::ResourceType::DataPack => "datapacks",
-                _ => "mods",
+                crate::models::resource::ResourceType::World => "saves",
+                crate::models::resource::ResourceType::Modpack => {
+                    log::warn!("[PistonModpackResolver] Found nested modpack in manifest: {}. Mapping to mods folder.", project.name);
+                    "mods"
+                },
             }.to_string();
+
+            log::debug!("[PistonModpackResolver] {} resolved to subfolder: {}", project.name, subfolder);
 
             Ok(ModpackResolvedCF {
                 url: version.download_url,
@@ -310,6 +319,7 @@ impl Task for InstallModpackTask {
                                         crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
                                         crate::models::resource::ResourceType::Shader => "shaderpacks",
                                         crate::models::resource::ResourceType::DataPack => "datapacks",
+                                        crate::models::resource::ResourceType::World => "saves",
                                         _ => "mods",
                                     };
                                     let local_path = game_dir_clone.join(subfolder).join(&version.file_name);

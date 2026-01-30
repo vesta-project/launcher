@@ -7,7 +7,10 @@ fn main() {
     
     // Obfuscate CurseForge API Key
     let _ = dotenvy::dotenv();
-    let api_key = env::var("CURSEFORGE_API_KEY").unwrap_or_else(|_| "".to_string());
+    let api_key = env::var("CURSEFORGE_API_KEY")
+        .unwrap_or_else(|_| "".to_string())
+        .trim_matches(|c| c == '\'' || c == '"')
+        .to_string();
     
     let out_dir = env::var_os("OUT_DIR").unwrap();
     let dest_path = Path::new(&out_dir).join("curseforge_key.rs");

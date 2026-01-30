@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Instance } from "./instances";
 
-export type ResourceType = 'mod' | 'resourcepack' | 'shader' | 'datapack' | 'modpack';
+export type ResourceType = 'mod' | 'resourcepack' | 'shader' | 'datapack' | 'modpack' | 'world';
 export type SourcePlatform = 'modrinth' | 'curseforge';
 // ... (rest of imports)
 
@@ -29,6 +29,15 @@ export type ResourceProject = {
 export type SearchResponse = {
     hits: ResourceProject[];
     total_hits: number;
+};
+
+export type ResourceCategory = {
+    id: string;
+    name: string;
+    icon_url: string | null;
+    project_type: ResourceType | null;
+    parent_id: string | null;
+    display_index: number | null;
 };
 
 export type ResourceVersion = {
@@ -81,6 +90,8 @@ type ResourceStoreState = {
     gameVersion: string | null;
     loader: string | null;
     categories: string[];
+    availableCategories: ResourceCategory[];
+    expandedCategoryGroups: string[];
     sortBy: string;
     sortOrder: 'asc' | 'desc';
     selectedProject: ResourceProject | null;
@@ -90,6 +101,7 @@ type ResourceStoreState = {
     installingProjectIds: string[];
     viewMode: 'grid' | 'list';
     showFilters: boolean;
+    reconcilingCategories: boolean;
     requestInstallProject: ResourceProject | null;
     requestInstallVersions: ResourceVersion[];
     selection: Record<string, boolean>;
@@ -109,6 +121,8 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     gameVersion: null,
     loader: null,
     categories: [],
+    availableCategories: [],
+    expandedCategoryGroups: [],
     sortBy: 'relevance',
     sortOrder: 'desc',
     selectedProject: null,
@@ -118,6 +132,7 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
     installingProjectIds: [],
     viewMode: 'grid',
     showFilters: true,
+    reconcilingCategories: false,
     requestInstallProject: null,
     requestInstallVersions: [],
     selection: {},
@@ -134,20 +149,60 @@ export const resources = {
 
     setQuery: (q: string) => setResourceStore("query", q),
     setSource: (s: SourcePlatform) => {
+        setResourceStore("reconcilingCategories", true);
         setResourceStore("activeSource", s);
+        setResourceStore("availableCategories", []);
         setResourceStore("sortBy", s === 'modrinth' ? 'relevance' : 'featured');
         setResourceStore("categories", []);
         setResourceStore("offset", 0);
+
+        // Modrinth doesn't support Worlds
+        if (s === 'modrinth' && resourceStore.resourceType === 'world') {
+            setResourceStore("resourceType", 'mod');
+        }
+
+        resources.fetchCategories();
     },
     setType: (t: ResourceType) => {
+        setResourceStore("reconcilingCategories", true);
         setResourceStore("resourceType", t);
+        setResourceStore("availableCategories", []);
         setResourceStore("offset", 0);
-        setResourceStore("categories", []);
+        
         // Clear loader if not on 'mod' as it doesn't apply to resourcepacks/shaders
         if (t !== 'mod') {
             setResourceStore("loader", null);
         }
+
+        resources.fetchCategories();
     },
+
+    fetchCategories: async () => {
+        try {
+            const categories = await invoke<ResourceCategory[]>("get_resource_categories", {
+                platform: resourceStore.activeSource
+            });
+            setResourceStore("availableCategories", categories);
+
+            // Prune categories that no longer exist for this type
+            const type = resourceStore.resourceType;
+            const validIds = categories
+                .filter(c => !c.project_type || c.project_type === type)
+                .map(c => c.id);
+            
+            const current = resourceStore.categories;
+            const next = current.filter(id => validIds.includes(id));
+            
+            if (next.length !== current.length) {
+                setResourceStore("categories", next);
+            }
+        } catch (e) {
+            console.error("Failed to fetch categories", e);
+        } finally {
+            setResourceStore("reconcilingCategories", false);
+        }
+    },
+
     setInstance: (id: number | null) => {
         setResourceStore("selectedInstanceId", id);
         if (id) {
@@ -176,6 +231,19 @@ export const resources = {
             setResourceStore("categories", [...current, c]);
         }
         setResourceStore("offset", 0);
+    },
+
+    toggleCategoryGroup: (groupId: string) => {
+        const current = resourceStore.expandedCategoryGroups;
+        if (current.includes(groupId)) {
+            setResourceStore("expandedCategoryGroups", current.filter(id => id !== groupId));
+        } else {
+            setResourceStore("expandedCategoryGroups", [...current, groupId]);
+        }
+    },
+
+    setExpandedCategoryGroups: (groups: string[]) => {
+        setResourceStore("expandedCategoryGroups", groups);
     },
     setSortBy: (s: string) => {
         setResourceStore("sortBy", s);

@@ -87,22 +87,6 @@ const SORT_OPTIONS = {
 };
 
 // Common categories across platforms
-const MOD_CATEGORIES = {
-    curseforge: [
-        "World Gen", "Technology", "Magic", "Storage", "Food",
-        "Mobs", "Armor, Tools, and Weapons", "Adventure and RPG",
-        "Map and Information", "Cosmetic", "Addons", "Thermal Expansion",
-        "Tinkers Construct", "Industrial Craft", "Thaumcraft", "Buildcraft",
-        "Forestry", "Blood Magic", "Lucky Blocks", "Applied Energistics 2",
-        "CraftTweaker", "Miscellaneous"
-    ]
-};
-
-type ModrinthCategory = {
-    icon: string;
-    name: string;
-    project_type: string;
-};
 
 const InstanceSelector: Component = () => {
     const selectedInstance = createMemo(() => 
@@ -573,20 +557,31 @@ const ResourceCard: Component<{ project: ResourceProject; viewMode: 'grid' | 'li
                 <Show when={props.project.categories && props.project.categories.length > 0}>
                     <div class="resource-card-tags">
                         <For each={props.project.categories.slice(0, 4)}>
-                            {(tag) => (
-                                <span 
-                                    class="resource-tag"
-                                    classList={{ active: resources.state.categories.includes(tag.toLowerCase()) }}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        // Normalize tag to lowercase for filtering
-                                        resources.toggleCategory(tag.toLowerCase());
-                                        resources.setOffset(0);
-                                    }}
-                                >
-                                    {tag}
-                                </span>
-                            )}
+                            {(tag) => {
+                                // Find the category object in availableCategories if possible to get its real ID/Slug
+                                const categoryObj = createMemo(() => 
+                                    resources.state.availableCategories.find(c => 
+                                        c.name.toLowerCase() === tag.toLowerCase() || 
+                                        c.id.toLowerCase() === tag.toLowerCase()
+                                    )
+                                );
+
+                                return (
+                                    <span 
+                                        class="resource-tag"
+                                        classList={{ active: resources.state.categories.includes((categoryObj()?.id || tag).toLowerCase()) }}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Normalize tag to ID if possible
+                                            const filterId = categoryObj()?.id || tag;
+                                            resources.toggleCategory(filterId.toLowerCase());
+                                            resources.setOffset(0);
+                                        }}
+                                    >
+                                        {categoryObj()?.name || tag}
+                                    </span>
+                                );
+                            }}
                         </For>
                         <Show when={props.project.categories.length > 4}>
                             <span class="resource-tag-more">+{props.project.categories.length - 4}</span>
@@ -624,15 +619,44 @@ const ResourceCard: Component<{ project: ResourceProject; viewMode: 'grid' | 'li
 
 const FiltersPanel: Component = () => {
     const [mcVersions] = createResource(getMinecraftVersions);
-    const [mrCategories] = createResource<ModrinthCategory[]>(async () => {
-        try {
-            const res = await fetch("https://api.modrinth.com/v2/tag/category");
-            return res.json();
-        } catch (e) {
-            console.error("Failed to fetch Modrinth categories:", e);
-            return [];
+
+    onMount(() => {
+        resources.fetchCategories();
+    });
+
+    // Auto-expand groups that contain active categories
+    createEffect(() => {
+        const activeCats = resources.state.categories;
+        const available = availableCategories();
+        if (activeCats.length > 0 && available.length > 0) {
+            const current = resources.state.expandedCategoryGroups;
+            const next = new Set(current);
+            let changed = false;
+            
+            for (const group of available) {
+                // Expand if group itself is active or any items are active
+                const id = group.id || group.name;
+                const groupIsActive = group.id && activeCats.includes(group.id);
+                const itemIsActive = group.items.some(item => activeCats.includes(item.id));
+                
+                if ((groupIsActive || itemIsActive) && id) {
+                    if (!next.has(id)) {
+                        next.add(id);
+                        changed = true;
+                    }
+                }
+            }
+            
+            if (changed) {
+                resources.setExpandedCategoryGroups(Array.from(next));
+            }
         }
     });
+
+    const toggleGroupExpand = (groupId: string, e: MouseEvent) => {
+        e.stopPropagation();
+        resources.toggleCategoryGroup(groupId);
+    };
 
     const gameVersions = createMemo(() => {
         const meta = mcVersions();
@@ -658,30 +682,78 @@ const FiltersPanel: Component = () => {
     const availableCategories = createMemo(() => {
         const type = resources.state.resourceType;
         const source = resources.state.activeSource;
+        const allCats = resources.state.availableCategories;
 
-        if (source === 'modrinth') {
-            const cats = mrCategories();
-            if (!cats) return [];
-            return cats
-                .filter(c => c.project_type === type)
-                .map(c => ({ 
-                    id: c.name.toLowerCase(), 
-                    name: c.name, 
-                    icon: c.icon 
-                }));
-        } else {
-            // CurseForge: Just names for now, filter based on type if possible
-            if (type !== 'mod') return [];
-            return MOD_CATEGORIES.curseforge.map(name => ({ 
-                id: name.toLowerCase(), 
-                name: name, 
-                icon: null 
-            }));
+        if (allCats.length === 0) return [];
+
+        // Filter by project type
+        const filtered = allCats.filter(c => {
+            if (!c.project_type) return true;
+            return c.project_type === type;
+        });
+
+        if (source === 'curseforge') {
+            interface CategoryItem { id: string; name: string; icon: string | null; displayIndex: number };
+            interface CategoryGroup { id?: string; name: string; icon?: string | null; displayIndex: number; items: CategoryItem[] };
+            
+            const result: CategoryGroup[] = [];
+            
+            // 1. Identify "Top Level" categories for this resource type.
+            const topLevel = filtered.filter(c => !c.parent_id || !filtered.some(p => p.id === c.parent_id));
+            
+            const generalGroup: CategoryGroup = { id: undefined, name: "General", icon: undefined, displayIndex: -1, items: [] };
+
+            for (const tl of topLevel) {
+                const children = filtered.filter(c => c.parent_id === tl.id);
+                if (children.length > 0) {
+                    result.push({
+                        id: tl.id,
+                        name: tl.name,
+                        icon: tl.icon_url,
+                        displayIndex: tl.display_index ?? 0,
+                        items: children.map(c => ({ 
+                            id: c.id, 
+                            name: c.name, 
+                            icon: c.icon_url,
+                            displayIndex: c.display_index ?? 0
+                        })).sort((a,b) => (a.displayIndex - b.displayIndex) || a.name.localeCompare(b.name))
+                    });
+                } else {
+                    generalGroup.items.push({ 
+                        id: tl.id, 
+                        name: tl.name, 
+                        icon: tl.icon_url,
+                        displayIndex: tl.display_index ?? 0
+                    });
+                }
+            }
+
+            result.sort((a, b) => (a.displayIndex - b.displayIndex) || a.name.localeCompare(b.name));
+            if (generalGroup.items.length > 0) {
+                generalGroup.items.sort((a, b) => (a.displayIndex - b.displayIndex) || a.name.localeCompare(b.name));
+                result.unshift(generalGroup); // General at the very top
+            }
+
+            return result;
         }
+
+        // Flat list for Modrinth (Single group with empty name to avoid double header)
+        return [{
+            id: undefined as string | undefined, 
+            name: "", 
+            icon: undefined as string | undefined,
+            displayIndex: 0,
+            items: filtered.map(c => ({
+                id: c.id,
+                name: c.name,
+                icon: c.icon_url,
+                displayIndex: c.display_index ?? 0
+            })).sort((a, b) => a.name.localeCompare(b.name))
+        }];
     });
 
-    const shouldShowLoader = () => resources.state.resourceType === 'mod';
-    const shouldShowGameVersion = () => resources.state.resourceType !== 'modpack';
+    const shouldShowLoader = () => resources.state.resourceType === 'mod' || resources.state.resourceType === 'modpack';
+    const shouldShowGameVersion = () => true;
 
     return (
         <div class="filters-panel">
@@ -704,11 +776,16 @@ const FiltersPanel: Component = () => {
             <div class="filter-section">
                 <label class="filter-label">Resource Type</label>
                 <div class="filter-options">
-                    <For each={['mod', 'resourcepack', 'shader', 'datapack', 'modpack'] as const}>
+                    <For each={['mod', 'resourcepack', 'shader', 'datapack', 'modpack', 'world'] as const}>
                         {(type) => (
                             <button
                                 class="filter-option"
-                                classList={{ active: resources.state.resourceType === type }}
+                                classList={{ 
+                                    active: resources.state.resourceType === type,
+                                    disabled: type === 'world' && resources.state.activeSource === 'modrinth'
+                                }}
+                                disabled={type === 'world' && resources.state.activeSource === 'modrinth'}
+                                title={type === 'world' && resources.state.activeSource === 'modrinth' ? "Modrinth does not support worlds" : undefined}
                                 onClick={() => {
                                     resources.setType(type);
                                     resources.setOffset(0);
@@ -773,22 +850,80 @@ const FiltersPanel: Component = () => {
             <Show when={availableCategories().length > 0}>
                 <div class="filter-section">
                     <label class="filter-label">Categories</label>
-                    <div class="category-grid">
+                    <div class="category-groups">
                         <For each={availableCategories()}>
-                            {(cat) => (
-                                <button
-                                    class="category-tag"
-                                    classList={{ active: resources.state.categories.includes(cat.id) }}
-                                    onClick={() => {
-                                        resources.toggleCategory(cat.id);
-                                        resources.setOffset(0);
-                                    }}
-                                >
-                                    <Show when={cat.icon}>
-                                        <div class="category-tag-icon" innerHTML={cat.icon ?? ""} />
+                            {(group) => (
+                                <div class="category-group">
+                                    <Show when={group.name !== ""}>
+                                        <div 
+                                            class="category-group-header"
+                                            classList={{ 'not-clickable': !group.id }}
+                                        >
+                                            <div 
+                                                class="category-group-title" 
+                                                title={group.id}
+                                                classList={{ 
+                                                    clickable: !!group.id, 
+                                                    active: group.id ? resources.state.categories.includes(group.id) : false 
+                                                }}
+                                                onClick={() => {
+                                                    if (group.id) {
+                                                        resources.toggleCategory(group.id);
+                                                        resources.setOffset(0);
+                                                    }
+                                                }}
+                                            >
+                                                <Show when={group.icon}>
+                                                    <div class="category-tag-icon">
+                                                        <Show when={group.icon?.startsWith("http")} fallback={
+                                                            <div class="category-tag-icon-svg" innerHTML={group.icon ?? ""} />
+                                                        }>
+                                                            <img src={group.icon ?? ""} class="category-tag-icon-img" alt={group.name} />
+                                                        </Show>
+                                                    </div>
+                                                </Show>
+                                                <span>{group.name}</span>
+                                            </div>
+                                            <Show when={group.items.length > 0 && resources.state.activeSource === 'curseforge'}>
+                                                <button 
+                                                    class="expand-toggle"
+                                                    classList={{ expanded: resources.state.expandedCategoryGroups.includes(group.id || group.name) }}
+                                                    onClick={(e) => toggleGroupExpand(group.id || group.name, e)}
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                                                </button>
+                                            </Show>
+                                        </div>
                                     </Show>
-                                    <span class="category-tag-text">{cat.name}</span>
-                                </button>
+                                    <Show when={resources.state.expandedCategoryGroups.includes(group.id || group.name) || resources.state.activeSource !== 'curseforge'}>
+                                        <div class="category-grid">
+                                            <For each={group.items}>
+                                                {(cat) => (
+                                                    <button
+                                                        class="category-tag"
+                                                        title={cat.id}
+                                                        classList={{ active: resources.state.categories.includes(cat.id) }}
+                                                        onClick={() => {
+                                                            resources.toggleCategory(cat.id);
+                                                            resources.setOffset(0);
+                                                        }}
+                                                    >
+                                                        <Show when={cat.icon}>
+                                                            <div class="category-tag-icon">
+                                                                <Show when={cat.icon?.startsWith("http")} fallback={
+                                                                    <div class="category-tag-icon-svg" innerHTML={cat.icon ?? ""} />
+                                                                }>
+                                                                    <img src={cat.icon ?? ""} class="category-tag-icon-img" alt={cat.name} />
+                                                                </Show>
+                                                            </div>
+                                                        </Show>
+                                                        <span class="category-tag-text">{cat.name}</span>
+                                                    </button>
+                                                )}
+                                            </For>
+                                        </div>
+                                    </Show>
+                                </div>
                             )}
                         </For>
                     </div>
@@ -995,7 +1130,10 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
         resources.state.sortOrder;
         resources.state.limit;
         resources.state.offset;
+        const reconciling = resources.state.reconcilingCategories;
         
+        if (reconciling) return;
+
         untrack(() => {
             resources.search();
         });
@@ -1107,9 +1245,13 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
                     <div class="results-stats">
                         <Show when={resources.state.totalHits > 0}>
                             Showing {resources.state.totalHits.toLocaleString()} results
-                        </Show>
-                        <Show when={resources.state.categories.length > 0}>
-                            <span class="active-categories-info"> • {resources.state.categories.join(", ")}</span>
+                            <Show when={resources.state.categories.length > 0}>
+                                {" • "}
+                                {resources.state.categories.map(catId => {
+                                    const cat = resources.state.availableCategories.find(c => c.id === catId);
+                                    return cat ? cat.name : (catId.charAt(0).toUpperCase() + catId.slice(1));
+                                }).join(", ")}
+                            </Show>
                         </Show>
                     </div>
                     <div class="results-sort">

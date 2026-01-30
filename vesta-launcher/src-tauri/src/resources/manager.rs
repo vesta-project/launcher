@@ -8,7 +8,7 @@ use chrono::NaiveDateTime;
 use crate::models::resource::{
     ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, 
     SearchResponse, ResourceMetadataCacheRecord, DependencyType, ReleaseType,
-    ResourceProjectRecord
+    ResourceProjectRecord, ResourceCategory
 };
 use crate::resources::sources::ResourceSource;
 use crate::resources::sources::modrinth::ModrinthSource;
@@ -26,6 +26,7 @@ pub struct ResourceManager {
     version_cache: Arc<Mutex<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>>,
     hash_cache: Arc<Mutex<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
     search_cache: Arc<Mutex<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
+    category_cache: Arc<Mutex<HashMap<SourcePlatform, (Vec<ResourceCategory>, NaiveDateTime)>>>,
 }
 
 impl ResourceManager {
@@ -41,7 +42,38 @@ impl ResourceManager {
             version_cache: Arc::new(Mutex::new(HashMap::new())),
             hash_cache: Arc::new(Mutex::new(HashMap::new())),
             search_cache: Arc::new(Mutex::new(HashMap::new())),
+            category_cache: Arc::new(Mutex::new(HashMap::new())),
         }
+    }
+
+    pub async fn get_categories(&self, platform: SourcePlatform) -> Result<Vec<ResourceCategory>> {
+        // 1. Check cache (cache for 1 hour)
+        {
+            let cache = self.category_cache.lock().await;
+            if let Some((categories, timestamp)) = cache.get(&platform) {
+                let now = chrono::Utc::now().naive_utc();
+                if (now - *timestamp).num_hours() < 1 {
+                    return Ok(categories.clone());
+                }
+            }
+        }
+
+        // 2. Fetch from source
+        let sources = self.sources.lock().await;
+        for source in sources.iter() {
+            if source.platform() == platform {
+                let categories = source.get_categories().await?;
+                
+                // 3. Update cache
+                {
+                    let mut cache = self.category_cache.lock().await;
+                    cache.insert(platform, (categories.clone(), chrono::Utc::now().naive_utc()));
+                }
+                
+                return Ok(categories);
+            }
+        }
+        Err(anyhow!("Source not found for platform {:?}", platform))
     }
 
     pub async fn resolve_dependencies(

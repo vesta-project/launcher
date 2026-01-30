@@ -915,24 +915,36 @@ const ResourceDetailsPage: Component<{
                                 </div>
                                 <div class="project-categories">
                                     <For each={project()?.categories}>
-                                        {(cat) => (
-                                            <span 
-                                                class="category-pill clickable" 
-                                                onClick={() => {
-                                                    const p = project();
-                                                    if (p) {
-                                                        resources.setType(p.resource_type);
-                                                        resources.setSource(p.source);
-                                                    }
-                                                    resources.setQuery("");
-                                                    resources.setCategories([cat.toLowerCase()]);
-                                                    resources.setOffset(0);
-                                                    router()?.navigate("/resources");
-                                                }}
-                                            >
-                                                {cat}
-                                            </span>
-                                        )}
+                                        {(cat) => {
+                                            // Find the category object in availableCategories if possible to get its real ID/Slug
+                                            const categoryObj = createMemo(() => 
+                                                resources.state.availableCategories.find(c => 
+                                                    c.name.toLowerCase() === cat.toLowerCase() || 
+                                                    c.id.toLowerCase() === cat.toLowerCase()
+                                                )
+                                            );
+
+                                            return (
+                                                <span 
+                                                    class="category-pill clickable" 
+                                                    onClick={() => {
+                                                        const p = project();
+                                                        if (p) {
+                                                            resources.setType(p.resource_type);
+                                                            resources.setSource(p.source);
+                                                        }
+                                                        resources.setQuery("");
+                                                        // Use the ID from the category object if found, otherwise fallback to the string
+                                                        const filterId = categoryObj()?.id || cat;
+                                                        resources.setCategories([filterId]);
+                                                        resources.setOffset(0);
+                                                        router()?.navigate("/resources");
+                                                    }}
+                                                >
+                                                    {categoryObj()?.name || cat}
+                                                </span>
+                                            );
+                                        }}
                                     </For>
                                 </div>
                             </div>

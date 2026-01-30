@@ -66,6 +66,7 @@ impl Task for ResourceDownloadTask {
                 ResourceType::ResourcePack => "resourcepacks",
                 ResourceType::Shader => "shaderpacks",
                 ResourceType::DataPack => "datapacks",
+                ResourceType::World => "saves",
                 ResourceType::Modpack => return Err("Modpack installation not supported yet".to_string()),
             };
             
@@ -193,6 +194,7 @@ impl Task for ResourceDownloadTask {
                             ResourceType::Shader => "shader",
                             ResourceType::DataPack => "datapack",
                             ResourceType::Modpack => "modpack",
+                            ResourceType::World => "world",
                         }),
                         installed_dsl::local_path.eq(&final_path_str),
                         installed_dsl::display_name.eq(&project_name),
@@ -228,6 +230,7 @@ impl Task for ResourceDownloadTask {
                         ResourceType::Shader => "shader",
                         ResourceType::DataPack => "datapack",
                         ResourceType::Modpack => "modpack",
+                        ResourceType::World => "world",
                     }.to_string(),
                     local_path: final_path_str,
                     display_name: project_name,

@@ -1,5 +1,5 @@
 use tauri::State;
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, SearchResponse};
+use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, SearchResponse, ResourceCategory};
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::resource_download::ResourceDownloadTask;
@@ -48,6 +48,15 @@ pub async fn get_installed_resources(
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     
     Ok(resources)
+}
+
+#[tauri::command]
+pub async fn get_resource_categories(
+    resource_manager: State<'_, ResourceManager>,
+    platform: SourcePlatform,
+) -> Result<Vec<ResourceCategory>> {
+    resource_manager.get_categories(platform).await
+        .map_err(|e| anyhow::anyhow!(e.to_string()).into())
 }
 
 #[tauri::command]
