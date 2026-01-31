@@ -1,4 +1,4 @@
-import {
+﻿import {
 	createSignal,
 	Show,
 	createResource,
@@ -25,6 +25,9 @@ import {
 } from "@utils/modpacks";
 import { resources, SourcePlatform } from "@stores/resources";
 import { InstallForm } from "./components/InstallForm";
+import SearchIcon from "@assets/search.svg";
+import GlobeIcon from "@assets/earth-globe.svg";
+import CubeIcon from "@assets/cube.svg";
 import "./install-page.css";
 
 interface InstallPageProps {
@@ -114,26 +117,73 @@ function InstallPage(props: InstallPageProps) {
 	const [urlInputValue, setUrlInputValue] = createSignal("");
 	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
 
+	// --- Derived UI States ---
+	// These prevent layout flickering between state updates
+	const shouldShowOverlay = createMemo(() => {
+		// If we HAVE a source but don't have modpack info yet, we are analyzing
+		const hasSource = !!(modpackUrl() || modpackPath());
+		const hasInfo = !!modpackInfo();
+		
+		if (isModpackMode() && hasSource && !hasInfo && !props.projectName) return true;
+		
+		// If we're loading project versions from the browser and don't have a name yet
+		if (isModpackMode() && props.projectId && projectVersions.loading && !props.projectName) return true;
+		
+		return false;
+	});
+
+	const shouldShowForm = createMemo(() => {
+		// Always show form in standard mode
+		if (!isModpackMode()) return true;
+		// Show if we have modpack metadata
+		if (modpackInfo()) return true;
+		// Show if we have initial project context (browser install)
+		if (props.projectName) return true;
+		return false;
+	});
+
 	// --- Resource: Fetch Platform Versions (Remote Repos) ---
 	const [projectVersions] = createResource(
-		() => (props.projectId && props.platform) ? { id: props.projectId, platform: props.platform } : null,
+		() => {
+			// [FIX] Never fetch versions for a local file import. 
+			// We only support version switching for Browser or URL imports.
+			if (modpackPath()) return null;
+
+			const pId = props.projectId || modpackInfo()?.modpackId;
+			const pPlatform = props.platform || modpackInfo()?.modpackPlatform;
+			
+			if (pId && pPlatform) {
+				return { id: pId, platform: pPlatform };
+			}
+			return null;
+		},
 		async ({ id, platform }) => {
 			try {
 				const vs = await resources.getVersions(platform as SourcePlatform, id);
 				// Sync selection if we have an initial URL matched up
 				const currentUrl = modpackUrl();
-				const initialVer = props.initialVersion;
+				const info = modpackInfo();
+				const initialVer = props.initialVersion || info?.modpackVersionId;
+
+				if (initialVer) {
+					const match = vs.find(v => v.id === initialVer || v.version_number === initialVer);
+					if (match) {
+						setSelectedModpackVersionId(match.id);
+						return vs;
+					}
+				}
 
 				if (currentUrl) {
 					const match = vs.find(v => v.download_url === currentUrl);
-					if (match) setSelectedModpackVersionId(match.id);
-				} else if (vs.length > 0 && isModpackMode()) {
-					// Auto-select based on initialVersion or just latest
-					let target = vs[0];
-					if (initialVer) {
-						const match = vs.find(v => v.id === initialVer || v.version_number === initialVer);
-						if (match) target = match;
+					if (match) {
+						setSelectedModpackVersionId(match.id);
+						return vs;
 					}
+				} 
+				
+				if (vs.length > 0 && isModpackMode()) {
+					// Auto-select latest if no specific match found
+					let target = vs[0];
 					
 					batch(() => {
 						setSelectedModpackVersionId(target.id);
@@ -163,8 +213,8 @@ function InstallPage(props: InstallPageProps) {
 			setIsFetchingMetadata(true);
 			try {
 				const info = url 
-					? await getModpackInfoFromUrl(url) 
-					: await getModpackInfo(path);
+					? await getModpackInfoFromUrl(url, props.projectId, props.platform) 
+					: await getModpackInfo(path, props.projectId, props.platform);
 				
 				setModpackInfo(info);
 			} catch (err) {
@@ -202,6 +252,11 @@ function InstallPage(props: InstallPageProps) {
 						description: "Could not read modpack metadata from the provided source. Check your selection.",
 						severity: "Warning"
 					});
+					// Reset the source so we go back to the selection page
+					batch(() => {
+						setModpackUrl("");
+						setModpackPath("");
+					});
 				}
 			} finally {
 				setIsFetchingMetadata(false);
@@ -230,13 +285,15 @@ function InstallPage(props: InstallPageProps) {
 			if (isModpackMode() && (modpackUrl() || modpackPath())) {
 				const sourceUrl = modpackUrl();
 				const sourcePath = modpackPath();
+				const info = modpackInfo();
+				const fullMetadata = info?.fullMetadata;
 				
 				if (sourceUrl) {
 					console.log(`[Install] Fetching modpack from URL: ${sourceUrl}`);
-					await installModpackFromUrl(sourceUrl, data);
+					await installModpackFromUrl(sourceUrl, data, fullMetadata);
 				} else if (sourcePath) {
 					console.log(`[Install] Installing modpack from local file: ${sourcePath}`);
-					await installModpackFromZip(sourcePath, data);
+					await installModpackFromZip(sourcePath, data, fullMetadata);
 				}
 				
 				showToast({ title: "Install Started", description: `Installing modpack: ${data.name}`, severity: "Success" });
@@ -311,7 +368,7 @@ function InstallPage(props: InstallPageProps) {
 
 	return (
 		<div class="page-root">
-			<Show when={!(props.projectId || modpackUrl() || modpackPath())}>
+			<Show when={!(props.projectId || modpackUrl() || modpackPath() || isModpackMode())}>
 				<header class="install-page-header">
 					<div class="header-text">
 						<h1>{isModpackMode() ? "Install Modpack" : "New Instance"}</h1>
@@ -328,7 +385,7 @@ function InstallPage(props: InstallPageProps) {
 
 			<div class="page-wrapper">
 				{/* Context Banner (e.g. "Installing Fabulous Optimized") */}
-				<Show when={props.projectName || modpackPath() || modpackUrl()}>
+				<Show when={(props.projectName || modpackPath() || modpackUrl()) && !shouldShowOverlay()}>
 					<div class="install-resource-context">
 						<button class="back-link" onClick={() => {
 							if (props.projectId) {
@@ -341,7 +398,7 @@ function InstallPage(props: InstallPageProps) {
 								});
 							}
 						}}>
-							← {props.projectId ? "Back to Browser" : "Back to Source"}
+							{props.projectId ? "Back to Browser" : "Back to Source"}
 						</button>
 						<div class="resource-pill">
 							<Show when={props.projectIcon || modpackInfo()?.iconUrl}>
@@ -352,8 +409,11 @@ function InstallPage(props: InstallPageProps) {
 									{props.resourceType || (isModpackMode() ? "Modpack" : "Package")}
 								</span>
 								<div class="resource-name-row">
-									<span class="resource-name">
-										{props.projectName || modpackInfo()?.name || "Analyzing..."}
+									<span 
+										class="resource-name"
+										classList={{ "is-analyzing": !modpackInfo() && !props.projectName }}
+									>
+										{props.projectName || modpackInfo()?.name || "Analyzing modpack details..."}
 									</span>
 									<Show when={modpackInfo() || (props.initialVersion && props.initialModloader)}>
 										<div class="resource-meta">
@@ -369,30 +429,58 @@ function InstallPage(props: InstallPageProps) {
 
 				{/* Source Selection (Only if we don't have a source yet and we're in modpack mode) */}
 				<Show when={isModpackMode() && !modpackUrl() && !modpackPath() && !isFetchingMetadata() && !props.projectId}>
-					<div class="modpack-import-container">
+					<div class="import-selection-wrapper">
 						<Show when={!showUrlInput()}>
-							<div class="modpack-import-card" onClick={handleLocalImport}>
-								<div class="icon">📦</div>
-								<div class="title">Local File</div>
-								<div class="description">Upload .zip or .mrpack</div>
+							<div class="import-header">
+								<h1>Install Modpack</h1>
+								<p>Choose an installation source to get started.</p>
 							</div>
-							<div class="modpack-import-card" onClick={() => { resources.setType('modpack'); router()?.navigate("/resources"); }}>
-								<div class="icon">🔍</div>
-								<div class="title">Explore</div>
-								<div class="description">Browse Modrinth & CF</div>
+
+							<div class="modpack-import-container">
+								<div class="modpack-import-card" onClick={handleLocalImport}>
+									<div class="card-icon">
+										<CubeIcon />
+									</div>
+									<div class="card-content">
+										<div class="title">Local File</div>
+										<div class="description">Upload .zip or .mrpack</div>
+									</div>
+								</div>
+								<div class="modpack-import-card" onClick={() => { resources.setType('modpack'); router()?.navigate("/resources"); }}>
+									<div class="card-icon">
+										<SearchIcon />
+									</div>
+									<div class="card-content">
+										<div class="title">Explore</div>
+										<div class="description">Browse Modrinth & CF</div>
+									</div>
+								</div>
+								<div class="modpack-import-card" onClick={() => setShowUrlInput(true)}>
+									<div class="card-icon is-stroke">
+										<GlobeIcon />
+									</div>
+									<div class="card-content">
+										<div class="title">From URL</div>
+										<div class="description">Direct download link</div>
+									</div>
+								</div>
 							</div>
-							<div class="modpack-import-card" onClick={() => setShowUrlInput(true)}>
-								<div class="icon">🌐</div>
-								<div class="title">From URL</div>
-								<div class="description">Direct download link</div>
+
+							<div class="import-footer">
+								<button class="switch-mode-button" onClick={() => setManualModpackMode(false)}>
+									Switch to Standard Instance
+								</button>
 							</div>
 						</Show>
 
 						<Show when={showUrlInput()}>
 							<div class="url-input-container">
 								<div class="url-input-header">
-									<div class="icon">🌐</div>
+									<div class="card-icon is-stroke">
+										<GlobeIcon />
+									</div>
 									<h3>Enter Download Link</h3>
+									<p>Paste a CurseForge, Modrinth, or direct ZIP/MRPACK link.</p>
 								</div>
 								<div class="url-input-row">
 									<input 
@@ -403,7 +491,7 @@ function InstallPage(props: InstallPageProps) {
 										onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
 										autofocus
 									/>
-									<button class="import-button" onClick={handleUrlSubmit} disabled={!urlInputValue()}>Next</button>
+									<button class="import-button" onClick={handleUrlSubmit} disabled={!urlInputValue()}>Continue</button>
 								</div>
 								<button class="cancel-link" onClick={() => setShowUrlInput(false)}>Go Back</button>
 							</div>
@@ -411,20 +499,26 @@ function InstallPage(props: InstallPageProps) {
 					</div>
 				</Show>
 
-				{/* Loading / Fetching State (Initial) */}
+					{/* Loading / Fetching State (Initial) */}
 				{/* We only show the full-page fetching overlay if we don't have a project name to show the form for yet */}
-				<Show when={((isFetchingMetadata() && !modpackInfo()) || (isModpackMode() && props.projectId && projectVersions.loading)) && !props.projectName}>
-					<div class="fetching-overlay">
-						<div class="spinner" />
-						<p>{projectVersions.loading ? "Fetching versions..." : "Syncing modpack data..."}</p>
+				<Show when={shouldShowOverlay()}>
+					<div class="fetching-metadata-container">
+						<div class="fetching-overlay">
+							<div class="spinner" />
+							<p>{projectVersions.loading ? "Loading available versions..." : "Fetching modpack details..."}</p>
+							<Show when={!projectVersions.loading}>
+								<span class="fetching-subtext">This usually takes a few seconds as we verify the pack manifest.</span>
+							</Show>
+						</div>
 					</div>
 				</Show>
 
 				{/* Configuration Form */}
 				{/* We show the form as soon as we have some basic context, or if we are not in modpack mode. */}
-				<Show when={(!isModpackMode() || modpackUrl() || modpackPath() || props.projectId) && (!isFetchingMetadata() || modpackInfo() || props.projectName)}>
+				<Show when={shouldShowForm() && (!isModpackMode() || modpackUrl() || modpackPath() || props.projectId)}>
 					<InstallForm 
 						isModpack={isModpackMode()}
+						isLocalImport={!!modpackPath()}
 						modpackInfo={modpackInfo()}
 						modpackVersions={projectVersions() ?? []}
 						selectedModpackVersionId={selectedModpackVersionId()}
@@ -460,4 +554,6 @@ function InstallPage(props: InstallPageProps) {
 }
 
 export default InstallPage;
+
+
 

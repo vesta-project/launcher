@@ -1,4 +1,4 @@
-import LauncherButton from "@ui/button/button";
+﻿import LauncherButton from "@ui/button/button";
 import {
 	Combobox,
 	ComboboxContent,
@@ -59,6 +59,7 @@ export interface InstallFormProps {
 	initialMaxMemory?: number;
 
 	isModpack?: any;
+	isLocalImport?: boolean;
 	modpackInfo?: ModpackInfo;
 	modpackVersions?: any[];
 	selectedModpackVersionId?: string;
@@ -399,7 +400,7 @@ export function InstallForm(props: InstallFormProps) {
 						</div>
 					</Show>
 
-					<Show when={normalizedIsModpack() && (props.projectId || (props.modpackVersions && props.modpackVersions.length > 0))}>
+					<Show when={normalizedIsModpack() && !props.isLocalImport && (props.projectId || (props.modpackVersions && props.modpackVersions.length > 0))}>
 						<div
 							class="form-section modpack-context-section"
 							classList={{ "is-fetching": props.isFetchingMetadata }}

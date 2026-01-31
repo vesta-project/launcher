@@ -225,7 +225,12 @@ impl Task for InstallInstanceTask {
                     }
 
                     // Emit installed event for frontend
-                    // (Note: update_installation_status already emits core://instance-updated)
+                    use tauri::Emitter;
+                    let _ = app_handle.emit("core://instance-installed", serde_json::json!({
+                        "name": instance.name,
+                        "instance_id": instance.slug()
+                    }));
+
                     Ok(())
                 }
                 Err(e) => {

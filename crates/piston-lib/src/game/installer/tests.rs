@@ -165,7 +165,6 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
-                quick: false,
                 concurrency: 8,
             };
 
@@ -209,7 +208,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -250,7 +248,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -294,7 +291,6 @@ mod tests {
             game_dir: game_dir.clone(),
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -358,7 +354,6 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
-                quick: false,
                 concurrency: 8,
             };
 
@@ -402,7 +397,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -443,7 +437,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -495,7 +488,6 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
-                quick: false,
                 concurrency: 8,
             };
 
@@ -539,7 +531,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -591,7 +582,6 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
-                quick: false,
                 concurrency: 8,
             };
 
@@ -635,7 +625,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -676,7 +665,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -717,7 +705,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -776,7 +763,6 @@ mod tests {
                 game_dir: game_dir,
                 java_path: None,
                 dry_run: false,
-                quick: false,
                 concurrency: 8,
             };
 
@@ -820,7 +806,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -861,7 +846,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -913,7 +897,6 @@ mod tests {
                 game_dir: game_dir.clone(),
                 java_path: None,
                 dry_run: false,
-                quick: false,
                 concurrency: 8,
             };
 
@@ -966,7 +949,6 @@ mod tests {
                     game_dir: game_dir,
                     java_path: None,
                     dry_run: false,
-                    quick: false,
                 concurrency: 8,
                 };
 
@@ -1036,7 +1018,6 @@ mod tests {
             game_dir: game_dir,
             java_path: None,
             dry_run: false,
-            quick: false,
                 concurrency: 8,
         };
 
@@ -1080,7 +1061,6 @@ mod tests {
             game_dir: game_dir.clone(),
             java_path: None,
             dry_run: true,
-            quick: false,
                 concurrency: 8,
         };
 

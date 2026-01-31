@@ -23,6 +23,7 @@ pub enum ModpackSource {
 pub struct InstallModpackTask {
     instance: Instance,
     source: ModpackSource,
+    metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
 }
 
 struct PistonModpackResolver {
@@ -92,10 +93,11 @@ impl ModpackResolver for PistonModpackResolver {
 }
 
 impl InstallModpackTask {
-    pub fn new(instance: Instance, source: ModpackSource) -> Self {
+    pub fn new(instance: Instance, source: ModpackSource, metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>) -> Self {
         Self {
             instance,
             source,
+            metadata,
         }
     }
 }
@@ -120,6 +122,7 @@ impl Task for InstallModpackTask {
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
         let instance = self.instance.clone();
         let source = self.source.clone();
+        let metadata = self.metadata.clone();
         let app_handle = ctx.app_handle.clone();
         let notification_id = ctx.notification_id.clone();
         let cancel_rx = ctx.cancel_rx.clone();
@@ -195,8 +198,9 @@ impl Task for InstallModpackTask {
 
             let java_path = instance.java_path.as_ref().map(PathBuf::from);
 
-            let (metadata, override_mods) = ModpackInstaller::install_from_zip(
+            let (metadata, override_mods) = ModpackInstaller::install_from_zip_with_metadata(
                 &modpack_path,
+                metadata,
                 &game_dir,
                 &data_dir,
                 reporter,
@@ -234,7 +238,11 @@ impl Task for InstallModpackTask {
 
             // Emit update event
             use tauri::Emitter;
-            let _ = app_handle.emit("core://instance-updated", final_instance);
+            let _ = app_handle.emit("core://instance-updated", final_instance.clone());
+            let _ = app_handle.emit("core://instance-installed", serde_json::json!({ 
+                "name": final_instance.name,
+                "instance_id": final_instance.slug()
+            }));
 
             // POST-INSTALL: Link resources to database automatically
             // This prevents the ResourceWatcher from needing to hit the network for every mod

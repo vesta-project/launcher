@@ -988,12 +988,29 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			}
 		});
 
+		const unlistenInstalled = await listen("core://instance-installed", (ev) => {
+			const payload = (ev as { payload: { instance_id?: string } }).payload;
+			if (payload.instance_id === slug()) {
+				handleRefetch();
+			}
+		});
+
+		const unlistenUpdated = await listen("core://instance-updated", (ev) => {
+			const payload = ev.payload as any;
+			const current = instance();
+			if (current && payload.id === current.id) {
+				handleRefetch();
+			}
+		});
+
 		onCleanup(() => {
 			unlisten();
 			unlistenResources();
 			unlistenLaunch();
 			unlistenKill();
 			unlistenExited();
+			unlistenInstalled();
+			unlistenUpdated();
 		});
 	});
 

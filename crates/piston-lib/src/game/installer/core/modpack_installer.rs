@@ -43,12 +43,37 @@ impl ModpackInstaller {
         resolver: Option<Arc<dyn ModpackResolver>>,
         java_path: Option<std::path::PathBuf>,
     ) -> Result<(crate::game::modpack::types::ModpackMetadata, Vec<std::path::PathBuf>)> {
+        Self::install_from_zip_with_metadata(
+            zip_path,
+            None,
+            game_dir,
+            data_dir,
+            reporter,
+            resolver,
+            java_path,
+        ).await
+    }
+
+    pub async fn install_from_zip_with_metadata(
+        zip_path: &Path,
+        metadata: Option<crate::game::modpack::types::ModpackMetadata>,
+        game_dir: &Path,
+        data_dir: &Path,
+        reporter: Arc<dyn ProgressReporter>,
+        resolver: Option<Arc<dyn ModpackResolver>>,
+        java_path: Option<std::path::PathBuf>,
+    ) -> Result<(crate::game::modpack::types::ModpackMetadata, Vec<std::path::PathBuf>)> {
         log::info!("Installing modpack from ZIP: {:?}", zip_path);
 
-        // Step 1: Parse metadata
-        reporter.start_step("Analyzing modpack ZIP", Some(100));
-        let metadata = get_modpack_metadata(zip_path)
-            .context("Failed to parse modpack metadata from ZIP")?;
+        // Step 1: Parse metadata (if not already provided)
+        let metadata = if let Some(meta) = metadata {
+            log::info!("Using pre-interpreted modpack metadata for {}", meta.name);
+            meta
+        } else {
+            reporter.start_step("Analyzing modpack ZIP", Some(100));
+            get_modpack_metadata(zip_path)
+                .context("Failed to parse modpack metadata from ZIP")?
+        };
         
         log::info!("Installing modpack: {} v{}", metadata.name, metadata.version);
         reporter.set_message(&format!("Preparing to install {}...", metadata.name));
@@ -90,7 +115,7 @@ impl ModpackInstaller {
 
         // Step 5: Download additional mods
         if !metadata.mods.is_empty() {
-            reporter.start_step("Downloading modpack mods", Some(metadata.mods.len() as u32));
+            reporter.start_step("Downloading modpack resources", Some(metadata.mods.len() as u32));
             let client = Client::new();
             let downloader = BatchDownloader::new(client, 8);
             

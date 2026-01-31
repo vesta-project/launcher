@@ -17,18 +17,26 @@ interface ModpackInstallDialogProps {
     zipPath?: string;
     url?: string;
     iconUrl?: string;
+    modpackId?: string;
+    modpackPlatform?: string;
 }
 
 export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
     const [isInstalling, setIsInstalling] = createSignal(false);
     const [showAdvanced, setShowAdvanced] = createSignal(false);
 
-    const [modpackInfo] = createResource<ModpackInfo | undefined, { zipPath?: string; url?: string; manualIcon?: string }>(
-        () => ({ zipPath: props.zipPath, url: props.url, manualIcon: props.iconUrl }),
+    const [modpackInfo] = createResource<ModpackInfo | undefined, { zipPath?: string; url?: string; manualIcon?: string; modpackId?: string; modpackPlatform?: string }>(
+        () => ({ 
+            zipPath: props.zipPath, 
+            url: props.url, 
+            manualIcon: props.iconUrl,
+            modpackId: props.modpackId,
+            modpackPlatform: props.modpackPlatform
+        }),
         async (source) => {
             let info: ModpackInfo | undefined;
-            if (source.zipPath) info = await getModpackInfo(source.zipPath);
-            else if (source.url) info = await getModpackInfoFromUrl(source.url);
+            if (source.zipPath) info = await getModpackInfo(source.zipPath, source.modpackId, source.modpackPlatform);
+            else if (source.url) info = await getModpackInfoFromUrl(source.url, source.modpackId, source.modpackPlatform);
             
             if (info) {
                 if (source.manualIcon) info.iconUrl = source.manualIcon;
@@ -40,10 +48,13 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
     const handleInstall = async (data: Partial<Instance>) => {
         setIsInstalling(true);
         try {
+            const info = modpackInfo();
+            const fullMetadata = info?.fullMetadata;
+
             if (props.zipPath) {
-                await installModpackFromZip(props.zipPath, data);
+                await installModpackFromZip(props.zipPath, data, fullMetadata);
             } else if (props.url) {
-                await installModpackFromUrl(props.url, data);
+                await installModpackFromUrl(props.url, data, fullMetadata);
             }
             
             showToast({

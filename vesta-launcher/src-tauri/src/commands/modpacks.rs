@@ -21,7 +21,7 @@ use anyhow::Result;
 use tempfile::NamedTempFile;
 use serde_json;
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModpackInfo {
     pub name: String,
@@ -38,11 +38,14 @@ pub struct ModpackInfo {
     pub modpack_id: Option<String>,
     pub modpack_version_id: Option<String>,
     pub modpack_platform: Option<String>,
+    pub full_metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
 }
 
 #[command]
 pub async fn get_modpack_info(
     path: String,
+    target_id: Option<String>,
+    target_platform: Option<String>,
     resource_manager: State<'_, crate::resources::ResourceManager>,
 ) -> Result<ModpackInfo, String> {
     let path_buf = PathBuf::from(path);
@@ -57,21 +60,46 @@ pub async fn get_modpack_info(
         metadata.name, metadata.version, metadata.minecraft_version, metadata.modloader_type, metadata.modloader_version);
 
     let mut info = ModpackInfo {
-        name: metadata.name,
+        name: metadata.name.clone(),
         version: metadata.version.clone(),
-        author: metadata.author,
-        description: metadata.description,
+        author: metadata.author.clone(),
+        description: metadata.description.clone(),
         icon_url: None, 
-        minecraft_version: metadata.minecraft_version,
-        modloader: metadata.modloader_type,
-        modloader_version: metadata.modloader_version,
+        minecraft_version: metadata.minecraft_version.clone(),
+        modloader: metadata.modloader_type.clone(),
+        modloader_version: metadata.modloader_version.clone(),
         mod_count: metadata.mods.len(),
         recommended_ram_mb: metadata.recommended_ram_mb,
         format: format!("{:?}", metadata.format),
-        modpack_id: None,
-        modpack_version_id: Some(metadata.version),
-        modpack_platform: None,
+        modpack_id: target_id.clone(),
+        modpack_version_id: Some(metadata.version.clone()),
+        modpack_platform: target_platform.clone(),
+        full_metadata: Some(metadata.clone()),
     };
+
+    // If we already know the platform and ID, we can skip the heavy identification logic
+    if let (Some(tid), Some(tplatform)) = (&target_id, &target_platform) {
+        log::info!("[get_modpack_info] Using provided platform info, skipping fingerprinting: {}/{}", tplatform, tid);
+        
+        // However, we still might want to fetch project details (icon, summary) if they are missing
+        let platform_enum = match tplatform.to_lowercase().as_str() {
+            "curseforge" => Some(SourcePlatform::CurseForge),
+            "modrinth" => Some(SourcePlatform::Modrinth),
+            _ => None,
+        };
+
+        if let Some(p) = platform_enum {
+            if let Ok(proj) = resource_manager.get_project(p, tid).await {
+                if info.icon_url.is_none() {
+                    info.icon_url = proj.icon_url;
+                }
+                if info.description.is_none() {
+                    info.description = Some(proj.summary);
+                }
+            }
+        }
+        return Ok(info);
+    }
 
     // Try to link to a platform by searching for the name
     use crate::models::resource::{SearchQuery, ResourceType, SourcePlatform};
@@ -135,6 +163,14 @@ pub async fn get_modpack_info(
             }
             return Ok(info);
         }
+    }
+
+    // Only attempt fuzzy search matching if we were unable to find an exact hash match
+    // and we really need to identify the project (e.g. for a browser install that somehow failed hash check).
+    // For manual local uploads, we should be strictly hash-based to avoid false positives.
+    if target_id.is_none() {
+        log::info!("[get_modpack_info] No hash match found. Skipping fuzzy identification to avoid false positives on custom packs.");
+        return Ok(info);
     }
 
     log::info!("[get_modpack_info] No hash match found. Falling back to search matching...");
@@ -358,6 +394,17 @@ async fn resolve_modpack_resource(client: &reqwest::Client, url: &str) -> (Strin
                 }
             }
         }
+    } else if url.contains("curseforge.com/") {
+        // Attempt to find /files/{id}
+        if let Some(file_id_str) = url.split("/files/").nth(1).and_then(|s| s.split('?').next()) {
+             if let Ok(file_id) = file_id_str.parse::<u32>() {
+                 // Typical CurseForge CDN pattern: https://edge.forgecdn.net/files/ID/STR/FILE.zip
+                 // But since we don't know the filename, it's safer to just return our URL and hope the redirect works,
+                 // or use the API if we had a key here.
+                 // For now, we just ensure we have the cleanest possible direct link URL.
+                 log::info!("[resolve_modpack_resource] Detected CurseForge file ID: {}", file_id);
+             }
+        }
     }
 
     log::info!("[resolve_modpack_resource] Final result for {}: {}", url, final_url);
@@ -367,11 +414,13 @@ async fn resolve_modpack_resource(client: &reqwest::Client, url: &str) -> (Strin
 #[command]
 pub async fn get_modpack_info_from_url(
     url: String,
+    target_id: Option<String>,
+    target_platform: Option<String>,
     resource_manager: State<'_, crate::resources::ResourceManager>,
 ) -> Result<ModpackInfo, String> {
-    log::info!("[get_modpack_info_from_url] Fetching info for: {}", url);
+    log::info!("[get_modpack_info_from_url] Fetching info for: {} (id override: {:?})", url, target_id);
     let client = reqwest::Client::builder()
-        .user_agent("VestaLauncher/0.1.0")
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -434,10 +483,89 @@ pub async fn get_modpack_info_from_url(
                                 modpack_id: Some(pid.to_string()),
                                 modpack_version_id: Some(v["id"].as_str().unwrap_or("").to_string()),
                                 modpack_platform: Some("modrinth".to_string()),
+                                full_metadata: None,
                             });
                         }
                     }
                 }
+            }
+        }
+    } else if url.contains("curseforge.com/") {
+        log::info!("[get_modpack_info_from_url] Detected CurseForge URL: {}", url);
+        
+        let mut project_id = None;
+        let mut version_id = None;
+
+        // Extract IDs from URL if possible
+        if let Some(vid_str) = url.split("/files/").nth(1).and_then(|s| s.split('?').next()) {
+             version_id = vid_str.parse::<i64>().ok();
+        }
+
+        let slug = url.split("curseforge.com/minecraft/modpacks/")
+            .nth(1)
+            .and_then(|s| s.split('?').next())
+            .and_then(|s| s.split('/').next())
+            .map(|s| s.to_string());
+
+        if let Some(ref slug_str) = slug {
+            log::info!("[get_modpack_info_from_url] Search for slug: {}", slug_str);
+            // Search for project by slug (search is the only way for slugs currently)
+            let query = crate::models::resource::SearchQuery {
+                text: Some(slug_str.clone()),
+                resource_type: crate::models::resource::ResourceType::Modpack,
+                limit: 10,
+                ..Default::default()
+            };
+            
+            if let Ok(res) = resource_manager.search(SourcePlatform::CurseForge, query).await {
+                let slug_lower = slug_str.to_lowercase();
+                if let Some(hit) = res.hits.iter().find(|h| h.web_url.to_lowercase().contains(&slug_lower)) {
+                    project_id = Some(hit.id.clone());
+                    log::info!("[get_modpack_info_from_url] Found project match: {} ({})", hit.name, hit.id);
+                    if version_id.is_none() {
+                        // Get latest version if not specified
+                        if let Ok(versions) = resource_manager.get_versions(SourcePlatform::CurseForge, &hit.id, false, None, None).await {
+                            if let Some(v) = versions.first() {
+                                version_id = v.id.parse::<i64>().ok();
+                            }
+                        }
+                    }
+                } else {
+                    log::warn!("[get_modpack_info_from_url] No project match found in search results for slug '{}'", slug_str);
+                    for h in &res.hits {
+                        log::debug!("  Hit: {} (link: {})", h.name, h.web_url);
+                    }
+                }
+            }
+        }
+
+        if let (Some(pid), Some(vid)) = (project_id, version_id) {
+            log::info!("[get_modpack_info_from_url] Identified as PID={}, VID={}", pid, vid);
+            if let Ok(proj) = resource_manager.get_project(SourcePlatform::CurseForge, &pid).await {
+                if let Ok(ver) = resource_manager.get_version(SourcePlatform::CurseForge, &pid, &vid.to_string()).await {
+                    log::info!("[get_modpack_info_from_url] Success! Returning ModpackInfo for '{}' version '{}'", proj.name, ver.version_number);
+                    return Ok(ModpackInfo {
+                        name: proj.name,
+                        description: Some(proj.summary),
+                        version: ver.version_number,
+                        icon_url: proj.icon_url,
+                        author: Some(proj.author),
+                        minecraft_version: ver.game_versions.first().cloned().unwrap_or_default(),
+                        modloader: ver.loaders.first().cloned().unwrap_or_default().to_lowercase(),
+                        modloader_version: None,
+                        mod_count: 0,
+                        recommended_ram_mb: None,
+                        format: "CurseForge".to_string(),
+                        modpack_id: Some(pid),
+                        modpack_version_id: Some(vid.to_string()),
+                        modpack_platform: Some("curseforge".to_string()),
+                        full_metadata: None,
+                    });
+                } else {
+                    log::error!("[get_modpack_info_from_url] Failed to fetch version {} for project {}", vid, pid);
+                }
+            } else {
+                log::error!("[get_modpack_info_from_url] Failed to fetch project {}", pid);
             }
         }
     }
@@ -470,7 +598,12 @@ pub async fn get_modpack_info_from_url(
     }
     
     log::info!("[get_modpack_info_from_url] Download complete ({} bytes). Parsing ZIP...", downloaded);
-    let mut info = get_modpack_info(temp_path.to_string_lossy().to_string(), resource_manager).await?;
+    let mut info = get_modpack_info(
+        temp_path.to_string_lossy().to_string(), 
+        target_id, 
+        target_platform, 
+        resource_manager
+    ).await?;
     if icon_url.is_some() {
         info.icon_url = icon_url;
     }
@@ -634,6 +767,7 @@ pub async fn install_modpack_from_zip(
     _app: AppHandle,
     zip_path: String,
     instance_data: Instance,
+    metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
     task_manager: State<'_, TaskManager>,
 ) -> Result<i32, String> {
     log::info!("[install_modpack_from_zip] Requested for: {}", instance_data.name);
@@ -665,7 +799,7 @@ pub async fn install_modpack_from_zip(
 
     // 2. Queue Task
     use crate::tasks::installers::modpack::ModpackSource;
-    let task = InstallModpackTask::new(saved_instance.clone(), ModpackSource::Path(zip_path));
+    let task = InstallModpackTask::new(saved_instance.clone(), ModpackSource::Path(zip_path), metadata);
     task_manager.submit(Box::new(task)).await.map_err(|e| e.to_string())?;
 
     Ok(saved_instance.id)
@@ -934,6 +1068,7 @@ pub async fn install_modpack_from_url(
     _app: AppHandle,
     url: String,
     instance_data: Instance,
+    metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
     task_manager: State<'_, TaskManager>,
 ) -> Result<i32, String> {
     let client = reqwest::Client::builder()
@@ -968,7 +1103,7 @@ pub async fn install_modpack_from_url(
 
     // Queue Task with the URL directly - the task now handles the download
     use crate::tasks::installers::modpack::ModpackSource;
-    let task = InstallModpackTask::new(saved_instance.clone(), ModpackSource::Url(final_url));
+    let task = InstallModpackTask::new(saved_instance.clone(), ModpackSource::Url(final_url), metadata);
     task_manager.submit(Box::new(task)).await.map_err(|e| e.to_string())?;
 
     Ok(saved_instance.id)

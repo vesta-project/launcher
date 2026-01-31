@@ -16,6 +16,7 @@ export interface ModpackInfo {
     modpackId?: string;
     modpackVersionId?: string;
     modpackPlatform?: string;
+    fullMetadata?: any;
 }
 
 export interface ExportCandidate {
@@ -29,12 +30,12 @@ export interface ExportCandidate {
     downloadUrl?: string;
 }
 
-export async function getModpackInfo(path: string): Promise<ModpackInfo> {
-    return await invoke("get_modpack_info", { path });
+export async function getModpackInfo(path: string, targetId?: string, targetPlatform?: string): Promise<ModpackInfo> {
+    return await invoke("get_modpack_info", { path, targetId, targetPlatform });
 }
 
-export async function getModpackInfoFromUrl(url: string): Promise<ModpackInfo> {
-    return await invoke("get_modpack_info_from_url", { url });
+export async function getModpackInfoFromUrl(url: string, targetId?: string, targetPlatform?: string): Promise<ModpackInfo> {
+    return await invoke("get_modpack_info_from_url", { url, targetId, targetPlatform });
 }
 
 export async function getHardwareInfo(): Promise<number> {
@@ -45,7 +46,7 @@ export async function getSystemMemoryMb(): Promise<number> {
     return await invoke("get_system_memory_mb");
 }
 
-export async function installModpackFromZip(zipPath: string, data: Partial<Instance>): Promise<number> {
+export async function installModpackFromZip(zipPath: string, data: Partial<Instance>, metadata?: any): Promise<number> {
     const instanceData: Instance = {
         id: 0,
         name: data.name || "New Modpack",
@@ -71,10 +72,10 @@ export async function installModpackFromZip(zipPath: string, data: Partial<Insta
         modpackIconUrl: data.modpackIconUrl || null,
         iconData: null,
     };
-    return await invoke("install_modpack_from_zip", { zipPath, instanceData });
+    return await invoke("install_modpack_from_zip", { zipPath, instanceData, metadata: metadata || null });
 }
 
-export async function installModpackFromUrl(url: string, data: Partial<Instance>): Promise<number> {
+export async function installModpackFromUrl(url: string, data: Partial<Instance>, metadata?: any): Promise<number> {
     const instanceData: Instance = {
         id: 0,
         name: data.name || "New Modpack",
@@ -100,7 +101,7 @@ export async function installModpackFromUrl(url: string, data: Partial<Instance>
         modpackIconUrl: data.modpackIconUrl || null,
         iconData: null,
     };
-    return await invoke("install_modpack_from_url", { url, instanceData });
+    return await invoke("install_modpack_from_url", { url, instanceData, metadata: metadata || null });
 }
 
 export async function listExportCandidates(instanceId: number): Promise<ExportCandidate[]> {

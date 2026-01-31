@@ -92,8 +92,9 @@ impl BatchDownloader {
                         let mut last_err = None;
 
                         for url in &artifact.urls {
-                            log::info!("Downloading: {} from {}", artifact.name, url);
-                            reporter.set_message(&format!("Downloading {}", artifact.name));
+                            let current = downloaded.load(Ordering::SeqCst) + 1;
+                            log::info!("Downloading: {} from {} ({}/{})", artifact.name, url, current, total);
+                            reporter.set_message(&format!("Downloading resources... ({}/{})", current, total));
                             
                             match download_to_path(
                                 &client,

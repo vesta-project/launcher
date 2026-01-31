@@ -17,11 +17,37 @@ pub fn get_modpack_metadata<P: AsRef<Path>>(path: P) -> Result<ModpackMetadata> 
     let mut archive = ZipArchive::new(file)?;
     log::info!("[get_modpack_metadata] ZIP opened, contains {} files", archive.len());
 
+    // Optimization: check common manifest locations first to avoid a full scan
+    let common_locations = [
+        "modrinth.index.json",
+        "manifest.json",
+        // Sometimes nested in a single top-level folder
+    ];
+
+    for loc in common_locations {
+        if let Ok(mut file) = archive.by_name(loc) {
+            log::info!("[get_modpack_metadata] Found manifest at common location: {}", loc);
+            let mut content = String::new();
+            file.read_to_string(&mut content)?;
+            
+            if loc == "modrinth.index.json" {
+                if let Ok(index) = serde_json::from_str::<ModrinthIndex>(&content) {
+                    return Ok(metadata_from_modrinth(index));
+                }
+            } else if loc == "manifest.json" {
+                if let Ok(manifest) = serde_json::from_str::<CurseForgeManifest>(&content) {
+                    return Ok(metadata_from_curseforge(manifest));
+                }
+            }
+        }
+    }
+
+    // If not found in common locations, we do the full scan (supporting nested folders)
+    log::info!("[get_modpack_metadata] Manifest not found at root. Scanning all files...");
     let mut modrinth_data: Option<(String, ModrinthIndex)> = None;
     let mut curseforge_data: Option<(String, CurseForgeManifest)> = None;
     let mut last_error: Option<String> = None;
 
-    // Iterate through all files to find indices, potentially nested in a folder
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         if file.is_dir() { continue; }
