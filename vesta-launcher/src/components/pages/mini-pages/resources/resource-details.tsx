@@ -1,4 +1,4 @@
-import { Component, createEffect, For, Show, createSignal, onMount, createMemo, untrack, onCleanup, createResource } from "solid-js";
+import { Component, createEffect, For, Show, createSignal, onMount, createMemo, untrack, onCleanup, createResource, on } from "solid-js";
 import { resources, ResourceProject, ResourceVersion, SourcePlatform, findBestVersion, ResourceDependency } from "@stores/resources";
 import { instancesState, Instance } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
@@ -141,13 +141,42 @@ const ResourceDetailsPage: Component<{
 }> = (props) => {
     const [project, setProject] = createSignal<ResourceProject | undefined>(props.project);
     const [loading, setLoading] = createSignal(false);
-    const [activeTab, setActiveTab] = createSignal<'description' | 'versions' | 'gallery' | 'dependencies'>('description');
+    
+    // Derived from router query params for persistence and history
+    const activeTab = createMemo(() => {
+        const params = router()?.currentParams.get();
+        return (params?.activeTab as 'description' | 'versions' | 'gallery' | 'dependencies') || 'description';
+    });
+
     const [versionFilter, setVersionFilter] = createSignal('');
     const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<string | null>(null);
     const [isZoomed, setIsZoomed] = createSignal(false);
     const [versionPage, setVersionPage] = createSignal(1);
     const versionsPerPage = 15;
     const [manualVersionId, setManualVersionId] = createSignal<string | null>(null);
+
+    // Register refetch so the navbar reload button works
+    onMount(() => {
+        props.setRefetch?.(async () => {
+            console.log("[ResourceDetails] Reloading project data...");
+            const p = project();
+            if (p) {
+                await resources.fetchProject(p.source, p.id);
+            }
+        });
+    });
+
+    // --- Dynamic Title Support ---
+    createEffect(() => {
+        const name = project()?.name;
+        if (name) {
+            router()?.customName.set(name);
+        }
+    });
+
+    onCleanup(() => {
+        router()?.customName.set(null);
+    });
 
     const bestVersionForCurrent = createMemo(() => {
         const instId = resources.state.selectedInstanceId;
@@ -331,14 +360,18 @@ const ResourceDetailsPage: Component<{
     });
 
     // Reset state when navigating to a different project
-    createEffect(() => {
-        if (props.projectId) {
-            setActiveTab('description');
+    createEffect(on(() => props.projectId, (id, prevId) => {
+        if (id && id !== prevId) {
+            // Only clear the tab if it's currently set, to avoid unnecessary router updates
+            const currentTab = untrack(() => router()?.currentParams.get().activeTab);
+            if (currentTab) {
+                router()?.removeQuery('activeTab');
+            }
             setVersionFilter('');
             setVersionPage(1);
             setSelectedGalleryItem(null);
         }
-    });
+    }));
 
     const filteredVersions = createMemo(() => {
         const query = versionFilter().toLowerCase();
@@ -434,7 +467,7 @@ const ResourceDetailsPage: Component<{
     const handleQuickAction = () => {
         if (isProjectIncompatible() && !isProjectInstalled()) {
             if (hasAnyCompatibleVersion()) {
-                setActiveTab('versions');
+                router()?.updateQuery('activeTab', 'versions', true);
             }
             return;
         }
@@ -481,7 +514,7 @@ const ResourceDetailsPage: Component<{
         if (best) {
             handleInstall(best);
         } else {
-            setActiveTab('versions');
+            router()?.updateQuery('activeTab', 'versions', true);
             showToast({
                 title: "Choose version",
                 description: "No automatically compatible version found. Please select one manually.",
@@ -538,27 +571,33 @@ const ResourceDetailsPage: Component<{
         }
     };
 
-    createEffect(() => {
-        const id = props.projectId;
-        const platform = props.platform;
-        const initialProject = props.project;
-
-        // Use untrack so updates to project() signal don't re-trigger this effect
-        const currentProjectId = untrack(() => project()?.id);
+    const handleProjectRouting = (id?: string, platform?: SourcePlatform, initialProject?: ResourceProject) => {
+        const currentProject = untrack(project);
 
         if (initialProject) {
-            if (currentProjectId !== initialProject.id) {
+            // If the project ID shifted, update state immediately
+            if (currentProject?.id !== initialProject.id) {
                 setProject(initialProject);
                 resources.selectProject(initialProject);
             }
-            // If it's just hit data (missing description), fetch full details
-            if (!initialProject.description && id && platform) {
+            
+            // Hit data usually lacks description; fetch it if missing
+            const needsHydration = !initialProject.description || (currentProject?.id === initialProject.id && !currentProject?.description);
+            if (needsHydration && id && platform) {
                 fetchFullProject(platform, id);
             }
-        } else if (id && platform && currentProjectId !== id) {
+            return;
+        }
+
+        // Deep link case (ID only)
+        if (id && platform && currentProject?.id !== id) {
             fetchFullProject(platform, id);
         }
-    });
+    };
+
+    createEffect(on(() => [props.projectId, props.platform, props.project] as const, ([id, platform, initialProject]) => {
+        handleProjectRouting(id, platform, initialProject);
+    }, { defer: false }));
 
     async function fetchFullProject(platform: SourcePlatform, id: string) {
         console.log("[ResourceDetails] Fetching full project details for:", id);
@@ -956,26 +995,26 @@ const ResourceDetailsPage: Component<{
                             <div class="details-tabs">
                                 <button 
                                     class={`tab-btn ${activeTab() === 'description' ? 'active' : ''}`}
-                                    onClick={() => setActiveTab('description')}
+                                    onClick={() => router()?.updateQuery("activeTab", 'description', true)}
                                 >
                                     Description
                                 </button>
                                 <button 
                                     class={`tab-btn ${activeTab() === 'versions' ? 'active' : ''}`}
-                                    onClick={() => setActiveTab('versions')}
+                                    onClick={() => router()?.updateQuery("activeTab", 'versions', true)}
                                 >
                                     Versions ({resources.state.versions.length})
                                 </button>
                                 <button 
                                     class={`tab-btn ${activeTab() === 'dependencies' ? 'active' : ''}`}
-                                    onClick={() => setActiveTab('dependencies')}
+                                    onClick={() => router()?.updateQuery("activeTab", 'dependencies', true)}
                                 >
                                     Dependencies ({primaryVersion()?.dependencies?.length || 0})
                                 </button>
                                 <Show when={(project()?.gallery?.length ?? 0) > 0}>
                                     <button 
                                         class={`tab-btn ${activeTab() === 'gallery' ? 'active' : ''}`}
-                                        onClick={() => setActiveTab('gallery')}
+                                        onClick={() => router()?.updateQuery("activeTab", 'gallery', true)}
                                     >
                                         Gallery ({project()?.gallery?.length})
                                     </button>
@@ -1280,7 +1319,7 @@ const ResourceDetailsPage: Component<{
                                 <div class="sidebar-section">
                                     <div class="sidebar-section-header">
                                         <h3 class="sidebar-title">Recent Versions</h3>
-                                        <button class="view-all-link" onClick={() => setActiveTab('versions')}>View All</button>
+                                        <button class="view-all-link" onClick={() => router()?.updateQuery('activeTab', 'versions', true)}>View All</button>
                                     </div>
                                     <div class="sidebar-version-list">
                                         <Show when={!resources.state.loading} fallback={<div>Loading...</div>}>

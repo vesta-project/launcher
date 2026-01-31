@@ -26,11 +26,13 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
+	createMemo,
 	createSignal,
 	For,
 	onCleanup,
 	onMount,
 	Show,
+	untrack,
 } from "solid-js";
 import {
 	applyTheme,
@@ -85,10 +87,36 @@ interface AppConfig {
 	[key: string]: any;
 }
 
+/**
+ * Settings Page
+ */
 function SettingsPage(props: { close?: () => void }) {
-	const [currentTab, setCurrentTab] = createSignal("general");
+	// Derive active tab from router params if available, fallback to default
+	const activeTab = createMemo(() => {
+		const params = router()?.currentParams.get();
+		const tab = params?.activeTab as string;
+		return tab || "general";
+	});
+
+	// Use a local signal for immediate UI feedback, synced with the router memo
+	const [selectedTab, setSelectedTab] = createSignal<string>(untrack(activeTab));
+	
+	createEffect(() => {
+		const tab = activeTab();
+		if (tab !== selectedTab()) {
+			setSelectedTab(tab);
+		}
+	});
+
 	const [debugLogging, setDebugLogging] = createSignal(false);
 	
+	onMount(() => {
+		// Register state for pop-out window handoff
+		router()?.registerStateProvider("/config", () => ({
+			activeTab: selectedTab(),
+		}));
+	});
+
 	// Initialize from global theme cache to prevent "Midnight Blue" flash
 	const [backgroundHue, setBackgroundHue] = createSignal(currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 220);
 	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>(currentThemeConfig.theme_style as ThemeConfig["style"] ?? "glass");
@@ -427,7 +455,13 @@ function SettingsPage(props: { close?: () => void }) {
 				when={!loading()}
 				fallback={<div class="settings-loading">Loading settings...</div>}
 			>
-				<Tabs value={currentTab()} onChange={setCurrentTab}>
+				<Tabs
+					value={selectedTab()}
+					onChange={(v) => {
+						setSelectedTab(v);
+						router()?.updateQuery("activeTab", v, true);
+					}}
+				>
 					<TabsList>
 						<TabsIndicator />
 						<TabsTrigger value="general">General</TabsTrigger>

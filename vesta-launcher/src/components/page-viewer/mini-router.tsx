@@ -28,6 +28,7 @@ interface MiniRouterProps {
 	paths: Record<string, RouterComponent>;
 	invalid?: ValidComponent;
 	currentPath?: string;
+	initialParams?: Record<string, unknown>;
 	initialProps?: Record<string, unknown>;
 }
 
@@ -46,9 +47,13 @@ class MiniRouter {
 	};
 	currentElement: Accessor<RouterComponent>;
 	currentPathProps: Accessor<Record<string, unknown> | undefined>;
+	customName: { set: (value: string | null) => void; get: Accessor<string | null> };
+	isReloading: Accessor<boolean>;
 	private setCurrentPathProps: (
 		props: Record<string, unknown> | undefined,
 	) => void;
+	private setIsReloading: (value: boolean) => void;
+	private stateProviders: Map<string, () => Record<string, unknown>> = new Map();
 	history: {
 		past: HistoryEntry[];
 		future: HistoryEntry[];
@@ -60,9 +65,15 @@ class MiniRouter {
 		params?: Record<string, unknown>,
 		props?: Record<string, unknown>,
 	) => void;
-	updateQuery: (key: string, value: unknown) => void;
+	updateQuery: (key: string, value: unknown, push?: boolean) => void;
+	removeQuery: (key: string, push?: boolean) => void;
 	reload: () => Promise<void>;
 	setState: (state: Record<string, unknown>) => void;
+	registerStateProvider: (
+		path: string,
+		provider: () => Record<string, unknown>,
+	) => void;
+	getSnapshot: () => Record<string, unknown>;
 	forwards: () => void;
 	backwards: () => void;
 	getRefetch: () => (() => Promise<void>) | undefined;
@@ -83,14 +94,20 @@ class MiniRouter {
 
 		const [getCurrentParams, setCurrentParams] = createSignal<
 			Record<string, unknown>
-		>({});
+		>(props.initialParams || {});
 
 		const [getCurrentPathProps, setCurrentPathProps] = createSignal<
 			Record<string, unknown> | undefined
 		>(props.initialProps);
 
+		const [getIsReloading, setIsReloading] = createSignal<boolean>(false);
+		const [getCustomName, setCustomName] = createSignal<string | null>(null);
+
 		this.currentPathProps = getCurrentPathProps;
 		this.setCurrentPathProps = setCurrentPathProps;
+		this.isReloading = getIsReloading;
+		this.setIsReloading = setIsReloading;
+		this.customName = { get: getCustomName, set: setCustomName };
 		this.currentPath = { set: setCurrentPath, get: getCurrentPath };
 		this.currentParams = { set: setCurrentParams, get: getCurrentParams };
 
@@ -130,13 +147,14 @@ class MiniRouter {
 					newPast.push({
 						path: this.currentPath.get(),
 						params: this.currentParams.get(),
-						props: this.currentPathProps(),
+						props: this.getSnapshot(), // Use snapshot to capture live state
 					});
 					setHistoryPast(newPast);
 				}
 				setCurrentPath(entry.path);
 				setCurrentParams(entry.params);
 				setCurrentPathProps(entry.props);
+				setCustomName(null);
 			},
 			clear: () => {
 				setHistoryPast([]);
@@ -159,13 +177,13 @@ class MiniRouter {
 			const path = this.currentPath.get();
 			const params = this.currentParams.get();
 
-			if (Object.keys(params).length === 0) {
-				return `vesta://${path}`;
-			}
-
 			const searchParams = new URLSearchParams();
-			for (const [key, value] of Object.entries(params)) {
-				searchParams.set(key, String(value));
+			searchParams.set("path", path);
+			
+			if (Object.keys(params).length > 0) {
+				for (const [key, value] of Object.entries(params)) {
+					searchParams.set(key, String(value));
+				}
 			}
 			return `vesta://${path}?${searchParams.toString()}`;
 		};
@@ -191,21 +209,47 @@ class MiniRouter {
 			);
 		};
 
-		// NEW METHOD: Update query params without creating history entry (for component local state like tabs)
-		this.updateQuery = (key: string, value: unknown) => {
-			const newParams = { ...this.currentParams.get(), [key]: value };
-			this.currentParams.set(newParams);
-			console.log(`Updated query param ${key}:`, value);
+		// Update query params. Can optionally create history entry (for tabs)
+		this.updateQuery = (key: string, value: unknown, push = false) => {
+			const currentParams = this.currentParams.get();
+			const newParams = { ...currentParams };
+
+			if (value === null || value === undefined) {
+				delete newParams[key];
+			} else {
+				newParams[key] = value;
+			}
+
+			if (push) {
+				this.history.push({
+					path: this.currentPath.get(),
+					params: newParams,
+					props: this.getSnapshot()
+				});
+				this.history.future = [];
+			} else {
+				this.currentParams.set(newParams);
+			}
+			
+			console.log(`Updated query param ${key}:`, value, push ? "(push)" : "(replace)");
 		};
 
-		// NEW METHOD: Reload current page without creating history entry
+		// Remove a query param
+		this.removeQuery = (key: string, push = false) => {
+			this.updateQuery(key, null, push);
+		};
+
+		// Reload current page without creating history entry
 		this.reload = async () => {
 			if (this.refetchFn) {
+				this.setIsReloading(true);
 				try {
 					await this.refetchFn();
 					console.log("Page reloaded");
 				} catch (error) {
 					console.error("Reload failed:", error);
+				} finally {
+					this.setIsReloading(false);
 				}
 			} else {
 				console.log("No refetch callback available");
@@ -217,6 +261,17 @@ class MiniRouter {
 			const newProps = { ...this.currentPathProps(), ...state };
 			this.setCurrentPathProps(newProps);
 			console.log("Updated component state:", state);
+		};
+
+		this.registerStateProvider = (path: string, provider: () => Record<string, unknown>) => {
+			this.stateProviders.set(path, provider);
+		};
+
+		this.getSnapshot = () => {
+			const currentPath = this.currentPath.get();
+			const provider = this.stateProviders.get(currentPath);
+			const liveState = provider ? provider() : {};
+			return { ...this.currentPathProps(), ...liveState };
 		};
 
 		this.backwards = () => {

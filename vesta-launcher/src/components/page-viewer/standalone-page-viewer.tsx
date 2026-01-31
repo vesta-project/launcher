@@ -1,8 +1,4 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
-import LinkIcon from "@assets/link.svg";
-import RefreshIcon from "@assets/refresh.svg";
-import ForwardsArrowIcon from "@assets/right-arrow.svg";
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 import {
 	miniRouterInvalidPage,
 	miniRouterPaths,
@@ -10,74 +6,99 @@ import {
 import { router, setRouter } from "@components/page-viewer/page-viewer";
 import { useSearchParams } from "@solidjs/router";
 import { WindowControls } from "@tauri-controls/solid";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ensureOsType } from "@utils/os";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import "./standalone-page-viewer.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
 	const [osType, setOsType] = createSignal<string>("windows");
-	const [refetchFn, setRefetchFn] = createSignal<
-		(() => Promise<void>) | undefined
-	>();
 
 	onMount(async () => {
 		const os = await ensureOsType();
 		setOsType(os || "windows");
 
-		const initialPath = searchParams.path || "/config";
+		const initialPath = (searchParams.path as string) || "/config";
+		console.log("[Standalone] Initial currentPath from URL:", initialPath);
 
 		// Separate route params (like slug) from component props
-		const initialParams: Record<string, unknown> = {};
-		const initialProps: Record<string, unknown> = {};
+		let initialParams: Record<string, unknown> = {};
+		let initialProps: Record<string, unknown> = {};
+		let historyPast: any[] = [];
+		let historyFuture: any[] = [];
 
-		// Parse history if it was passed from the main window
-		let historyPast: Array<{
-			path: string;
-			params: Record<string, unknown>;
-			props?: Record<string, unknown>;
-		}> = [];
-		let historyFuture: Array<{
-			path: string;
-			params: Record<string, unknown>;
-			props?: Record<string, unknown>;
-		}> = [];
+		const tryParse = (val: string) => {
+			if (typeof val !== "string") return val;
+			if (val === "true") return true;
+			if (val === "false") return false;
+			if (val === "null") return null;
+			if (val === "undefined") return undefined;
+			if (/^-?\d+$/.test(val)) return parseInt(val, 10);
+			if (/^-?\d*\.\d+$/.test(val)) return parseFloat(val);
+			if (val.startsWith("{") || val.startsWith("[")) {
+				try {
+					return JSON.parse(val);
+				} catch {
+					return val;
+				}
+			}
+			return val;
+		};
 
-		const historyData = (searchParams as any).history;
-		console.log(
-			"History data from searchParams:",
-			historyData ? "Found" : "Not found",
-		);
-		if (historyData && typeof historyData === "string") {
-			try {
-				const parsed = JSON.parse(historyData);
-				historyPast = parsed.past || [];
-				historyFuture = parsed.future || [];
-				console.log(
-					"Successfully parsed history - Past entries:",
-					historyPast.length,
-					"Future entries:",
-					historyFuture.length,
-				);
-			} catch (e) {
-				console.warn(
-					"Failed to parse history data:",
-					e,
-					"Raw data:",
-					historyData?.substring?.(0, 100),
-				);
+		// Check for handoff data in localStorage
+		const handoffId = searchParams.handoffId as string;
+		if (handoffId) {
+			const rawHandoff = localStorage.getItem(handoffId);
+			if (rawHandoff) {
+				try {
+					const handoff = JSON.parse(rawHandoff);
+					localStorage.removeItem(handoffId); // Clean up
+
+					// Categorize handoff props into params and component props
+					if (handoff.props) {
+						for (const [k, v] of Object.entries(handoff.props)) {
+							const parsed = tryParse(v as string);
+							if (["slug", "id", "projectId", "platform", "activeTab", "query", "resourceType", "activeSource", "gameVersion", "loader", "mode", "source"].includes(k)) {
+								initialParams[k] = parsed;
+							} else {
+								initialProps[k] = parsed;
+							}
+						}
+					}
+
+					if (handoff.history) {
+						const hist = JSON.parse(handoff.history);
+						historyPast = hist.past || [];
+						historyFuture = hist.future || [];
+					}
+				} catch (e) {
+					console.error("Failed to parse handoff data:", e);
+				}
 			}
 		}
 
-		for (const [key, value] of Object.entries(searchParams)) {
-			if (key !== "path" && key !== "history" && value !== undefined) {
-				// Common route params across all pages
+		// Fallback/Legacy: Parse directly from searchParams if no handoff or handoff failed
+		if (Object.keys(initialProps).length === 0) {
+			const historyData = searchParams.history as string;
+			if (historyData) {
+				try {
+					const parsed = JSON.parse(historyData);
+					historyPast = parsed.past || [];
+					historyFuture = parsed.future || [];
+				} catch (e) {
+					console.error("Failed to parse history data:", e);
+				}
+			}
+
+			for (const [key, value] of Object.entries(searchParams)) {
+				if (key === "path" || key === "history" || key === "handoffId") continue;
+				const parsed = tryParse(String(value));
 				if (["slug", "id", "projectId", "platform", "activeTab"].includes(key)) {
-					initialParams[key] = value;
+					initialParams[key] = parsed;
 				} else {
-					// Everything else is component state
-					initialProps[key] = value;
+					initialProps[key] = parsed;
 				}
 			}
 		}
@@ -86,148 +107,51 @@ function StandalonePageViewer() {
 			paths: miniRouterPaths,
 			invalid: miniRouterInvalidPage,
 			currentPath: initialPath,
-			initialProps:
-				Object.keys(initialProps).length > 0 ? initialProps : undefined,
+			initialProps: Object.keys(initialProps).length > 0 ? initialProps : undefined,
 		});
 
-		// Set initial route params
 		if (Object.keys(initialParams).length > 0) {
 			mini_router.currentParams.set(initialParams);
 		}
 
-		setRouter(mini_router);
-
-		// Restore history stacks from main window
 		if (historyPast.length > 0 || historyFuture.length > 0) {
-			console.log(
-				"Restoring history - Past:",
-				historyPast.length,
-				"Future:",
-				historyFuture.length,
-			);
-			mini_router.history.past = historyPast.map((entry) => ({
+			const mapHistory = (entries: any[]) => entries.map((entry) => ({
 				path: entry.path,
-				params: entry.params || {},
-				props: entry.props,
+				params: entry.params ? Object.fromEntries(Object.entries(entry.params).map(([k, v]) => [k, tryParse(v as string)])) : {},
+				props: entry.props ? Object.fromEntries(Object.entries(entry.props).map(([k, v]) => [k, tryParse(v as string)])) : undefined,
 			}));
-			mini_router.history.future = historyFuture.map((entry) => ({
-				path: entry.path,
-				params: entry.params || {},
-				props: entry.props,
-			}));
-			console.log(
-				"History restored. Can go back:",
-				mini_router.canGoBack(),
-				"Can go forward:",
-				mini_router.canGoForward(),
-			);
-		} else {
-			console.log("No history data received");
+
+			mini_router.history.past = mapHistory(historyPast);
+			mini_router.history.future = mapHistory(historyFuture);
 		}
 
 		setRouter(mini_router);
 	});
 
-	const copyUrl = async () => {
-		const url = router()?.generateUrl();
-		if (!url) return;
-
-		try {
-			await navigator.clipboard.writeText(url);
-			console.log("URL copied to clipboard:", url);
-		} catch (e) {
-			console.error("Failed to copy URL:", e);
-		}
-	};
-
-	const reloadCurrentView = async () => {
-		const fn = refetchFn();
-		if (fn) {
-			try {
-				await fn();
-				console.log("Page reloaded successfully");
-			} catch (error) {
-				console.error("Failed to reload page:", error);
-			}
-		} else {
-			console.warn("No refetch callback available for reload");
-		}
-	};
-
-	const canGoBack = createMemo(() => router()?.canGoBack() ?? false);
-	const canGoForward = createMemo(() => router()?.canGoForward() ?? false);
-
 	return (
-		<div class="standalone-page-viewer">
-			<div class="standalone-page-viewer__header">
-				<div class="standalone-page-viewer__nav-left">
-					<Tooltip placement="top">
-						<TooltipTrigger>
-							<button
-								class="standalone-page-viewer__nav-button"
-								onClick={() => router()?.backwards()}
-								disabled={!canGoBack()}
-							>
-								<BackArrowIcon />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent>Back</TooltipContent>
-					</Tooltip>
-					<Tooltip placement="top">
-						<TooltipTrigger>
-							<button
-								class="standalone-page-viewer__nav-button forward"
-								onClick={() => router()?.forwards()}
-								disabled={!canGoForward()}
-							>
-								<BackArrowIcon />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent>Forward</TooltipContent>
-					</Tooltip>
-					<Tooltip placement="top">
-						<TooltipTrigger>
-							<button
-								class="standalone-page-viewer__nav-button"
-								onClick={reloadCurrentView}
-							>
-								<RefreshIcon />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent>Refresh</TooltipContent>
-					</Tooltip>
-				</div>
-				<div class="standalone-page-viewer__title" data-tauri-drag-region>
-					{router()?.currentElement().name || "Page Viewer"}
-				</div>
-				<div class="standalone-page-viewer__nav-right">
-					<Tooltip placement="top">
-						<TooltipTrigger>
-							<button
-								class="standalone-page-viewer__nav-button"
-								onClick={copyUrl}
-							>
-								<LinkIcon />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent>Copy URL</TooltipContent>
-					</Tooltip>
-				</div>
-				<WindowControls
-					class={"standalone-page-viewer__controls " + `controls-${osType()}`}
-					platform={
-						osType() === "linux"
-							? "gnome"
-							: osType() === "macos"
-								? "macos"
-								: "windows"
+		<Show when={router()}>
+			{(r) => (
+				<UnifiedPageViewer 
+					router={r()} 
+					showWindowControls={true}
+					titleSuffix="Standalone"
+					os={osType()}
+					onClose={() => getCurrentWindow().close()}
+					windowControls={
+						<WindowControls
+							class="standalone-page-viewer__controls"
+							platform={
+								osType() === "linux"
+									? "gnome"
+									: osType() === "macos"
+										? "macos"
+										: "windows"
+							}
+						/>
 					}
 				/>
-			</div>
-			<div class="standalone-page-viewer__content">
-				{router()?.getRouterView({ setRefetch: setRefetchFn })}
-			</div>
-		</div>
+			)}
+		</Show>
 	);
 }
 

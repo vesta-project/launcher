@@ -5,7 +5,18 @@ import { splitProps, type ValidComponent } from "solid-js";
 import "./slider.css";
 
 // Root slider component
-const Slider = SliderPrimitive.Root;
+const Slider = <T extends ValidComponent = "div">(
+	props: PolymorphicProps<T, SliderPrimitive.SliderRootProps<T>>,
+) => {
+	const [local, others] = splitProps(props as any, ["class"]);
+
+	return (
+		<SliderPrimitive.Root
+			class={clsx("slider", local.class)}
+			{...others}
+		/>
+	);
+};
 
 // Slider Track
 type SliderTrackProps = SliderPrimitive.SliderTrackProps & {

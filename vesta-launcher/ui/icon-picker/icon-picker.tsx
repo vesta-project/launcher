@@ -63,6 +63,19 @@ export function IconPicker<T extends ValidComponent = "button">(
 	
 	// Determine if an icon is a gradient or image URL
 	const isGradient = (icon: string) => icon.startsWith("linear-gradient");
+
+	// Get style object for an icon (gradient vs image)
+	const getIconStyle = (icon?: string | null) => {
+		const target = icon || DEFAULT_ICONS[0];
+		if (isGradient(target)) {
+			return { background: target };
+		}
+		return {
+			"background-image": `url('${target}')`,
+			"background-size": "cover",
+			"background-position": "center",
+		};
+	};
 	
 	// Handle file upload with resizing and compression
 	const handleFileUpload = () => {
@@ -136,13 +149,7 @@ export function IconPicker<T extends ValidComponent = "button">(
 	};
 
 	// Get current icon style for trigger display
-	const getTriggerStyle = () => {
-		const icon = local.value || DEFAULT_ICONS[0];
-		if (isGradient(icon)) {
-			return { background: icon };
-		}
-		return { "background-image": `url('${icon}')` };
-	};
+	const getTriggerStyle = () => getIconStyle(local.value);
 
 	return (
 		<Popover open={isOpen()} onOpenChange={setIsOpen}>
@@ -245,11 +252,7 @@ export function IconPicker<T extends ValidComponent = "button">(
 										"icon-picker__option",
 										isSuggestedSelected() && "icon-picker__option--selected",
 									)}
-									style={{
-										"background-image": `url('${local.suggestedIcon}')`,
-										"background-size": "cover",
-										"background-position": "center",
-									}}
+									style={getIconStyle(local.suggestedIcon)}
 									onClick={() => local.suggestedIcon && handleSelect(local.suggestedIcon)}
 								>
 									<Show when={isSuggestedSelected()}>
@@ -294,11 +297,7 @@ export function IconPicker<T extends ValidComponent = "button">(
 										"icon-picker__option",
 										!isSuggestedSelected() && local.value === icon && "icon-picker__option--selected",
 									)}
-									style={{
-										"background-image": `url('${icon}')`,
-										"background-size": "cover",
-										"background-position": "center",
-									}}
+									style={getIconStyle(icon)}
 									onClick={() => handleSelect(icon)}
 								>
 									<Show when={!isSuggestedSelected() && local.value === icon}>
@@ -338,15 +337,7 @@ export function IconPicker<T extends ValidComponent = "button">(
 										"icon-picker__option",
 										!isSuggestedSelected() && local.value === icon && "icon-picker__option--selected",
 									)}
-									style={
-										isGradient(icon)
-											? { background: icon }
-											: {
-													"background-image": `url('${icon}')`,
-													"background-size": "cover",
-													"background-position": "center",
-												}
-									}
+									style={getIconStyle(icon)}
 									onClick={() => handleSelect(icon)}
 								>
 									<Show when={!isSuggestedSelected() && local.value === icon}>

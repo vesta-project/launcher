@@ -1,4 +1,4 @@
-import { Component, createEffect, For, Show, createSignal, createResource, createMemo, untrack, onMount, onCleanup, JSX } from "solid-js";
+import { Component, createEffect, For, Show, createSignal, createResource, createMemo, untrack, onMount, onCleanup, JSX, batch } from "solid-js";
 import { resources, ResourceProject, ResourceVersion, findBestVersion } from "@stores/resources";
 import { instancesState, Instance } from "@stores/instances";
 import { TextField } from "@ui/text-field/text-field";
@@ -86,6 +86,13 @@ const SORT_OPTIONS = {
     ]
 };
 
+// These are used as a fallback before metadata loads or if it fails.
+// We include major/popular versions to ensure the UI is functional immediately.
+const VERSION_OPTIONS = [
+    "All versions",
+    "1.21.4", "1.21.1", "1.20.1", "1.19.2", "1.18.2", "1.17.1", "1.16.5", "1.12.2", "1.8.9", "1.7.10"
+];
+
 // Common categories across platforms
 
 const InstanceSelector: Component = () => {
@@ -115,34 +122,38 @@ const InstanceSelector: Component = () => {
             <Select<any>
                 disabled={isModpack()}
                 options={[{ id: null, name: "No Instance" } as any, ...instancesState.instances]}
-            value={selectedInstance() || { id: null, name: "No Instance" }}
-            onChange={(v) => {
-                const id = v?.id ?? null;
-                resources.setInstance(id);
-                if (id) {
-                    const inst = instancesState.instances.find(i => i.id === id);
-                    if (inst) {
-                        resources.setGameVersion(inst.minecraftVersion);
-                        
-                        // Only set loader filter if we are currently looking at mods
-                        if (resources.state.resourceType === 'mod') {
-                            // Don't set "vanilla" or empty as a loader filter
-                            const loader = inst.modloader?.toLowerCase();
-                            if (loader && loader !== "vanilla") {
-                                resources.setLoader(inst.modloader);
+                value={selectedInstance()}
+                onChange={(instance: any) => {
+                    batch(() => {
+                        const id = instance?.id ?? null;
+                        resources.setInstance(id);
+                        if (id && instance) {
+                            resources.setGameVersion(instance.minecraftVersion);
+
+                            // Only set loader filter if we are currently looking at mods
+                            if (resources.state.resourceType === "mod") {
+                                // Don't set "vanilla" or empty as a loader filter
+                                const loader = instance.modloader?.toLowerCase();
+                                if (loader && loader !== "vanilla") {
+                                    resources.setLoader(instance.modloader);
+                                } else {
+                                    resources.setLoader(null);
+                                }
                             } else {
                                 resources.setLoader(null);
                             }
                         } else {
+                            // Reset versions/loaders when going back to No Instance
+                            resources.setGameVersion(null);
                             resources.setLoader(null);
                         }
-                    }
-                } else {
-                    // Reset versions/loaders when going back to Global
-                    resources.setGameVersion(null);
-                    resources.setLoader(null);
-                }
-            }}
+
+                        // Sync with router
+                        router()?.updateQuery("selectedInstanceId", id);
+                        router()?.updateQuery("gameVersion", resources.state.gameVersion);
+                        router()?.updateQuery("loader", resources.state.loader);
+                    });
+                }}
             optionValue="id"
             optionTextValue="name"
             itemComponent={(props) => (
@@ -159,7 +170,7 @@ const InstanceSelector: Component = () => {
                     <InstanceIcon instance={selectedInstance()} />
                     <div class="instance-trigger-info">
                         <span class="instance-trigger-label">Instance</span>
-                        <SelectValue<any>>{(s) => s.selectedOption()?.name ?? "Global"}</SelectValue>
+                        <SelectValue<any>>{(s) => s.selectedOption()?.name ?? "No Instance"}</SelectValue>
                     </div>
                 </div>
             </SelectTrigger>
@@ -661,22 +672,29 @@ const FiltersPanel: Component = () => {
     const gameVersions = createMemo(() => {
         const meta = mcVersions();
         const current = resources.state.gameVersion;
-        const base = ["All versions"];
+        const base = VERSION_OPTIONS;
 
-        if (!meta || !meta.game_versions) {
-            return current ? [...base, current] : base;
+        // If metadata is available, use it as the primary source
+        if (meta && meta.game_versions) {
+            const releases = meta.game_versions
+                .filter(v => v.version_type === 'release')
+                .map(v => v.id);
+            
+            // Build the list: "All versions" first, then all releases from metadata
+            const merged = ["All versions", ...releases];
+            
+            // Ensure the current selection is in the list even if it's not a release (e.g. snapshot)
+            if (current && current !== "All versions" && !merged.includes(current)) {
+                merged.push(current);
+            }
+            return merged;
         }
 
-        const releases = meta.game_versions
-            .filter(v => v.version_type === 'release')
-            .map(v => v.id);
-        
-        const list = [...base, ...releases];
-        if (current && !list.includes(current)) {
-            // Keep current selection in list even if not a release or still loading
-            list.push(current);
+        // Fallback to static list if metadata is still loading or failed
+        if (current && current !== "All versions" && !base.includes(current)) {
+            return [...base, current];
         }
-        return list;
+        return base;
     });
 
     const availableCategories = createMemo(() => {
@@ -787,8 +805,11 @@ const FiltersPanel: Component = () => {
                                 disabled={type === 'world' && resources.state.activeSource === 'modrinth'}
                                 title={type === 'world' && resources.state.activeSource === 'modrinth' ? "Modrinth does not support worlds" : undefined}
                                 onClick={() => {
-                                    resources.setType(type);
-                                    resources.setOffset(0);
+                                    batch(() => {
+                                        resources.setType(type);
+                                        resources.setOffset(0);
+                                        router()?.updateQuery("resourceType", type);
+                                    });
                                 }}
                             >
                                 {type.charAt(0).toUpperCase() + type.slice(1)}s
@@ -805,12 +826,16 @@ const FiltersPanel: Component = () => {
                         options={gameVersions()} 
                         value={resources.state.gameVersion || "All versions"}
                         onChange={(v: string | null) => {
-                            resources.setGameVersion(v === "All versions" || !v ? null : v);
-                            resources.setOffset(0);
+                            batch(() => {
+                                const val = v === "All versions" || !v ? null : v;
+                                resources.setGameVersion(val);
+                                resources.setOffset(0);
+                                router()?.updateQuery("gameVersion", val);
+                            });
                         }}
                         itemComponent={(props) => (
                             <ComboboxItem item={props.item}>
-                                {props.item.rawValue}
+                                {String(props.item.rawValue)}
                             </ComboboxItem>
                         )}
                     >
@@ -829,18 +854,22 @@ const FiltersPanel: Component = () => {
                     <Select 
                         options={["All Loaders", ...LOADERS]} 
                         value={LOADERS.find(l => l.toLowerCase() === resources.state.loader) || "All Loaders"}
-                        onChange={(v) => {
-                            resources.setLoader(v === "All Loaders" || !v ? null : v.toLowerCase());
-                            resources.setOffset(0);
+                        onChange={(v: string | null) => {
+                            batch(() => {
+                                const val = v === "All Loaders" || !v ? null : v.toLowerCase();
+                                resources.setLoader(val);
+                                resources.setOffset(0);
+                                router()?.updateQuery("loader", val);
+                            });
                         }}
                         itemComponent={(props) => (
                             <SelectItem item={props.item}>
-                                {props.item.rawValue}
+                                {String(props.item.rawValue)}
                             </SelectItem>
                         )}
                     >
                         <SelectTrigger class="filter-select">
-                            <SelectValue<string>>{(s) => s.selectedOption() || "All Loaders"}</SelectValue>
+                            <SelectValue<string>>{(s) => String(s.selectedOption() || "All Loaders")}</SelectValue>
                         </SelectTrigger>
                         <SelectContent />
                     </Select>
@@ -868,8 +897,11 @@ const FiltersPanel: Component = () => {
                                                 }}
                                                 onClick={() => {
                                                     if (group.id) {
-                                                        resources.toggleCategory(group.id);
-                                                        resources.setOffset(0);
+                                                        batch(() => {
+                                                            resources.toggleCategory(group.id!);
+                                                            resources.setOffset(0);
+                                                            router()?.updateQuery("categories", resources.state.categories);
+                                                        });
                                                     }
                                                 }}
                                             >
@@ -933,11 +965,28 @@ const FiltersPanel: Component = () => {
     );
 };
 
-const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => void }> = (props) => {
+const ResourceBrowser: Component<{ 
+    setRefetch?: (fn: () => Promise<void>) => void;
+    query?: string;
+    resourceType?: any;
+    gameVersion?: string;
+    loader?: string;
+    activeSource?: any;
+    sortBy?: string;
+    sortOrder?: string;
+    showFilters?: boolean;
+    categories?: string[];
+    selectedInstanceId?: string;
+    limit?: number;
+    offset?: number;
+    viewMode?: 'grid' | 'list';
+    expandedCategoryGroups?: string[];
+}> = (props) => {
     let debounceTimer: number | undefined;
     const [isSearchExpanded, setIsSearchExpanded] = createSignal(false);
     const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
     let lastWidth = window.innerWidth;
+    let isInitializedFromProps = false;
 
     const currentSortOptions = () => SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] || [];
 
@@ -1041,6 +1090,47 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
     };
 
     onMount(() => {
+        // Apply props to global store if provided (e.g. from pop-out handoff)
+        // We do this here instead of a createEffect to ensure props only initialize the store once
+        // and don't overwrite manual user changes during the session.
+        batch(() => {
+            if (props.query !== undefined) { resources.setQuery(props.query); isInitializedFromProps = true; }
+            if (props.resourceType !== undefined) { resources.setType(props.resourceType); isInitializedFromProps = true; }
+            if (props.gameVersion !== undefined) { resources.setGameVersion(props.gameVersion === "All versions" ? null : props.gameVersion); isInitializedFromProps = true; }
+            if (props.loader !== undefined) { resources.setLoader(props.loader === "All Loaders" ? null : props.loader); isInitializedFromProps = true; }
+            if (props.activeSource !== undefined) { resources.setSource(props.activeSource); isInitializedFromProps = true; }
+            if (props.sortBy !== undefined) { resources.setSortBy(props.sortBy); isInitializedFromProps = true; }
+            if (props.sortOrder !== undefined) { resources.setSortOrder(props.sortOrder as any); isInitializedFromProps = true; }
+            if (props.showFilters !== undefined && props.showFilters !== resources.state.showFilters) { resources.toggleFilters(); isInitializedFromProps = true; }
+            if (props.categories !== undefined) { resources.setCategories(props.categories); isInitializedFromProps = true; }
+            if (props.selectedInstanceId !== undefined) { 
+                resources.setInstance(props.selectedInstanceId ? parseInt(props.selectedInstanceId as any) : null);
+                isInitializedFromProps = true;
+            }
+            if (props.limit !== undefined) { resources.setLimit(props.limit); isInitializedFromProps = true; }
+            if (props.offset !== undefined) { resources.setOffset(props.offset); isInitializedFromProps = true; }
+            if (props.viewMode !== undefined) { resources.setViewMode(props.viewMode); isInitializedFromProps = true; }
+            if (props.expandedCategoryGroups !== undefined) { resources.setExpandedCategoryGroups(props.expandedCategoryGroups); isInitializedFromProps = true; }
+        });
+
+        // Register state provider for pop-out window handoff
+        router()?.registerStateProvider("/resources", () => ({
+            query: resources.state.query,
+            resourceType: resources.state.resourceType,
+            gameVersion: resources.state.gameVersion,
+            loader: resources.state.loader,
+            activeSource: resources.state.activeSource,
+            sortBy: resources.state.sortBy,
+            sortOrder: resources.state.sortOrder,
+            showFilters: resources.state.showFilters,
+            categories: [...resources.state.categories],
+            selectedInstanceId: resources.state.selectedInstanceId,
+            limit: resources.state.limit,
+            offset: resources.state.offset,
+            viewMode: resources.state.viewMode,
+            expandedCategoryGroups: [...resources.state.expandedCategoryGroups]
+        }));
+
         if (props.setRefetch) {
             props.setRefetch(async () => {
                 await resources.search();
@@ -1088,9 +1178,18 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
     const handleSearchInput = (value: string) => {
         resources.setQuery(value);
         if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = window.setTimeout(() => {
+        debounceTimer = window.setTimeout(async () => {
             resources.setOffset(0);
-            resources.search();
+            await resources.search();
+            
+            // Only update the router query if the search value hasn't changed 
+            // and it's actually different from the current router state.
+            untrack(() => {
+                const currentRouterQuery = router()?.currentParams.get().query;
+                if (resources.state.query === value && currentRouterQuery !== value) {
+                    router()?.updateQuery("query", value);
+                }
+            });
         }, 500);
     };
 
@@ -1103,7 +1202,8 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
 
         // Sync filters with selected instance if they are currently null
         // We only do this once on mount/initial load to avoid fighting user manual changes
-        if (!hasInitializedFilters && instances.length > 0 && selectedId && !currentVersion) {
+        // CRITICAL: Skip if we were already initialized from handoff props to preserve pop-out state
+        if (!hasInitializedFilters && !isInitializedFromProps && instances.length > 0 && selectedId && !currentVersion) {
             hasInitializedFilters = true;
             untrack(() => {
                 const inst = instances.find(i => i.id === selectedId);
@@ -1204,8 +1304,11 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
                                 class="source-btn"
                                 classList={{ active: resources.state.activeSource === 'modrinth' }}
                                 onClick={() => {
-                                    resources.setSource('modrinth');
-                                    resources.setOffset(0);
+                                    batch(() => {
+                                        resources.setSource('modrinth');
+                                        resources.setOffset(0);
+                                        router()?.updateQuery("activeSource", "modrinth");
+                                    });
                                 }}
                             >
                                 Modrinth
@@ -1214,8 +1317,11 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
                                 class="source-btn"
                                 classList={{ active: resources.state.activeSource === 'curseforge' }}
                                 onClick={() => {
-                                    resources.setSource('curseforge');
-                                    resources.setOffset(0);
+                                    batch(() => {
+                                        resources.setSource('curseforge');
+                                        resources.setOffset(0);
+                                        router()?.updateQuery("activeSource", "curseforge");
+                                    });
                                 }}
                             >
                                 CurseForge
@@ -1260,7 +1366,7 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
                             <Select 
                                 options={[20, 50, 100]} 
                                 value={resources.state.limit}
-                                onChange={(v) => resources.setLimit(v || 20)}
+                                onChange={(v: number | null) => resources.setLimit(v || 20)}
                                 itemComponent={(props) => (
                                     <SelectItem item={props.item}>
                                         {props.item.rawValue}
@@ -1277,10 +1383,14 @@ const ResourceBrowser: Component<{ setRefetch?: (fn: () => Promise<void>) => voi
                         <span class="sort-label">Sort By:</span>
                         <Select 
                             options={currentSortOptions()} 
-                            value={currentSortOptions().find(o => o.value === resources.state.sortBy) || currentSortOptions()[0]}
-                            onChange={(v) => {
-                                resources.setSortBy(v?.value || 'relevance');
-                                resources.setOffset(0);
+                            value={resources.state.sortBy || (currentSortOptions()[0]?.value)}
+                            onChange={(val: string | null) => {
+                                batch(() => {
+                                    // val is the primitive value because optionValue="value" is set
+                                    resources.setSortBy(val || 'relevance');
+                                    resources.setOffset(0);
+                                    router()?.updateQuery("sortBy", val);
+                                });
                             }}
                             optionValue="value"
                             optionTextValue="label"

@@ -70,6 +70,7 @@ import {
 	onMount,
 	Show,
 	createMemo,
+	on,
 } from "solid-js";
 import {
 	createColumnHelper,
@@ -87,6 +88,14 @@ type TabType = "home" | "console" | "resources" | "settings" | "versioning";
 
 interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
+	activeTab?: TabType;
+	initialData?: any;
+	initialName?: string;
+	initialIconPath?: string;
+	initialMinMemory?: number;
+	initialMaxMemory?: number;
+	initialJavaArgs?: string;
+	_dirty?: Record<string, boolean>;
 }
 
 const ResourceIcon = (props: { record?: any, name: string }) => {
@@ -142,11 +151,26 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		return params?.slug as string | undefined;
 	};
 
-	const slug = () => getSlug() || "";
+	const slug = createMemo(() => {
+		const s = getSlug();
+		console.log("[InstanceDetails] Derived slug:", s);
+		return s || "";
+	});
 
 	const [instance, { refetch }] = createResource(slug, async (s) => {
-		if (!s) return undefined;
-		return await getInstanceBySlug(s);
+		if (!s) {
+			console.warn("[InstanceDetails] No slug provided to resource fetcher");
+			return undefined;
+		}
+		console.log("[InstanceDetails] Fetching instance for slug:", s);
+		try {
+			const inst = await getInstanceBySlug(s);
+			if (!inst) console.warn("[InstanceDetails] Backend returned null for slug:", s);
+			return inst;
+		} catch (e) {
+			console.error("[InstanceDetails] Error fetching instance:", e);
+			throw e;
+		}
 	});
 
 	const [installedResources, { refetch: refetchResources, mutate: mutateResources }] = createResource(instance, async (inst) => {
@@ -175,37 +199,118 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		}
 	});
 
+	// --- Settings State (Unsaved Changes) ---
+	const [name, setName] = createSignal(props.initialName || "");
+	const [iconPath, setIconPath] = createSignal(props.initialIconPath || "");
+	const [minMemory, setMinMemory] = createSignal<number[]>([props.initialMinMemory || 2048]);
+	const [maxMemory, setMaxMemory] = createSignal<number[]>([props.initialMaxMemory || 4096]);
+	const [javaArgs, setJavaArgs] = createSignal(props.initialJavaArgs || "");
+
+	// Dirty flags for settings
+	const [isNameDirty, setIsNameDirty] = createSignal(props._dirty?.name || false);
+	const [isIconDirty, setIsIconDirty] = createSignal(props._dirty?.icon || false);
+	const [isMinMemDirty, setIsMinMemDirty] = createSignal(props._dirty?.minMem || false);
+	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(props._dirty?.maxMem || false);
+	const [isJvmDirty, setIsJvmDirty] = createSignal(props._dirty?.jvm || false);
+
+	const [saving, setSaving] = createSignal(false);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+
+	// Create uploadedIcons array that includes all custom icons seen this session
+	const uploadedIcons = createMemo(() => {
+		const result = [...customIconsThisSession()];
+		const current = iconPath();
+		const inst = instance();
+		const originalIcon = inst?.iconPath;
+		
+		if (
+			current &&
+			!DEFAULT_ICONS.includes(current) &&
+			current !== originalIcon &&
+			!result.includes(current)
+		) {
+			return [current, ...result];
+		}
+		return result;
+	});
+
+	// Track custom icons in session list
+	createEffect(() => {
+		const current = iconPath();
+		if (current && !DEFAULT_ICONS.includes(current)) {
+			setCustomIconsThisSession((prev) => {
+				if (prev.includes(current)) return prev;
+				return [current, ...prev];
+			});
+		}
+	});
+
+	// Check running state on mount and when instance changes
+	createEffect(async () => {
+		const inst = instance();
+		if (inst) {
+			try {
+				const running = await isInstanceRunning(inst);
+				setIsRunning(running);
+			} catch (e) {
+				console.error("Failed to check running state:", e);
+			}
+		}
+	});
+
 	// Register refetch callback with router so reload button can trigger it
 	const handleRefetch = async () => {
 		await Promise.all([refetch(), refetchResources()]);
 	};
 
 	onMount(() => {
+		props.setRefetch?.(handleRefetch);
 		router()?.setRefetch(handleRefetch);
-		if (props.setRefetch) {
-			props.setRefetch(handleRefetch);
+
+		// Register state provider for pop-out window handoff
+		router()?.registerStateProvider("/instance", () => ({
+			...props,
+			slug: slug(),
+			activeTab: activeTab(),
+			// Capture unsaved settings
+			initialName: name(),
+			initialIconPath: iconPath(),
+			initialMinMemory: minMemory()[0],
+			initialMaxMemory: maxMemory()[0],
+			initialJavaArgs: javaArgs(),
+			_dirty: {
+				name: isNameDirty(),
+				icon: isIconDirty(),
+				minMem: isMinMemDirty(),
+				maxMem: isMaxMemDirty(),
+				jvm: isJvmDirty(),
+			}
+		}));
+	});
+
+	// --- Dynamic Title Support ---
+	createEffect(() => {
+		const nameLabel = instance()?.name;
+		if (nameLabel) {
+			router()?.customName.set(nameLabel);
 		}
 	});
 
 	onCleanup(() => {
+		router()?.customName.set(null);
 		router()?.setRefetch(() => Promise.resolve());
 	});
 
 	// Tab state - initialized from query param if available
-	const [activeTab, setActiveTab] = createSignal<TabType>("home");
-	const [showExportDialog, setShowExportDialog] = createSignal(false);
-
-	// Sync tab state with router params
-	createEffect(() => {
+	const activeTab = createMemo<TabType>(() => {
 		const params = router()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
-		if (tab && ["home", "console", "resources", "settings", "versioning"].includes(tab)) {
-			setActiveTab(tab);
-		} else {
-			// Default to home if no tab specified
-			setActiveTab("home");
-		}
+		return (tab && ["home", "console", "resources", "settings", "versioning"].includes(tab)) 
+			? tab 
+			: "home";
 	});
+
+	const [showExportDialog, setShowExportDialog] = createSignal(false);
 
 	// Running state
 	const [isRunning, setIsRunning] = createSignal(false);
@@ -576,71 +681,20 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		setBusy(false);
 	};
 
-	// Settings form state (existing code continues...)
-	const [name, setName] = createSignal<string>("");
-	const [iconPath, setIconPath] = createSignal<string | null>(null);
-	const [javaArgs, setJavaArgs] = createSignal<string>("");
-	const [minMemory, setMinMemory] = createSignal<number[]>([2048]);
-	const [maxMemory, setMaxMemory] = createSignal<number[]>([4096]);
-	const [saving, setSaving] = createSignal(false);
-
 	const selectedToUpdateCount = createMemo(() => {
 		const sel = resources.state.selection;
 		const ups = updates();
 		return Object.keys(sel).filter(id => sel[id] && ups[Number(id)]).length;
 	});
 
-	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
-
-	// Create uploadedIcons array that includes all custom icons seen this session
-	const uploadedIcons = createMemo(() => {
-		const result = [...customIconsThisSession()];
-		const current = iconPath();
-		if (current && !DEFAULT_ICONS.includes(current) && !result.includes(current)) {
-			return [current, ...result];
-		}
-		return result;
-	});
-
-	// Track custom icons in session list
-	createEffect(() => {
-		const current = iconPath();
-		if (current && !DEFAULT_ICONS.includes(current)) {
-			setCustomIconsThisSession((prev) => {
-				if (prev.includes(current)) return prev;
-				return [current, ...prev];
-			});
-		}
-	});
-
-	// Check running state on mount and when instance changes
-	createEffect(async () => {
+	// Sync resources separately - only on actual instance change
+	createEffect(on(() => instance()?.id, (id) => {
 		const inst = instance();
-		if (inst) {
-			try {
-				const running = await isInstanceRunning(inst);
-				setIsRunning(running);
-			} catch (e) {
-				console.error("Failed to check running state:", e);
-			}
-		}
-	});
-
-	// Sync settings form with instance data
-	createEffect(() => {
-		const inst = instance();
-		if (inst) {
-			setName(inst.name);
-			setIconPath(inst.iconPath);
-			setJavaArgs(inst.javaArgs ?? "");
-			setMinMemory([inst.minMemory ?? 2048]);
-			setMaxMemory([inst.maxMemory ?? 4096]);
-			
-			// Initialize resource watcher but don't set as globally "selected" yet
+		if (id && inst) {
 			resources.clearSelection();
-			resources.sync(inst.id, slug(), inst.gameDirectory || "");
+			resources.sync(id, slug(), inst.gameDirectory || "");
 		}
-	});
+	}, { defer: true }));
 
 	// Clear selection on unmount
 	onCleanup(() => resources.clearSelection());
@@ -743,7 +797,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 				>
 					<Switch
 						checked={info.getValue()}
-						onChange={async (enabled) => {
+						onChange={async (enabled: boolean) => {
 							const previous = installedResources.latest;
 							// Optimistic update
 							mutateResources((prev) => 
@@ -905,7 +959,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			}
 		}
 
-		const unlisten = await listen("core://instance-log", (ev) => {
+		cleanups.push(await listen("core://instance-log", (ev) => {
 			const payload =
 				(ev as { payload: Record<string, unknown> }).payload || {};
 			const currentSlug = slug();
@@ -954,64 +1008,60 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 				}
 				return next;
 			});
-		});
+		}));
 
-		const unlistenLaunch = await listen("core://instance-launched", (ev) => {
+		cleanups.push(await listen("core://instance-launched", (ev) => {
 			const payload = (ev as { payload: { instance_id?: string } }).payload;
 			if (payload.instance_id === slug()) {
 				setIsRunning(true);
 				// Clear console on new launch
 				setLines([]);
 			}
-		});
+		}));
 
-		const unlistenKill = await listen("core://instance-killed", (ev) => {
+		cleanups.push(await listen("core://instance-killed", (ev) => {
 			const payload = (ev as { payload: { instance_id?: string } }).payload;
 			if (payload.instance_id === slug()) {
 				setIsRunning(false);
 			}
-		});
+		}));
 
 		// Listen for natural process exit (game closed by user)
-		const unlistenExited = await listen("core://instance-exited", (ev) => {
+		cleanups.push(await listen("core://instance-exited", (ev) => {
 			const payload = (ev as { payload: { instance_id?: string } }).payload;
 			if (payload.instance_id === slug()) {
 				setIsRunning(false);
 			}
-		});
+		}));
 
-		const unlistenResources = await listen("resources-updated", (event) => {
+		cleanups.push(await listen("resources-updated", (event) => {
 			const inst = instance();
 			if (inst && event.payload === inst.id) {
 				refetchResources();
 				resources.fetchInstalled(inst.id);
 			}
-		});
+		}));
 
-		const unlistenInstalled = await listen("core://instance-installed", (ev) => {
+		cleanups.push(await listen("core://instance-installed", (ev) => {
 			const payload = (ev as { payload: { instance_id?: string } }).payload;
 			if (payload.instance_id === slug()) {
 				handleRefetch();
 			}
-		});
+		}));
 
-		const unlistenUpdated = await listen("core://instance-updated", (ev) => {
+		cleanups.push(await listen("core://instance-updated", (ev) => {
 			const payload = ev.payload as any;
 			const current = instance();
 			if (current && payload.id === current.id) {
 				handleRefetch();
 			}
-		});
+		}));
+	});
 
-		onCleanup(() => {
-			unlisten();
-			unlistenResources();
-			unlistenLaunch();
-			unlistenKill();
-			unlistenExited();
-			unlistenInstalled();
-			unlistenUpdated();
-		});
+	const cleanups: (() => void)[] = [];
+	onCleanup(() => {
+		for (const cb of cleanups) cb();
+		resources.clearSelection();
 	});
 
 	// Auto-scroll console when lines change
@@ -1089,14 +1139,11 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		}
 	};
 
-	// Handle tab changes - use navigate to support history (back/forward)
+	// Handle tab changes - use updateQuery for stable state preservation
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
 
-		router()?.navigate("/instance", { 
-			...router()?.currentParams.get(),
-			activeTab: tab 
-		});
+		router()?.updateQuery("activeTab", tab, true); // Push to history
 	};
 
 	const [isScrolled, setIsScrolled] = createSignal(false);
@@ -1159,7 +1206,17 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 						</div>
 					</Show>
 
-					<Show when={instance.latest}>
+					<Show 
+						when={instance.latest}
+						fallback={
+							<Show when={!instance.loading}>
+								<div class="instance-error">
+									<p>No instance data available. {slug() ? `(Slug: ${slug()})` : "No slug provided."}</p>
+									<Button onClick={() => router()?.navigate("/")}>Back to Home</Button>
+								</div>
+							</Show>
+						}
+					>
 						{(inst) => (
 							<>
 								<header class="instance-details-header" classList={{ shrunk: activeTab() !== "home" }}>
@@ -1578,9 +1635,9 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																		<Show when={!modpackVersions.loading} fallback={<div class="skeleton-picker" />}>
 																			<Combobox<any>
 																				options={searchableModpackVersions()}
-																				value={searchableModpackVersions().find(v => v.id === selectedModpackVersionId() || v.version_number === selectedModpackVersionId())}
-																				onChange={(v) => {
-																					if (v && v.id) setSelectedModpackVersionId(v.id);
+																				value={selectedModpackVersionId()}
+																				onChange={(id: string | null) => {
+																					if (id) setSelectedModpackVersionId(id);
 																				}}
 																				optionValue="id"
 																				optionTextValue="searchString"
@@ -1655,12 +1712,12 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			options={searchableMcVersions()}
 																			optionValue="id"
 																			optionTextValue="searchString"
-																			value={searchableMcVersions().find(gv => gv.id === selectedMcVersion())}
-																			onChange={(val) => {
-																				if (!val) return;
-																				setSelectedMcVersion(val.id);
+																			value={selectedMcVersion()}
+																			onChange={(id: string | null) => {
+																				if (!id) return;
+																				setSelectedMcVersion(id);
 																				// Refresh loaders if needed
-																				const vMeta = mcVersions()?.game_versions.find(gv => gv.id === val.id);
+																				const vMeta = mcVersions()?.game_versions.find(gv => gv.id === id);
 																				if (vMeta) {
 																					setSelectedLoader("vanilla");
 																					setSelectedLoaderVersion("");
@@ -1690,14 +1747,14 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			options={loadersList}
 																			optionValue="value"
 																			optionTextValue="label"
-																			value={loadersList.find(l => l.value === selectedLoader())}
-																			onChange={(val) => {
+																			value={selectedLoader()}
+																			onChange={(val: string | null) => {
 																				if (!val) return;
-																				setSelectedLoader(val.value);
+																				setSelectedLoader(val);
 																				// Pick default version for new loader
 																				const vMeta = mcVersions()?.game_versions.find(gv => gv.id === selectedMcVersion());
 																				if (vMeta) {
-																					const loaders = vMeta.loaders[val.value] || [];
+																					const loaders = vMeta.loaders[val] || [];
 																					if (loaders.length > 0) setSelectedLoaderVersion(loaders[0].version);
 																					else setSelectedLoaderVersion("");
 																				}
@@ -1726,8 +1783,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																				options={mcVersions()?.game_versions.find(gv => gv.id === selectedMcVersion())?.loaders[selectedLoader()] || []}
 																				optionValue="version"
 																				optionTextValue="version"
-																				value={(mcVersions()?.game_versions.find(gv => gv.id === selectedMcVersion())?.loaders[selectedLoader()] || []).find(v => v.version === selectedLoaderVersion())}
-																				onChange={(val) => val && setSelectedLoaderVersion(val.version)}
+																				value={selectedLoaderVersion()}
+																				onChange={(val: string | null) => val && setSelectedLoaderVersion(val)}
 																				itemComponent={(props) => (
 																					<ComboboxItem item={props.item}>
 																						{props.item.rawValue.version}
@@ -1826,7 +1883,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 													<div class="form-row" style="align-items: flex-start;">
 														<IconPicker
 															value={iconPath()}
-															onSelect={(icon) => setIconPath(icon)}
+															onSelect={(icon) => {
+																setIconPath(icon);
+																setIsIconDirty(true);
+															}}
 															uploadedIcons={uploadedIcons()}
 															suggestedIcon={instance()?.modpackIconUrl}
 															isSuggestedSelected={
@@ -1840,7 +1900,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<TextFieldLabel>Instance Name</TextFieldLabel>
 															<TextFieldInput
 																value={name()}
-																onInput={(e: any) => setName(e.currentTarget.value)}
+																onInput={(e: any) => {
+																	setName(e.currentTarget.value);
+																	setIsNameDirty(true);
+																}}
 																disabled={isInstalling()}
 															/>
 														</TextFieldRoot>
@@ -1852,7 +1915,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 														<TextFieldLabel>Java Arguments</TextFieldLabel>
 														<TextFieldInput
 															value={javaArgs()}
-															onInput={(e: any) => setJavaArgs(e.currentTarget.value)}
+															onInput={(e: any) => {
+																setJavaArgs(e.currentTarget.value);
+																setIsJvmDirty(true);
+															}}
 															placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
 														/>
 													</TextFieldRoot>
@@ -1864,7 +1930,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												<div class="settings-field">
 													<Slider
 														value={minMemory()}
-														onChange={setMinMemory}
+														onChange={(val) => {
+															setMinMemory(val);
+															setIsMinMemDirty(true);
+														}}
 														minValue={512}
 														maxValue={16384}
 														step={512}
@@ -1886,7 +1955,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												<div class="settings-field">
 													<Slider
 														value={maxMemory()}
-														onChange={setMaxMemory}
+														onChange={(val) => {
+															setMaxMemory(val);
+															setIsMaxMemDirty(true);
+														}}
 														minValue={512}
 														maxValue={16384}
 														step={512}

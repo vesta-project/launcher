@@ -46,17 +46,27 @@ import {
 	on,
 	onMount,
 	Show,
+	Accessor,
 } from "solid-js";
+import { createStore } from "solid-js/store";
 
 export interface InstallFormProps {
 	compact?: boolean;
+	initialData?: Partial<Instance>;
+	
 	initialName?: string;
 	initialAuthor?: string;
 	initialVersion?: string;
 	initialModloader?: string;
 	initialModloaderVersion?: string;
 	initialIcon?: string;
+	originalIcon?: string;
+	initialMinMemory?: number;
 	initialMaxMemory?: number;
+	initialIncludeSnapshots?: boolean;
+	initialJvmArgs?: string;
+	initialResW?: string;
+	initialResH?: string;
 
 	isModpack?: any;
 	isLocalImport?: boolean;
@@ -73,6 +83,7 @@ export interface InstallFormProps {
 
 	onInstall: (data: Partial<Instance>) => Promise<void>;
 	onCancel?: () => void;
+	onStateChange?: (data: Partial<Instance>) => void;
 	isInstalling?: boolean;
 	isFetchingMetadata?: boolean;
 }
@@ -91,24 +102,42 @@ const MODLOADER_DISPLAY_NAMES: Record<string, string> = {
  */
 export function InstallForm(props: InstallFormProps) {
 	// --- Core Instance State ---
-	const [name, setName] = createSignal("");
-	const [icon, setIcon] = createSignal<string | null>(null);
-	const [mcVersion, setMcVersion] = createSignal("");
-	const [loader, setLoader] = createSignal("vanilla");
-	const [loaderVer, setLoaderVer] = createSignal("");
+	const [name, setName] = createSignal(props.initialData?.name || props.initialName || "");
+	const [icon, setIcon] = createSignal<string | null>(props.initialData?.iconPath || props.initialIcon || DEFAULT_ICONS[0]);
+	const [mcVersion, setMcVersion] = createSignal(props.initialData?.minecraftVersion || props.initialVersion || "");
+	const [loader, setLoader] = createSignal(props.initialData?.modloader || props.initialModloader || "vanilla");
+	const [loaderVer, setLoaderVer] = createSignal(props.initialData?.modloaderVersion || props.initialModloaderVersion || "");
 	const [memory, setMemory] = createSignal<number[]>([
-		2048,
-		props.initialMaxMemory || 4096,
+		props.initialData?.minMemory || props.initialMinMemory || 2048,
+		props.initialData?.maxMemory || props.initialMaxMemory || 4096,
 	]);
+	const [includeSnapshots, setIncludeSnapshots] = createSignal(props.initialIncludeSnapshots || false);
+
+	// --- State Propagation ---
+	createEffect(() => {
+		props.onStateChange?.({
+			name: name(),
+			iconPath: icon() || DEFAULT_ICONS[0],
+			minecraftVersion: mcVersion(),
+			modloader: loader(),
+			modloaderVersion: loaderVer(),
+			minMemory: memory()[0],
+			maxMemory: memory()[1],
+			includeSnapshots: includeSnapshots(),
+			javaArgs: jvmArgs(),
+			width: parseInt(resW()) || 854,
+			height: parseInt(resH()) || 480,
+			_dirty: { ...dirty },
+		} as any);
+	});
 
 	// --- Performance State ---
 	const [totalRam, setTotalRam] = createSignal(16384);
-	const [jvmArgs, setJvmArgs] = createSignal("");
-	const [resW, setResW] = createSignal("854");
-	const [resH, setResH] = createSignal("480");
+	const [jvmArgs, setJvmArgs] = createSignal(props.initialData?.javaArgs || props.initialJvmArgs || "");
+	const [resW, setResW] = createSignal(String(props.initialData?.width || props.initialResW || "854"));
+	const [resH, setResH] = createSignal(String(props.initialData?.height || props.initialResH || "480"));
 
 	// --- Internal UI Toggles ---
-	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
 
 	// --- Data Sources ---
 	const [pistonMetadata] = createResource<PistonMetadata>(getMinecraftVersions);
@@ -126,9 +155,19 @@ export function InstallForm(props: InstallFormProps) {
 		return String(props.isModpack) === "true" || props.isModpack === true;
 	});
 
-	// Flag to track if the user has manually changed the name
-	const [isNameDirty, setIsNameDirty] = createSignal(false);
-	const [isIconDirty, setIsIconDirty] = createSignal(false);
+	// Flag to track if the user has manually changed fields
+	// These are persisted across window handoffs via props.initialData._dirty
+	const [dirty, setDirty] = createStore<Record<string, boolean>>((props.initialData as any)?._dirty || {});
+	
+	const isNameDirty = () => !!dirty.name;
+	const isIconDirty = () => !!dirty.icon;
+	const isVersionDirty = () => !!dirty.version;
+	const isLoaderDirty = () => !!dirty.loader;
+	const isLoaderVerDirty = () => !!dirty.loaderVer;
+	const isJvmArgsDirty = () => !!dirty.jvmArgs;
+	const isResDirty = () => !!dirty.res;
+	const isMemoryDirty = () => !!dirty.memory;
+
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
 	// Create uploadedIcons array that includes all custom icons seen this session
@@ -177,14 +216,34 @@ export function InstallForm(props: InstallFormProps) {
 		// Only seed if not already set or if explicitly provided as initial values
 		// We use batch to ensure consistent state updates
 		batch(() => {
-			if (props.initialName && !isNameDirty()) setName(props.initialName);
-			if (props.initialVersion) setMcVersion(props.initialVersion);
-			if (props.initialModloader)
+			const d = props.initialData;
+			
+			if (d) {
+				if (d.name !== undefined && !isNameDirty()) setName(d.name);
+				if (d.minecraftVersion && !isVersionDirty()) setMcVersion(d.minecraftVersion);
+				if (d.modloader && !isLoaderDirty()) setLoader(d.modloader.toLowerCase());
+				if (d.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(d.modloaderVersion);
+				if (d.iconPath && !isIconDirty()) setIcon(d.iconPath);
+				if (d.maxMemory && !isMemoryDirty()) setMemory([d.minMemory || 2048, d.maxMemory]);
+				if (d.javaArgs !== undefined && !isJvmArgsDirty()) setJvmArgs(d.javaArgs);
+				if (d.width && !isResDirty()) setResW(String(d.width));
+				if (d.height && !isResDirty()) setResH(String(d.height));
+			}
+
+			if (props.initialName !== undefined && !isNameDirty() && !d?.name) setName(props.initialName);
+			if (props.initialVersion && !isVersionDirty() && !d?.minecraftVersion) setMcVersion(props.initialVersion);
+			if (props.initialModloader && !isLoaderDirty() && !d?.modloader)
 				setLoader(props.initialModloader.toLowerCase());
-			if (props.initialModloaderVersion)
+			if (props.initialModloaderVersion && !isLoaderVerDirty() && !d?.modloaderVersion)
 				setLoaderVer(props.initialModloaderVersion);
-			if (props.initialIcon) setIcon(props.initialIcon);
-			if (props.initialMaxMemory) setMemory([2048, props.initialMaxMemory]);
+			if (props.initialIcon && !isIconDirty() && !d?.iconPath) setIcon(props.initialIcon);
+			if (props.initialMaxMemory && !isMemoryDirty() && !d?.maxMemory) {
+				setMemory([props.initialMinMemory || 2048, props.initialMaxMemory]);
+			}
+			if (props.initialIncludeSnapshots !== undefined) setIncludeSnapshots(props.initialIncludeSnapshots);
+			if (props.initialJvmArgs !== undefined && !isJvmArgsDirty() && !d?.javaArgs) setJvmArgs(props.initialJvmArgs);
+			if (props.initialResW && !isResDirty() && !d?.width) setResW(props.initialResW);
+			if (props.initialResH && !isResDirty() && !d?.height) setResH(props.initialResH);
 		});
 	});
 
@@ -194,13 +253,13 @@ export function InstallForm(props: InstallFormProps) {
 		if (info && normalizedIsModpack()) {
 			batch(() => {
 				console.log("[InstallForm] Reactive sync from modpackInfo:", info.name);
-				// We prioritize modpack-defined metadata
+				// We prioritize modpack-defined metadata unless user has already touched it
 				if (info.name && !isNameDirty()) setName(info.name);
 				if (info.iconUrl && !isIconDirty()) setIcon(info.iconUrl);
-				if (info.minecraftVersion) setMcVersion(info.minecraftVersion);
-				if (info.modloader) setLoader(info.modloader.toLowerCase());
-				if (info.modloaderVersion) setLoaderVer(info.modloaderVersion);
-				if (info.recommendedRamMb) setMemory([2048, info.recommendedRamMb]);
+				if (info.minecraftVersion && !isVersionDirty()) setMcVersion(info.minecraftVersion);
+				if (info.modloader && !isLoaderDirty()) setLoader(info.modloader.toLowerCase());
+				if (info.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(info.modloaderVersion);
+				if (info.recommendedRamMb && !isMemoryDirty()) setMemory([2048, info.recommendedRamMb]);
 			});
 		}
 	});
@@ -249,7 +308,8 @@ export function InstallForm(props: InstallFormProps) {
 
 	const availableMcVersions = createMemo(() => {
 		const meta = pistonMetadata();
-		if (!meta) return [];
+		const current = mcVersion();
+		if (!meta) return current ? [{ id: current, stable: true }] : [];
 
 		let versions = meta.game_versions;
 
@@ -257,6 +317,11 @@ export function InstallForm(props: InstallFormProps) {
 		if (props.supportedMcVersions && props.supportedMcVersions.length > 0) {
 			const supported = props.supportedMcVersions;
 			versions = versions.filter((v) => supported.includes(v.id));
+		}
+
+		// Ensure current version is always in the list to prevent visual flickering
+		if (current && !versions.some(v => v.id === current)) {
+			versions = [{ id: current, stable: true }, ...versions];
 		}
 
 		// Priority 2: Filter by stable only
@@ -269,10 +334,11 @@ export function InstallForm(props: InstallFormProps) {
 	const availableLoaders = createMemo(() => {
 		const meta = pistonMetadata();
 		const currentV = mcVersion();
-		if (!meta || !currentV) return ["vanilla"];
+		const currentL = loader();
+		if (!meta || !currentV) return [currentL || "vanilla"];
 
 		const vData = meta.game_versions.find((v) => v.id === currentV);
-		if (!vData) return ["vanilla"];
+		if (!vData) return [currentL || "vanilla"];
 
 		const set = new Set(["vanilla"]);
 		Object.keys(vData.loaders).forEach((l) => {
@@ -286,6 +352,11 @@ export function InstallForm(props: InstallFormProps) {
 				set.add(loaderName);
 			}
 		});
+
+		if (currentL && !set.has(currentL.toLowerCase())) {
+			set.add(currentL.toLowerCase());
+		}
+
 		return Array.from(set);
 	});
 
@@ -293,10 +364,18 @@ export function InstallForm(props: InstallFormProps) {
 		const meta = pistonMetadata();
 		const currentV = mcVersion();
 		const currentL = loader();
-		if (!meta || !currentV || currentL === "vanilla") return [];
+		const currentLV = loaderVer();
+		
+		if (!meta || !currentV || currentL === "vanilla") return currentLV ? [{ version: currentLV }] : [];
 
 		const vData = meta.game_versions.find((v) => v.id === currentV);
-		return vData?.loaders[currentL] || [];
+		const list = vData?.loaders[currentL] || [];
+
+		if (currentLV && !list.some(v => v.version === currentLV)) {
+			return [{ version: currentLV }, ...list];
+		}
+
+		return list;
 	});
 
 	// --- Actions ---
@@ -308,10 +387,11 @@ export function InstallForm(props: InstallFormProps) {
 			loader: loader(),
 			loaderVer: loaderVer(),
 		});
+		const effectiveIcon = icon() || DEFAULT_ICONS[0];
 		const data: Partial<Instance> = {
 			name: name(),
-			iconPath: icon() || null,
-			modpackIconUrl: (icon()?.startsWith("http") ? icon() : null) || null,
+			iconPath: effectiveIcon,
+			modpackIconUrl: (effectiveIcon.startsWith("http") ? effectiveIcon : null) || null,
 			minecraftVersion: mcVersion(),
 			modloader: loader(),
 			modloaderVersion: loaderVer() || null,
@@ -348,14 +428,18 @@ export function InstallForm(props: InstallFormProps) {
 								value={icon()}
 								onSelect={(newIcon) => {
 									setIcon(newIcon);
-									setIsIconDirty(true);
+									setDirty("icon", true);
 								}}
-								suggestedIcon={props.initialIcon}
+								suggestedIcon={
+									normalizedIsModpack() || props.projectId
+										? props.originalIcon
+										: undefined
+								}
 								isSuggestedSelected={
-									!!props.initialIcon && icon() === props.initialIcon
+									!!props.originalIcon && icon() === props.originalIcon
 								}
 								uploadedIcons={uploadedIcons()}
-								showHint={!isIconDirty() && !props.initialIcon && !icon()}
+								showHint={!isIconDirty() && !props.originalIcon && !icon()}
 								triggerProps={{
 									class: "form-icon-trigger",
 								}}
@@ -367,7 +451,7 @@ export function InstallForm(props: InstallFormProps) {
 										value={name()}
 										onInput={(e) => {
 											setName((e.currentTarget as HTMLInputElement).value);
-											setIsNameDirty(true);
+											setDirty("name", true);
 										}}
 										placeholder="My Instance"
 									/>
@@ -423,11 +507,9 @@ export function InstallForm(props: InstallFormProps) {
 									<div class="field-label-manual">Release Version</div>
 									<Combobox
 										options={searchableModpackVersions()}
-										value={searchableModpackVersions().find(
-											(v) => v.id === props.selectedModpackVersionId,
-										)}
-										onChange={(v: any) => {
-											if (v && v.id) props.onModpackVersionChange?.(v.id);
+										value={props.selectedModpackVersionId}
+										onChange={(id: any) => {
+											if (id) props.onModpackVersionChange?.(id);
 										}}
 										optionValue="id"
 										optionTextValue="searchString"
@@ -453,7 +535,10 @@ export function InstallForm(props: InstallFormProps) {
 													const selected = props.modpackVersions?.find(
 														(v) => v.id === props.selectedModpackVersionId,
 													);
-													if (!selected) return "";
+													if (!selected) {
+														if (props.selectedModpackVersionId) return "Loading version...";
+														return "";
+													}
 													const mcV = selected.game_versions?.[0];
 													return mcV
 														? `${selected.version_number} (MC ${mcV})`
@@ -495,7 +580,10 @@ export function InstallForm(props: InstallFormProps) {
 										<Combobox
 											options={availableMcVersions().map((v) => v.id)}
 											value={mcVersion()}
-											onChange={setMcVersion}
+											onChange={(v) => {
+												setMcVersion(v || "");
+											setDirty("version", true);
+											}}
 											placeholder="Pick a version..."
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
@@ -532,7 +620,10 @@ export function InstallForm(props: InstallFormProps) {
 										<Combobox
 											options={availableLoaders()}
 											value={loader()}
-											onChange={setLoader}
+											onChange={(v) => {
+												setLoader(v || "vanilla");
+											setDirty("loader", true);
+											}}
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
 													{MODLOADER_DISPLAY_NAMES[p.item.rawValue] ||
@@ -554,7 +645,10 @@ export function InstallForm(props: InstallFormProps) {
 											<Combobox
 												options={availableLoaderVers().map((v) => v.version)}
 												value={loaderVer()}
-												onChange={setLoaderVer}
+												onChange={(v) => {
+													setLoaderVer(v || "");
+													setDirty("loaderVer", true);
+												}}
 												placeholder="Latest"
 												itemComponent={(p) => (
 													<ComboboxItem item={p.item}>
@@ -592,7 +686,16 @@ export function InstallForm(props: InstallFormProps) {
 									{memory()[0]}MB — {memory()[1]}MB
 								</div>
 							</div>
-							<Slider value={memory()} onChange={setMemory} minValue={512} maxValue={totalRam()} step={512}>
+							<Slider 
+								value={memory()} 
+								onChange={(val) => {
+									setMemory(val);
+									setDirty("memory", true);
+								}} 
+								minValue={512} 
+								maxValue={totalRam()} 
+								step={512}
+							>
 								<SliderTrack>
 									<SliderFill />
 									<SliderThumb />
@@ -618,7 +721,10 @@ export function InstallForm(props: InstallFormProps) {
 							<TextFieldLabel>JVM Arguments</TextFieldLabel>
 							<TextFieldInput
 								value={jvmArgs()}
-								onInput={(e) => setJvmArgs((e.currentTarget as HTMLInputElement).value)}
+								onInput={(e) => {
+									setJvmArgs((e.currentTarget as HTMLInputElement).value);
+									setDirty("jvmArgs", true);
+								}}
 								placeholder="-Xmx..."
 							/>
 						</TextFieldRoot>
@@ -632,21 +738,26 @@ export function InstallForm(props: InstallFormProps) {
 								<TextFieldLabel>Width</TextFieldLabel>
 								<TextFieldInput
 									value={resW()}
-									onInput={(e) => setResW((e.currentTarget as HTMLInputElement).value)}
+									onInput={(e) => {
+										setResW((e.currentTarget as HTMLInputElement).value);
+										setDirty("res", true);
+									}}
 								/>
 							</TextFieldRoot>
 							<TextFieldRoot>
 								<TextFieldLabel>Height</TextFieldLabel>
 								<TextFieldInput
 									value={resH()}
-									onInput={(e) => setResH((e.currentTarget as HTMLInputElement).value)}
+									onInput={(e) => {
+										setResH((e.currentTarget as HTMLInputElement).value);
+										setDirty("res", true);
+									}}
 								/>
 							</TextFieldRoot>
 						</div>
 					</div>
 				</div>
 			</div>
-
 
 			{/* FOOTER ACTIONS - MOVED OUTSIDE SCROLL AREA */}
 			<div class="install-form__actions-container">

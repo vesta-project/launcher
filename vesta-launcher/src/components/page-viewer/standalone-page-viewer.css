@@ -1,177 +1,45 @@
-.standalone-page-viewer {
-	width: 100vw;
-	height: 100vh;
-	display: flex;
-	flex-direction: column;
-
-	/* Solid background for standalone viewer (no glass) */
-	background: var(--bg-surface);
-	border: 1px solid var(--border-subtle);
-
-	position: relative;
-	overflow: hidden;
-}
-
-/* Reduced effects override */
-:root[data-bordered="true"] .standalone-page-viewer {
-	backdrop-filter: none;
-	-webkit-backdrop-filter: none;
-	background: var(--bg-surface);
-	box-shadow: none;
-	border: 1px solid transparent; /* More stable border color */
-}
-
-/* Top highlight - removed for standalone */
-.standalone-page-viewer::before {
-	display: none;
-}
-
-/* Left highlight - removed for standalone */
-.standalone-page-viewer::after {
-	display: none;
-}
-
-/* Noise overlay */
-.standalone-page-viewer {
-	background-image: var(--glass-noise);
-	background-blend-mode: overlay;
-}
-
-.standalone-page-viewer__header {
-	height: 32px;
-	background: var(--bg-surface);
-	display: grid;
-	grid-template-columns: auto 1fr auto auto;
-	align-items: center;
-	border-bottom: 1px solid var(--border-subtle);
-	user-select: none;
-	position: relative;
-	z-index: 1;
-}
-
-.standalone-page-viewer__nav-left {
-	display: flex;
-	gap: 2px;
-	padding-left: 4px;
-	grid-column: 1;
-}
-
-.standalone-page-viewer__title {
-	grid-column: 2;
-	font-size: var(--font-xsmall);
-	color: var(--text-primary);
-	font-weight: 500;
-	text-align: center;
-	padding: 0 16px;
-}
-
-.standalone-page-viewer__nav-right {
-	display: flex;
-	gap: 2px;
-	padding-right: 4px;
-	grid-column: 3;
-}
-
 .standalone-page-viewer__controls {
-	grid-column: 4;
-	width: fit-content;
-	padding: 0;
+    display: flex;
+    height: 100%;
+    align-items: stretch;
 }
 
-.standalone-page-viewer__controls > * {
-	color: var(--text-primary);
+.standalone-page-viewer__controls > div {
+    display: flex;
+    align-items: stretch;
 }
 
-.standalone-page-viewer__controls .controls-windows > * {
-	color: var(--text-primary);
+.standalone-page-viewer__controls button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    height: 100%;
+    border-radius: 0 !important;
+    color: inherit !important;
+    transition: background 0.2s;
 }
 
-.standalone-page-viewer__nav-button {
-	width: 28px;
-	height: 28px;
-	padding: 6px;
-	background: linear-gradient(
-		to bottom,
-		hsl(0deg 0% 71% / 1%),
-		hsl(0deg 0% 40% / 1%)
-	);
-	display: flex;
-	justify-content: center;
-	align-items: center;
-	cursor: pointer;
-	overflow: hidden;
-	border-radius: 3px;
-	border: transparent solid 1px;
+.standalone-page-viewer__controls button:hover {
+    background: hsla(0, 0%, 50%, 0.15);
 }
 
-.standalone-page-viewer__nav-button:hover {
-	border: hsl(200deg 92% 35% / 10%) solid 1px;
+.hover\:bg-\[\#c42b1c\]:hover {
+    background: rgb(196 43 28 / var(--tw-bg-opacity)) !important;
 }
 
-.standalone-page-viewer__nav-button:hover svg {
-	transform: scale(105%);
-	transition-duration: 75ms;
+/* MacOS specific stoplight alignment */
+.unified-page-viewer-root[data-os="macos"] .page-viewer-window-controls-wrapper {
+    padding-left: 12px;
+    padding-right: 8px;
 }
 
-.standalone-page-viewer__nav-button:active {
-	transform: scale(90%);
-	transition-duration: 75ms;
+/* Windows/Linux padding */
+.unified-page-viewer-root:not([data-os="macos"]) .page-viewer-window-controls-wrapper {
+    margin-left: 8px;
 }
 
-.standalone-page-viewer__nav-button:disabled {
-	opacity: 0.3;
-	cursor: not-allowed;
-	pointer-events: none;
+.standalone-page-viewer__controls svg path {
+    fill: currentColor !important;
 }
 
-.standalone-page-viewer__nav-button:disabled svg {
-	transform: none;
-}
-
-.standalone-page-viewer__nav-button.forward svg {
-	transform: scaleX(-1);
-}
-
-.standalone-page-viewer__nav-button.forward:hover svg {
-	transform: scaleX(-1) scale(105%);
-}
-
-.standalone-page-viewer__nav-button.forward:disabled svg {
-	transform: scaleX(-1);
-}
-
-.standalone-page-viewer__nav-button svg {
-	width: 100%;
-	height: 100%;
-	fill: var(--icon-primary);
-}
-
-.standalone-page-viewer__title {
-	flex: 1;
-	font-size: var(--font-xsmall);
-	color: var(--text-primary);
-	font-weight: 500;
-	text-align: center;
-	padding: 0 16px;
-}
-
-.standalone-page-viewer__controls {
-	width: fit-content;
-	padding: 0;
-}
-
-.standalone-page-viewer__content {
-	flex: 1;
-	overflow-y: auto;
-	background: var(--bg-glass);
-	position: relative;
-	z-index: 1;
-}
-
-.standalone-page-viewer__controls > * {
-	color: var(--text-primary);
-}
-
-.standalone-page-viewer__controls .controls-windows > * {
-	color: var(--text-primary);
-}
