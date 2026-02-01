@@ -794,9 +794,9 @@ pub async fn install_modpack_from_zip(
         .first::<Instance>(&mut conn)
         .map_err(|e| format!("Failed to fetch saved instance: {}", e))?;
 
-    // Emit event so UI home page updates immediately
+    // Emit created event so UI home page updates immediately
     use tauri::Emitter;
-    let _ = _app.emit("core://instance-updated", &saved_instance);
+    let _ = _app.emit("core://instance-created", &saved_instance);
 
     // 2. Queue Task
     use crate::tasks::installers::modpack::ModpackSource;
@@ -1098,9 +1098,9 @@ pub async fn install_modpack_from_url(
     log::info!("[install_modpack_from_url] Saved instance into DB. ID={}, name={}, version_id={:?}", 
         saved_instance.id, saved_instance.name, saved_instance.modpack_version_id);
 
-    // Emit refresh event so UI home page updates immediately
+    // Emit created event so UI home page updates immediately
     use tauri::Emitter;
-    let _ = _app.emit("core://instance-updated", &saved_instance);
+    let _ = _app.emit("core://instance-created", &saved_instance);
 
     // Queue Task with the URL directly - the task now handles the download
     use crate::tasks::installers::modpack::ModpackSource;

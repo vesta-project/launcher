@@ -128,6 +128,15 @@ impl Task for CloneInstanceTask {
                 .execute(&mut conn)
                 .map_err(|e| format!("Failed to insert cloned instance: {}", e))?;
 
+            // Fetch the inserted instance and emit created event
+            let inserted_inst = instance
+                .order(id.desc())
+                .first::<Instance>(&mut conn)
+                .map_err(|e| format!("Failed to fetch cloned instance: {}", e))?;
+
+            use tauri::Emitter;
+            let _ = ctx.app_handle.emit("core://instance-created", inserted_inst);
+
             Ok(())
         })
     }

@@ -49,6 +49,7 @@ import {
 	getInstanceBySlug,
 	getMinecraftVersions,
 	isInstanceRunning,
+	installInstance,
 	killInstance,
 	launchInstance,
 	repairInstance,
@@ -332,6 +333,17 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		const inst = instance();
 		return inst?.installationStatus === "interrupted";
 	});
+
+	const isFailed = createMemo(() => {
+		const inst = instance();
+		return inst?.installationStatus === "failed";
+	});
+
+	const needsInstallation = createMemo(() => {
+		const inst = instance();
+		return !inst?.installationStatus || isFailed();
+	});
+
 	let lastSelectedRowId: string | null = null;
 
 	const handleRowClick = (row: any, event: MouseEvent) => {
@@ -1094,8 +1106,17 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 
 		if (isInterrupted()) {
 			const op = inst.lastOperation;
-			const opName = op === "hard-reset" ? "Reset" : op === "repair" ? "Repair" : "Installation";
+			const opName =
+				op === "hard-reset"
+					? "Reset"
+					: op === "repair"
+						? "Repair"
+						: "Installation";
 			return `Resume ${opName}`;
+		}
+
+		if (needsInstallation()) {
+			return isFailed() ? "Retry Install" : "Install Now";
 		}
 
 		return "Play Now";
@@ -1108,6 +1129,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		try {
 			if (isInterrupted()) {
 				await resumeInstanceOperation(inst);
+			} else if (needsInstallation()) {
+				await installInstance(inst);
 			} else {
 				await launchInstance(inst);
 			}

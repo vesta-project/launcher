@@ -52,12 +52,13 @@ export interface Instance {
 	totalPlaytimeMinutes: number;
 	createdAt: string | null;
 	updatedAt: string | null;
-	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
+		// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
 	installationStatus?:
 		| "pending"
 		| "installing"
 		| "installed"
 		| "failed"
+		| "interrupted"
 		| null;
 	crashed?: boolean;
 	crashDetails?: string | null;

@@ -239,6 +239,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         );
 
         // Can't call slug on NewInstance, need to insert first

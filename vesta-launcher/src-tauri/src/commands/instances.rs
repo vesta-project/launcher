@@ -428,6 +428,12 @@ pub async fn create_instance(
         .first(&mut conn)
         .map_err(|e| format!("Failed to get inserted instance ID: {}", e))?;
 
+    // Fetch the full instance and emit created event
+    if let Ok(full_instance) = instance.find(inserted_id).first::<Instance>(&mut conn) {
+        use tauri::Emitter;
+        let _ = app_handle.emit("core://instance-created", full_instance);
+    }
+
     // Set initial installation_status to "pending"
     let _ = crate::commands::instances::update_installation_status(&app_handle, inserted_id, "installing");
 
