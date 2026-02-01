@@ -40,6 +40,7 @@ pub struct Instance {
     pub modpack_platform: Option<String>,
     pub modpack_icon_url: Option<String>,
     pub icon_data: Option<Vec<u8>>,
+    pub last_operation: Option<String>,
 }
 
 /// New instance (without id for insertion)
@@ -71,6 +72,7 @@ pub struct NewInstance {
     pub modpack_platform: Option<String>,
     pub modpack_icon_url: Option<String>,
     pub icon_data: Option<Vec<u8>>,
+    pub last_operation: Option<String>,
 }
 
 impl Default for Instance {
@@ -101,6 +103,7 @@ impl Default for Instance {
             modpack_platform: None,
             modpack_icon_url: None,
             icon_data: None,
+            last_operation: None,
         }
     }
 }
@@ -141,6 +144,7 @@ impl NewInstance {
         modpack_platform: Option<String>,
         modpack_icon_url: Option<String>,
         icon_data: Option<Vec<u8>>,
+        last_operation: Option<String>,
     ) -> Self {
         NewInstance {
             name,
@@ -167,6 +171,7 @@ impl NewInstance {
             modpack_platform,
             modpack_icon_url,
             icon_data,
+            last_operation,
         }
     }
 }
@@ -198,6 +203,7 @@ impl Default for NewInstance {
             modpack_platform: None,
             modpack_icon_url: None,
             icon_data: None,
+            last_operation: None,
         }
     }
 }

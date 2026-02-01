@@ -61,6 +61,37 @@ impl ActionHandler for ResumeTaskHandler {
     }
 }
 
+/// Handler that resumes an interrupted instance operation
+struct ResumeInstanceOperationHandler {}
+
+impl ActionHandler for ResumeInstanceOperationHandler {
+    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+        let key = match client_key {
+            Some(k) => k,
+            None => anyhow::bail!("Missing client_key for resume_instance_operation action"),
+        };
+
+        // Extract ID from key (interrupted_instance_{id})
+        let id_str = key.replace("interrupted_instance_", "");
+        let id = id_str.parse::<i32>().map_err(|_| anyhow::anyhow!("Invalid instance ID in client_key"))?;
+
+        let handle = app_handle.clone();
+        
+        tauri::async_runtime::spawn(async move {
+            let tm = handle.state::<TaskManager>();
+            if let Err(e) = crate::commands::instances::resume_instance_operation(
+                handle.clone(),
+                tm,
+                id
+            ).await {
+                log::error!("[ResumeInstanceOperationHandler] Failed to resume: {}", e);
+            }
+        });
+
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -322,6 +353,7 @@ impl NotificationManager {
         manager.register_action("cancel_task", Arc::new(CancelTaskHandler {}));
         manager.register_action("pause_task", Arc::new(PauseTaskHandler {}));
         manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
+        manager.register_action("resume_instance_operation", Arc::new(ResumeInstanceOperationHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager

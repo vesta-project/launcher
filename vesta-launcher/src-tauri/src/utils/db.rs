@@ -164,6 +164,15 @@ pub fn init_vesta_pool(path: PathBuf) -> Result<(), anyhow::Error> {
     conn.run_pending_migrations(VESTA_MIGRATIONS)
         .map_err(|e| anyhow::anyhow!("Migration failed: {}", e))?;
 
+    // Mark any 'installing' instances as 'interrupted' on startup
+    // This allows the user to resume them if the app was closed during an operation
+    {
+        use crate::schema::instance::dsl::*;
+        let _ = diesel::update(instance.filter(installation_status.eq("installing")))
+            .set(installation_status.eq("interrupted"))
+            .execute(&mut conn);
+    }
+
     log::info!("✓ Vesta database initialized");
 
     *VESTA_POOL.lock().unwrap() = Some(pool);

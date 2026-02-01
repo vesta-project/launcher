@@ -14,6 +14,7 @@ pub mod utils;
 
 use utils::config::{get_config, set_config, update_config_field, update_config_fields};
 use utils::windows::launch_window;
+use tauri::Emitter;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 
@@ -63,6 +64,8 @@ fn main() {
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
             commands::app::open_instance_folder,
+            commands::app::exit_check,
+            commands::app::exit_app,
             commands::app::close_all_windows_and_reset,
             commands::app::get_default_instance_dir,
             commands::app::os_type,
@@ -110,6 +113,7 @@ fn main() {
             commands::instances::duplicate_instance,
             commands::instances::repair_instance,
             commands::instances::reset_instance,
+            commands::instances::resume_instance_operation,
             commands::modpacks::get_modpack_info,
             commands::modpacks::get_modpack_info_from_url,
             commands::modpacks::get_system_memory_mb,
@@ -143,6 +147,14 @@ fn main() {
             commands::resources::get_installed_resources,
             commands::resources::check_resource_updates,
         ])
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.emit("core://exit-requested", ());
+                }
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

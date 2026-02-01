@@ -68,7 +68,6 @@ pub struct CreateNotificationInput {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
 pub struct Notification {
     pub id: Option<i32>,
     pub client_key: Option<String>,
@@ -93,6 +92,8 @@ pub struct Notification {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct NotificationAction {
     pub label: String,
+    #[serde(rename = "id")]
     pub action_id: String,
-    pub primary: bool,
+    #[serde(rename = "type")]
+    pub action_type: String,
 }

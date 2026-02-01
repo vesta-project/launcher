@@ -23,12 +23,20 @@ import {
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { lazy, onCleanup, onMount } from "solid-js";
+import { createSignal, lazy, onCleanup, onMount } from "solid-js";
 import { initializeInstances, setupInstanceListeners } from "@stores/instances";
+import { ConfirmExitDialog } from "@components/confirm-exit-dialog";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
 );
+
+export interface ExitCheckResponse {
+	can_exit: boolean;
+	blocking_tasks: string[];
+	running_instances: string[];
+}
+
 
 /**
  * Handles deep-link URLs like vesta://instance?slug=my-instance
@@ -85,11 +93,34 @@ function App() {
 function Root(props: ChildrenProp) {
 	const navigate = useNavigate();
 
+	const [exitDialogOpen, setExitDialogOpen] = createSignal(false);
+	const [blockingTasks, setBlockingTasks] = createSignal<string[]>([]);
+	const [runningInstances, setRunningInstances] = createSignal<string[]>([]);
+
 	let unlisten: UnlistenFn | null = null;
 	let unlistenDeepLink: (() => void) | null = null;
 	let unlistenCrash: (() => void) | null = null;
+	let unlistenExit: UnlistenFn | null = null;
 
 	onMount(async () => {
+		unlistenExit = await listen("core://exit-requested", async () => {
+			try {
+				const check = await invoke<ExitCheckResponse>("exit_check");
+				if (check.can_exit) {
+					await invoke("exit_app");
+				} else {
+					setBlockingTasks(check.blocking_tasks);
+					setRunningInstances(check.running_instances);
+					setExitDialogOpen(true);
+				}
+			} catch (e) {
+				console.error("Failed to perform exit check:", e);
+				// Fallback to exit if check fails? maybe safer to stay open or exit?
+				// User explicitly asked for exit, so let's try to exit if check itself fails.
+				await invoke("exit_app");
+			}
+		});
+
 		// Critical: Setup crash handler immediately
 		unlisten = await listen<{
 			title: string;
@@ -203,6 +234,7 @@ function Root(props: ChildrenProp) {
 		unlisten?.();
 		unlistenDeepLink?.();
 		unlistenCrash?.();
+		unlistenExit?.();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		// cleanupFileDropSystem();
@@ -220,6 +252,14 @@ function Root(props: ChildrenProp) {
 	return (
 		<>
 			{props.children}
+			<ConfirmExitDialog
+				open={exitDialogOpen()}
+				onOpenChange={setExitDialogOpen}
+				blockingTasks={blockingTasks()}
+				runningInstances={runningInstances()}
+				onConfirm={() => invoke("exit_app")}
+				onCancel={() => setExitDialogOpen(false)}
+			/>
 		</>
 	);
 }

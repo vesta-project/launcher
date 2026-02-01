@@ -53,6 +53,7 @@ import {
 	launchInstance,
 	repairInstance,
 	resetInstance,
+	resumeInstanceOperation,
 } from "@utils/instances";
 import {
 	createSignal,
@@ -245,6 +246,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 	// Installation status checks
 	const isInstalling = () =>
 		props.instance.installationStatus === "installing";
+	const isInterrupted = () =>
+		props.instance.installationStatus === "interrupted";
 	const isInstalled = () => props.instance.installationStatus === "installed";
 	const isFailed = () => props.instance.installationStatus === "failed";
 	const needsInstallation = () =>
@@ -258,14 +261,20 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const _canLaunch = () =>
 		!busy() && !launching() && !isInstalling() && isInstalled() && !isRunning();
 
-	const playButtonTooltip = () =>
-		needsInstallation()
+	const playButtonTooltip = () => {
+		if (isInterrupted()) {
+			const op = props.instance.lastOperation === "hard-reset" ? "Hard reset" : (props.instance.lastOperation || "Installation");
+			return `${op} interrupted. Click to resume.`;
+		}
+		
+		return needsInstallation()
 			? "Needs Installation"
 			: isRunning()
 				? "Running (click to stop)"
 				: launching()
 					? "Launching..."
 					: "Launch";
+	};
 
 	const toggleRun = async () => {
 		if (busy() || launching()) return;
@@ -332,13 +341,18 @@ export default function InstanceCard(props: InstanceCardProps) {
 			return;
 		}
 
-		// If needs installation, start installer
-		if (needsInstallation()) {
+		// If needs installation or was interrupted, start/resume installer
+		if (needsInstallation() || isInterrupted()) {
 			setBusy(true);
 			try {
-				await installInstance(props.instance);
+				if (isInterrupted()) {
+					// Use smart resume logic based on last known operation
+					await resumeInstanceOperation(props.instance);
+				} else {
+					await installInstance(props.instance);
+				}
 			} catch (err) {
-				console.error("Install failed", err);
+				console.error("Install/Resume failed", err);
 			}
 			setBusy(false);
 			return;
@@ -392,7 +406,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		<ContextMenu>
 			<ContextMenuTrigger
 				as="div"
-				class={`instance-card${isFailed() ? " failed" : ""}${leaveAnim() ? " instance-card-leave" : ""}`}
+				class={`instance-card${isFailed() ? " failed" : ""}${isInterrupted() ? " interrupted" : ""}${leaveAnim() ? " instance-card-leave" : ""}`}
 				onMouseOver={() => {
 					setHover(true);
 					setLeaveAnim(false);
@@ -456,6 +470,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 										Running
 									</span>
 								</Show>
+								<Show when={isInterrupted()}>
+									<span class="interrupted-pill">
+										<div class="status-dot" />
+										Interrupted
+									</span>
+								</Show>
 								<Show when={hasCrashed()}>
 									<Tooltip placement="top">
 										<TooltipTrigger>
@@ -481,17 +501,21 @@ export default function InstanceCard(props: InstanceCardProps) {
 										class={`play-button ${
 											isInstalling() || launching()
 												? "installing"
-												: needsInstallation()
-													? "install"
-													: isRunning()
-														? "kill"
-														: "launch"
+												: isInterrupted()
+													? "resume"
+													: needsInstallation()
+														? "install"
+														: isRunning()
+															? "kill"
+															: "launch"
 										}`}
 										onClick={handleClick}
 										disabled={isInstalling() || launching()}
 									>
 										{isInstalling() || launching() ? (
 											<div class="instance-card-spinner" />
+										) : isInterrupted() ? (
+											<RefreshIcon />
 										) : needsInstallation() ? (
 											<ErrorIcon />
 										) : isRunning() ? (

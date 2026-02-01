@@ -759,6 +759,7 @@ async fn prepare_instance(
         modpack_platform: instance_data.modpack_platform.clone(),
         modpack_icon_url: instance_data.modpack_icon_url.clone(),
         icon_data: final_icon_data,
+        last_operation: Some("install".to_string()),
     })
 }
 

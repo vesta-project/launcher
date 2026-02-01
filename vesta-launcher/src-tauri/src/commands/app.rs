@@ -2,6 +2,49 @@ use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
 
 #[tauri::command]
+pub async fn exit_check(
+    task_manager: tauri::State<'_, crate::tasks::manager::TaskManager>,
+) -> Result<ExitCheckResponse, String> {
+    let mut response = ExitCheckResponse {
+        can_exit: true,
+        blocking_tasks: Vec::new(),
+        running_instances: Vec::new(),
+    };
+
+    // 1. Check for running game instances
+    match piston_lib::game::launcher::get_running_instances().await {
+        Ok(instances) => {
+            if !instances.is_empty() {
+                response.can_exit = false;
+                response.running_instances = instances
+                    .into_iter()
+                    .map(|i| i.instance_id)
+                    .collect();
+            }
+        }
+        Err(e) => {
+            log::error!("Error checking running instances: {}", e);
+        }
+    }
+
+    // 2. Check for active tasks
+    let active_tasks = task_manager.get_active_tasks();
+    if !active_tasks.is_empty() {
+        response.can_exit = false;
+        response.blocking_tasks = active_tasks;
+    }
+
+    Ok(response)
+}
+
+#[derive(serde::Serialize)]
+pub struct ExitCheckResponse {
+    pub can_exit: bool,
+    pub blocking_tasks: Vec<String>,
+    pub running_instances: Vec<String>,
+}
+
+#[tauri::command]
 pub fn open_app_config_dir() -> Result<(), String> {
     let config_path = get_app_config_dir().map_err(|e| e.to_string())?;
 
@@ -116,6 +159,11 @@ pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> 
         )
     })?;
     Ok(())
+}
+
+#[tauri::command]
+pub fn exit_app(app_handle: tauri::AppHandle) {
+    app_handle.exit(0);
 }
 
 #[tauri::command]

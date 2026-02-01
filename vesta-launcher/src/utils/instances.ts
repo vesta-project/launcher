@@ -66,6 +66,23 @@ export interface Instance {
 	modpackPlatform: string | null;
 	modpackIconUrl: string | null;
 	iconData: Uint8Array | null;
+	/**
+	 * Identifier of the last lifecycle operation performed on this instance.
+	 *
+	 * This is set by the backend/task manager whenever a significant operation
+	 * is executed for the instance, and can be used by the frontend to show
+	 * contextual status or history in the UI.
+	 *
+	 * Common values include:
+	 * - "install"      — initial installation of the instance/modpack
+	 * - "repair"       — repair or re-apply the instance files
+	 * - "hard-reset"   — full reset of the instance to a clean state
+	 * - "update"       — update of the instance or its modpack
+	 *
+	 * May be `null` or `undefined` if no tracked operation has been performed yet,
+	 * or if the backend does not report an operation for this instance.
+	 */
+	lastOperation?: string | null;
 }
 
 // Simplified version for creating new instances
@@ -212,6 +229,28 @@ export async function repairInstance(id: number): Promise<void> {
 // Reset an instance (Hard Reset)
 export async function resetInstance(id: number): Promise<void> {
 	await invoke("reset_instance", { instanceId: id });
+}
+
+// Resume an interrupted operation
+export async function resumeInstanceOperation(
+	instance: Instance,
+): Promise<void> {
+	// Fallback to 'install' if no specific operation is recorded, as it's the 
+	// most common initial operation that would need resuming.
+	const operation = instance.lastOperation || "install";
+
+	switch (operation) {
+		case "repair":
+			await repairInstance(instance.id);
+			break;
+		case "hard-reset":
+			await resetInstance(instance.id);
+			break;
+		case "install":
+		default:
+			await installInstance(instance);
+			break;
+	}
 }
 
 // Delete an instance

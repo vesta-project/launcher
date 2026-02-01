@@ -120,6 +120,7 @@ impl Task for CloneInstanceTask {
                 modpack_platform: source.modpack_platform.clone(),
                 modpack_icon_url: source.modpack_icon_url.clone(),
                 icon_data: source.icon_data.clone(),
+                last_operation: None,
             };
 
             diesel::insert_into(instance)

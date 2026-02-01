@@ -29,6 +29,7 @@ import {
 } from "@ui/pagination/pagination";
 import { getMinecraftVersions, DEFAULT_ICONS } from "@utils/instances";
 import { getShaderEnginesInOrder, type ShaderEngineInfo } from "@utils/resources";
+import { sanitizeSvg } from "@utils/security";
 import { router } from "@components/page-viewer/page-viewer";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
@@ -892,14 +893,14 @@ const FiltersPanel: Component = () => {
                                                 class="category-group-title" 
                                                 title={group.id}
                                                 classList={{ 
-                                                    clickable: !!group.id, 
-                                                    active: group.id ? resources.state.categories.includes(group.id) : false 
+                                                    clickable: group.id !== undefined, 
+                                                    active: group.id !== undefined && resources.state.categories.includes(group.id)
                                                 }}
                                                 onClick={() => {
-                                                    const gid = group.id;
-                                                    if (gid) {
+                                                    const groupId = group.id;
+                                                    if (groupId) {
                                                         batch(() => {
-                                                            resources.toggleCategory(gid);
+                                                            resources.toggleCategory(groupId);
                                                             resources.setOffset(0);
                                                             router()?.updateQuery("categories", resources.state.categories);
                                                         });
@@ -909,9 +910,9 @@ const FiltersPanel: Component = () => {
                                                 <Show when={group.icon}>
                                                     <div class="category-tag-icon">
                                                         <Show when={group.icon?.startsWith("http")} fallback={
-                                                            <div class="category-tag-icon-svg" innerHTML={group.icon ?? ""} />
+                                                            <div class="category-tag-icon-svg" innerHTML={sanitizeSvg(group.icon || "")} />
                                                         }>
-                                                            <img src={group.icon ?? ""} class="category-tag-icon-img" alt={group.name} />
+                                                            <img src={group.icon || ""} class="category-tag-icon-img" alt={group.name} />
                                                         </Show>
                                                     </div>
                                                 </Show>
@@ -944,9 +945,9 @@ const FiltersPanel: Component = () => {
                                                         <Show when={cat.icon}>
                                                             <div class="category-tag-icon">
                                                                 <Show when={cat.icon?.startsWith("http")} fallback={
-                                                                    <div class="category-tag-icon-svg" innerHTML={cat.icon ?? ""} />
+                                                                    <div class="category-tag-icon-svg" innerHTML={sanitizeSvg(cat.icon || "")} />
                                                                 }>
-                                                                    <img src={cat.icon ?? ""} class="category-tag-icon-img" alt={cat.name} />
+                                                                    <img src={cat.icon || ""} class="category-tag-icon-img" alt={cat.name} />
                                                                 </Show>
                                                             </div>
                                                         </Show>
@@ -989,7 +990,7 @@ const ResourceBrowser: Component<{
     let lastWidth = window.innerWidth;
     let isInitializedFromProps = false;
 
-    const currentSortOptions = () => SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] || [];
+    const currentSortOptions = createMemo(() => SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] || []);
 
     createEffect(() => {
         if (resources.state.requestInstallProject) {

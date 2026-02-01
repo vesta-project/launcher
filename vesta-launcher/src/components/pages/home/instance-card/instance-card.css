@@ -349,6 +349,12 @@
 	box-shadow: 0 0 15px hsl(var(--hue-warning) 70% 50% / 0.4);
 }
 
+.play-button.resume:hover {
+	background: hsl(var(--hue-secondary) 70% 50% / 0.3);
+	border-color: hsl(var(--hue-secondary) 70% 50% / 0.5);
+	box-shadow: 0 0 15px hsl(var(--hue-secondary) 70% 50% / 0.4);
+}
+
 /* Reduced Motion Support */
 :root[data-reduced-motion="true"] .play-button {
 	transition: none;
@@ -464,7 +470,8 @@
 }
 
 .running,
-.crashed {
+.crashed,
+.interrupted-pill {
 	font-size: clamp(8px, 2vw, 10px);
 	padding: 2px 6px;
 	border-radius: 8px;
@@ -478,6 +485,7 @@
 		hsl(0 0% 0% / 0.4) 50%,
 		transparent 100%
 	);
+	display: flex;
 	align-items: center;
 	gap: 4px;
 	backdrop-filter: blur(var(--blur-subtle));
@@ -491,6 +499,12 @@
 	background: hsl(var(--hue-success) 70% 45% / 0.85);
 	border: 1px solid hsl(var(--hue-success) 70% 60%);
 	box-shadow: 0 0 8px hsl(var(--hue-success) 70% 30%);
+}
+
+.interrupted-pill {
+	background: hsl(45 90% 40% / 0.85);
+	border: 1px solid hsl(45 90% 60%);
+	box-shadow: 0 0 8px hsl(45 90% 20%);
 }
 
 .crashed {
@@ -513,8 +527,15 @@
 	animation: pulse 2s infinite;
 }
 
+.interrupted-pill .status-dot {
+	background: hsl(45 100% 70%);
+	box-shadow: 0 0 6px hsl(45 100% 50%);
+	animation: pulse-interrupted 2s infinite;
+}
+
 /* Reduced Motion for Status Dot */
-:root[data-reduced-motion="true"] .running .status-dot {
+:root[data-reduced-motion="true"] .running .status-dot,
+:root[data-reduced-motion="true"] .interrupted-pill .status-dot {
 	animation: none;
 }
 
@@ -538,6 +559,21 @@
 	}
 }
 
+@keyframes pulse-interrupted {
+	0% {
+		transform: scale(0.95);
+		box-shadow: 0 0 0 0 hsl(45 100% 50% / 0.7);
+	}
+	70% {
+		transform: scale(1);
+		box-shadow: 0 0 0 6px hsl(45 100% 50% / 0);
+	}
+	100% {
+		transform: scale(0.95);
+		box-shadow: 0 0 0 0 hsl(45 100% 50% / 0);
+	}
+}
+
 .instance-card.failed {
 	background-image:
 		radial-gradient(
@@ -553,6 +589,41 @@
 		);
 	outline-color: hsl(0 100% 50% / 0.4);
 }
+
+.instance-card.interrupted {
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			hsl(45 100% 66% / 0.15) 0%,
+			hsl(45 67% 47% / 0.2) 20%,
+			hsl(45 100% 20% / 0.4) 45.5%,
+			hsl(45 100% 6% / 0.9) 100%
+		),
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
+	outline-color: hsl(45 100% 50% / 0.4);
+}
+
+.instance-card.interrupted::before {
+	content: "";
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: 3px;
+	background: repeating-linear-gradient(
+		-45deg,
+		hsl(45 100% 50%),
+		hsl(45 100% 50%) 10px,
+		hsl(45 100% 20%) 10px,
+		hsl(45 100% 20%) 20px
+	);
+	z-index: 10;
+	opacity: 0.8;
+}
+
 
 .instance-card-leave {
 	transform: scale(1);

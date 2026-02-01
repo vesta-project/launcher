@@ -10,17 +10,11 @@ import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import { invoke } from "@tauri-apps/api/core";
 import { attachConsole, info } from "@tauri-apps/plugin-log";
 import { WindowControls, WindowTitlebar } from "@tauri-controls/solid";
-import { clearToasts, showToast, Toaster } from "@ui/toast/toast";
-import {
-	listInstances,
-	subscribeToInstanceUpdates,
-	unsubscribeFromInstanceUpdates,
-} from "@utils/instances";
+import { showToast, Toaster, clearToasts } from "@ui/toast/toast";
 import { getOsType } from "@utils/os";
 import {
 	createEffect,
 	createMemo,
-	createResource,
 	createSignal,
 	For,
 	onCleanup,
@@ -31,6 +25,11 @@ import "./home.css";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
 import { startAppTutorial } from "@utils/tutorial";
+import { 
+	instances as instancesStore, 
+	instancesLoading, 
+	instancesError 
+} from "@stores/instances";
 
 // Module-level signals for sidebar state
 const [sidebarOpen, setSidebarOpen] = createSignal(false);
@@ -73,22 +72,6 @@ function HomePage() {
 }
 
 function MainMenu() {
-	// createResource returns [resource, { refetch, mutate }]
-	// The status signals (loading, error) live on the resource signal itself
-	// as properties: instances.loading, instances.error.
-	const [instances, { refetch }] = createResource(listInstances);
-
-	onMount(() => {
-		// Subscribe to instance updates to refetch when instances change
-		subscribeToInstanceUpdates(() => {
-			refetch();
-		});
-	});
-
-	onCleanup(() => {
-		unsubscribeFromInstanceUpdates();
-	});
-
 	const InstanceCardSkeleton = () => (
 		<div
 			class={"instance-card"}
@@ -127,24 +110,24 @@ function MainMenu() {
 		<div class={"main-menu"}>
 			<div class={"instance-wrapper"}>
 				<div class={"instance-container"}>
-					<Show when={instances.loading}>
+					<Show when={instancesLoading() && instancesStore().length === 0}>
 						<>
 							{Array.from({ length: 8 }).map(() => (
 								<InstanceCardSkeleton />
 							))}
 						</>
 					</Show>
-					<Show when={instances.error}>
+					<Show when={instancesError()}>
 						<p style={{ color: "#ff4444", padding: "20px" }}>
-							Failed to load instances: {String(instances.error)}
+							Failed to load instances: {String(instancesError())}
 						</p>
 					</Show>
-					<Show when={instances() && (instances() || []).length === 0}>
+					<Show when={!instancesLoading() && instancesStore().length === 0}>
 						<p style={{ color: "#888", padding: "20px" }}>
 							No instances found. Create one to get started!
 						</p>
 					</Show>
-					<For each={instances()}>
+					<For each={instancesStore()}>
 						{(instance) => <InstanceCard instance={instance} />}
 					</For>
 				</div>

@@ -188,6 +188,11 @@ function NotificationCard(props: {
 	const handleAction = async (actionId: string) => {
 		try {
 			await invokeNotificationAction(actionId, props.client_key || undefined);
+			// Most actions (like Resume or Cancel) should dismiss the notification once triggered
+			// but we skip this for pause/resume task as those keep the notification active
+			if (actionId !== "pause_task" && actionId !== "resume_task") {
+				await handleDelete();
+			}
 		} catch (error) {
 			console.error(`Failed to invoke action ${actionId}:`, error);
 		}
@@ -226,7 +231,30 @@ function NotificationCard(props: {
 				"border-left": `4px solid ${severityColor()}`,
 			}}
 		>
-			<div style={{ width: "100%", "min-width": "0", overflow: "hidden" }}>
+			{/* Delete/Close button - absolute top right via CSS */}
+			<Show when={props.dismissible}>
+				<Tooltip placement="top">
+					<TooltipTrigger>
+						<button
+							class={styles["sidebar__notification__close-btn"]}
+							onClick={handleDelete}
+						>
+							<CloseIcon />
+						</button>
+					</TooltipTrigger>
+					<TooltipContent>Delete</TooltipContent>
+				</Tooltip>
+			</Show>
+
+			<div
+				style={{
+					width: "100%",
+					"min-width": "0",
+					overflow: "hidden",
+					display: "flex",
+					"flex-direction": "column",
+				}}
+			>
 				<div
 					style={{
 						display: "flex",
@@ -254,15 +282,12 @@ function NotificationCard(props: {
 						"font-size": "14px",
 						"font-weight": "600",
 						margin: "0 0 4px 0",
+						"padding-right": props.dismissible ? "24px" : "0",
 					}}
 				>
 					{props.title || "Notification"}
 				</h1>
-				<p
-					class={styles["sidebar__notification__description"]}
-				>
-					{props.description}
-				</p>
+				<p class={styles["sidebar__notification__description"]}>{props.description}</p>
 				{props.progress !== null && props.progress !== undefined && (
 					<div style={{ "margin-top": "8px", "max-width": "100%" }}>
 						<Progress
@@ -270,72 +295,49 @@ function NotificationCard(props: {
 							current_step={props.current_step}
 							total_steps={props.total_steps}
 							severity={
-								props.severity
-									? (props.severity.toLowerCase() as any)
-									: undefined
+								props.severity ? (props.severity.toLowerCase() as any) : undefined
 							}
 							class={styles["sidebar__notification__progress"]}
 							size="sm"
 						/>
 					</div>
 				)}
-			</div>
-			<div
-				style={{
-					display: "flex",
-					gap: "6px",
-					"flex-direction": "column",
-					"flex-shrink": "0",
-					"align-items": "stretch",
-					"min-width": "60px",
-				}}
-			>
-				{/* Action buttons */}
-				<Show when={props.actions && props.actions.length > 0}>
-					<For each={props.actions}>
-						{(action) => (
-							<Tooltip placement="top">
-								<TooltipTrigger>
-									<button
-										class={styles["sidebar__notification__action-btn"]}
-										onClick={() => handleAction(action.id)}
-										style={{
-											background:
-												action.type === "destructive"
-													? "hsl(0deg 70% 40% / 25%)"
-													: action.type === "primary"
-														? "hsl(210deg 80% 50% / 25%)"
-														: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
-											"border-color":
-												action.type === "destructive"
-													? "hsl(0deg 70% 40% / 40%)"
-													: action.type === "primary"
-														? "hsl(210deg 80% 50% / 40%)"
-														: "hsl(var(--color__primary-hue) 5% 50% / 30%)",
-										}}
-									>
-										{action.label}
-									</button>
-								</TooltipTrigger>
-								<TooltipContent>{action.label}</TooltipContent>
-							</Tooltip>
-						)}
-					</For>
-				</Show>
 
-				{/* Delete/Close button - show for dismissible notifications */}
-				<Show when={props.dismissible}>
-					<Tooltip placement="top">
-						<TooltipTrigger>
-							<button
-								class={styles["sidebar__notification__close-btn"]}
-								onClick={handleDelete}
-							>
-								<CloseIcon />
-							</button>
-						</TooltipTrigger>
-						<TooltipContent>Delete</TooltipContent>
-					</Tooltip>
+				{/* Action buttons at the bottom-left of the content area */}
+				<Show when={props.actions && props.actions.length > 0}>
+					<div
+						style={{
+							display: "flex",
+							gap: "8px",
+							"margin-top": "12px",
+							"flex-wrap": "wrap",
+						}}
+					>
+						<For each={props.actions}>
+							{(action) => (
+								<button
+									class={styles["sidebar__notification__action-btn"]}
+									onClick={() => handleAction(action.id)}
+									style={{
+										background:
+											action.type === "destructive"
+												? "hsl(0deg 70% 40% / 25%)"
+												: action.type === "primary"
+													? "hsl(210deg 80% 50% / 25%)"
+													: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
+										"border-color":
+											action.type === "destructive"
+												? "hsl(0deg 70% 40% / 40%)"
+												: action.type === "primary"
+													? "hsl(210deg 80% 50% / 40%)"
+													: "hsl(var(--color__primary-hue) 5% 50% / 30%)",
+									}}
+								>
+									{action.label}
+								</button>
+							)}
+						</For>
+					</div>
 				</Show>
 			</div>
 		</div>

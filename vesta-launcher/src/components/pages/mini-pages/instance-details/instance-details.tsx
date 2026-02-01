@@ -53,6 +53,7 @@ import {
 	launchInstance,
 	repairInstance,
 	resetInstance,
+	resumeInstanceOperation,
 	updateInstance,
 	updateInstanceModpackVersion,
 	unlinkInstance,
@@ -320,6 +321,16 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const isInstalling = createMemo(() => {
 		const inst = instance();
 		return inst?.installationStatus === "installing";
+	});
+
+	/**
+	 * Tracks if an instance was interrupted during a critical operation 
+	 * (install, repair, hard-reset) usually detected at application startup.
+	 * Differs from 'installing' as it represents a passive state awaiting user resumption.
+	 */
+	const isInterrupted = createMemo(() => {
+		const inst = instance();
+		return inst?.installationStatus === "interrupted";
 	});
 	let lastSelectedRowId: string | null = null;
 
@@ -1074,14 +1085,34 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		}, 0);
 	});
 
+	const playButtonText = createMemo(() => {
+		const inst = instance();
+		if (!inst) return "Play Now";
+
+		if (isRunning()) return "Kill Instance";
+		if (isInstalling()) return "Installing...";
+
+		if (isInterrupted()) {
+			const op = inst.lastOperation;
+			const opName = op === "hard-reset" ? "Reset" : op === "repair" ? "Repair" : "Installation";
+			return `Resume ${opName}`;
+		}
+
+		return "Play Now";
+	});
+
 	const handlePlay = async () => {
 		const inst = instance();
 		if (!inst || busy()) return;
 		setBusy(true);
 		try {
-			await launchInstance(inst);
+			if (isInterrupted()) {
+				await resumeInstanceOperation(inst);
+			} else {
+				await launchInstance(inst);
+			}
 		} catch (e) {
-			console.error("Launch failed:", e);
+			console.error("Action failed:", e);
 		}
 		setBusy(false);
 	};
@@ -1285,7 +1316,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 												<Show when={isInstalling() && !busy()}>
 													<span class="btn-spinner" />
 												</Show>
-												{isRunning() ? "Kill Instance" : isInstalling() ? "Installing..." : "Play Now"}
+												{playButtonText()}
 											</Button>
 										</div>
 									</div>

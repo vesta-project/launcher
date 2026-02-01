@@ -194,6 +194,11 @@ pub async fn install_instance(
         Ok(_) => {
             // Immediately update DB to 'installing' so UI shows progress without waiting
             if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_instance_operation(
+                    &app_handle,
+                    instance_data.id,
+                    "install",
+                );
                 let _ = crate::commands::instances::update_installation_status(
                     &app_handle,
                     instance_data.id,
@@ -405,6 +410,7 @@ pub async fn create_instance(
         modpack_platform: inst.modpack_platform,
         modpack_icon_url: inst.modpack_icon_url,
         icon_data: inst.icon_data,
+        last_operation: None,
     };
 
     diesel::insert_into(instance)
@@ -694,9 +700,13 @@ pub async fn update_instance(
 pub async fn delete_instance(
     app_handle: tauri::AppHandle, 
     instance_id: i32,
+    task_manager: tauri::State<'_, TaskManager>,
     resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
 ) -> Result<(), String> {
     log::info!("Deleting instance ID: {}", instance_id);
+
+    // 0. Cancel any active tasks (install/download) for this instance
+    task_manager.cancel_instance_tasks(instance_id);
 
     let mut conn =
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
@@ -1236,6 +1246,37 @@ pub async fn regenerate_piston_manifest(app_handle: tauri::AppHandle) -> Result<
     Ok(())
 }
 
+/// Update the operation type for an instance
+pub fn update_instance_operation(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    operation: &str,
+) -> Result<(), String> {
+    log::info!(
+        "Updating last operation for instance {} to: {}",
+        instance_id,
+        operation
+    );
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+
+    diesel::update(instance.find(instance_id))
+        .set(last_operation.eq(operation))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to update last operation: {}", e))?;
+
+    // Fetch the updated instance to emit it
+    let updated: crate::models::instance::Instance = instance
+        .find(instance_id)
+        .first(&mut conn)
+        .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
+
+    use tauri::Emitter;
+    let _ = app_handle.emit("core://instance-updated", updated);
+
+    Ok(())
+}
+
 /// Update the installation status for an instance
 pub fn update_installation_status(
     app_handle: &tauri::AppHandle,
@@ -1423,6 +1464,11 @@ pub async fn repair_instance(
     instance_id: i32,
 ) -> Result<(), String> {
     // Set status to 'installing' so UI shows progress
+    let _ = crate::commands::instances::update_instance_operation(
+        &app_handle,
+        instance_id,
+        "repair",
+    );
     let _ = crate::commands::instances::update_installation_status(
         &app_handle,
         instance_id,
@@ -1441,6 +1487,11 @@ pub async fn reset_instance(
     instance_id: i32,
 ) -> Result<(), String> {
     // Set status to 'installing' so UI shows progress
+    let _ = crate::commands::instances::update_instance_operation(
+        &app_handle,
+        instance_id,
+        "hard-reset",
+    );
     let _ = crate::commands::instances::update_installation_status(
         &app_handle,
         instance_id,
@@ -1450,6 +1501,30 @@ pub async fn reset_instance(
     let task = ResetInstanceTask::new(instance_id);
     let _ = task_manager.submit(Box::new(task)).await;
     Ok(())
+}
+
+#[tauri::command]
+pub async fn resume_instance_operation(
+    app_handle: tauri::AppHandle,
+    task_manager: State<'_, TaskManager>,
+    instance_id: i32,
+) -> Result<(), String> {
+    log::info!("[resume_instance_operation] Resuming operation for instance ID: {}", instance_id);
+    
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let inst: Instance = instance
+        .find(instance_id)
+        .first(&mut conn)
+        .map_err(|e| format!("Instance not found: {}", e))?;
+
+    let op = inst.last_operation.as_deref().unwrap_or("install");
+    log::info!("[resume_instance_operation] Detected last operation: {}", op);
+
+    match op {
+        "repair" => repair_instance(app_handle, task_manager, instance_id).await,
+        "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
+        "install" | _ => install_instance(app_handle, task_manager, inst, None).await,
+    }
 }
 
 #[tauri::command]

@@ -74,6 +74,7 @@ pub struct TaskManager {
     current_limit: Mutex<usize>,
     cancellation_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
     pause_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
+    active_tasks: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl TaskManager {
@@ -84,11 +85,13 @@ impl TaskManager {
         let current_limit = Mutex::new(initial_limit);
         let cancellation_tokens = Arc::new(Mutex::new(HashMap::new()));
         let pause_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let active_tasks = Arc::new(Mutex::new(HashMap::new()));
 
         let manager_semaphore = semaphore.clone();
         let manager_app = app_handle.clone();
         let manager_tokens = cancellation_tokens.clone();
         let manager_pause_tokens = pause_tokens.clone();
+        let manager_active_tasks = active_tasks.clone();
 
         tauri::async_runtime::spawn(async move {
             static TASK_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -105,6 +108,12 @@ impl TaskManager {
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
 
+                // Track active task
+                manager_active_tasks
+                    .lock()
+                    .unwrap()
+                    .insert(client_key.clone(), task_name.clone());
+
                 let manager = manager_app.state::<NotificationManager>();
 
                 // Create actions array
@@ -113,14 +122,14 @@ impl TaskManager {
                     actions.push(NotificationAction {
                         action_id: "cancel_task".to_string(),
                         label: "Cancel".to_string(),
-                        primary: false,
+                        action_type: "secondary".to_string(),
                     });
                 }
                 if is_pausable {
                     actions.push(NotificationAction {
                         action_id: "pause_task".to_string(),
                         label: "Pause".to_string(),
-                        primary: false,
+                        action_type: "secondary".to_string(),
                     });
                 }
 
@@ -180,6 +189,7 @@ impl TaskManager {
                 let app = manager_app.clone();
                 let tokens = manager_tokens.clone();
                 let p_tokens = manager_pause_tokens.clone();
+                let active_tasks = manager_active_tasks.clone();
                 let key_clone = client_key.clone();
 
                 tokio::spawn(async move {
@@ -215,6 +225,7 @@ impl TaskManager {
                         if is_pausable {
                             p_tokens.lock().unwrap().remove(&key_clone);
                         }
+                        active_tasks.lock().unwrap().remove(&key_clone);
                         drop(permit);
                         return;
                     }
@@ -240,6 +251,15 @@ impl TaskManager {
                     }
 
                     let run_result = task.run(ctx).await;
+
+                    // Cleanup tokens after run
+                    if is_cancellable {
+                        tokens.lock().unwrap().remove(&key_clone);
+                    }
+                    if is_pausable {
+                        p_tokens.lock().unwrap().remove(&key_clone);
+                    }
+                    active_tasks.lock().unwrap().remove(&key_clone);
 
                     let manager = app.state::<NotificationManager>();
                     match run_result {
@@ -303,7 +323,17 @@ impl TaskManager {
             current_limit,
             cancellation_tokens,
             pause_tokens,
+            active_tasks,
         }
+    }
+
+    pub fn get_active_tasks(&self) -> Vec<String> {
+        self.active_tasks
+            .lock()
+            .unwrap()
+            .values()
+            .cloned()
+            .collect()
     }
 
     pub async fn submit(&self, task: Box<dyn Task>) -> Result<(), String> {
@@ -341,6 +371,23 @@ impl TaskManager {
         }
     }
 
+    /// Cancel all active tasks associated with a specific instance (e.g. before deletion)
+    pub fn cancel_instance_tasks(&self, instance_id: i32) {
+        let tokens = self.cancellation_tokens.lock().unwrap();
+        let install_prefix = format!("install_instance_{}", instance_id);
+        let download_prefix = format!("download_{}_", instance_id);
+
+        for (key, tx) in tokens.iter() {
+            if key.starts_with(&install_prefix) || key.starts_with(&download_prefix) {
+                let _ = tx.send(true);
+                log::info!(
+                    "TaskManager: Sent automatic cancel signal to associated task: {}",
+                    key
+                );
+            }
+        }
+    }
+
     pub fn pause_task(&self, client_key: &str) -> Result<(), String> {
         let tokens = self.pause_tokens.lock().unwrap();
         if let Some(tx) = tokens.get(client_key) {
@@ -357,13 +404,13 @@ impl TaskManager {
                 actions.push(NotificationAction {
                     action_id: "cancel_task".to_string(),
                     label: "Cancel".to_string(),
-                    primary: false,
+                    action_type: "secondary".to_string(),
                 });
             }
             actions.push(NotificationAction {
                 action_id: "resume_task".to_string(),
                 label: "Resume".to_string(),
-                primary: true,
+                action_type: "primary".to_string(),
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
@@ -392,13 +439,13 @@ impl TaskManager {
                 actions.push(NotificationAction {
                     action_id: "cancel_task".to_string(),
                     label: "Cancel".to_string(),
-                    primary: false,
+                    action_type: "secondary".to_string(),
                 });
             }
             actions.push(NotificationAction {
                 action_id: "pause_task".to_string(),
                 label: "Pause".to_string(),
-                primary: false,
+                action_type: "secondary".to_string(),
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
@@ -472,12 +519,12 @@ impl Task for TestTask {
                         NotificationAction {
                             action_id: "cancel_task".to_string(),
                             label: "Cancel".to_string(),
-                            primary: false,
+                            action_type: "secondary".to_string(),
                         },
                         NotificationAction {
                             action_id: "pause_task".to_string(),
                             label: "Pause".to_string(),
-                            primary: false,
+                            action_type: "secondary".to_string(),
                         },
                     ]).unwrap()),
                     progress: Some(0),
@@ -508,12 +555,12 @@ impl Task for TestTask {
                             NotificationAction {
                                 action_id: "cancel_task".to_string(),
                                 label: "Cancel".to_string(),
-                                primary: false,
+                                action_type: "secondary".to_string(),
                             },
                             NotificationAction {
                                 action_id: "resume_task".to_string(),
                                 label: "Resume".to_string(),
-                                primary: true,
+                                action_type: "primary".to_string(),
                             },
                         ]
                     ).map_err(|e| e.to_string())?;
@@ -539,12 +586,12 @@ impl Task for TestTask {
                                             NotificationAction {
                                                 action_id: "cancel_task".to_string(),
                                                 label: "Cancel".to_string(),
-                                                primary: false,
+                                                action_type: "secondary".to_string(),
                                             },
                                             NotificationAction {
                                                 action_id: "pause_task".to_string(),
                                                 label: "Pause".to_string(),
-                                                primary: false,
+                                                action_type: "secondary".to_string(),
                                             },
                                         ]
                                     ).map_err(|e| e.to_string())?;

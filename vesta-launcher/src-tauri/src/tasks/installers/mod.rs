@@ -40,6 +40,10 @@ impl Task for InstallInstanceTask {
         format!("Install {}", self.instance.name)
     }
 
+    fn id(&self) -> Option<String> {
+        Some(format!("install_instance_{}", self.instance.id))
+    }
+
     fn cancellable(&self) -> bool {
         true
     }
@@ -155,12 +159,12 @@ impl Task for InstallInstanceTask {
                             crate::notifications::models::NotificationAction {
                                 action_id: "cancel_task".to_string(),
                                 label: "Cancel".to_string(),
-                                primary: false,
+                                action_type: "secondary".to_string(),
                             },
                             crate::notifications::models::NotificationAction {
                                 action_id: "resume_task".to_string(),
                                 label: "Resume".to_string(),
-                                primary: true,
+                                action_type: "primary".to_string(),
                             },
                         ]
                     } else {
@@ -168,12 +172,12 @@ impl Task for InstallInstanceTask {
                             crate::notifications::models::NotificationAction {
                                 action_id: "cancel_task".to_string(),
                                 label: "Cancel".to_string(),
-                                primary: false,
+                                action_type: "secondary".to_string(),
                             },
                             crate::notifications::models::NotificationAction {
                                 action_id: "pause_task".to_string(),
                                 label: "Pause".to_string(),
-                                primary: false,
+                                action_type: "secondary".to_string(),
                             },
                         ]
                     };

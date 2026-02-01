@@ -77,6 +77,7 @@ diesel::table! {
         modpack_platform -> Nullable<Text>,
         modpack_icon_url -> Nullable<Text>,
         icon_data -> Nullable<Binary>,
+        last_operation -> Nullable<Text>,
     }
 }
 
