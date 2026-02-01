@@ -10,7 +10,7 @@ import QuiltLogo from "@assets/quilt-logo.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router } from "@components/page-viewer/page-viewer";
-import { setPageViewerOpen } from "@components/pages/home/home";
+import { setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
@@ -590,7 +590,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						onSelect={async () => {
 							const idNum = getInstanceId(props.instance);
 							if (!idNum) return;
-							if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. Your worlds, screenshots, and configs will be DELETED.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
+							if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. This action cannot be undone and your worlds, screenshots, and configs will be lost.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
 								await resetInstance(idNum);
 							}
 						}}
@@ -604,7 +604,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						onSelect={async () => {
 							// confirm uninstall: this removes the instance entry (does not clear shared game files)
 							const confirmUninstall = await window.confirm(
-								`Uninstall instance \"${props.instance.name}\"? This will remove the instance but not shared game assets.`,
+								`Uninstall instance \"${props.instance.name}\"? This will permanently remove the instance and all its files from your computer.`,
 							);
 							if (!confirmUninstall) return;
 							setBusy(true);

@@ -1829,7 +1829,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 													<div class="mgmt-action">
 														<div class="mgmt-text">
 															<h4>Repair</h4>
-															<p>Verify all game files and mods. Missing or corrupted files will be redownloaded.</p>
+															<p>Verifies and redownloads any missing or corrupted game files. Your worlds, screenshots, and settings are kept safe.</p>
 														</div>
 														<Button onClick={() => repairInstance(inst().id)} disabled={isInstalling()}>Repair</Button>
 													</div>
@@ -1837,10 +1837,10 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 													<div class="mgmt-action danger">
 														<div class="mgmt-text">
 															<h4>Hard Reset</h4>
-															<p>Wipe the instance directory and reinstall from scratch. <strong style="color: var(--color-danger)">Deletes all local data!</strong></p>
+															<p>Reinstalls the game from scratch. This <strong style="color: var(--color-danger)">permanently deletes</strong> your worlds, configs, and screenshots!</p>
 														</div>
 														<Button variant="outline" color="destructive" disabled={isInstalling()} onClick={async () => {
-															if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. Your worlds, screenshots, and configs will be DELETED.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
+															if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. This action cannot be undone and your local data will be lost.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
 																resetInstance(inst().id);
 															}
 														}}>Reset</Button>
@@ -1849,7 +1849,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 													<div class="mgmt-action danger">
 														<div class="mgmt-text">
 															<h4>Uninstall Instance</h4>
-															<p>Remove this instance from Vesta Launcher. <strong style="color: var(--color-danger)">Deletes all files and data!</strong></p>
+															<p>Remove this instance and all its files from your computer. This action is <strong style="color: var(--color-danger)">permanent and irreversible</strong>.</p>
 														</div>
 														<Button variant="outline" color="destructive" disabled={isInstalling()} onClick={async () => {
 															if (await ask("Are you sure you want to uninstall this instance? This will permanently delete the instance and ALL its files from your computer. This action cannot be undone.", { title: "Vesta Launcher - Uninstall Instance", kind: "error" })) {

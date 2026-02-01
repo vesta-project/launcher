@@ -47,6 +47,8 @@ import {
 } from "../../../themes/presets";
 import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
 import { updateThemeConfigLocal, currentThemeConfig } from "../../../utils/config-sync";
+import { ModdingGuideContent } from "../mini-pages/modding-guide/guide";
+import { HelpTrigger } from "../../ui/help-trigger";
 import {
 	createInstance,
 	DEFAULT_ICONS,
@@ -81,17 +83,57 @@ interface InitPagesProps {
 function InitFirstPage(props: InitPagesProps) {
 	return (
 		<>
-			<div class={"init-page__top"}>
-				<h1 style={"font-size: 40px"}>Welcome to Vesta</h1>
+			<div class={"init-page__top"} style={{ "text-align": "center", "margin-bottom": "2vh", "flex-shrink": 0 }}>
+				<h1 class="init-page__header-title">Welcome to Vesta</h1>
+				<p style={{ "opacity": 0.6, "font-size": "clamp(14px, 2vh, 18px)", "font-weight": "500", "margin": 0 }}>Your journey into effortless modding starts here.</p>
 			</div>
-			<div class={"init-page__middle"}>Some stuff</div>
-			<div class={"init-page__bottom"}>
+			<div class={"init-page__middle"} style={{ "display": "flex", "flex-direction": "column", "align-items": "center", "justify-content": "center", "gap": "min(4vh, 32px)", "padding": "1vh 0", "min-height": 0, "overflow": "hidden" }}>
+				<div style={{ "position": "relative", "display": "flex", "align-items": "center", "justify-content": "center", "width": "min(20vh, 180px)", "height": "min(20vh, 180px)", "flex-shrink": 0 }}>
+					<div class="welcome-flare__glow" />
+					<div class="welcome-flare__icon">🚀</div>
+				</div>
+				<p style={{ "max-width": "520px", "opacity": 0.8, "line-height": "1.7", "font-size": "clamp(13px, 1.8vh, 16px)", "text-align": "center", "margin": 0 }}>
+					Vesta is designed to be the most capable, yet simplest way to play Minecraft. 
+					We've handled the technical hurdles so you can get straight to the game.
+				</p>
+			</div>
+			<div class={"init-page__bottom"} style={{ "display": "flex", "flex-direction": "column", "align-items": "center", "gap": "1.5vh", "margin-top": "auto", "padding-top": "2vh", "flex-shrink": 0 }}>
 				<Button 
 					color="primary" 
-					onClick={() => props.changeInitStep(props.initStep + 1)}
-					style={{ "min-width": "180px" }}
+					onClick={() => props.changeInitStep(2)} // Skip guide (Step 1) and go to Login (Step 2)
+					style={{ "width": "clamp(240px, 40%, 320px)", "height": "clamp(44px, 6vh, 54px)", "font-size": "clamp(14px, 2vh, 18px)", "font-weight": "700", "border-radius": "12px", "box-shadow": "0 10px 20px -5px hsla(var(--accent-base) / 0.3)" }}
 				>
-					Get Started
+					Start Setup
+				</Button>
+				<Button 
+					variant="ghost" 
+					onClick={() => props.changeInitStep(1)} // Go to Guide (Step 1)
+					style={{ "opacity": 0.6, "font-size": "clamp(12px, 1.5vh, 14px)" }}
+				>
+					Wait, what does this all mean?
+				</Button>
+			</div>
+		</>
+	);
+}
+
+function InitGuidePage(props: InitPagesProps) {
+	return (
+		<>
+			<div class={"init-page__top"} style={{ "text-align": "left", "margin-bottom": "12px", "width": "100%" }}>
+				<h1 style={"font-size: 28px; font-weight: 800; color: var(--primary); text-align: left;"}>Modding Knowledge Base</h1>
+				<p style={"opacity: 0.7; text-align: left;"}>A quick overview of how everything works together.</p>
+			</div>
+			<div class={"init-page__middle"} style={{ "overflow-y": "auto", "padding-right": "8px", "text-align": "left" }}>
+				<ModdingGuideContent />
+			</div>
+			<div class={"init-page__bottom"} style={{ "margin-top": "20px" }}>
+				<Button 
+					color="primary" 
+					onClick={() => props.changeInitStep(2)} // Move to Login
+					style={{ "min-width": "200px" }}
+				>
+					Got it, let's continue
 				</Button>
 			</div>
 		</>
@@ -550,7 +592,7 @@ function InitInstallationPage(props: InitPagesProps) {
 					"opacity": 0.8,
 					"line-height": "1.5"
 				}}>
-					<strong>Note:</strong> We'll use your global Java and display settings for this instance. You can customize these later.
+					<strong>Note:</strong> This version will use the default Java and screen settings you chose earlier. You can change these anytime in the settings.
 				</div>
 			</div>
 
@@ -603,9 +645,12 @@ function InitFinishedPage(props: InitPagesProps) {
 				"align-items": "center",
 				"justify-content": "center",
 				"gap": "25px",
-				"margin-top": "20px"
+				"margin-top": "20px",
+				"overflow-y": "auto",
+				"max-height": "400px",
+				"padding": "0 20px"
 			}}>
-				 <div style={{
+				<div style={{
 					"width": "80px",
 					"height": "80px",
 					"background": "var(--surface-raised)",
@@ -619,6 +664,7 @@ function InitFinishedPage(props: InitPagesProps) {
 						<polyline points="20 6 9 17 4 12"></polyline>
 					</svg>
 				</div>
+
 				<div style={{
 					"display": "flex",
 					"flex-direction": "column",
@@ -1023,8 +1069,13 @@ function InitJavaPage(props: InitPagesProps) {
 				<div class={"init-page__top"} style={{ "text-align": "left", "margin-bottom": "8px" }}>
 					<div style={{ "display": "flex", "justify-content": "space-between", "align-items": "flex-start", "margin-bottom": "8px" }}>
 						<div>
-							<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>Environment Setup</h1>
-							<p style={"font-size: 14px; opacity: 0.6;"}>Java versions required for Minecraft.</p>
+							<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>
+								Java Setup
+								<HelpTrigger topic="JAVA_MANAGED" />
+							</h1>
+							<p style={"font-size: 14px; opacity: 0.7; max-width: 500px;"}>
+								Minecraft needs a software called <strong>Java</strong> to run. Different versions of the game require different versions of Java.
+							</p>
 						</div>
 						<Button 
 							variant="ghost"
@@ -1400,6 +1451,7 @@ export {
 	InitAppearancePage,
 	InitFinishedPage,
 	InitFirstPage,
+	InitGuidePage,
 	InitJavaPage,
 	InitLoginPage,
 	InitDataStoragePage,

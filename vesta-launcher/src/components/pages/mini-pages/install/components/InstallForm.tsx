@@ -49,6 +49,7 @@ import {
 	Accessor,
 } from "solid-js";
 import { createStore } from "solid-js/store";
+import { HelpTrigger } from "../../../../../components/ui/help-trigger";
 
 export interface InstallFormProps {
 	compact?: boolean;
@@ -558,7 +559,10 @@ export function InstallForm(props: InstallFormProps) {
 									<span class="value">{mcVersion() || "Loading..."}</span>
 								</div>
 								<div class="meta-item">
-									<span class="label">Modloader</span>
+									<span class="label">
+										Modloader
+										<HelpTrigger topic="MODLOADER_EXPLAINED" />
+									</span>
 									<span class="value">
 										{MODLOADER_DISPLAY_NAMES[loader()] || loader()}{" "}
 										{loaderVer()}
@@ -576,7 +580,10 @@ export function InstallForm(props: InstallFormProps) {
 							<div class="standard-settings-grid">
 								<div class="form-row">
 									<div class="flex-grow">
-										<div class="field-label-manual">Minecraft Version</div>
+										<div class="field-label-manual">
+											Minecraft Version
+											<HelpTrigger topic="MINECRAFT_VERSION" />
+										</div>
 										<Combobox
 											options={availableMcVersions().map((v) => v.id)}
 											value={mcVersion()}
@@ -616,7 +623,10 @@ export function InstallForm(props: InstallFormProps) {
 
 								<div class="form-row">
 									<div class="flex-grow">
-										<div class="field-label-manual">Modloader</div>
+										<div class="field-label-manual">
+											Modloader
+											<HelpTrigger topic="MODLOADER_EXPLAINED" />
+										</div>
 										<Combobox
 											options={availableLoaders()}
 											value={loader()}
@@ -679,7 +689,10 @@ export function InstallForm(props: InstallFormProps) {
 						<div class="memory-setting">
 							<div class="memory-header">
 								<div class="memory-labels">
-									<span class="main-label">Allocation</span>
+									<span class="main-label">
+										Allocation
+										<HelpTrigger topic="MEMORY_ALLOCATION" />
+									</span>
 									<span class="sub-label">Min and Max memory in MB</span>
 								</div>
 								<div class="memory-range-display">
@@ -718,7 +731,10 @@ export function InstallForm(props: InstallFormProps) {
 
 						{/* JVM ARGS */}
 						<TextFieldRoot>
-							<TextFieldLabel>JVM Arguments</TextFieldLabel>
+							<TextFieldLabel>
+								JVM Arguments
+								<HelpTrigger topic="JVM_ARGS" />
+							</TextFieldLabel>
 							<TextFieldInput
 								value={jvmArgs()}
 								onInput={(e) => {

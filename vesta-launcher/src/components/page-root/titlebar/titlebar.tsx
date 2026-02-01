@@ -1,16 +1,27 @@
 import { WindowControls } from "@tauri-controls/solid";
 import { getOsType } from "@utils/os";
-import { createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import ConnectionStatus from "../connection-status";
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import HelpIcon from "@assets/help.svg";
 import "./titlebar.css";
 
 interface TitleBarProps {
 	pageViewerOpen?: boolean;
+	hideHelp?: boolean;
 	class?: string;
 	os: string;
 }
 
 function TitleBar(props: TitleBarProps) {
+	const handleHelpClick = () => {
+		const r = router();
+		if (r) {
+			r.navigate("/config", { activeTab: "help" });
+			setPageViewerOpen(true);
+		}
+	};
+
 	return (
 		<div
 			classList={{
@@ -34,6 +45,15 @@ function TitleBar(props: TitleBarProps) {
 			<div class={"titlebar__grab"} data-tauri-drag-region={true}>
 				<div data-tauri-drag-region={true} class={"titlebar__content"}>
 					<span data-tauri-drag-region={true}>Vesta Launcher Alpha V0.0.1</span>
+					<Show when={!props.hideHelp}>
+						<button 
+							class="titlebar__help-btn" 
+							onClick={handleHelpClick}
+							title="Help & Modding Guide"
+						>
+							<HelpIcon />
+						</button>
+					</Show>
 				</div>
 			</div>
 		</div>

@@ -23,6 +23,8 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { onConfigUpdate, updateThemeConfigLocal, currentThemeConfig } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { showToast } from "@ui/toast/toast";
+import { open } from "@tauri-apps/plugin-shell";
 import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
@@ -45,6 +47,7 @@ import {
 	type GradientHarmony,
 } from "../../../../themes/presets";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
+import { HelpTrigger } from "../../../ui/help-trigger";
 import "./settings-page.css";
 
 interface AppConfig {
@@ -93,27 +96,22 @@ interface AppConfig {
 function SettingsPage(props: { close?: () => void }) {
 	// Derive active tab from router params if available, fallback to default
 	const activeTab = createMemo(() => {
+		if (router()?.currentPath.get() !== "/config") return "general";
 		const params = router()?.currentParams.get();
-		const tab = params?.activeTab as string;
-		return tab || "general";
-	});
-
-	// Use a local signal for immediate UI feedback, synced with the router memo
-	const [selectedTab, setSelectedTab] = createSignal<string>(untrack(activeTab));
-	
-	createEffect(() => {
-		const tab = activeTab();
-		if (tab !== selectedTab()) {
-			setSelectedTab(tab);
-		}
+		return (params?.activeTab as string) || "general";
 	});
 
 	const [debugLogging, setDebugLogging] = createSignal(false);
+	const [selectedTab, setSelectedTab] = createSignal(activeTab());
+
+	createEffect(() => {
+		setSelectedTab(activeTab());
+	});
 	
 	onMount(() => {
 		// Register state for pop-out window handoff
 		router()?.registerStateProvider("/config", () => ({
-			activeTab: selectedTab(),
+			activeTab: activeTab(),
 		}));
 	});
 
@@ -405,47 +403,41 @@ function SettingsPage(props: { close?: () => void }) {
 		const id = themeId();
 		const currentTheme = id ? getThemeById(id) : undefined;
 		if (currentTheme) {
-			applyTheme(
-				validateTheme({
-					...currentTheme,
-					primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
-					style: (styleMode() ?? currentTheme.style) as ThemeConfig["style"],
-					gradientEnabled: (gradientEnabled() ??
-						currentTheme.gradientEnabled) as boolean,
-					rotation: (rotation() ??
-						currentTheme.rotation) as number,
-					gradientType: (gradientType() ??
-						currentTheme.gradientType) as "linear" | "radial",
-					gradientHarmony: (gradientHarmony() ??
-						currentTheme.gradientHarmony) as GradientHarmony,
-					borderWidthSubtle: borderThickness(),
-					borderWidthStrong: Math.max(borderThickness() + 1, 1),
-				}),
-			);
+			const themeToApply = validateTheme({
+				...currentTheme,
+				primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
+				style: (styleMode() ?? currentTheme.style) as ThemeConfig["style"],
+				gradientEnabled: (gradientEnabled() ??
+					currentTheme.gradientEnabled) as boolean,
+				rotation: (rotation() ??
+					currentTheme.rotation) as number,
+				gradientType: (gradientType() ??
+					currentTheme.gradientType) as "linear" | "radial",
+				gradientHarmony: (gradientHarmony() ??
+					currentTheme.gradientHarmony) as GradientHarmony,
+				borderWidthSubtle: borderThickness(),
+				borderWidthStrong: Math.max(borderThickness() + 1, 1),
+			});
+			applyTheme(themeToApply);
 		}
 	});
 
 	createEffect(() => {
 		if (loading()) return;
 		
+		const root = document.documentElement;
 		if (styleMode() === "bordered") {
-			document.documentElement.style.setProperty(
+			root.style.setProperty(
 				"--border-width-subtle",
 				`${borderThickness()}px`,
 			);
-			document.documentElement.style.setProperty(
+			root.style.setProperty(
 				"--border-width-strong",
 				`${Math.max(borderThickness() + 1, 1)}px`,
 			);
 		} else {
-			document.documentElement.style.setProperty(
-				"--border-width-subtle",
-				"1px",
-			);
-			document.documentElement.style.setProperty(
-				"--border-width-strong",
-				"1px",
-			);
+			root.style.setProperty("--border-width-subtle", "1px");
+			root.style.setProperty("--border-width-strong", "1px");
 		}
 	});
 
@@ -471,6 +463,73 @@ function SettingsPage(props: { close?: () => void }) {
 						<TabsTrigger value="developer">Developer</TabsTrigger>
 						<TabsTrigger value="help">Help</TabsTrigger>
 					</TabsList>
+
+					<TabsContent value="general">
+						<div class="settings-tab-content">
+							<section class="settings-section">
+								<h2>Accessibility</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Reduced Motion</span>
+										<span class="settings-description">
+											Disable animations and transitions
+										</span>
+									</div>
+									<Switch
+										checked={reducedMotion()}
+										onChange={handleReducedMotionToggle}
+									>
+										<SwitchControl>
+											<SwitchThumb />
+										</SwitchControl>
+									</Switch>
+								</div>
+							</section>
+
+							<section class="settings-section">
+								<h2>Application Data</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">App Data Folder</span>
+										<span class="settings-description">
+											Open the folder where Vesta Launcher stores its data.
+										</span>
+									</div>
+									<LauncherButton onClick={handleOpenAppData}>
+										Open Folder
+									</LauncherButton>
+								</div>
+							</section>
+
+							<section class="settings-section">
+								<h2>Troubleshooting</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Reset Onboarding</span>
+										<span class="settings-description">
+											Redo the first-time setup process. This will not delete your accounts or instances.
+										</span>
+									</div>
+									<LauncherButton 
+										variant="shadow" 
+										color="destructive"
+										onClick={async () => {
+											if (await confirm("Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen.")) {
+												try {
+													await invoke("reset_onboarding");
+													window.location.href = "/"; // Force reload to root
+												} catch (e) {
+													console.error("Failed to reset onboarding:", e);
+												}
+											}
+										}}
+									>
+										Redo Setup
+									</LauncherButton>
+								</div>
+							</section>
+						</div>
+					</TabsContent>
 
 					<TabsContent value="appearance">
 						<div class="settings-tab-content">
@@ -615,7 +674,10 @@ function SettingsPage(props: { close?: () => void }) {
 
 										<div class="settings-row">
 											<div class="settings-info">
-												<span class="settings-label">Color Harmony</span>
+												<span class="settings-label">
+													Color Harmony
+													<HelpTrigger topic="GRADIENT_HARMONY" />
+												</span>
 												<span class="settings-description">
 													Choose how secondary colors are generated
 												</span>
@@ -674,7 +736,10 @@ function SettingsPage(props: { close?: () => void }) {
 							<section class="settings-section">
 								<div class="section-header">
 									<div>
-										<h2>Java Environments</h2>
+										<h2>
+											Java Environments
+											<HelpTrigger topic="JAVA_MANAGED" />
+										</h2>
 										<p class="section-description">
 											Vesta uses these Java installations to run Minecraft.
 										</p>
@@ -700,7 +765,10 @@ function SettingsPage(props: { close?: () => void }) {
 													<div class="java-version-row">
 														<span class="java-version">Java {java.major_version}</span>
 														<Show when={java.is_managed}>
-															<span class="managed-badge">Managed</span>
+															<span class="managed-badge">
+																Managed
+																<HelpTrigger topic="JAVA_MANAGED" />
+															</span>
 														</Show>
 													</div>
 													<div class="java-path">{java.path}</div>
@@ -716,12 +784,27 @@ function SettingsPage(props: { close?: () => void }) {
 					<TabsContent value="help">
 						<div class="settings-tab-content">
 							<section class="settings-section">
+								<h2>Minecraft Modding</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Documentation</span>
+										<span class="settings-description">
+											Technical overview of modding frameworks, runtime environments, and configuration.
+										</span>
+									</div>
+									<LauncherButton onClick={() => router()?.navigate("/modding-guide")}>
+										View Docs
+									</LauncherButton>
+								</div>
+							</section>
+
+							<section class="settings-section">
 								<h2>App Tutorial</h2>
 								<div class="settings-row">
 									<div class="settings-info">
-										<span class="settings-label">Guided Walkthrough</span>
+										<span class="settings-label">Platform Walkthrough</span>
 										<span class="settings-description">
-											Run the interactive tutorial to learn how to use Vesta.
+											Initiate the interactive walkthrough to familiarize yourself with Vesta's interface.
 										</span>
 									</div>
 									<LauncherButton onClick={() => {
@@ -734,81 +817,32 @@ function SettingsPage(props: { close?: () => void }) {
 							</section>
 
 							<section class="settings-section">
-								<h2>Social & Support</h2>
+								<h2>Support</h2>
 								<div class="social-links">
-									<LauncherButton variant="ghost" onClick={() => window.open("https://github.com/VestaLauncher/Vesta", "_blank")}>
+									<LauncherButton variant="ghost" onClick={() => open("https://github.com/vesta-project/launcher")}>
 										GitHub
 									</LauncherButton>
-									<LauncherButton variant="ghost">
-										Discord Support
-									</LauncherButton>
-								</div>
-							</section>
-						</div>
-					</TabsContent>
-
-					<TabsContent value="general">
-						<div class="settings-tab-content">
-							<section class="settings-section">
-								<h2>Accessibility</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Reduced Motion</span>
-										<span class="settings-description">
-											Disable animations and transitions
-										</span>
-									</div>
-									<Switch
-										checked={reducedMotion()}
-										onChange={handleReducedMotionToggle}
-									>
-										<SwitchControl>
-											<SwitchThumb />
-										</SwitchControl>
-									</Switch>
+									{/* <LauncherButton variant="ghost" onClick={() => open("https://discord.gg/vesta")}>
+										Discord
+									</LauncherButton> */}
 								</div>
 							</section>
 
 							<section class="settings-section">
-								<h2>Application Data</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">App Data Folder</span>
-										<span class="settings-description">
-											Open the folder where Vesta Launcher stores its data.
-										</span>
+								<h2>About</h2>
+								<div class="about-info">
+									<div class="about-field">
+										<span>App Version</span>
+										<span>0.7.1</span>
 									</div>
-									<LauncherButton onClick={handleOpenAppData}>
-										Open Folder
-									</LauncherButton>
-								</div>
-							</section>
-
-							<section class="settings-section">
-								<h2>Troubleshooting</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Reset Onboarding</span>
-										<span class="settings-description">
-											Redo the first-time setup process. This will not delete your accounts or instances.
-										</span>
+									<div class="about-field">
+										<span>Platform</span>
+										<span>Tauri + SolidJS</span>
 									</div>
-									<LauncherButton 
-										variant="shadow" 
-										color="destructive"
-										onClick={async () => {
-											if (await confirm("Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen.")) {
-												try {
-													await invoke("reset_onboarding");
-													window.location.href = "/"; // Force reload to root
-												} catch (e) {
-													console.error("Failed to reset onboarding:", e);
-												}
-											}
-										}}
-									>
-										Redo Setup
-									</LauncherButton>
+									<div class="about-field">
+										<span>License</span>
+										<span>MIT License</span>
+									</div>
 								</div>
 							</section>
 						</div>

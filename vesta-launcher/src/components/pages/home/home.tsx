@@ -5,7 +5,7 @@ import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
 import ConnectionStatus from "@components/page-root/connection-status";
 import TitleBar from "@components/page-root/titlebar/titlebar";
-import { PageViewer, router } from "@components/page-viewer/page-viewer";
+import { PageViewer, router, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import { invoke } from "@tauri-apps/api/core";
 import { attachConsole, info } from "@tauri-apps/plugin-log";
@@ -32,11 +32,8 @@ import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
 import { startAppTutorial } from "@utils/tutorial";
 
-// Module-level signals for page viewer state - exported so child components can open pages
-const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
+// Module-level signals for sidebar state
 const [sidebarOpen, setSidebarOpen] = createSignal(false);
-
-export { setPageViewerOpen };
 
 const os = getOsType() ?? "windows";
 

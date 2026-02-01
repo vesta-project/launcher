@@ -102,6 +102,50 @@
 	font-weight: 600;
 }
 
+@keyframes pulse {
+	0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.15; }
+	50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.25; }
+	100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.15; }
+}
+
+@keyframes welcome-float {
+	0% { transform: translateY(0px); }
+	50% { transform: translateY(-10px); }
+	100% { transform: translateY(0px); }
+}
+
+.welcome-flare__glow {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 80%;
+	height: 80%;
+	background: var(--primary);
+	filter: blur(50px);
+	border-radius: 50%;
+	z-index: 0;
+	animation: pulse 4s ease-in-out infinite;
+}
+
+.welcome-flare__icon {
+	font-size: clamp(64px, 15vh, 96px);
+	position: relative;
+	z-index: 1;
+	filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
+	animation: welcome-float 5s ease-in-out infinite;
+}
+
+.init-page__header-title {
+	font-size: clamp(32px, 8vh, 56px);
+	font-weight: 900;
+	letter-spacing: -0.04em;
+	line-height: 1.1;
+	margin-bottom: 8px;
+	background: linear-gradient(160deg, #fff 20%, var(--primary) 100%);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
 .login-page__url {
 	font-size: 13px;
 	opacity: 0.5;

@@ -161,7 +161,10 @@ const ResourceDetailsPage: Component<{
             console.log("[ResourceDetails] Reloading project data...");
             const p = project();
             if (p) {
-                await resources.fetchProject(p.source, p.id);
+                const updated = await resources.getProject(p.source, p.id);
+                if (updated) {
+                    await resources.selectProject(updated);
+                }
             }
         });
     });

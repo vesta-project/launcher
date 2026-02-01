@@ -1,8 +1,10 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
+import { PageViewer, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import {
 	InitAppearancePage,
 	InitFinishedPage,
 	InitFirstPage,
+	InitGuidePage,
 	InitJavaPage,
 	InitLoginPage,
 	InitDataStoragePage,
@@ -46,9 +48,9 @@ function InitPage() {
 					let resumeStep = config.setup_step || 0;
 
 					// If we are resuming at login but already have an account, skip to Java
-					if (resumeStep === 1 && account) {
-						resumeStep = 2;
-						await invoke("set_setup_step", { step: 2 });
+					if (resumeStep === 2 && account) {
+						resumeStep = 3;
+						await invoke("set_setup_step", { step: 3 });
 					}
 
 					setInitStep(resumeStep);
@@ -65,17 +67,15 @@ function InitPage() {
 		let step = nextStep;
 
 		// If going to login step, check if already authenticated
-		if (step === 1 && !isLoginOnly()) {
+		if (step === 2 && !isLoginOnly()) {
 			const account = await invoke("get_active_account");
 			if (account) {
 				if (nextStep < initStep()) {
-					// User is going back from Java (2) or later, 
-					// skip login backwards to the welcome page
+					// User is going back from Java or later, skip login backwards
 					step = 0;
 				} else {
-					// User is going forward from welcome (0),
-					// skip login forwards to Java
-					step = 2;
+					// User is going forward, skip login forwards to Java
+					step = 3;
 				}
 			}
 		}
@@ -98,7 +98,7 @@ function InitPage() {
 
 	return (
 		<div id={"init-page__root"}>
-			<TitleBar os={os} />
+			<TitleBar os={os} hideHelp={true} />
 			<div id={"init-page__wrapper"}>
 				<Switch>
 					<Match when={isLoading()}>
@@ -123,6 +123,12 @@ function InitPage() {
 						/>
 					</Match>
 					<Match when={initStep() == 1}>
+						<InitGuidePage
+							initStep={initStep()}
+							changeInitStep={handleStepChange}
+						/>
+					</Match>
+					<Match when={initStep() == 2}>
 						<InitLoginPage
 							initStep={initStep()}
 							changeInitStep={handleStepChange}
@@ -131,38 +137,38 @@ function InitPage() {
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 2}>
+					<Match when={initStep() == 3}>
 						<InitJavaPage
 							initStep={initStep()}
 							changeInitStep={handleStepChange}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 3}>
+					<Match when={initStep() == 4}>
 						<InitAppearancePage
 							initStep={initStep()}
 							changeInitStep={handleStepChange}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 4}>
+					<Match when={initStep() == 5}>
 						<InitDataStoragePage
 							initStep={initStep()}
 							changeInitStep={handleStepChange}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 5}>
+					<Match when={initStep() == 6}>
 						<InitInstallationPage
 							initStep={initStep()}
 							changeInitStep={handleStepChange}
 							onInstanceInstalled={() => {
 								setHasInstalledInstance(true);
-								handleStepChange(6);
+								handleStepChange(7);
 							}}
 						/>
 					</Match>
-					<Match when={initStep() == 6}>
+					<Match when={initStep() == 7}>
 						<InitFinishedPage
 							initStep={initStep()}
 							changeInitStep={handleStepChange}
@@ -173,6 +179,10 @@ function InitPage() {
 				</Switch>
 				{/*{initStep()}*/}
 			</div>
+			<PageViewer
+				open={pageViewerOpen()}
+				viewChanged={() => setPageViewerOpen(false)}
+			/>
 		</div>
 	);
 }

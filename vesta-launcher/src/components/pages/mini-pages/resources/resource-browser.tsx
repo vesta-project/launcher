@@ -896,9 +896,10 @@ const FiltersPanel: Component = () => {
                                                     active: group.id ? resources.state.categories.includes(group.id) : false 
                                                 }}
                                                 onClick={() => {
-                                                    if (group.id) {
+                                                    const gid = group.id;
+                                                    if (gid) {
                                                         batch(() => {
-                                                            resources.toggleCategory(group.id!);
+                                                            resources.toggleCategory(gid);
                                                             resources.setOffset(0);
                                                             router()?.updateQuery("categories", resources.state.categories);
                                                         });
@@ -1381,19 +1382,17 @@ const ResourceBrowser: Component<{
                         </div>
 
                         <span class="sort-label">Sort By:</span>
-                        <Select 
+                        <Select<{label: string, value: string}> 
                             options={currentSortOptions()} 
-                            value={resources.state.sortBy || (currentSortOptions()[0]?.value)}
-                            onChange={(val: string | null) => {
+                            value={currentSortOptions().find(o => o.value === resources.state.sortBy) || currentSortOptions()[0]}
+                            onChange={(val) => {
                                 batch(() => {
-                                    // val is the primitive value because optionValue="value" is set
-                                    resources.setSortBy(val || 'relevance');
+                                    const sval = val?.value || 'relevance';
+                                    resources.setSortBy(sval);
                                     resources.setOffset(0);
-                                    router()?.updateQuery("sortBy", val);
+                                    router()?.updateQuery("sortBy", sval);
                                 });
                             }}
-                            optionValue="value"
-                            optionTextValue="label"
                             itemComponent={(props) => (
                                 <SelectItem item={props.item}>
                                     {props.item.rawValue.label}

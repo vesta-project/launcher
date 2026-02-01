@@ -9,11 +9,13 @@ import ResourceDetailsPage from "@components/pages/mini-pages/resources/resource
 import SettingsPage from "@components/pages/mini-pages/settings/settings-page";
 import TaskTestPage from "@components/pages/mini-pages/task-test/task-test-page";
 import NotificationTestPage from "@components/pages/notification-test/notification-test";
+import { ModdingGuidePage } from "../pages/mini-pages/modding-guide/guide";
 
 // Centralized router path configuration
 export const miniRouterPaths = {
 	...CreateMiniRouterPath("/config", SettingsPage, "Settings"),
 	...CreateMiniRouterPath("/install", InstallPage, "Install"),
+	...CreateMiniRouterPath("/modding-guide", ModdingGuidePage, "Modding Guide"),
 	...CreateMiniRouterPath("/instance", InstanceDetailsPage, "Instance Details"),
 	...CreateMiniRouterPath("/file-drop", FileDropPage, "File Drop"),
 	...CreateMiniRouterPath("/login", LoginPage, "Sign In"),

@@ -15,6 +15,9 @@
 }
 
 .slider__label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
 	font-size: 0.875rem;
 	font-weight: 500;
 	line-height: 1.25;

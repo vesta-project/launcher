@@ -15,6 +15,8 @@ import {
 } from "solid-js";
 import "./page-viewer.css";
 
+const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
+
 const [router, setRouter] = createSignal<MiniRouter>(
 	new MiniRouter({
 		paths: miniRouterPaths,
@@ -80,16 +82,20 @@ function PageViewer(props: {
 			props: { handoffId }, // Pass the ID instead of full data
 		});
 
+		setPageViewerOpen(false);
 		props.viewChanged?.(false);
 	};
 
 	return (
-		<Show when={props.open}>
+		<Show when={props.open !== undefined ? props.open : pageViewerOpen()}>
 			<div class="page-viewer-wrapper">
 				<div class="page-viewer-root">
 					<UnifiedPageViewer
 						router={mini_router}
-						onClose={() => props.viewChanged?.(false)}
+						onClose={() => {
+							setPageViewerOpen(false);
+							props.viewChanged?.(false);
+						}}
 						onPopOut={onPopOut}
 					/>
 				</div>
@@ -98,4 +104,4 @@ function PageViewer(props: {
 	);
 }
 
-export { PageViewer, router, setRouter };
+export { PageViewer, router, setRouter, pageViewerOpen, setPageViewerOpen };
