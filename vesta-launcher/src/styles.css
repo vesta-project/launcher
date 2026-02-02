@@ -758,3 +758,117 @@ button {
     margin-bottom: 6px;
     color: var(--text-secondary);
 }
+
+/* Java Settings Styles */
+.java-requirements-list {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	margin-top: 16px;
+}
+
+.java-req-item {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-bottom: 24px;
+	border-bottom: var(--border-width-subtle) solid var(--border-subtle);
+}
+
+.java-req-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.java-req-header h3 {
+	margin: 0;
+	font-size: 1.1rem;
+	font-weight: 600;
+}
+
+.current-path-label {
+	font-size: 0.8rem;
+	opacity: 0.5;
+	font-family: var(--font-mono);
+}
+
+.java-options-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+	gap: 12px;
+}
+
+.java-option-card {
+	background: var(--surface-raised);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	border-radius: 8px;
+	padding: 12px 16px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	min-height: 84px;
+	justify-content: flex-start;
+}
+
+.java-option-card:hover {
+	background: var(--surface-overlay);
+	border-color: var(--border-strong);
+	transform: translateY(-1px);
+}
+
+.java-option-card.active {
+	border-color: var(--accent-primary);
+	background: hsl(var(--color__primary-hue) 70% var(--button-lightness) / 0.1);
+	box-shadow: 0 0 0 1px var(--accent-primary);
+}
+
+.java-option-card.browse {
+	border-style: dashed;
+	opacity: 0.7;
+	text-align: center;
+}
+
+.java-option-card.browse .option-title {
+	justify-content: center;
+}
+
+.java-option-card.browse:hover {
+	opacity: 1;
+}
+
+.option-title {
+	font-weight: 600;
+	font-size: 0.9rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+}
+
+.active-badge {
+	font-size: 0.65rem;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	background: var(--accent-primary);
+	color: white;
+	padding: 1px 6px;
+	border-radius: 4px;
+	font-weight: 800;
+}
+
+.option-path {
+	font-size: 0.75rem;
+	opacity: 0.5;
+	font-family: var(--font-mono);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.option-subtitle {
+	font-size: 0.8rem;
+	opacity: 0.4;
+}

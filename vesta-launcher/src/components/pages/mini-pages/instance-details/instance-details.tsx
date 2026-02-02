@@ -2,6 +2,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ask, confirm } from "@tauri-apps/plugin-dialog";
+import { HelpTrigger } from "@components/ui/help-trigger";
 import Button from "@ui/button/button";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
@@ -18,7 +19,16 @@ import {
 	ComboboxControl,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+	SelectLabel,
+} from "@ui/select/select";
 import { Skeleton } from "@ui/skeleton/skeleton";
+import { showToast } from "@ui/toast/toast";
 import {
 	Slider,
 	SliderFill,
@@ -41,6 +51,12 @@ import {
 	Checkbox,
 } from "@ui/checkbox/checkbox";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@ui/context-menu/context-menu";
 import { resources, findBestVersion, type ResourceVersion, type InstalledResource } from "@stores/resources";
 import {
 	DEFAULT_ICONS,
@@ -97,6 +113,7 @@ interface InstanceDetailsProps {
 	initialMinMemory?: number;
 	initialMaxMemory?: number;
 	initialJavaArgs?: string;
+	initialJavaPath?: string;
 	_dirty?: Record<string, boolean>;
 }
 
@@ -207,6 +224,8 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [minMemory, setMinMemory] = createSignal<number[]>([props.initialMinMemory || 2048]);
 	const [maxMemory, setMaxMemory] = createSignal<number[]>([props.initialMaxMemory || 4096]);
 	const [javaArgs, setJavaArgs] = createSignal(props.initialJavaArgs || "");
+	const [javaPath, setJavaPath] = createSignal(props.initialJavaPath || "");
+	const [isCustomMode, setIsCustomMode] = createSignal(false);
 
 	// Dirty flags for settings
 	const [isNameDirty, setIsNameDirty] = createSignal(props._dirty?.name || false);
@@ -214,6 +233,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [isMinMemDirty, setIsMinMemDirty] = createSignal(props._dirty?.minMem || false);
 	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(props._dirty?.maxMem || false);
 	const [isJvmDirty, setIsJvmDirty] = createSignal(props._dirty?.jvm || false);
+	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(props._dirty?.javaPath || false);
 
 	const [saving, setSaving] = createSignal(false);
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
@@ -265,9 +285,16 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		await Promise.all([refetch(), refetchResources()]);
 	};
 
-	onMount(() => {
+	onMount(async () => {
 		props.setRefetch?.(handleRefetch);
 		router()?.setRefetch(handleRefetch);
+
+		const unlisten = await listen("java-paths-updated", () => {
+			managedJavas.refetch();
+			globalJavaPaths.refetch();
+			detectedJavas.refetch();
+		});
+		onCleanup(() => unlisten());
 
 		// Register state provider for pop-out window handoff
 		router()?.registerStateProvider("/instance", () => ({
@@ -317,6 +344,56 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	// Running state
 	const [isRunning, setIsRunning] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
+
+	const [requiredJava] = createResource(() => instance()?.id, async (id) => {
+		if (!id) return null;
+		return await invoke<number>("get_instance_required_java", { instanceId: id });
+	});
+
+	const [detectedJavas] = createResource<any[]>(() => invoke("detect_java"));
+	const [managedJavas] = createResource<any[]>(() => invoke("get_managed_javas"));
+	const [globalJavaPaths] = createResource<any[]>(() => invoke("get_global_java_paths"));
+
+	const jreOptions = createMemo(() => {
+		const req = requiredJava();
+		if (!req) return [];
+		
+		const global = globalJavaPaths()?.find(g => g.major_version === req);
+		const globalPathSuffix = global ? `→ ${global.path}` : "(not set)";
+		
+		const opts: any[] = [
+			{ label: `Global Default (Java ${req})`, description: globalPathSuffix, value: "__default__" }
+		];
+		
+		// Managed Runtime
+		const managed = managedJavas() || [];
+		const managedForVersion = managed.find(j => j.major_version === req);
+		if (managedForVersion) {
+			opts.push({ label: `Managed Runtime`, description: managedForVersion.path, value: managedForVersion.path });
+		} else {
+			opts.push({ label: `Managed Runtime`, description: "Not installed - Click to download and use", value: `__download_${req}__` });
+		}
+		
+		(detectedJavas() || []).filter(j => j.major_version === req).forEach(j => {
+			opts.push({ label: `System Runtime`, description: j.path, value: j.path });
+		});
+		
+		opts.push({ label: "Custom / Manual Path...", description: "Select a specific file", value: "__custom__" });
+		
+		return opts;
+	});
+
+	const currentSelection = createMemo(() => {
+		if (isCustomMode()) return "__custom__";
+		const path = javaPath();
+		if (path === "") return "__default__";
+		
+		const options = jreOptions();
+		const match = options.find(o => o.value === path && o.value !== "__default__" && o.value !== "__custom__");
+		if (match) return match.value;
+		
+		return "__custom__";
+	});
 
 	// Check if instance is currently being installed/repaired/updated
 	const isInstalling = createMemo(() => {
@@ -1161,6 +1238,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 			fresh.name = name();
 			fresh.iconPath = iconPath();
 			fresh.javaArgs = javaArgs() || null;
+			fresh.javaPath = javaPath() || null;
 			fresh.minMemory = minMemory()[0];
 			fresh.maxMemory = maxMemory()[0];
 			await updateInstance(fresh);
@@ -1962,6 +2040,141 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															/>
 														</TextFieldRoot>
 													</div>
+												</div>
+
+												<div class="settings-field">
+													<div style="display: flex; flex-direction: column; gap: 8px;">
+														<Select<any>
+															options={jreOptions()}
+															optionValue="value"
+															optionTextValue="label"
+															value={jreOptions().find(o => o.value === currentSelection())}
+															onChange={(val) => {
+																if (val.value === "__default__") {
+																	setJavaPath("");
+																	setIsCustomMode(false);
+																	setIsJavaPathDirty(true);
+																} else if (val.value === "__custom__") {
+																	setIsCustomMode(true);
+																} else if (val.value.startsWith("__download_")) {
+																	const version = parseInt(val.value.split("_")[2]);
+																	invoke("download_managed_java", { version }).then(() => {
+																		showToast({ 
+																			title: "Download Started", 
+																			description: `Java ${version} is being downloaded.`, 
+																			variant: "info" 
+																		});
+																	}).catch(err => {
+																		showToast({ 
+																			title: "Error", 
+																			description: "Failed to start Java download.", 
+																			variant: "error" 
+																		});
+																	});
+																	// Keep current selection or go to default until download finishes
+																	setJavaPath("");
+																	setIsCustomMode(false);
+																	setIsJavaPathDirty(true);
+																} else {
+																	setJavaPath(val.value);
+																	setIsCustomMode(false);
+																	setIsJavaPathDirty(true);
+																}
+															}}
+															itemComponent={(props) => (
+																<SelectItem item={props.item}>
+																	<div style="display: flex; flex-direction: column; line-height: 1.2;">
+																		<span style="font-weight: 600; font-size: 13px;">{props.item.rawValue.label}</span>
+																		<span style="font-size: 10px; opacity: 0.5; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;">
+																			{props.item.rawValue.description}
+																		</span>
+																	</div>
+																</SelectItem>
+															)}
+														>
+															<SelectLabel class="text-field__label" style={{ padding: 0, "margin-bottom": 0 }}>
+																Java Executable
+																<HelpTrigger topic="JAVA_MANAGED" />
+															</SelectLabel>
+															
+															<ContextMenu>
+																<ContextMenuTrigger style="width: 100%;">
+																	<Tooltip>
+																		<TooltipTrigger style="width: 100%; display: block;" as="div">
+																			<SelectTrigger style="width: 100%;">
+																				<SelectValue<any>>
+																					{(state) => (
+																						<div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
+																							<span style="font-size: 13px;">{state.selectedOption().label}</span>
+																							<span style="font-size: 10px; opacity: 0.5; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px;">
+																								{state.selectedOption().description}
+																							</span>
+																						</div>
+																					)}
+																				</SelectValue>
+																			</SelectTrigger>
+																		</TooltipTrigger>
+																		<TooltipContent>
+																			<Show when={jreOptions().find(o => o.value === currentSelection())?.description} fallback="No path set">
+																				{(desc) => (
+																					<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
+																						{desc().startsWith("→ ") ? desc().substring(2) : desc()}
+																					</div>
+																				)}
+																			</Show>
+																		</TooltipContent>
+																	</Tooltip>
+																</ContextMenuTrigger>
+																<ContextMenuContent>
+																	<ContextMenuItem onClick={() => {
+																		const current = jreOptions().find(o => o.value === currentSelection());
+																		if (current && current.description && current.description !== "(not set)") {
+																			let path = current.description;
+																			if (path.startsWith("→ ")) path = path.substring(2);
+																			navigator.clipboard.writeText(path);
+																			showToast({ title: "Copied", description: "Java path copied to clipboard", variant: "success" });
+																		}
+																	}}>
+																		Copy Full Path
+																	</ContextMenuItem>
+																</ContextMenuContent>
+															</ContextMenu>
+
+															<SelectContent />
+														</Select>
+
+														<Show when={currentSelection() === "__custom__"}>
+															<div style="display: flex; gap: 8px; margin-top: 4px;">
+																<TextFieldRoot style="flex: 1">
+																	<TextFieldInput 
+																		value={javaPath()} 
+																		placeholder="Path to java executable"
+																		onInput={(e) => {
+																			setJavaPath((e.currentTarget as HTMLInputElement).value);
+																			setIsJavaPathDirty(true);
+																		}}
+																	/>
+																</TextFieldRoot>
+																<Button 
+																	variant="ghost" 
+																	size="sm"
+																	onClick={async () => {
+																		const path = await invoke<string | null>("pick_java_path");
+																		if (path) {
+																			setJavaPath(path);
+																			setIsCustomMode(false);
+																			setIsJavaPathDirty(true);
+																		}
+																	}}
+																>
+																	Browse...
+																</Button>
+															</div>
+														</Show>
+													</div>
+													<p class="field-hint">
+														The Java runtime used to launch this instance.
+													</p>
 												</div>
 
 												<div class="settings-field">

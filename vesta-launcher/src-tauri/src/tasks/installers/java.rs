@@ -2,7 +2,7 @@ use anyhow::Result;
 use diesel::prelude::*;
 use piston_lib::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
 use piston_lib::game::installer::types::{ProgressReporter, NotificationActionSpec};
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, Emitter};
 use tokio::sync::watch;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::notifications::manager::NotificationManager;
@@ -21,8 +21,20 @@ impl Task for DownloadJavaTask {
         format!("Downloading Java {}", self.major_version)
     }
 
+    fn id(&self) -> Option<String> {
+        Some(format!("download_java_{}", self.major_version))
+    }
+
     fn cancellable(&self) -> bool {
         true
+    }
+
+    fn starting_description(&self) -> String {
+        format!("Preparing to download Java {}...", self.major_version)
+    }
+
+    fn completion_description(&self) -> String {
+        format!("Java {} installed successfully.", self.major_version)
     }
 
     fn run(&self, ctx: TaskContext) -> crate::tasks::manager::BoxFuture<'static, Result<(), String>> {
@@ -62,7 +74,8 @@ impl Task for DownloadJavaTask {
                 .set(&new_entry)
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
-
+            // Emit event to notify frontend to refetch Java paths
+            let _ = ctx.app_handle.emit("java-paths-updated", ());
             Ok(())
         })
     }

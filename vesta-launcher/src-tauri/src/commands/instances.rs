@@ -758,6 +758,13 @@ pub async fn delete_instance(
 }
 
 #[tauri::command]
+pub fn get_instance_required_java(instance_id: i32) -> Result<u32, String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let inst = instance.find(instance_id).first::<Instance>(&mut conn).map_err(|e| e.to_string())?;
+    Ok(crate::utils::java::get_required_java_for_version(&inst.minecraft_version))
+}
+
+#[tauri::command]
 pub fn get_instance(instance_id: i32) -> Result<Instance, String> {
     log::info!("Fetching instance ID: {}", instance_id);
 
@@ -820,18 +827,36 @@ pub async fn launch_instance(
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
     // Determine Java path
-    let java_path_str = instance_data.java_path.clone().unwrap_or_else(|| {
-        // Try to find java in PATH
-        #[cfg(windows)]
-        let default_java = "java.exe";
-        #[cfg(not(windows))]
-        let default_java = "java";
+    let java_path_str = if let Some(path) = instance_data.java_path.clone() {
+        path
+    } else {
+        // Try to find global default for the required version
+        let required_major = crate::utils::java::get_required_java_for_version(&instance_data.minecraft_version);
+        
+        let global_path = (|| -> Option<String> {
+            use crate::utils::db::get_config_conn;
+            use crate::schema::global_java_paths::dsl::*;
+            let mut conn = get_config_conn().ok()?;
+            global_java_paths
+                .filter(major_version.eq(required_major as i32))
+                .select(path)
+                .first::<String>(&mut conn)
+                .ok()
+        })();
 
-        which::which(default_java)
-            .ok()
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
-            .unwrap_or_else(|| default_java.to_string())
-    });
+        global_path.unwrap_or_else(|| {
+            // Try to find java in PATH
+            #[cfg(windows)]
+            let default_java = "java.exe";
+            #[cfg(not(windows))]
+            let default_java = "java";
+
+            which::which(default_java)
+                .ok()
+                .and_then(|p| p.to_str().map(|s| s.to_string()))
+                .unwrap_or_else(|| default_java.to_string())
+        })
+    };
 
     // Determine which data_dir to use
     let spec_data_dir = if data_dir.join("data").exists() {

@@ -99,14 +99,25 @@ impl TaskManager {
 
             while let Some(task) = receiver.recv().await {
                 log::info!("TaskManager: Received task: {}", task.name());
+                
+                let task_name = task.name();
+                let is_cancellable = task.cancellable();
+                let is_pausable = task.pausable();
+
                 // Generate ID and create "Waiting" notification immediately
                 let id = TASK_COUNTER.fetch_add(1, Ordering::Relaxed);
                 let client_key = task.id().unwrap_or_else(|| {
                     format!("task_{}_{}", chrono::Utc::now().timestamp(), id)
                 });
-                let task_name = task.name();
-                let is_cancellable = task.cancellable();
-                let is_pausable = task.pausable();
+
+                // Check if task is already running (deduplication)
+                {
+                    let active = manager_active_tasks.lock().unwrap();
+                    if active.contains_key(&client_key) {
+                        log::info!("TaskManager: Task with ID {} already active, ignoring submission", client_key);
+                        continue;
+                    }
+                }
 
                 // Track active task
                 manager_active_tasks

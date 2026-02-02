@@ -128,7 +128,7 @@ function MainMenu() {
 						</p>
 					</Show>
 					<For each={instancesStore()}>
-						{(instance) => <InstanceCard instance={instance as any} />}
+						{(instance) => <InstanceCard instance={instance} />}
 					</For>
 				</div>
 			</div>

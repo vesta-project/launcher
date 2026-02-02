@@ -1,4 +1,5 @@
 pub mod config;
+pub mod java;
 pub mod crash_parser;
 pub mod hash;
 

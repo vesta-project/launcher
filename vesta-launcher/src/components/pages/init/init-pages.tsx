@@ -925,10 +925,13 @@ function InitLoginPage(props: InitPagesProps) {
 
 function InitJavaPage(props: InitPagesProps) {
 	const [requirements, { refetch: refetchReqs }] = createResource<JavaRequirement[]>(() =>
-		invoke("get_onboarding_requirements"),
+		invoke("get_required_java_versions"),
 	);
 	const [detected] = createResource<DetectedJava[]>(() =>
 		invoke("detect_java"),
+	);
+	const [managed] = createResource<DetectedJava[]>(() =>
+		invoke("get_managed_javas"),
 	);
 	const [selections, setSelections] = createSignal<Record<number, string>>({});
 	const [verifying, setVerifying] = createSignal<Record<number, boolean>>({});
@@ -948,18 +951,22 @@ function InitJavaPage(props: InitPagesProps) {
 		}
 	});
 
-	const isAllAuto = createMemo(() => {
+	const isAllManaged = createMemo(() => {
 		const reqs = requirements();
 		if (!reqs || reqs.length === 0) return false;
-		return reqs.every(r => selections()[r.major_version] === "auto");
+		return reqs.every(r => selections()[r.major_version] === "managed");
 	});
 
-	const handleAuto = (version: number) => {
-		setSelections(prev => ({ ...prev, [version]: "auto" }));
+	const isManagedInstalled = (version: number) => {
+		return managed()?.some(m => m.major_version === version);
+	};
+
+	const handleSelectManaged = (version: number) => {
+		setSelections(prev => ({ ...prev, [version]: "managed" }));
 		setErrors(prev => ({ ...prev, [version]: "" }));
 	};
 
-	const handleAutoAll = () => {
+	const handleSelectManagedAll = () => {
 		const reqs = requirements();
 		if (!reqs) return;
 		
@@ -967,7 +974,7 @@ function InitJavaPage(props: InitPagesProps) {
 		const newErrors = { ...errors() };
 		
 		for (const req of reqs) {
-			newSelections[req.major_version] = "auto";
+			newSelections[req.major_version] = "managed";
 			newErrors[req.major_version] = "";
 		}
 		
@@ -995,23 +1002,41 @@ function InitJavaPage(props: InitPagesProps) {
 		}
 	};
 
+	const handleManualPick = async (version: number) => {
+		try {
+			const path = await invoke<string | null>("pick_java_path");
+			if (path) {
+				await handleSelect(version, path);
+			}
+		} catch (e) {
+			console.error("Failed to pick java path:", e);
+		}
+	};
+
 	const handleProceed = async () => {
 		if (!canProceed()) return;
 		setIsApplying(true);
 		try {
 			const currentSelections = selections();
-			for (const [versionStr, path] of Object.entries(currentSelections)) {
+			
+			// Start all submissions and configuration updates in parallel
+			const tasks = Object.entries(currentSelections).map(([versionStr, path]) => {
 				const version = parseInt(versionStr);
-				if (path === "auto") {
-					await invoke("download_managed_java", { version });
+				if (path === "managed") {
+					// This submits the task to the background manager and returns immediately
+					return invoke("download_managed_java", { version });
 				} else {
-					await invoke("set_global_java_path", {
+					return invoke("set_global_java_path", {
 						version,
 						pathStr: path,
 						managed: false,
 					});
 				}
-			}
+			});
+
+			await Promise.all(tasks);
+			
+			// Move to next step immediately as tasks are now handled in the background
 			props.changeInitStep(props.initStep + 1);
 		} catch (e) {
 			console.error("Failed to apply Java settings:", e);
@@ -1080,10 +1105,9 @@ function InitJavaPage(props: InitPagesProps) {
 						<Button 
 							variant="ghost"
 							size="sm" 
-							onClick={handleAutoAll}
-							classList={{ "active-auto": isAllAuto() }}
+							onClick={handleSelectManagedAll}
 						>
-							{isAllAuto() ? "✓ All Automatic Selected" : "Select All Automatic"}
+							{isAllManaged() ? "✓ All Managed Selected" : "Select All Managed"}
 						</Button>
 					</div>
 					
@@ -1095,7 +1119,7 @@ function InitJavaPage(props: InitPagesProps) {
 						"width": "100%"
 					}}>
 						<p style={{ "font-size": "12px", "opacity": 0.7, "line-height": "1.4" }}>
-							<strong>Tip:</strong> You can use Vesta's <strong>automatic</strong> downloads (recommended) or your own <strong>system</strong> paths.
+							<strong>Tip:</strong> You can use Vesta's <strong>Managed</strong> runtimes (recommended) or your own <strong>System</strong> paths.
 						</p>
 					</div>
 				</div>
@@ -1136,7 +1160,7 @@ function InitJavaPage(props: InitPagesProps) {
 								}}
 							>
 								<div>
-									<h3 style={{ margin: 0, "font-size": "18px", "font-weight": "700" }}>{req.recommended_name}</h3>
+									<h3 style={{ margin: 0, "font-size": "18px", "font-weight": "700", "text-align": "left" }}>{req.recommended_name}</h3>
 									<p style={{ "font-size": "11px", opacity: 0.6, "margin-top": "2px" }}>
 										{req.is_required_for_latest
 											? "Mission critical for modern releases"
@@ -1145,17 +1169,19 @@ function InitJavaPage(props: InitPagesProps) {
 								</div>
 								<div style={{ display: "flex", gap: "8px" }}>
 									<Button
-										onClick={() => handleAuto(req.major_version)}
+										onClick={() => handleSelectManaged(req.major_version)}
 										size="sm"
-										color={selections()[req.major_version] === "auto" ? "primary" : "none"}
+										color={selections()[req.major_version] === "managed" ? "primary" : "none"}
 										variant={
-											selections()[req.major_version] === "auto"
+											selections()[req.major_version] === "managed"
 												? "solid"
 												: "ghost"
 										}
 										style={{ "transition": "all 0.2s ease" }}
 									>
-										{selections()[req.major_version] === "auto" ? "✓ Automatic Selected" : "Use Automatic"}
+										{selections()[req.major_version] === "managed" 
+											? (isManagedInstalled(req.major_version) ? "✓ Managed Installed" : "✓ Managed Selected") 
+											: "Use Managed"}
 									</Button>
 								</div>
 							</div>
@@ -1239,6 +1265,21 @@ function InitJavaPage(props: InitPagesProps) {
 											No compatible versions detected on your system.
 										</p>
 									</Show>
+									
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => handleManualPick(req.major_version)}
+										style={{ 
+											"margin-top": "4px", 
+											"font-size": "11px", 
+											"justify-content": "center",
+											"border": "1px dashed rgba(255,255,255,0.1)",
+											"opacity": 0.7
+										}}
+									>
+										+ Browse for Java executable...
+									</Button>
 								</div>
 							</div>
 

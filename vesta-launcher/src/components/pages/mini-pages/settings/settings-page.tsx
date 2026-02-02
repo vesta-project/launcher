@@ -1,5 +1,6 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
 import {
 	Slider,
@@ -29,6 +30,7 @@ import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
 	createMemo,
+	createResource,
 	createSignal,
 	For,
 	onCleanup,
@@ -48,6 +50,13 @@ import {
 } from "../../../../themes/presets";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
 import { HelpTrigger } from "../../../ui/help-trigger";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { 
+	ContextMenu, 
+	ContextMenuContent, 
+	ContextMenuItem, 
+	ContextMenuTrigger 
+} from "@ui/context-menu/context-menu";
 import "./settings-page.css";
 
 interface AppConfig {
@@ -127,7 +136,19 @@ function SettingsPage(props: { close?: () => void }) {
 	
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
-	const [globalJavas, setGlobalJavas] = createSignal<any[]>([]);
+	const [requirements] = createResource<any[]>(() =>
+		hasTauriRuntime() ? invoke("get_required_java_versions") : Promise.resolve([]),
+	);
+	const [detected, { refetch: refetchDetected }] = createResource<any[]>(() =>
+		hasTauriRuntime() ? invoke("detect_java") : Promise.resolve([]),
+	);
+	const [managed, { refetch: refetchManaged }] = createResource<any[]>(() =>
+		hasTauriRuntime() ? invoke("get_managed_javas") : Promise.resolve([]),
+	);
+	const [globalPaths, { refetch: refetchGlobalPaths }] = createResource<any[]>(() =>
+		hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
+	);
+
 	const [isScanning, setIsScanning] = createSignal(false);
 
 	// Permissions helpers based on current theme
@@ -138,23 +159,76 @@ function SettingsPage(props: { close?: () => void }) {
 
 	let unsubscribeConfigUpdate: (() => void) | null = null;
 
-	const fetchJavas = async () => {
+	const refreshJavas = async () => {
 		if (!hasTauriRuntime()) return;
 		try {
 			setIsScanning(true);
-			const detected = await invoke<any[]>("detect_java");
-			setGlobalJavas(detected);
+			await Promise.all([
+				refetchDetected(),
+				refetchManaged(),
+				refetchGlobalPaths()
+			]);
 		} catch (e) {
-			console.error("Failed to fetch javas:", e);
+			console.error("Failed to refresh javas:", e);
 		} finally {
 			setIsScanning(false);
 		}
 	};
 
+	const handleSetGlobalPath = async (version: number, path: string, isManaged: boolean) => {
+		try {
+			await invoke("set_global_java_path", { version, pathStr: path, managed: isManaged });
+			refetchGlobalPaths();
+		} catch (e) {
+			console.error("Failed to set global java path:", e);
+		}
+	};
+
+	const handleDownloadManaged = async (version: number) => {
+		try {
+			await invoke("download_managed_java", { version });
+			showToast({
+				title: "Download Started",
+				description: `Java ${version} is being downloaded in the background.`,
+				variant: "info",
+			});
+		} catch (e) {
+			console.error("Failed to download managed java:", e);
+			showToast({
+				title: "Download Failed",
+				description: "Failed to initiate Java download.",
+				variant: "error",
+			});
+		}
+	};
+
+	const handleManualPickSetGlobal = async (version: number) => {
+		try {
+			const path = await invoke<string | null>("pick_java_path");
+			if (path) {
+				const info = await invoke<any>("verify_java_path", { pathStr: path });
+				if (info.major_version !== version) {
+					alert(`Selected Java is version ${info.major_version}, but ${version} is required.`);
+				} else {
+					await handleSetGlobalPath(version, path, false);
+				}
+			}
+		} catch (e) {
+			console.error("Failed to pick java path:", e);
+		}
+	};
+
 	onMount(async () => {
+		if (hasTauriRuntime()) {
+			const unlisten = await listen("java-paths-updated", () => {
+				refreshJavas();
+			});
+			onCleanup(() => unlisten());
+		}
+
 		try {
 			if (hasTauriRuntime()) {
-				fetchJavas();
+				refreshJavas();
 				const config = await invoke<AppConfig>("get_config");
 				setDebugLogging(config.debug_logging);
 				setReducedMotion(config.reduced_motion ?? false);
@@ -741,11 +815,11 @@ function SettingsPage(props: { close?: () => void }) {
 											<HelpTrigger topic="JAVA_MANAGED" />
 										</h2>
 										<p class="section-description">
-											Vesta uses these Java installations to run Minecraft.
+											Global defaults for each Java version. Instances follow these by default.
 										</p>
 									</div>
 									<LauncherButton 
-										onClick={fetchJavas} 
+										onClick={refreshJavas} 
 										disabled={isScanning()}
 										variant="ghost"
 									>
@@ -753,28 +827,159 @@ function SettingsPage(props: { close?: () => void }) {
 									</LauncherButton>
 								</div>
 								
-								<div class="java-list">
-									<For each={globalJavas()} fallback={
-										<div class="java-empty">
-											{isScanning() ? "Scanning for Java installations..." : "No Java installations found."}
-										</div>
-									}>
-										{(java) => (
-											<div class="java-item">
-												<div class="java-info">
-													<div class="java-version-row">
-														<span class="java-version">Java {java.major_version}</span>
-														<Show when={java.is_managed}>
-															<span class="managed-badge">
-																Managed
-																<HelpTrigger topic="JAVA_MANAGED" />
-															</span>
-														</Show>
+								<div class="java-requirements-list">
+									<For each={requirements()}>
+										{(req: any) => {
+											const current = () => globalPaths()?.find((p: any) => p.major_version === req.major_version);
+											const managedVersion = () => managed()?.find((m: any) => m.major_version === req.major_version);
+											
+											return (
+												<div class="java-req-item">
+													<div class="java-req-header">
+														<h3>{req.recommended_name}</h3>
 													</div>
-													<div class="java-path">{java.path}</div>
+													
+													<div class="java-options-grid">
+														{/* Managed Option */}
+														<ContextMenu>
+															<ContextMenuTrigger>
+																<Tooltip>
+																	<TooltipTrigger as="div" style={{ display: "contents" }}>
+																		<div 
+																			class="java-option-card"
+																			classList={{ 'active': current()?.is_managed }}
+																			onClick={() => managedVersion() && handleSetGlobalPath(req.major_version, managedVersion()!.path, true)}
+																		>
+																			<div class="option-title">
+																				Managed Runtime
+																				<Show when={current()?.is_managed}>
+																					<span class="active-badge">Active</span>
+																				</Show>
+																			</div>
+																			<Show when={managedVersion()} fallback={
+																				<LauncherButton 
+																					size="sm" 
+																					variant="ghost"
+																					onClick={(e) => { e.stopPropagation(); handleDownloadManaged(req.major_version); }}
+																					style={{ "margin-top": "auto", "width": "100%", "font-size": "0.75rem", "height": "28px" }}
+																				>
+																					Download & Use
+																				</LauncherButton>
+																			}>
+																				<div class="option-path" style={{ "margin-top": "auto" }}>{managedVersion()!.path}</div>
+																			</Show>
+																		</div>
+																	</TooltipTrigger>
+																	<TooltipContent>
+																		<Show when={managedVersion()?.path} fallback="No path set">
+																			{(path) => (
+																				<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
+																					{path()}
+																				</div>
+																			)}
+																		</Show>
+																	</TooltipContent>
+																</Tooltip>
+															</ContextMenuTrigger>
+															<ContextMenuContent>
+																<ContextMenuItem onClick={() => {
+																	if (managedVersion()?.path) {
+																		navigator.clipboard.writeText(managedVersion()!.path);
+																		showToast({ title: "Copied", description: "Path copied to clipboard", variant: "success" });
+																	}
+																}}>
+																	Copy Full Path
+																</ContextMenuItem>
+															</ContextMenuContent>
+														</ContextMenu>
+
+														{/* System Detected */}
+														<For each={detected()?.filter((d: any) => d.major_version === req.major_version)}>
+															{(det: any) => {
+																const isActive = () => current()?.path === det.path && !current()?.is_managed;
+																return (
+																	<ContextMenu>
+																		<ContextMenuTrigger>
+																			<Tooltip>
+																				<TooltipTrigger as="div" style={{ display: "contents" }}>
+																					<div 
+																						class="java-option-card"
+																						classList={{ 'active': isActive() }}
+																						onClick={() => handleSetGlobalPath(req.major_version, det.path, false)}
+																					>
+																						<div class="option-title">
+																							System Runtime
+																							<Show when={isActive()}>
+																								<span class="active-badge">Active</span>
+																							</Show>
+																						</div>
+																						<div class="option-path" style={{ "margin-top": "auto" }}>{det.path}</div>
+																					</div>
+																				</TooltipTrigger>
+																				<TooltipContent>
+																					<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
+																						{det.path}
+																					</div>
+																				</TooltipContent>
+																			</Tooltip>
+																		</ContextMenuTrigger>
+																		<ContextMenuContent>
+																			<ContextMenuItem onClick={() => {
+																				navigator.clipboard.writeText(det.path);
+																				showToast({ title: "Copied", description: "Path copied to clipboard", variant: "success" });
+																			}}>
+																				Copy Full Path
+																			</ContextMenuItem>
+																		</ContextMenuContent>
+																	</ContextMenu>
+																);
+															}}
+														</For>
+
+														{/* Custom active path if not in lists */}
+														<Show when={current() && !current()?.is_managed && !detected()?.some(d => d.path === current()?.path && d.major_version === req.major_version)}>
+															<ContextMenu>
+																<ContextMenuTrigger>
+																	<Tooltip>
+																		<TooltipTrigger as="div" style={{ display: "contents" }}>
+																			<div 
+																				class="java-option-card active"
+																				onClick={() => handleManualPickSetGlobal(req.major_version)}
+																			>
+																				<div class="option-title">
+																					Custom Path
+																					<span class="active-badge">Active</span>
+																				</div>
+																				<div class="option-path" style={{ "margin-top": "auto" }}>{current()?.path}</div>
+																			</div>
+																		</TooltipTrigger>
+																		<TooltipContent>
+																			<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
+																				{current()?.path}
+																			</div>
+																		</TooltipContent>
+																	</Tooltip>
+																</ContextMenuTrigger>
+																<ContextMenuContent>
+																	<ContextMenuItem onClick={() => {
+																		navigator.clipboard.writeText(current()!.path);
+																		showToast({ title: "Copied", description: "Path copied to clipboard", variant: "success" });
+																	}}>
+																		Copy Full Path
+																	</ContextMenuItem>
+																</ContextMenuContent>
+															</ContextMenu>
+														</Show>
+
+														{/* Manual browse */}
+														<div class="java-option-card browse" onClick={() => handleManualPickSetGlobal(req.major_version)}>
+															<div class="option-title">+ Browse...</div>
+															<div class="option-subtitle" style={{ "margin-top": "auto" }}>Select manually</div>
+														</div>
+													</div>
 												</div>
-											</div>
-										)}
+											);
+										}}
 									</For>
 								</div>
 							</section>
