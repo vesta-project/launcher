@@ -21,6 +21,7 @@ import {
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
 import { getMinecraftVersions } from "@utils/instances";
+import { checkForAppUpdates } from "@utils/updater";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
@@ -215,6 +216,17 @@ function Root(props: ChildrenProp) {
 				.catch((error) => {
 					console.error("Failed to cleanup notifications:", error);
 				});
+
+			// Check for updates on startup if enabled
+			if (hasTauriRuntime()) {
+				invoke<any>("get_config")
+					.then((config) => {
+						if (config.startup_check_updates) {
+							checkForAppUpdates(true);
+						}
+					})
+					.catch((error) => console.error("Failed to check for updates on startup:", error));
+			}
 
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()

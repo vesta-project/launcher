@@ -1,6 +1,6 @@
 {
 	"name": "vesta-launcher",
-	"version": "0.7.1",
+	"version": "0.1.0-alpha.1",
 	"description": "",
 	"type": "module",
 	"scripts": {
@@ -8,6 +8,7 @@
 		"dev": "vite",
 		"vesta:dev": "vite",
 		"build": "vite build",
+		"version:bump": "bun ../scripts/bump-version.ts",
 		"serve": "vite preview",
 		"tauri": "tauri",
 		"test": "vitest"
@@ -22,14 +23,15 @@
 		"@tauri-apps/plugin-dialog": "^2.4.2",
 		"@tauri-apps/plugin-log": "^2.7.1",
 		"@tauri-apps/plugin-shell": "^2.3.3",
+		"@tauri-apps/plugin-updater": "^2.9.0",
 		"@tauri-controls/solid": "^0.4.0",
-		"tauri-plugin-macos-permissions-api": "2",
 		"baseline-browser-mapping": "^2.9.11",
 		"caniuse-lite": "^1.0.30001761",
 		"driver.js": "^1.4.0",
 		"marked": "^17.0.1",
 		"solid-js": "^1.9.10",
-		"solid-transition-group": "^0.2.3"
+		"solid-transition-group": "^0.2.3",
+		"tauri-plugin-macos-permissions-api": "2"
 	},
 	"devDependencies": {
 		"@solidjs/testing-library": "^0.8.10",

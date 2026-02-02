@@ -162,6 +162,11 @@ pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub fn restart_app(app_handle: tauri::AppHandle) {
+    app_handle.restart();
+}
+
+#[tauri::command]
 pub fn exit_app(app_handle: tauri::AppHandle) {
     app_handle.exit(0);
 }

@@ -1,5 +1,6 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
+import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
 import {
@@ -27,6 +28,7 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { showToast } from "@ui/toast/toast";
 import { open } from "@tauri-apps/plugin-shell";
 import { startAppTutorial } from "@utils/tutorial";
+import { checkForAppUpdates } from "@utils/updater";
 import {
 	createEffect,
 	createMemo,
@@ -103,6 +105,8 @@ interface AppConfig {
  * Settings Page
  */
 function SettingsPage(props: { close?: () => void }) {
+	const [version] = createResource(getVersion);
+
 	// Derive active tab from router params if available, fallback to default
 	const activeTab = createMemo(() => {
 		if (router()?.currentPath.get() !== "/config") return "general";
@@ -111,6 +115,8 @@ function SettingsPage(props: { close?: () => void }) {
 	});
 
 	const [debugLogging, setDebugLogging] = createSignal(false);
+	const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
+	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 
 	createEffect(() => {
@@ -190,14 +196,14 @@ function SettingsPage(props: { close?: () => void }) {
 			showToast({
 				title: "Download Started",
 				description: `Java ${version} is being downloaded in the background.`,
-				variant: "info",
+				severity: "info",
 			});
 		} catch (e) {
 			console.error("Failed to download managed java:", e);
 			showToast({
 				title: "Download Failed",
 				description: "Failed to initiate Java download.",
-				variant: "error",
+				severity: "error",
 			});
 		}
 	};
@@ -232,6 +238,8 @@ function SettingsPage(props: { close?: () => void }) {
 				const config = await invoke<AppConfig>("get_config");
 				setDebugLogging(config.debug_logging);
 				setReducedMotion(config.reduced_motion ?? false);
+				setAutoUpdateEnabled(config.auto_update_enabled ?? true);
+				setStartupCheckUpdates(config.startup_check_updates ?? true);
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
@@ -255,6 +263,8 @@ function SettingsPage(props: { close?: () => void }) {
 
 			unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
 				if (field === "debug_logging") setDebugLogging(value);
+				if (field === "auto_update_enabled") setAutoUpdateEnabled(value);
+				if (field === "startup_check_updates") setStartupCheckUpdates(value);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
 				if (field === "theme_id" && value) setThemeId(value);
 				if (field === "theme_primary_hue" && value !== null) setBackgroundHue(value);
@@ -460,6 +470,26 @@ function SettingsPage(props: { close?: () => void }) {
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
 				field: "debug_logging",
+				value: checked,
+			});
+		}
+	};
+
+	const handleAutoUpdateToggle = async (checked: boolean) => {
+		setAutoUpdateEnabled(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "auto_update_enabled",
+				value: checked,
+			});
+		}
+	};
+
+	const handleStartupCheckToggle = async (checked: boolean) => {
+		setStartupCheckUpdates(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "startup_check_updates",
 				value: checked,
 			});
 		}
@@ -848,7 +878,10 @@ function SettingsPage(props: { close?: () => void }) {
 																		<div 
 																			class="java-option-card"
 																			classList={{ 'active': current()?.is_managed }}
-																			onClick={() => managedVersion() && handleSetGlobalPath(req.major_version, managedVersion()!.path, true)}
+																			onClick={() => {
+																				const m = managedVersion();
+																				if (m) handleSetGlobalPath(req.major_version, m.path, true);
+																			}}
 																		>
 																			<div class="option-title">
 																				Managed Runtime
@@ -866,7 +899,14 @@ function SettingsPage(props: { close?: () => void }) {
 																					Download & Use
 																				</LauncherButton>
 																			}>
-																				<div class="option-path" style={{ "margin-top": "auto" }}>{managedVersion()!.path}</div>
+																				{(m) => {
+																					const managed = m();
+																					return (
+																						<div class="option-path" style={{ "margin-top": "auto" }}>
+																							{managed.path}
+																						</div>
+																					);
+																				}}
 																			</Show>
 																		</div>
 																	</TooltipTrigger>
@@ -883,9 +923,10 @@ function SettingsPage(props: { close?: () => void }) {
 															</ContextMenuTrigger>
 															<ContextMenuContent>
 																<ContextMenuItem onClick={() => {
-																	if (managedVersion()?.path) {
-																		navigator.clipboard.writeText(managedVersion()!.path);
-																		showToast({ title: "Copied", description: "Path copied to clipboard", variant: "success" });
+																	const path = managedVersion()?.path;
+																	if (path) {
+																		navigator.clipboard.writeText(path);
+																		showToast({ title: "Copied", description: "Path copied to clipboard", severity: "Success" });
 																	}
 																}}>
 																	Copy Full Path
@@ -926,7 +967,7 @@ function SettingsPage(props: { close?: () => void }) {
 																		<ContextMenuContent>
 																			<ContextMenuItem onClick={() => {
 																				navigator.clipboard.writeText(det.path);
-																				showToast({ title: "Copied", description: "Path copied to clipboard", variant: "success" });
+																				showToast({ title: "Copied", description: "Path copied to clipboard", severity: "Success" });
 																			}}>
 																				Copy Full Path
 																			</ContextMenuItem>
@@ -962,8 +1003,11 @@ function SettingsPage(props: { close?: () => void }) {
 																</ContextMenuTrigger>
 																<ContextMenuContent>
 																	<ContextMenuItem onClick={() => {
-																		navigator.clipboard.writeText(current()!.path);
-																		showToast({ title: "Copied", description: "Path copied to clipboard", variant: "success" });
+																		const path = current()?.path;
+																		if (path) {
+																			navigator.clipboard.writeText(path);
+																			showToast({ title: "Copied", description: "Path copied to clipboard", severity: "Success" });
+																		}
 																	}}>
 																		Copy Full Path
 																	</ContextMenuItem>
@@ -1034,11 +1078,58 @@ function SettingsPage(props: { close?: () => void }) {
 							</section>
 
 							<section class="settings-section">
+								<h2>App Updates</h2>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Automatic Updates</span>
+										<span class="settings-description">
+											Download and install updates automatically in the background
+										</span>
+									</div>
+									<Switch
+										checked={autoUpdateEnabled()}
+										onChange={handleAutoUpdateToggle}
+									>
+										<SwitchControl>
+											<SwitchThumb />
+										</SwitchControl>
+									</Switch>
+								</div>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Check on Startup</span>
+										<span class="settings-description">
+											Check for new versions when the launcher starts
+										</span>
+									</div>
+									<Switch
+										checked={startupCheckUpdates()}
+										onChange={handleStartupCheckToggle}
+									>
+										<SwitchControl>
+											<SwitchThumb />
+										</SwitchControl>
+									</Switch>
+								</div>
+								<div class="settings-row">
+									<div class="settings-info">
+										<span class="settings-label">Check for Updates</span>
+										<span class="settings-description">
+											Manually verify if a newer version is available
+										</span>
+									</div>
+									<LauncherButton onClick={() => checkForAppUpdates()}>
+										Check Now
+									</LauncherButton>
+								</div>
+							</section>
+
+							<section class="settings-section">
 								<h2>About</h2>
 								<div class="about-info">
 									<div class="about-field">
 										<span>App Version</span>
-										<span>0.7.1</span>
+										<span>{version() || "..."}</span>
 									</div>
 									<div class="about-field">
 										<span>Platform</span>

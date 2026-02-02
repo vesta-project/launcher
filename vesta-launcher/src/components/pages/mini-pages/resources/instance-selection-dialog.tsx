@@ -1,6 +1,6 @@
 import { Component, For, Show, createSignal, createEffect, createMemo } from "solid-js";
 import { Dialog, DialogContent, DialogHeader } from "@ui/dialog/dialog";
-import { instancesState, Instance } from "@stores/instances";
+import { instancesState, type Instance } from "@stores/instances";
 import { ResourceProject, ResourceVersion, findBestVersion, resources } from "@stores/resources";
 import { DEFAULT_ICONS } from "@utils/instances";
 import { getCompatibilityForInstance } from "@utils/resources";

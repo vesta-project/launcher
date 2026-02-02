@@ -233,7 +233,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	const [isMinMemDirty, setIsMinMemDirty] = createSignal(props._dirty?.minMem || false);
 	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(props._dirty?.maxMem || false);
 	const [isJvmDirty, setIsJvmDirty] = createSignal(props._dirty?.jvm || false);
-	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(props._dirty?.javaPath || false);
+	const [, setIsJavaPathDirty] = createSignal(props._dirty?.javaPath || false);
 
 	const [saving, setSaving] = createSignal(false);
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
@@ -290,9 +290,9 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		router()?.setRefetch(handleRefetch);
 
 		const unlisten = await listen("java-paths-updated", () => {
-			managedJavas.refetch();
-			globalJavaPaths.refetch();
-			detectedJavas.refetch();
+			refetchManaged();
+			refetchGlobal();
+			refetchDetected();
 		});
 		onCleanup(() => unlisten());
 
@@ -350,9 +350,9 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 		return await invoke<number>("get_instance_required_java", { instanceId: id });
 	});
 
-	const [detectedJavas] = createResource<any[]>(() => invoke("detect_java"));
-	const [managedJavas] = createResource<any[]>(() => invoke("get_managed_javas"));
-	const [globalJavaPaths] = createResource<any[]>(() => invoke("get_global_java_paths"));
+	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(() => invoke("detect_java"));
+	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(() => invoke("get_managed_javas"));
+	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(() => invoke("get_global_java_paths"));
 
 	const jreOptions = createMemo(() => {
 		const req = requiredJava();
@@ -2062,13 +2062,13 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																		showToast({ 
 																			title: "Download Started", 
 																			description: `Java ${version} is being downloaded.`, 
-																			variant: "info" 
+																			severity: "Info" 
 																		});
-																	}).catch(err => {
+																	}).catch(() => {
 																		showToast({ 
 																			title: "Error", 
 																			description: "Failed to start Java download.", 
-																			variant: "error" 
+																			severity: "Error" 
 																		});
 																	});
 																	// Keep current selection or go to default until download finishes
@@ -2132,7 +2132,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			let path = current.description;
 																			if (path.startsWith("→ ")) path = path.substring(2);
 																			navigator.clipboard.writeText(path);
-																			showToast({ title: "Copied", description: "Java path copied to clipboard", variant: "success" });
+																			showToast({ title: "Copied", description: "Java path copied to clipboard", severity: "Success" });
 																		}
 																	}}>
 																		Copy Full Path

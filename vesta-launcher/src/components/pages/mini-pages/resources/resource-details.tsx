@@ -1,6 +1,6 @@
 import { Component, createEffect, For, Show, createSignal, onMount, createMemo, untrack, onCleanup, createResource, on } from "solid-js";
 import { resources, ResourceProject, ResourceVersion, SourcePlatform, findBestVersion, ResourceDependency } from "@stores/resources";
-import { instancesState, Instance } from "@stores/instances";
+import { instancesState, type Instance } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { 

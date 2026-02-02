@@ -1,6 +1,6 @@
 import { Component, createEffect, For, Show, createSignal, createResource, createMemo, untrack, onMount, onCleanup, JSX, batch } from "solid-js";
 import { resources, ResourceProject, ResourceVersion, findBestVersion } from "@stores/resources";
-import { instancesState, Instance } from "@stores/instances";
+import { instancesState, type Instance } from "@stores/instances";
 import { TextField } from "@ui/text-field/text-field";
 import Button from "@ui/button/button";
 import { 

@@ -1,6 +1,6 @@
 {
 	"productName": "Vesta Launcher",
-	"version": "0.7.1",
+	"version": "0.1.0-alpha.1",
 	"identifier": "net.vesta.launcher",
 	"build": {
 		"beforeDevCommand": "npm run dev",
@@ -23,6 +23,12 @@
 			"desktop": {
 				"schemes": ["vesta"]
 			}
+		},
+		"updater": {
+			"endpoints": [
+				"https://releases.vesta.ms/{{target}}-{{arch}}/{{current_version}}"
+			],
+			"pubkey": "CONTENT_SIGNING_PUB_KEY_PLACEHOLDER"
 		}
 	},
 	"bundle": {

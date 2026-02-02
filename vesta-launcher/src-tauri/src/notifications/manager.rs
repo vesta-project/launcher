@@ -92,6 +92,16 @@ impl ActionHandler for ResumeInstanceOperationHandler {
     }
 }
 
+/// Handler that restarts the app when the notification action 'restart_app' is invoked.
+struct RestartAppHandler {}
+
+impl ActionHandler for RestartAppHandler {
+    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+        app_handle.restart();
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -354,6 +364,7 @@ impl NotificationManager {
         manager.register_action("pause_task", Arc::new(PauseTaskHandler {}));
         manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
         manager.register_action("resume_instance_operation", Arc::new(ResumeInstanceOperationHandler {}));
+        manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager

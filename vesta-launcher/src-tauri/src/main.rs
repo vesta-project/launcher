@@ -55,6 +55,7 @@ fn main() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_deep_link::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_macos_permissions::init())
         .invoke_handler(tauri::generate_handler![
             launch_window,
@@ -65,6 +66,7 @@ fn main() {
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
             commands::app::open_instance_folder,
+            commands::app::restart_app,
             commands::app::exit_check,
             commands::app::exit_app,
             commands::app::close_all_windows_and_reset,

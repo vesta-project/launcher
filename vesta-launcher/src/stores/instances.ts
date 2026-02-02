@@ -1,7 +1,7 @@
 import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Instance } from "@utils/instances";
+export type { Instance } from "@utils/instances";
 
 type InstancesState = {
 	instances: Instance[];
