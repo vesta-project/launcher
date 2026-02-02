@@ -30,6 +30,7 @@
 		"log:default",
 		"shell:default",
 		"dialog:default",
-		"deep-link:default"
+		"deep-link:default",
+		"macos-permissions:default"
 	]
 }

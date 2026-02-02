@@ -807,6 +807,17 @@ pub async fn launch_instance(
     app_handle: tauri::AppHandle,
     instance_data: Instance,
 ) -> Result<(), String> {
+    // macOS: Ensure microphone permissions are granted before launch
+    // to allow voice chat mods in Minecraft to function.
+    #[cfg(target_os = "macos")]
+    {
+        if !tauri_plugin_macos_permissions::check_microphone_permission().await {
+            log::info!("[macOS Permissions] Requesting microphone permission...");
+            // We don't block the launch if permission is denied, but we try to request it.
+            let _ = tauri_plugin_macos_permissions::request_microphone_permission().await;
+        }
+    }
+
     log::info!(
         "[launch_instance] Launch requested for instance: {} (ID: {})",
         instance_data.name,
