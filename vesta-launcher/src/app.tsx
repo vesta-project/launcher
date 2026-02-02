@@ -1,5 +1,9 @@
 import { FatalPage, setFatalInfo } from "@components/pages/fatal/fatal-page";
-// import { initializeFileDropSystem, cleanupFileDropSystem } from "@utils/file-drop";
+import {
+	initializeFileDropSystem,
+	cleanupFileDropSystem,
+	getDropZoneManager,
+} from "@utils/file-drop";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
@@ -220,14 +224,116 @@ function Root(props: ChildrenProp) {
 				.catch((error) => {
 					console.error("Failed to initialize config sync:", error);
 				});
+
+			// Initialize file drop system
+			initializeFileDropSystem().catch((error) => {
+				console.error("Failed to initialize file drop system:", error);
+			});
 		}, 100); // 100ms delay to ensure UI renders first
 
-		// File drop system disabled for now
-		// try {
-		// 	await initializeFileDropSystem();
-		// } catch (error) {
-		// 	console.error("Failed to initialize file drop system:", error);
-		// }
+		// Global window-level drag events to manage the sniffer
+		const manager = getDropZoneManager();
+		let leaveTimeout: any;
+
+		const handleWindowDragEnter = (e: DragEvent) => {
+			e.preventDefault();
+			if (leaveTimeout) {
+				clearTimeout(leaveTimeout);
+				leaveTimeout = undefined;
+			}
+			
+			// Detect if it's a file drag
+			const isFileDrag = e.dataTransfer?.types.includes("Files");
+			if (!isFileDrag) {
+				// If they drag text or something else, we reset the sniffer session
+				// so they can drag a file again later without having to fully leave the window
+				if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
+					console.log("[App] Non-file drag detected: resetting sniffer state");
+					manager.clearSniffedPaths();
+					manager.hideSniffer();
+				}
+				return;
+			}
+
+			// Add global dragging class for UI feedback
+			document.body.classList.add("window--dragging");
+
+			// Summon if we haven't sniffed yet AND the window isn't already active
+			if (manager.getSniffedPaths().length === 0 && !manager.isSnifferVisible() && !manager.isDragging()) {
+				manager.showSniffer();
+			}
+		};
+
+		const handleWindowDragLeave = (e: DragEvent) => {
+			e.preventDefault();
+			// Only clear if we actually left the window (no relatedTarget)
+			if (!e.relatedTarget) {
+				if (leaveTimeout) clearTimeout(leaveTimeout);
+				leaveTimeout = setTimeout(() => {
+					console.log("[App] Final DragLeave: clearing state");
+					document.body.classList.remove("window--dragging");
+					manager.clearSniffedPaths();
+					manager.hideSniffer();
+					leaveTimeout = undefined;
+				}, 300); // Increased timeout to handle focus swap jitter
+			}
+		};
+
+		const handleWindowDrop = (e: DragEvent) => {
+			if (leaveTimeout) {
+				clearTimeout(leaveTimeout);
+				leaveTimeout = undefined;
+			}
+			document.body.classList.remove("window--dragging");
+			// Component handles the actual drop data, but we make sure state is reset
+			// for next drag session if they dropped on a non-zone area
+			manager.hideSniffer();
+			setTimeout(() => {
+				if (!manager.isDragging()) {
+					manager.clearSniffedPaths();
+				}
+			}, 100);
+		};
+
+		const handleWindowDragOver = (e: DragEvent) => {
+			e.preventDefault();
+
+			if (leaveTimeout) {
+				clearTimeout(leaveTimeout);
+				leaveTimeout = undefined;
+			}
+			
+			// Detect if it's a file drag
+			const isFileDrag = e.dataTransfer?.types.includes("Files");
+			if (!isFileDrag) {
+				if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
+					manager.clearSniffedPaths();
+					manager.hideSniffer();
+				}
+				return;
+			}
+
+			if (!document.body.classList.contains("window--dragging")) {
+				document.body.classList.add("window--dragging");
+			}
+
+			// Summon if we haven't sniffed yet AND the window isn't already active
+			if (manager.getSniffedPaths().length === 0 && !manager.isSnifferVisible() && !manager.isDragging()) {
+				manager.showSniffer();
+			}
+		};
+
+		window.addEventListener("dragenter", handleWindowDragEnter);
+		window.addEventListener("dragover", handleWindowDragOver);
+		window.addEventListener("dragleave", handleWindowDragLeave);
+		window.addEventListener("drop", handleWindowDrop);
+
+		onCleanup(() => {
+			window.removeEventListener("dragenter", handleWindowDragEnter);
+			window.removeEventListener("dragover", handleWindowDragOver);
+			window.removeEventListener("dragleave", handleWindowDragLeave);
+			window.removeEventListener("drop", handleWindowDrop);
+		});
 	});
 
 	onCleanup(() => {
@@ -237,7 +343,7 @@ function Root(props: ChildrenProp) {
 		unlistenExit?.();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
-		// cleanupFileDropSystem();
+		cleanupFileDropSystem();
 	});
 
 	// Hide loader on first paint rather than a fixed timeout

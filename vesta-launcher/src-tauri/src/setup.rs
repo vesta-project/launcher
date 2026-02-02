@@ -6,6 +6,7 @@ use crate::utils::config::init_config_db;
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
+use tauri::Emitter;
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
@@ -560,7 +561,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .title("Vesta Launcher")
             .inner_size(1200_f64, 700_f64)
             .min_inner_size(520_f64, 465_f64)
-            .disable_drag_drop_handler() // Disable so overlay can capture drag events
+            .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
             .transparent(true)
             .decorations(false);
 
@@ -610,7 +611,15 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .build(),
     );
 
-    win_builder.build()?;
+    let main_win = win_builder.build()?;
+
+    // Setup sniffer window immediately
+    let app_handle_for_sniffer = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        // Wait a small amount for the main window to settle before creating the primed sniffer
+        tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
+        let _ = crate::utils::file_drop::create_file_drop_overlay(app_handle_for_sniffer).await;
+    });
 
     // Generate PistonManifest in background on launch
     // Add a small delay to ensure TaskManager is fully initialized
@@ -628,12 +637,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
-
-    // File drop overlay disabled for now
-    // let app_handle = app.handle().clone();
-    // if let Err(e) = tauri::async_runtime::block_on(create_file_drop_overlay(app_handle)) {
-    //     eprintln!("Failed to create file drop overlay: {}", e);
-    // }
 
     Ok(())
 }

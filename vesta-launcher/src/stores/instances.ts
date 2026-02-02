@@ -1,31 +1,7 @@
 import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-
-export type Instance = {
-	id: number;
-	slug: string;
-	name: string;
-	gameDirectory: string;
-	minecraftVersion: string;
-	modloader: string | null;
-	modloaderVersion: string | null;
-	javaPath: string | null;
-	javaArgs: string | null;
-	gameArgs: string | null;
-	minMemory: number;
-	maxMemory: number;
-	windowWidth: number | null;
-	windowHeight: number | null;
-	iconPath: string | null;
-	createdAt: string | null;
-	updatedAt: string | null;
-	lastPlayed: string | null;
-	totalPlaytimeMinutes: number;
-	installationStatus: string | null;
-	crashed: boolean | null;
-	crashDetails: string | null;
-};
+import type { Instance } from "@utils/instances";
 
 type InstancesState = {
 	instances: Instance[];

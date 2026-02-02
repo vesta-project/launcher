@@ -89,6 +89,17 @@ export interface InstallFormProps {
 	isFetchingMetadata?: boolean;
 }
 
+interface DirtyState {
+	name?: boolean;
+	version?: boolean;
+	loader?: boolean;
+	loaderVer?: boolean;
+	icon?: boolean;
+	memory?: boolean;
+	jvmArgs?: boolean;
+	res?: boolean;
+}
+
 const MODLOADER_DISPLAY_NAMES: Record<string, string> = {
 	vanilla: "Vanilla",
 	fabric: "Fabric",
@@ -147,7 +158,7 @@ export function InstallForm(props: InstallFormProps) {
 		return (props.modpackVersions ?? []).map((v) => ({
 			...v,
 			// We create a composite string for the combobox to use for filtering
-			searchString: `${v.version_number} ${v.game_versions.join(" ")} ${v.loaders.join(" ")}`,
+			searchString: `${v.version_number} ${(v.game_versions as string[]).join(" ")} ${(v.loaders as string[]).join(" ")}`,
 		}));
 	});
 
@@ -158,7 +169,7 @@ export function InstallForm(props: InstallFormProps) {
 
 	// Flag to track if the user has manually changed fields
 	// These are persisted across window handoffs via props.initialData._dirty
-	const [dirty, setDirty] = createStore<Record<string, boolean>>((props.initialData as any)?._dirty || {});
+	const [dirty, setDirty] = createStore<DirtyState>((props.initialData as any)?._dirty || {});
 	
 	const isNameDirty = () => !!dirty.name;
 	const isIconDirty = () => !!dirty.icon;
@@ -226,7 +237,7 @@ export function InstallForm(props: InstallFormProps) {
 				if (d.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(d.modloaderVersion);
 				if (d.iconPath && !isIconDirty()) setIcon(d.iconPath);
 				if (d.maxMemory && !isMemoryDirty()) setMemory([d.minMemory || 2048, d.maxMemory]);
-				if (d.javaArgs !== undefined && !isJvmArgsDirty()) setJvmArgs(d.javaArgs);
+				if (d.javaArgs !== undefined && !isJvmArgsDirty()) setJvmArgs(d.javaArgs ?? "");
 				if (d.width && !isResDirty()) setResW(String(d.width));
 				if (d.height && !isResDirty()) setResH(String(d.height));
 			}
@@ -299,7 +310,7 @@ export function InstallForm(props: InstallFormProps) {
 
 			// If nothing set, or if current selection is invalid for this loader/MC combo
 			if (!current || !exists) {
-				const latestStable = versions.find((v) => v.stable);
+				const latestStable = versions.find((v: LoaderVersionInfo) => v.stable);
 				setLoaderVer(latestStable ? latestStable.version : versions[0].version);
 			}
 		}
@@ -322,7 +333,14 @@ export function InstallForm(props: InstallFormProps) {
 
 		// Ensure current version is always in the list to prevent visual flickering
 		if (current && !versions.some(v => v.id === current)) {
-			versions = [{ id: current, stable: true }, ...versions];
+			const syntheticVersion: GameVersionMetadata = { 
+				id: current, 
+				stable: true,
+				version_type: "release",
+				release_time: new Date().toISOString(),
+				loaders: {}
+			};
+			versions = [syntheticVersion, ...versions];
 		}
 
 		// Priority 2: Filter by stable only
@@ -367,13 +385,14 @@ export function InstallForm(props: InstallFormProps) {
 		const currentL = loader();
 		const currentLV = loaderVer();
 		
-		if (!meta || !currentV || currentL === "vanilla") return currentLV ? [{ version: currentLV }] : [];
+		if (!meta || !currentV || currentL === "vanilla") return currentLV ? [{ version: currentLV, stable: true }] : [];
 
 		const vData = meta.game_versions.find((v) => v.id === currentV);
 		const list = vData?.loaders[currentL] || [];
 
 		if (currentLV && !list.some(v => v.version === currentLV)) {
-			return [{ version: currentLV }, ...list];
+			const synthetic: LoaderVersionInfo = { version: currentLV, stable: true };
+			return [synthetic, ...list];
 		}
 
 		return list;
@@ -506,14 +525,14 @@ export function InstallForm(props: InstallFormProps) {
 							>
 								<div class="modpack-version-picker">
 									<div class="field-label-manual">Release Version</div>
-									<Combobox
+									<Combobox<any>
 										options={searchableModpackVersions()}
 										value={props.selectedModpackVersionId}
 										onChange={(id: any) => {
 											if (id) props.onModpackVersionChange?.(id);
 										}}
-										optionValue="id"
-										optionTextValue="searchString"
+										optionValue={(v) => v.id}
+										optionTextValue={(v) => v.searchString}
 										placeholder="Select version..."
 										itemComponent={(p) => (
 											<ComboboxItem item={p.item}>
@@ -522,8 +541,8 @@ export function InstallForm(props: InstallFormProps) {
 														{p.item.rawValue.version_number}
 													</span>
 													<span class="v-meta">
-														{p.item.rawValue.game_versions.join(", ")} •{" "}
-														{p.item.rawValue.loaders.join(", ")}
+														{(p.item.rawValue.game_versions as string[]).join(", ")} •{" "}
+														{(p.item.rawValue.loaders as string[]).join(", ")}
 													</span>
 												</div>
 											</ComboboxItem>
@@ -584,12 +603,14 @@ export function InstallForm(props: InstallFormProps) {
 											Minecraft Version
 											<HelpTrigger topic="MINECRAFT_VERSION" />
 										</div>
-										<Combobox
+										<Combobox<string>
 											options={availableMcVersions().map((v) => v.id)}
 											value={mcVersion()}
 											onChange={(v) => {
-												setMcVersion(v || "");
-											setDirty("version", true);
+												if (v) {
+													setMcVersion(v);
+													setDirty("version", true);
+												}
 											}}
 											placeholder="Pick a version..."
 											itemComponent={(p) => (
@@ -627,12 +648,14 @@ export function InstallForm(props: InstallFormProps) {
 											Modloader
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</div>
-										<Combobox
+										<Combobox<string>
 											options={availableLoaders()}
 											value={loader()}
 											onChange={(v) => {
-												setLoader(v || "vanilla");
-											setDirty("loader", true);
+												if (v) {
+													setLoader(v);
+													setDirty("loader", true);
+												}
 											}}
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
@@ -652,12 +675,14 @@ export function InstallForm(props: InstallFormProps) {
 									<Show when={loader() !== "vanilla"}>
 										<div class="flex-grow">
 											<div class="field-label-manual">Loader Version</div>
-											<Combobox
+											<Combobox<string>
 												options={availableLoaderVers().map((v) => v.version)}
 												value={loaderVer()}
 												onChange={(v) => {
-													setLoaderVer(v || "");
-													setDirty("loaderVer", true);
+													if (v) {
+														setLoaderVer(v);
+														setDirty("loaderVer", true);
+													}
 												}}
 												placeholder="Latest"
 												itemComponent={(p) => (

@@ -19,6 +19,7 @@
 	pointer-events: none;
 	animation: pulse 1s ease-in-out infinite;
 	z-index: 1;
+	border-radius: inherit; /* Pulse takes the shape of the component */
 }
 
 @keyframes pulse {

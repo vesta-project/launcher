@@ -19,7 +19,8 @@ export function DropZone(props: DropZoneProps) {
 	const resolved = accessChildren(() => props.children);
 
 	let childElement: HTMLElement | undefined;
-	const dropZoneManager = getDropZoneManager();
+	const manager = getDropZoneManager();
+	let dragCounter = 0;
 
 	createEffect(() => {
 		const child = resolved();
@@ -38,41 +39,79 @@ export function DropZone(props: DropZoneProps) {
 
 		const element = childElement;
 
-		// Add data attribute for identification for visual purposes only
-		element.setAttribute("data-drop-zone", "true");
-
-		// Watch for prop changes and update drop zone registration
-		createEffect(() => {
-			// Update data attributes for visual purposes
-			if (props.accept) {
-				element.setAttribute("data-drop-zone-accept", props.accept);
-			} else {
-				element.removeAttribute("data-drop-zone-accept");
+		const handleDragEnter = (e: DragEvent) => {
+			e.preventDefault();
+			dragCounter++;
+			
+			if (dragCounter === 1) {
+				// Only highlight if we ALREADY have sniffed paths
+				const paths = manager.getSniffedPaths();
+				const filtered = manager.filterPaths(paths, props);
+				
+				if (paths.length > 0 && filtered.length > 0) {
+					element.classList.add("drop-zone--active");
+				}
+				
+				manager.setIsDragActive(true);
 			}
-			if (props.allowedExtensions?.length) {
-				element.setAttribute(
-					"data-drop-zone-extensions",
-					props.allowedExtensions.join(","),
-				);
-			} else {
-				element.removeAttribute("data-drop-zone-extensions");
+		};
+
+		const handleDragOver = (e: DragEvent) => {
+			e.preventDefault();
+			
+			if (e.dataTransfer) {
+				const paths = manager.getSniffedPaths();
+				const filtered = manager.filterPaths(paths, props);
+				
+				// Only show "copy" cursor and highlight if we have matching paths
+				if (paths.length > 0 && filtered.length > 0) {
+					e.dataTransfer.dropEffect = "copy";
+					if (!element.classList.contains("drop-zone--active")) {
+						element.classList.add("drop-zone--active");
+					}
+				} else {
+					e.dataTransfer.dropEffect = "none";
+					element.classList.remove("drop-zone--active");
+				}
 			}
+		};
 
-			// Re-register the zone with updated options
-			dropZoneManager.registerZone(element, props.onFileDrop, {
-				accept: props.accept,
-				allowedExtensions: props.allowedExtensions,
-			});
-		});
-
-		onCleanup(() => {
-			if (element) {
-				element.removeAttribute("data-drop-zone");
-				element.removeAttribute("data-drop-zone-accept");
-				element.removeAttribute("data-drop-zone-extensions");
+		const handleDragLeave = (e: DragEvent) => {
+			e.preventDefault();
+			dragCounter--;
+			if (dragCounter <= 0) {
+				dragCounter = 0;
 				element.classList.remove("drop-zone--active");
 			}
-			dropZoneManager.unregisterZone(element);
+		};
+
+		const handleDrop = (e: DragEvent) => {
+			e.preventDefault();
+			dragCounter = 0;
+			element.classList.remove("drop-zone--active");
+
+			const paths = manager.getSniffedPaths();
+			const filtered = manager.filterPaths(paths, props);
+
+			console.log("[DropZone] Files dropped, paths:", paths, "filtered:", filtered);
+
+			if (filtered.length > 0) {
+				props.onFileDrop(filtered.map(p => p.path));
+			}
+			manager.clearSniffedPaths();
+		};
+
+		element.addEventListener("dragenter", handleDragEnter);
+		element.addEventListener("dragover", handleDragOver);
+		element.addEventListener("dragleave", handleDragLeave);
+		element.addEventListener("drop", handleDrop);
+
+		onCleanup(() => {
+			element.removeEventListener("dragenter", handleDragEnter);
+			element.removeEventListener("dragover", handleDragOver);
+			element.removeEventListener("dragleave", handleDragLeave);
+			element.removeEventListener("drop", handleDrop);
+			element.classList.remove("drop-zone--active");
 		});
 	});
 

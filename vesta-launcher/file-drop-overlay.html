@@ -1,282 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>File Drop Overlay</title>
-		<style>
-			* {
-				box-sizing: border-box;
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>File Drop Overlay</title>
+<style>
+			html {
+				background: transparent !important;
+				background-color: transparent !important;
+				color-scheme: dark; /* Helps prevent white flash in some webview implementations */
 			}
-
-			html,
 			body {
 				margin: 0;
-				height: 100%;
-				width: 100%;
+				height: 100vh;
+				width: 100vw;
+				background: transparent !important;
+				background-color: transparent !important;
+				overflow: hidden;
+				pointer-events: none !important;
 			}
-
-			body {
-				font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
-				background-color: transparent;
-				border: none;
-				outline: none;
-				color: #e9edff;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				background-clip: padding-box;
-				pointer-events: none;
-				opacity: 0;
-				cursor: copy;
-			}
-
-			body::before {
-				content: "";
-				position: absolute;
-				inset: 0;
-				background: radial-gradient(circle at center, hsl(226 100% 86% / 0.18), transparent 55%);
-				animation: pulse 1.5s ease-in-out infinite;
-				pointer-events: none;
-			}
-
-			.overlay {
-				position: relative;
-				padding: 32px 40px;
-				border-radius: 20px;
-				background-color: hsl(240 12% 8% / 0.8);
-				border: 1px solid hsl(240 60% 80% / 0.5);
-				box-shadow: 0 25px 65px hsl(240 70% 5% / 0.65);
-				text-align: center;
-				backdrop-filter: blur(18px) saturate(160%);
-				min-width: 320px;
-			}
-
-			.overlay__icon {
-				width: 56px;
-				height: 56px;
-				margin: 0 auto 16px;
-				color: hsl(226 100% 76%);
-			}
-
-			.overlay__title {
-				margin: 0 0 8px;
-				font-size: 1.25rem;
-				letter-spacing: 0.02em;
-			}
-
-			.overlay__hint {
-				margin: 0;
-				font-size: 0.95rem;
-				color: hsl(226 20% 82%);
-			}
-
-			.overlay--active {
-				box-shadow: 0 35px 75px hsl(226 90% 10% / 0.85);
-				border-color: hsl(226 100% 80%);
-			}
-
-			@keyframes pulse {
-				0%,
-				100% {
-					opacity: 1;
-				}
-				55% {
-					opacity: 0.55;
-				}
-			}
-		</style>
-	</head>
-	<body>
-		<div class="overlay" aria-live="polite">
-			<svg class="overlay__icon" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.5">
-				<path d="M24 6v24" stroke-linecap="round" stroke-linejoin="round"></path>
-				<path d="M16 18l8-8 8 8" stroke-linecap="round" stroke-linejoin="round"></path>
-				<rect x="8" y="30" width="32" height="10" rx="5" stroke-linecap="round"></rect>
-			</svg>
-			<p class="overlay__title">Drop files or folders</p>
-			<p class="overlay__hint">Release to import into Vesta</p>
-		</div>
-		<script>
-			(function () {
-				const channelName = "vesta-file-drop";
-				const channel = typeof BroadcastChannel !== "undefined" ? new BroadcastChannel(channelName) : null;
-				const overlay = document.querySelector(".overlay");
-				let hoverFrame = 0;
-
-				const log = (...args) => console.debug("[Overlay]", ...args);
-
-				// DEBUG: Set initial red background
-				document.body.style.backgroundColor = "rgba(255, 0, 0, 0.1)";
-				document.body.style.outline = "2px solid rgba(255, 0, 0, 0.5)";
-				log("Overlay HTML initialized with debug colors");
-
-				function post(message) {
-					if (!channel) {
-						return;
-					}
-					try {
-						channel.postMessage({ source: "overlay", ...message });
-					} catch (error) {
-						log("BroadcastChannel failed", error);
-					}
-				}
-
-				function cursorCopy(event) {
-					if (event?.dataTransfer) {
-						try {
-							event.dataTransfer.dropEffect = "copy";
-						} catch (error) {
-							log("Failed to set dropEffect", error);
-						}
-					}
-					document.body.style.cursor = "copy";
-				}
-
-				function addScreenPosition(pos) {
-					if (!pos || typeof pos.x !== "number" || typeof pos.y !== "number") {
-						return pos ?? null;
-					}
-					const screenX = typeof pos.screenX === "number" ? pos.screenX : (window.screenX || 0) + pos.x;
-					const screenY = typeof pos.screenY === "number" ? pos.screenY : (window.screenY || 0) + pos.y;
-					return { ...pos, screenX, screenY };
-				}
-
-				function positionFromEvent(event) {
-					return addScreenPosition({ x: event.clientX, y: event.clientY });
-				}
-
-				function emitOverlayEvent(type, detail = {}) {
-					const payload = { type, ...detail };
-					log("Emitting overlay event:", type, "with position:", detail.position);
-					post(payload);
-					const api = window.__TAURI__;
-					if (api?.event?.emit) {
-						api.event.emit("vesta://overlay-events", payload).catch(() => undefined);
-					}
-				}
-
-				function handleDrop(paths, position) {
-					log("handleDrop called with", paths?.length || 0, "paths");
-					post({ type: "overlay-drop", paths: paths || [], position });
-				}
-
-				function registerHtmlDragEvents() {
-					document.addEventListener("dragenter", (event) => {
-						log("DRAGENTER detected at:", event.clientX, event.clientY);
-						event.preventDefault();
-						cursorCopy(event);
-						overlay?.classList.add("overlay--active");
-						
-						// Show the overlay window when drag is detected
-						const api = window.__TAURI__;
-						if (api?.invoke) {
-							api.invoke("show_overlay").catch(() => undefined);
-						}
-						
-						emitOverlayEvent("overlay-enter", { position: positionFromEvent(event) });
-					});
-
-					document.addEventListener("dragover", (event) => {
-						event.preventDefault();
-						cursorCopy(event);
-						if (hoverFrame) {
-							return;
-						}
-						hoverFrame = window.requestAnimationFrame(() => {
-							hoverFrame = 0;
-							log("DRAGOVER detected at:", event.clientX, event.clientY);
-							emitOverlayEvent("overlay-over", { position: positionFromEvent(event) });
-						});
-					});
-
-					document.addEventListener("dragleave", (event) => {
-						event.preventDefault();
-						overlay?.classList.remove("overlay--active");
-						document.body.style.cursor = "";
-						emitOverlayEvent("overlay-leave", { position: positionFromEvent(event) });
-					});
-
-					document.addEventListener("drop", (event) => {
-						event.preventDefault();
-						overlay?.classList.remove("overlay--active");
-						document.body.style.cursor = "";
-
-						const position = positionFromEvent(event);
-						let paths = [];
-
-						try {
-							const dt = event.dataTransfer;
-							if (dt?.files && dt.files.length) {
-								paths = Array.from(dt.files).map((f) => f.path || f.name || "");
-							} else if (dt?.items && dt.items.length) {
-								// Fallback: try to get file names from items
-								for (const item of dt.items) {
-									if (item.kind === "file") {
-										const file = item.getAsFile();
-										if (file) paths.push(file.name);
-									}
-								}
-							}
-						} catch (e) {
-							log("Error reading dropped files", e);
-						}
-
-						handleDrop(paths, position);
-						emitOverlayEvent("overlay-drop", { paths, position });
-					});
-				}
-
-				async function setupTauriListeners() {
-					const api = window.__TAURI__;
-					if (!api || !api.event || !api.event.listen) {
-						return;
-					}
-
-					let unlistenOverlay = null;
-					let unlistenState = null;
-
-					try {
-						unlistenOverlay = await api.event.listen("vesta://overlay", (event) => {
-							const payload = event?.payload;
-							if (!payload) return;
-							// Accept commands from the main app (safely)
-							if (payload.type === "drop" && Array.isArray(payload.paths)) {
-								handleDrop(payload.paths, payload.position ?? null);
-							} else if (payload.type === "leave") {
-								emitOverlayEvent("overlay-leave", { position: payload.position ?? null });
-							}
-						});
-					} catch (e) {
-						log("Failed to listen to vesta://overlay", e);
-					}
-
-					try {
-						unlistenState = await api.event.listen("vesta://visual-state", (event) => {
-							const state = event?.payload;
-							if (!state) return;
-							document.body.style.backgroundColor = state.backgroundColor || "";
-							document.body.style.borderColor = state.borderColor || "";
-							document.body.style.borderRadius = state.borderRadius || "";
-							document.body.style.outline = state.outline || "";
-							document.body.style.opacity = state.opacity || "0";
-							document.body.style.pointerEvents = (state.opacity === "1") ? "all" : "none";
-							log("Visual state updated:", state);
-						});
-					} catch (e) {
-						log("Failed to listen to vesta://visual-state", e);
-					}
-
-					window.addEventListener("unload", () => {
-						try { unlistenOverlay?.(); } catch (e) {}
-						try { unlistenState?.(); } catch (e) {}
-					});
-				}
-
-				registerHtmlDragEvents();
-				setupTauriListeners();
-				window.addEventListener("unload", () => channel?.close());
-			})();
-		</script>
-	</body>
+            
+            /* High-priority suppression of all visible elements */
+            * {
+                visibility: hidden !important;
+                background: transparent !important;
+                background-color: transparent !important;
+                border-color: transparent !important;
+                outline-color: transparent !important;
+                box-shadow: none !important;
+            }
+</style>
+</head>
+<body>
+<!-- Sniffer overlay window: totally transparent but handles DragDrop events -->
+</body>
 </html>
