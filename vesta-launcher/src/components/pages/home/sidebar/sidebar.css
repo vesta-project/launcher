@@ -18,7 +18,7 @@
 			)
 			100%
 	);
-	color: contrast(--bg);
+	color: contrast-color(var(--bg));
 
 	z-index: 1;
 	padding: 13px 0 13px 13px;

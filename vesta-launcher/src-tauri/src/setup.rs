@@ -6,7 +6,6 @@ use crate::utils::config::init_config_db;
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
-use tauri::Emitter;
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
@@ -611,7 +610,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .build(),
     );
 
-    let main_win = win_builder.build()?;
+    let _main_win = win_builder.build()?;
 
     // Setup sniffer window immediately
     let app_handle_for_sniffer = app.handle().clone();

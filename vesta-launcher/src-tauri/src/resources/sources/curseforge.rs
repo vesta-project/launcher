@@ -75,19 +75,19 @@ struct CFCategory {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct CFCategoryFull {
-    id: i64,
-    name: String,
+pub struct CFCategoryFull {
+    pub id: i64,
+    pub name: String,
     #[serde(default)]
-    icon_url: Option<String>,
+    pub icon_url: Option<String>,
     #[serde(default)]
-    class_id: Option<i64>,
+    pub class_id: Option<i64>,
     #[serde(default)]
-    parent_category_id: Option<i64>,
+    pub parent_category_id: Option<i64>,
     #[serde(default)]
-    is_class: Option<bool>,
+    _is_class: Option<bool>,
     #[serde(default)]
-    display_index: Option<i32>,
+    pub display_index: Option<i32>,
 }
 
 #[derive(Deserialize)]

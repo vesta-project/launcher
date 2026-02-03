@@ -98,6 +98,7 @@ struct RestartAppHandler {}
 impl ActionHandler for RestartAppHandler {
     fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
         app_handle.restart();
+        #[allow(unreachable_code)]
         Ok(())
     }
 }

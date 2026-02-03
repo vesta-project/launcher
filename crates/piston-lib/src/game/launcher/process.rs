@@ -1,6 +1,5 @@
 /// Process management and game launch orchestration
-use crate::game::installer::types::{OsType, InstallSpec, SilentProgressReporter};
-use crate::game::installer::install_instance;
+use crate::game::installer::types::OsType;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
     classpath::{build_classpath_filtered, validate_classpath},

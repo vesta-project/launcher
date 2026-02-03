@@ -535,22 +535,6 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     vars
 }
 
-/// Get default JVM arguments
-fn get_default_jvm_args() -> Vec<String> {
-    vec![
-        // Memory settings
-        "-Xms2G".to_string(),
-        "-Xmx4G".to_string(),
-        // G1GC settings for better performance
-        "-XX:+UseG1GC".to_string(),
-        "-XX:+UnlockExperimentalVMOptions".to_string(),
-        "-XX:G1NewSizePercent=20".to_string(),
-        "-XX:G1ReservePercent=20".to_string(),
-        "-XX:MaxGCPauseMillis=50".to_string(),
-        "-XX:G1HeapRegionSize=32M".to_string(),
-    ]
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

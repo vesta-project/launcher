@@ -1,7 +1,7 @@
 use crate::game::installer::core::downloader::download_to_path;
 use crate::game::installer::try_restore_artifact;
 use crate::game::installer::types::ProgressReporter;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use futures::stream::{self, StreamExt};
 use reqwest::Client;
 use std::path::PathBuf;

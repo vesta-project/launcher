@@ -196,14 +196,14 @@ function SettingsPage(props: { close?: () => void }) {
 			showToast({
 				title: "Download Started",
 				description: `Java ${version} is being downloaded in the background.`,
-				severity: "info",
+				severity: "Info",
 			});
 		} catch (e) {
 			console.error("Failed to download managed java:", e);
 			showToast({
 				title: "Download Failed",
 				description: "Failed to initiate Java download.",
-				severity: "error",
+				severity: "Error",
 			});
 		}
 	};

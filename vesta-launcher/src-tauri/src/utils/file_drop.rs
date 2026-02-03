@@ -32,6 +32,9 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
     .build()
     .map_err(|e| format!("Failed to build overlay: {}", e))?;
 
+    // Force off-screen position immediately after build to be safe
+    let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x: -40000, y: -40000 }));
+
     // On macOS, we also need to explicitly disable the shadow via private API or standard methods
     #[cfg(target_os = "macos")]
     let _ = overlay.set_has_shadow(false);

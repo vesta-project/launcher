@@ -6,9 +6,6 @@ module.exports = (ctx) => ({
 		cssnano: {
 			preset: "default",
 		},
-		"postcss-contrast": {
-			light: "hsl(0, 0%, 80%)",
-			dark: "hsl(0, 0%, 10%)",
-		},
+		"@csstools/postcss-contrast-color-function": {},
 	},
 });

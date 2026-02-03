@@ -23,28 +23,28 @@ diesel = { version = "2.3.6", features = ["sqlite", "r2d2", "64-column-tables", 
 diesel_migrations = { version = "2.3.1", features = ["sqlite"] }
 libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
 
-tauri = { version = "2.9.5", features = [
+tauri = { version = "2.10.1", features = [
     "protocol-asset",
     "macos-private-api",
 ] }
 
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.145"
-tokio = { version = "1.48.0", features = ["full"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.149"
+tokio = { version = "1.49.0", features = ["full"] }
 futures = "0.3"
 
 tauri-plugin-os = "2.3.2"
-tauri-plugin-log = "2.7.1"
-tauri-plugin-shell = "2.3.3"
-tauri-plugin-dialog = "2.3.1"
+tauri-plugin-log = "2.8.0"
+tauri-plugin-shell = "2.3.4"
+tauri-plugin-dialog = "2.6.0"
 tauri-plugin-deep-link = "2"
 tauri-plugin-macos-permissions = "2"
 
-anyhow = "1.0.100"
+anyhow = "1.0"
 anyhow-tauri = "1.0.0"
-thiserror = "2.0.17"
-chrono = "0.4.38"
-log = "0.4.28"
+thiserror = "2.0.18"
+chrono = "0.4"
+log = "0.4"
 
 
 directories = "6.0.0"
@@ -68,8 +68,8 @@ lazy_static = "1.5"
 walkdir = "2.5.0"
 murmur2 = "0.1.0"
 base64 = "0.22.1"
-tempfile = "3.24.0"
-uuid = { version = "1.19.0", features = ["v4"] }
+tempfile = "3"
+uuid = { version = "1.20.0", features = ["v4"] }
 tauri-plugin-updater = "2.9.0"
 
 [target."cfg(target_os = \"macos\")".dependencies]
