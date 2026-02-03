@@ -1,5 +1,7 @@
 use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::{CreateNotificationInput, NotificationAction, NotificationType};
+use crate::notifications::models::{
+    CreateNotificationInput, NotificationAction, NotificationType, PROGRESS_INDETERMINATE,
+};
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
@@ -159,7 +161,7 @@ impl TaskManager {
                     dismissible: Some(false),
                     show_on_completion: Some(task.show_completion_notification()),
                     actions: actions_json,
-                    progress: Some(-1), // Indeterminate until picked up
+                    progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
                     current_step: Some(0),
                     total_steps: Some(task.total_steps()),
                     metadata: None,

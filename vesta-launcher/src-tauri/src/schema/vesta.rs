@@ -26,6 +26,7 @@ diesel::table! {
         theme_gradient_harmony -> Nullable<Text>,
         theme_advanced_overrides -> Nullable<Text>,
         theme_border_width -> Nullable<Integer>,
+        account_type -> Text,
     }
 }
 

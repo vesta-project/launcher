@@ -138,6 +138,24 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
                     <span class="page-viewer-title">
                         {props.router.customName.get() || props.router.currentElement().name}
                         {props.titleSuffix && ` - ${props.titleSuffix}`}
+                        <Show when={props.router.currentParams.get()?.slug === 'vesta-explorer-demo'}>
+                            <span 
+                                style={{
+                                    "margin-left": "8px",
+                                    "background": "rgba(255,255,255,0.1)",
+                                    "padding": "2px 6px",
+                                    "border-radius": "4px",
+                                    "font-size": "10px",
+                                    "color": "var(--primary)",
+                                    "border": "1px solid var(--primary)",
+                                    "font-weight": "800",
+                                    "letter-spacing": "0.5px",
+                                    "vertical-align": "middle"
+                                }}
+                            >
+                                DEMO
+                            </span>
+                        </Show>
                     </span>
                 </div>
 

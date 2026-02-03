@@ -1,6 +1,7 @@
-import { Component, createEffect, For, Show, createSignal, onMount, createMemo, untrack, onCleanup, createResource, on } from "solid-js";
+import { Component, createEffect, For, Show, createSignal, onMount, createMemo, untrack, onCleanup, on, createResource } from "solid-js";
 import { resources, ResourceProject, ResourceVersion, SourcePlatform, findBestVersion, ResourceDependency } from "@stores/resources";
-import { instancesState, type Instance } from "@stores/instances";
+import { instancesState } from "@stores/instances";
+import { type Instance } from "@utils/instances";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { 
@@ -88,7 +89,7 @@ const DependencyItem = (props: { dependency: ResourceDependency, platform: Sourc
     const [data] = createResource(() => {
         if (props.project) return null; // already have data
         return props.dependency.project_id;
-    }, async (id) => {
+    }, async (id: string) => {
         return await resources.getProject(props.platform, id);
     });
 
@@ -141,7 +142,7 @@ const ResourceDetailsPage: Component<{
 }> = (props) => {
     const [project, setProject] = createSignal<ResourceProject | undefined>(props.project);
     const [loading, setLoading] = createSignal(false);
-    
+
     // Derived from router query params for persistence and history
     const activeTab = createMemo(() => {
         const params = router()?.currentParams.get();
@@ -220,9 +221,9 @@ const ResourceDetailsPage: Component<{
             platform: project()?.source,
             deps: primaryVersion()?.dependencies || []
         }),
-        async ({ platform, deps }) => {
+        async ({ platform, deps }: { platform: SourcePlatform | undefined, deps: ResourceDependency[] }) => {
             if (!platform || deps.length === 0) return new Map<string, ResourceProject>();
-            const ids = deps.map(d => d.project_id);
+            const ids = deps.map((d: ResourceDependency) => d.project_id);
             try {
                 const projects = await resources.getProjects(platform, ids);
                 return new Map(projects.map(p => [p.id, p]));

@@ -4,6 +4,7 @@ import * as ProgressPrimitive from "@kobalte/core/progress";
 import clsx from "clsx";
 import type { ParentProps, ValidComponent } from "solid-js";
 import { splitProps } from "solid-js";
+import { PROGRESS_INDETERMINATE } from "@utils/notifications";
 import "./progress.css";
 
 export const ProgressLabel = ProgressPrimitive.Label;
@@ -12,7 +13,7 @@ export const ProgressValueLabel = ProgressPrimitive.ValueLabel;
 type ProgressProps<T extends ValidComponent = "div"> = ParentProps<
 	ProgressRootProps<T> & {
 		class?: string;
-		progress?: number | null; // -1 = indeterminate (pulse), 0-100 determinate
+		progress?: number | null; // PROGRESS_INDETERMINATE = indeterminate (pulse), 0-100 determinate
 		current_step?: number | null;
 		total_steps?: number | null;
 		severity?: "info" | "success" | "warning" | "error";
@@ -33,11 +34,11 @@ export const Progress = <T extends ValidComponent = "div">(
 		"size",
 	]);
 
-	const isIndeterminate = local.progress === -1;
+	const isIndeterminate = local.progress === PROGRESS_INDETERMINATE;
 	const value =
 		local.progress === null ||
 		local.progress === undefined ||
-		local.progress === -1
+		local.progress === PROGRESS_INDETERMINATE
 			? undefined
 			: Math.min(100, Math.max(0, local.progress));
 
@@ -79,12 +80,11 @@ export const Progress = <T extends ValidComponent = "div">(
 						)}
 					/>
 				</ProgressPrimitive.Track>
-				{local.current_step != null &&
-					local.total_steps != null && (
-						<div class="progress__steps">
-							{local.current_step}/{local.total_steps}
-						</div>
-					)}
+				{local.current_step != null && local.total_steps != null && (
+					<div class="progress__steps">
+						{local.current_step}/{local.total_steps}
+					</div>
+				)}
 			</div>
 		</ProgressPrimitive.Root>
 	);

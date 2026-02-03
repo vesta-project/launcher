@@ -1,19 +1,19 @@
 ﻿import {
 	createSignal,
 	Show,
-	createResource,
 	createMemo,
 	onMount,
 	createEffect,
-	batch
+	batch,
+	createResource
 } from "solid-js";
 import { showToast } from "@ui/toast/toast";
 import {
 	createInstance,
 	installInstance,
 	getInstance,
-	type Instance,
 } from "@utils/instances";
+import { type Instance } from "@utils/instances";
 import { router } from "@components/page-viewer/page-viewer";
 import { open } from "@tauri-apps/plugin-dialog";
 import { 
@@ -23,7 +23,7 @@ import {
 	installModpackFromZip, 
 	ModpackInfo 
 } from "@utils/modpacks";
-import { resources, SourcePlatform } from "@stores/resources";
+import { resources, SourcePlatform, ResourceVersion } from "@stores/resources";
 import { InstallForm } from "./components/InstallForm";
 import SearchIcon from "@assets/search.svg";
 import GlobeIcon from "@assets/earth-globe.svg";
@@ -160,7 +160,7 @@ function InstallPage(props: InstallPageProps) {
 			}
 			return null;
 		},
-		async ({ id, platform }) => {
+		async ({ id, platform }: { id: string, platform: string }) => {
 			try {
 				const vs = await resources.getVersions(platform as SourcePlatform, id);
 				// Sync selection if we have an initial URL matched up
@@ -169,7 +169,7 @@ function InstallPage(props: InstallPageProps) {
 				const initialVer = props.initialVersion || info?.modpackVersionId;
 
 				if (initialVer) {
-					const match = vs.find(v => v.id === initialVer || v.version_number === initialVer);
+					const match = vs.find((v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer);
 					if (match) {
 						setSelectedModpackVersionId(match.id);
 						return vs;
@@ -177,7 +177,7 @@ function InstallPage(props: InstallPageProps) {
 				}
 
 				if (currentUrl) {
-					const match = vs.find(v => v.download_url === currentUrl);
+					const match = vs.find((v: ResourceVersion) => v.download_url === currentUrl);
 					if (match) {
 						setSelectedModpackVersionId(match.id);
 						return vs;
@@ -234,7 +234,7 @@ function InstallPage(props: InstallPageProps) {
 					}
 
 					const initialVerId = props.initialVersion || selectedModpackVersionId();
-					const selectedVer = vs?.find(v => v.id === initialVerId || v.version_number === initialVerId) || vs?.[0];
+					const selectedVer = vs?.find((v: ResourceVersion) => v.id === initialVerId || v.version_number === initialVerId) || vs?.[0];
 					
 					setModpackInfo({
 						name: props.projectName || "Unknown Modpack",
@@ -273,7 +273,7 @@ function InstallPage(props: InstallPageProps) {
 
 	const handleModpackVersionChange = (versionId: string) => {
 		const vs = projectVersions();
-		const target = vs?.find(v => v.id === versionId);
+		const target = vs?.find((v: ResourceVersion) => v.id === versionId);
 		if (target) {
 			setSelectedModpackVersionId(versionId);
 			setModpackUrl(target.download_url);
@@ -353,7 +353,7 @@ function InstallPage(props: InstallPageProps) {
 		// If we have a source, we are locked to its version.
 		if (info && (modpackUrl() || modpackPath())) return [info.minecraftVersion];
 		// If browsing a project, show all its available versions
-		return projectVersions()?.flatMap(v => v.game_versions) || undefined;
+		return projectVersions()?.flatMap((v: ResourceVersion) => v.game_versions) || undefined;
 	});
 
 	const supportedModloaders = createMemo(() => {
@@ -363,7 +363,7 @@ function InstallPage(props: InstallPageProps) {
 		const vs = projectVersions();
 		if (vs && vs.length > 0) {
 			const set = new Set(["vanilla"]);
-			vs.forEach(v => v.loaders.forEach(l => set.add(l.toLowerCase())));
+			vs.forEach((v: ResourceVersion) => v.loaders.forEach((l: string) => set.add(l.toLowerCase())));
 			return Array.from(set);
 		}
 		return undefined;

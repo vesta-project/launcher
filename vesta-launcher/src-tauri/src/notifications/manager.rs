@@ -103,6 +103,48 @@ impl ActionHandler for RestartAppHandler {
     }
 }
 
+/// Handler that logs out of guest mode and returns to onboarding
+struct LogoutGuestHandler {}
+
+impl ActionHandler for LogoutGuestHandler {
+    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+        log::info!("[LogoutGuestHandler] Logging out guest...");
+        
+        // 1. Cleanup marker file
+        if let Ok(app_data_dir) = crate::utils::db_manager::get_app_config_dir() {
+            let marker_path = app_data_dir.join(".guest_mode");
+            if marker_path.exists() {
+                let _ = std::fs::remove_file(marker_path);
+            }
+        }
+
+        // 2. Cleanup Guest account from database
+        if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
+            use diesel::prelude::*;
+            use crate::schema::account::dsl::*;
+            let _ = diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID))).execute(&mut conn);
+        }
+
+        // 3. Cleanup the notification itself
+        if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
+            let _ = nm.delete("guest_mode_warning".to_string());
+        }
+
+        // 4. Reset config state
+        use crate::utils::config::{get_app_config, update_app_config};
+        if let Ok(mut config) = get_app_config() {
+            config.setup_completed = false;
+            config.active_account_uuid = None;
+            let _ = update_app_config(&config);
+        }
+
+        // 5. Notify frontend to redirect
+        app_handle.emit("core://logout-guest", ()).map_err(|e| anyhow::anyhow!(e))?;
+        
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -366,6 +408,7 @@ impl NotificationManager {
         manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
         manager.register_action("resume_instance_operation", Arc::new(ResumeInstanceOperationHandler {}));
         manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
+        manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager
@@ -436,7 +479,7 @@ impl NotificationManager {
                 if let Some(id) = existing.id {
                     notification.id = Some(id);
                     // Preserve creation time
-                    notification.created_at = existing.created_at;
+            notification.created_at = existing.created_at;
                     NotificationStore::update(id, &notification)?;
 
                     self.app_handle.emit("core://notification", &notification)?;
@@ -445,8 +488,17 @@ impl NotificationManager {
             }
         }
 
-        let id = NotificationStore::create(&notification)?;
-        notification.id = Some(id);
+        // Only persist non-immediate notifications to the database.
+        // Immediate notifications are treated as ephemeral toasts.
+        let id = if notification.notification_type != NotificationType::Immediate {
+            let nid = NotificationStore::create(&notification)?;
+            notification.id = Some(nid);
+            nid
+        } else {
+            // For ephemeral notifications, we use 0 or a negative ID to indicate no persistence
+            notification.id = Some(0);
+            0
+        };
 
         self.app_handle.emit("core://notification", &notification)?;
 

@@ -33,6 +33,7 @@ pub struct Account {
     pub theme_gradient_harmony: Option<String>,
     pub theme_advanced_overrides: Option<String>,
     pub theme_border_width: Option<i32>,
+    pub account_type: String,
 }
 
 /// New account (without id for insertion)
@@ -62,6 +63,7 @@ pub struct NewAccount {
     pub theme_gradient_harmony: Option<String>,
     pub theme_advanced_overrides: Option<String>,
     pub theme_border_width: Option<i32>,
+    pub account_type: String,
 }
 
 impl Default for Account {
@@ -91,6 +93,7 @@ impl Default for Account {
             theme_gradient_harmony: None,
             theme_advanced_overrides: None,
             theme_border_width: None,
+            account_type: "Microsoft".to_string(),
         }
     }
 }
@@ -121,6 +124,7 @@ impl Default for NewAccount {
             theme_gradient_harmony: None,
             theme_advanced_overrides: None,
             theme_border_width: None,
+            account_type: "Microsoft".to_string(),
         }
     }
 }

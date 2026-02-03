@@ -6,7 +6,7 @@ use tokio::fs;
 
 use crate::game::installer::{track_artifact_from_path, try_restore_artifact};
 
-const METADATA_FILENAME: &str = "metadata.json";
+const METADATA_FILENAME: &str = "piston_manifest.json";
 const CACHE_DURATION_HOURS: i64 = 24; // Refresh metadata every 24 hours
 const METADATA_LABEL: &str = "metadata/piston_metadata.json";
 

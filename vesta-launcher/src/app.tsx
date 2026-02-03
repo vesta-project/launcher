@@ -106,8 +106,13 @@ function Root(props: ChildrenProp) {
 	let unlistenDeepLink: (() => void) | null = null;
 	let unlistenCrash: (() => void) | null = null;
 	let unlistenExit: UnlistenFn | null = null;
+	let unlistenLogout: UnlistenFn | null = null;
 
 	onMount(async () => {
+		unlistenLogout = await listen("core://logout-guest", () => {
+			window.location.href = "/";
+		});
+
 		unlistenExit = await listen("core://exit-requested", async () => {
 			try {
 				const check = await invoke<ExitCheckResponse>("exit_check");
@@ -353,6 +358,7 @@ function Root(props: ChildrenProp) {
 		unlistenDeepLink?.();
 		unlistenCrash?.();
 		unlistenExit?.();
+		unlistenLogout?.();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		cleanupFileDropSystem();

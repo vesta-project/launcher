@@ -1,5 +1,6 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::schema::instance::dsl::*;
+use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::maintenance::{CloneInstanceTask, ResetInstanceTask, RepairInstanceTask};
 use crate::tasks::manager::TaskManager;
@@ -171,6 +172,43 @@ pub async fn install_instance(
     instance_data: Instance,
     dry_run: Option<bool>,
 ) -> Result<(), String> {
+    // Check if we are in guest mode
+    let active_account = match crate::auth::get_active_account() {
+        Ok(a) => a,
+        Err(_) => None,
+    };
+
+    if let Some(acc) = active_account {
+        if acc.account_type == ACCOUNT_TYPE_GUEST {
+            log::warn!("[install_instance] Blocked install attempt from Guest account");
+
+            // Show notification
+            if let Some(nm) =
+                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+            {
+                let _ = nm.create(crate::notifications::models::CreateNotificationInput {
+                    client_key: None,
+                    title: Some("Login Required".to_string()),
+                    description: Some(
+                        "You must be signed in with a Microsoft account to install Minecraft."
+                            .to_string(),
+                    ),
+                    severity: Some("warning".to_string()),
+                    notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                    dismissible: Some(true),
+                    actions: None,
+                    progress: None,
+                    current_step: None,
+                    total_steps: None,
+                    metadata: None,
+                    show_on_completion: None,
+                });
+            }
+
+            return Err("You must be signed in with a Microsoft account to install Minecraft.".to_string());
+        }
+    }
+
     log::info!(
         "[install_instance] Command invoked for instance: {} (dry_run={:?})",
         instance_data.name,
@@ -242,6 +280,14 @@ fn process_instance_icon(mut inst: Instance) -> Instance {
 #[tauri::command]
 pub fn list_instances() -> Result<Vec<Instance>, String> {
     log::info!("Fetching all instances from database");
+
+    // Guest Mode check: If active account is Guest, we hide real instances 
+    // to provide a clean slate without destroying user data.
+    if let Ok(Some(active_acc)) = crate::auth::get_active_account() {
+        if active_acc.account_type == ACCOUNT_TYPE_GUEST {
+            return Ok(vec![]);
+        }
+    }
 
     let mut conn =
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
@@ -913,6 +959,35 @@ pub async fn launch_instance(
 
     // If we have an active account, ensure token validity
     if let Some(acc) = active_account.clone() {
+        if acc.account_type == ACCOUNT_TYPE_GUEST {
+            log::warn!("[launch_instance] Blocked launch attempt from Guest account");
+
+            // Show notification to user that Guest mode cannot launch games
+            if let Some(nm) =
+                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+            {
+                let _ = nm.create(crate::notifications::models::CreateNotificationInput {
+                    client_key: None,
+                    title: Some("Login Required".to_string()),
+                    description: Some(
+                        "You must be signed in with a Microsoft account to launch Minecraft."
+                            .to_string(),
+                    ),
+                    severity: Some("warning".to_string()),
+                    notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                    dismissible: Some(true),
+                    actions: None,
+                    progress: None,
+                    current_step: None,
+                    total_steps: None,
+                    metadata: None,
+                    show_on_completion: None,
+                });
+            }
+
+            return Err("You must be signed in with a Microsoft account to launch Minecraft.".to_string());
+        }
+
         if let Err(e) = crate::auth::ensure_account_tokens_valid(acc.uuid.clone()).await {
             log::error!("[launch_instance] Failed to refresh token: {}", e);
             return Err(format!("Failed to refresh authentication: {}", e));
@@ -1230,42 +1305,10 @@ pub async fn get_minecraft_versions(
 
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-    let manifest_path = data_dir.join("piston_manifest.json");
 
-    let metadata = if manifest_path.exists() {
-        if let Ok(contents) = tokio::fs::read_to_string(&manifest_path).await {
-            if let Ok(parsed) =
-                serde_json::from_str::<piston_lib::game::metadata::PistonMetadata>(&contents)
-            {
-                if !parsed.game_versions.is_empty() {
-                    parsed
-                } else {
-                    piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
-                        .await
-                        .map_err(|e| e.to_string())?
-                }
-            } else {
-                piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
-        } else {
-            piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
-                .await
-                .map_err(|e| e.to_string())?
-        }
-    } else {
-        piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
-            .await
-            .map_err(|e| e.to_string())?
-    };
-
-    // Save cache
-    let _ = tokio::fs::write(
-        &manifest_path,
-        serde_json::to_string_pretty(&metadata).unwrap_or_default(),
-    )
-    .await;
+    let metadata = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
+        .await
+        .map_err(|e| e.to_string())?;
 
     if let Err(e) = check_and_notify_new_versions(&metadata, &app_handle).await {
         log::warn!("Failed to check for new versions: {}", e);

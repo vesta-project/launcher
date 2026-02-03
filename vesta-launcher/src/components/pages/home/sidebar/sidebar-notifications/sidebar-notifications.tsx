@@ -115,7 +115,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 			>
 				<div class={styles.sidebar__notifications__wrapper}>
 					{/* All notifications from backend (includes Immediate which won't persist after restart) */}
-					<For each={persistentNotifs()}>
+					<For each={(persistentNotifs() || []).sort((a, b) => (a.dismissible === b.dismissible ? 0 : a.dismissible ? 1 : -1))}>
 						{(notification) => {
 							console.log(
 								`Rendering notification: ${notification.title} - type: ${notification.notification_type}, dismissible: ${notification.dismissible}`,

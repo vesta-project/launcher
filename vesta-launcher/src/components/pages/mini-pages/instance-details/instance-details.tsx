@@ -1,6 +1,7 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import { ask, confirm } from "@tauri-apps/plugin-dialog";
 import { HelpTrigger } from "@components/ui/help-trigger";
 import Button from "@ui/button/button";
@@ -344,6 +345,17 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 	// Running state
 	const [isRunning, setIsRunning] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
+
+	const [activeAccount] = createResource<any>(async () => {
+		try {
+			const { getActiveAccount } = await import("@utils/auth");
+			return await getActiveAccount();
+		} catch {
+			return null;
+		}
+	});
+
+	const isGuest = () => activeAccount()?.account_type === ACCOUNT_TYPE_GUEST;
 
 	const [requiredJava] = createResource(() => instance()?.id, async (id) => {
 		if (!id) return null;
@@ -1714,6 +1726,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															variant="outline"
 															size="sm"
 															onClick={() => setShowExportDialog(true)}
+															disabled={isGuest()}
 														>
 															Export Instance...
 														</Button>
@@ -1745,7 +1758,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			variant="ghost" 
 																			size="sm"
 																			onClick={() => checkUpdates()} 
-																			disabled={checkingUpdates()}
+																			disabled={checkingUpdates() || isGuest()}
 																		>
 																			{checkingUpdates() ? "Checking..." : "Refresh"}
 																		</Button>
@@ -1753,7 +1766,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			variant="ghost" 
 																			size="sm"
 																			onClick={() => handleUnlink()}
-																			disabled={busy() || isInstalling()}
+																			disabled={busy() || isInstalling() || isGuest()}
 																			color="destructive"
 																		>
 																			Unlink
@@ -1768,6 +1781,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			<Combobox<any>
 																				options={searchableModpackVersions()}
 																				value={selectedModpackVersionId()}
+																				disabled={isGuest()}
 																				onChange={(id: string | null) => {
 																					if (id) setSelectedModpackVersionId(id);
 																				}}
@@ -1820,7 +1834,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<Show when={selectedModpackVersionId() !== inst().modpackVersionId && selectedModpackVersion()?.version_number !== inst().modpackVersionId}>
 																<Button 
 																	onClick={() => rolloutModpackUpdate()} 
-																	disabled={busy() || isInstalling()}
+																	disabled={busy() || isInstalling() || isGuest()}
 																	color="primary"
 																	size="sm"
 																>
@@ -1845,6 +1859,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			optionValue="id"
 																			optionTextValue="searchString"
 																			value={selectedMcVersion()}
+																			disabled={isGuest()}
 																			onChange={(id: string | null) => {
 																				if (!id) return;
 																				setSelectedMcVersion(id);
@@ -1880,6 +1895,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																			optionValue="value"
 																			optionTextValue="label"
 																			value={selectedLoader()}
+																			disabled={isGuest()}
 																			onChange={(val: string | null) => {
 																				if (!val) return;
 																				setSelectedLoader(val);
@@ -1916,6 +1932,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																				optionValue="version"
 																				optionTextValue="version"
 																				value={selectedLoaderVersion()}
+																				disabled={isGuest()}
 																				onChange={(val: string | null) => val && setSelectedLoaderVersion(val)}
 																				itemComponent={(props) => (
 																					<ComboboxItem item={props.item}>
@@ -1942,7 +1959,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 																selectedLoader().toLowerCase() !== (inst().modloader || "vanilla").toLowerCase() || 
 																(selectedLoader().toLowerCase() !== "vanilla" && selectedLoaderVersion() !== (inst().modloaderVersion || ""))
 															}>
-																<Button onClick={handleStandardUpdate} disabled={busy() || isInstalling()} color="primary" size="sm">Save & Reinstall</Button>
+																<Button onClick={handleStandardUpdate} disabled={busy() || isInstalling() || isGuest()} color="primary" size="sm">Save & Reinstall</Button>
 															</Show>
 														</div>
 													</Show>
@@ -1952,7 +1969,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Duplicate</h4>
 															<p>Create a full copy of this instance, including all files and settings.</p>
 														</div>
-														<Button disabled={isInstalling()} onClick={() => {
+														<Button disabled={isInstalling() || isGuest()} onClick={() => {
 															const name = window.prompt("Enter name for the copy:", `${inst().name} (Copy)`);
 															if (name) duplicateInstance(inst().id, name);
 														}}>Duplicate</Button>
@@ -1963,7 +1980,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Repair</h4>
 															<p>Verifies and redownloads any missing or corrupted game files. Your worlds, screenshots, and settings are kept safe.</p>
 														</div>
-														<Button onClick={() => repairInstance(inst().id)} disabled={isInstalling()}>Repair</Button>
+														<Button onClick={() => repairInstance(inst().id)} disabled={isInstalling() || isGuest()}>Repair</Button>
 													</div>
 
 													<div class="mgmt-action danger">
@@ -1971,7 +1988,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Hard Reset</h4>
 															<p>Reinstalls the game from scratch. This <strong style="color: var(--color-danger)">permanently deletes</strong> your worlds, configs, and screenshots!</p>
 														</div>
-														<Button variant="outline" color="destructive" disabled={isInstalling()} onClick={async () => {
+														<Button variant="outline" color="destructive" disabled={isInstalling() || isGuest()} onClick={async () => {
 															if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. This action cannot be undone and your local data will be lost.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
 																resetInstance(inst().id);
 															}
@@ -1983,7 +2000,7 @@ export default function InstanceDetails(props: InstanceDetailsProps & { setRefet
 															<h4>Uninstall Instance</h4>
 															<p>Remove this instance and all its files from your computer. This action is <strong style="color: var(--color-danger)">permanent and irreversible</strong>.</p>
 														</div>
-														<Button variant="outline" color="destructive" disabled={isInstalling()} onClick={async () => {
+														<Button variant="outline" color="destructive" disabled={isInstalling() || isGuest()} onClick={async () => {
 															if (await ask("Are you sure you want to uninstall this instance? This will permanently delete the instance and ALL its files from your computer. This action cannot be undone.", { title: "Vesta Launcher - Uninstall Instance", kind: "error" })) {
 																try {
 																	await deleteInstance(inst().id);

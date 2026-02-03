@@ -1,10 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { showToast, tryRemoveToast, updateToast } from "@ui/toast/toast";
 import { createSignal, JSX } from "solid-js";
 
 const [notifications, setNotifications] = createSignal<Notification[]>([]);
 let _notificationCache: Notification[] = [];
+
+/** Promise-based queue to prevent race conditions in showAlert focus checks */
+let _showAlertQueue: Promise<any> = Promise.resolve();
+
+/** Value returned when a notification toast is not shown (e.g. window not focused) */
+export const NOTIFICATION_NOT_SHOWN = -1;
+/** Value used to indicate indeterminate/pulsing progress */
+export const PROGRESS_INDETERMINATE = -1;
 
 // New notification type system
 type NotificationType = "alert" | "progress" | "immediate" | "patient";
@@ -24,7 +33,7 @@ interface Notification {
 	type: NotificationSeverity;
 	title?: string;
 	description?: string;
-	progress?: number | null; // -1 for pulsing, 0-100 for percentage, null for none
+	progress?: number | null; // PROGRESS_INDETERMINATE for pulsing, 0-100 for percentage, null for none
 	current_step?: number | null;
 	total_steps?: number | null;
 	client_key?: string | null;
@@ -68,70 +77,84 @@ function showAlert(
 	dismissible?: boolean,
 	actions?: NotificationAction[],
 	metadata?: string | null,
-) {
-	console.log(
-		`[Notification] showAlert: ${title}, Key: ${client_key}, Type: ${notification_type}, Actions:`,
-		actions,
-	);
-	// If progress is null/undefined, treat it as indeterminate (-1)
-	let displayProgress = progress;
-	let displayCurrentStep = current_step;
-	let displayTotalSteps = total_steps;
+): Promise<number> {
+	// Chain onto the showAlertQueue to prevent race conditions during focus checks
+	const ownPromise = _showAlertQueue.then(async () => {
+		// Only show toasts in the focused window
+		const isFocused = await getCurrentWebviewWindow().isFocused();
+		if (!isFocused) return NOTIFICATION_NOT_SHOWN;
 
-	if (progress == null) {
-		displayProgress = -1;
-	}
+		console.log(
+			`[Notification] showAlert: ${title}, Key: ${client_key}, Type: ${notification_type}, Actions:`,
+			actions,
+		);
+		// If progress is null/undefined, treat it as indeterminate (PROGRESS_INDETERMINATE)
+		let displayProgress = progress;
+		let displayCurrentStep = current_step;
+		let displayTotalSteps = total_steps;
 
-	// Determine if cancellable/pausable based on actions
-	const cancellable = actions?.some((a) => a.id === "cancel_task") ?? false;
-	const pausable =
-		actions?.some((a) => a.id === "pause_task" || a.id === "resume_task") ??
-		false;
-	const isPaused = actions?.some((a) => a.id === "resume_task") ?? false;
+		if (progress == null) {
+			displayProgress = PROGRESS_INDETERMINATE;
+		}
 
-	let id = showToast({
-		title,
-		description,
-		duration: 5000,
-		onToastForceClose: (id: number) => closeAlert(id),
-		severity: capitalizeFirstLetter(severity) as
-			| "Info"
-			| "Success"
-			| "Warning"
-			| "Error",
-		progress: displayProgress,
-		current_step: displayCurrentStep,
-		total_steps: displayTotalSteps,
-		cancellable: cancellable,
-		onCancel: client_key ? () => cancelTask(client_key) : undefined,
-		pausable: pausable,
-		isPaused: isPaused,
-		onPause: client_key
-			? () => invokeNotificationAction("pause_task", client_key)
-			: undefined,
-		onResume: client_key
-			? () => invokeNotificationAction("resume_task", client_key)
-			: undefined,
+		// Determine if cancellable/pausable based on actions
+		const cancellable = actions?.some((a) => a.id === "cancel_task") ?? false;
+		const pausable =
+			actions?.some((a) => a.id === "pause_task" || a.id === "resume_task") ??
+			false;
+		const isPaused = actions?.some((a) => a.id === "resume_task") ?? false;
+
+		const id = showToast({
+			title,
+			description,
+			duration: 5000,
+			onToastForceClose: (id: number) => closeAlert(id),
+			severity: capitalizeFirstLetter(severity) as
+				| "Info"
+				| "Success"
+				| "Warning"
+				| "Error",
+			progress: displayProgress,
+			current_step: displayCurrentStep,
+			total_steps: displayTotalSteps,
+			cancellable: cancellable,
+			onCancel: client_key ? () => cancelTask(client_key) : undefined,
+			pausable: pausable,
+			isPaused: isPaused,
+			onPause: client_key
+				? () => invokeNotificationAction("pause_task", client_key)
+				: undefined,
+			onResume: client_key
+				? () => invokeNotificationAction("resume_task", client_key)
+				: undefined,
+		});
+
+		const newNotif: Notification = {
+			id,
+			type: severity,
+			title,
+			description,
+			progress,
+			current_step,
+			total_steps,
+			client_key,
+			notification_type,
+			dismissible,
+			actions,
+			metadata,
+		};
+
+		_notificationCache.push(newNotif);
+		setNotifications([..._notificationCache]);
+		return id;
 	});
 
-	const newNotif: Notification = {
-		id,
-		type: severity,
-		title,
-		description,
-		progress,
-		current_step,
-		total_steps,
-		client_key,
-		notification_type,
-		dismissible,
-		actions,
-		metadata,
-	};
+	// Update the queue to wait for this one, but catch errors to avoid breaking the chain
+	_showAlertQueue = ownPromise.catch(() => {
+		/* ignore */
+	});
 
-	_notificationCache.push(newNotif);
-	setNotifications([..._notificationCache]);
-	return id;
+	return ownPromise;
 }
 
 function removeAllAlerts() {
@@ -243,7 +266,7 @@ async function subscribeToBackendNotifications() {
 		// Listen for new/updated notifications
 		const unsubNotif = await listen<BackendNotification>(
 			"core://notification",
-			(event) => {
+			async (event) => {
 				const notif = event.payload;
 				console.log(
 					`[Notification] Event: ${notif.title}, Key: ${notif.client_key}, Cache Size: ${_notificationCache.length}`,
@@ -332,7 +355,7 @@ async function subscribeToBackendNotifications() {
 						notif.notification_type === "immediate" ||
 						notif.notification_type === "progress"
 					) {
-						showAlert(
+						await showAlert(
 							notif.severity,
 							notif.title,
 							notif.description || undefined,
@@ -356,7 +379,7 @@ async function subscribeToBackendNotifications() {
 		// Listen for progress updates
 		const unsubProgress = await listen<BackendNotification>(
 			"core://notification-progress",
-			(event) => {
+			async (event) => {
 				console.log("Received progress event:", event.payload);
 				const notif = event.payload;
 
@@ -454,7 +477,7 @@ async function subscribeToBackendNotifications() {
 							notif.notification_type === "immediate" ||
 							notif.notification_type === "progress"
 						) {
-							showAlert(
+							await showAlert(
 								notif.severity,
 								notif.title,
 								notif.description || undefined,

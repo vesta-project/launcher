@@ -1,17 +1,18 @@
 import { check } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
 import { showToast } from "@ui/toast/toast";
+import { PROGRESS_INDETERMINATE } from "./notifications";
 
 export async function checkForAppUpdates(silent = false) {
 	try {
 		const update = await check();
-		
+
 		if (update) {
 			if (!silent) {
 				showToast({
 					title: "Update Available",
 					description: `Version ${update.version} is available. Downloading now...`,
-					severity: "Info"
+					severity: "Info",
 				});
 			}
 
@@ -23,8 +24,8 @@ export async function checkForAppUpdates(silent = false) {
 					notification_type: "Progress",
 					severity: "info",
 					progress: 0,
-					client_key: "app_update"
-				}
+					client_key: "app_update",
+				},
 			});
 
 			let downloaded = 0;
@@ -32,27 +33,30 @@ export async function checkForAppUpdates(silent = false) {
 
 			await update.downloadAndInstall((event) => {
 				switch (event.event) {
-					case 'Started': {
+					case "Started": {
 						contentLength = event.data.contentLength || 0;
 						break;
 					}
-					case 'Progress': {
+					case "Progress": {
 						downloaded += event.data.chunkLength;
-						const progress = contentLength > 0 ? Math.round((downloaded / contentLength) * 100) : -1;
+						const progress =
+							contentLength > 0
+								? Math.round((downloaded / contentLength) * 100)
+								: PROGRESS_INDETERMINATE;
 						invoke("update_notification_progress", {
 							id: notificationId,
-							progress: progress
+							progress: progress,
 						});
 						break;
 					}
-					case 'Finished': {
+					case "Finished": {
 						// Convert to Patient with Restart action
 						const actions = [
 							{
 								action_id: "restart_app",
 								label: "Restart now",
-								action_type: "primary"
-							}
+								action_type: "primary",
+							},
 						];
 
 						invoke("create_notification", {
@@ -63,8 +67,8 @@ export async function checkForAppUpdates(silent = false) {
 								notification_type: "Patient",
 								severity: "success",
 								dismissible: true,
-								actions: JSON.stringify(actions)
-							}
+								actions: JSON.stringify(actions),
+							},
 						});
 						break;
 					}
@@ -74,7 +78,7 @@ export async function checkForAppUpdates(silent = false) {
 			showToast({
 				title: "No Updates",
 				description: "You are running the latest version of Vesta.",
-				severity: "Info"
+				severity: "Info",
 			});
 		}
 	} catch (error) {
@@ -83,7 +87,7 @@ export async function checkForAppUpdates(silent = false) {
 			showToast({
 				title: "Update Error",
 				description: "Could not check for updates. Please try again later.",
-				severity: "Error"
+				severity: "Error",
 			});
 		}
 	}

@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import {
+	ACCOUNT_TYPE_GUEST,
 	type Account,
 	getAccounts,
 	removeAccount,
@@ -183,23 +184,30 @@ function AccountListItem(props: AccountListItemProps) {
 			/>
 			<div class="account-info">
 				<div class="account-username">{props.account.username}</div>
-				<Show when={props.isActive}>
-					<div class="account-active-badge">Active</div>
-				</Show>
+				<div style={{ display: "flex", gap: "4px" }}>
+					<Show when={props.isActive}>
+						<div class="account-active-badge">Active</div>
+					</Show>
+					<Show when={props.account.account_type === ACCOUNT_TYPE_GUEST}>
+						<div class="account-active-badge" style={{ background: "var(--primary)", color: "white" }}>Guest</div>
+					</Show>
+				</div>
 			</div>
-			<Button
-				class="account-remove-button"
-				onClick={(e) => {
-					e.stopPropagation();
-					props.onRemove();
-				}}
-				variant="ghost"
-				size="sm"
-				icon_only
-				title="Remove Account"
-			>
-				×
-			</Button>
+			<Show when={props.account.account_type !== ACCOUNT_TYPE_GUEST}>
+				<Button
+					class="account-remove-button"
+					onClick={(e) => {
+						e.stopPropagation();
+						props.onRemove();
+					}}
+					variant="ghost"
+					size="sm"
+					icon_only
+					title="Remove Account"
+				>
+					×
+				</Button>
+			</Show>
 		</div>
 	);
 }

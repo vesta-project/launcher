@@ -11,6 +11,9 @@ import PlaceholderImage10 from "@assets/placeholder-images/placeholder-image10.p
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
+export const DEMO_INSTANCE_ID = -1;
+export const DEMO_INSTANCE_SLUG = "vesta-explorer-demo";
+
 // Default icons for instances
 export const DEFAULT_ICONS = [
 	PlaceholderImage1,
@@ -52,7 +55,7 @@ export interface Instance {
 	totalPlaytimeMinutes: number;
 	createdAt: string | null;
 	updatedAt: string | null;
-		// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
+	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
 	installationStatus?:
 		| "pending"
 		| "installing"
@@ -126,6 +129,37 @@ export interface PistonMetadata {
 	latest: {
 		release: string;
 		snapshot: string;
+	};
+}
+
+/** Returns the virtual demo instance object used in Guest mode */
+export function createDemoInstance(): Instance {
+	return {
+		id: DEMO_INSTANCE_ID,
+		name: "Vesta Explorer (Demo)",
+		minecraftVersion: "1.20.1",
+		modloader: "Fabric",
+		modloaderVersion: "0.15.3",
+		javaPath: null,
+		javaArgs: null,
+		gameDirectory: null,
+		width: 854,
+		height: 480,
+		minMemory: 1024,
+		maxMemory: 4096,
+		iconPath: null,
+		lastPlayed: null,
+		totalPlaytimeMinutes: 0,
+		createdAt: new Date().toISOString(),
+		updatedAt: new Date().toISOString(),
+		installationStatus: "installed",
+		crashed: false,
+		crashDetails: null,
+		modpackId: null,
+		modpackVersionId: null,
+		modpackPlatform: null,
+		modpackIconUrl: null,
+		iconData: null,
 	};
 }
 
@@ -236,7 +270,7 @@ export async function resetInstance(id: number): Promise<void> {
 export async function resumeInstanceOperation(
 	instance: Instance,
 ): Promise<void> {
-	// Fallback to 'install' if no specific operation is recorded, as it's the 
+	// Fallback to 'install' if no specific operation is recorded, as it's the
 	// most common initial operation that would need resuming.
 	const operation = instance.lastOperation || "install";
 
@@ -261,11 +295,17 @@ export async function deleteInstance(id: number): Promise<void> {
 
 // Get a single instance by ID
 export async function getInstance(id: number): Promise<Instance> {
+	if (id === DEMO_INSTANCE_ID) {
+		return createDemoInstance();
+	}
 	return await invoke<Instance>("get_instance", { instanceId: id });
 }
 
 // Get a single instance by slug (unique instance identifier)
 export async function getInstanceBySlug(slug: string): Promise<Instance> {
+	if (slug === DEMO_INSTANCE_SLUG) {
+		return createDemoInstance();
+	}
 	return await invoke<Instance>("get_instance_by_slug", { slugVal: slug });
 }
 

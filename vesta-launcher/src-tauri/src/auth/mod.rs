@@ -19,6 +19,9 @@ use crate::schema::account::dsl::*; // Bring table and column names into scope f
 use crate::utils::config::{get_app_config, update_app_config};
 use crate::utils::db::get_vesta_conn;
 
+pub const ACCOUNT_TYPE_GUEST: &str = "Guest";
+pub const GUEST_UUID: &str = "00000000000000000000000000000000";
+
 lazy_static! {
     /// Global cancel channel for aborting authentication
     static ref CANCEL_SENDER: Arc<Mutex<Option<oneshot::Sender<()>>>> = Arc::new(Mutex::new(None));
@@ -131,6 +134,85 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
+    log::info!("[auth] Starting guest session...");
+
+    let app_data_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+    let marker_path = app_data_dir.join(".guest_mode");
+    
+    // Create marker file
+    std::fs::File::create(&marker_path).map_err(|e| format!("Failed to create guest marker: {}", e))?;
+
+    let guest_uuid = GUEST_UUID.to_string(); // Zeroed UUID for guest
+
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    // Create Guest Account
+    let mut new_acct = NewAccount::default();
+    new_acct.uuid = guest_uuid.clone();
+    new_acct.username = ACCOUNT_TYPE_GUEST.to_string();
+    new_acct.display_name = Some("Guest Explorer".to_string());
+    new_acct.is_active = true;
+    new_acct.account_type = ACCOUNT_TYPE_GUEST.to_string();
+
+    // Deactivate others
+    diesel::update(account)
+        .set(is_active.eq(false))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    // Upsert guest (if they somehow click it twice)
+    diesel::insert_into(account)
+        .values(&new_acct)
+        .on_conflict(uuid)
+        .do_update()
+        .set((
+            is_active.eq(true),
+            account_type.eq(ACCOUNT_TYPE_GUEST),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    // Set as active account in config
+    let mut config = get_app_config().map_err(|e| e.to_string())?;
+    config.active_account_uuid = Some(guest_uuid.clone());
+    update_app_config(&config).map_err(|e| e.to_string())?;
+
+    // Notify UI
+    app_handle.emit("core://account-heads-updated", ()).map_err(|e| e.to_string())?;
+
+    // Create persistent warning notification
+    let manager = app_handle.state::<crate::notifications::manager::NotificationManager>();
+    
+    use crate::notifications::models::{CreateNotificationInput, NotificationType, NotificationAction};
+    
+    let actions = vec![
+        NotificationAction {
+            action_id: "logout_guest".to_string(),
+            label: "Sign In".to_string(),
+            action_type: "primary".to_string(),
+        }
+    ];
+
+    let _ = manager.create(CreateNotificationInput {
+        client_key: Some("guest_mode_warning".to_string()),
+        title: Some("Guest Mode Active".to_string()),
+        description: Some("You are in guest mode. Changes will not be saved, and certain features are restricted.".to_string()),
+        severity: Some("info".to_string()),
+        notification_type: Some(NotificationType::Patient),
+        dismissible: Some(false), // Persistent
+        actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
+        progress: None,
+        current_step: None,
+        total_steps: None,
+        metadata: None,
+        show_on_completion: None,
+    });
+
+    Ok(())
+}
+
 /// Cancel ongoing authentication
 #[tauri::command]
 pub fn cancel_login() -> Result<(), String> {
@@ -206,6 +288,28 @@ async fn process_login_completion(
         .await
         .context("Failed to exchange for Minecraft token")?;
 
+    // --- Guest Mode Cleanup ---
+    // If we were in guest mode, we want to clean up the marker and guest session data
+    let app_data_dir = crate::utils::db_manager::get_app_config_dir().ok();
+    if let Some(dir) = app_data_dir {
+        let marker_path = dir.join(".guest_mode");
+        if marker_path.exists() {
+            log::info!("[auth] Cleaning up guest session...");
+            let _ = std::fs::remove_file(marker_path);
+
+            // Clear the guest mode notification
+            if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
+                let _ = nm.delete("guest_mode_warning".to_string());
+            }
+
+            // Evict Guest account from database
+            if let Some(mut c) = get_vesta_conn().ok() {
+                let _ = diesel::delete(account.filter(uuid.eq(GUEST_UUID))).execute(&mut c);
+            }
+        }
+    }
+    // ---------------------------
+
     let minecraft_access_token = minecraft_token.access_token().clone();
     let minecraft_access_token_str = minecraft_access_token.clone().into_inner();
 
@@ -240,35 +344,41 @@ async fn process_login_completion(
     let now_str = Utc::now().to_rfc3339();
     let current_config = get_app_config().unwrap_or_default();
 
+    // Set all other accounts to inactive
+    diesel::update(account)
+        .set(is_active.eq(false))
+        .execute(&mut conn)
+        .map_err(|e| anyhow::anyhow!("Failed to deactivate other accounts: {}", e))?;
+
     if existing_count == 0 {
         // Insert new account
         log::info!("[auth] Inserting new account for uuid: {}", normalized_uuid);
 
-        let new_account = NewAccount {
-            uuid: normalized_uuid.clone(),
-            username: profile.name.clone(),
-            display_name: Some(profile.name.clone()),
-            access_token: Some(minecraft_access_token.into_inner()),
-            refresh_token: Some(refresh_token_val),
-            token_expires_at: Some(token_expires_at_val.to_rfc3339()),
-            is_active: true,
-            skin_url: skin_url_val,
-            cape_url: cape_url_val,
-            created_at: Some(now_str.clone()),
-            updated_at: Some(now_str.clone()),
-            theme_id: Some(current_config.theme_id),
-            theme_mode: Some(current_config.theme_mode),
-            theme_primary_hue: Some(current_config.theme_primary_hue),
-            theme_primary_sat: current_config.theme_primary_sat,
-            theme_primary_light: current_config.theme_primary_light,
-            theme_style: Some(current_config.theme_style),
-            theme_gradient_enabled: Some(current_config.theme_gradient_enabled),
-            theme_gradient_angle: current_config.theme_gradient_angle,
-            theme_gradient_type: current_config.theme_gradient_type,
-            theme_gradient_harmony: current_config.theme_gradient_harmony,
-            theme_advanced_overrides: current_config.theme_advanced_overrides,
-            theme_border_width: current_config.theme_border_width,
-        };
+        let mut new_account = NewAccount::default();
+        new_account.uuid = normalized_uuid.clone();
+        new_account.username = profile.name.clone();
+        new_account.display_name = Some(profile.name.clone());
+        new_account.access_token = Some(minecraft_access_token.into_inner());
+        new_account.refresh_token = Some(refresh_token_val);
+        new_account.token_expires_at = Some(token_expires_at_val.to_rfc3339());
+        new_account.is_active = true;
+        new_account.skin_url = skin_url_val;
+        new_account.cape_url = cape_url_val;
+        new_account.created_at = Some(now_str.clone());
+        new_account.updated_at = Some(now_str.clone());
+        new_account.theme_id = Some(current_config.theme_id);
+        new_account.theme_mode = Some(current_config.theme_mode);
+        new_account.theme_primary_hue = Some(current_config.theme_primary_hue);
+        new_account.theme_primary_sat = current_config.theme_primary_sat;
+        new_account.theme_primary_light = current_config.theme_primary_light;
+        new_account.theme_style = Some(current_config.theme_style);
+        new_account.theme_gradient_enabled = Some(current_config.theme_gradient_enabled);
+        new_account.theme_gradient_angle = current_config.theme_gradient_angle;
+        new_account.theme_gradient_type = current_config.theme_gradient_type;
+        new_account.theme_gradient_harmony = current_config.theme_gradient_harmony;
+        new_account.theme_advanced_overrides = current_config.theme_advanced_overrides;
+        new_account.theme_border_width = current_config.theme_border_width;
+        new_account.account_type = "Microsoft".to_string();
 
         diesel::insert_into(account)
             .values(&new_account)
@@ -287,6 +397,7 @@ async fn process_login_completion(
                 token_expires_at.eq(Some(token_expires_at_val.to_rfc3339())),
                 skin_url.eq(skin_url_val),
                 cape_url.eq(cape_url_val),
+                is_active.eq(true),
                 updated_at.eq(Some(now_str.clone())),
             ))
             .execute(&mut conn)
@@ -308,6 +419,9 @@ async fn process_login_completion(
             "value": normalized_uuid
         }),
     );
+
+    // Notify UI that accounts might have changed (added/updated)
+    let _ = app_handle.emit("core://account-heads-updated", ());
 
     Ok((normalized_uuid, profile.name))
 }
@@ -359,6 +473,12 @@ pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), Stri
         Some(a) => a,
         None => return Err("Account not found".to_string()),
     };
+
+    // Skip all token validation for Guest accounts
+    if acct.account_type == ACCOUNT_TYPE_GUEST {
+        log::debug!("[auth] Skipping token validation for Guest account {}", target_uuid);
+        return Ok(());
+    }
 
     // If no refresh token present, nothing to do
     let _refresh = match acct.refresh_token.clone() {

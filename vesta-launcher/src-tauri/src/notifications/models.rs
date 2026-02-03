@@ -51,6 +51,8 @@ impl ToString for NotificationSeverity {
     }
 }
 
+pub const PROGRESS_INDETERMINATE: i32 = -1;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CreateNotificationInput {
     pub client_key: Option<String>,

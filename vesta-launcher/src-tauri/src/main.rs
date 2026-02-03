@@ -85,6 +85,7 @@ fn main() {
             auth::get_accounts,
             auth::get_active_account,
             auth::set_active_account,
+            auth::start_guest_session,
             auth::remove_account,
             auth::get_player_head_path,
             auth::preload_account_heads,

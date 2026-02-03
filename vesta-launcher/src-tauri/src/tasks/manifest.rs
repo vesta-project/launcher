@@ -95,7 +95,7 @@ impl Task for GenerateManifestTask {
             let metadata = if force_refresh {
                 log::info!("Force refreshing PistonMetadata (bypassing cache)...");
                 // Delete cache to force fresh fetch
-                let cache_path = config_dir.join("metadata.json");
+                let cache_path = config_dir.join("piston_manifest.json");
                 if cache_path.exists() {
                     log::info!("Deleting cache file to force refresh");
                     let _ = fs::remove_file(&cache_path).await;
@@ -124,33 +124,10 @@ impl Task for GenerateManifestTask {
 
             let _ = manager.update_progress_with_description(
                 notif_key.clone(),
-                90,
-                Some(4),
+                100,
                 Some(5),
-                "Saving piston_manifest.json...".to_string(),
-            );
-
-            // Save pretty JSON under required filename
-            log::info!("Serializing metadata to JSON...");
-            let json = to_string_pretty(&metadata).map_err(|e| {
-                log::error!("Failed to serialize metadata: {}", e);
-                e.to_string()
-            })?;
-            let manifest_path = config_dir.join("piston_manifest.json");
-            log::info!("Writing piston_manifest.json to: {:?}", manifest_path);
-
-            fs::write(&manifest_path, &json).await.map_err(|e| {
-                log::error!("Failed to write piston_manifest.json: {}", e);
-                e.to_string()
-            })?;
-
-            let file_size = fs::metadata(&manifest_path)
-                .await
-                .map(|m| m.len())
-                .unwrap_or(0);
-            log::info!(
-                "piston_manifest.json written successfully ({} bytes)",
-                file_size
+                Some(5),
+                "Manifest ready".to_string(),
             );
 
             // Update in-memory cache for fast subsequent access

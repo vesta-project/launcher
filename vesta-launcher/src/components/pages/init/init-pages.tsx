@@ -83,9 +83,9 @@ interface InitPagesProps {
 function InitFirstPage(props: InitPagesProps) {
 	return (
 		<>
-			<div class={"init-page__top"} style={{ "text-align": "center", "margin-bottom": "2vh", "flex-shrink": 0 }}>
-				<h1 class="init-page__header-title">Welcome to Vesta</h1>
-				<p style={{ "opacity": 0.6, "font-size": "clamp(14px, 2vh, 18px)", "font-weight": "500", "margin": 0 }}>Your journey into effortless modding starts here.</p>
+			<div class={"init-page__top"} style={{ "text-align": "center", "margin-bottom": "3vh", "flex-shrink": 0 }}>
+				<h1 class="init-page__header-title" style={{ "font-size": "clamp(32px, 5vh, 48px)", "font-weight": "800", "letter-spacing": "-2px", "margin": 0, "background": "linear-gradient(135deg, white 0%, rgba(255,255,255,0.6) 100%)", "-webkit-background-clip": "text", "-webkit-text-fill-color": "transparent" }}>Welcome to Vesta</h1>
+				<p style={{ "opacity": 0.5, "font-size": "clamp(14px, 2vh, 18px)", "font-weight": "500", "margin-top": "8px", "letter-spacing": "0.5px" }}>Your journey into effortless modding starts here.</p>
 			</div>
 			<div class={"init-page__middle"} style={{ "display": "flex", "flex-direction": "column", "align-items": "center", "justify-content": "center", "gap": "min(4vh, 32px)", "padding": "1vh 0", "min-height": 0, "overflow": "hidden" }}>
 				<div style={{ "position": "relative", "display": "flex", "align-items": "center", "justify-content": "center", "width": "min(20vh, 180px)", "height": "min(20vh, 180px)", "flex-shrink": 0 }}>
@@ -706,12 +706,17 @@ function InitLoginPage(props: InitPagesProps) {
 	const [errorMessage, setErrorMessage] = createSignal<string>("");
 	const [copied, setCopied] = createSignal(false);
 	const [timeLeft, setTimeLeft] = createSignal<number>(0);
+	const [hasAccount, setHasAccount] = createSignal(false);
 
 	let unlistenAuth: (() => void) | null = null;
 	let timer: any = null;
 
 	onMount(async () => {
-		const { listenToAuthEvents } = await import("@utils/auth");
+		const { getActiveAccount, listenToAuthEvents } = await import("@utils/auth");
+		
+		const acc = await getActiveAccount();
+		setHasAccount(!!acc);
+
 		unlistenAuth = await listenToAuthEvents((event) => {
 			if (event.stage === "AuthCode") {
 				setAuthCode(event.code);
@@ -768,6 +773,18 @@ function InitLoginPage(props: InitPagesProps) {
 		}
 	};
 
+	const handleGuestMode = async () => {
+		try {
+			setErrorMessage("");
+			const { invoke } = await import("@tauri-apps/api/core");
+			await invoke("start_guest_session");
+			await invoke("update_config_field", { field: "setup_completed", value: true });
+			window.location.href = "/home";
+		} catch (error) {
+			setErrorMessage(`Failed to start guest session: ${error}`);
+		}
+	};
+
 	const handleCancel = async () => {
 		try {
 			const { cancelLogin } = await import("@utils/auth");
@@ -798,11 +815,11 @@ function InitLoginPage(props: InitPagesProps) {
 
 	return (
 		<>
-			<div class={"init-page__top"}>
-				<h1 style={"font-size: 36px; font-weight: 800; letter-spacing: -1px;"}>
+			<div class={"init-page__top"} style={{ "text-align": "center", "margin-bottom": "3vh" }}>
+				<h1 style={{ "font-size": "clamp(28px, 4vh, 36px)", "font-weight": "800", "letter-spacing": "-1.5px", "margin": 0, "background": "linear-gradient(135deg, white 0%, rgba(255,255,255,0.7) 100%)", "-webkit-background-clip": "text", "-webkit-text-fill-color": "transparent" }}>
 					Microsoft Account
 				</h1>
-				<p style={"opacity: 0.8; margin-top: 8px;"}>
+				<p style={{ "opacity": 0.5, "font-size": "clamp(14px, 1.8vh, 16px)", "margin-top": "8px", "font-weight": "500", "letter-spacing": "0.3px" }}>
 					Connect your account to access Minecraft and online services.
 				</p>
 			</div>
@@ -834,6 +851,18 @@ function InitLoginPage(props: InitPagesProps) {
 									</div>
 								</Show>
 							</Button>
+
+							<div style={"margin-top: 16px;"}>
+								<button 
+									onClick={handleGuestMode}
+									class="init-link"
+									style={"background: none; border: none; color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: underline; transition: color 0.2s;"}
+									onMouseEnter={(e) => { e.currentTarget.style.color = 'white'; }}
+									onMouseLeave={(e) => { e.currentTarget.style.color = 'rgba(255,255,255,0.5)'; }}
+								>
+									{hasAccount() && props.isLoginOnly ? "Back to Launcher" : "Continue as Guest"}
+								</button>
+							</div>
 							
 							<Show when={errorMessage()}>
 								<div style={"margin-top: 16px; padding: 12px; background: rgba(255, 85, 85, 0.1); border-radius: 8px; border: 1px solid rgba(255, 85, 85, 0.2); color: #ff5555; font-size: 14px; width: 100%;"}>

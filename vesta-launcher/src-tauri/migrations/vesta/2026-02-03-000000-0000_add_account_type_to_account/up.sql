@@ -1,0 +1,1 @@
+ALTER TABLE account ADD COLUMN account_type TEXT NOT NULL DEFAULT 'Microsoft';

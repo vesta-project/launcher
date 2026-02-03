@@ -12,12 +12,14 @@ import {
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
 import { invoke } from "@tauri-apps/api/core";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
 	closeAlert,
 	createNotification,
 	listNotifications,
 	notifications,
 	persistentNotificationTrigger,
+	PROGRESS_INDETERMINATE,
 	showAlert,
 } from "@utils/notifications";
 import { openModpackInstall } from "@stores/modpack-install";
@@ -74,7 +76,7 @@ function Sidebar(props: SidebarProps) {
 					(n) =>
 						n.notification_type === "progress" &&
 						n.progress !== null &&
-						(n.progress === -1 || (n.progress >= 0 && n.progress < 100)),
+						(n.progress === PROGRESS_INDETERMINATE || (n.progress >= 0 && n.progress < 100)),
 				);
 				return { totalCount, hasActiveTask };
 			} catch (_error) {
@@ -197,8 +199,21 @@ function Sidebar(props: SidebarProps) {
 			<AccountList
 				open={accountMenuOpen()}
 				onClose={() => setAccountMenuOpen(false)}
-				onAddAccount={() => {
+				onAddAccount={async () => {
 					setAccountMenuOpen(false);
+					
+					// Guest mode check for redirect to onboarding
+					try {
+						const { getActiveAccount } = await import("@utils/auth");
+						const account = await getActiveAccount();
+						if (account?.account_type === ACCOUNT_TYPE_GUEST) {
+							window.location.href = "/?login=true"; // Send back to onboarding for real login
+							return;
+						}
+					} catch (e) {
+						console.error("Failed to check guest status for Add Account:", e);
+					}
+					
 					openPage("/login");
 				}}
 			/>

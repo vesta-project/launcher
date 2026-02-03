@@ -1,7 +1,10 @@
 import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-export type { Instance } from "@utils/instances";
+import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
+import { createDemoInstance, DEMO_INSTANCE_ID, type Instance } from "@utils/instances";
+
+export type { Instance };
 
 type InstancesState = {
 	instances: Instance[];
@@ -20,7 +23,14 @@ const [instancesState, setInstancesState] = createStore<InstancesState>({
 export async function initializeInstances() {
 	setInstancesState({ loading: true, error: null });
 	try {
-		const instances = await invoke<Instance[]>("list_instances");
+		let instances = await invoke<Instance[]>("list_instances");
+
+		const account = await invoke<any>("get_active_account");
+		if (account && account.account_type === ACCOUNT_TYPE_GUEST) {
+			const virtualInstance = createDemoInstance();
+			instances = [virtualInstance, ...instances];
+		}
+
 		setInstancesState({
 			instances: instances,
 			loading: false,
@@ -36,7 +46,11 @@ export async function initializeInstances() {
 
 // Update single instance in store
 function updateInstance(updatedInstance: Instance) {
-	setInstancesState("instances", (inst) => inst.id === updatedInstance.id, reconcile(updatedInstance));
+	setInstancesState(
+		"instances",
+		(inst) => inst.id === updatedInstance.id,
+		reconcile(updatedInstance),
+	);
 }
 
 // Add new instance to store
@@ -46,7 +60,9 @@ function addInstance(newInstance: Instance) {
 
 // Remove instance from store
 function removeInstance(instanceId: number) {
-	setInstancesState("instances", (instances) => instances.filter((inst) => inst.id !== instanceId));
+	setInstancesState("instances", (instances) =>
+		instances.filter((inst) => inst.id !== instanceId),
+	);
 }
 
 // Listen for Tauri events
@@ -79,6 +95,21 @@ export function setupInstanceListeners() {
 		// Listen for launch events (updates lastPlayed, playtime)
 		await listen<Instance>("core://instance-launched", (event) => {
 			updateInstance(event.payload);
+		});
+
+		// Listen for account changes to re-initialize instances (important for Guest -> Real transition)
+		await listen<any>("config-updated", (event) => {
+			if (event.payload.field === "active_account_uuid") {
+				console.log(
+					"[InstancesStore] Active account changed, re-initializing...",
+				);
+				initializeInstances();
+			}
+		});
+
+		await listen<any>("core://account-heads-updated", () => {
+			console.log("[InstancesStore] Account heads updated, re-initializing...");
+			initializeInstances();
 		});
 	})();
 

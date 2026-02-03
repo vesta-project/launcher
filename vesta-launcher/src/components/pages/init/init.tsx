@@ -27,21 +27,24 @@ function InitPage() {
 	const [isLoginOnly, setIsLoginOnly] = createSignal(false);
 
 	onMount(() => {
+		const searchParams = new URLSearchParams(window.location.search);
+		const forceLoginRequested = searchParams.get("login") === "true";
+
 		// Initial setup check
 		setTimeout(async () => {
 			try {
 				const config = await invoke<any>("get_config");
-				const account = await invoke("get_active_account");
+				const account = await invoke<any>("get_active_account");
 
 				if (config.setup_completed) {
-					if (account) {
-						// Setup done and logged in -> Home
+					if (account && !forceLoginRequested) {
+						// Setup done and logged in (including Guest) -> Home
 						navigate("/home", { replace: true });
 						return;
 					} else {
-						// Setup done but logged out -> Force Login Only
+						// Setup done but logged out OR force login -> Jump to Login
 						setIsLoginOnly(true);
-						setInitStep(1); // Step 1 is Login
+						setInitStep(2); // Step 2 is Login
 					}
 				} else {
 					// Setup not done -> Resume or start onboarding

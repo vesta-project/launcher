@@ -1,5 +1,6 @@
-use tauri::State;
+use tauri::{Manager, State};
 use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, SearchResponse, ResourceCategory};
+use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::resource_download::ResourceDownloadTask;
@@ -223,6 +224,7 @@ pub async fn toggle_resource(
 
 #[tauri::command]
 pub async fn install_resource(
+    app_handle: tauri::AppHandle,
     resource_manager: State<'_, ResourceManager>,
     task_manager: State<'_, TaskManager>,
     instance_id: i32,
@@ -232,6 +234,43 @@ pub async fn install_resource(
     version: ResourceVersion,
     resource_type: ResourceType,
 ) -> Result<String> {
+    // Check if we are in guest mode
+    let active_account = match crate::auth::get_active_account() {
+        Ok(a) => a,
+        Err(_) => None,
+    };
+
+    if let Some(acc) = active_account {
+        if acc.account_type == ACCOUNT_TYPE_GUEST {
+            log::warn!("[install_resource] Blocked resource install attempt from Guest account");
+
+            // Show notification
+            if let Some(nm) =
+                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+            {
+                let _ = nm.create(crate::notifications::models::CreateNotificationInput {
+                    client_key: None,
+                    title: Some("Login Required".to_string()),
+                    description: Some(
+                        "You must be signed in with a Microsoft account to install mods or resources."
+                            .to_string(),
+                    ),
+                    severity: Some("warning".to_string()),
+                    notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                    dismissible: Some(true),
+                    actions: None,
+                    progress: None,
+                    current_step: None,
+                    total_steps: None,
+                    metadata: None,
+                    show_on_completion: None,
+                });
+            }
+
+            return Err(anyhow::anyhow!("You must be signed in with a Microsoft account to install mods or resources.").into());
+        }
+    }
+
     use crate::utils::db::get_vesta_conn;
     use crate::schema::instance::dsl as inst_dsl;
     use crate::schema::installed_resource::dsl as ir_dsl;

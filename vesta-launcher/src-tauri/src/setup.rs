@@ -151,12 +151,12 @@ fn store_crash_details_setup(
 }
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    // Get app data directory
+    let app_data_dir = get_app_config_dir()?;
+
     // CRITICAL: Initialize Diesel connection pools FIRST before any other code runs
     // This ensures migrations are applied before any queries are executed
     log::info!("Initializing databases with Diesel and running migrations...");
-
-    // Get app data directory
-    let app_data_dir = get_app_config_dir()?;
 
     // Initialize connection pools (this runs migrations automatically)
     if let Err(e) = init_config_pool(app_data_dir.clone()) {
@@ -175,6 +175,33 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     log::info!("✓ Database initialization complete");
+
+    // --- Guest Mode Cleanup ---
+    // If the app was closed while in guest mode, clean up the marker and guest session data
+    if let Ok(dir) = get_app_config_dir() {
+        let marker_path = dir.join(".guest_mode");
+        if marker_path.exists() {
+            log::info!("[setup] Cleaning up stale guest session...");
+            let _ = std::fs::remove_file(marker_path);
+
+            // Evict Guest account from database
+            if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
+                use crate::schema::account::dsl::*;
+                use diesel::prelude::*;
+                let _ = diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID)))
+                    .execute(&mut conn);
+            }
+
+            // Reset active account if it was guest
+            if let Ok(mut config) = crate::utils::config::get_app_config() {
+                if config.active_account_uuid == Some(crate::auth::GUEST_UUID.to_string()) {
+                    config.active_account_uuid = None;
+                    let _ = crate::utils::config::update_app_config(&config);
+                }
+            }
+        }
+    }
+    // ---------------------------
 
     // Recovery for interrupted installs - move any stuck 'installing' instances to 'interrupted'
     {

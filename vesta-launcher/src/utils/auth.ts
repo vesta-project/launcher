@@ -5,6 +5,9 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 
+export const ACCOUNT_TYPE_GUEST = "Guest";
+export const GUEST_UUID = "00000000000000000000000000000000";
+
 export interface Account {
 	id: number;
 	uuid: string;
@@ -18,6 +21,7 @@ export interface Account {
 	cape_url: string | null;
 	created_at: string | null;
 	updated_at: string | null;
+	account_type: string;
 }
 
 export type AuthStage =
