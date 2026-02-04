@@ -1,156 +1,167 @@
 .unified-page-viewer-root {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    background: transparent;
-    color: var(--page-viewer-nav-color, var(--theme-text));
-    overflow: hidden;
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: 100%;
+	background: transparent;
+	color: var(--page-viewer-nav-color, var(--theme-text));
+	overflow: hidden;
 }
 
 .page-viewer-navbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    height: 32px;
-    padding: 0 8px;
-    background: var(--liquid-background, var(--theme-background-secondary));
-    backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
-    -webkit-backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
-    box-shadow: var(--liquid-box-shadow);
-    border-bottom: var(--border-width-subtle) solid hsla(var(--color__primary-hue), 30%, 30%, 0.3);
-    flex-shrink: 0;
-    user-select: none;
-    z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 32px;
+	padding: 0 8px;
+	background: var(--liquid-background, var(--theme-background-secondary));
+	backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
+	box-shadow: var(--liquid-box-shadow);
+	border-bottom: var(--border-width-subtle) solid
+		hsla(var(--color__primary-hue), 30%, 30%, 0.3);
+	flex-shrink: 0;
+	user-select: none;
+	z-index: 10;
 }
 
 .page-viewer-navbar-right {
-    display: flex;
-    align-items: center;
-    height: 100%;
-    z-index: 20;
+	display: flex;
+	align-items: center;
+	height: 100%;
+	z-index: 20;
 }
 
 .page-viewer-window-controls-wrapper {
-    display: flex;
-    align-items: stretch;
-    height: 100%;
-    margin-right: -8px;
-    pointer-events: auto;
+	display: flex;
+	align-items: stretch;
+	height: 100%;
+	margin-right: -8px;
+	pointer-events: auto;
 }
 
 .page-viewer-window-controls-wrapper > * {
-    display: flex;
-    align-items: stretch;
-    height: 100%;
-    pointer-events: auto;
+	display: flex;
+	align-items: stretch;
+	height: 100%;
+	pointer-events: auto;
 }
 
 .page-viewer-window-controls-wrapper button {
-    pointer-events: auto !important;
+	pointer-events: auto !important;
 }
 
 .page-viewer-window-controls-wrapper svg path {
-    fill: var(--page-viewer-nav-color, var(--theme-text));
+	fill: var(--page-viewer-nav-color, var(--theme-text));
 }
 
 .page-viewer-navbar-center {
-    flex: 1;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100%;
-    min-width: 0;
-    pointer-events: none; /* Let drag through to header */
+	flex: 1;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	height: 100%;
+	min-width: 0;
+	pointer-events: none; /* Let drag through to header */
 }
 
 .page-viewer-title {
-    font-weight: 500;
-    font-size: 13px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    opacity: 0.7;
-    pointer-events: auto; /* Re-enable for title? maybe not needed */
+	font-weight: 500;
+	font-size: 13px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	opacity: 0.7;
+	pointer-events: auto; /* Re-enable for title? maybe not needed */
 }
 
 .page-viewer-navbar-button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 4px;
-    border: none;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
-    pointer-events: auto;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	border-radius: 4px;
+	border: none;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	transition:
+		background 0.2s,
+		transform 0.1s;
+	pointer-events: auto;
 }
 
 .page-viewer-navbar-button:hover:not(:disabled) {
-    background: hsla(var(--color__primary-hue) 60% 80% / 0.1);
+	background: hsla(var(--color__primary-hue) 60% 80% / 0.1);
 }
 
 .page-viewer-navbar-button:active:not(:disabled) {
-    background: hsla(var(--color__primary-hue) 60% 80% / 0.2);
-    transform: translateY(1px);
+	background: hsla(var(--color__primary-hue) 60% 80% / 0.2);
+	transform: translateY(1px);
 }
 
 .page-viewer-navbar-button svg {
-    width: 14px;
-    height: 14px;
-    fill: currentColor;
+	width: 14px;
+	height: 14px;
+	fill: currentColor;
 }
 
 .page-viewer-navbar-button:disabled {
-    opacity: 0.3;
-    filter: grayscale(1);
-    cursor: not-allowed;
+	opacity: 0.3;
+	filter: grayscale(1);
+	cursor: not-allowed;
 }
 
 .page-viewer-navbar-button.is-loading svg {
-    animation: rotate 1s linear infinite;
+	animation: rotate 1s linear infinite;
 }
 
 @keyframes rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .page-viewer-content {
-    flex: 1;
-    position: relative;
-    overflow: auto;
-    width: 100%;
+	flex: 1;
+	position: relative;
+	overflow: auto;
+	width: 100%;
 }
 
 .page-viewer-reload-overlay {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: hsla(var(--color__primary-hue), 10%, 10%, 0.4);
-    backdrop-filter: blur(4px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 1000;
-    animation: fadeIn 0.15s ease-out;
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: hsla(var(--color__primary-hue), 10%, 10%, 0.4);
+	backdrop-filter: blur(4px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 1000;
+	animation: fadeIn 0.15s ease-out;
 }
 
 .page-viewer-reload-spinner {
-    width: 32px;
-    height: 32px;
-    border: 3px solid hsla(var(--color__primary-hue), 80%, 80%, 0.2);
-    border-top-color: hsl(var(--color__primary-hue), 100%, 70%);
-    border-radius: 50%;
-    animation: rotate 0.8s linear infinite;
+	width: 32px;
+	height: 32px;
+	border: 3px solid hsla(var(--color__primary-hue), 80%, 80%, 0.2);
+	border-top-color: hsl(var(--color__primary-hue), 100%, 70%);
+	border-radius: 50%;
+	animation: rotate 0.8s linear infinite;
 }
 
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
 }

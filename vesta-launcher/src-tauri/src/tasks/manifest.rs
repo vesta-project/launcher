@@ -1,5 +1,4 @@
 use anyhow::Result;
-use serde_json::to_string_pretty;
 use tauri::Manager;
 use tokio::fs;
 
@@ -91,8 +90,20 @@ impl Task for GenerateManifestTask {
                 },
             );
 
+            let network_manager = app.state::<crate::utils::network::NetworkManager>();
+            let network_status = network_manager.get_status();
+
+            let max_age = if network_status == crate::utils::network::NetworkStatus::Weak {
+                168 // 7 days
+            } else if network_status == crate::utils::network::NetworkStatus::Offline {
+                8760 // 1 year (basically use any cache we have)
+            } else {
+                24 // 1 day
+            };
+
             // Load or fetch metadata
-            let metadata = if force_refresh {
+            let start = std::time::Instant::now();
+            let metadata_res = if force_refresh {
                 log::info!("Force refreshing PistonMetadata (bypassing cache)...");
                 // Delete cache to force fresh fetch
                 let cache_path = config_dir.join("piston_manifest.json");
@@ -100,21 +111,23 @@ impl Task for GenerateManifestTask {
                     log::info!("Deleting cache file to force refresh");
                     let _ = fs::remove_file(&cache_path).await;
                 }
-                piston_lib::game::metadata::cache::refresh_metadata(&config_dir)
-                    .await
-                    .map_err(|e| {
-                        log::error!("Failed to refresh metadata: {}", e);
-                        e.to_string()
-                    })?
+                piston_lib::game::metadata::cache::refresh_metadata(&config_dir).await
             } else {
-                log::info!("Fetching PistonMetadata from piston-lib cache...");
-                piston_lib::game::metadata::cache::load_or_fetch_metadata(&config_dir)
+                log::info!(
+                    "Fetching PistonMetadata (status: {:?}, max_age: {}h)...",
+                    network_status,
+                    max_age
+                );
+                piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&config_dir, max_age)
                     .await
-                    .map_err(|e| {
-                        log::error!("Failed to load/fetch metadata: {}", e);
-                        e.to_string()
-                    })?
             };
+
+            network_manager.report_request_result(start.elapsed().as_millis(), metadata_res.is_ok());
+
+            let metadata = metadata_res.map_err(|e| {
+                log::error!("Failed to load/fetch metadata: {}", e);
+                e.to_string()
+            })?;
 
             log::info!(
                 "Metadata loaded successfully: {} game versions, last_updated: {}",

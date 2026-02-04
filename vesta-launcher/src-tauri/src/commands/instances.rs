@@ -1,12 +1,12 @@
-use crate::models::instance::{Instance, NewInstance};
-use crate::schema::instance::dsl::*;
 use crate::auth::ACCOUNT_TYPE_GUEST;
+use crate::models::instance::{Instance, NewInstance};
+use crate::resources::ResourceWatcher;
+use crate::schema::instance::dsl::*;
 use crate::tasks::installers::InstallInstanceTask;
-use crate::tasks::maintenance::{CloneInstanceTask, ResetInstanceTask, RepairInstanceTask};
+use crate::tasks::maintenance::{CloneInstanceTask, RepairInstanceTask, ResetInstanceTask};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
-use crate::resources::ResourceWatcher;
 use diesel::prelude::*;
 use std::sync::Arc;
 use tauri::{Manager, State};
@@ -194,7 +194,9 @@ pub async fn install_instance(
                             .to_string(),
                     ),
                     severity: Some("warning".to_string()),
-                    notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                    notification_type: Some(
+                        crate::notifications::models::NotificationType::Immediate,
+                    ),
                     dismissible: Some(true),
                     actions: None,
                     progress: None,
@@ -205,7 +207,9 @@ pub async fn install_instance(
                 });
             }
 
-            return Err("You must be signed in with a Microsoft account to install Minecraft.".to_string());
+            return Err(
+                "You must be signed in with a Microsoft account to install Minecraft.".to_string(),
+            );
         }
     }
 
@@ -262,16 +266,20 @@ pub async fn install_instance(
 fn process_instance_icon(mut inst: Instance) -> Instance {
     // If we have icon_data, we should prefer serving it via base64 for offline compatibility,
     // unless the icon_path is a gradient (which doesn't use icon_data).
-    let is_gradient = inst.icon_path.as_ref().map(|p| p.starts_with("linear-gradient")).unwrap_or(false);
-    
+    let is_gradient = inst
+        .icon_path
+        .as_ref()
+        .map(|p| p.starts_with("linear-gradient"))
+        .unwrap_or(false);
+
     if !is_gradient {
         if let Some(ref data) = inst.icon_data {
-            use base64::{Engine as _, engine::general_purpose};
+            use base64::{engine::general_purpose, Engine as _};
             let b64 = general_purpose::STANDARD.encode(data);
             inst.icon_path = Some(format!("data:image/png;base64,{}", b64));
         } else if let Some(ref url) = inst.modpack_icon_url {
-             // Fallback to URL if we have one but no data yet
-             inst.icon_path = Some(url.clone());
+            // Fallback to URL if we have one but no data yet
+            inst.icon_path = Some(url.clone());
         }
     }
     inst
@@ -281,7 +289,7 @@ fn process_instance_icon(mut inst: Instance) -> Instance {
 pub fn list_instances() -> Result<Vec<Instance>, String> {
     log::info!("Fetching all instances from database");
 
-    // Guest Mode check: If active account is Guest, we hide real instances 
+    // Guest Mode check: If active account is Guest, we hide real instances
     // to provide a clean slate without destroying user data.
     if let Ok(Some(active_acc)) = crate::auth::get_active_account() {
         if active_acc.account_type == ACCOUNT_TYPE_GUEST {
@@ -298,7 +306,7 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
         .map_err(|e| format!("Failed to query instances: {}", e))?;
 
     log::info!("Retrieved {} instances", instances.len());
-    
+
     let processed = instances.into_iter().map(process_instance_icon).collect();
     Ok(processed)
 }
@@ -349,7 +357,10 @@ pub async fn create_instance(
         app_config_dir.join("instances")
     };
 
-    log::info!("[create_instance] Using instances root: {:?}", instances_root);
+    log::info!(
+        "[create_instance] Using instances root: {:?}",
+        instances_root
+    );
 
     // Fetch existing instance names and compute their slugs
     let existing_names: Vec<String> = instance
@@ -374,7 +385,7 @@ pub async fn create_instance(
         if path.starts_with("data:image/") {
             log::info!("[create_instance] Converting base64 icon to binary data");
             if let Some(base64_part) = path.split(",").collect::<Vec<&str>>().get(1) {
-                use base64::{Engine as _, engine::general_purpose};
+                use base64::{engine::general_purpose, Engine as _};
                 if let Ok(bytes) = general_purpose::STANDARD.decode(base64_part) {
                     inst.icon_data = Some(bytes);
                     inst.icon_path = Some("internal://icon".to_string());
@@ -392,8 +403,15 @@ pub async fn create_instance(
 
     // If we have a modpack icon URL but no bytes, try to download them now
     if inst.modpack_icon_url.is_some() && inst.icon_data.is_none() {
-        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(inst.modpack_icon_url.as_ref().unwrap()).await {
-            log::info!("[create_instance] Successfully downloaded icon for offline use ({} bytes)", bytes.len());
+        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
+            inst.modpack_icon_url.as_ref().unwrap(),
+        )
+        .await
+        {
+            log::info!(
+                "[create_instance] Successfully downloaded icon for offline use ({} bytes)",
+                bytes.len()
+            );
             inst.icon_data = Some(bytes);
         }
     }
@@ -424,7 +442,10 @@ pub async fn create_instance(
         if let Err(e) = std::fs::create_dir_all(&mods_dir) {
             log::error!("[create_instance] Failed to create mods directory: {}", e);
         } else {
-            log::info!("[create_instance] Created mods directory for modloader instance: {}", inst.name);
+            log::info!(
+                "[create_instance] Created mods directory for modloader instance: {}",
+                inst.name
+            );
         }
     }
 
@@ -481,7 +502,11 @@ pub async fn create_instance(
     }
 
     // Set initial installation_status to "pending"
-    let _ = crate::commands::instances::update_installation_status(&app_handle, inserted_id, "installing");
+    let _ = crate::commands::instances::update_installation_status(
+        &app_handle,
+        inserted_id,
+        "installing",
+    );
 
     // Start watching the new instance's folders for mods/packs
     log::info!(
@@ -489,7 +514,10 @@ pub async fn create_instance(
         slug,
         inserted_id
     );
-    if let Err(e) = resource_watcher.watch_instance(slug.clone(), inserted_id, gd).await {
+    if let Err(e) = resource_watcher
+        .watch_instance(slug.clone(), inserted_id, gd)
+        .await
+    {
         log::error!("[create_instance] Failed to start resource watcher: {}", e);
     }
 
@@ -534,7 +562,7 @@ pub async fn update_instance(
         if path.starts_with("data:image/") {
             log::info!("[update_instance] Converting base64 icon to binary data");
             if let Some(base64_part) = path.split(",").collect::<Vec<&str>>().get(1) {
-                use base64::{Engine as _, engine::general_purpose};
+                use base64::{engine::general_purpose, Engine as _};
                 if let Ok(bytes) = general_purpose::STANDARD.decode(base64_part) {
                     final_instance.icon_data = Some(bytes);
                     final_instance.icon_path = Some("internal://icon".to_string());
@@ -542,15 +570,25 @@ pub async fn update_instance(
             }
         } else if !path.starts_with("internal://") && !path.starts_with("linear-gradient") {
             // If it's a preset or something else, clear the custom icon data
-            log::debug!("[update_instance] Clearing binary icon data as path is now a preset: {}", path);
+            log::debug!(
+                "[update_instance] Clearing binary icon data as path is now a preset: {}",
+                path
+            );
             final_instance.icon_data = None;
         }
     }
 
     // Download icon for offline use if we have a URL but no bytes (e.g. newly linked or recently updated)
     if final_instance.modpack_icon_url.is_some() && final_instance.icon_data.is_none() {
-        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(final_instance.modpack_icon_url.as_ref().unwrap()).await {
-            log::info!("[update_instance] Successfully downloaded icon for offline use ({} bytes)", bytes.len());
+        if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
+            final_instance.modpack_icon_url.as_ref().unwrap(),
+        )
+        .await
+        {
+            log::info!(
+                "[update_instance] Successfully downloaded icon for offline use ({} bytes)",
+                bytes.len()
+            );
             final_instance.icon_data = Some(bytes);
         }
     }
@@ -697,7 +735,10 @@ pub async fn update_instance(
             log::warn!("[update_instance] Failed to unwatch during rename: {}", e);
         }
         if let Some(ref gd) = final_instance.game_directory {
-            if let Err(e) = resource_watcher.watch_instance(new_slug, update_id, gd.clone()).await {
+            if let Err(e) = resource_watcher
+                .watch_instance(new_slug, update_id, gd.clone())
+                .await
+            {
                 log::warn!("[update_instance] Failed to re-watch after rename: {}", e);
             }
         }
@@ -750,7 +791,7 @@ pub async fn update_instance(
 
 #[tauri::command]
 pub async fn delete_instance(
-    app_handle: tauri::AppHandle, 
+    app_handle: tauri::AppHandle,
     instance_id: i32,
     task_manager: tauri::State<'_, TaskManager>,
     resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
@@ -764,7 +805,8 @@ pub async fn delete_instance(
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
     // 1. Fetch instance to get slug and directory before deleting
-    let inst = instance.find(instance_id)
+    let inst = instance
+        .find(instance_id)
         .first::<Instance>(&mut conn)
         .map_err(|e| format!("Instance not found: {}", e))?;
 
@@ -787,7 +829,11 @@ pub async fn delete_instance(
         if gd_path.exists() {
             log::info!("Removing instance directory: {:?}", gd_path);
             if let Err(e) = std::fs::remove_dir_all(&gd_path) {
-                log::error!("Failed to delete instance directory at {:?}: {}", gd_path, e);
+                log::error!(
+                    "Failed to delete instance directory at {:?}: {}",
+                    gd_path,
+                    e
+                );
             }
         }
     }
@@ -806,8 +852,13 @@ pub async fn delete_instance(
 #[tauri::command]
 pub fn get_instance_required_java(instance_id: i32) -> Result<u32, String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-    let inst = instance.find(instance_id).first::<Instance>(&mut conn).map_err(|e| e.to_string())?;
-    Ok(crate::utils::java::get_required_java_for_version(&inst.minecraft_version))
+    let inst = instance
+        .find(instance_id)
+        .first::<Instance>(&mut conn)
+        .map_err(|e| e.to_string())?;
+    Ok(crate::utils::java::get_required_java_for_version(
+        &inst.minecraft_version,
+    ))
 }
 
 #[tauri::command]
@@ -888,11 +939,12 @@ pub async fn launch_instance(
         path
     } else {
         // Try to find global default for the required version
-        let required_major = crate::utils::java::get_required_java_for_version(&instance_data.minecraft_version);
-        
+        let required_major =
+            crate::utils::java::get_required_java_for_version(&instance_data.minecraft_version);
+
         let global_path = (|| -> Option<String> {
-            use crate::utils::db::get_config_conn;
             use crate::schema::global_java_paths::dsl::*;
+            use crate::utils::db::get_config_conn;
             let mut conn = get_config_conn().ok()?;
             global_java_paths
                 .filter(major_version.eq(required_major as i32))
@@ -957,6 +1009,10 @@ pub async fn launch_instance(
         }
     };
 
+    // Check network status
+    let network_manager = app_handle.state::<crate::utils::network::NetworkManager>();
+    let is_offline = network_manager.get_status() == crate::utils::network::NetworkStatus::Offline;
+
     // If we have an active account, ensure token validity
     if let Some(acc) = active_account.clone() {
         if acc.account_type == ACCOUNT_TYPE_GUEST {
@@ -974,7 +1030,9 @@ pub async fn launch_instance(
                             .to_string(),
                     ),
                     severity: Some("warning".to_string()),
-                    notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                    notification_type: Some(
+                        crate::notifications::models::NotificationType::Immediate,
+                    ),
                     dismissible: Some(true),
                     actions: None,
                     progress: None,
@@ -985,20 +1043,24 @@ pub async fn launch_instance(
                 });
             }
 
-            return Err("You must be signed in with a Microsoft account to launch Minecraft.".to_string());
-        }
+            return Err(
+                "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
+            );
+        } else if !is_offline {
+            if let Err(e) = crate::auth::ensure_account_tokens_valid(acc.uuid.clone()).await {
+                log::error!("[launch_instance] Failed to refresh token: {}", e);
+                return Err(format!("Failed to refresh authentication: {}", e));
+            }
 
-        if let Err(e) = crate::auth::ensure_account_tokens_valid(acc.uuid.clone()).await {
-            log::error!("[launch_instance] Failed to refresh token: {}", e);
-            return Err(format!("Failed to refresh authentication: {}", e));
+            // Re-fetch
+            active_account = match crate::auth::get_active_account() {
+                Ok(Some(acc)) => Some(acc),
+                Ok(None) => None,
+                Err(_) => None,
+            };
+        } else {
+            log::info!("[launch_instance] Offline mode: skipping token refresh");
         }
-
-        // Re-fetch
-        active_account = match crate::auth::get_active_account() {
-            Ok(Some(acc)) => Some(acc),
-            Ok(None) => None,
-            Err(_) => None,
-        };
     }
 
     // Build launch spec
@@ -1024,6 +1086,20 @@ pub async fn launch_instance(
         .join("logs")
         .join(format!("{}.log", instance_id));
 
+    let username = active_account
+        .as_ref()
+        .map(|a| a.username.clone())
+        .unwrap_or_else(|| "Player".to_string());
+
+    let uuid = if is_offline {
+        piston_lib::auth::generate_offline_uuid(&username)
+    } else {
+        active_account
+            .as_ref()
+            .map(|a| a.uuid.clone())
+            .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string())
+    };
+
     let spec = piston_lib::game::launcher::LaunchSpec {
         instance_id: instance_id.clone(),
         version_id: instance_data.minecraft_version.clone(),
@@ -1034,18 +1110,16 @@ pub async fn launch_instance(
         java_path: std::path::PathBuf::from(&java_path_str),
         min_memory: Some(instance_data.min_memory as u32),
         max_memory: Some(instance_data.max_memory as u32),
-        username: active_account
-            .as_ref()
-            .map(|a| a.username.clone())
-            .unwrap_or_else(|| "Player".to_string()),
-        uuid: active_account
-            .as_ref()
-            .map(|a| a.uuid.clone())
-            .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string()),
-        access_token: active_account
-            .as_ref()
-            .and_then(|a| a.access_token.clone())
-            .unwrap_or_else(|| "0".to_string()),
+        username,
+        uuid,
+        access_token: if is_offline {
+            "offline".to_string()
+        } else {
+            active_account
+                .as_ref()
+                .and_then(|a| a.access_token.clone())
+                .unwrap_or_else(|| "offline".to_string())
+        },
         xuid: None,
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
@@ -1107,6 +1181,27 @@ pub async fn launch_instance(
         Arc::new(move |iid, line, stream| {
             let _ = log_tx.send((iid, line, stream));
         });
+
+    if is_offline {
+        if let Some(nm) =
+            app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+        {
+            let _ = nm.create(crate::notifications::models::CreateNotificationInput {
+                client_key: None,
+                title: Some(format!("Launching {} (Offline)", instance_data.name)),
+                description: Some("Started in offline mode. Multiplayer on authenticated servers will not be available.".to_string()),
+                severity: Some("info".to_string()),
+                notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                dismissible: Some(true),
+                actions: None,
+                progress: None,
+                current_step: None,
+                total_steps: None,
+                metadata: None,
+                show_on_completion: None,
+            });
+        }
+    }
 
     let join = tokio::task::spawn_blocking(move || {
         futures::executor::block_on(piston_lib::game::launcher::launch_game(
@@ -1306,9 +1401,14 @@ pub async fn get_minecraft_versions(
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
-    let metadata = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
-        .await
-        .map_err(|e| e.to_string())?;
+    let start = std::time::Instant::now();
+    let metadata_res = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir).await;
+
+    if let Some(nm) = app_handle.try_state::<crate::utils::network::NetworkManager>() {
+        nm.report_request_result(start.elapsed().as_millis(), metadata_res.is_ok());
+    }
+
+    let metadata = metadata_res.map_err(|e| e.to_string())?;
 
     if let Err(e) = check_and_notify_new_versions(&metadata, &app_handle).await {
         log::warn!("Failed to check for new versions: {}", e);
@@ -1549,11 +1649,8 @@ pub async fn repair_instance(
     instance_id: i32,
 ) -> Result<(), String> {
     // Set status to 'installing' so UI shows progress
-    let _ = crate::commands::instances::update_instance_operation(
-        &app_handle,
-        instance_id,
-        "repair",
-    );
+    let _ =
+        crate::commands::instances::update_instance_operation(&app_handle, instance_id, "repair");
     let _ = crate::commands::instances::update_installation_status(
         &app_handle,
         instance_id,
@@ -1594,8 +1691,11 @@ pub async fn resume_instance_operation(
     task_manager: State<'_, TaskManager>,
     instance_id: i32,
 ) -> Result<(), String> {
-    log::info!("[resume_instance_operation] Resuming operation for instance ID: {}", instance_id);
-    
+    log::info!(
+        "[resume_instance_operation] Resuming operation for instance ID: {}",
+        instance_id
+    );
+
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let inst: Instance = instance
         .find(instance_id)
@@ -1603,7 +1703,10 @@ pub async fn resume_instance_operation(
         .map_err(|e| format!("Instance not found: {}", e))?;
 
     let op = inst.last_operation.as_deref().unwrap_or("install");
-    log::info!("[resume_instance_operation] Detected last operation: {}", op);
+    log::info!(
+        "[resume_instance_operation] Detected last operation: {}",
+        op
+    );
 
     match op {
         "repair" => repair_instance(app_handle, task_manager, instance_id).await,
@@ -1628,9 +1731,11 @@ pub async fn update_instance_modpack_version(
         .map_err(|e| e.to_string())?;
 
     // Fetch updated instance to notify UI
-    let updated: Instance = instance.find(instance_id).first(&mut conn).map_err(|e| e.to_string())?;
+    let updated: Instance = instance
+        .find(instance_id)
+        .first(&mut conn)
+        .map_err(|e| e.to_string())?;
     let _ = app_handle.emit("core://instance-updated", updated);
 
     Ok(())
 }
-

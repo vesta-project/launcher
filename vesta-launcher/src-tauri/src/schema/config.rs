@@ -47,7 +47,4 @@ diesel::table! {
     }
 }
 
-diesel::allow_tables_to_appear_in_same_query!(
-    app_config,
-    global_java_paths,
-);
+diesel::allow_tables_to_appear_in_same_query!(app_config, global_java_paths,);

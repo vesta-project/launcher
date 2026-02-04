@@ -1,7 +1,7 @@
-use std::io::{Read, BufReader};
-use std::fs::File;
-use std::path::Path;
 use anyhow::Result;
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::path::Path;
 
 const READ_CHUNK_SIZE: usize = 16384;
 
@@ -12,19 +12,21 @@ pub fn calculate_curseforge_fingerprint(path: &Path) -> Result<u32> {
     let file = File::open(path)?;
     let mut reader = BufReader::new(file);
     let mut data = Vec::with_capacity(metadata.len() as usize);
-    
+
     let mut buffer = [0u8; READ_CHUNK_SIZE];
     loop {
         let n = reader.read(&mut buffer)?;
-        if n == 0 { break; }
-        
+        if n == 0 {
+            break;
+        }
+
         for &b in &buffer[..n] {
             if b != 9 && b != 10 && b != 13 && b != 32 {
                 data.push(b);
             }
         }
     }
-    
+
     Ok(murmur2::murmur2(&data, 1))
 }
 
@@ -38,7 +40,7 @@ pub fn calculate_murmur2_raw(path: &Path) -> Result<u32> {
 }
 
 pub fn calculate_sha1(path: &Path) -> Result<String> {
-    use sha1::{Sha1, Digest};
+    use sha1::{Digest, Sha1};
     let mut file = File::open(path)?;
     let mut hasher = Sha1::new();
     let mut buffer = [0; 8192];

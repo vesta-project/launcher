@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
 use crate::schema::installed_resource;
-use diesel::prelude::*;
 use chrono::NaiveDateTime;
+use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Queryable, Selectable, Insertable, AsChangeset, Clone)]
 #[diesel(table_name = installed_resource)]

@@ -1,7 +1,11 @@
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { applyTheme, configToTheme, type AppThemeConfig } from "../themes/presets";
+import {
+	applyTheme,
+	configToTheme,
+	type AppThemeConfig,
+} from "../themes/presets";
 
 interface ConfigUpdateEvent {
 	field: string;
@@ -54,37 +58,43 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 			console.error("Failed to get current window label:", error);
 		}
 
-		configUnlisten = await listen<ConfigUpdateEvent>("config-updated", (event) => {
-			const { field, value } = event.payload;
+		configUnlisten = await listen<ConfigUpdateEvent>(
+			"config-updated",
+			(event) => {
+				const { field, value } = event.payload;
 
-			try {
-				// Notify all registered handlers
-				updateHandlers.forEach((handler) => {
-					try {
-						handler(field, value);
-					} catch (error) {
-						console.error(`Handler failed for config update ${field}:`, error);
-					}
-				});
-
-				console.log(`Config synced: ${field} = ${value}`);
-			} catch (error) {
-				const errorMsg = `Failed to process config update: ${field} = ${value}`;
-				console.error(errorMsg, error);
-
-				// Broadcast error event for other windows to be aware
-				if (hasTauriRuntime()) {
-					import("@tauri-apps/api/event").then(({ emit }) => {
-						emit("config-update-error", {
-							field,
-							value,
-							error: error instanceof Error ? error.message : String(error),
-							window: currentWindowLabel,
-						});
+				try {
+					// Notify all registered handlers
+					updateHandlers.forEach((handler) => {
+						try {
+							handler(field, value);
+						} catch (error) {
+							console.error(
+								`Handler failed for config update ${field}:`,
+								error,
+							);
+						}
 					});
+
+					console.log(`Config synced: ${field} = ${value}`);
+				} catch (error) {
+					const errorMsg = `Failed to process config update: ${field} = ${value}`;
+					console.error(errorMsg, error);
+
+					// Broadcast error event for other windows to be aware
+					if (hasTauriRuntime()) {
+						import("@tauri-apps/api/event").then(({ emit }) => {
+							emit("config-update-error", {
+								field,
+								value,
+								error: error instanceof Error ? error.message : String(error),
+								window: currentWindowLabel,
+							});
+						});
+					}
 				}
-			}
-		});
+			},
+		);
 	})();
 
 	await setupPromise;

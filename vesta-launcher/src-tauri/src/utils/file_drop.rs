@@ -27,13 +27,16 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
     .skip_taskbar(true)
     .fullscreen(false)
     .resizable(false)
-    .position(-40000.0, -40000.0) 
+    .position(-40000.0, -40000.0)
     .inner_size(1.0, 1.0)
     .build()
     .map_err(|e| format!("Failed to build overlay: {}", e))?;
 
     // Force off-screen position immediately after build to be safe
-    let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x: -40000, y: -40000 }));
+    let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+        x: -40000,
+        y: -40000,
+    }));
 
     // On macOS, we also need to explicitly disable the shadow via private API or standard methods
     #[cfg(target_os = "macos")]
@@ -62,13 +65,13 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
                 // Only request hide if the sniffer window is "on screen" (x >= 0)
                 if let Ok(pos) = overlay_for_event.outer_position() {
                     if pos.x >= 0 {
-                       let _ = handle.emit("vesta://hide-sniffer-request", ());
-                   }
+                        let _ = handle.emit("vesta://hide-sniffer-request", ());
+                    }
                 }
             }
             tauri::WindowEvent::Focused(focused) => {
                 if *focused {
-                   log::debug!("[FileDrop-Rust] Sniffer focused");
+                    log::debug!("[FileDrop-Rust] Sniffer focused");
                 }
             }
             _ => {}
@@ -82,12 +85,13 @@ fn emit_paths(handle: &AppHandle, paths: &Vec<std::path::PathBuf>) {
     if paths.is_empty() {
         return;
     }
-    let sniffed: Vec<SniffedPath> = paths.iter().map(|p| {
-        SniffedPath {
+    let sniffed: Vec<SniffedPath> = paths
+        .iter()
+        .map(|p| SniffedPath {
             path: p.clone(),
             is_directory: p.is_dir(),
-        }
-    }).collect();
+        })
+        .collect();
     let _ = handle.emit("vesta://sniffed-file-drop", &sniffed);
 }
 
@@ -113,7 +117,10 @@ pub async fn position_overlay(
 pub async fn hide_overlay(app_handle: AppHandle) -> Result<(), String> {
     if let Some(overlay) = app_handle.get_webview_window("file-drop-overlay") {
         // Teleport off-screen. NO hide() call to avoid 3s latency and white flashes.
-        let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition { x: -40000, y: -40000 }));
+        let _ = overlay.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+            x: -40000,
+            y: -40000,
+        }));
     }
     Ok(())
 }
@@ -132,10 +139,7 @@ pub async fn reset_file_drop_sniffer(app_handle: AppHandle) -> Result<(), String
 
 // These are still needed for the overlay's internal script to report back
 #[tauri::command]
-pub async fn set_overlay_visual_state(
-    _app_handle: AppHandle,
-    _active: bool,
-) -> Result<(), String> {
+pub async fn set_overlay_visual_state(_app_handle: AppHandle, _active: bool) -> Result<(), String> {
     Ok(())
 }
 

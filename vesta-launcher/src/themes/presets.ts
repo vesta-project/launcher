@@ -84,13 +84,17 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 
 	return validateTheme({
 		...baseTheme,
-		primaryHue: getNum(config.theme_primary_hue) ?? getNum(config.background_hue) ?? baseTheme.primaryHue,
+		primaryHue:
+			getNum(config.theme_primary_hue) ??
+			getNum(config.background_hue) ??
+			baseTheme.primaryHue,
 		style: config.theme_style ?? baseTheme.style,
 		gradientEnabled: config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
 		rotation: getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
 		gradientType: config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony: config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
-		borderWidthSubtle: getNum(config.theme_border_width) ?? baseTheme.borderWidthSubtle,
+		borderWidthSubtle:
+			getNum(config.theme_border_width) ?? baseTheme.borderWidthSubtle,
 		borderWidthStrong:
 			getNum(config.theme_border_width) !== undefined
 				? Math.max((getNum(config.theme_border_width) as number) + 1, 1)
@@ -283,7 +287,11 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		id: theme.id || "custom",
 		name: theme.name || "Custom Theme",
 		description: theme.description,
-		primaryHue: clamp(getVal(theme.primaryHue, defaultTheme.primaryHue), 0, 360),
+		primaryHue: clamp(
+			getVal(theme.primaryHue, defaultTheme.primaryHue),
+			0,
+			360,
+		),
 		primarySat:
 			theme.primarySat !== undefined && theme.primarySat !== null
 				? clamp(theme.primarySat, 0, 100)
@@ -400,8 +408,10 @@ export function applyTheme(theme: ThemeConfig): void {
 	if (
 		currentHue === theme.primaryHue.toString() &&
 		root.getAttribute("data-style") === theme.style &&
-		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0") &&
-		root.getAttribute("data-gradient-type") === (theme.gradientType || "linear") &&
+		root.getAttribute("data-gradient") ===
+			(theme.gradientEnabled ? "1" : "0") &&
+		root.getAttribute("data-gradient-type") ===
+			(theme.gradientType || "linear") &&
 		currentRotation === vars["--rotation"] &&
 		currentSecondaryHue === vars["--hue-secondary"]
 	) {

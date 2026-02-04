@@ -24,8 +24,7 @@ export const startAppTutorial = (onComplete?: () => void) => {
 				element: "#sidebar-explore",
 				popover: {
 					title: "Explore",
-					description:
-						"Discover modpacks and maps directly from Vesta.",
+					description: "Discover modpacks and maps directly from Vesta.",
 					side: "right",
 					align: "start",
 				},

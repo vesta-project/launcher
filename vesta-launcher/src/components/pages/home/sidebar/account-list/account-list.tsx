@@ -27,14 +27,17 @@ interface AccountListProps {
 }
 
 function AccountList(props: AccountListProps) {
-	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
-	const [activeAccount, { refetch: refetchActive }] = createResource(async () => {
-		try {
-			return await invoke<Account | null>("get_active_account");
-		} catch {
-			return null;
-		}
-	});
+	const [accounts, { refetch: refetchAccounts }] =
+		createResource<Account[]>(getAccounts);
+	const [activeAccount, { refetch: refetchActive }] = createResource(
+		async () => {
+			try {
+				return await invoke<Account | null>("get_active_account");
+			} catch {
+				return null;
+			}
+		},
+	);
 
 	const [avatarTimestamp, setAvatarTimestamp] = createSignal(Date.now());
 
@@ -54,7 +57,9 @@ function AccountList(props: AccountListProps) {
 		let unlisten: (() => void) | undefined;
 		listen("core://account-heads-updated", () => {
 			setAvatarTimestamp(Date.now());
-		}).then((fn) => { unlisten = fn; });
+		}).then((fn) => {
+			unlisten = fn;
+		});
 
 		onCleanup(() => unlisten?.());
 	});
@@ -75,7 +80,7 @@ function AccountList(props: AccountListProps) {
 		try {
 			console.log("[AccountList] Switching to account:", uuid);
 			await setActiveAccount(uuid);
-			
+
 			// Give the backend a moment to emit events and the UI to react
 			// before we close the modal
 			setTimeout(() => {
@@ -189,7 +194,12 @@ function AccountListItem(props: AccountListItemProps) {
 						<div class="account-active-badge">Active</div>
 					</Show>
 					<Show when={props.account.account_type === ACCOUNT_TYPE_GUEST}>
-						<div class="account-active-badge" style={{ background: "var(--primary)", color: "white" }}>Guest</div>
+						<div
+							class="account-active-badge"
+							style={{ background: "var(--primary)", color: "white" }}
+						>
+							Guest
+						</div>
 					</Show>
 				</div>
 			</div>

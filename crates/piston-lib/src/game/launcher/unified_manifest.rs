@@ -430,10 +430,6 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
             };
 
             if normalized_arch != host_arch {
-                // Allow x86 on x86_64 as a fallback
-                if host_arch == "x86_64" && normalized_arch == "x86" {
-                    return true;
-                }
                 return false;
             }
         }

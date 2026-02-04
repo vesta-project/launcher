@@ -23,7 +23,11 @@ import {
 	TabsTrigger,
 } from "@ui/tabs/tabs";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
-import { onConfigUpdate, updateThemeConfigLocal, currentThemeConfig } from "@utils/config-sync";
+import {
+	onConfigUpdate,
+	updateThemeConfigLocal,
+	currentThemeConfig,
+} from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { showToast } from "@ui/toast/toast";
 import { open } from "@tauri-apps/plugin-shell";
@@ -53,11 +57,11 @@ import {
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
 import { HelpTrigger } from "../../../ui/help-trigger";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { 
-	ContextMenu, 
-	ContextMenuContent, 
-	ContextMenuItem, 
-	ContextMenuTrigger 
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import "./settings-page.css";
 
@@ -122,7 +126,7 @@ function SettingsPage(props: { close?: () => void }) {
 	createEffect(() => {
 		setSelectedTab(activeTab());
 	});
-	
+
 	onMount(() => {
 		// Register state for pop-out window handoff
 		router()?.registerStateProvider("/config", () => ({
@@ -131,19 +135,39 @@ function SettingsPage(props: { close?: () => void }) {
 	});
 
 	// Initialize from global theme cache to prevent "Midnight Blue" flash
-	const [backgroundHue, setBackgroundHue] = createSignal(currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 220);
-	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>(currentThemeConfig.theme_style as ThemeConfig["style"] ?? "glass");
-	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(currentThemeConfig.theme_gradient_enabled ?? true);
-	const [rotation, setRotation] = createSignal<number>(currentThemeConfig.theme_gradient_angle ?? 135);
-	const [gradientType, setGradientType] = createSignal<"linear" | "radial">(currentThemeConfig.theme_gradient_type as "linear" | "radial" ?? "linear");
-	const [gradientHarmony, setGradientHarmony] = createSignal<GradientHarmony>(currentThemeConfig.theme_gradient_harmony as GradientHarmony ?? "none");
-	const [themeId, setThemeId] = createSignal<string>(currentThemeConfig.theme_id ?? "midnight");
-	const [borderThickness, setBorderThickness] = createSignal(currentThemeConfig.theme_border_width ?? 1);
-	
+	const [backgroundHue, setBackgroundHue] = createSignal(
+		currentThemeConfig.theme_primary_hue ??
+			currentThemeConfig.background_hue ??
+			220,
+	);
+	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>(
+		(currentThemeConfig.theme_style as ThemeConfig["style"]) ?? "glass",
+	);
+	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(
+		currentThemeConfig.theme_gradient_enabled ?? true,
+	);
+	const [rotation, setRotation] = createSignal<number>(
+		currentThemeConfig.theme_gradient_angle ?? 135,
+	);
+	const [gradientType, setGradientType] = createSignal<"linear" | "radial">(
+		(currentThemeConfig.theme_gradient_type as "linear" | "radial") ?? "linear",
+	);
+	const [gradientHarmony, setGradientHarmony] = createSignal<GradientHarmony>(
+		(currentThemeConfig.theme_gradient_harmony as GradientHarmony) ?? "none",
+	);
+	const [themeId, setThemeId] = createSignal<string>(
+		currentThemeConfig.theme_id ?? "midnight",
+	);
+	const [borderThickness, setBorderThickness] = createSignal(
+		currentThemeConfig.theme_border_width ?? 1,
+	);
+
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
 	const [requirements] = createResource<any[]>(() =>
-		hasTauriRuntime() ? invoke("get_required_java_versions") : Promise.resolve([]),
+		hasTauriRuntime()
+			? invoke("get_required_java_versions")
+			: Promise.resolve([]),
 	);
 	const [detected, { refetch: refetchDetected }] = createResource<any[]>(() =>
 		hasTauriRuntime() ? invoke("detect_java") : Promise.resolve([]),
@@ -151,8 +175,9 @@ function SettingsPage(props: { close?: () => void }) {
 	const [managed, { refetch: refetchManaged }] = createResource<any[]>(() =>
 		hasTauriRuntime() ? invoke("get_managed_javas") : Promise.resolve([]),
 	);
-	const [globalPaths, { refetch: refetchGlobalPaths }] = createResource<any[]>(() =>
-		hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
+	const [globalPaths, { refetch: refetchGlobalPaths }] = createResource<any[]>(
+		() =>
+			hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
 	);
 
 	const [isScanning, setIsScanning] = createSignal(false);
@@ -172,7 +197,7 @@ function SettingsPage(props: { close?: () => void }) {
 			await Promise.all([
 				refetchDetected(),
 				refetchManaged(),
-				refetchGlobalPaths()
+				refetchGlobalPaths(),
 			]);
 		} catch (e) {
 			console.error("Failed to refresh javas:", e);
@@ -181,9 +206,17 @@ function SettingsPage(props: { close?: () => void }) {
 		}
 	};
 
-	const handleSetGlobalPath = async (version: number, path: string, isManaged: boolean) => {
+	const handleSetGlobalPath = async (
+		version: number,
+		path: string,
+		isManaged: boolean,
+	) => {
 		try {
-			await invoke("set_global_java_path", { version, pathStr: path, managed: isManaged });
+			await invoke("set_global_java_path", {
+				version,
+				pathStr: path,
+				managed: isManaged,
+			});
 			refetchGlobalPaths();
 		} catch (e) {
 			console.error("Failed to set global java path:", e);
@@ -214,7 +247,9 @@ function SettingsPage(props: { close?: () => void }) {
 			if (path) {
 				const info = await invoke<any>("verify_java_path", { pathStr: path });
 				if (info.major_version !== version) {
-					alert(`Selected Java is version ${info.major_version}, but ${version} is required.`);
+					alert(
+						`Selected Java is version ${info.major_version}, but ${version} is required.`,
+					);
 				} else {
 					await handleSetGlobalPath(version, path, false);
 				}
@@ -243,21 +278,37 @@ function SettingsPage(props: { close?: () => void }) {
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
-				if (config.theme_primary_hue !== null && config.theme_primary_hue !== undefined)
+				if (
+					config.theme_primary_hue !== null &&
+					config.theme_primary_hue !== undefined
+				)
 					setBackgroundHue(config.theme_primary_hue);
-				else if (config.background_hue !== null && config.background_hue !== undefined)
+				else if (
+					config.background_hue !== null &&
+					config.background_hue !== undefined
+				)
 					setBackgroundHue(config.background_hue);
 
-				if (config.theme_style) setStyleMode(config.theme_style as ThemeConfig["style"]);
-				if (config.theme_gradient_enabled !== null && config.theme_gradient_enabled !== undefined)
+				if (config.theme_style)
+					setStyleMode(config.theme_style as ThemeConfig["style"]);
+				if (
+					config.theme_gradient_enabled !== null &&
+					config.theme_gradient_enabled !== undefined
+				)
 					setGradientEnabled(config.theme_gradient_enabled);
-				if (config.theme_gradient_angle !== null && config.theme_gradient_angle !== undefined)
+				if (
+					config.theme_gradient_angle !== null &&
+					config.theme_gradient_angle !== undefined
+				)
 					setRotation(config.theme_gradient_angle);
 				if (config.theme_gradient_type)
 					setGradientType(config.theme_gradient_type as "linear" | "radial");
 				if (config.theme_gradient_harmony)
 					setGradientHarmony(config.theme_gradient_harmony as GradientHarmony);
-				if (config.theme_border_width !== null && config.theme_border_width !== undefined)
+				if (
+					config.theme_border_width !== null &&
+					config.theme_border_width !== undefined
+				)
 					setBorderThickness(config.theme_border_width);
 			}
 
@@ -267,14 +318,20 @@ function SettingsPage(props: { close?: () => void }) {
 				if (field === "startup_check_updates") setStartupCheckUpdates(value);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
 				if (field === "theme_id" && value) setThemeId(value);
-				if (field === "theme_primary_hue" && value !== null) setBackgroundHue(value);
+				if (field === "theme_primary_hue" && value !== null)
+					setBackgroundHue(value);
 				if (field === "theme_style" && value)
 					setStyleMode(value as ThemeConfig["style"]);
-				if (field === "theme_gradient_enabled" && value !== null) setGradientEnabled(value);
-				if (field === "theme_gradient_angle" && value !== null) setRotation(value);
-				if (field === "theme_gradient_type" && value) setGradientType(value as "linear" | "radial");
-				if (field === "theme_gradient_harmony" && value) setGradientHarmony(value as GradientHarmony);
-				if (field === "theme_border_width" && value !== null) setBorderThickness(value);
+				if (field === "theme_gradient_enabled" && value !== null)
+					setGradientEnabled(value);
+				if (field === "theme_gradient_angle" && value !== null)
+					setRotation(value);
+				if (field === "theme_gradient_type" && value)
+					setGradientType(value as "linear" | "radial");
+				if (field === "theme_gradient_harmony" && value)
+					setGradientHarmony(value as GradientHarmony);
+				if (field === "theme_border_width" && value !== null)
+					setBorderThickness(value);
 			});
 		} catch (error) {
 			console.error("Failed to load settings:", error);
@@ -315,8 +372,14 @@ function SettingsPage(props: { close?: () => void }) {
 			updateThemeConfigLocal("theme_style", theme.style);
 			updateThemeConfigLocal("theme_gradient_enabled", theme.gradientEnabled);
 			updateThemeConfigLocal("theme_gradient_angle", theme.rotation ?? 135);
-			updateThemeConfigLocal("theme_gradient_type", theme.gradientType || "linear");
-			updateThemeConfigLocal("theme_gradient_harmony", theme.gradientHarmony || "none");
+			updateThemeConfigLocal(
+				"theme_gradient_type",
+				theme.gradientType || "linear",
+			);
+			updateThemeConfigLocal(
+				"theme_gradient_harmony",
+				theme.gradientHarmony || "none",
+			);
 			if (theme.borderWidthSubtle !== undefined) {
 				updateThemeConfigLocal("theme_border_width", theme.borderWidthSubtle);
 			}
@@ -503,7 +566,7 @@ function SettingsPage(props: { close?: () => void }) {
 
 	createEffect(() => {
 		if (loading()) return;
-		
+
 		const id = themeId();
 		const currentTheme = id ? getThemeById(id) : undefined;
 		if (currentTheme) {
@@ -513,10 +576,10 @@ function SettingsPage(props: { close?: () => void }) {
 				style: (styleMode() ?? currentTheme.style) as ThemeConfig["style"],
 				gradientEnabled: (gradientEnabled() ??
 					currentTheme.gradientEnabled) as boolean,
-				rotation: (rotation() ??
-					currentTheme.rotation) as number,
-				gradientType: (gradientType() ??
-					currentTheme.gradientType) as "linear" | "radial",
+				rotation: (rotation() ?? currentTheme.rotation) as number,
+				gradientType: (gradientType() ?? currentTheme.gradientType) as
+					| "linear"
+					| "radial",
 				gradientHarmony: (gradientHarmony() ??
 					currentTheme.gradientHarmony) as GradientHarmony,
 				borderWidthSubtle: borderThickness(),
@@ -528,13 +591,10 @@ function SettingsPage(props: { close?: () => void }) {
 
 	createEffect(() => {
 		if (loading()) return;
-		
+
 		const root = document.documentElement;
 		if (styleMode() === "bordered") {
-			root.style.setProperty(
-				"--border-width-subtle",
-				`${borderThickness()}px`,
-			);
+			root.style.setProperty("--border-width-subtle", `${borderThickness()}px`);
 			root.style.setProperty(
 				"--border-width-strong",
 				`${Math.max(borderThickness() + 1, 1)}px`,
@@ -611,14 +671,19 @@ function SettingsPage(props: { close?: () => void }) {
 									<div class="settings-info">
 										<span class="settings-label">Reset Onboarding</span>
 										<span class="settings-description">
-											Redo the first-time setup process. This will not delete your accounts or instances.
+											Redo the first-time setup process. This will not delete
+											your accounts or instances.
 										</span>
 									</div>
-									<LauncherButton 
-										variant="shadow" 
+									<LauncherButton
+										variant="shadow"
 										color="destructive"
 										onClick={async () => {
-											if (await confirm("Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen.")) {
+											if (
+												await confirm(
+													"Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen.",
+												)
+											) {
 												try {
 													await invoke("reset_onboarding");
 													window.location.href = "/"; // Force reload to root
@@ -750,7 +815,9 @@ function SettingsPage(props: { close?: () => void }) {
 												}}
 											>
 												<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
-												<ToggleGroupItem value="radial">Circular</ToggleGroupItem>
+												<ToggleGroupItem value="radial">
+													Circular
+												</ToggleGroupItem>
 											</ToggleGroup>
 										</div>
 
@@ -765,9 +832,7 @@ function SettingsPage(props: { close?: () => void }) {
 											>
 												<div class="slider__header">
 													<label class="slider__label">Rotation</label>
-													<div class="slider__value-label">
-														{rotation()}°
-													</div>
+													<div class="slider__value-label">{rotation()}°</div>
 												</div>
 												<SliderTrack>
 													<SliderFill />
@@ -790,9 +855,7 @@ function SettingsPage(props: { close?: () => void }) {
 												value={gradientHarmony() ?? "none"}
 												onChange={(val) => {
 													if (val)
-														handleGradientHarmonyChange(
-															val as GradientHarmony,
-														);
+														handleGradientHarmonyChange(val as GradientHarmony);
 												}}
 											>
 												<ToggleGroupItem value="none">None</ToggleGroupItem>
@@ -845,64 +908,99 @@ function SettingsPage(props: { close?: () => void }) {
 											<HelpTrigger topic="JAVA_MANAGED" />
 										</h2>
 										<p class="section-description">
-											Global defaults for each Java version. Instances follow these by default.
+											Global defaults for each Java version. Instances follow
+											these by default.
 										</p>
 									</div>
-									<LauncherButton 
-										onClick={refreshJavas} 
+									<LauncherButton
+										onClick={refreshJavas}
 										disabled={isScanning()}
 										variant="ghost"
 									>
 										{isScanning() ? "Scanning..." : "Rescan System"}
 									</LauncherButton>
 								</div>
-								
+
 								<div class="java-requirements-list">
 									<For each={requirements()}>
 										{(req: any) => {
-											const current = () => globalPaths()?.find((p: any) => p.major_version === req.major_version);
-											const managedVersion = () => managed()?.find((m: any) => m.major_version === req.major_version);
-											
+											const current = () =>
+												globalPaths()?.find(
+													(p: any) => p.major_version === req.major_version,
+												);
+											const managedVersion = () =>
+												managed()?.find(
+													(m: any) => m.major_version === req.major_version,
+												);
+
 											return (
 												<div class="java-req-item">
 													<div class="java-req-header">
 														<h3>{req.recommended_name}</h3>
 													</div>
-													
+
 													<div class="java-options-grid">
 														{/* Managed Option */}
 														<ContextMenu>
 															<ContextMenuTrigger>
 																<Tooltip>
-																	<TooltipTrigger as="div" style={{ display: "contents" }}>
-																		<div 
+																	<TooltipTrigger
+																		as="div"
+																		style={{ display: "contents" }}
+																	>
+																		<div
 																			class="java-option-card"
-																			classList={{ 'active': current()?.is_managed }}
+																			classList={{
+																				active: current()?.is_managed,
+																			}}
 																			onClick={() => {
 																				const m = managedVersion();
-																				if (m) handleSetGlobalPath(req.major_version, m.path, true);
+																				if (m)
+																					handleSetGlobalPath(
+																						req.major_version,
+																						m.path,
+																						true,
+																					);
 																			}}
 																		>
 																			<div class="option-title">
 																				Managed Runtime
 																				<Show when={current()?.is_managed}>
-																					<span class="active-badge">Active</span>
+																					<span class="active-badge">
+																						Active
+																					</span>
 																				</Show>
 																			</div>
-																			<Show when={managedVersion()} fallback={
-																				<LauncherButton 
-																					size="sm" 
-																					variant="ghost"
-																					onClick={(e) => { e.stopPropagation(); handleDownloadManaged(req.major_version); }}
-																					style={{ "margin-top": "auto", "width": "100%", "font-size": "0.75rem", "height": "28px" }}
-																				>
-																					Download & Use
-																				</LauncherButton>
-																			}>
+																			<Show
+																				when={managedVersion()}
+																				fallback={
+																					<LauncherButton
+																						size="sm"
+																						variant="ghost"
+																						onClick={(e) => {
+																							e.stopPropagation();
+																							handleDownloadManaged(
+																								req.major_version,
+																							);
+																						}}
+																						style={{
+																							"margin-top": "auto",
+																							width: "100%",
+																							"font-size": "0.75rem",
+																							height: "28px",
+																						}}
+																					>
+																						Download & Use
+																					</LauncherButton>
+																				}
+																			>
 																				{(m) => {
 																					const managed = m();
 																					return (
-																						<div class="option-path" style={{ "margin-top": "auto" }}>
+																						<div
+																							class="option-path"
+																							style={{ "margin-top": "auto" }}
+																						>
 																							{managed.path}
 																						</div>
 																					);
@@ -911,7 +1009,10 @@ function SettingsPage(props: { close?: () => void }) {
 																		</div>
 																	</TooltipTrigger>
 																	<TooltipContent>
-																		<Show when={managedVersion()?.path} fallback="No path set">
+																		<Show
+																			when={managedVersion()?.path}
+																			fallback="No path set"
+																		>
 																			{(path) => (
 																				<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
 																					{path()}
@@ -922,39 +1023,68 @@ function SettingsPage(props: { close?: () => void }) {
 																</Tooltip>
 															</ContextMenuTrigger>
 															<ContextMenuContent>
-																<ContextMenuItem onClick={() => {
-																	const path = managedVersion()?.path;
-																	if (path) {
-																		navigator.clipboard.writeText(path);
-																		showToast({ title: "Copied", description: "Path copied to clipboard", severity: "Success" });
-																	}
-																}}>
+																<ContextMenuItem
+																	onClick={() => {
+																		const path = managedVersion()?.path;
+																		if (path) {
+																			navigator.clipboard.writeText(path);
+																			showToast({
+																				title: "Copied",
+																				description: "Path copied to clipboard",
+																				severity: "Success",
+																			});
+																		}
+																	}}
+																>
 																	Copy Full Path
 																</ContextMenuItem>
 															</ContextMenuContent>
 														</ContextMenu>
 
 														{/* System Detected */}
-														<For each={detected()?.filter((d: any) => d.major_version === req.major_version)}>
+														<For
+															each={detected()?.filter(
+																(d: any) =>
+																	d.major_version === req.major_version,
+															)}
+														>
 															{(det: any) => {
-																const isActive = () => current()?.path === det.path && !current()?.is_managed;
+																const isActive = () =>
+																	current()?.path === det.path &&
+																	!current()?.is_managed;
 																return (
 																	<ContextMenu>
 																		<ContextMenuTrigger>
 																			<Tooltip>
-																				<TooltipTrigger as="div" style={{ display: "contents" }}>
-																					<div 
+																				<TooltipTrigger
+																					as="div"
+																					style={{ display: "contents" }}
+																				>
+																					<div
 																						class="java-option-card"
-																						classList={{ 'active': isActive() }}
-																						onClick={() => handleSetGlobalPath(req.major_version, det.path, false)}
+																						classList={{ active: isActive() }}
+																						onClick={() =>
+																							handleSetGlobalPath(
+																								req.major_version,
+																								det.path,
+																								false,
+																							)
+																						}
 																					>
 																						<div class="option-title">
 																							System Runtime
 																							<Show when={isActive()}>
-																								<span class="active-badge">Active</span>
+																								<span class="active-badge">
+																									Active
+																								</span>
 																							</Show>
 																						</div>
-																						<div class="option-path" style={{ "margin-top": "auto" }}>{det.path}</div>
+																						<div
+																							class="option-path"
+																							style={{ "margin-top": "auto" }}
+																						>
+																							{det.path}
+																						</div>
 																					</div>
 																				</TooltipTrigger>
 																				<TooltipContent>
@@ -965,10 +1095,19 @@ function SettingsPage(props: { close?: () => void }) {
 																			</Tooltip>
 																		</ContextMenuTrigger>
 																		<ContextMenuContent>
-																			<ContextMenuItem onClick={() => {
-																				navigator.clipboard.writeText(det.path);
-																				showToast({ title: "Copied", description: "Path copied to clipboard", severity: "Success" });
-																			}}>
+																			<ContextMenuItem
+																				onClick={() => {
+																					navigator.clipboard.writeText(
+																						det.path,
+																					);
+																					showToast({
+																						title: "Copied",
+																						description:
+																							"Path copied to clipboard",
+																						severity: "Success",
+																					});
+																				}}
+																			>
 																				Copy Full Path
 																			</ContextMenuItem>
 																		</ContextMenuContent>
@@ -978,20 +1117,44 @@ function SettingsPage(props: { close?: () => void }) {
 														</For>
 
 														{/* Custom active path if not in lists */}
-														<Show when={current() && !current()?.is_managed && !detected()?.some(d => d.path === current()?.path && d.major_version === req.major_version)}>
+														<Show
+															when={
+																current() &&
+																!current()?.is_managed &&
+																!detected()?.some(
+																	(d) =>
+																		d.path === current()?.path &&
+																		d.major_version === req.major_version,
+																)
+															}
+														>
 															<ContextMenu>
 																<ContextMenuTrigger>
 																	<Tooltip>
-																		<TooltipTrigger as="div" style={{ display: "contents" }}>
-																			<div 
+																		<TooltipTrigger
+																			as="div"
+																			style={{ display: "contents" }}
+																		>
+																			<div
 																				class="java-option-card active"
-																				onClick={() => handleManualPickSetGlobal(req.major_version)}
+																				onClick={() =>
+																					handleManualPickSetGlobal(
+																						req.major_version,
+																					)
+																				}
 																			>
 																				<div class="option-title">
 																					Custom Path
-																					<span class="active-badge">Active</span>
+																					<span class="active-badge">
+																						Active
+																					</span>
 																				</div>
-																				<div class="option-path" style={{ "margin-top": "auto" }}>{current()?.path}</div>
+																				<div
+																					class="option-path"
+																					style={{ "margin-top": "auto" }}
+																				>
+																					{current()?.path}
+																				</div>
 																			</div>
 																		</TooltipTrigger>
 																		<TooltipContent>
@@ -1002,13 +1165,20 @@ function SettingsPage(props: { close?: () => void }) {
 																	</Tooltip>
 																</ContextMenuTrigger>
 																<ContextMenuContent>
-																	<ContextMenuItem onClick={() => {
-																		const path = current()?.path;
-																		if (path) {
-																			navigator.clipboard.writeText(path);
-																			showToast({ title: "Copied", description: "Path copied to clipboard", severity: "Success" });
-																		}
-																	}}>
+																	<ContextMenuItem
+																		onClick={() => {
+																			const path = current()?.path;
+																			if (path) {
+																				navigator.clipboard.writeText(path);
+																				showToast({
+																					title: "Copied",
+																					description:
+																						"Path copied to clipboard",
+																					severity: "Success",
+																				});
+																			}
+																		}}
+																	>
 																		Copy Full Path
 																	</ContextMenuItem>
 																</ContextMenuContent>
@@ -1016,9 +1186,19 @@ function SettingsPage(props: { close?: () => void }) {
 														</Show>
 
 														{/* Manual browse */}
-														<div class="java-option-card browse" onClick={() => handleManualPickSetGlobal(req.major_version)}>
+														<div
+															class="java-option-card browse"
+															onClick={() =>
+																handleManualPickSetGlobal(req.major_version)
+															}
+														>
 															<div class="option-title">+ Browse...</div>
-															<div class="option-subtitle" style={{ "margin-top": "auto" }}>Select manually</div>
+															<div
+																class="option-subtitle"
+																style={{ "margin-top": "auto" }}
+															>
+																Select manually
+															</div>
 														</div>
 													</div>
 												</div>
@@ -1038,10 +1218,13 @@ function SettingsPage(props: { close?: () => void }) {
 									<div class="settings-info">
 										<span class="settings-label">Documentation</span>
 										<span class="settings-description">
-											Technical overview of modding frameworks, runtime environments, and configuration.
+											Technical overview of modding frameworks, runtime
+											environments, and configuration.
 										</span>
 									</div>
-									<LauncherButton onClick={() => router()?.navigate("/modding-guide")}>
+									<LauncherButton
+										onClick={() => router()?.navigate("/modding-guide")}
+									>
 										View Docs
 									</LauncherButton>
 								</div>
@@ -1053,13 +1236,16 @@ function SettingsPage(props: { close?: () => void }) {
 									<div class="settings-info">
 										<span class="settings-label">Platform Walkthrough</span>
 										<span class="settings-description">
-											Initiate the interactive walkthrough to familiarize yourself with Vesta's interface.
+											Initiate the interactive walkthrough to familiarize
+											yourself with Vesta's interface.
 										</span>
 									</div>
-									<LauncherButton onClick={() => {
-										props.close?.();
-										setTimeout(() => startAppTutorial(), 100);
-									}}>
+									<LauncherButton
+										onClick={() => {
+											props.close?.();
+											setTimeout(() => startAppTutorial(), 100);
+										}}
+									>
 										Run Tutorial
 									</LauncherButton>
 								</div>
@@ -1068,7 +1254,12 @@ function SettingsPage(props: { close?: () => void }) {
 							<section class="settings-section">
 								<h2>Support</h2>
 								<div class="social-links">
-									<LauncherButton variant="ghost" onClick={() => open("https://github.com/vesta-project/launcher")}>
+									<LauncherButton
+										variant="ghost"
+										onClick={() =>
+											open("https://github.com/vesta-project/launcher")
+										}
+									>
 										GitHub
 									</LauncherButton>
 									{/* <LauncherButton variant="ghost" onClick={() => open("https://discord.gg/vesta")}>
@@ -1083,7 +1274,8 @@ function SettingsPage(props: { close?: () => void }) {
 									<div class="settings-info">
 										<span class="settings-label">Automatic Updates</span>
 										<span class="settings-description">
-											Download and install updates automatically in the background
+											Download and install updates automatically in the
+											background
 										</span>
 									</div>
 									<Switch
@@ -1171,10 +1363,7 @@ function SettingsPage(props: { close?: () => void }) {
 											Enable verbose logging for troubleshooting
 										</span>
 									</div>
-									<Switch
-										checked={debugLogging()}
-										onChange={handleDebugToggle}
-									>
+									<Switch checked={debugLogging()} onChange={handleDebugToggle}>
 										<SwitchControl>
 											<SwitchThumb />
 										</SwitchControl>

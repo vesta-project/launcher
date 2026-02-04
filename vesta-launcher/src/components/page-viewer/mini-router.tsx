@@ -47,13 +47,17 @@ class MiniRouter {
 	};
 	currentElement: Accessor<RouterComponent>;
 	currentPathProps: Accessor<Record<string, unknown> | undefined>;
-	customName: { set: (value: string | null) => void; get: Accessor<string | null> };
+	customName: {
+		set: (value: string | null) => void;
+		get: Accessor<string | null>;
+	};
 	isReloading: Accessor<boolean>;
 	private setCurrentPathProps: (
 		props: Record<string, unknown> | undefined,
 	) => void;
 	private setIsReloading: (value: boolean) => void;
-	private stateProviders: Map<string, () => Record<string, unknown>> = new Map();
+	private stateProviders: Map<string, () => Record<string, unknown>> =
+		new Map();
 	history: {
 		past: HistoryEntry[];
 		future: HistoryEntry[];
@@ -179,7 +183,7 @@ class MiniRouter {
 
 			const searchParams = new URLSearchParams();
 			searchParams.set("path", path);
-			
+
 			if (Object.keys(params).length > 0) {
 				for (const [key, value] of Object.entries(params)) {
 					searchParams.set(key, String(value));
@@ -224,14 +228,18 @@ class MiniRouter {
 				this.history.push({
 					path: this.currentPath.get(),
 					params: newParams,
-					props: this.getSnapshot()
+					props: this.getSnapshot(),
 				});
 				this.history.future = [];
 			} else {
 				this.currentParams.set(newParams);
 			}
-			
-			console.log(`Updated query param ${key}:`, value, push ? "(push)" : "(replace)");
+
+			console.log(
+				`Updated query param ${key}:`,
+				value,
+				push ? "(push)" : "(replace)",
+			);
 		};
 
 		// Remove a query param
@@ -263,7 +271,10 @@ class MiniRouter {
 			console.log("Updated component state:", state);
 		};
 
-		this.registerStateProvider = (path: string, provider: () => Record<string, unknown>) => {
+		this.registerStateProvider = (
+			path: string,
+			provider: () => Record<string, unknown>,
+		) => {
 			this.stateProviders.set(path, provider);
 		};
 

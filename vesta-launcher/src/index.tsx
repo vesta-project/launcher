@@ -26,27 +26,34 @@ initTheme().catch((err) => {
 });
 
 // Render app with a guard for the initial theme loading
-render(() => (
-	<Show 
-		when={isThemeReady()} 
-		fallback={
-			<div style={{ 
-				display: "flex", 
-				height: "100vh", 
-				width: "100vw", 
-				"align-items": "center", 
-				"justify-content": "center",
-				background: "#0a0a0a",
-				color: "white",
-				"font-family": "system-ui, sans-serif"
-			}}>
-				<div style={{ "text-align": "center" }}>
-					<div class="spinner" style={{ "margin-bottom": "12px" }}></div>
-					<p style={{ opacity: 0.5, "font-size": "14px" }}>Initializing Vesta...</p>
+render(
+	() => (
+		<Show
+			when={isThemeReady()}
+			fallback={
+				<div
+					style={{
+						display: "flex",
+						height: "100vh",
+						width: "100vw",
+						"align-items": "center",
+						"justify-content": "center",
+						background: "#0a0a0a",
+						color: "white",
+						"font-family": "system-ui, sans-serif",
+					}}
+				>
+					<div style={{ "text-align": "center" }}>
+						<div class="spinner" style={{ "margin-bottom": "12px" }}></div>
+						<p style={{ opacity: 0.5, "font-size": "14px" }}>
+							Initializing Vesta...
+						</p>
+					</div>
 				</div>
-			</div>
-		}
-	>
-		<App />
-	</Show>
-), root as MountableElement);
+			}
+		>
+			<App />
+		</Show>
+	),
+	root as MountableElement,
+);

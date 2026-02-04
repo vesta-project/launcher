@@ -76,7 +76,8 @@ function Sidebar(props: SidebarProps) {
 					(n) =>
 						n.notification_type === "progress" &&
 						n.progress !== null &&
-						(n.progress === PROGRESS_INDETERMINATE || (n.progress >= 0 && n.progress < 100)),
+						(n.progress === PROGRESS_INDETERMINATE ||
+							(n.progress >= 0 && n.progress < 100)),
 				);
 				return { totalCount, hasActiveTask };
 			} catch (_error) {
@@ -201,7 +202,7 @@ function Sidebar(props: SidebarProps) {
 				onClose={() => setAccountMenuOpen(false)}
 				onAddAccount={async () => {
 					setAccountMenuOpen(false);
-					
+
 					// Guest mode check for redirect to onboarding
 					try {
 						const { getActiveAccount } = await import("@utils/auth");
@@ -213,7 +214,7 @@ function Sidebar(props: SidebarProps) {
 					} catch (e) {
 						console.error("Failed to check guest status for Add Account:", e);
 					}
-					
+
 					openPage("/login");
 				}}
 			/>

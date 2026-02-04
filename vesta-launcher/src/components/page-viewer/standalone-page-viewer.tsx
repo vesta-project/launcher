@@ -60,7 +60,22 @@ function StandalonePageViewer() {
 					if (handoff.props) {
 						for (const [k, v] of Object.entries(handoff.props)) {
 							const parsed = tryParse(v as string);
-							if (["slug", "id", "projectId", "platform", "activeTab", "query", "resourceType", "activeSource", "gameVersion", "loader", "mode", "source"].includes(k)) {
+							if (
+								[
+									"slug",
+									"id",
+									"projectId",
+									"platform",
+									"activeTab",
+									"query",
+									"resourceType",
+									"activeSource",
+									"gameVersion",
+									"loader",
+									"mode",
+									"source",
+								].includes(k)
+							) {
 								initialParams[k] = parsed;
 							} else {
 								initialProps[k] = parsed;
@@ -93,9 +108,12 @@ function StandalonePageViewer() {
 			}
 
 			for (const [key, value] of Object.entries(searchParams)) {
-				if (key === "path" || key === "history" || key === "handoffId") continue;
+				if (key === "path" || key === "history" || key === "handoffId")
+					continue;
 				const parsed = tryParse(String(value));
-				if (["slug", "id", "projectId", "platform", "activeTab"].includes(key)) {
+				if (
+					["slug", "id", "projectId", "platform", "activeTab"].includes(key)
+				) {
 					initialParams[key] = parsed;
 				} else {
 					initialProps[key] = parsed;
@@ -107,7 +125,8 @@ function StandalonePageViewer() {
 			paths: miniRouterPaths,
 			invalid: miniRouterInvalidPage,
 			currentPath: initialPath,
-			initialProps: Object.keys(initialProps).length > 0 ? initialProps : undefined,
+			initialProps:
+				Object.keys(initialProps).length > 0 ? initialProps : undefined,
 		});
 
 		if (Object.keys(initialParams).length > 0) {
@@ -115,11 +134,26 @@ function StandalonePageViewer() {
 		}
 
 		if (historyPast.length > 0 || historyFuture.length > 0) {
-			const mapHistory = (entries: any[]) => entries.map((entry) => ({
-				path: entry.path,
-				params: entry.params ? Object.fromEntries(Object.entries(entry.params).map(([k, v]) => [k, tryParse(v as string)])) : {},
-				props: entry.props ? Object.fromEntries(Object.entries(entry.props).map(([k, v]) => [k, tryParse(v as string)])) : undefined,
-			}));
+			const mapHistory = (entries: any[]) =>
+				entries.map((entry) => ({
+					path: entry.path,
+					params: entry.params
+						? Object.fromEntries(
+								Object.entries(entry.params).map(([k, v]) => [
+									k,
+									tryParse(v as string),
+								]),
+							)
+						: {},
+					props: entry.props
+						? Object.fromEntries(
+								Object.entries(entry.props).map(([k, v]) => [
+									k,
+									tryParse(v as string),
+								]),
+							)
+						: undefined,
+				}));
 
 			mini_router.history.past = mapHistory(historyPast);
 			mini_router.history.future = mapHistory(historyFuture);
@@ -131,8 +165,8 @@ function StandalonePageViewer() {
 	return (
 		<Show when={router()}>
 			{(r) => (
-				<UnifiedPageViewer 
-					router={r()} 
+				<UnifiedPageViewer
+					router={r()}
 					showWindowControls={true}
 					titleSuffix="Standalone"
 					os={osType()}

@@ -10,7 +10,7 @@ const [isThemeReady, setIsThemeReady] = createSignal(false);
  */
 export async function initTheme() {
 	if (isThemeReady()) return;
-	
+
 	try {
 		const config = await invoke("get_config");
 		applyConfigSnapshot(config as Record<string, any>);

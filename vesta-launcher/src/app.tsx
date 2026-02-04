@@ -42,7 +42,6 @@ export interface ExitCheckResponse {
 	running_instances: string[];
 }
 
-
 /**
  * Handles deep-link URLs like vesta://instance?slug=my-instance
  * Parses the URL and navigates to the appropriate page
@@ -185,8 +184,14 @@ function Root(props: ChildrenProp) {
 				invoke("get_db_status")
 					.then((status: any) => {
 						console.group("Database Diagnostic Report");
-						console.log("Vesta DB Tables:", status.vesta?.tables || "NOT FOUND");
-						console.log("Config DB Tables:", status.config?.tables || "NOT FOUND");
+						console.log(
+							"Vesta DB Tables:",
+							status.vesta?.tables || "NOT FOUND",
+						);
+						console.log(
+							"Config DB Tables:",
+							status.config?.tables || "NOT FOUND",
+						);
 						console.groupEnd();
 					})
 					.catch((err) => {
@@ -230,7 +235,9 @@ function Root(props: ChildrenProp) {
 							checkForAppUpdates(true);
 						}
 					})
-					.catch((error) => console.error("Failed to check for updates on startup:", error));
+					.catch((error) =>
+						console.error("Failed to check for updates on startup:", error),
+					);
 			}
 
 			// Setup config sync system (non-blocking)
@@ -258,7 +265,7 @@ function Root(props: ChildrenProp) {
 				clearTimeout(leaveTimeout);
 				leaveTimeout = undefined;
 			}
-			
+
 			// Detect if it's a file drag
 			const isFileDrag = e.dataTransfer?.types.includes("Files");
 			if (!isFileDrag) {
@@ -276,7 +283,11 @@ function Root(props: ChildrenProp) {
 			document.body.classList.add("window--dragging");
 
 			// Summon if we haven't sniffed yet AND the window isn't already active
-			if (manager.getSniffedPaths().length === 0 && !manager.isSnifferVisible() && !manager.isDragging()) {
+			if (
+				manager.getSniffedPaths().length === 0 &&
+				!manager.isSnifferVisible() &&
+				!manager.isDragging()
+			) {
 				manager.showSniffer();
 			}
 		};
@@ -319,7 +330,7 @@ function Root(props: ChildrenProp) {
 				clearTimeout(leaveTimeout);
 				leaveTimeout = undefined;
 			}
-			
+
 			// Detect if it's a file drag
 			const isFileDrag = e.dataTransfer?.types.includes("Files");
 			if (!isFileDrag) {
@@ -335,7 +346,11 @@ function Root(props: ChildrenProp) {
 			}
 
 			// Summon if we haven't sniffed yet AND the window isn't already active
-			if (manager.getSniffedPaths().length === 0 && !manager.isSnifferVisible() && !manager.isDragging()) {
+			if (
+				manager.getSniffedPaths().length === 0 &&
+				!manager.isSnifferVisible() &&
+				!manager.isDragging()
+			) {
 				manager.showSniffer();
 			}
 		};

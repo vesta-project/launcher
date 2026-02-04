@@ -53,7 +53,7 @@
 //!    ```sql
 //!    ALTER TABLE app_config DROP COLUMN new_field_name;
 //!    ```
-//! 
+//!
 //! 4. **Run the migration**:
 //! ```bash
 //! $env:DATABASE_URL="sqlite://...\VestaProject\vesta-launcher\src-tauri\vesta.db"
@@ -119,20 +119,20 @@ pub struct AppConfig {
     pub debug_logging: bool,
     pub notification_retention_days: i32,
     pub active_account_uuid: Option<String>,
-    
+
     // Theme system fields
-    pub theme_id: String,                     // Current theme preset ID (e.g., "midnight", "solar")
-    pub theme_mode: String,                   // "template" or "advanced" 
-    pub theme_primary_hue: i32,               // User-customized primary hue
-    pub theme_primary_sat: Option<i32>,       // Advanced mode: primary saturation
-    pub theme_primary_light: Option<i32>,     // Advanced mode: primary lightness
-    pub theme_style: String,                  // "glass", "satin", "flat", "bordered"
-    pub theme_gradient_enabled: bool,         // Enable background gradient
-    pub theme_gradient_angle: Option<i32>,    // Gradient angle in degrees
+    pub theme_id: String, // Current theme preset ID (e.g., "midnight", "solar")
+    pub theme_mode: String, // "template" or "advanced"
+    pub theme_primary_hue: i32, // User-customized primary hue
+    pub theme_primary_sat: Option<i32>, // Advanced mode: primary saturation
+    pub theme_primary_light: Option<i32>, // Advanced mode: primary lightness
+    pub theme_style: String, // "glass", "satin", "flat", "bordered"
+    pub theme_gradient_enabled: bool, // Enable background gradient
+    pub theme_gradient_angle: Option<i32>, // Gradient angle in degrees
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
     pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
-    pub theme_gradient_type: Option<String>,   // "linear" or "radial"
-    pub theme_border_width: Option<i32>,       // Border thickness in pixels
+    pub theme_gradient_type: Option<String>, // "linear" or "radial"
+    pub theme_border_width: Option<i32>, // Border thickness in pixels
 
     // Onboarding fields
     pub setup_completed: bool,
@@ -163,25 +163,23 @@ impl Default for AppConfig {
             notification_retention_days: 30,
             active_account_uuid: None,
 
-            
             // Theme system defaults
-            theme_id: "midnight".to_string(),  // theme_id - default to signature theme
-            theme_mode: "template".to_string(),  // theme_mode - start with easy mode  
-            theme_primary_hue: 220,               // theme_primary_hue - default blue
-            theme_primary_sat: None,               // theme_primary_sat - advanced mode only
-            theme_primary_light: None,             // theme_primary_light - advanced mode only
-            theme_style: "glass".to_string(),      // theme_style - default glass effect
-            theme_gradient_enabled: true,          // theme_gradient_enabled - enable gradients
-            theme_gradient_angle: Some(135),       // theme_gradient_angle - diagonal gradient
+            theme_id: "midnight".to_string(), // theme_id - default to signature theme
+            theme_mode: "template".to_string(), // theme_mode - start with easy mode
+            theme_primary_hue: 220,           // theme_primary_hue - default blue
+            theme_primary_sat: None,          // theme_primary_sat - advanced mode only
+            theme_primary_light: None,        // theme_primary_light - advanced mode only
+            theme_style: "glass".to_string(), // theme_style - default glass effect
+            theme_gradient_enabled: true,     // theme_gradient_enabled - enable gradients
+            theme_gradient_angle: Some(135),  // theme_gradient_angle - diagonal gradient
             theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
-            theme_advanced_overrides: None,        // theme_advanced_overrides - no custom overrides by default
+            theme_advanced_overrides: None, // theme_advanced_overrides - no custom overrides by default
             theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
-            theme_border_width: Some(1),           // theme_border_width - default 1px
+            theme_border_width: Some(1),                     // theme_border_width - default 1px
 
             setup_completed: false,
             setup_step: 0,
             tutorial_completed: false,
-        
         }
     }
 }
@@ -248,18 +246,32 @@ pub fn update_app_config(config: &AppConfig) -> Result<(), anyhow::Error> {
 }
 
 /// Helper to sync theme-related config changes to the active account's profile
-fn sync_theme_to_account(field: &str, value: &serde_json::Value, account_uuid: &str) -> Result<(), String> {
+fn sync_theme_to_account(
+    field: &str,
+    value: &serde_json::Value,
+    account_uuid: &str,
+) -> Result<(), String> {
     use crate::schema::account::dsl::*;
-    
+
     // Normalize UUID
     let account_uuid = account_uuid.replace("-", "");
-    
+
     // Only sync visual aesthetic fields
     let is_theme_field = match field {
-        "theme_id" | "theme_mode" | "theme_primary_hue" | "theme_primary_sat" | "theme_primary_light" |
-        "theme_style" | "theme_gradient_enabled" | "theme_gradient_angle" | "theme_gradient_type" | 
-        "theme_gradient_harmony" | "theme_advanced_overrides" | "background_hue" | "theme_border_width" => true,
-        _ => false
+        "theme_id"
+        | "theme_mode"
+        | "theme_primary_hue"
+        | "theme_primary_sat"
+        | "theme_primary_light"
+        | "theme_style"
+        | "theme_gradient_enabled"
+        | "theme_gradient_angle"
+        | "theme_gradient_type"
+        | "theme_gradient_harmony"
+        | "theme_advanced_overrides"
+        | "background_hue"
+        | "theme_border_width" => true,
+        _ => false,
     };
 
     if !is_theme_field {
@@ -274,63 +286,75 @@ fn sync_theme_to_account(field: &str, value: &serde_json::Value, account_uuid: &
         "theme_id" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_id.eq(value.as_str().unwrap_or("midnight")))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_mode" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_mode.eq(value.as_str().unwrap_or("template")))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_primary_hue" | "background_hue" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_primary_hue.eq(value.as_i64().unwrap_or(220) as i32))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_primary_sat" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_primary_sat.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_primary_light" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_primary_light.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_style" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_style.eq(value.as_str().unwrap_or("glass")))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_gradient_enabled" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_gradient_enabled.eq(value.as_bool().unwrap_or(true)))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_gradient_angle" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_gradient_angle.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_gradient_type" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_gradient_type.eq(value.as_str()))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_gradient_harmony" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_gradient_harmony.eq(value.as_str()))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_advanced_overrides" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_advanced_overrides.eq(value.as_str()))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         "theme_border_width" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
                 .set(theme_border_width.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn).map_err(|e| e.to_string())?;
-        },
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
         _ => {}
     }
 
@@ -344,14 +368,22 @@ fn sync_theme_to_account(field: &str, value: &serde_json::Value, account_uuid: &
 pub fn get_config() -> Result<AppConfig, String> {
     log::info!("Tauri command: get_config called");
     let cfg = get_app_config().map_err(|e| e.to_string())?;
-    log::info!("Tauri command: get_config returning config id={}, theme_id={}", cfg.id, cfg.theme_id);
+    log::info!(
+        "Tauri command: get_config returning config id={}, theme_id={}",
+        cfg.id,
+        cfg.theme_id
+    );
     Ok(cfg)
 }
 
 /// Tauri command to update the configuration
 #[tauri::command]
 pub fn set_config(config: AppConfig) -> Result<(), String> {
-    log::info!("Tauri command: set_config called, id={}, theme_id={}", config.id, config.theme_id);
+    log::info!(
+        "Tauri command: set_config called, id={}, theme_id={}",
+        config.id,
+        config.theme_id
+    );
     update_app_config(&config).map_err(|e| e.to_string())
 }
 

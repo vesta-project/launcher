@@ -1,11 +1,15 @@
 import { WindowControls } from "@tauri-controls/solid";
 import { getOsType } from "@utils/os";
 import { createResource, createSignal, Show } from "solid-js";
-import ConnectionStatus from "../connection-status";
+import NetworkPill from "./network-pill";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import HelpIcon from "@assets/help.svg";
 import { getVersion } from "@tauri-apps/api/app";
-import { ACCOUNT_TYPE_GUEST, getActiveAccount, type Account } from "@utils/auth";
+import {
+	ACCOUNT_TYPE_GUEST,
+	getActiveAccount,
+	type Account,
+} from "@utils/auth";
 import "./titlebar.css";
 
 interface TitleBarProps {
@@ -55,32 +59,35 @@ function TitleBar(props: TitleBarProps) {
 			/>
 			<div class={"titlebar__grab"} data-tauri-drag-region={true}>
 				<div data-tauri-drag-region={true} class={"titlebar__content"}>
-					<span data-tauri-drag-region={true}>Vesta Launcher {version() ? `v${version()}` : "..."}</span>
+					<span data-tauri-drag-region={true}>
+						Vesta Launcher {version() ? `v${version()}` : "..."}
+					</span>
 					<Show when={activeAccount()?.account_type === ACCOUNT_TYPE_GUEST}>
-						<div 
+						<div
 							class="guest-pill"
 							style={{
 								"margin-left": "8px",
-								"background": "var(--primary)",
-								"color": "white",
+								background: "var(--primary)",
+								color: "white",
 								"font-size": "10px",
 								"font-weight": "800",
-								"padding": "1px 6px",
+								padding: "1px 6px",
 								"border-radius": "100px",
 								"letter-spacing": "0.5px",
 								"box-shadow": "0 2px 4px rgba(0,0,0,0.1)",
-								"display": "inline-flex",
+								display: "inline-flex",
 								"align-items": "center",
-								"height": "16px",
-								"text-transform": "uppercase"
+								height: "16px",
+								"text-transform": "uppercase",
 							}}
 						>
 							Guest Mode
 						</div>
 					</Show>
+					<NetworkPill />
 					<Show when={!props.hideHelp}>
-						<button 
-							class="titlebar__help-btn" 
+						<button
+							class="titlebar__help-btn"
 							onClick={handleHelpClick}
 							title="Help & Modding Guide"
 						>

@@ -1,17 +1,17 @@
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use notify::{Watcher, RecursiveMode, Event, Config};
-use walkdir::WalkDir;
-use tauri::{AppHandle, Manager, Emitter};
-use std::collections::HashMap;
-use crate::resources::ResourceManager;
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::SourcePlatform;
-use anyhow::Result;
+use crate::resources::ResourceManager;
 use crate::schema::installed_resource::dsl as ir_dsl;
-use crate::utils::hash::{calculate_sha1, calculate_curseforge_fingerprint};
+use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_sha1};
 use crate::utils::instance_helpers::normalize_path;
+use anyhow::Result;
+use notify::{Config, Event, RecursiveMode, Watcher};
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use tauri::{AppHandle, Emitter, Manager};
+use tokio::sync::Mutex;
+use walkdir::WalkDir;
 
 pub struct ResourceWatcher {
     app_handle: AppHandle,
@@ -28,16 +28,21 @@ impl ResourceWatcher {
     }
 
     /// Recursively scan and watch an instance's resource folders
-    pub async fn watch_instance(&self, _slug: String, db_id: i32, game_dir: String) -> anyhow::Result<()> {
+    pub async fn watch_instance(
+        &self,
+        _slug: String,
+        db_id: i32,
+        game_dir: String,
+    ) -> anyhow::Result<()> {
         let mut watchers = self.watchers.lock().await;
-        
+
         if watchers.contains_key(&db_id) {
             return Ok(());
         }
 
         let game_path = PathBuf::from(&game_dir);
         let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
-        
+
         let app_handle = self.app_handle.clone();
         let watchers_ptr = self.watchers.clone();
 
@@ -53,11 +58,14 @@ impl ResourceWatcher {
 
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
-        let mut watcher = notify::RecommendedWatcher::new(move |res: notify::Result<Event>| {
-            if let Ok(event) = res {
-                let _ = tx.blocking_send(event);
-            }
-        }, Config::default())?;
+        let mut watcher = notify::RecommendedWatcher::new(
+            move |res: notify::Result<Event>| {
+                if let Ok(event) = res {
+                    let _ = tx.blocking_send(event);
+                }
+            },
+            Config::default(),
+        )?;
 
         for folder in folders_to_watch {
             let path = game_path.join(folder);
@@ -78,7 +86,10 @@ impl ResourceWatcher {
                 if is_watched {
                     handle_event(&app_handle, db_id, event, watchers_ptr.clone()).await;
                 } else {
-                    log::debug!("[ResourceWatcher] Dropping event for db_id {} as it is no longer watched", db_id);
+                    log::debug!(
+                        "[ResourceWatcher] Dropping event for db_id {} as it is no longer watched",
+                        db_id
+                    );
                     break;
                 }
             }
@@ -100,15 +111,26 @@ impl ResourceWatcher {
     async fn scan_folder(&self, db_id: i32, folder_path: &Path) -> Result<()> {
         log::info!("[ResourceWatcher] Scanning folder: {:?}", folder_path);
         let watchers_ptr = self.watchers.clone();
-        for entry in WalkDir::new(folder_path).max_depth(1).into_iter().filter_map(|e| e.ok()) {
+        for entry in WalkDir::new(folder_path)
+            .max_depth(1)
+            .into_iter()
+            .filter_map(|e| e.ok())
+        {
             if entry.file_type().is_file() && is_resource_file(entry.path()) {
                 let path = entry.path().to_path_buf();
                 let app = self.app_handle.clone();
                 let watchers_spawn = watchers_ptr.clone();
-                
+
                 // Get metadata for quick check
                 let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&path) {
-                    (meta.len() as i64, meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+                    (
+                        meta.len() as i64,
+                        meta.modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0),
+                    )
                 } else {
                     (0, 0)
                 };
@@ -121,9 +143,21 @@ impl ResourceWatcher {
                     };
                     if is_watched {
                         // Pass metadata for skip check
-                        if let Err(e) = identify_and_link_resource(&app, db_id, &path, watchers_spawn, Some((file_size, file_mtime))).await {
+                        if let Err(e) = identify_and_link_resource(
+                            &app,
+                            db_id,
+                            &path,
+                            watchers_spawn,
+                            Some((file_size, file_mtime)),
+                        )
+                        .await
+                        {
                             if !e.to_string().contains("FOREIGN KEY") {
-                                log::error!("[ResourceWatcher] Failed to identify {:?}: {}", path, e);
+                                log::error!(
+                                    "[ResourceWatcher] Failed to identify {:?}: {}",
+                                    path,
+                                    e
+                                );
                             }
                         }
                     }
@@ -136,11 +170,14 @@ impl ResourceWatcher {
     async fn cleanup_missing_resources(&self, db_id: i32, folder_path: &Path) -> Result<()> {
         use crate::utils::db::get_vesta_conn;
         use diesel::prelude::*;
-        
+
         let mut conn = get_vesta_conn()?;
         let folder_prefix = normalize_path(folder_path);
 
-        log::debug!("[ResourceWatcher] Cleaning up missing resources in: {:?}", folder_path);
+        log::debug!(
+            "[ResourceWatcher] Cleaning up missing resources in: {:?}",
+            folder_path
+        );
 
         // Get all resources for this instance
         let resources = ir_dsl::installed_resource
@@ -151,13 +188,16 @@ impl ResourceWatcher {
             // If the resource is in the folder we just scanned, check if it exists
             if res.local_path.starts_with(&folder_prefix) {
                 if !Path::new(&res.local_path).exists() {
-                    log::info!("[ResourceWatcher] Removing dead resource from DB: {}", res.local_path);
+                    log::info!(
+                        "[ResourceWatcher] Removing dead resource from DB: {}",
+                        res.local_path
+                    );
                     diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
                         .execute(&mut conn)?;
                 }
             }
         }
-        
+
         Ok(())
     }
 
@@ -181,19 +221,35 @@ impl ResourceWatcher {
     }
 }
 
-async fn handle_event(app: &AppHandle, db_id: i32, event: Event, watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>) {
+async fn handle_event(
+    app: &AppHandle,
+    db_id: i32,
+    event: Event,
+    watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
+) {
     use notify::EventKind;
 
     match event.kind {
         EventKind::Create(_) | EventKind::Modify(_) => {
             for path in event.paths {
                 if is_resource_file(&path) {
-                    log::info!("[ResourceWatcher] Resource changed in instance {}: {:?}", db_id, path);
+                    log::info!(
+                        "[ResourceWatcher] Resource changed in instance {}: {:?}",
+                        db_id,
+                        path
+                    );
                     let app_clone = app.clone();
                     let watchers_clone = watchers.clone();
-                    
+
                     let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&path) {
-                        (meta.len() as i64, meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+                        (
+                            meta.len() as i64,
+                            meta.modified()
+                                .ok()
+                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(0),
+                        )
                     } else {
                         (0, 0)
                     };
@@ -204,9 +260,21 @@ async fn handle_event(app: &AppHandle, db_id: i32, event: Event, watchers: Arc<M
                             w.contains_key(&db_id)
                         };
                         if is_watched {
-                            if let Err(e) = identify_and_link_resource(&app_clone, db_id, &path, watchers_clone, Some((file_size, file_mtime))).await {
+                            if let Err(e) = identify_and_link_resource(
+                                &app_clone,
+                                db_id,
+                                &path,
+                                watchers_clone,
+                                Some((file_size, file_mtime)),
+                            )
+                            .await
+                            {
                                 if !e.to_string().contains("FOREIGN KEY") {
-                                    log::error!("[ResourceWatcher] Failed to identify {:?}: {}", path, e);
+                                    log::error!(
+                                        "[ResourceWatcher] Failed to identify {:?}: {}",
+                                        path,
+                                        e
+                                    );
                                 }
                             }
                         }
@@ -216,7 +284,11 @@ async fn handle_event(app: &AppHandle, db_id: i32, event: Event, watchers: Arc<M
         }
         EventKind::Remove(_) => {
             for path in event.paths {
-                log::info!("[ResourceWatcher] Resource removed from instance {}: {:?}", db_id, path);
+                log::info!(
+                    "[ResourceWatcher] Resource removed from instance {}: {:?}",
+                    db_id,
+                    path
+                );
                 let app_clone = app.clone();
                 let watchers_clone = watchers.clone();
                 tauri::async_runtime::spawn(async move {
@@ -240,7 +312,10 @@ async fn handle_event(app: &AppHandle, db_id: i32, event: Event, watchers: Arc<M
 
 fn is_resource_file(path: &Path) -> bool {
     let s = path.to_string_lossy().to_lowercase();
-    s.ends_with(".jar") || s.ends_with(".zip") || s.ends_with(".jar.disabled") || s.ends_with(".zip.disabled")
+    s.ends_with(".jar")
+        || s.ends_with(".zip")
+        || s.ends_with(".jar.disabled")
+        || s.ends_with(".zip.disabled")
 }
 
 fn is_enabled_path(path: &Path) -> bool {
@@ -266,9 +341,18 @@ async fn identify_and_link_resource(
         return Ok(());
     }
 
-    let (file_size, file_mtime) = if let Some(m) = metadata { m } else {
+    let (file_size, file_mtime) = if let Some(m) = metadata {
+        m
+    } else {
         if let Ok(meta) = std::fs::metadata(path) {
-            (meta.len() as i64, meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+            (
+                meta.len() as i64,
+                meta.modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0),
+            )
         } else {
             (0, 0)
         }
@@ -291,9 +375,15 @@ async fn identify_and_link_resource(
                 // If metadata matches AND enabled status matches, we can skip everything
                 // EXCEPT if the resource is currently marked as a "modpack" override with no remote ID.
                 // In that case, we want to try identifying it at least once to see if it can be linked.
-                if res.file_size == file_size && res.file_mtime == file_mtime && res.is_enabled == is_enabled {
+                if res.file_size == file_size
+                    && res.file_mtime == file_mtime
+                    && res.is_enabled == is_enabled
+                {
                     if res.platform != "modpack" || !res.remote_id.is_empty() {
-                        log::debug!("[ResourceWatcher] Metadata match for {}, skipping scan", path_str);
+                        log::debug!(
+                            "[ResourceWatcher] Metadata match for {}, skipping scan",
+                            path_str
+                        );
                         return Ok(());
                     }
                 }
@@ -305,21 +395,45 @@ async fn identify_and_link_resource(
     let hash = calculate_sha1(path)?;
     log::debug!("[ResourceWatcher] Identified hash for {:?}: {}", path, hash);
 
+    let network_manager = app.state::<crate::utils::network::NetworkManager>();
+    let network_status = network_manager.get_status();
+
+    // Skip external API calls if network is weak or offline
+    if network_status != crate::utils::network::NetworkStatus::Online {
+        log::info!(
+            "[ResourceWatcher] Skipping remote identification for {:?} due to {:?} network",
+            path,
+            network_status
+        );
+        link_manual_resource_to_db(
+            app,
+            instance_db_id,
+            path,
+            Some(hash),
+            (file_size, file_mtime),
+            "manual",
+        )
+        .await?;
+        return Ok(());
+    }
+
     let resource_manager = app.state::<ResourceManager>();
-    
+
     // Check if we HAVE a record in the DB already with a specific platform.
     let mut preferred_platform = None;
     let mut instance_platform = None;
     {
+        use crate::models::instance::Instance;
+        use crate::schema::instance::dsl as inst_dsl;
         use crate::utils::db::get_vesta_conn;
         use diesel::prelude::*;
-        use crate::schema::instance::dsl as inst_dsl;
-        use crate::models::instance::Instance;
 
         if let Ok(mut conn) = get_vesta_conn() {
             // Get instance primary platform
-            if let Ok(inst) = inst_dsl::instance.filter(inst_dsl::id.eq(instance_db_id))
-                .first::<Instance>(&mut conn) {
+            if let Ok(inst) = inst_dsl::instance
+                .filter(inst_dsl::id.eq(instance_db_id))
+                .first::<Instance>(&mut conn)
+            {
                 instance_platform = inst.modpack_platform.map(|s| match s.as_str() {
                     "curseforge" => SourcePlatform::CurseForge,
                     "modrinth" => SourcePlatform::Modrinth,
@@ -330,13 +444,14 @@ async fn identify_and_link_resource(
             if let Ok(Some(existing)) = ir_dsl::installed_resource
                 .filter(ir_dsl::local_path.eq(&path_str))
                 .first::<InstalledResource>(&mut conn)
-                .optional() {
-                    preferred_platform = Some(match existing.platform.as_str() {
-                        "modrinth" => SourcePlatform::Modrinth,
-                        "curseforge" => SourcePlatform::CurseForge,
-                        _ => SourcePlatform::Modrinth,
-                    });
-                }
+                .optional()
+            {
+                preferred_platform = Some(match existing.platform.as_str() {
+                    "modrinth" => SourcePlatform::Modrinth,
+                    "curseforge" => SourcePlatform::CurseForge,
+                    _ => SourcePlatform::Modrinth,
+                });
+            }
         }
     }
 
@@ -346,7 +461,7 @@ async fn identify_and_link_resource(
     // 3. Modrinth (default)
     // 4. CurseForge
     let mut search_order = vec![SourcePlatform::Modrinth, SourcePlatform::CurseForge];
-    
+
     let priority = preferred_platform.or(instance_platform);
     if let Some(p) = priority {
         search_order.retain(|&x| x != p);
@@ -356,17 +471,51 @@ async fn identify_and_link_resource(
     for platform in search_order {
         match platform {
             SourcePlatform::Modrinth => {
-                if let Ok((project, version)) = resource_manager.get_by_hash(SourcePlatform::Modrinth, &hash).await {
-                    log::info!("[ResourceWatcher] Found Modrinth resource: {} ({})", project.name, version.version_number);
-                    link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::Modrinth, Some(hash), (file_size, file_mtime)).await?;
+                if let Ok((project, version)) = resource_manager
+                    .get_by_hash(SourcePlatform::Modrinth, &hash)
+                    .await
+                {
+                    log::info!(
+                        "[ResourceWatcher] Found Modrinth resource: {} ({})",
+                        project.name,
+                        version.version_number
+                    );
+                    link_resource_to_db(
+                        app,
+                        instance_db_id,
+                        path,
+                        project,
+                        version,
+                        SourcePlatform::Modrinth,
+                        Some(hash),
+                        (file_size, file_mtime),
+                    )
+                    .await?;
                     return Ok(());
                 }
-            },
+            }
             SourcePlatform::CurseForge => {
                 if let Ok(fp) = calculate_curseforge_fingerprint(path) {
-                    if let Ok((project, version)) = resource_manager.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()).await {
-                        log::info!("[ResourceWatcher] Found CurseForge resource: {} ({})", project.name, version.version_number);
-                        link_resource_to_db(app, instance_db_id, path, project, version, SourcePlatform::CurseForge, Some(hash), (file_size, file_mtime)).await?;
+                    if let Ok((project, version)) = resource_manager
+                        .get_by_hash(SourcePlatform::CurseForge, &fp.to_string())
+                        .await
+                    {
+                        log::info!(
+                            "[ResourceWatcher] Found CurseForge resource: {} ({})",
+                            project.name,
+                            version.version_number
+                        );
+                        link_resource_to_db(
+                            app,
+                            instance_db_id,
+                            path,
+                            project,
+                            version,
+                            SourcePlatform::CurseForge,
+                            Some(hash),
+                            (file_size, file_mtime),
+                        )
+                        .await?;
                         return Ok(());
                     }
                 }
@@ -375,7 +524,15 @@ async fn identify_and_link_resource(
     }
 
     // If no match found, link as manual/unknown resource
-    link_manual_resource_to_db(app, instance_db_id, path, Some(hash), (file_size, file_mtime), "manual").await?;
+    link_manual_resource_to_db(
+        app,
+        instance_db_id,
+        path,
+        Some(hash),
+        (file_size, file_mtime),
+        "manual",
+    )
+    .await?;
 
     Ok(())
 }
@@ -389,17 +546,25 @@ pub async fn link_manual_resource_to_db(
     metadata: (i64, i64),
     platform: &str,
 ) -> Result<()> {
+    use crate::models::installed_resource::InstalledResource;
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
-    use crate::models::installed_resource::InstalledResource;
 
     let mut conn = get_vesta_conn()?;
     let path_str = normalize_path(path);
-    let file_name = path.file_name().and_then(|s| s.to_str()).unwrap_or("Unknown Resource").to_string();
+    let file_name = path
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or("Unknown Resource")
+        .to_string();
     let is_enabled = is_enabled_path(path);
     let (file_size_val, file_mtime_val) = metadata;
 
-    log::debug!("[ResourceWatcher] Linking manual resource: {} (path: {})", file_name, path_str);
+    log::debug!(
+        "[ResourceWatcher] Linking manual resource: {} (path: {})",
+        file_name,
+        path_str
+    );
 
     // Infer type from folder
     let inferred_type = if let Some(parent) = path.parent() {
@@ -425,7 +590,10 @@ pub async fn link_manual_resource_to_db(
         .optional()?;
 
     if let Some(res) = existing {
-        log::debug!("[ResourceWatcher] Updating existing record for manual resource: {}", res.display_name);
+        log::debug!(
+            "[ResourceWatcher] Updating existing record for manual resource: {}",
+            res.display_name
+        );
         diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
             .set((
                 ir_dsl::is_enabled.eq(is_enabled),
@@ -440,7 +608,10 @@ pub async fn link_manual_resource_to_db(
         return Ok(());
     }
 
-    log::info!("[ResourceWatcher] Creating new database record for manual resource: {}", file_name);
+    log::info!(
+        "[ResourceWatcher] Creating new database record for manual resource: {}",
+        file_name
+    );
 
     diesel::insert_into(ir_dsl::installed_resource)
         .values((
@@ -468,10 +639,10 @@ pub async fn link_manual_resource_to_db(
 }
 
 pub async fn link_resource_to_db(
-    app: &AppHandle, 
-    instance_db_id: i32, 
-    path: &Path, 
-    project: crate::models::resource::ResourceProject, 
+    app: &AppHandle,
+    instance_db_id: i32,
+    path: &Path,
+    project: crate::models::resource::ResourceProject,
     version: crate::models::resource::ResourceVersion,
     platform: SourcePlatform,
     hash: Option<String>,
@@ -565,21 +736,19 @@ pub async fn link_resource_to_db(
     Ok(())
 }
 
-async fn unlink_resource_from_db(
-    app: &AppHandle,
-    instance_db_id: i32,
-    path: &Path,
-) -> Result<()> {
+async fn unlink_resource_from_db(app: &AppHandle, instance_db_id: i32, path: &Path) -> Result<()> {
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
 
     let mut conn = get_vesta_conn()?;
     let path_str = normalize_path(path);
 
-    diesel::delete(ir_dsl::installed_resource
-        .filter(ir_dsl::instance_id.eq(instance_db_id))
-        .filter(ir_dsl::local_path.eq(&path_str)))
-        .execute(&mut conn)?;
+    diesel::delete(
+        ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_db_id))
+            .filter(ir_dsl::local_path.eq(&path_str)),
+    )
+    .execute(&mut conn)?;
 
     app.emit("resources-updated", instance_db_id)?;
 

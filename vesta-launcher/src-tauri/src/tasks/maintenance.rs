@@ -1,14 +1,14 @@
-use anyhow::Result;
 use crate::models::instance::{Instance, NewInstance};
+use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::get_vesta_conn;
 use crate::utils::instance_helpers::{compute_unique_name, compute_unique_slug};
-use crate::tasks::installers::InstallInstanceTask;
+use anyhow::Result;
+use chrono::Utc;
 use diesel::prelude::*;
 use futures::future::BoxFuture;
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
-use chrono::Utc;
 
 pub struct CloneInstanceTask {
     source_id: i32,
@@ -32,7 +32,7 @@ impl Task for CloneInstanceTask {
     fn cancellable(&self) -> bool {
         false
     }
-    
+
     fn completion_description(&self) -> String {
         "Successfully duplicated instance".to_string()
     }
@@ -43,7 +43,7 @@ impl Task for CloneInstanceTask {
 
         Box::pin(async move {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-            
+
             // 1. Fetch source instance
             use crate::schema::instance::dsl::*;
             let source = instance
@@ -52,7 +52,8 @@ impl Task for CloneInstanceTask {
                 .map_err(|e| format!("Source instance not found: {}", e))?;
 
             // 2. Determine new name and slug
-            let existing_instances: Vec<Instance> = instance.load(&mut conn).map_err(|e| e.to_string())?;
+            let existing_instances: Vec<Instance> =
+                instance.load(&mut conn).map_err(|e| e.to_string())?;
             let mut seen_names = std::collections::HashSet::new();
             let mut seen_slugs = std::collections::HashSet::new();
             for inst in existing_instances {
@@ -62,10 +63,13 @@ impl Task for CloneInstanceTask {
 
             let base_name = new_name_opt.unwrap_or_else(|| source.name.clone());
             let final_name = compute_unique_name(&base_name, &seen_names);
-            
+
             let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
-            let app_config_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
-            let instances_root = config.default_game_dir.as_ref()
+            let app_config_dir =
+                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+            let instances_root = config
+                .default_game_dir
+                .as_ref()
                 .map(PathBuf::from)
                 .unwrap_or_else(|| app_config_dir.join("instances"));
 
@@ -77,7 +81,7 @@ impl Task for CloneInstanceTask {
                 let src_dir = Path::new(src_dir_str);
                 if src_dir.exists() {
                     ctx.update_description(format!("Copying files for {}...", final_name));
-                    
+
                     for entry in WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok()) {
                         let path = entry.path();
                         let relative = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
@@ -133,7 +137,9 @@ impl Task for CloneInstanceTask {
                 .map_err(|e| format!("Failed to fetch cloned instance: {}", e))?;
 
             use tauri::Emitter;
-            let _ = ctx.app_handle.emit("core://instance-created", inserted_inst);
+            let _ = ctx
+                .app_handle
+                .emit("core://instance-created", inserted_inst);
 
             Ok(())
         })
@@ -154,11 +160,11 @@ impl Task for ResetInstanceTask {
     fn name(&self) -> String {
         "Resetting Instance".to_string()
     }
-    
+
     fn cancellable(&self) -> bool {
         false
     }
-    
+
     fn completion_description(&self) -> String {
         "Successfully reset instance".to_string()
     }
@@ -169,7 +175,7 @@ impl Task for ResetInstanceTask {
         Box::pin(async move {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl::*;
-            
+
             let inst = instance
                 .find(inst_id)
                 .first::<Instance>(&mut conn)
@@ -183,7 +189,7 @@ impl Task for ResetInstanceTask {
                     let _ = std::fs::create_dir_all(&gd_path);
                 }
             }
-            
+
             ctx.update_description("Reinstalling...".to_string());
             let install_task = InstallInstanceTask::new(inst);
             install_task.run(ctx).await?;
@@ -207,11 +213,11 @@ impl Task for RepairInstanceTask {
     fn name(&self) -> String {
         "Repairing Instance".to_string()
     }
-    
+
     fn cancellable(&self) -> bool {
         true
     }
-    
+
     fn completion_description(&self) -> String {
         "Repair completed".to_string()
     }
@@ -222,14 +228,14 @@ impl Task for RepairInstanceTask {
         Box::pin(async move {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl::*;
-            
+
             let inst = instance
                 .find(inst_id)
                 .first::<Instance>(&mut conn)
                 .map_err(|e| format!("Instance not found: {}", e))?;
 
             ctx.update_description("Verifying and repairing all files...".to_string());
-            
+
             // Reinstall task with hash verification already handled by piston-lib
             let install_task = InstallInstanceTask::new(inst);
             install_task.run(ctx).await?;
@@ -238,4 +244,3 @@ impl Task for RepairInstanceTask {
         })
     }
 }
-

@@ -244,15 +244,25 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const isRunning = () => runningIds().has(instanceSlug);
 
 	// Installation status checks
-	const isInstalling = () =>
-		props.instance.installationStatus === "installing";
+	const isInstalling = () => props.instance.installationStatus === "installing";
 	const isInterrupted = () =>
 		props.instance.installationStatus === "interrupted";
 	const isInstalled = () => props.instance.installationStatus === "installed";
-	const isFailed = () => props.instance.installationStatus === "failed";
+	const isFailed = () =>
+		props.instance.installationStatus === "failed" ||
+		props.instance.installationStatus?.startsWith("failed:");
+
+	const failureReason = () => {
+		if (!isFailed()) return null;
+		const status = props.instance.installationStatus;
+		if (status?.includes(":")) {
+			return status.split(":").slice(1).join(":");
+		}
+		return "Installation failed";
+	};
+
 	const needsInstallation = () =>
-		!props.instance.installationStatus ||
-		isFailed();
+		!props.instance.installationStatus || isFailed();
 
 	const [busy, setBusy] = createSignal(false);
 	const [launching, setLaunching] = createSignal(false);
@@ -263,10 +273,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const playButtonTooltip = () => {
 		if (isInterrupted()) {
-			const op = props.instance.lastOperation === "hard-reset" ? "Hard reset" : (props.instance.lastOperation || "Installation");
+			const op =
+				props.instance.lastOperation === "hard-reset"
+					? "Hard reset"
+					: props.instance.lastOperation || "Installation";
 			return `${op} interrupted. Click to resume.`;
 		}
-		
+
 		return needsInstallation()
 			? "Needs Installation"
 			: isRunning()
@@ -278,7 +291,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const toggleRun = async () => {
 		if (busy() || launching()) return;
-		
+
 		if (isRunning()) {
 			setBusy(true);
 			try {
@@ -323,8 +336,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 				});
 				setLaunching(false);
 			}
-			// Note: launching state is cleared when core://instance-launched or core://instance-exited occurs, 
-			// but we can also clear it if launchInstance returns (meaning it's 'started') 
+			// Note: launching state is cleared when core://instance-launched or core://instance-exited occurs,
+			// but we can also clear it if launchInstance returns (meaning it's 'started')
 			// or if it fails immediately above.
 			// Let's keep it until either event or if it takes too long.
 		}
@@ -447,18 +460,31 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 					</Match>
 					<Match when={isFailed()}>
-						<div class="instance-card-centered">
-							<ErrorIcon style={{ width: "24px", height: "24px" }} />
+						<div class="instance-card-centered failure-overlay">
+							<ErrorIcon style={{ width: "24px", height: "24px", color: "#ff5252" }} />
 							<h1
 								style={{
-									margin: 0,
+									margin: "4px 0 0",
 									padding: 0,
 									"line-height": "16px",
 									"font-weight": "bold",
+									"text-align": "center",
 								}}
 							>
 								{props.instance.name}
 							</h1>
+							<p
+								style={{
+									margin: "4px 8px 0",
+									padding: 0,
+									"font-size": "10px",
+									color: "rgba(255, 255, 255, 0.6)",
+									"text-align": "center",
+									"line-height": "1.2",
+								}}
+							>
+								{failureReason()}
+							</p>
 						</div>
 					</Match>
 					<Match when={true}>
@@ -594,7 +620,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 					<ContextMenuItem
 						onSelect={async () => {
-							const name = window.prompt("Enter name for the copy:", `${props.instance.name} (Copy)`);
+							const name = window.prompt(
+								"Enter name for the copy:",
+								`${props.instance.name} (Copy)`,
+							);
 							if (name) {
 								const idNum = getInstanceId(props.instance);
 								if (idNum) await duplicateInstance(idNum, name);
@@ -604,9 +633,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						Duplicate
 					</ContextMenuItem>
 
-					<ContextMenuItem
-						onSelect={() => setShowExportDialog(true)}
-					>
+					<ContextMenuItem onSelect={() => setShowExportDialog(true)}>
 						Export Instance
 					</ContextMenuItem>
 
@@ -614,7 +641,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 						onSelect={async () => {
 							const idNum = getInstanceId(props.instance);
 							if (!idNum) return;
-							if (await ask("Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. This action cannot be undone and your worlds, screenshots, and configs will be lost.", { title: "Vesta Launcher - Hard Reset", kind: "error" })) {
+							if (
+								await ask(
+									"Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. This action cannot be undone and your worlds, screenshots, and configs will be lost.",
+									{ title: "Vesta Launcher - Hard Reset", kind: "error" },
+								)
+							) {
 								await resetInstance(idNum);
 							}
 						}}

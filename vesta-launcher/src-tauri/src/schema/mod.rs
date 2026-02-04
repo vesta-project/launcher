@@ -1,6 +1,6 @@
-pub mod vesta;
 pub mod config;
+pub mod vesta;
 
 // Re-export for backward compatibility
-pub use vesta::*;
 pub use config::*;
+pub use vesta::*;

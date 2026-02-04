@@ -37,7 +37,7 @@
 	grid-template-rows: auto 1fr auto;
 	grid-column: 2;
 	grid-row: 2;
-	width: 100%;	
+	width: 100%;
 	border-radius: 12px;
 	background-color: var(--bg-glass);
 	backdrop-filter: var(--glass-blur);
@@ -80,14 +80,14 @@
 
 .login-page__code {
 	font-size: 32px;
-	font-family: 'JetBrains Mono', 'Fira Code', monospace;
+	font-family: "JetBrains Mono", "Fira Code", monospace;
 	letter-spacing: 4px;
 	font-weight: 700;
 	color: hsl(var(--color__primary-hue) 80% 80%);
 	padding: 12px 24px;
 	background: rgba(0, 0, 0, 0.3);
 	border-radius: 8px;
-	box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+	box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 .login-page__timer {
@@ -103,15 +103,30 @@
 }
 
 @keyframes pulse {
-	0% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.15; }
-	50% { transform: translate(-50%, -50%) scale(1.1); opacity: 0.25; }
-	100% { transform: translate(-50%, -50%) scale(0.95); opacity: 0.15; }
+	0% {
+		transform: translate(-50%, -50%) scale(0.95);
+		opacity: 0.15;
+	}
+	50% {
+		transform: translate(-50%, -50%) scale(1.1);
+		opacity: 0.25;
+	}
+	100% {
+		transform: translate(-50%, -50%) scale(0.95);
+		opacity: 0.15;
+	}
 }
 
 @keyframes welcome-float {
-	0% { transform: translateY(0px); }
-	50% { transform: translateY(-10px); }
-	100% { transform: translateY(0px); }
+	0% {
+		transform: translateY(0px);
+	}
+	50% {
+		transform: translateY(-10px);
+	}
+	100% {
+		transform: translateY(0px);
+	}
 }
 
 .welcome-flare__glow {
@@ -131,7 +146,7 @@
 	font-size: clamp(64px, 15vh, 96px);
 	position: relative;
 	z-index: 1;
-	filter: drop-shadow(0 10px 20px rgba(0,0,0,0.4));
+	filter: drop-shadow(0 10px 20px rgba(0, 0, 0, 0.4));
 	animation: welcome-float 5s ease-in-out infinite;
 }
 
@@ -185,7 +200,9 @@
 }
 
 @keyframes spin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .hue-track .slider__track {
@@ -212,82 +229,82 @@
 
 /* Modloader Pills for Onboarding (matches Install Mini Page) */
 .modloader-pills {
-display: flex;
-gap: 8px;
-flex-wrap: wrap;
-background-color: transparent;
-border-radius: 0;
-overflow: visible;
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	background-color: transparent;
+	border-radius: 0;
+	overflow: visible;
 }
 
 .modloader-pills .toggle-group__item {
-padding: 6px 16px;
-border-radius: 20px;
-border: 1px solid var(--border-subtle);
-background: var(--surface-base);
-color: var(--text-primary);
-opacity: 0.8;
-cursor: pointer;
-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-font-size: 13px;
-font-weight: 500;
+	padding: 6px 16px;
+	border-radius: 20px;
+	border: 1px solid var(--border-subtle);
+	background: var(--surface-base);
+	color: var(--text-primary);
+	opacity: 0.8;
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	font-size: 13px;
+	font-weight: 500;
 }
 
 .modloader-pills .toggle-group__item:hover {
-background: var(--surface-raised);
-opacity: 1;
-transform: translateY(-1px);
+	background: var(--surface-raised);
+	opacity: 1;
+	transform: translateY(-1px);
 }
 
 .modloader-pills .toggle-group__item[data-pressed] {
-background-color: var(--primary);
-border-color: transparent;
-color: white;
-opacity: 1;
-box-shadow: 0 4px 12px hsl(var(--color__primary-hue) 70% 30% / 0.3);
+	background-color: var(--primary);
+	border-color: transparent;
+	color: white;
+	opacity: 1;
+	box-shadow: 0 4px 12px hsl(var(--color__primary-hue) 70% 30% / 0.3);
 }
 
 /* Form styles for onboarding to match install page */
 .init-form-field {
-display: flex;
-flex-direction: column;
-gap: 8px;
-width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	width: 100%;
 }
 
 .init-form-label {
-font-size: 12px;
-font-weight: 600;
-opacity: 0.5;
-color: var(--text-primary);
+	font-size: 12px;
+	font-weight: 600;
+	opacity: 0.5;
+	color: var(--text-primary);
 }
 
 /* Icon Picker Hint for onboarding */
 .init-icon-container {
-position: relative;
-cursor: pointer;
+	position: relative;
+	cursor: pointer;
 }
 
 .init-icon-hint {
-position: absolute;
-bottom: 0;
-left: 0;
-right: 0;
-background: rgba(0, 0, 0, 0.61);
-color: white;
-font-size: 10px;
-font-weight: 700;
-text-transform: uppercase;
-padding: 4px 0;
-text-align: center;
-border-bottom-left-radius: 12px;
-border-bottom-right-radius: 12px;
-opacity: 0.8;
-pointer-events: none;
-transition: opacity 0.2s;
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	background: rgba(0, 0, 0, 0.61);
+	color: white;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	padding: 4px 0;
+	text-align: center;
+	border-bottom-left-radius: 12px;
+	border-bottom-right-radius: 12px;
+	opacity: 0.8;
+	pointer-events: none;
+	transition: opacity 0.2s;
 }
 
 .init-icon-container:hover .init-icon-hint {
-opacity: 1;
-background: var(--primary);
+	opacity: 1;
+	background: var(--primary);
 }

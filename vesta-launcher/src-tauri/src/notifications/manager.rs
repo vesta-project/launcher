@@ -73,17 +73,17 @@ impl ActionHandler for ResumeInstanceOperationHandler {
 
         // Extract ID from key (interrupted_instance_{id})
         let id_str = key.replace("interrupted_instance_", "");
-        let id = id_str.parse::<i32>().map_err(|_| anyhow::anyhow!("Invalid instance ID in client_key"))?;
+        let id = id_str
+            .parse::<i32>()
+            .map_err(|_| anyhow::anyhow!("Invalid instance ID in client_key"))?;
 
         let handle = app_handle.clone();
-        
+
         tauri::async_runtime::spawn(async move {
             let tm = handle.state::<TaskManager>();
-            if let Err(e) = crate::commands::instances::resume_instance_operation(
-                handle.clone(),
-                tm,
-                id
-            ).await {
+            if let Err(e) =
+                crate::commands::instances::resume_instance_operation(handle.clone(), tm, id).await
+            {
                 log::error!("[ResumeInstanceOperationHandler] Failed to resume: {}", e);
             }
         });
@@ -109,7 +109,7 @@ struct LogoutGuestHandler {}
 impl ActionHandler for LogoutGuestHandler {
     fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
         log::info!("[LogoutGuestHandler] Logging out guest...");
-        
+
         // 1. Cleanup marker file
         if let Ok(app_data_dir) = crate::utils::db_manager::get_app_config_dir() {
             let marker_path = app_data_dir.join(".guest_mode");
@@ -120,13 +120,16 @@ impl ActionHandler for LogoutGuestHandler {
 
         // 2. Cleanup Guest account from database
         if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
-            use diesel::prelude::*;
             use crate::schema::account::dsl::*;
-            let _ = diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID))).execute(&mut conn);
+            use diesel::prelude::*;
+            let _ =
+                diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID))).execute(&mut conn);
         }
 
         // 3. Cleanup the notification itself
-        if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
+        if let Some(nm) =
+            app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+        {
             let _ = nm.delete("guest_mode_warning".to_string());
         }
 
@@ -139,8 +142,10 @@ impl ActionHandler for LogoutGuestHandler {
         }
 
         // 5. Notify frontend to redirect
-        app_handle.emit("core://logout-guest", ()).map_err(|e| anyhow::anyhow!(e))?;
-        
+        app_handle
+            .emit("core://logout-guest", ())
+            .map_err(|e| anyhow::anyhow!(e))?;
+
         Ok(())
     }
 }
@@ -406,7 +411,10 @@ impl NotificationManager {
         manager.register_action("cancel_task", Arc::new(CancelTaskHandler {}));
         manager.register_action("pause_task", Arc::new(PauseTaskHandler {}));
         manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
-        manager.register_action("resume_instance_operation", Arc::new(ResumeInstanceOperationHandler {}));
+        manager.register_action(
+            "resume_instance_operation",
+            Arc::new(ResumeInstanceOperationHandler {}),
+        );
         manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
@@ -479,7 +487,7 @@ impl NotificationManager {
                 if let Some(id) = existing.id {
                     notification.id = Some(id);
                     // Preserve creation time
-            notification.created_at = existing.created_at;
+                    notification.created_at = existing.created_at;
                     NotificationStore::update(id, &notification)?;
 
                     self.app_handle.emit("core://notification", &notification)?;
@@ -539,12 +547,12 @@ impl NotificationManager {
         if let Some(mut notification) = notification_opt {
             // println!("NotificationManager: Found notification with {} actions", notification.actions.len());
             notification.progress = Some(progress);
-            
-/*
-TODO:
 
-The conditional assignment of current_step and total_steps (lines 444-449) may prevent resetting these values to None when needed. The previous implementation unconditionally assigned these values, which allowed clearing them. If the intent is to preserve existing values when None is passed, this change is correct, but it may break existing behavior that relies on being able to clear these fields.
-*/
+            /*
+            TODO:
+
+            The conditional assignment of current_step and total_steps (lines 444-449) may prevent resetting these values to None when needed. The previous implementation unconditionally assigned these values, which allowed clearing them. If the intent is to preserve existing values when None is passed, this change is correct, but it may break existing behavior that relies on being able to clear these fields.
+            */
 
             if current_step.is_some() {
                 notification.current_step = current_step;

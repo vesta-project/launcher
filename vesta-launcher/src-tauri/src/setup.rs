@@ -26,10 +26,10 @@ fn update_instance_playtime(
     started_at_str: &str,
     exited_at_str: &str,
 ) -> Result<(), String> {
+    use crate::models::instance::Instance;
     use crate::schema::instance::dsl::*;
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
-    use crate::models::instance::Instance;
 
     // Parse timestamps
     let started = chrono::DateTime::parse_from_rfc3339(started_at_str)
@@ -205,8 +205,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Recovery for interrupted installs - move any stuck 'installing' instances to 'interrupted'
     {
-        use crate::utils::db::get_vesta_conn;
         use crate::schema::instance::dsl::*;
+        use crate::utils::db::get_vesta_conn;
         use diesel::prelude::*;
 
         if let Ok(mut conn) = get_vesta_conn() {
@@ -214,9 +214,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             let result = diesel::update(instance.filter(installation_status.eq("installing")))
                 .set(installation_status.eq("interrupted"))
                 .execute(&mut conn);
-            
+
             match result {
-                Ok(count) if count > 0 => log::info!("Recovered {} interrupted installations (set to 'interrupted')", count),
+                Ok(count) if count > 0 => log::info!(
+                    "Recovered {} interrupted installations (set to 'interrupted')",
+                    count
+                ),
                 Ok(_) => log::debug!("No interrupted installations found"),
                 Err(e) => log::error!("Failed to recover interrupted installations: {}", e),
             }
@@ -225,14 +228,19 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 use crate::models::instance::Instance;
+                use crate::notifications::models::{
+                    CreateNotificationInput, NotificationAction, NotificationType,
+                };
                 use crate::schema::instance::dsl::*;
-                use crate::notifications::models::{CreateNotificationInput, NotificationType, NotificationAction};
-                
+
                 // Wait for NotificationManager to be definitely ready in state
                 tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-                
+
                 if let Ok(mut conn) = get_vesta_conn() {
-                    if let Ok(interrupted_list) = instance.filter(installation_status.eq("interrupted")).load::<Instance>(&mut conn) {
+                    if let Ok(interrupted_list) = instance
+                        .filter(installation_status.eq("interrupted"))
+                        .load::<Instance>(&mut conn)
+                    {
                         let manager = handle.state::<NotificationManager>();
                         for inst in interrupted_list {
                             let raw_op = inst.last_operation.as_deref().unwrap_or("installation");
@@ -241,16 +249,17 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 "repair" => "repair",
                                 _ => "installation",
                             };
-                            let description = format!("The {} for '{}' was interrupted. Would you like to resume?", display_op, inst.name);
-                            
-                            let actions = vec![
-                                NotificationAction {
-                                    action_id: "resume_instance_operation".to_string(),
-                                    label: "Resume Now".to_string(),
-                                    action_type: "primary".to_string(),
-                                }
-                            ];
-                            
+                            let description = format!(
+                                "The {} for '{}' was interrupted. Would you like to resume?",
+                                display_op, inst.name
+                            );
+
+                            let actions = vec![NotificationAction {
+                                action_id: "resume_instance_operation".to_string(),
+                                label: "Resume Now".to_string(),
+                                action_type: "primary".to_string(),
+                            }];
+
                             let _ = manager.create(CreateNotificationInput {
                                 client_key: Some(format!("interrupted_instance_{}", inst.id)),
                                 title: Some("Interrupted Operation Detected".to_string()),
@@ -288,6 +297,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let task_manager = TaskManager::new(app.handle().clone());
     app.manage(task_manager);
 
+    // Initialize NetworkManager
+    let network_manager = crate::utils::network::NetworkManager::new(app.handle().clone());
+    app.manage(network_manager);
+
     // Initialize MetadataCache (in-memory fast path for manifest)
     app.manage(MetadataCache::new());
 
@@ -302,11 +315,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     {
         let handle = app.handle().clone();
         tauri::async_runtime::spawn(async move {
-            use crate::utils::db::get_vesta_conn;
             use crate::models::instance::Instance;
-            use crate::schema::instance::dsl::*;
-            use diesel::prelude::*;
             use crate::resources::ResourceWatcher;
+            use crate::schema::instance::dsl::*;
+            use crate::utils::db::get_vesta_conn;
+            use diesel::prelude::*;
 
             // Wait a bit to ensure everything is ready
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -317,7 +330,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                         for inst in instances_list {
                             if let Some(game_dir) = &inst.game_directory {
                                 log::info!("[Setup] Starting watcher for instance: {}", inst.name);
-                                let _ = watcher.watch_instance(inst.slug(), inst.id, game_dir.clone()).await;
+                                let _ = watcher
+                                    .watch_instance(inst.slug(), inst.id, game_dir.clone())
+                                    .await;
                             }
                         }
                     }

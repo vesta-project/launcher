@@ -74,14 +74,16 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	// helper may not return the second control tuple reliably across build
 	// configurations. Avoid relying on destructuring the `loading` accessor
 	// and instead check the resource value directly (undefined while loading).
-	const [activeAccount, { refetch }] = createResource<Account | null>(async () => {
-		try {
-			return await getActiveAccount();
-		} catch (e) {
-			console.error("Failed to get active account:", e);
-			return null;
-		}
-	});
+	const [activeAccount, { refetch }] = createResource<Account | null>(
+		async () => {
+			try {
+				return await getActiveAccount();
+			} catch (e) {
+				console.error("Failed to get active account:", e);
+				return null;
+			}
+		},
+	);
 
 	// Listen for config updates to refetch active account
 	createEffect(() => {
@@ -98,7 +100,9 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 		let unlisten: (() => void) | undefined;
 		listen("core://account-heads-updated", () => {
 			setAvatarTimestamp(Date.now());
-		}).then((fn) => { unlisten = fn; });
+		}).then((fn) => {
+			unlisten = fn;
+		});
 
 		onCleanup(() => unlisten?.());
 	});

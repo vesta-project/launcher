@@ -16,10 +16,7 @@ pub async fn exit_check(
         Ok(instances) => {
             if !instances.is_empty() {
                 response.can_exit = false;
-                response.running_instances = instances
-                    .into_iter()
-                    .map(|i| i.instance_id)
-                    .collect();
+                response.running_instances = instances.into_iter().map(|i| i.instance_id).collect();
             }
         }
         Err(e) => {
@@ -92,7 +89,8 @@ pub fn open_instance_folder(instance_id_slug: String) -> Result<(), String> {
     if let Some(gd) = found_dir {
         let path = std::path::PathBuf::from(gd);
         if !path.exists() {
-            std::fs::create_dir_all(&path).map_err(|e| format!("Failed to create instance directory: {}", e))?;
+            std::fs::create_dir_all(&path)
+                .map_err(|e| format!("Failed to create instance directory: {}", e))?;
         }
         open::that(&path).map_err(|e| format!("Failed to open instance directory: {}", e))?;
         Ok(())
@@ -214,4 +212,34 @@ pub fn os_type() -> String {
 #[tauri::command]
 pub fn path_exists(path: String) -> bool {
     std::path::Path::new(&path).exists()
+}
+
+#[tauri::command]
+pub fn get_network_status(
+    network_manager: tauri::State<'_, crate::utils::network::NetworkManager>,
+) -> crate::utils::network::NetworkStatus {
+    network_manager.get_status()
+}
+
+#[tauri::command]
+pub async fn set_network_status(
+    status: crate::utils::network::NetworkStatus,
+    network_manager: tauri::State<'_, crate::utils::network::NetworkManager>,
+) -> Result<(), String> {
+    if status == crate::utils::network::NetworkStatus::Online {
+        let actual = network_manager.check_connectivity().await;
+        network_manager.set_status(actual);
+    } else {
+        network_manager.set_status(status);
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn refresh_network_status(
+    network_manager: tauri::State<'_, crate::utils::network::NetworkManager>,
+) -> Result<crate::utils::network::NetworkStatus, String> {
+    let status = network_manager.check_connectivity().await;
+    network_manager.set_status(status);
+    Ok(status)
 }

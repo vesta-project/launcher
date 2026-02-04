@@ -12,9 +12,9 @@ mod setup;
 mod tasks;
 pub mod utils;
 
+use tauri::Emitter;
 use utils::config::{get_config, set_config, update_config_field, update_config_fields};
 use utils::windows::launch_window;
-use tauri::Emitter;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
 
@@ -73,6 +73,9 @@ fn main() {
             commands::app::get_default_instance_dir,
             commands::app::os_type,
             commands::app::path_exists,
+            commands::app::get_network_status,
+            commands::app::set_network_status,
+            commands::app::refresh_network_status,
             utils::db::get_db_status,
             utils::file_drop::create_file_drop_overlay,
             utils::file_drop::position_overlay,

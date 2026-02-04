@@ -300,10 +300,12 @@ fn evaluate_rules(
                 for (k, v) in features.iter() {
                     let satisfied = match k.as_str() {
                         "is_demo_user" => {
-                            // Demo user detection: match launcher defaults
-                            let is_demo = spec.username == "Player"
+                            // Demo user detection: match launcher defaults.
+                            // Offline users with token "offline" are NOT demo users.
+                            let is_demo = (spec.username == "Player"
                                 || spec.uuid == "00000000-0000-0000-0000-000000000000"
-                                || spec.access_token == "0";
+                                || spec.access_token == "0")
+                                && spec.access_token != "offline";
                             is_demo == *v
                         }
                         "has_custom_resolution" => {
@@ -475,7 +477,14 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     vars.insert("uuid".to_string(), spec.uuid.clone());
     vars.insert("auth_access_token".to_string(), spec.access_token.clone());
     vars.insert("accessToken".to_string(), spec.access_token.clone());
-    vars.insert("auth_session".to_string(), spec.access_token.clone());
+    
+    // auth_session should be "-" for offline mode (access_token == "0"), else same as token
+    if spec.access_token == "0" {
+        vars.insert("auth_session".to_string(), "-".to_string());
+    } else {
+        vars.insert("auth_session".to_string(), spec.access_token.clone());
+    }
+    
     vars.insert("user_type".to_string(), spec.user_type.clone());
     
     // Client ID (used in 1.19+)
@@ -530,7 +539,12 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     // clientid should contain a launcher client id. Use value supplied on LaunchSpec
     // (plumbed through from the caller) so ita can be the official client id.
     vars.insert("clientid".to_string(), spec.client_id.clone());
-    vars.insert("auth_session".to_string(), spec.access_token.clone());
+    
+    if spec.access_token == "0" {
+        vars.insert("auth_session".to_string(), "-".to_string());
+    } else {
+        vars.insert("auth_session".to_string(), spec.access_token.clone());
+    }
 
     vars
 }

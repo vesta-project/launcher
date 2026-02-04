@@ -115,7 +115,11 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 			>
 				<div class={styles.sidebar__notifications__wrapper}>
 					{/* All notifications from backend (includes Immediate which won't persist after restart) */}
-					<For each={(persistentNotifs() || []).sort((a, b) => (a.dismissible === b.dismissible ? 0 : a.dismissible ? 1 : -1))}>
+					<For
+						each={(persistentNotifs() || []).sort((a, b) =>
+							a.dismissible === b.dismissible ? 0 : a.dismissible ? 1 : -1,
+						)}
+					>
 						{(notification) => {
 							console.log(
 								`Rendering notification: ${notification.title} - type: ${notification.notification_type}, dismissible: ${notification.dismissible}`,
@@ -287,7 +291,9 @@ function NotificationCard(props: {
 				>
 					{props.title || "Notification"}
 				</h1>
-				<p class={styles["sidebar__notification__description"]}>{props.description}</p>
+				<p class={styles["sidebar__notification__description"]}>
+					{props.description}
+				</p>
 				{props.progress !== null && props.progress !== undefined && (
 					<div style={{ "margin-top": "8px", "max-width": "100%" }}>
 						<Progress
@@ -295,7 +301,9 @@ function NotificationCard(props: {
 							current_step={props.current_step}
 							total_steps={props.total_steps}
 							severity={
-								props.severity ? (props.severity.toLowerCase() as any) : undefined
+								props.severity
+									? (props.severity.toLowerCase() as any)
+									: undefined
 							}
 							class={styles["sidebar__notification__progress"]}
 							size="sm"

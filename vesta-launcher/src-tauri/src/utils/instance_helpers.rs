@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 /// Names are checked case-insensitively to prevent confusion
 pub fn compute_unique_name(base_name: &str, existing_names_lowercase: &HashSet<String>) -> String {
     let base_lower = base_name.to_lowercase();
-    
+
     if !existing_names_lowercase.contains(&base_lower) {
         return base_name.to_string();
     }
@@ -72,7 +72,7 @@ pub async fn download_icon_as_bytes(url: &str) -> Result<Vec<u8>> {
         .user_agent("VestaLauncher/0.1.0")
         .timeout(std::time::Duration::from_secs(10))
         .build()?;
-    
+
     let resp = client.get(url).send().await?;
     let bytes = resp.bytes().await?;
     Ok(bytes.to_vec())

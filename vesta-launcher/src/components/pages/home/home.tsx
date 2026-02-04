@@ -5,7 +5,12 @@ import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
 import ConnectionStatus from "@components/page-root/connection-status";
 import TitleBar from "@components/page-root/titlebar/titlebar";
-import { PageViewer, router, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import {
+	PageViewer,
+	router,
+	pageViewerOpen,
+	setPageViewerOpen,
+} from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import { invoke } from "@tauri-apps/api/core";
 import { attachConsole, info } from "@tauri-apps/plugin-log";
@@ -25,10 +30,10 @@ import "./home.css";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
 import { startAppTutorial } from "@utils/tutorial";
-import { 
-	instances as instancesStore, 
-	instancesLoading, 
-	instancesError 
+import {
+	instances as instancesStore,
+	instancesLoading,
+	instancesError,
 } from "@stores/instances";
 
 // Module-level signals for sidebar state

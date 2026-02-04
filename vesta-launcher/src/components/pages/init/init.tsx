@@ -1,5 +1,9 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
-import { PageViewer, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import {
+	PageViewer,
+	pageViewerOpen,
+	setPageViewerOpen,
+} from "@components/page-viewer/page-viewer";
 import {
 	InitAppearancePage,
 	InitFinishedPage,

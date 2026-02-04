@@ -50,19 +50,22 @@ class DropZoneManager {
 		}
 
 		console.log("[FileDrop] Initializing file drop manager");
-		
-		this.unlisten = await listen<SniffedPath[]>("vesta://sniffed-file-drop", (event) => {
-			console.log("[FileDrop] Sniffed paths received:", event.payload);
-			setSniffedPaths(event.payload);
-			
-			if (event.payload.length > 0) {
-				setIsDragging(true);
-				this.hasSniffedThisSession = true;
-				this.cooldownUntil = Date.now() + 1000; // Don't re-summon for 1s
-				// Immediately hide the sniffer once we have the paths
-				this.hideSniffer();
-			}
-		});
+
+		this.unlisten = await listen<SniffedPath[]>(
+			"vesta://sniffed-file-drop",
+			(event) => {
+				console.log("[FileDrop] Sniffed paths received:", event.payload);
+				setSniffedPaths(event.payload);
+
+				if (event.payload.length > 0) {
+					setIsDragging(true);
+					this.hasSniffedThisSession = true;
+					this.cooldownUntil = Date.now() + 1000; // Don't re-summon for 1s
+					// Immediately hide the sniffer once we have the paths
+					this.hideSniffer();
+				}
+			},
+		);
 
 		this.unlistenHide = await listen("vesta://hide-sniffer-request", () => {
 			console.log("[FileDrop] Hide request received from native sniffer");
@@ -73,8 +76,9 @@ class DropZoneManager {
 	}
 
 	async showSniffer(): Promise<void> {
-		if (!hasTauriRuntime() || this.isSummoning || this.hasSniffedThisSession) return;
-		
+		if (!hasTauriRuntime() || this.isSummoning || this.hasSniffedThisSession)
+			return;
+
 		// Cooldown check to prevent flickering after a successful sniff
 		if (Date.now() < this.cooldownUntil) return;
 
@@ -134,18 +138,18 @@ class DropZoneManager {
 		return this.isSummoning;
 	}
 
-    setIsDragActive(active: boolean): void {
-        const currentlyDragging = isDragging();
-        if (active === currentlyDragging) return;
+	setIsDragActive(active: boolean): void {
+		const currentlyDragging = isDragging();
+		if (active === currentlyDragging) return;
 
-        console.log("[FileDrop] setIsDragActive:", active);
-        setIsDragging(active);
-    }
+		console.log("[FileDrop] setIsDragActive:", active);
+		setIsDragging(active);
+	}
 
 	clearSniffedPaths(): void {
 		console.log("[FileDrop] Clearing sniffed paths and resetting session lock");
 		setSniffedPaths([]);
-        setIsDragging(false);
+		setIsDragging(false);
 		this.hasSniffedThisSession = false;
 		this.cooldownUntil = 0; // Immediate reset for new drag session
 	}
@@ -154,7 +158,7 @@ class DropZoneManager {
 		paths: SniffedPath[],
 		options: DropZoneOptions = {},
 	): SniffedPath[] {
-        const normalized = normalizeOptions(options);
+		const normalized = normalizeOptions(options);
 		return paths.filter((item) => {
 			const isDir = item.is_directory;
 
@@ -201,4 +205,3 @@ export function cleanupFileDropSystem(): void {
 		dropZoneManager = null;
 	}
 }
-

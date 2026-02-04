@@ -1,18 +1,18 @@
-use crate::models::resource::{ResourceType, SourcePlatform, ResourceVersion};
 use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
+use crate::models::resource::{ResourceType, ResourceVersion, SourcePlatform};
 use crate::notifications::manager::NotificationManager;
-use crate::tasks::manager::{Task, TaskContext};
-use crate::utils::db::{get_vesta_conn};
-use crate::utils::instance_helpers::normalize_path;
-use crate::schema::instance::dsl as instances_dsl;
 use crate::schema::installed_resource::dsl as installed_dsl;
+use crate::schema::instance::dsl as instances_dsl;
+use crate::tasks::manager::{Task, TaskContext};
+use crate::utils::db::get_vesta_conn;
+use crate::utils::instance_helpers::normalize_path;
+use chrono::Utc;
 use diesel::prelude::*;
+use reqwest::{Client, Url};
 use std::path::PathBuf;
 use tauri::Manager;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
-use reqwest::{Client, Url};
-use chrono::Utc;
 
 pub struct ResourceDownloadTask {
     pub instance_id: i32,
@@ -25,18 +25,27 @@ pub struct ResourceDownloadTask {
 
 impl Task for ResourceDownloadTask {
     fn name(&self) -> String {
-        format!("Installing {} ({})", self.project_name, self.version.version_number)
+        format!(
+            "Installing {} ({})",
+            self.project_name, self.version.version_number
+        )
     }
 
     fn id(&self) -> Option<String> {
-        Some(format!("download_{}_{}_{}", self.instance_id, self.project_id, self.version.id))
+        Some(format!(
+            "download_{}_{}_{}",
+            self.instance_id, self.project_id, self.version.id
+        ))
     }
 
     fn cancellable(&self) -> bool {
         true
     }
 
-    fn run(&self, ctx: TaskContext) -> crate::tasks::manager::BoxFuture<'static, Result<(), String>> {
+    fn run(
+        &self,
+        ctx: TaskContext,
+    ) -> crate::tasks::manager::BoxFuture<'static, Result<(), String>> {
         let instance_id = self.instance_id;
         let platform = self.platform;
         let project_id = self.project_id.clone();
@@ -57,9 +66,9 @@ impl Task for ResourceDownloadTask {
                 .first::<Option<String>>(&mut conn)
                 .map_err(|e| format!("Instance not found: {}", e))?
                 .ok_or_else(|| "Instance has no game directory set".to_string())?;
-            
+
             let instance_path = PathBuf::from(instance_path_str);
-            
+
             // 2. Determine target directory
             let target_dir_name = match resource_type {
                 ResourceType::Mod => "mods",
@@ -67,17 +76,25 @@ impl Task for ResourceDownloadTask {
                 ResourceType::Shader => "shaderpacks",
                 ResourceType::DataPack => "datapacks",
                 ResourceType::World => "saves",
-                ResourceType::Modpack => return Err("Modpack installation not supported yet".to_string()),
+                ResourceType::Modpack => {
+                    return Err("Modpack installation not supported yet".to_string())
+                }
             };
-            
+
             let target_dir = instance_path.join(target_dir_name);
             if !target_dir.exists() {
-                fs::create_dir_all(&target_dir).await.map_err(|e| e.to_string())?;
+                fs::create_dir_all(&target_dir)
+                    .await
+                    .map_err(|e| e.to_string())?;
             }
 
             // 3. Download the file
-            log::info!("Starting download of '{}' from URL: '{}'", project_name, version.download_url);
-            
+            log::info!(
+                "Starting download of '{}' from URL: '{}'",
+                project_name,
+                version.download_url
+            );
+
             if version.download_url.is_empty() {
                 return Err("Download URL is empty. This resource may not be available for direct download.".to_string());
             }
@@ -89,23 +106,30 @@ impl Task for ResourceDownloadTask {
                 .user_agent("VestaLauncher/0.1.0")
                 .build()
                 .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
-                
-            let mut response = client.get(url)
+
+            let mut response = client
+                .get(url)
                 .send()
                 .await
                 .map_err(|e| format!("Failed to send download request: {}", e))?;
 
             if !response.status().is_success() {
-                return Err(format!("Download failed with status {}: {}", response.status(), version.download_url));
+                return Err(format!(
+                    "Download failed with status {}: {}",
+                    response.status(),
+                    version.download_url
+                ));
             }
 
             let total_size = response.content_length().unwrap_or(0);
             let mut downloaded: u64 = 0;
             let mut last_update = std::time::Instant::now();
             let mut last_downloaded: u64 = 0;
-            
+
             let temp_file_path = target_dir.join(format!("{}.tmp", version.file_name));
-            let mut file = fs::File::create(&temp_file_path).await.map_err(|e| e.to_string())?;
+            let mut file = fs::File::create(&temp_file_path)
+                .await
+                .map_err(|e| e.to_string())?;
 
             while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
                 // Check for cancellation
@@ -121,7 +145,7 @@ impl Task for ResourceDownloadTask {
                 if now.duration_since(last_update).as_millis() > 500 {
                     let elapsed = now.duration_since(last_update).as_secs_f64();
                     let speed = (downloaded - last_downloaded) as f64 / elapsed; // bytes/sec
-                    
+
                     let speed_fmt = if speed > 1024.0 * 1024.0 {
                         format!("{:.2} MB/s", speed / (1024.0 * 1024.0))
                     } else {
@@ -134,10 +158,22 @@ impl Task for ResourceDownloadTask {
                     if total_size > 0 {
                         let percent = (downloaded as f64 / total_size as f64 * 100.0) as i32;
                         let desc = format!("{} / {} ({})", downloaded_fmt, total_fmt, speed_fmt);
-                        let _ = manager.update_progress_with_description(notification_id.clone(), percent, None, None, desc);
+                        let _ = manager.update_progress_with_description(
+                            notification_id.clone(),
+                            percent,
+                            None,
+                            None,
+                            desc,
+                        );
                     } else {
                         let desc = format!("{} units downloaded ({})", downloaded, speed_fmt);
-                        let _ = manager.update_progress_with_description(notification_id.clone(), -1, None, None, desc);
+                        let _ = manager.update_progress_with_description(
+                            notification_id.clone(),
+                            -1,
+                            None,
+                            None,
+                            desc,
+                        );
                     }
 
                     last_update = now;
@@ -154,10 +190,17 @@ impl Task for ResourceDownloadTask {
             // 5. Finalize file placement
             let final_path = target_dir.join(&version.file_name);
             let final_path_str = normalize_path(&final_path);
-            
+
             // Get metadata from temp file before move
             let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&temp_file_path) {
-                (meta.len() as i64, meta.modified().ok().and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok()).map(|d| d.as_secs() as i64).unwrap_or(0))
+                (
+                    meta.len() as i64,
+                    meta.modified()
+                        .ok()
+                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0),
+                )
             } else {
                 (0, 0)
             };
@@ -175,53 +218,64 @@ impl Task for ResourceDownloadTask {
                 if res.local_path != final_path_str {
                     let old_path = std::path::PathBuf::from(&res.local_path);
                     if old_path.exists() {
-                        log::info!("[ResourceDownload] Deleting old version file: {:?}", old_path);
+                        log::info!(
+                            "[ResourceDownload] Deleting old version file: {:?}",
+                            old_path
+                        );
                         let _ = fs::remove_file(&old_path).await;
                     }
                 }
-                
+
                 // Update existing record
-                diesel::update(installed_dsl::installed_resource.filter(installed_dsl::id.eq(res.id)))
-                    .set((
-                        installed_dsl::platform.eq(match platform {
-                            SourcePlatform::Modrinth => "modrinth",
-                            SourcePlatform::CurseForge => "curseforge",
-                        }),
-                        installed_dsl::remote_version_id.eq(&version.id),
-                        installed_dsl::resource_type.eq(match resource_type {
-                            ResourceType::Mod => "mod",
-                            ResourceType::ResourcePack => "resourcepack",
-                            ResourceType::Shader => "shader",
-                            ResourceType::DataPack => "datapack",
-                            ResourceType::Modpack => "modpack",
-                            ResourceType::World => "world",
-                        }),
-                        installed_dsl::local_path.eq(&final_path_str),
-                        installed_dsl::display_name.eq(&project_name),
-                        installed_dsl::current_version.eq(&version.version_number),
-                        installed_dsl::release_type.eq(format!("{:?}", version.release_type).to_lowercase()),
-                        installed_dsl::is_manual.eq(false),
-                        installed_dsl::is_enabled.eq(true),
-                        installed_dsl::last_updated.eq(Utc::now().naive_utc()),
-                        installed_dsl::file_size.eq(file_size),
-                        installed_dsl::file_mtime.eq(file_mtime),
-                    ))
-                    .execute(&mut conn)
-                    .map_err(|e| e.to_string())?;
+                diesel::update(
+                    installed_dsl::installed_resource.filter(installed_dsl::id.eq(res.id)),
+                )
+                .set((
+                    installed_dsl::platform.eq(match platform {
+                        SourcePlatform::Modrinth => "modrinth",
+                        SourcePlatform::CurseForge => "curseforge",
+                    }),
+                    installed_dsl::remote_version_id.eq(&version.id),
+                    installed_dsl::resource_type.eq(match resource_type {
+                        ResourceType::Mod => "mod",
+                        ResourceType::ResourcePack => "resourcepack",
+                        ResourceType::Shader => "shader",
+                        ResourceType::DataPack => "datapack",
+                        ResourceType::Modpack => "modpack",
+                        ResourceType::World => "world",
+                    }),
+                    installed_dsl::local_path.eq(&final_path_str),
+                    installed_dsl::display_name.eq(&project_name),
+                    installed_dsl::current_version.eq(&version.version_number),
+                    installed_dsl::release_type
+                        .eq(format!("{:?}", version.release_type).to_lowercase()),
+                    installed_dsl::is_manual.eq(false),
+                    installed_dsl::is_enabled.eq(true),
+                    installed_dsl::last_updated.eq(Utc::now().naive_utc()),
+                    installed_dsl::file_size.eq(file_size),
+                    installed_dsl::file_mtime.eq(file_mtime),
+                ))
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
             } else {
                 // Handle existing file block (pre-existing but not in DB)
                 if final_path.exists() {
-                    fs::remove_file(&final_path).await.map_err(|e| e.to_string())?;
+                    fs::remove_file(&final_path)
+                        .await
+                        .map_err(|e| e.to_string())?;
                 }
-                
-                fs::rename(&temp_file_path, &final_path).await.map_err(|e| e.to_string())?;
+
+                fs::rename(&temp_file_path, &final_path)
+                    .await
+                    .map_err(|e| e.to_string())?;
 
                 let new_installed = NewInstalledResource {
                     instance_id,
                     platform: match platform {
                         SourcePlatform::Modrinth => "modrinth",
                         SourcePlatform::CurseForge => "curseforge",
-                    }.to_string(),
+                    }
+                    .to_string(),
                     remote_id: project_id,
                     remote_version_id: version.id,
                     resource_type: match resource_type {
@@ -231,7 +285,8 @@ impl Task for ResourceDownloadTask {
                         ResourceType::DataPack => "datapack",
                         ResourceType::Modpack => "modpack",
                         ResourceType::World => "world",
-                    }.to_string(),
+                    }
+                    .to_string(),
                     local_path: final_path_str,
                     display_name: project_name,
                     current_version: version.version_number,

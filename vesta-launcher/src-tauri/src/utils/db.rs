@@ -21,7 +21,10 @@ where
 }
 
 /// Helper to retry database operations when locked, with cancellation support.
-pub fn with_retry_cancellable<T, F, C>(cancel_check: Option<C>, mut op: F) -> Result<T, anyhow::Error>
+pub fn with_retry_cancellable<T, F, C>(
+    cancel_check: Option<C>,
+    mut op: F,
+) -> Result<T, anyhow::Error>
 where
     F: FnMut() -> Result<T, diesel::result::Error>,
     C: Fn() -> bool,
@@ -48,7 +51,9 @@ where
                     // Check for cancellation if provided
                     if let Some(ref check) = cancel_check {
                         if check() {
-                            return Err(anyhow::anyhow!("Database operation cancelled during retry"));
+                            return Err(anyhow::anyhow!(
+                                "Database operation cancelled during retry"
+                            ));
                         }
                     }
 

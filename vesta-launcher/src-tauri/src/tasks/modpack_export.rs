@@ -1,13 +1,13 @@
-use crate::tasks::manager::{Task, TaskContext, BoxFuture};
-use piston_lib::game::modpack::exporter::{export_modpack, ExportSpec, ExportEntry};
-use piston_lib::game::modpack::types::ModpackFormat;
-use crate::tasks::installers::TauriProgressReporter;
-use piston_lib::game::installer::types::{CancelToken, ProgressReporter};
-use crate::resources::ResourceManager;
 use crate::models::resource::SourcePlatform;
+use crate::resources::ResourceManager;
+use crate::tasks::installers::TauriProgressReporter;
+use crate::tasks::manager::{BoxFuture, Task, TaskContext};
+use piston_lib::game::installer::types::{CancelToken, ProgressReporter};
+use piston_lib::game::modpack::exporter::{export_modpack, ExportEntry, ExportSpec};
+use piston_lib::game::modpack::types::ModpackFormat;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::path::PathBuf;
 
 pub struct ModpackExportTask {
     pub instance_name: String,
@@ -36,7 +36,8 @@ impl Task for ModpackExportTask {
     }
 
     fn starting_description(&self) -> String {
-        format!("Creating {} modpack for {}...", 
+        format!(
+            "Creating {} modpack for {}...",
             match self.modpack_format {
                 ModpackFormat::Modrinth => "Modrinth",
                 ModpackFormat::CurseForge => "CurseForge",
@@ -80,15 +81,28 @@ impl Task for ModpackExportTask {
                         return Err("Export cancelled".to_string());
                     }
 
-                    if let ExportEntry::Mod { path, source_id, version_id, external_ids, .. } = entry {
-                        let is_numeric = !version_id.is_empty() && version_id.chars().all(|c| c.is_ascii_digit());
-                        
+                    if let ExportEntry::Mod {
+                        path,
+                        source_id,
+                        version_id,
+                        external_ids,
+                        ..
+                    } = entry
+                    {
+                        let is_numeric = !version_id.is_empty()
+                            && version_id.chars().all(|c| c.is_ascii_digit());
+
                         // If not numeric, try to resolve via CurseForge fingerprint
                         if !is_numeric {
                             let full_path = PathBuf::from(&game_dir).join(&path);
                             if full_path.exists() {
-                                if let Ok(fp) = crate::utils::hash::calculate_curseforge_fingerprint(&full_path) {
-                                    if let Ok((p, v)) = rm.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()).await {
+                                if let Ok(fp) =
+                                    crate::utils::hash::calculate_curseforge_fingerprint(&full_path)
+                                {
+                                    if let Ok((p, v)) = rm
+                                        .get_by_hash(SourcePlatform::CurseForge, &fp.to_string())
+                                        .await
+                                    {
                                         *source_id = p.id;
                                         *version_id = v.id;
                                         *external_ids = p.external_ids;
@@ -99,7 +113,10 @@ impl Task for ModpackExportTask {
                         }
                     }
                 }
-                log::info!("[ModpackExportTask] Resolved {} CurseForge identifiers via hash lookup", resolved_count);
+                log::info!(
+                    "[ModpackExportTask] Resolved {} CurseForge identifiers via hash lookup",
+                    resolved_count
+                );
             }
 
             // Run the export in a blocking thread since it's a CPU/IO intensive sync operation
@@ -112,4 +129,3 @@ impl Task for ModpackExportTask {
         })
     }
 }
-

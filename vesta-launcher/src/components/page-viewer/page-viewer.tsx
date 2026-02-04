@@ -6,13 +6,7 @@ import {
 } from "@components/page-viewer/mini-router-config";
 
 import { invoke } from "@tauri-apps/api/core";
-import {
-	createMemo,
-	createSignal,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import "./page-viewer.css";
 
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);

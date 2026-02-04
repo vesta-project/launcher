@@ -16,14 +16,18 @@ pub async fn launch_window(
     // Build URL with path parameter for routing
     let url_path = path.unwrap_or_else(|| "/config".to_string());
     let mut url = format!("standalone?path={}", urlencoding::encode(&url_path));
-    
+
     // Add props as URL parameters
     if let Some(props_map) = props {
         for (key, value) in props_map {
-            url.push_str(&format!("&{}={}", urlencoding::encode(&key), urlencoding::encode(&value)));
+            url.push_str(&format!(
+                "&{}={}",
+                urlencoding::encode(&key),
+                urlencoding::encode(&value)
+            ));
         }
     }
-    
+
     // Add history as URL parameter (as JSON string)
     if let Some(history_data) = history {
         url.push_str(&format!("&history={}", urlencoding::encode(&history_data)));

@@ -20,7 +20,11 @@ export const miniRouterPaths = {
 	...CreateMiniRouterPath("/file-drop", FileDropPage, "File Drop"),
 	...CreateMiniRouterPath("/login", LoginPage, "Sign In"),
 	...CreateMiniRouterPath("/resources", ResourceBrowser, "Resource Browser"),
-	...CreateMiniRouterPath("/resource-details", ResourceDetailsPage, "Resource Details"),
+	...CreateMiniRouterPath(
+		"/resource-details",
+		ResourceDetailsPage,
+		"Resource Details",
+	),
 	...CreateMiniRouterPath(
 		"/notification-test",
 		NotificationTestPage,

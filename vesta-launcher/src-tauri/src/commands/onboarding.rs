@@ -1,10 +1,10 @@
+use crate::metadata_cache::MetadataCache;
 use crate::models::GlobalJavaPath;
 use crate::schema::global_java_paths::dsl::{global_java_paths, major_version};
-use crate::tasks::manager::TaskManager;
 use crate::tasks::installers::java::DownloadJavaTask;
+use crate::tasks::manager::TaskManager;
 use crate::utils::config::{update_config_field, update_config_fields};
 use crate::utils::db::get_config_conn;
-use crate::metadata_cache::MetadataCache;
 use diesel::prelude::*;
 use piston_lib::game::installer::core::jre_manager;
 use serde_json::json;
@@ -28,14 +28,18 @@ pub async fn get_required_java_versions(
     let mut requirements = Vec::new();
 
     if let Some(meta) = metadata {
-        log::info!("Metadata cache accessed, versions found: {}, required_javas: {:?}", 
-            meta.game_versions.len(), 
-            meta.required_java_major_versions);
+        log::info!(
+            "Metadata cache accessed, versions found: {}, required_javas: {:?}",
+            meta.game_versions.len(),
+            meta.required_java_major_versions
+        );
 
         if meta.required_java_major_versions.is_empty() {
-             log::warn!("Metadata cache present but required_java_major_versions is empty. Using defaults.");
-             let default_versions = vec![21, 17, 8];
-             for version in default_versions {
+            log::warn!(
+                "Metadata cache present but required_java_major_versions is empty. Using defaults."
+            );
+            let default_versions = vec![21, 17, 8];
+            for version in default_versions {
                 requirements.push(JavaRequirement {
                     major_version: version,
                     recommended_name: match version {
@@ -46,13 +50,13 @@ pub async fn get_required_java_versions(
                     },
                     is_required_for_latest: version == 21,
                 });
-             }
-             return Ok(requirements);
+            }
+            return Ok(requirements);
         }
 
         for version in meta.required_java_major_versions {
             let is_latest = version == 25 || version == 21; // Simple heuristic for now
-            
+
             let name = match version {
                 25 => "Java 25".to_string(),
                 21 => "Java 21".to_string(),
@@ -96,9 +100,13 @@ pub async fn pick_java_path(app_handle: AppHandle) -> Result<Option<String>, Str
 
     let (tx, rx) = tokio::sync::oneshot::channel();
 
-    app_handle.dialog().file().set_title("Select Java Executable").pick_file(move |res| {
-        let _ = tx.send(res.map(|p| p.to_string()));
-    });
+    app_handle
+        .dialog()
+        .file()
+        .set_title("Select Java Executable")
+        .pick_file(move |res| {
+            let _ = tx.send(res.map(|p| p.to_string()));
+        });
 
     match rx.await {
         Ok(res) => Ok(res),
@@ -107,11 +115,7 @@ pub async fn pick_java_path(app_handle: AppHandle) -> Result<Option<String>, Str
 }
 
 #[tauri::command]
-pub fn set_global_java_path(
-    version: i32,
-    path_str: String,
-    managed: bool,
-) -> Result<(), String> {
+pub fn set_global_java_path(version: i32, path_str: String, managed: bool) -> Result<(), String> {
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
 
     let new_entry = GlobalJavaPath {
@@ -144,7 +148,7 @@ pub async fn complete_onboarding(app_handle: AppHandle) -> Result<(), String> {
     let mut updates = HashMap::new();
     updates.insert("setup_completed".to_string(), json!(true));
     updates.insert("setup_step".to_string(), json!(6));
-    
+
     update_config_fields(app_handle, updates)
 }
 
@@ -154,7 +158,7 @@ pub async fn reset_onboarding(app_handle: AppHandle) -> Result<(), String> {
     updates.insert("setup_completed".to_string(), json!(false));
     updates.insert("setup_step".to_string(), json!(0));
     updates.insert("tutorial_completed".to_string(), json!(false));
-    
+
     update_config_fields(app_handle, updates)
 }
 
@@ -168,9 +172,15 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
     // Check if already managed and available to avoid task overhead and notification flashing
     if let Ok(managed_dir) = crate::utils::java::get_managed_jre_dir() {
         let install_dir = managed_dir.join(format!("zulu-{}", version));
-        if let Some(java_path) = piston_lib::game::installer::core::jre_manager::find_java_executable(&install_dir) {
-            log::info!("Managed Java {} already exists at {:?}, skipping download task.", version, java_path);
-            
+        if let Some(java_path) =
+            piston_lib::game::installer::core::jre_manager::find_java_executable(&install_dir)
+        {
+            log::info!(
+                "Managed Java {} already exists at {:?}, skipping download task.",
+                version,
+                java_path
+            );
+
             let mut conn = get_config_conn().map_err(|e| e.to_string())?;
             let new_entry = GlobalJavaPath {
                 major_version: version as i32,
@@ -185,13 +195,17 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
                 .set(&new_entry)
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
-                
+
             return Ok(());
         }
     }
 
     let task_manager = app_handle.state::<TaskManager>();
-    let task = DownloadJavaTask { major_version: version };
-    task_manager.submit(Box::new(task)).await.map_err(|e| e.to_string())
+    let task = DownloadJavaTask {
+        major_version: version,
+    };
+    task_manager
+        .submit(Box::new(task))
+        .await
+        .map_err(|e| e.to_string())
 }
-

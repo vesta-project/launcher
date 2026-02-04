@@ -16,6 +16,11 @@ pub fn metadata_cache_path(data_dir: &Path) -> PathBuf {
 
 /// Load cached metadata from disk, or fetch fresh if cache is stale/missing
 pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata> {
+    load_or_fetch_metadata_ext(data_dir, CACHE_DURATION_HOURS).await
+}
+
+/// Load cached metadata with custom stale threshold
+pub async fn load_or_fetch_metadata_ext(data_dir: &PathBuf, max_age_hours: i64) -> Result<PistonMetadata> {
     let metadata_path = metadata_cache_path(data_dir);
 
     if !metadata_path.exists() && try_restore_artifact(METADATA_LABEL, &metadata_path).await? {
@@ -34,16 +39,18 @@ pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata
                 // Check if cache is still fresh
                 let age = Utc::now() - metadata.last_updated;
 
-                if age < Duration::hours(CACHE_DURATION_HOURS) {
+                if age < Duration::hours(max_age_hours) {
                     log::info!(
-                        "Using cached PistonMetadata (age: {} hours)",
-                        age.num_hours()
+                        "Using cached PistonMetadata (age: {} hours, limit: {} hours)",
+                        age.num_hours(),
+                        max_age_hours
                     );
                     return Ok(metadata);
                 } else {
                     log::info!(
-                        "Cached PistonMetadata is stale (age: {} hours), refreshing...",
-                        age.num_hours()
+                        "Cached PistonMetadata is stale (age: {} hours, limit: {} hours), refreshing...",
+                        age.num_hours(),
+                        max_age_hours
                     );
                 }
             }

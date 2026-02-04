@@ -139,80 +139,79 @@
 
 /* Java Management */
 .java-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-top: 16px;
 }
 
 .java-item {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-  background: var(--surface-sunken);
-  border: var(--border-width-subtle) solid var(--border-subtle);
-  border-radius: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 12px;
+	background: var(--surface-sunken);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	border-radius: 8px;
 }
 
 .java-version-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .java-version {
-  font-weight: 600;
-  color: var(--text-primary);
+	font-weight: 600;
+	color: var(--text-primary);
 }
 
 .managed-badge {
-  font-size: 10px;
-  padding: 2px 6px;
-  background: var(--accent-primary);
-  color: white;
-  border-radius: 100px;
-  text-transform: uppercase;
-  font-weight: bold;
+	font-size: 10px;
+	padding: 2px 6px;
+	background: var(--accent-primary);
+	color: white;
+	border-radius: 100px;
+	text-transform: uppercase;
+	font-weight: bold;
 }
 
 .java-path {
-  font-family: monospace;
-  font-size: var(--font-xsmall);
-  color: var(--text-secondary);
-  opacity: 0.7;
-  word-break: break-all;
+	font-family: monospace;
+	font-size: var(--font-xsmall);
+	color: var(--text-secondary);
+	opacity: 0.7;
+	word-break: break-all;
 }
 
 .section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 20px;
 }
 
 .section-header .section-description {
-  margin-bottom: 0;
+	margin-bottom: 0;
 }
 
 .social-links {
-  display: flex;
-  gap: 12px;
+	display: flex;
+	gap: 12px;
 }
 
 .about-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 }
 
 .about-field {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--font-small);
+	display: flex;
+	justify-content: space-between;
+	font-size: var(--font-small);
 }
 
 .about-field span:first-child {
-  color: var(--text-secondary);
+	color: var(--text-secondary);
 }
-

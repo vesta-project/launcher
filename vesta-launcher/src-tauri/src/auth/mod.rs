@@ -66,9 +66,14 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
     let client = get_auth_client().map_err(|e| e.to_string())?;
 
     // Request device code
-    let device_code_response = get_device_code(&client)
-        .await
-        .map_err(|e| format!("Failed to get device code: {}", e))?;
+    let start = std::time::Instant::now();
+    let device_code_res = get_device_code(&client).await;
+    
+    if let Some(nm) = app.try_state::<crate::utils::network::NetworkManager>() {
+        nm.report_request_result(start.elapsed().as_millis(), device_code_res.is_ok());
+    }
+
+    let device_code_response = device_code_res.map_err(|e| format!("Failed to get device code: {}", e))?;
 
     let details = device_code_to_details(&device_code_response);
 
@@ -140,19 +145,26 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
 
     let app_data_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
     let marker_path = app_data_dir.join(".guest_mode");
-    
-    // Create marker file
-    std::fs::File::create(&marker_path).map_err(|e| format!("Failed to create guest marker: {}", e))?;
 
-    let guest_uuid = GUEST_UUID.to_string(); // Zeroed UUID for guest
+    // Create marker file
+    std::fs::File::create(&marker_path)
+        .map_err(|e| format!("Failed to create guest marker: {}", e))?;
+
+    // Generate accurate offline UUID (MD5 v3 of "OfflinePlayer:LocalGuest")
+    // This matches how Minecraft generates offline player UUIDs
+    let username_v = "LocalGuest";
+    let seed = format!("OfflinePlayer:{}", username_v);
+    
+    // Use ::uuid to avoid shadowing with diesel schema column
+    let guest_uuid = ::uuid::Uuid::new_v3(&::uuid::Uuid::nil(), seed.as_bytes()).to_string();
 
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
     // Create Guest Account
     let mut new_acct = NewAccount::default();
     new_acct.uuid = guest_uuid.clone();
-    new_acct.username = ACCOUNT_TYPE_GUEST.to_string();
-    new_acct.display_name = Some("Guest Explorer".to_string());
+    new_acct.username = username_v.to_string();
+    new_acct.display_name = Some("Local Guest".to_string());
     new_acct.is_active = true;
     new_acct.account_type = ACCOUNT_TYPE_GUEST.to_string();
 
@@ -167,10 +179,7 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
         .values(&new_acct)
         .on_conflict(uuid)
         .do_update()
-        .set((
-            is_active.eq(true),
-            account_type.eq(ACCOUNT_TYPE_GUEST),
-        ))
+        .set((is_active.eq(true), account_type.eq(ACCOUNT_TYPE_GUEST)))
         .execute(&mut conn)
         .map_err(|e| e.to_string())?;
 
@@ -180,20 +189,22 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     update_app_config(&config).map_err(|e| e.to_string())?;
 
     // Notify UI
-    app_handle.emit("core://account-heads-updated", ()).map_err(|e| e.to_string())?;
+    app_handle
+        .emit("core://account-heads-updated", ())
+        .map_err(|e| e.to_string())?;
 
     // Create persistent warning notification
     let manager = app_handle.state::<crate::notifications::manager::NotificationManager>();
-    
-    use crate::notifications::models::{CreateNotificationInput, NotificationType, NotificationAction};
-    
-    let actions = vec![
-        NotificationAction {
-            action_id: "logout_guest".to_string(),
-            label: "Sign In".to_string(),
-            action_type: "primary".to_string(),
-        }
-    ];
+
+    use crate::notifications::models::{
+        CreateNotificationInput, NotificationAction, NotificationType,
+    };
+
+    let actions = vec![NotificationAction {
+        action_id: "logout_guest".to_string(),
+        label: "Sign In".to_string(),
+        action_type: "primary".to_string(),
+    }];
 
     let _ = manager.create(CreateNotificationInput {
         client_key: Some("guest_mode_warning".to_string()),
@@ -298,7 +309,9 @@ async fn process_login_completion(
             let _ = std::fs::remove_file(marker_path);
 
             // Clear the guest mode notification
-            if let Some(nm) = app_handle.try_state::<crate::notifications::manager::NotificationManager>() {
+            if let Some(nm) =
+                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
+            {
                 let _ = nm.delete("guest_mode_warning".to_string());
             }
 
@@ -476,7 +489,10 @@ pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), Stri
 
     // Skip all token validation for Guest accounts
     if acct.account_type == ACCOUNT_TYPE_GUEST {
-        log::debug!("[auth] Skipping token validation for Guest account {}", target_uuid);
+        log::debug!(
+            "[auth] Skipping token validation for Guest account {}",
+            target_uuid
+        );
         return Ok(());
     }
 
@@ -682,15 +698,24 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     }
     if let Some(val) = target_account.theme_primary_hue {
         config.theme_primary_hue = val;
-        updates.insert("theme_primary_hue".to_string(), serde_json::Value::Number(val.into()));
+        updates.insert(
+            "theme_primary_hue".to_string(),
+            serde_json::Value::Number(val.into()),
+        );
     }
     if let Some(val) = target_account.theme_primary_sat {
         config.theme_primary_sat = Some(val);
-        updates.insert("theme_primary_sat".to_string(), serde_json::Value::Number(val.into()));
+        updates.insert(
+            "theme_primary_sat".to_string(),
+            serde_json::Value::Number(val.into()),
+        );
     }
     if let Some(val) = target_account.theme_primary_light {
         config.theme_primary_light = Some(val);
-        updates.insert("theme_primary_light".to_string(), serde_json::Value::Number(val.into()));
+        updates.insert(
+            "theme_primary_light".to_string(),
+            serde_json::Value::Number(val.into()),
+        );
     }
     if let Some(val) = target_account.theme_style {
         config.theme_style = val.clone();
@@ -698,27 +723,45 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     }
     if let Some(val) = target_account.theme_gradient_enabled {
         config.theme_gradient_enabled = val;
-        updates.insert("theme_gradient_enabled".to_string(), serde_json::Value::Bool(val));
+        updates.insert(
+            "theme_gradient_enabled".to_string(),
+            serde_json::Value::Bool(val),
+        );
     }
     if let Some(val) = target_account.theme_gradient_angle {
         config.theme_gradient_angle = Some(val);
-        updates.insert("theme_gradient_angle".to_string(), serde_json::Value::Number(val.into()));
+        updates.insert(
+            "theme_gradient_angle".to_string(),
+            serde_json::Value::Number(val.into()),
+        );
     }
     if let Some(val) = target_account.theme_gradient_type {
         config.theme_gradient_type = Some(val.clone());
-        updates.insert("theme_gradient_type".to_string(), serde_json::Value::String(val));
+        updates.insert(
+            "theme_gradient_type".to_string(),
+            serde_json::Value::String(val),
+        );
     }
     if let Some(val) = target_account.theme_gradient_harmony {
         config.theme_gradient_harmony = Some(val.clone());
-        updates.insert("theme_gradient_harmony".to_string(), serde_json::Value::String(val));
+        updates.insert(
+            "theme_gradient_harmony".to_string(),
+            serde_json::Value::String(val),
+        );
     }
     if let Some(val) = target_account.theme_advanced_overrides {
         config.theme_advanced_overrides = Some(val.clone());
-        updates.insert("theme_advanced_overrides".to_string(), serde_json::Value::String(val));
+        updates.insert(
+            "theme_advanced_overrides".to_string(),
+            serde_json::Value::String(val),
+        );
     }
     if let Some(val) = target_account.theme_border_width {
         config.theme_border_width = Some(val);
-        updates.insert("theme_border_width".to_string(), serde_json::Value::Number(val.into()));
+        updates.insert(
+            "theme_border_width".to_string(),
+            serde_json::Value::Number(val.into()),
+        );
     }
 
     update_app_config(&config).map_err(|e| e.to_string())?;
@@ -733,10 +776,13 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     }
 
     // Also emit the active account change
-    let _ = app_handle.emit("config-updated", serde_json::json!({
-        "field": "active_account_uuid",
-        "value": target_uuid
-    }));
+    let _ = app_handle.emit(
+        "config-updated",
+        serde_json::json!({
+            "field": "active_account_uuid",
+            "value": target_uuid
+        }),
+    );
 
     Ok(())
 }

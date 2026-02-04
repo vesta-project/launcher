@@ -1,16 +1,16 @@
+use crate::models::GlobalJavaPath;
+use crate::notifications::manager::NotificationManager;
+use crate::notifications::models::{CreateNotificationInput, NotificationType};
+use crate::schema::global_java_paths::dsl::*;
+use crate::tasks::manager::{Task, TaskContext};
+use crate::utils::db::get_config_conn;
+use crate::utils::db_manager::get_app_config_dir;
 use anyhow::Result;
 use diesel::prelude::*;
 use piston_lib::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
-use piston_lib::game::installer::types::{ProgressReporter, NotificationActionSpec};
-use tauri::{AppHandle, Manager, Emitter};
+use piston_lib::game::installer::types::{NotificationActionSpec, ProgressReporter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::watch;
-use crate::tasks::manager::{Task, TaskContext};
-use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::{CreateNotificationInput, NotificationType};
-use crate::utils::db_manager::get_app_config_dir;
-use crate::utils::db::get_config_conn;
-use crate::models::GlobalJavaPath;
-use crate::schema::global_java_paths::dsl::*;
 
 pub struct DownloadJavaTask {
     pub major_version: u32,
@@ -37,15 +37,18 @@ impl Task for DownloadJavaTask {
         format!("Java {} installed successfully.", self.major_version)
     }
 
-    fn run(&self, ctx: TaskContext) -> crate::tasks::manager::BoxFuture<'static, Result<(), String>> {
+    fn run(
+        &self,
+        ctx: TaskContext,
+    ) -> crate::tasks::manager::BoxFuture<'static, Result<(), String>> {
         let major = self.major_version;
-        
+
         Box::pin(async move {
             let jre_dir = get_app_config_dir()
                 .map_err(|e| e.to_string())?
                 .join("data")
                 .join("jre");
-            
+
             let reporter = TaskProgressReporter {
                 app_handle: ctx.app_handle.clone(),
                 notification_id: ctx.notification_id.clone(),
@@ -54,7 +57,7 @@ impl Task for DownloadJavaTask {
             };
 
             let version = JavaVersion::new(major);
-            
+
             let java_path = get_or_install_jre(&jre_dir, &version, &reporter)
                 .await
                 .map_err(|e| e.to_string())?;
@@ -152,7 +155,7 @@ impl ProgressReporter for TaskProgressReporter {
     fn done(&self, success: bool, message: Option<&str>) {
         let manager = self.app_handle.state::<NotificationManager>();
         if !success {
-             let input = CreateNotificationInput {
+            let input = CreateNotificationInput {
                 client_key: Some(self.notification_id.clone()),
                 title: Some("Java Download Failed".to_string()),
                 description: Some(message.unwrap_or("Unknown error").to_string()),

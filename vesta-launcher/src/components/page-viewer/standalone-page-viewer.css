@@ -1,45 +1,46 @@
 .standalone-page-viewer__controls {
-    display: flex;
-    height: 100%;
-    align-items: stretch;
+	display: flex;
+	height: 100%;
+	align-items: stretch;
 }
 
 .standalone-page-viewer__controls > div {
-    display: flex;
-    align-items: stretch;
+	display: flex;
+	align-items: stretch;
 }
 
 .standalone-page-viewer__controls button {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 12px;
-    height: 100%;
-    border-radius: 0 !important;
-    color: inherit !important;
-    transition: background 0.2s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 12px;
+	height: 100%;
+	border-radius: 0 !important;
+	color: inherit !important;
+	transition: background 0.2s;
 }
 
 .standalone-page-viewer__controls button:hover {
-    background: hsla(0, 0%, 50%, 0.15);
+	background: hsla(0, 0%, 50%, 0.15);
 }
 
 .hover\:bg-\[\#c42b1c\]:hover {
-    background: rgb(196 43 28 / var(--tw-bg-opacity)) !important;
+	background: rgb(196 43 28 / var(--tw-bg-opacity)) !important;
 }
 
 /* MacOS specific stoplight alignment */
-.unified-page-viewer-root[data-os="macos"] .page-viewer-window-controls-wrapper {
-    padding-left: 12px;
-    padding-right: 8px;
+.unified-page-viewer-root[data-os="macos"]
+.page-viewer-window-controls-wrapper {
+	padding-left: 12px;
+	padding-right: 8px;
 }
 
 /* Windows/Linux padding */
-.unified-page-viewer-root:not([data-os="macos"]) .page-viewer-window-controls-wrapper {
-    margin-left: 8px;
+.unified-page-viewer-root:not([data-os="macos"])
+.page-viewer-window-controls-wrapper {
+	margin-left: 8px;
 }
 
 .standalone-page-viewer__controls svg path {
-    fill: currentColor !important;
+	fill: currentColor !important;
 }
-

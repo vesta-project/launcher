@@ -177,7 +177,9 @@
 	margin: 0;
 	word-break: break-word;
 	line-height: 1.4;
-	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+	font-family:
+		ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+		"Courier New", monospace;
 	opacity: 0.95;
 	background: var(--surface-base);
 	padding: 4px 8px;

@@ -2,7 +2,11 @@ import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import { createDemoInstance, DEMO_INSTANCE_ID, type Instance } from "@utils/instances";
+import {
+	createDemoInstance,
+	DEMO_INSTANCE_ID,
+	type Instance,
+} from "@utils/instances";
 
 export type { Instance };
 

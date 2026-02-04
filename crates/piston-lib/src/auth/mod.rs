@@ -12,6 +12,7 @@ use oauth2::{
     RequestTokenError, Scope, StandardDeviceAuthorizationResponse, TokenUrl,
 };
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 /// Microsoft OAuth endpoints
 const AUTHORIZATION_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
@@ -137,4 +138,11 @@ pub async fn exchange_for_minecraft_token(
     };
 
     Ok(response)
+}
+
+/// Generate a Minecraft-compatible offline UUID for a given username.
+/// This matches Prism Launcher and official Minecraft behavior for offline mode.
+pub fn generate_offline_uuid(username: &str) -> String {
+    let uuid = Uuid::new_v3(&Uuid::nil(), format!("OfflinePlayer:{}", username).as_bytes());
+    uuid.to_string()
 }

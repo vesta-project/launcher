@@ -47,22 +47,19 @@ pub fn load_running_processes() -> Result<Vec<InstanceRunState>> {
         return Ok(Vec::new());
     }
 
-    let data = std::fs::read_to_string(&path)
-        .context("Failed to read running processes file")?;
+    let data = std::fs::read_to_string(&path).context("Failed to read running processes file")?;
 
-    serde_json::from_str(&data)
-        .context("Failed to parse running processes JSON")
+    serde_json::from_str(&data).context("Failed to parse running processes JSON")
 }
 
 /// Save or update process states
 pub fn save_running_processes(processes: &[InstanceRunState]) -> Result<()> {
     let path = get_process_state_file()?;
 
-    let data = serde_json::to_string_pretty(processes)
-        .context("Failed to serialize running processes")?;
+    let data =
+        serde_json::to_string_pretty(processes).context("Failed to serialize running processes")?;
 
-    std::fs::write(&path, data)
-        .context("Failed to write running processes file")?;
+    std::fs::write(&path, data).context("Failed to write running processes file")?;
 
     Ok(())
 }

@@ -1,10 +1,13 @@
-use tauri::{Manager, State};
-use crate::models::resource::{ResourceProject, ResourceVersion, SearchQuery, SourcePlatform, ResourceType, SearchResponse, ResourceCategory};
 use crate::auth::ACCOUNT_TYPE_GUEST;
+use crate::models::resource::{
+    ResourceCategory, ResourceProject, ResourceType, ResourceVersion, SearchQuery, SearchResponse,
+    SourcePlatform,
+};
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::resource_download::ResourceDownloadTask;
 use anyhow_tauri::TAResult as Result;
+use tauri::{Manager, State};
 
 #[tauri::command]
 pub async fn check_resource_updates(
@@ -16,8 +19,14 @@ pub async fn check_resource_updates(
     // Run in background
     let rm = resource_manager.inner().clone();
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = rm.refresh_resources_for_instance(instance_id, &mc_version, &loader).await {
-            log::error!("[check_resource_updates] Failed to refresh resources: {}", e);
+        if let Err(e) = rm
+            .refresh_resources_for_instance(instance_id, &mc_version, &loader)
+            .await
+        {
+            log::error!(
+                "[check_resource_updates] Failed to refresh resources: {}",
+                e
+            );
         }
     });
     Ok(())
@@ -29,7 +38,9 @@ pub async fn sync_instance_resources(
     instance_id: i32,
     game_dir: String,
 ) -> Result<()> {
-    resource_watcher.watch_instance("sync".to_string(), instance_id, game_dir).await
+    resource_watcher
+        .watch_instance("sync".to_string(), instance_id, game_dir)
+        .await
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(())
 }
@@ -38,8 +49,8 @@ pub async fn sync_instance_resources(
 pub async fn get_installed_resources(
     instance_id: i32,
 ) -> Result<Vec<crate::models::installed_resource::InstalledResource>> {
-    use crate::utils::db::get_vesta_conn;
     use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
 
     let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -47,7 +58,7 @@ pub async fn get_installed_resources(
         .filter(ir_dsl::instance_id.eq(instance_id))
         .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    
+
     Ok(resources)
 }
 
@@ -56,26 +67,36 @@ pub async fn get_resource_categories(
     resource_manager: State<'_, ResourceManager>,
     platform: SourcePlatform,
 ) -> Result<Vec<ResourceCategory>> {
-    resource_manager.get_categories(platform).await
+    resource_manager
+        .get_categories(platform)
+        .await
         .map_err(|e| anyhow::anyhow!(e.to_string()).into())
 }
 
 #[tauri::command]
 pub async fn search_resources(
     resource_manager: State<'_, ResourceManager>,
+    nm: State<'_, crate::utils::network::NetworkManager>,
     platform: SourcePlatform,
     query: SearchQuery,
 ) -> Result<SearchResponse> {
-    Ok(resource_manager.search(platform, query).await?)
+    let start = std::time::Instant::now();
+    let res = resource_manager.search(platform, query).await;
+    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
+    Ok(res?)
 }
 
 #[tauri::command]
 pub async fn get_resource_project(
     resource_manager: State<'_, ResourceManager>,
+    nm: State<'_, crate::utils::network::NetworkManager>,
     platform: SourcePlatform,
     id: String,
 ) -> Result<ResourceProject> {
-    Ok(resource_manager.get_project(platform, &id).await?)
+    let start = std::time::Instant::now();
+    let res = resource_manager.get_project(platform, &id).await;
+    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
+    Ok(res?)
 }
 
 #[tauri::command]
@@ -84,7 +105,9 @@ pub async fn cache_resource_metadata(
     platform: SourcePlatform,
     project: ResourceProject,
 ) -> Result<()> {
-    Ok(resource_manager.cache_project_metadata(platform, &project).await?)
+    Ok(resource_manager
+        .cache_project_metadata(platform, &project)
+        .await?)
 }
 
 #[tauri::command]
@@ -119,7 +142,15 @@ pub async fn get_resource_versions(
     project_id: String,
     ignore_cache: Option<bool>,
 ) -> Result<Vec<ResourceVersion>> {
-    Ok(resource_manager.get_versions(platform, &project_id, ignore_cache.unwrap_or(false), None, None).await?)
+    Ok(resource_manager
+        .get_versions(
+            platform,
+            &project_id,
+            ignore_cache.unwrap_or(false),
+            None,
+            None,
+        )
+        .await?)
 }
 
 #[tauri::command]
@@ -131,23 +162,25 @@ pub async fn find_peer_resource(
 }
 
 #[tauri::command]
-pub async fn delete_resource(
-    instance_id: i32,
-    resource_id: i32,
-) -> Result<()> {
-    use crate::utils::db::get_vesta_conn;
+pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
     use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
     use std::fs;
 
     let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    
+
     // Find the resource to get the path
     let res = ir_dsl::installed_resource
         .filter(ir_dsl::id.eq(resource_id))
         .filter(ir_dsl::instance_id.eq(instance_id))
         .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Resource not found or does not belong to this instance: {}", e))?;
+        .map_err(|e| {
+            anyhow::anyhow!(
+                "Resource not found or does not belong to this instance: {}",
+                e
+            )
+        })?;
 
     // Delete the file
     if fs::metadata(&res.local_path).is_ok() {
@@ -164,18 +197,15 @@ pub async fn delete_resource(
 }
 
 #[tauri::command]
-pub async fn toggle_resource(
-    resource_id: i32,
-    enabled: bool,
-) -> Result<()> {
-    use crate::utils::db::get_vesta_conn;
+pub async fn toggle_resource(resource_id: i32, enabled: bool) -> Result<()> {
     use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
     use std::fs;
     use std::path::Path;
 
     let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    
+
     let res = ir_dsl::installed_resource
         .filter(ir_dsl::id.eq(resource_id))
         .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
@@ -186,7 +216,10 @@ pub async fn toggle_resource(
         // Auto-delete dead entry
         let _ = diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
             .execute(&mut conn);
-        return Err(anyhow::anyhow!("File not found on disk. The entry has been removed from the database.").into());
+        return Err(anyhow::anyhow!(
+            "File not found on disk. The entry has been removed from the database."
+        )
+        .into());
     }
 
     let new_path = if enabled {
@@ -209,7 +242,7 @@ pub async fn toggle_resource(
         fs::rename(&res.local_path, &new_path)
             .map_err(|e| anyhow::anyhow!("Failed to rename file: {}", e))?;
     }
-    
+
     // Update database
     diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
         .set((
@@ -267,13 +300,16 @@ pub async fn install_resource(
                 });
             }
 
-            return Err(anyhow::anyhow!("You must be signed in with a Microsoft account to install mods or resources.").into());
+            return Err(anyhow::anyhow!(
+                "You must be signed in with a Microsoft account to install mods or resources."
+            )
+            .into());
         }
     }
 
-    use crate::utils::db::get_vesta_conn;
-    use crate::schema::instance::dsl as inst_dsl;
     use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
 
     let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -287,12 +323,9 @@ pub async fn install_resource(
     // 2. Resolve dependencies
     let loader = instance.modloader.as_deref().unwrap_or("vanilla");
     let dependencies = if resource_type == ResourceType::Mod {
-        resource_manager.resolve_dependencies(
-            platform, 
-            &version, 
-            &instance.minecraft_version, 
-            loader
-        ).await?
+        resource_manager
+            .resolve_dependencies(platform, &version, &instance.minecraft_version, loader)
+            .await?
     } else {
         Vec::new()
     };
@@ -305,10 +338,12 @@ pub async fn install_resource(
 
     // 4. Submit tasks
     // Main resource
-    
+
     // Fetch and cache main project metadata (including icon)
     if let Ok(project) = resource_manager.get_project(platform, &project_id).await {
-        let _ = resource_manager.cache_project_metadata(platform, &project).await;
+        let _ = resource_manager
+            .cache_project_metadata(platform, &project)
+            .await;
     }
 
     let main_task = ResourceDownloadTask {
@@ -319,24 +354,29 @@ pub async fn install_resource(
         version,
         resource_type,
     };
-    task_manager.submit(Box::new(main_task)).await.map_err(|e| anyhow::anyhow!(e))?;
+    task_manager
+        .submit(Box::new(main_task))
+        .await
+        .map_err(|e| anyhow::anyhow!(e))?;
 
     // Dependencies
     for (dep_project, dep_version) in dependencies {
         // Cache dependency metadata (including icon)
-        let _ = resource_manager.cache_project_metadata(dep_project.source, &dep_project).await;
+        let _ = resource_manager
+            .cache_project_metadata(dep_project.source, &dep_project)
+            .await;
 
         // Check if already installed (by ID or Peer ID)
         let mut is_installed = false;
         let dep_platform_str = format!("{:?}", dep_project.source).to_lowercase();
-        
+
         for ins in &installed {
             // Direct ID match
             if ins.platform == dep_platform_str && ins.remote_id == dep_project.id {
                 is_installed = true;
                 break;
             }
-            
+
             // External ID match
             if let Some(ref external_ids) = dep_project.external_ids {
                 for (ext_plat, ext_id) in external_ids {
@@ -346,7 +386,9 @@ pub async fn install_resource(
                     }
                 }
             }
-            if is_installed { break; }
+            if is_installed {
+                break;
+            }
 
             // Name match as fallback
             if ins.display_name.to_lowercase() == dep_project.name.to_lowercase() {
@@ -368,8 +410,11 @@ pub async fn install_resource(
             version: dep_version,
             resource_type: ResourceType::Mod,
         };
-        
-        task_manager.submit(Box::new(dep_task)).await.map_err(|e| anyhow::anyhow!(e))?;
+
+        task_manager
+            .submit(Box::new(dep_task))
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?;
     }
 
     Ok("Tasks submitted".to_string())

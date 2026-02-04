@@ -101,22 +101,25 @@ impl TaskManager {
 
             while let Some(task) = receiver.recv().await {
                 log::info!("TaskManager: Received task: {}", task.name());
-                
+
                 let task_name = task.name();
                 let is_cancellable = task.cancellable();
                 let is_pausable = task.pausable();
 
                 // Generate ID and create "Waiting" notification immediately
                 let id = TASK_COUNTER.fetch_add(1, Ordering::Relaxed);
-                let client_key = task.id().unwrap_or_else(|| {
-                    format!("task_{}_{}", chrono::Utc::now().timestamp(), id)
-                });
+                let client_key = task
+                    .id()
+                    .unwrap_or_else(|| format!("task_{}_{}", chrono::Utc::now().timestamp(), id));
 
                 // Check if task is already running (deduplication)
                 {
                     let active = manager_active_tasks.lock().unwrap();
                     if active.contains_key(&client_key) {
-                        log::info!("TaskManager: Task with ID {} already active, ignoring submission", client_key);
+                        log::info!(
+                            "TaskManager: Task with ID {} already active, ignoring submission",
+                            client_key
+                        );
                         continue;
                     }
                 }
@@ -528,18 +531,21 @@ impl Task for TestTask {
                     severity: Some("info".to_string()),
                     notification_type: Some(NotificationType::Progress),
                     dismissible: Some(false),
-                    actions: Some(serde_json::to_string(&vec![
-                        NotificationAction {
-                            action_id: "cancel_task".to_string(),
-                            label: "Cancel".to_string(),
-                            action_type: "secondary".to_string(),
-                        },
-                        NotificationAction {
-                            action_id: "pause_task".to_string(),
-                            label: "Pause".to_string(),
-                            action_type: "secondary".to_string(),
-                        },
-                    ]).unwrap()),
+                    actions: Some(
+                        serde_json::to_string(&vec![
+                            NotificationAction {
+                                action_id: "cancel_task".to_string(),
+                                label: "Cancel".to_string(),
+                                action_type: "secondary".to_string(),
+                            },
+                            NotificationAction {
+                                action_id: "pause_task".to_string(),
+                                label: "Pause".to_string(),
+                                action_type: "secondary".to_string(),
+                            },
+                        ])
+                        .unwrap(),
+                    ),
                     progress: Some(0),
                     current_step: Some(0),
                     total_steps: Some(100),
@@ -562,29 +568,33 @@ impl Task for TestTask {
                 if *ctx.pause_rx.borrow() {
                     println!("Task paused: {}", client_key);
                     // Update notification to show Resume button
-                    manager.update_notification_actions(
-                        client_key.clone(),
-                        vec![
-                            NotificationAction {
-                                action_id: "cancel_task".to_string(),
-                                label: "Cancel".to_string(),
-                                action_type: "secondary".to_string(),
-                            },
-                            NotificationAction {
-                                action_id: "resume_task".to_string(),
-                                label: "Resume".to_string(),
-                                action_type: "primary".to_string(),
-                            },
-                        ]
-                    ).map_err(|e| e.to_string())?;
-                    
-                    manager.update_progress_with_description(
-                        client_key.clone(),
-                        ((i * 100) / steps) as i32,
-                        Some(i as i32),
-                        Some(steps as i32),
-                        "Paused".to_string()
-                    ).map_err(|e| e.to_string())?;
+                    manager
+                        .update_notification_actions(
+                            client_key.clone(),
+                            vec![
+                                NotificationAction {
+                                    action_id: "cancel_task".to_string(),
+                                    label: "Cancel".to_string(),
+                                    action_type: "secondary".to_string(),
+                                },
+                                NotificationAction {
+                                    action_id: "resume_task".to_string(),
+                                    label: "Resume".to_string(),
+                                    action_type: "primary".to_string(),
+                                },
+                            ],
+                        )
+                        .map_err(|e| e.to_string())?;
+
+                    manager
+                        .update_progress_with_description(
+                            client_key.clone(),
+                            ((i * 100) / steps) as i32,
+                            Some(i as i32),
+                            Some(steps as i32),
+                            "Paused".to_string(),
+                        )
+                        .map_err(|e| e.to_string())?;
 
                     // Wait for resume or cancel
                     loop {
@@ -608,7 +618,7 @@ impl Task for TestTask {
                                             },
                                         ]
                                     ).map_err(|e| e.to_string())?;
-                                    
+
                                     manager.update_progress_with_description(
                                         client_key.clone(),
                                         ((i * 100) / steps) as i32,

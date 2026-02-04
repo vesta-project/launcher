@@ -1,154 +1,154 @@
 .instance-selection-dialog {
-    max-width: 450px !important;
-    width: 90vw;
+	max-width: 450px !important;
+	width: 90vw;
 }
 
 .instance-list-scroll {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    max-height: 350px;
-    overflow-y: auto;
-    margin: 16px 0;
-    padding-right: 4px;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-height: 350px;
+	overflow-y: auto;
+	margin: 16px 0;
+	padding-right: 4px;
 }
 
 .instance-list-scroll::-webkit-scrollbar {
-    width: 6px;
+	width: 6px;
 }
 
 .instance-list-scroll::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 6px;
+	background: var(--border);
+	border-radius: 6px;
 }
 
 .instance-select-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 12px;
-    background: var(--surface-low);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    text-align: left;
-    width: 100%;
-    color: var(--text);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 12px;
+	background: var(--surface-low);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	text-align: left;
+	width: 100%;
+	color: var(--text);
 }
 
 .instance-select-item:hover:not(.disabled) {
-    background: var(--surface-medium);
-    border-color: var(--primary-low);
-    transform: translateY(-1px);
+	background: var(--surface-medium);
+	border-color: var(--primary-low);
+	transform: translateY(-1px);
 }
 
 .instance-select-item:active:not(.disabled) {
-    transform: translateY(0);
+	transform: translateY(0);
 }
 
 .instance-select-item.disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    background: var(--surface-sunken);
+	opacity: 0.5;
+	cursor: not-allowed;
+	background: var(--surface-sunken);
 }
 
 .instance-item-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+	display: flex;
+	align-items: center;
+	gap: 12px;
 }
 
 .instance-select-icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
-    background-size: cover;
-    background-position: center;
-    border: 1px solid var(--border-subtle);
-    flex-shrink: 0;
+	width: 36px;
+	height: 36px;
+	border-radius: 6px;
+	background-size: cover;
+	background-position: center;
+	border: 1px solid var(--border-subtle);
+	flex-shrink: 0;
 }
 
 .instance-item-info {
-    display: flex;
-    flex-direction: column;
+	display: flex;
+	flex-direction: column;
 }
 
 .instance-item-name {
-    font-weight: 600;
-    font-size: 14px;
+	font-weight: 600;
+	font-size: 14px;
 }
 
 .instance-item-meta {
-    font-size: 11px;
-    color: var(--text-secondary);
+	font-size: 11px;
+	color: var(--text-secondary);
 }
 
 .incompatible-reason {
-    font-size: 11px;
-    color: var(--destructive);
-    margin-top: 2px;
-    font-weight: 500;
+	font-size: 11px;
+	color: var(--destructive);
+	margin-top: 2px;
+	font-weight: 500;
 }
 
 .incompatible-badge {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    background: var(--destructive-low);
-    color: var(--destructive);
-    padding: 2px 6px;
-    border-radius: 4px;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	background: var(--destructive-low);
+	color: var(--destructive);
+	padding: 2px 6px;
+	border-radius: 4px;
 }
 
 .instance-select-item.installed {
-    border-color: var(--primary-low);
-    background: color-mix(in srgb, var(--primary), transparent 95%);
-    cursor: default;
+	border-color: var(--primary-low);
+	background: color-mix(in srgb, var(--primary), transparent 95%);
+	cursor: default;
 }
 
 .installed-status {
-    font-size: 11px;
-    color: var(--primary);
-    margin-top: 2px;
-    font-weight: 500;
+	font-size: 11px;
+	color: var(--primary);
+	margin-top: 2px;
+	font-weight: 500;
 }
 
 .installed-badge {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    background: var(--primary-low);
-    color: var(--primary);
-    padding: 2px 6px;
-    border-radius: 4px;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	background: var(--primary-low);
+	color: var(--primary);
+	padding: 2px 6px;
+	border-radius: 4px;
 }
 
 .instance-select-item.update {
-    border-color: var(--secondary-low);
-    background: color-mix(in srgb, var(--secondary), transparent 95%);
+	border-color: var(--secondary-low);
+	background: color-mix(in srgb, var(--secondary), transparent 95%);
 }
 
 .update-status {
-    font-size: 11px;
-    color: var(--secondary);
-    margin-top: 2px;
-    font-weight: 500;
+	font-size: 11px;
+	color: var(--secondary);
+	margin-top: 2px;
+	font-weight: 500;
 }
 
 .update-badge {
-    font-size: 10px;
-    font-weight: 700;
-    text-transform: uppercase;
-    background: var(--secondary-low);
-    color: var(--secondary);
-    padding: 2px 6px;
-    border-radius: 4px;
+	font-size: 10px;
+	font-weight: 700;
+	text-transform: uppercase;
+	background: var(--secondary-low);
+	color: var(--secondary);
+	padding: 2px 6px;
+	border-radius: 4px;
 }
 
 .dialog-footer {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    margin-top: 8px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	margin-top: 8px;
 }

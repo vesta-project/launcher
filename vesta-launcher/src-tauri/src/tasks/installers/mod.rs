@@ -68,7 +68,10 @@ impl Task for InstallInstanceTask {
                 self.instance.modloader_version.as_ref().unwrap()
             )
         } else if modloader != "vanilla" {
-            format!("Minecraft {} ({})", self.instance.minecraft_version, modloader)
+            format!(
+                "Minecraft {} ({})",
+                self.instance.minecraft_version, modloader
+            )
         } else {
             format!("Minecraft {}", self.instance.minecraft_version)
         }
@@ -115,7 +118,11 @@ impl Task for InstallInstanceTask {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("instances").join(&instance.slug()));
 
-            log::info!("[InstallTask] Data dir: {:?}, Game dir: {:?}", data_dir, game_dir);
+            log::info!(
+                "[InstallTask] Data dir: {:?}, Game dir: {:?}",
+                data_dir,
+                game_dir
+            );
 
             let spec = InstallSpec {
                 version_id: instance.minecraft_version.clone(),
@@ -182,8 +189,8 @@ impl Task for InstallInstanceTask {
                         ]
                     };
 
-                    let _ = manager
-                        .update_notification_actions(pause_notification_id.clone(), actions);
+                    let _ =
+                        manager.update_notification_actions(pause_notification_id.clone(), actions);
 
                     if is_paused {
                         let _ = manager.upsert_description(&pause_notification_id, "Paused");
@@ -222,7 +229,9 @@ impl Task for InstallInstanceTask {
                     // Update database status to 'installed'
                     if instance.id > 0 {
                         if let Err(e) = crate::commands::instances::update_installation_status(
-                            &app_handle, instance.id, "installed",
+                            &app_handle,
+                            instance.id,
+                            "installed",
                         ) {
                             log::error!("[InstallTask] Failed to update status: {}", e);
                         }
@@ -230,25 +239,36 @@ impl Task for InstallInstanceTask {
 
                     // Emit installed event for frontend
                     use tauri::Emitter;
-                    let _ = app_handle.emit("core://instance-installed", serde_json::json!({
-                        "name": instance.name,
-                        "instance_id": instance.slug()
-                    }));
+                    let _ = app_handle.emit(
+                        "core://instance-installed",
+                        serde_json::json!({
+                            "name": instance.name,
+                            "instance_id": instance.slug()
+                        }),
+                    );
 
                     Ok(())
                 }
                 Err(e) => {
                     log::error!("[InstallTask] Installation failed: {}", e);
-                    
-                    // Update database status to 'failed'
+
+                    // Update database status to 'failed' with reason
                     if instance.id > 0 {
-                        if let Err(status_err) = crate::commands::instances::update_installation_status(
-                            &app_handle, instance.id, "failed",
-                        ) {
-                            log::error!("[InstallTask] Failed to update error status: {}", status_err);
+                        let status_val = format!("failed:{}", e);
+                        if let Err(status_err) =
+                            crate::commands::instances::update_installation_status(
+                                &app_handle,
+                                instance.id,
+                                &status_val,
+                            )
+                        {
+                            log::error!(
+                                "[InstallTask] Failed to update error status: {}",
+                                status_err
+                            );
                         }
                     }
-                    
+
                     Err(e.to_string())
                 }
             }
