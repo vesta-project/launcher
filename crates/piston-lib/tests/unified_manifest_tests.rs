@@ -1,10 +1,10 @@
-use piston_lib::game::launcher::unified_manifest::{UnifiedManifest, UnifiedLibrary};
+use piston_lib::game::launcher::unified_manifest::UnifiedManifest;
 use piston_lib::game::launcher::version_parser::{VersionManifest, Library, LibraryDownloads, Artifact};
 use piston_lib::game::installer::types::OsType;
 
 #[test]
 fn test_library_deduplication_with_natives() {
-    let mut manifest = VersionManifest {
+    let manifest = VersionManifest {
         id: "test".to_string(),
         main_class: Some("Main".to_string()),
         libraries: vec![
@@ -52,7 +52,7 @@ fn test_library_deduplication_with_natives() {
 
 #[test]
 fn test_library_resolution_with_rules() {
-    let mut manifest = VersionManifest {
+    let manifest = VersionManifest {
         id: "test".to_string(),
         main_class: Some("Main".to_string()),
         libraries: vec![
@@ -88,7 +88,7 @@ fn test_library_resolution_with_rules() {
 
 #[test]
 fn test_arch_rule_matching() {
-    let mut manifest = VersionManifest {
+    let manifest = VersionManifest {
         id: "test".to_string(),
         main_class: Some("Main".to_string()),
         libraries: vec![

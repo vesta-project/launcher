@@ -559,9 +559,58 @@ mod tests {
 
     #[test]
     fn test_default_jvm_args() {
-        let args = get_default_jvm_args();
-        assert!(args.contains(&"-Xms2G".to_string()));
-        assert!(args.contains(&"-Xmx4G".to_string()));
+        use crate::game::launcher::version_parser::VersionManifest;
+
+        let spec = LaunchSpec {
+            instance_id: "test".to_string(),
+            version_id: "1.20.1".to_string(),
+            modloader: None,
+            modloader_version: None,
+            data_dir: std::path::PathBuf::from("."),
+            game_dir: std::path::PathBuf::from("."),
+            java_path: std::path::PathBuf::from("java"),
+            username: "Player".to_string(),
+            uuid: "uuid".to_string(),
+            access_token: "token".to_string(),
+            user_type: "msa".to_string(),
+            xuid: None,
+            jvm_args: vec![],
+            game_args: vec![],
+            window_width: None,
+            window_height: None,
+            min_memory: None,
+            max_memory: None,
+            client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
+        };
+
+        let manifest = UnifiedManifest::from(VersionManifest {
+            id: "1.20.1".to_string(),
+            main_class: None,
+            inherits_from: None,
+            arguments: None,
+            jvm_arguments: None,
+            game_arguments: None,
+            minecraft_arguments: None,
+            libraries: vec![],
+            asset_index: None,
+            assets: None,
+            java_version: None,
+            version_type: None,
+            release_time: None,
+            time: None,
+            downloads: None,
+        });
+
+        let natives_dir = std::path::PathBuf::from("natives");
+        let classpath = "cp";
+
+        let args = build_jvm_arguments(&spec, &manifest, &natives_dir, classpath);
+
+        // Verify defaults from build_jvm_arguments
+        assert!(args.contains(&"-Xms2048M".to_string()));
+        assert!(args.contains(&"-Xmx4096M".to_string()));
         assert!(args.contains(&"-XX:+UseG1GC".to_string()));
     }
 
