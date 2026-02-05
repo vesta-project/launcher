@@ -75,7 +75,7 @@ fn update_instance_playtime(
             // Fetch the updated instance to emit
             if let Ok(updated_inst) = instance.find(inst.id).first::<Instance>(&mut conn) {
                 use tauri::Emitter;
-                let _ = app_handle.emit("core://instance-updated", updated_inst);
+                let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated_inst));
             }
 
             return Ok(());
@@ -277,9 +277,9 @@ fn process_instance_icon(mut inst: Instance) -> Instance {
             use base64::{engine::general_purpose, Engine as _};
             let b64 = general_purpose::STANDARD.encode(data);
             inst.icon_path = Some(format!("data:image/png;base64,{}", b64));
-        } else if let Some(ref url) = inst.modpack_icon_url {
-            // Fallback to URL if we have one but no data yet
-            inst.icon_path = Some(url.clone());
+        } else if inst.icon_path.is_none() && inst.modpack_icon_url.is_some() {
+            // Fallback to URL if we have one but no data and no explicitly set path
+            inst.icon_path = inst.modpack_icon_url.clone();
         }
     }
     inst
@@ -498,7 +498,7 @@ pub async fn create_instance(
     // Fetch the full instance and emit created event
     if let Ok(full_instance) = instance.find(inserted_id).first::<Instance>(&mut conn) {
         use tauri::Emitter;
-        let _ = app_handle.emit("core://instance-created", full_instance);
+        let _ = app_handle.emit("core://instance-created", process_instance_icon(full_instance));
     }
 
     // Set initial installation_status to "pending"
@@ -579,7 +579,13 @@ pub async fn update_instance(
     }
 
     // Download icon for offline use if we have a URL but no bytes (e.g. newly linked or recently updated)
-    if final_instance.modpack_icon_url.is_some() && final_instance.icon_data.is_none() {
+    // We only do this if the user hasn't opted for a specific preset or gradient
+    let is_using_custom_preset = final_instance.icon_path.as_ref().map(|p| {
+        (!p.starts_with("internal://") && Some(p) != final_instance.modpack_icon_url.as_ref()) || 
+        p.starts_with("linear-gradient")
+    }).unwrap_or(false);
+
+    if !is_using_custom_preset && final_instance.modpack_icon_url.is_some() && final_instance.icon_data.is_none() {
         if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
             final_instance.modpack_icon_url.as_ref().unwrap(),
         )
@@ -784,7 +790,7 @@ pub async fn update_instance(
 
     // Notify frontend
     use tauri::Emitter;
-    let _ = app_handle.emit("core://instance-updated", updated);
+    let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
 
     Ok(())
 }
@@ -1457,7 +1463,7 @@ pub fn update_instance_operation(
         .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
 
     use tauri::Emitter;
-    let _ = app_handle.emit("core://instance-updated", updated);
+    let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
 
     Ok(())
 }
@@ -1489,7 +1495,7 @@ pub fn update_installation_status(
         .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
 
     use tauri::Emitter;
-    let _ = app_handle.emit("core://instance-updated", updated);
+    let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
 
     Ok(())
 }
@@ -1735,7 +1741,7 @@ pub async fn update_instance_modpack_version(
         .find(instance_id)
         .first(&mut conn)
         .map_err(|e| e.to_string())?;
-    let _ = app_handle.emit("core://instance-updated", updated);
+    let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
 
     Ok(())
 }

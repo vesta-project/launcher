@@ -1,6 +1,14 @@
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import {
+	NumberField,
+	NumberFieldDecrementTrigger,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
+	NumberFieldLabel,
+} from "@ui/number-field/number-field";
+import {
 	Slider,
 	SliderFill,
 	SliderLabel,
@@ -9,7 +17,7 @@ import {
 	SliderValueLabel,
 } from "@ui/slider/slider";
 import { createSignal } from "solid-js";
-import "./task-test-page.css";
+import styles from "./task-test-page.module.css";
 
 function TaskTestPage() {
 	const [title, setTitle] = createSignal("Test Task");
@@ -40,39 +48,44 @@ function TaskTestPage() {
 	};
 
 	return (
-		<div class="task-test-page">
+		<div class={styles["task-test-page"]}>
 			<h1>Task System Test</h1>
 
-			<section class="task-section">
+			<section class={styles["task-section"]}>
 				<h2>Submit Task</h2>
-				<div class="input-group">
+				<div class={styles["input-group"]}>
 					<label>
 						Task Title:
 						<input
 							type="text"
 							value={title()}
 							onInput={(e) => setTitle(e.currentTarget.value)}
-							class="task-input"
+							class={styles["task-input"]}
 						/>
 					</label>
 				</div>
-				<div class="input-group">
-					<label>
-						Duration (seconds):
-						<input
-							type="number"
-							value={duration()}
-							onInput={(e) => setDuration(parseInt(e.currentTarget.value))}
-							class="task-input"
-						/>
-					</label>
+				<div class={styles["input-group"]}>
+					<NumberField
+						value={duration()}
+						onRawValueChange={(val) => {
+							if (!isNaN(val)) setDuration(val);
+						}}
+						minValue={1}
+					>
+						<NumberFieldLabel>Duration (seconds):</NumberFieldLabel>
+						<NumberFieldGroup>
+							<NumberFieldInput />
+							<NumberFieldIncrementTrigger />
+							<NumberFieldDecrementTrigger />
+						</NumberFieldGroup>
+					</NumberField>
 				</div>
 				<LauncherButton onClick={handleSubmit}>Submit Task</LauncherButton>
 			</section>
 
-			<section class="task-section">
+			<section class={styles["task-section"]}>
 				<h2>Worker Configuration</h2>
-				<div class="slider-container">
+				<div class={styles["slider-container"]}>
 					<Slider
 						value={[workerLimit()]}
 						onChange={handleLimitChange}
@@ -80,7 +93,7 @@ function TaskTestPage() {
 						maxValue={10}
 						step={1}
 					>
-						<div class="slider__header">
+						<div class={styles["slider__header"]}>
 							<SliderLabel>Worker Limit</SliderLabel>
 							<SliderValueLabel />
 						</div>
@@ -97,3 +110,4 @@ function TaskTestPage() {
 }
 
 export default TaskTestPage;
+

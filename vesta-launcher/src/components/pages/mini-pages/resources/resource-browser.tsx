@@ -1,3 +1,4 @@
+import { Badge } from "@ui/badge";
 import {
 	Component,
 	createEffect,
@@ -54,8 +55,7 @@ import { sanitizeSvg } from "@utils/security";
 import { router } from "@components/page-viewer/page-viewer";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
-import "./resource-browser.css";
-
+import styles from "./resource-browser.module.css";
 import HeartIcon from "@assets/heart.svg";
 import PanelOpenIcon from "@assets/left_panel_open.svg";
 import PanelCloseIcon from "@assets/left_panel_close.svg";
@@ -172,7 +172,7 @@ const InstanceSelector: Component = () => {
 		return (
 			<Show when={props.instance}>
 				<div
-					class="instance-item-icon"
+					class={styles["instance-item-icon"]}
 					style={
 						iconPath().startsWith("linear-gradient")
 							? { background: iconPath() }
@@ -189,8 +189,8 @@ const InstanceSelector: Component = () => {
 
 	return (
 		<div
-			class="instance-selector-wrapper"
-			classList={{ disabled: isModpack() }}
+			class={styles["instance-selector-wrapper"]}
+			classList={{ [styles.disabled]: isModpack() }}
 			title={
 				isModpack() ? "Instance selection is disabled for modpacks" : undefined
 			}
@@ -236,21 +236,23 @@ const InstanceSelector: Component = () => {
 				optionValue="id"
 				optionTextValue="name"
 				itemComponent={(props) => (
-					<SelectItem item={props.item} class="instance-select-item">
-						<div class="instance-item-content">
+					<SelectItem item={props.item} class={styles["instance-select-item"]}>
+						<div class={styles["instance-item-content"]}>
 							<InstanceIcon
 								instance={props.item.rawValue.id ? props.item.rawValue : null}
 							/>
-							<span class="instance-item-name">{props.item.rawValue.name}</span>
+							<span class={styles["instance-item-name"]}>
+								{props.item.rawValue.name}
+							</span>
 						</div>
 					</SelectItem>
 				)}
 			>
-				<SelectTrigger class="instance-toolbar-select">
-					<div class="instance-trigger-content">
+				<SelectTrigger class={styles["instance-toolbar-select"]}>
+					<div class={styles["instance-trigger-content"]}>
 						<InstanceIcon instance={selectedInstance()} />
-						<div class="instance-trigger-info">
-							<span class="instance-trigger-label">Instance</span>
+						<div class={styles["instance-trigger-info"]}>
+							<span class={styles["instance-trigger-label"]}>Instance</span>
 							<SelectValue<any>>
 								{(s) => s.selectedOption()?.name ?? "No Instance"}
 							</SelectValue>
@@ -685,28 +687,30 @@ const ResourceCard: Component<{
 
 	return (
 		<div
-			class={`resource-card ${props.viewMode}`}
+			class={`${styles["resource-card"]} ${styles[props.viewMode]}`}
 			onClick={navigateToDetails}
-			classList={{ installed: isInstalled() }}
+			classList={{ [styles.installed]: isInstalled() }}
 		>
-			<div class="resource-card-icon">
+			<div class={styles["resource-card-icon"]}>
 				<Show
 					when={props.project.icon_url}
-					fallback={<div class="icon-placeholder" />}
+					fallback={<div class={styles["icon-placeholder"]} />}
 				>
 					<img src={props.project.icon_url ?? ""} alt={props.project.name} />
 				</Show>
 			</div>
-			<div class="resource-card-content">
-				<div class="resource-card-header">
-					<div class="resource-card-title-group">
-						<h3 class="resource-card-title">{props.project.name}</h3>
-						<span class="resource-card-author">by {props.project.author}</span>
+			<div class={styles["resource-card-content"]}>
+				<div class={styles["resource-card-header"]}>
+					<div class={styles["resource-card-title-group"]}>
+						<h3 class={styles["resource-card-title"]}>{props.project.name}</h3>
+						<span class={styles["resource-card-author"]}>
+							by {props.project.author}
+						</span>
 					</div>
 				</div>
-				<p class="resource-card-summary">{props.project.summary}</p>
-				<div class="resource-card-footer">
-					<span class="resource-card-downloads">
+				<p class={styles["resource-card-summary"]}>{props.project.summary}</p>
+				<div class={styles["resource-card-footer"]}>
+					<span class={styles["resource-card-downloads"]}>
 						{props.project.download_count.toLocaleString()} downloads
 					</span>
 					<Show
@@ -715,13 +719,13 @@ const ResourceCard: Component<{
 							(props.project.follower_count || 0) > 0
 						}
 					>
-						<span class="resource-card-followers">
+						<span class={styles["resource-card-followers"]}>
 							<HeartIcon />{" "}
 							{(props.project.follower_count || 0).toLocaleString()}
 						</span>
 					</Show>
 					<Show when={props.project.published_at}>
-						<span class="resource-card-date">
+						<span class={styles["resource-card-date"]}>
 							{new Date(props.project.published_at ?? "").toLocaleDateString()}
 						</span>
 					</Show>
@@ -729,7 +733,7 @@ const ResourceCard: Component<{
 				<Show
 					when={props.project.categories && props.project.categories.length > 0}
 				>
-					<div class="resource-card-tags">
+					<div class={styles["resource-card-tags"]}>
 						<For each={props.project.categories.slice(0, 4)}>
 							{(tag) => {
 								// Find the category object in availableCategories if possible to get its real ID/Slug
@@ -742,13 +746,14 @@ const ResourceCard: Component<{
 								);
 
 								return (
-									<span
-										class="resource-tag"
-										classList={{
-											active: resources.state.categories.includes(
-												(categoryObj()?.id || tag).toLowerCase(),
-											),
-										}}
+									<Badge
+										variant="theme"
+										round
+										clickable
+										class={styles["resource-tag"]}
+										active={resources.state.categories.includes(
+											(categoryObj()?.id || tag).toLowerCase(),
+										)}
 										onClick={(e) => {
 											e.stopPropagation();
 											// Normalize tag to ID if possible
@@ -758,19 +763,19 @@ const ResourceCard: Component<{
 										}}
 									>
 										{categoryObj()?.name || tag}
-									</span>
+									</Badge>
 								);
 							}}
 						</For>
 						<Show when={props.project.categories.length > 4}>
-							<span class="resource-tag-more">
+							<span class={styles["resource-tag-more"]}>
 								+{props.project.categories.length - 4}
 							</span>
 						</Show>
 					</div>
 				</Show>
 			</div>
-			<div class="resource-card-actions">
+			<div class={styles["resource-card-actions"]}>
 				<Button
 					onClick={handleQuickInstall}
 					disabled={
@@ -1002,8 +1007,8 @@ const FiltersPanel: Component = () => {
 	const shouldShowGameVersion = () => true;
 
 	return (
-		<div class="filters-panel">
-			<div class="filters-header">
+		<div class={styles["filters-panel"]}>
+			<div class={styles["filters-header"]}>
 				<h3>Filters</h3>
 				<Button
 					size="sm"
@@ -1014,14 +1019,14 @@ const FiltersPanel: Component = () => {
 				</Button>
 			</div>
 
-			<div class="filter-section mobile-only-instance">
-				<label class="filter-label">Target Instance</label>
+			<div class={`${styles["filter-section"]} ${styles["mobile-only-instance"]}`}>
+				<label class={styles["filter-label"]}>Target Instance</label>
 				<InstanceSelector />
 			</div>
 
-			<div class="filter-section">
-				<label class="filter-label">Resource Type</label>
-				<div class="filter-options">
+			<div class={styles["filter-section"]}>
+				<label class={styles["filter-label"]}>Resource Type</label>
+				<div class={styles["filter-options"]}>
 					<For
 						each={
 							[
@@ -1036,10 +1041,10 @@ const FiltersPanel: Component = () => {
 					>
 						{(type) => (
 							<button
-								class="filter-option"
+								class={styles["filter-option"]}
 								classList={{
-									active: resources.state.resourceType === type,
-									disabled:
+									[styles.active]: resources.state.resourceType === type,
+									[styles.disabled]:
 										type === "world" &&
 										resources.state.activeSource === "modrinth",
 								}}
@@ -1069,8 +1074,8 @@ const FiltersPanel: Component = () => {
 			</div>
 
 			<Show when={shouldShowGameVersion()}>
-				<div class="filter-section">
-					<label class="filter-label">Minecraft Version</label>
+				<div class={styles["filter-section"]}>
+					<label class={styles["filter-label"]}>Minecraft Version</label>
 					<Combobox
 						options={gameVersions()}
 						value={resources.state.gameVersion || "All versions"}
@@ -1088,7 +1093,7 @@ const FiltersPanel: Component = () => {
 							</ComboboxItem>
 						)}
 					>
-						<ComboboxControl class="filter-combobox">
+						<ComboboxControl class={styles["filter-combobox"]}>
 							<ComboboxInput />
 							<ComboboxTrigger />
 						</ComboboxControl>
@@ -1098,8 +1103,8 @@ const FiltersPanel: Component = () => {
 			</Show>
 
 			<Show when={shouldShowLoader()}>
-				<div class="filter-section">
-					<label class="filter-label">Mod Loader</label>
+				<div class={styles["filter-section"]}>
+					<label class={styles["filter-label"]}>Mod Loader</label>
 					<Select
 						options={["All Loaders", ...LOADERS]}
 						value={
@@ -1120,7 +1125,7 @@ const FiltersPanel: Component = () => {
 							</SelectItem>
 						)}
 					>
-						<SelectTrigger class="filter-select">
+						<SelectTrigger class={styles["filter-select"]}>
 							<SelectValue<string>>
 								{(s) => String(s.selectedOption() || "All Loaders")}
 							</SelectValue>
@@ -1131,23 +1136,23 @@ const FiltersPanel: Component = () => {
 			</Show>
 
 			<Show when={availableCategories().length > 0}>
-				<div class="filter-section">
-					<label class="filter-label">Categories</label>
-					<div class="category-groups">
+				<div class={styles["filter-section"]}>
+					<label class={styles["filter-label"]}>Categories</label>
+					<div class={styles["category-groups"]}>
 						<For each={availableCategories()}>
 							{(group) => (
-								<div class="category-group">
+								<div class={styles["category-group"]}>
 									<Show when={group.name !== ""}>
 										<div
-											class="category-group-header"
-											classList={{ "not-clickable": !group.id }}
+											class={styles["category-group-header"]}
+											classList={{ [styles["not-clickable"]]: !group.id }}
 										>
 											<div
-												class="category-group-title"
+												class={styles["category-group-title"]}
 												title={group.id}
 												classList={{
-													clickable: group.id !== undefined,
-													active:
+													[styles.clickable]: group.id !== undefined,
+													[styles.active]:
 														group.id !== undefined &&
 														resources.state.categories.includes(group.id),
 												}}
@@ -1166,19 +1171,19 @@ const FiltersPanel: Component = () => {
 												}}
 											>
 												<Show when={group.icon}>
-													<div class="category-tag-icon">
+													<div class={styles["category-tag-icon"]}>
 														<Show
 															when={group.icon?.startsWith("http")}
 															fallback={
 																<div
-																	class="category-tag-icon-svg"
+																	class={styles["category-tag-icon-svg"]}
 																	innerHTML={sanitizeSvg(group.icon || "")}
 																/>
 															}
 														>
 															<img
 																src={group.icon || ""}
-																class="category-tag-icon-img"
+																class={styles["category-tag-icon-img"]}
 																alt={group.name}
 															/>
 														</Show>
@@ -1193,9 +1198,9 @@ const FiltersPanel: Component = () => {
 												}
 											>
 												<button
-													class="expand-toggle"
+													class={styles["expand-toggle"]}
 													classList={{
-														expanded:
+														[styles.expanded]:
 															resources.state.expandedCategoryGroups.includes(
 																group.id || group.name,
 															),
@@ -1228,43 +1233,43 @@ const FiltersPanel: Component = () => {
 											) || resources.state.activeSource !== "curseforge"
 										}
 									>
-										<div class="category-grid">
+										<div class={styles["category-grid"]}>
 											<For each={group.items}>
 												{(cat) => (
-													<button
-														class="category-tag"
+													<Badge
+														variant="theme"
+														class={styles["category-tag"]}
+														clickable
+														active={resources.state.categories.includes(
+															cat.id,
+														)}
 														title={cat.id}
-														classList={{
-															active: resources.state.categories.includes(
-																cat.id,
-															),
-														}}
 														onClick={() => {
 															resources.toggleCategory(cat.id);
 															resources.setOffset(0);
 														}}
 													>
 														<Show when={cat.icon}>
-															<div class="category-tag-icon">
+															<div class={styles["category-tag-icon"]}>
 																<Show
 																	when={cat.icon?.startsWith("http")}
 																	fallback={
 																		<div
-																			class="category-tag-icon-svg"
+																			class={styles["category-tag-icon-svg"]}
 																			innerHTML={sanitizeSvg(cat.icon || "")}
 																		/>
 																	}
 																>
 																	<img
 																		src={cat.icon || ""}
-																		class="category-tag-icon-img"
+																		class={styles["category-tag-icon-img"]}
 																		alt={cat.name}
 																	/>
 																</Show>
 															</div>
 														</Show>
-														<span class="category-tag-text">{cat.name}</span>
-													</button>
+														<span class={styles["category-tag-text"]}>{cat.name}</span>
+													</Badge>
 												)}
 											</For>
 										</div>
@@ -1641,17 +1646,17 @@ const ResourceBrowser: Component<{
 		Math.ceil(resources.state.totalHits / resources.state.limit);
 
 	return (
-		<div class="resource-browser">
+		<div class={styles["resource-browser"]}>
 			<Show when={resources.state.showFilters}>
 				<FiltersPanel />
 			</Show>
 
-			<div class="resource-browser-main">
+			<div class={styles["resource-browser-main"]}>
 				<div
-					class="resource-browser-toolbar"
-					classList={{ "is-search-expanded": isSearchExpanded() }}
+					class={styles["resource-browser-toolbar"]}
+					classList={{ [styles["is-search-expanded"]]: isSearchExpanded() }}
 				>
-					<div class="toolbar-left">
+					<div class={styles["toolbar-left"]}>
 						<Button
 							size="sm"
 							variant="ghost"
@@ -1660,7 +1665,7 @@ const ResourceBrowser: Component<{
 							title={
 								resources.state.showFilters ? "Hide Filters" : "Show Filters"
 							}
-							class="filter-toggle-btn"
+							class={styles["filter-toggle-btn"]}
 						>
 							<Show
 								when={resources.state.showFilters}
@@ -1670,34 +1675,34 @@ const ResourceBrowser: Component<{
 							</Show>
 						</Button>
 						<div
-							class="search-container"
-							classList={{ expanded: isSearchExpanded() }}
+							class={styles["search-container"]}
+							classList={{ [styles.expanded]: isSearchExpanded() }}
 						>
 							<Button
 								size="sm"
 								variant="ghost"
 								icon_only
-								class="mobile-search-trigger"
+								class={styles["mobile-search-trigger"]}
 								onClick={() => {
 									setIsSearchExpanded(true);
 									// Focus the input after expanding
 									const input = document.querySelector(
-										".toolbar-search-field input",
+										`.${styles["toolbar-search-field"]} input`,
 									) as HTMLInputElement;
 									input?.focus();
 								}}
 							>
 								<SearchIcon />
 							</Button>
-							<div class="search-input-wrapper">
-								<SearchIcon class="search-svg" />
+							<div class={styles["search-input-wrapper"]}>
+								<SearchIcon class={styles["search-svg"]} />
 								<TextField
 									placeholder="Search resources..."
 									value={resources.state.query}
 									onInput={(
 										e: InputEvent & { currentTarget: HTMLInputElement },
 									) => handleSearchInput(e.currentTarget.value)}
-									class="toolbar-search-field"
+									class={styles["toolbar-search-field"]}
 									onFocus={() => setIsSearchExpanded(true)}
 									onBlur={() => {
 										setTimeout(() => setIsSearchExpanded(false), 200);
@@ -1707,16 +1712,16 @@ const ResourceBrowser: Component<{
 						</div>
 					</div>
 
-					<div class="toolbar-center">
+					<div class={styles["toolbar-center"]}>
 						<InstanceSelector />
 					</div>
 
-					<div class="toolbar-right">
-						<div class="source-toggle">
+					<div class={styles["toolbar-right"]}>
+						<div class={styles["source-toggle"]}>
 							<button
-								class="source-btn"
+								class={styles["source-btn"]}
 								classList={{
-									active: resources.state.activeSource === "modrinth",
+									[styles.active]: resources.state.activeSource === "modrinth",
 								}}
 								onClick={() => {
 									batch(() => {
@@ -1729,9 +1734,9 @@ const ResourceBrowser: Component<{
 								Modrinth
 							</button>
 							<button
-								class="source-btn"
+								class={styles["source-btn"]}
 								classList={{
-									active: resources.state.activeSource === "curseforge",
+									[styles.active]: resources.state.activeSource === "curseforge",
 								}}
 								onClick={() => {
 									batch(() => {
@@ -1744,18 +1749,18 @@ const ResourceBrowser: Component<{
 								CurseForge
 							</button>
 						</div>
-						<div class="view-toggle">
+						<div class={styles["view-toggle"]}>
 							<button
-								class="view-btn"
-								classList={{ active: resources.state.viewMode === "list" }}
+								class={styles["view-btn"]}
+								classList={{ [styles.active]: resources.state.viewMode === "list" }}
 								onClick={() => resources.setViewMode("list")}
 								title="List View"
 							>
 								<ListIcon />
 							</button>
 							<button
-								class="view-btn"
-								classList={{ active: resources.state.viewMode === "grid" }}
+								class={styles["view-btn"]}
+								classList={{ [styles.active]: resources.state.viewMode === "grid" }}
 								onClick={() => resources.setViewMode("grid")}
 								title="Grid View"
 							>
@@ -1764,8 +1769,8 @@ const ResourceBrowser: Component<{
 						</div>
 					</div>
 				</div>
-				<div class="resource-results-info">
-					<div class="results-stats">
+				<div class={styles["resource-results-info"]}>
+					<div class={styles["results-stats"]}>
 						<Show when={resources.state.totalHits > 0}>
 							Showing {resources.state.totalHits.toLocaleString()} results
 							<Show when={resources.state.categories.length > 0}>
@@ -1783,9 +1788,9 @@ const ResourceBrowser: Component<{
 							</Show>
 						</Show>
 					</div>
-					<div class="results-sort">
-						<div class="limit-selector">
-							<span class="sort-label">Per Page:</span>
+					<div class={styles["results-sort"]}>
+						<div class={styles["limit-selector"]}>
+							<span class={styles["sort-label"]}>Per Page:</span>
 							<Select
 								options={[20, 50, 100]}
 								value={resources.state.limit}
@@ -1796,14 +1801,14 @@ const ResourceBrowser: Component<{
 									</SelectItem>
 								)}
 							>
-								<SelectTrigger class="limit-select-trigger">
+								<SelectTrigger class={styles["limit-select-trigger"]}>
 									<SelectValue<number>>{(s) => s.selectedOption()}</SelectValue>
 								</SelectTrigger>
 								<SelectContent />
 							</Select>
 						</div>
 
-						<span class="sort-label">Sort By:</span>
+						<span class={styles["sort-label"]}>Sort By:</span>
 						<Select<{ label: string; value: string }>
 							options={currentSortOptions()}
 							value={
@@ -1825,7 +1830,7 @@ const ResourceBrowser: Component<{
 								</SelectItem>
 							)}
 						>
-							<SelectTrigger class="sort-select-trigger">
+							<SelectTrigger class={styles["sort-select-trigger"]}>
 								<SelectValue<any>>
 									{(s) => s.selectedOption()?.label || "Sort By..."}
 								</SelectValue>
@@ -1834,7 +1839,7 @@ const ResourceBrowser: Component<{
 						</Select>
 						<Show when={resources.state.activeSource === "curseforge"}>
 							<button
-								class="sort-direction-btn"
+								class={styles["sort-direction-btn"]}
 								onClick={() => {
 									resources.toggleSortOrder();
 									resources.setOffset(0);
@@ -1851,12 +1856,12 @@ const ResourceBrowser: Component<{
 					</div>
 				</div>
 
-				<div class="resource-results">
+				<div class={styles["resource-results"]}>
 					<Show
 						when={!resources.state.loading}
 						fallback={
-							<div class="loading-state">
-								<div class="spinner" />
+							<div class={styles["loading-state"]}>
+								<div class={styles.spinner} />
 								<span>Searching for resources...</span>
 							</div>
 						}
@@ -1864,7 +1869,7 @@ const ResourceBrowser: Component<{
 						<Show
 							when={resources.state.results.length > 0}
 							fallback={
-								<div class="empty-state">
+								<div class={styles["empty-state"]}>
 									<h3>No resources found</h3>
 									<p>Try adjusting your search query or filters.</p>
 									<Button onClick={() => resources.resetFilters()}>
@@ -1873,7 +1878,13 @@ const ResourceBrowser: Component<{
 								</div>
 							}
 						>
-							<div class={`resource-${resources.state.viewMode}`}>
+							<div
+								class={
+									resources.state.viewMode === "grid"
+										? styles["resource-grid"]
+										: styles["resource-list"]
+								}
+							>
 								<For each={resources.state.results}>
 									{(project) => (
 										<ResourceCard
@@ -1885,26 +1896,31 @@ const ResourceBrowser: Component<{
 							</div>
 
 							<Show when={totalPages() > 1}>
-								<div class="resource-browser-pagination">
+								<div class={styles["resource-browser-pagination"]}>
 									<Pagination
 										count={totalPages()}
 										page={currentPage()}
 										onPageChange={resources.setPage}
-										class="pagination"
+										class={styles.pagination}
 										itemComponent={(props) => (
-											<PaginationItem page={props.page} class="pagination-item">
+											<PaginationItem
+												page={props.page}
+												class={styles["pagination-item"]}
+											>
 												{props.page}
 											</PaginationItem>
 										)}
 										ellipsisComponent={() => (
-											<PaginationEllipsis class="pagination-ellipsis" />
+											<PaginationEllipsis
+												class={styles["pagination-ellipsis"]}
+											/>
 										)}
 									>
-										<PaginationPrevious class="pagination-prev">
+										<PaginationPrevious class={styles["pagination-prev"]}>
 											Prev
 										</PaginationPrevious>
 										<PaginationItems />
-										<PaginationNext class="pagination-next">
+										<PaginationNext class={styles["pagination-next"]}>
 											Next
 										</PaginationNext>
 									</Pagination>
@@ -1931,3 +1947,4 @@ const ResourceBrowser: Component<{
 };
 
 export default ResourceBrowser;
+

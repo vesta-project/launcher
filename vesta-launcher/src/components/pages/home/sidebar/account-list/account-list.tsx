@@ -1,6 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import Button from "@ui/button/button";
+import { ResourceAvatar } from "@ui/avatar";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import {
 	ACCOUNT_TYPE_GUEST,
@@ -18,7 +19,7 @@ import {
 	onCleanup,
 	Show,
 } from "solid-js";
-import "./account-list.css";
+import styles from "./account-list.module.css";
 
 interface AccountListProps {
 	open: boolean;
@@ -120,9 +121,9 @@ function AccountList(props: AccountListProps) {
 				if (!open) props.onClose();
 			}}
 		>
-			<DialogContent class={"account-list-menu"}>
+			<DialogContent class={styles["account-list-menu"]}>
 				<h3>Accounts</h3>
-				<div class="account-list-items">
+				<div class={styles["account-list-items"]}>
 					<For each={accounts()}>
 						{(account) => (
 							<AccountListItem
@@ -137,7 +138,7 @@ function AccountList(props: AccountListProps) {
 					</For>
 				</div>
 				<Button
-					class="add-account-button"
+					class={styles["add-account-button"]}
 					onClick={props.onAddAccount}
 					variant="solid"
 				>
@@ -164,7 +165,7 @@ function AccountListItem(props: AccountListItemProps) {
 	);
 	const handleClick = (e: MouseEvent) => {
 		// Don't switch if clicking the remove button
-		if ((e.target as HTMLElement).closest(".account-remove-button")) {
+		if ((e.target as HTMLElement).closest(`.${styles["account-remove-button"]}`)) {
 			return;
 		}
 		if (!props.isActive) {
@@ -173,29 +174,26 @@ function AccountListItem(props: AccountListItemProps) {
 	};
 	return (
 		<div
-			class="account-list-item"
-			classList={{ "account-list-item--active": props.isActive }}
+			class={styles["account-list-item"]}
+			classList={{ [styles["account-list-item--active"]]: props.isActive }}
 			onClick={handleClick}
 		>
-			<div
-				class="account-avatar"
-				style={{
-					"background-image": avatarUrl()
-						? `url(${avatarUrl()})`
-						: "linear-gradient(to bottom, hsl(0deg 0% 50%), hsl(0deg 0% 30%))",
-					"background-size": "cover",
-					"background-position": "center",
-				}}
+			<ResourceAvatar
+				name={props.account.username}
+				playerUuid={props.account.uuid}
+				size={36}
+				shape="circle"
+				class={styles["account-avatar"]}
 			/>
-			<div class="account-info">
-				<div class="account-username">{props.account.username}</div>
+			<div class={styles["account-info"]}>
+				<div class={styles["account-username"]}>{props.account.username}</div>
 				<div style={{ display: "flex", gap: "4px" }}>
 					<Show when={props.isActive}>
-						<div class="account-active-badge">Active</div>
+						<div class={styles["account-active-badge"]}>Active</div>
 					</Show>
 					<Show when={props.account.account_type === ACCOUNT_TYPE_GUEST}>
 						<div
-							class="account-active-badge"
+							class={styles["account-active-badge"]}
 							style={{ background: "var(--primary)", color: "white" }}
 						>
 							Guest
@@ -205,7 +203,7 @@ function AccountListItem(props: AccountListItemProps) {
 			</div>
 			<Show when={props.account.account_type !== ACCOUNT_TYPE_GUEST}>
 				<Button
-					class="account-remove-button"
+					class={styles["account-remove-button"]}
 					onClick={(e) => {
 						e.stopPropagation();
 						props.onRemove();

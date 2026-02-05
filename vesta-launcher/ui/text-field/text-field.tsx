@@ -3,7 +3,7 @@ import { PolymorphicProps } from "@kobalte/core/polymorphic";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { splitProps, ValidComponent } from "solid-js";
-import "./text-field.css";
+import styles from "./text-field.module.css";
 
 const TextFieldRoot = TextFieldPrimitive.Root;
 
@@ -16,7 +16,7 @@ function TextFieldInput<T extends ValidComponent = "input">(
 
 	return (
 		<TextFieldPrimitive.Input
-			class={clsx("text-field__input", props.class)}
+			class={clsx(styles["text-field__input"], props.class)}
 			{...rest}
 		/>
 	);
@@ -31,7 +31,7 @@ function TextFieldTextArea<T extends ValidComponent = "input">(
 
 	return (
 		<TextFieldPrimitive.TextArea
-			class={clsx("text-field__text-area", props.class)}
+			class={clsx(styles["text-field__text-area"], props.class)}
 			{...rest}
 		/>
 	);
@@ -46,7 +46,7 @@ function TextFieldLabel<T extends "label">(
 
 	return (
 		<TextFieldPrimitive.Label
-			class={clsx("text-field__label", props.class)}
+			class={clsx(styles["text-field__label"], props.class)}
 			{...rest}
 		/>
 	);
@@ -62,7 +62,7 @@ function TextFieldDescription<T extends ValidComponent = "div">(
 
 	return (
 		<TextFieldPrimitive.Description
-			class={clsx("text-field__description", props.class)}
+			class={clsx(styles["text-field__description"], props.class)}
 			{...rest}
 		/>
 	);
@@ -77,7 +77,7 @@ function TextFieldErrorMessage<T extends ValidComponent = "div">(
 
 	return (
 		<TextFieldPrimitive.ErrorMessage
-			class={"text-field__error-message"}
+			class={styles["text-field__error-message"]}
 			{...rest}
 		/>
 	);
@@ -94,7 +94,7 @@ export type TextFieldProps = TextFieldPrimitive.TextFieldRootProps & {
 export function TextField(props: TextFieldProps) {
 	const [local, rest] = splitProps(props, ["placeholder", "onInput", "class", "onFocus", "onBlur"]);
 	return (
-		<TextFieldRoot class={local.class} {...rest}>
+		<TextFieldRoot class={clsx(styles["text-field"], local.class)} {...rest}>
 			<TextFieldInput 
                 placeholder={local.placeholder} 
                 onInput={local.onInput} 

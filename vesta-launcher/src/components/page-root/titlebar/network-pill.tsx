@@ -1,7 +1,7 @@
 import { createMemo, Show } from "solid-js";
 import networkStore from "@stores/network";
-import { invoke } from "@tauri-apps/api/core";
-import "./network-pill.css";
+import { Badge } from "@ui/badge";
+import styles from "./network-pill.module.css";
 
 function NetworkPill() {
 	const status = networkStore.status;
@@ -27,16 +27,18 @@ function NetworkPill() {
 
 	return (
 		<Show when={status() !== "online"}>
-			<div
+			<Badge
+				pill={true}
+				clickable={!isRefreshing()}
+				variant={status() === "offline" ? "error" : "warning"}
 				classList={{
-					"network-pill": true,
-					[`network-pill--${status()}`]: true,
-					"network-pill--refreshing": isRefreshing(),
+					[styles["network-pill"]]: true,
+					[styles["network-pill--refreshing"]]: isRefreshing(),
 				}}
 				title={isRefreshing() ? "Checking connection..." : `${label()} - Click to retry`}
 				onClick={handleRetry}
 			>
-				<div class="network-pill__icon">
+				<div class={styles["network-pill__icon"]}>
 					<Show when={isRefreshing()}>
 						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
 							<path d="M21 12a9 9 0 1 1-6.219-8.56" />
@@ -74,10 +76,11 @@ function NetworkPill() {
 						</svg>
 					</Show>
 				</div>
-				<span class="network-pill__label">{label()}</span>
-			</div>
+				<span class={styles["network-pill__label"]}>{label()}</span>
+			</Badge>
 		</Show>
 	);
 }
 
 export default NetworkPill;
+

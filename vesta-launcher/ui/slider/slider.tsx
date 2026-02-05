@@ -2,7 +2,7 @@ import { type PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SliderPrimitive from "@kobalte/core/slider";
 import clsx from "clsx";
 import { splitProps, type ValidComponent } from "solid-js";
-import "./slider.css";
+import styles from "./slider.module.css";
 
 // Root slider component
 const Slider = <T extends ValidComponent = "div">(
@@ -12,7 +12,7 @@ const Slider = <T extends ValidComponent = "div">(
 
 	return (
 		<SliderPrimitive.Root
-			class={clsx("slider", local.class)}
+			class={clsx(styles.slider, local.class)}
 			{...others}
 		/>
 	);
@@ -30,7 +30,7 @@ const SliderTrack = <T extends ValidComponent = "div">(
 
 	return (
 		<SliderPrimitive.Track
-			class={clsx("slider__track", local.class)}
+			class={clsx(styles["slider__track"], local.class)}
 			{...others}
 		/>
 	);
@@ -48,7 +48,7 @@ const SliderFill = <T extends ValidComponent = "div">(
 
 	return (
 		<SliderPrimitive.Fill
-			class={clsx("slider__fill", local.class)}
+			class={clsx(styles["slider__fill"], local.class)}
 			{...others}
 		/>
 	);
@@ -66,7 +66,7 @@ const SliderThumb = <T extends ValidComponent = "span">(
 
 	return (
 		<SliderPrimitive.Thumb
-			class={clsx("slider__thumb", local.class)}
+			class={clsx(styles["slider__thumb"], local.class)}
 			{...others}
 		>
 			<SliderPrimitive.Input />
@@ -86,7 +86,7 @@ const SliderLabel = <T extends ValidComponent = "label">(
 
 	return (
 		<SliderPrimitive.Label
-			class={clsx("slider__label", local.class)}
+			class={clsx(styles["slider__label"], local.class)}
 			{...others}
 		/>
 	);
@@ -104,7 +104,7 @@ const SliderValueLabel = <T extends ValidComponent = "output">(
 
 	return (
 		<SliderPrimitive.ValueLabel
-			class={clsx("slider__value-label", local.class)}
+			class={clsx(styles["slider__value-label"], local.class)}
 			{...others}
 		/>
 	);

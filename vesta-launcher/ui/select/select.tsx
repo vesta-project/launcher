@@ -4,7 +4,7 @@ import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SelectPrimitive from "@kobalte/core/select";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import "./select.css";
+import styles from "./select.module.css";
 
 const Select = SelectPrimitive.Root;
 const SelectValue = SelectPrimitive.Value;
@@ -19,7 +19,7 @@ const SelectTrigger = <T extends ValidComponent = "button">(
     const [local, others] = splitProps(props as SelectTriggerProps, ["class", "children"]);
     return (
         <SelectPrimitive.Trigger
-            class={clsx("select__trigger", local.class)}
+            class={clsx(styles["select__trigger"], local.class)}
             {...others}
         >
             {local.children}
@@ -32,7 +32,7 @@ const SelectTrigger = <T extends ValidComponent = "button">(
                 stroke-width="2"
                 stroke-linecap="round"
                 stroke-linejoin="round"
-                class="select__icon"
+                class={styles["select__icon"]}
             >
                 <path d="M8 9l4 -4l4 4" />
                 <path d="M16 15l-4 4l-4 -4" />
@@ -51,10 +51,10 @@ const SelectContent = <T extends ValidComponent = "div">(
     return (
         <SelectPrimitive.Portal>
             <SelectPrimitive.Content
-                class={clsx("select__content", local.class)}
+                class={clsx(styles["select__content"], local.class)}
                 {...others}
             >
-                <SelectPrimitive.Listbox class="select__listbox">
+                <SelectPrimitive.Listbox class={styles["select__listbox"]}>
                     {local.children as any}
                 </SelectPrimitive.Listbox>
             </SelectPrimitive.Content>
@@ -70,11 +70,11 @@ const SelectItem = <T extends ValidComponent = "li">(
     const [local, others] = splitProps(props as SelectItemProps, ["class", "children"]);
     return (
         <SelectPrimitive.Item
-            class={clsx("select__item", local.class)}
+            class={clsx(styles["select__item"], local.class)}
             {...others}
         >
             <SelectPrimitive.ItemLabel>{local.children}</SelectPrimitive.ItemLabel>
-            <SelectPrimitive.ItemIndicator class="select__item-indicator">
+            <SelectPrimitive.ItemIndicator class={styles["select__item-indicator"]}>
                 <svg
                     xmlns="http://www.w3.org/2000/svg"
                     viewBox="0 0 24 24"
@@ -98,7 +98,7 @@ const SelectLabel = <T extends ValidComponent = "label">(
     props: PolymorphicProps<T, SelectLabelProps<T>>
 ) => {
     const [local, others] = splitProps(props as SelectLabelProps, ["class"]);
-    return <SelectPrimitive.Label class={clsx("select__label", local.class)} {...others} />;
+    return <SelectPrimitive.Label class={clsx(styles["select__label"], local.class)} {...others} />;
 };
 
 type SelectDescriptionProps<T extends ValidComponent = "div"> =
@@ -110,7 +110,7 @@ const SelectDescription = <T extends ValidComponent = "div">(
     const [local, others] = splitProps(props as SelectDescriptionProps, ["class"]);
     return (
         <SelectPrimitive.Description
-            class={clsx("select__description", local.class)}
+            class={clsx(styles["select__description"], local.class)}
             {...others}
         />
     );
@@ -125,7 +125,7 @@ const SelectErrorMessage = <T extends ValidComponent = "div">(
     const [local, others] = splitProps(props as SelectErrorMessageProps, ["class"]);
     return (
         <SelectPrimitive.ErrorMessage
-            class={clsx("select__error-message", local.class)}
+            class={clsx(styles["select__error-message"], local.class)}
             {...others}
         />
     );

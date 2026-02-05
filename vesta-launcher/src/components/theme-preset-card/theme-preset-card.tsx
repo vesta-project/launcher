@@ -1,6 +1,6 @@
 import { type Component } from "solid-js";
 import { type ThemeConfig } from "../../themes/presets";
-import "./theme-preset-card.css";
+import styles from "./theme-preset-card.module.css";
 
 interface ThemePresetCardProps {
 	theme: ThemeConfig;
@@ -15,7 +15,8 @@ interface ThemePresetCardProps {
 export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 	return (
 		<button
-			class={`theme-preset-card ${props.isSelected ? "theme-preset-card--selected" : ""}`}
+			class={styles["theme-preset-card"]}
+			classList={{ [styles["theme-preset-card--selected"]]: props.isSelected }}
 			onClick={props.onClick}
 			data-preview-style={props.theme.style}
 			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
@@ -27,28 +28,38 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 			}}
 		>
 			{/* Mini UI Preview */}
-			<div class="theme-preview">
-				<div class="theme-preview__bg"></div>
-				<div class="theme-preview__sidebar">
-					<div class="theme-preview__sidebar-item"></div>
-					<div class="theme-preview__sidebar-item theme-preview__sidebar-item--active"></div>
-					<div class="theme-preview__sidebar-item"></div>
+			<div class={styles["theme-preview"]}>
+				<div class={styles["theme-preview__bg"]}></div>
+				<div class={styles["theme-preview__sidebar"]}>
+					<div class={styles["theme-preview__sidebar-item"]}></div>
+					<div
+						class={styles["theme-preview__sidebar-item"]}
+						classList={{
+							[styles["theme-preview__sidebar-item--active"]]: true,
+						}}
+					></div>
+					<div class={styles["theme-preview__sidebar-item"]}></div>
 				</div>
-				<div class="theme-preview__main">
-					<div class="theme-preview__card">
-						<div class="theme-preview__card-header"></div>
-						<div class="theme-preview__card-body">
-							<div class="theme-preview__card-line"></div>
-							<div class="theme-preview__card-line theme-preview__card-line--short"></div>
+				<div class={styles["theme-preview__main"]}>
+					<div class={styles["theme-preview__card"]}>
+						<div class={styles["theme-preview__card-header"]}></div>
+						<div class={styles["theme-preview__card-body"]}>
+							<div class={styles["theme-preview__card-line"]}></div>
+							<div
+								class={styles["theme-preview__card-line"]}
+								classList={{
+									[styles["theme-preview__card-line--short"]]: true,
+								}}
+							></div>
 						</div>
 					</div>
 				</div>
 			</div>
 
 			{/* Theme Name */}
-			<div class="theme-preset-card__info">
-				<span class="theme-preset-card__name">{props.theme.name}</span>
-				<span class="theme-preset-card__description">
+			<div class={styles["theme-preset-card__info"]}>
+				<span class={styles["theme-preset-card__name"]}>{props.theme.name}</span>
+				<span class={styles["theme-preset-card__description"]}>
 					{props.theme.description || props.theme.style}
 				</span>
 			</div>

@@ -9,7 +9,7 @@ import {
 	splitProps,
 	ValidComponent,
 } from "solid-js";
-import "./dialog.css";
+import styles from "./dialog.module.css";
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -18,7 +18,7 @@ const DialogPortal: Component<DialogPrimitive.DialogPortalProps> = (props) => {
 	const [, rest] = splitProps(props, ["children"]);
 	return (
 		<DialogPrimitive.Portal {...rest}>
-			<div class="dialog__portal-container">{props.children}</div>
+			<div class={styles["dialog__portal-container"]}>{props.children}</div>
 		</DialogPrimitive.Portal>
 	);
 };
@@ -32,7 +32,7 @@ const DialogOverlay = <T extends ValidComponent = "div">(
 	const [local, rest] = splitProps(props as DialogOverlayProps, ["class"]);
 	return (
 		<DialogPrimitive.Overlay
-			class={clsx("dialog__overlay", local.class)}
+			class={clsx(styles["dialog__overlay"], local.class)}
 			{...rest}
 		/>
 	);
@@ -55,11 +55,11 @@ const DialogContent = <T extends ValidComponent = "div">(
 		<DialogPortal>
 			<DialogOverlay />
 			<DialogPrimitive.Content
-				class={clsx("dialog__content", local.class)}
+				class={clsx(styles["dialog__content"], local.class)}
 				{...rest}
 			>
 				{local.children}
-				<DialogPrimitive.CloseButton class="dialog__close-btn">
+				<DialogPrimitive.CloseButton class={styles["dialog__close-btn"]}>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
 						viewBox="0 0 24 24"
@@ -96,12 +96,12 @@ const DialogContent = <T extends ValidComponent = "div">(
 
 const DialogHeader: Component<ComponentProps<"div"> & ClassProp> = (props) => {
 	const [local, rest] = splitProps(props, ["class"]);
-	return <div class={clsx("dialog__header", local.class)} {...rest} />;
+	return <div class={clsx(styles["dialog__header"], local.class)} {...rest} />;
 };
 
 const DialogFooter: Component<ComponentProps<"div"> & ClassProp> = (props) => {
 	const [local, rest] = splitProps(props, ["class"]);
-	return <div class={clsx("dialog__footer", local.class)} {...rest} />;
+	return <div class={clsx(styles["dialog__footer"], local.class)} {...rest} />;
 };
 
 type DialogTitleProps<T extends ValidComponent = "h2"> =
@@ -113,7 +113,7 @@ const DialogTitle = <T extends ValidComponent = "h2">(
 	const [local, rest] = splitProps(props as DialogTitleProps, ["class"]);
 	return (
 		<DialogPrimitive.Title
-			class={clsx("dialog__title", local.class)}
+			class={clsx(styles["dialog__title"], local.class)}
 			{...rest}
 		/>
 	);
@@ -128,7 +128,7 @@ const DialogDescription = <T extends ValidComponent = "p">(
 	const [local, rest] = splitProps(props as DialogDescriptionProps, ["class"]);
 	return (
 		<DialogPrimitive.Description
-			class={clsx("dialog__description", local.class)}
+			class={clsx(styles["dialog__description"], local.class)}
 			{...rest}
 		/>
 	);

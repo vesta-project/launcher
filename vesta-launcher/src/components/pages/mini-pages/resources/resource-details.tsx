@@ -11,6 +11,7 @@ import {
 	on,
 	createResource,
 } from "solid-js";
+import { Badge } from "@ui/badge";
 import {
 	resources,
 	ResourceProject,
@@ -55,7 +56,7 @@ import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import CloseIcon from "@assets/close.svg";
 import HeartIcon from "@assets/heart.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
-import "./resource-details.css";
+import styles from "./resource-details.module.css";
 
 // Configure marked for GFM
 marked.setOptions({
@@ -85,19 +86,21 @@ const VersionTags = (props: { versions: string[] }) => {
 	};
 
 	return (
-		<div class="version-meta">
+		<div class={styles["version-meta"]}>
 			<For each={displayVersions()}>
-				{(v) => <span class="meta-tag">{v}</span>}
+				{(v) => <span class={styles["meta-tag"]}>{v}</span>}
 			</For>
 			<Show when={hasMore() && displayVersions().length === limit}>
 				<Tooltip>
 					<TooltipTrigger>
-						<span class="meta-tag more">+{remainingCount()} more</span>
+						<span class={`${styles["meta-tag"]} ${styles.more}`}>
+							+{remainingCount()} more
+						</span>
 					</TooltipTrigger>
 					<TooltipContent>
-						<div class="version-tooltip-list">
+						<div class={styles["version-tooltip-list"]}>
 							<For each={remainingItems()}>
-								{(v) => <div class="tooltip-version-item">{v}</div>}
+								{(v) => <div class={styles["tooltip-version-item"]}>{v}</div>}
 							</For>
 						</div>
 					</TooltipContent>
@@ -127,10 +130,10 @@ const DependencyItem = (props: {
 	return (
 		<Show
 			when={displayData()}
-			fallback={<div class="dependency-item skeleton" />}
+			fallback={<div class={`${styles["dependency-item"]} ${styles.skeleton}`} />}
 		>
 			<div
-				class="dependency-item"
+				class={styles["dependency-item"]}
 				onClick={() => {
 					const p = displayData();
 					if (p) {
@@ -150,28 +153,32 @@ const DependencyItem = (props: {
 				<img
 					src={displayData()?.icon_url || "/default-pack.png"}
 					alt={displayData()?.name}
-					class="dep-icon"
+					class={styles["dep-icon"]}
 				/>
-				<div class="dep-info">
-					<div class="dep-header">
-						<span class="dep-name">{displayData()?.name}</span>
-						<span
-							class={`dep-type-badge ${props.dependency.dependency_type.toLowerCase()}`}
+				<div class={styles["dep-info"]}>
+					<div class={styles["dep-header"]}>
+						<span class={styles["dep-name"]}>{displayData()?.name}</span>
+						<Badge
+							variant={
+								props.dependency.dependency_type.toLowerCase() === "required"
+									? "default"
+									: "secondary"
+							}
 						>
 							{props.dependency.dependency_type}
-						</span>
+						</Badge>
 					</div>
-					<div class="dep-meta">
-						<span class="dep-author">by {displayData()?.author}</span>
+					<div class={styles["dep-meta"]}>
+						<span class={styles["dep-author"]}>by {displayData()?.author}</span>
 						<Show when={props.dependency.file_name}>
-							<span class="dep-version-tag">
+							<span class={styles["dep-version-tag"]}>
 								{" "}
 								• {props.dependency.file_name}
 							</span>
 						</Show>
 					</div>
 				</div>
-				<div class="dep-action">
+				<div class={styles["dep-action"]}>
 					<RightArrowIcon width={16} height={16} />
 				</div>
 			</div>
@@ -313,7 +320,7 @@ const ResourceDetailsPage: Component<{
 		return (
 			<Show when={iconProps.instance && iconProps.instance.id !== null}>
 				<div
-					class="instance-item-icon"
+					class={styles["instance-item-icon"]}
 					style={
 						iconPath().startsWith("linear-gradient")
 							? { background: iconPath() }
@@ -986,8 +993,8 @@ const ResourceDetailsPage: Component<{
 		<Show
 			when={!loading() || project()}
 			fallback={
-				<div class="loading-state">
-					<span class="loading-spinner" />
+				<div class={styles["loading-state"]}>
+					<span class={styles["loading-spinner"]} />
 					<p>Fetching project details...</p>
 				</div>
 			}
@@ -995,11 +1002,11 @@ const ResourceDetailsPage: Component<{
 			<Show
 				when={!error()}
 				fallback={
-					<div class="error-state">
-						<div class="error-icon">⚠️</div>
-						<h2>Unable to load project</h2>
-						<p>{error()}</p>
-						<div class="error-actions">
+					<div class={styles["error-state"]}>
+						<div class={styles["error-icon"]}>⚠️</div>
+						<h2 class={styles["error-title"]}>Unable to load project</h2>
+						<p class={styles["error-description"]}>{error()}</p>
+						<div class={styles["error-actions"]}>
 							<Button onClick={() => router()?.reload()}>Try Again</Button>
 							<Button variant="ghost" onClick={() => router()?.backwards()}>
 								Go Back
@@ -1010,353 +1017,362 @@ const ResourceDetailsPage: Component<{
 			>
 				<Show
 					when={project()}
-					fallback={<div class="error-state">Project not found.</div>}
+					fallback={
+						<div class={styles["error-state"]}>Project not found.</div>
+					}
 				>
-					<div class="resource-details" classList={{ "is-reloading": loading() }}>
-					<div class="resource-details-header">
-						<div class="project-header-info">
-							<Show when={project()?.icon_url}>
-								<img
-									src={project()?.icon_url ?? ""}
-									alt={project()?.name}
-									class="project-icon"
-								/>
-							</Show>
-							<div class="project-header-text">
-								<div class="project-title-row">
-									<div class="project-title-group">
-										<h1>{project()?.name}</h1>
-										<Show when={isProjectInstalled() || isProjectInstalling()}>
-											<span class="installed-badge">
-												{isProjectInstalling() ? "Installing..." : "Installed"}
-											</span>
-										</Show>
-									</div>
-									<div class="header-link-group">
-										<Show when={peerProject()}>
-											<div class="source-toggle">
-												<button
-													class="source-btn"
-													classList={{
-														active: project()?.source === "modrinth",
-													}}
-													onClick={() => {
-														if (project()?.source === "modrinth") return;
-														const peer = peerProject();
-														if (peer && peer.source === "modrinth") {
-															router()?.navigate("/resource-details", {
-																projectId: peer.id,
-																platform: "modrinth",
-															});
-														}
-													}}
-												>
-													Modrinth
-												</button>
-												<button
-													class="source-btn"
-													classList={{
-														active: project()?.source === "curseforge",
-													}}
-													onClick={() => {
-														if (project()?.source === "curseforge") return;
-														const peer = peerProject();
-														if (peer && peer.source === "curseforge") {
-															router()?.navigate("/resource-details", {
-																projectId: peer.id,
-																platform: "curseforge",
-															});
-														}
-													}}
-												>
-													CurseForge
-												</button>
-											</div>
-										</Show>
-										<Button
-											variant="outline"
-											size="sm"
-											onClick={() => open(project()?.web_url ?? "")}
-											class="header-web-link"
-											tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
-										>
-											<div
-												style={{
-													display: "flex",
-													"align-items": "center",
-													gap: "6px",
-												}}
-											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="14"
-													height="14"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-												>
-													<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-													<polyline points="15 3 21 3 21 9"></polyline>
-													<line x1="10" y1="14" x2="21" y2="3"></line>
-												</svg>
-												<span>Browser</span>
-											</div>
-										</Button>
-									</div>
-								</div>
-								<div class="project-subtitle-row">
-									<div class="subtitle-left">
-										<p class="author">By {project()?.author}</p>
-										<Show when={project()?.follower_count !== undefined}>
-											<span class="stat-item">
-												<HeartIcon />
-												{project()?.follower_count.toLocaleString()}
-											</span>
-										</Show>
-										<Show when={project()?.updated_at}>
-											<span class="stat-item">
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													width="14"
-													height="14"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-												>
-													<circle cx="12" cy="12" r="10"></circle>
-													<polyline points="12 6 12 12 16 14"></polyline>
-												</svg>
-												Updated {formatDate(project()?.updated_at || "")}
-											</span>
-										</Show>
-									</div>
-									<div class="header-instance-picker">
-										<Show
-											when={!isModpack()}
-											fallback={
-												<div class="modpack-instance-notice">
-													<span>
-														Modpacks will create a new instance when installed
-													</span>
-												</div>
-											}
-										>
-											<span class="picker-label">Target Instance:</span>
-											<Select<any>
-												options={[
-													{ id: null, name: "No Instance" },
-													...instancesState.instances,
-												]}
-												value={
-													instancesState.instances.find(
-														(i) => i.id === resources.state.selectedInstanceId,
-													) || { id: null, name: "No Instance" }
-												}
-												onChange={(v) => {
-													const id = (v as any)?.id ?? null;
-													resources.setInstance(id);
-													if (id) {
-														const inst = instancesState.instances.find(
-															(i) => i.id === id,
-														);
-														if (inst) {
-															resources.setGameVersion(inst.minecraftVersion);
-															resources.setLoader(inst.modloader);
-														}
-													}
-												}}
-												optionValue="id"
-												optionTextValue="name"
-												placeholder="Select instance..."
-												itemComponent={(props) => (
-													<SelectItem item={props.item}>
-														<div
-															style={{
-																display: "flex",
-																"align-items": "center",
-																gap: "10px",
-															}}
-														>
-															<InstanceIcon instance={props.item.rawValue} />
-															<div
-																style={{
-																	display: "flex",
-																	"flex-direction": "column",
-																	gap: "2px",
-																}}
-															>
-																<span>{props.item.rawValue.name}</span>
-																<Show when={props.item.rawValue.id !== null}>
-																	<span
-																		style={{
-																			"font-size": "11px",
-																			opacity: 0.6,
-																		}}
-																	>
-																		{props.item.rawValue.minecraftVersion}{" "}
-																		{props.item.rawValue.modloader
-																			? `- ${props.item.rawValue.modloader}`
-																			: ""}
-																	</span>
-																</Show>
-															</div>
-														</div>
-													</SelectItem>
-												)}
-											>
-												<SelectTrigger class="instance-select-header">
-													<SelectValue<any>>
-														{(s) => {
-															const inst = s.selectedOption();
-															return (
-																<div
-																	style={{
-																		display: "flex",
-																		"align-items": "center",
-																		gap: "10px",
-																	}}
-																>
-																	<InstanceIcon instance={inst} />
-																	<span>
-																		{inst
-																			? `${inst.name}`
-																			: "Select instance..."}
-																	</span>
-																</div>
-															);
+					<div
+						class={styles["resource-details"]}
+						classList={{ [styles["is-reloading"]]: loading() }}
+					>
+						<div class={styles["resource-details-header"]}>
+							<div class={styles["project-header-info"]}>
+								<Show when={project()?.icon_url}>
+									<img
+										src={project()?.icon_url ?? ""}
+										alt={project()?.name}
+										class={styles["project-icon"]}
+									/>
+								</Show>
+								<div class={styles["project-header-text"]}>
+									<div class={styles["project-title-row"]}>
+										<div class={styles["project-title-group"]}>
+											<h1 class={styles["project-title"]}>{project()?.name}</h1>
+											<Show when={isProjectInstalled() || isProjectInstalling()}>
+												<Badge variant="success">
+													{isProjectInstalling() ? "Installing..." : "Installed"}
+												</Badge>
+											</Show>
+										</div>
+										<div class={styles["header-link-group"]}>
+											<Show when={peerProject()}>
+												<div class={styles["source-toggle"]}>
+													<button
+														class={styles["source-btn"]}
+														classList={{
+															[styles.active]: project()?.source === "modrinth",
 														}}
-													</SelectValue>
-												</SelectTrigger>
-												<SelectContent />
-											</Select>
-										</Show>
-										<div
-											class="header-action-row"
-											style={{ "margin-top": "8px" }}
-										>
+														onClick={() => {
+															if (project()?.source === "modrinth") return;
+															const peer = peerProject();
+															if (peer && peer.source === "modrinth") {
+																router()?.navigate("/resource-details", {
+																	projectId: peer.id,
+																	platform: "modrinth",
+																});
+															}
+														}}
+													>
+														Modrinth
+													</button>
+													<button
+														class={styles["source-btn"]}
+														classList={{
+															[styles.active]:
+																project()?.source === "curseforge",
+														}}
+														onClick={() => {
+															if (project()?.source === "curseforge") return;
+															const peer = peerProject();
+															if (peer && peer.source === "curseforge") {
+																router()?.navigate("/resource-details", {
+																	projectId: peer.id,
+																	platform: "curseforge",
+																});
+															}
+														}}
+													>
+														CurseForge
+													</button>
+												</div>
+											</Show>
 											<Button
+												variant="outline"
 												size="sm"
-												style={{ width: "100%" }}
-												color={
-													isUpdateAvailable()
-														? "secondary"
-														: isProjectInstalled()
-															? "destructive"
-															: isProjectIncompatible() && !isProjectInstalled()
-																? "none"
-																: "primary"
-												}
-												variant={
-													isProjectInstalled() && !isUpdateAvailable()
-														? "outline"
-														: "solid"
-												}
-												onClick={handleQuickAction}
-												disabled={
-													isProjectInstalling() ||
-													(isProjectIncompatible() &&
-														!isProjectInstalled() &&
-														resources.state.selectedInstanceId !== null)
-												}
+												onClick={() => open(project()?.web_url ?? "")}
+												class={styles["header-web-link"]}
+												tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
 											>
-												<Show when={isProjectInstalling()}>
-													<span>Installing...</span>
-												</Show>
-												<Show when={!isProjectInstalling()}>
-													<Show when={isProjectInstalled()}>
-														<Show
-															when={isUpdateAvailable()}
-															fallback={
-																<>
-																	<svg
-																		xmlns="http://www.w3.org/2000/svg"
-																		width="16"
-																		height="16"
-																		viewBox="0 0 24 24"
-																		fill="none"
-																		stroke="currentColor"
-																		stroke-width="2"
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		style={{ "margin-right": "8px" }}
-																	>
-																		<path d="M3 6h18"></path>
-																		<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-																		<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-																	</svg>
-																	<Show
-																		when={confirmUninstall()}
-																		fallback="Uninstall"
-																	>
-																		Confirm?
-																	</Show>
-																</>
-															}
-														>
-															<svg
-																xmlns="http://www.w3.org/2000/svg"
-																width="16"
-																height="16"
-																viewBox="0 0 24 24"
-																fill="none"
-																stroke="currentColor"
-																stroke-width="2"
-																stroke-linecap="round"
-																stroke-linejoin="round"
-																style={{ "margin-right": "8px" }}
-															>
-																<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-																<polyline points="7 10 12 15 17 10"></polyline>
-																<line x1="12" y1="15" x2="12" y2="3"></line>
-															</svg>
-															Update
-														</Show>
-													</Show>
-													<Show when={!isProjectInstalled()}>
-														<Show
-															when={isProjectIncompatible()}
-															fallback={
-																<>
-																	<svg
-																		xmlns="http://www.w3.org/2000/svg"
-																		width="16"
-																		height="16"
-																		viewBox="0 0 24 24"
-																		fill="none"
-																		stroke="currentColor"
-																		stroke-width="2"
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																		style={{ "margin-right": "8px" }}
-																	>
-																		<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-																		<polyline points="7 10 12 15 17 10"></polyline>
-																		<line x1="12" y1="15" x2="12" y2="3"></line>
-																	</svg>
-																	Install
-																</>
-															}
-														>
-															<Show
-																when={hasAnyCompatibleVersion()}
-																fallback="Unsupported"
-															>
-																Check Versions
-															</Show>
-														</Show>
-													</Show>
-												</Show>
+												<div
+													style={{
+														display: "flex",
+														"align-items": "center",
+														gap: "6px",
+													}}
+												>
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="14"
+														height="14"
+														viewBox="0 0 24 24"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+													>
+														<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+														<polyline points="15 3 21 3 21 9"></polyline>
+														<line x1="10" y1="14" x2="21" y2="3"></line>
+													</svg>
+													<span>Browser</span>
+												</div>
 											</Button>
 										</div>
 									</div>
-								</div>
-								<div class="project-categories">
+									<div class={styles["project-subtitle-row"]}>
+										<div class={styles["subtitle-left"]}>
+											<p class={styles.author}>By {project()?.author}</p>
+											<Show when={project()?.follower_count !== undefined}>
+												<span class={styles["stat-item"]}>
+													<HeartIcon />
+													{project()?.follower_count.toLocaleString()}
+												</span>
+											</Show>
+											<Show when={project()?.updated_at}>
+												<span class={styles["stat-item"]}>
+													<svg
+														xmlns="http://www.w3.org/2000/svg"
+														width="14"
+														height="14"
+														viewBox="0 0 24 24"
+														fill="none"
+														stroke="currentColor"
+														stroke-width="2"
+														stroke-linecap="round"
+														stroke-linejoin="round"
+													>
+														<circle cx="12" cy="12" r="10"></circle>
+														<polyline points="12 6 12 12 16 14"></polyline>
+													</svg>
+													Updated {formatDate(project()?.updated_at || "")}
+												</span>
+											</Show>
+										</div>
+										<div class={styles["header-instance-picker"]}>
+											<Show
+												when={!isModpack()}
+												fallback={
+													<div class={styles["modpack-instance-notice"]}>
+														<span>
+															Modpacks will create a new instance when installed
+														</span>
+													</div>
+												}
+											>
+												<span class={styles["picker-label"]}>
+													Target Instance:
+												</span>
+												<Select<any>
+													options={[
+														{ id: null, name: "No Instance" },
+														...instancesState.instances,
+													]}
+													value={
+														instancesState.instances.find(
+															(i) =>
+																i.id === resources.state.selectedInstanceId,
+														) || { id: null, name: "No Instance" }
+													}
+													onChange={(v) => {
+														const id = (v as any)?.id ?? null;
+														resources.setInstance(id);
+														if (id) {
+															const inst = instancesState.instances.find(
+																(i) => i.id === id,
+															);
+															if (inst) {
+																resources.setGameVersion(inst.minecraftVersion);
+																resources.setLoader(inst.modloader);
+															}
+														}
+													}}
+													optionValue="id"
+													optionTextValue="name"
+													placeholder="Select instance..."
+													itemComponent={(props) => (
+														<SelectItem item={props.item}>
+															<div
+																style={{
+																	display: "flex",
+																	"align-items": "center",
+																	gap: "10px",
+																}}
+															>
+																<InstanceIcon instance={props.item.rawValue} />
+																<div
+																	style={{
+																		display: "flex",
+																		"flex-direction": "column",
+																		gap: "2px",
+																	}}
+																>
+																	<span>{props.item.rawValue.name}</span>
+																	<Show when={props.item.rawValue.id !== null}>
+																		<span
+																			style={{
+																				"font-size": "11px",
+																				opacity: 0.6,
+																			}}
+																		>
+																			{props.item.rawValue.minecraftVersion}{" "}
+																			{props.item.rawValue.modloader
+																				? `- ${props.item.rawValue.modloader}`
+																				: ""}
+																		</span>
+																	</Show>
+																</div>
+															</div>
+														</SelectItem>
+													)}
+												>
+													<SelectTrigger class={styles["instance-select-header"]}>
+														<SelectValue<any>>
+															{(s) => {
+																const inst = s.selectedOption();
+																return (
+																	<div
+																		style={{
+																			display: "flex",
+																			"align-items": "center",
+																			gap: "10px",
+																		}}
+																	>
+																		<InstanceIcon instance={inst} />
+																		<span>
+																			{inst
+																				? `${inst.name}`
+																				: "Select instance..."}
+																		</span>
+																	</div>
+																);
+															}}
+														</SelectValue>
+													</SelectTrigger>
+													<SelectContent />
+												</Select>
+											</Show>
+											<div
+												class={styles["header-action-row"]}
+												style={{ "margin-top": "8px" }}
+											>
+												<Button
+													size="sm"
+													style={{ width: "100%" }}
+													color={
+														isUpdateAvailable()
+															? "secondary"
+															: isProjectInstalled()
+																? "destructive"
+																: isProjectIncompatible() && !isProjectInstalled()
+																	? "none"
+																	: "primary"
+													}
+													variant={
+														isProjectInstalled() && !isUpdateAvailable()
+															? "outline"
+															: "solid"
+													}
+													onClick={handleQuickAction}
+													disabled={
+														isProjectInstalling() ||
+														(isProjectIncompatible() &&
+															!isProjectInstalled() &&
+															resources.state.selectedInstanceId !== null)
+													}
+												>
+													<Show when={isProjectInstalling()}>
+														<span>Installing...</span>
+													</Show>
+													<Show when={!isProjectInstalling()}>
+														<Show when={isProjectInstalled()}>
+															<Show
+																when={isUpdateAvailable()}
+																fallback={
+																	<>
+																		<svg
+																			xmlns="http://www.w3.org/2000/svg"
+																			width="16"
+																			height="16"
+																			viewBox="0 0 24 24"
+																			fill="none"
+																			stroke="currentColor"
+																			stroke-width="2"
+																			stroke-linecap="round"
+																			stroke-linejoin="round"
+																			style={{ "margin-right": "8px" }}
+																		>
+																			<path d="M3 6h18"></path>
+																			<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+																			<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+																		</svg>
+																		<Show
+																			when={confirmUninstall()}
+																			fallback="Uninstall"
+																		>
+																			Confirm?
+																		</Show>
+																	</>
+																}
+															>
+																<svg
+																	xmlns="http://www.w3.org/2000/svg"
+																	width="16"
+																	height="16"
+																	viewBox="0 0 24 24"
+																	fill="none"
+																	stroke="currentColor"
+																	stroke-width="2"
+																	stroke-linecap="round"
+																	stroke-linejoin="round"
+																	style={{ "margin-right": "8px" }}
+																>
+																	<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+																	<polyline points="7 10 12 15 17 10"></polyline>
+																	<line x1="12" y1="15" x2="12" y2="3"></line>
+																</svg>
+																Update
+															</Show>
+														</Show>
+														<Show when={!isProjectInstalled()}>
+															<Show
+																when={isProjectIncompatible()}
+																fallback={
+																	<>
+																		<svg
+																			xmlns="http://www.w3.org/2000/svg"
+																			width="16"
+																			height="16"
+																			viewBox="0 0 24 24"
+																			fill="none"
+																			stroke="currentColor"
+																			stroke-width="2"
+																			stroke-linecap="round"
+																			stroke-linejoin="round"
+																			style={{ "margin-right": "8px" }}
+																		>
+																			<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+																			<polyline points="7 10 12 15 17 10"></polyline>
+																			<line x1="12" y1="15" x2="12" y2="3"></line>
+																		</svg>
+																		Install
+																	</>
+																}
+															>
+																<Show
+																	when={hasAnyCompatibleVersion()}
+																	fallback="Unsupported"
+																>
+																	Check Versions
+																</Show>
+															</Show>
+														</Show>
+													</Show>
+												</Button>
+											</div>
+										</div>
+									</div>
+									<div class={styles["project-categories"]}>
 									<For each={project()?.categories}>
 										{(cat) => {
 											// Find the category object in availableCategories if possible to get its real ID/Slug
@@ -1369,8 +1385,10 @@ const ResourceDetailsPage: Component<{
 											);
 
 											return (
-												<span
-													class="category-pill clickable"
+												<Badge
+													pill={true}
+													clickable={true}
+													variant="surface"
 													onClick={() => {
 														const p = project();
 														if (p) {
@@ -1386,7 +1404,7 @@ const ResourceDetailsPage: Component<{
 													}}
 												>
 													{categoryObj()?.name || cat}
-												</span>
+												</Badge>
 											);
 										}}
 									</For>
@@ -1395,11 +1413,12 @@ const ResourceDetailsPage: Component<{
 						</div>
 					</div>
 
-					<div class="resource-details-layout">
-						<div class="resource-details-main">
-							<div class="details-tabs">
+					<div class={styles["resource-details-layout"]}>
+						<div class={styles["resource-details-main"]}>
+							<div class={styles["details-tabs"]}>
 								<button
-									class={`tab-btn ${activeTab() === "description" ? "active" : ""}`}
+									class={styles["tab-btn"]}
+									classList={{ [styles.active]: activeTab() === "description" }}
 									onClick={() =>
 										router()?.updateQuery("activeTab", "description", true)
 									}
@@ -1407,7 +1426,8 @@ const ResourceDetailsPage: Component<{
 									Description
 								</button>
 								<button
-									class={`tab-btn ${activeTab() === "versions" ? "active" : ""}`}
+									class={styles["tab-btn"]}
+									classList={{ [styles.active]: activeTab() === "versions" }}
 									onClick={() =>
 										router()?.updateQuery("activeTab", "versions", true)
 									}
@@ -1415,7 +1435,8 @@ const ResourceDetailsPage: Component<{
 									Versions ({resources.state.versions.length})
 								</button>
 								<button
-									class={`tab-btn ${activeTab() === "dependencies" ? "active" : ""}`}
+									class={styles["tab-btn"]}
+									classList={{ [styles.active]: activeTab() === "dependencies" }}
 									onClick={() =>
 										router()?.updateQuery("activeTab", "dependencies", true)
 									}
@@ -1424,7 +1445,8 @@ const ResourceDetailsPage: Component<{
 								</button>
 								<Show when={(project()?.gallery?.length ?? 0) > 0}>
 									<button
-										class={`tab-btn ${activeTab() === "gallery" ? "active" : ""}`}
+										class={styles["tab-btn"]}
+										classList={{ [styles.active]: activeTab() === "gallery" }}
 										onClick={() =>
 											router()?.updateQuery("activeTab", "gallery", true)
 										}
@@ -1434,10 +1456,10 @@ const ResourceDetailsPage: Component<{
 								</Show>
 							</div>
 
-							<div class="tab-content">
+							<div class={styles["tab-content"]}>
 								<Show when={activeTab() === "description"}>
 									<div
-										class="description"
+										class={styles.description}
 										innerHTML={renderedDescription() as string}
 										onClick={(e) => {
 											const target = e.target as HTMLElement;
@@ -1451,11 +1473,11 @@ const ResourceDetailsPage: Component<{
 								</Show>
 
 								<Show when={activeTab() === "gallery"}>
-									<div class="gallery-grid">
+									<div class={styles["gallery-grid"]}>
 										<For each={project()?.gallery}>
 											{(item) => (
 												<div
-													class="gallery-item"
+													class={styles["gallery-item"]}
 													onClick={() => setSelectedGalleryItem(item)}
 												>
 													<img src={item} alt="Gallery Item" />
@@ -1466,8 +1488,8 @@ const ResourceDetailsPage: Component<{
 								</Show>
 
 								<Show when={activeTab() === "dependencies"}>
-									<div class="dependencies-tab">
-										<div class="dependency-info-notice">
+									<div class={styles["dependencies-tab"]}>
+										<div class={styles["dependency-info-notice"]}>
 											<span>Showing dependencies for version:</span>
 											<Select<ResourceVersion>
 												options={resources.state.versions}
@@ -1478,21 +1500,28 @@ const ResourceDetailsPage: Component<{
 												placeholder="Select version..."
 												itemComponent={(props) => (
 													<SelectItem item={props.item}>
-														<div class="version-select-item">
-															<span class="version-name">
+														<div class={styles["version-select-item"]}>
+															<span class={styles["version-name"]}>
 																{props.item.rawValue.version_number}
 															</span>
-															<div class="version-badges">
-																<span
-																	class={`release-type-badge ${props.item.rawValue.release_type}`}
+															<div class={styles["version-badges"]}>
+																<Badge
+																	variant={
+																		props.item.rawValue.release_type === "release"
+																			? "success"
+																			: props.item.rawValue.release_type ===
+																					"beta"
+																				? "warning"
+																				: "error"
+																	}
 																>
 																	{props.item.rawValue.release_type}
-																</span>
+																</Badge>
 																<For
 																	each={props.item.rawValue.loaders.slice(0, 2)}
 																>
 																	{(loader) => (
-																		<span class="loader-badge">{loader}</span>
+																		<Badge variant="info">{loader}</Badge>
 																	)}
 																</For>
 															</div>
@@ -1500,7 +1529,7 @@ const ResourceDetailsPage: Component<{
 													</SelectItem>
 												)}
 											>
-												<SelectTrigger class="version-select-trigger">
+												<SelectTrigger class={styles["version-select-trigger"]}>
 													<SelectValue<ResourceVersion>>
 														{(s) =>
 															s.selectedOption()?.version_number ||
@@ -1515,12 +1544,12 @@ const ResourceDetailsPage: Component<{
 										<Show
 											when={(primaryVersion()?.dependencies?.length ?? 0) > 0}
 											fallback={
-												<div class="empty-state">
+												<div class={styles["empty-state"]}>
 													No dependencies listed for this version.
 												</div>
 											}
 										>
-											<div class="dependency-groups">
+											<div class={styles["dependency-groups"]}>
 												{(() => {
 													const deps = primaryVersion()?.dependencies || [];
 													const required = deps.filter(
@@ -1541,9 +1570,13 @@ const ResourceDetailsPage: Component<{
 													return (
 														<>
 															<Show when={required.length > 0}>
-																<div class="dependency-group">
-																	<h3 class="group-title required">Required</h3>
-																	<div class="dependency-list">
+																<div class={styles["dependency-group"]}>
+																	<h3
+																		class={`${styles["group-title"]} ${styles.required}`}
+																	>
+																		Required
+																	</h3>
+																	<div class={styles["dependency-list"]}>
 																		<For each={required}>
 																			{(dep) => (
 																				<DependencyItem
@@ -1560,11 +1593,13 @@ const ResourceDetailsPage: Component<{
 															</Show>
 
 															<Show when={optional.length > 0}>
-																<div class="dependency-group">
-																	<h3 class="group-title optional">
+																<div class={styles["dependency-group"]}>
+																	<h3
+																		class={`${styles["group-title"]} ${styles.optional}`}
+																	>
 																		Optional / Embedded
 																	</h3>
-																	<div class="dependency-list">
+																	<div class={styles["dependency-list"]}>
 																		<For each={optional}>
 																			{(dep) => (
 																				<DependencyItem
@@ -1581,11 +1616,13 @@ const ResourceDetailsPage: Component<{
 															</Show>
 
 															<Show when={incompatible.length > 0}>
-																<div class="dependency-group">
-																	<h3 class="group-title incompatible">
+																<div class={styles["dependency-group"]}>
+																	<h3
+																		class={`${styles["group-title"]} ${styles.incompatible}`}
+																	>
 																		Incompatible
 																	</h3>
-																	<div class="dependency-list">
+																	<div class={styles["dependency-list"]}>
 																		<For each={incompatible}>
 																			{(dep) => (
 																				<DependencyItem
@@ -1609,8 +1646,8 @@ const ResourceDetailsPage: Component<{
 								</Show>
 
 								<Show when={activeTab() === "versions"}>
-									<div class="version-page">
-										<div class="version-filters">
+									<div class={styles["version-page"]}>
+										<div class={styles["version-filters"]}>
 											<input
 												type="text"
 												placeholder="Filter versions (e.g. 1.21.1, Fabric)..."
@@ -1619,39 +1656,39 @@ const ResourceDetailsPage: Component<{
 													setVersionFilter(e.currentTarget.value);
 													setVersionPage(1);
 												}}
-												class="version-search-input"
+												class={styles["version-search-input"]}
 											/>
 										</div>
-										<div class="version-list full-width">
+										<div class={`${styles["version-list"]} ${styles["full-width"]}`}>
 											<Show
 												when={!resources.state.loading}
 												fallback={<div>Loading versions...</div>}
 											>
 												<For each={paginatedVersions()}>
 													{(version) => (
-														<div class="version-item">
-															<div class="version-main-info">
-																<span class="version-name">
+														<div class={styles["version-item"]}>
+															<div class={styles["version-main-info"]}>
+																<span class={styles["version-name"]}>
 																	{version.version_number}
 																</span>
-																<span class="version-filename">
+																<span class={styles["version-filename"]}>
 																	{version.file_name}
 																</span>
 															</div>
 
-															<div class="version-loaders-row">
-																<div class="meta-group">
-																	<span class="meta-label">Versions</span>
+															<div class={styles["version-loaders-row"]}>
+																<div class={styles["meta-group"]}>
+																	<span class={styles["meta-label"]}>Versions</span>
 																	<VersionTags
 																		versions={version.game_versions}
 																	/>
 																</div>
-																<div class="meta-group">
-																	<span class="meta-label">Loaders</span>
-																	<div class="version-meta">
+																<div class={styles["meta-group"]}>
+																	<span class={styles["meta-label"]}>Loaders</span>
+																	<div class={styles["version-meta"]}>
 																		<For each={version.loaders}>
 																			{(l) => (
-																				<span class="meta-tag loader-tag">
+																				<span class={`${styles["meta-tag"]} ${styles["loader-tag"]}`}>
 																					{l}
 																				</span>
 																			)}
@@ -1660,9 +1697,9 @@ const ResourceDetailsPage: Component<{
 																</div>
 															</div>
 
-															<div class="version-actions">
+															<div class={styles["version-actions"]}>
 																<span
-																	class={`version-tag ${version.release_type}`}
+																	class={`${styles["version-tag"]} ${styles[version.release_type]}`}
 																>
 																	{version.release_type}
 																</span>
@@ -1838,7 +1875,7 @@ const ResourceDetailsPage: Component<{
 												</For>
 
 												<Show when={totalPages() > 1}>
-													<div class="version-pagination">
+													<div class={styles["version-pagination"]}>
 														<Pagination
 															count={totalPages()}
 															page={versionPage()}
@@ -1863,25 +1900,25 @@ const ResourceDetailsPage: Component<{
 							</div>
 						</div>
 
-						<div class="resource-details-sidebar">
-							<div class="sidebar-scrollable-area">
-								<div class="sidebar-section">
-									<h3 class="sidebar-title">Information</h3>
-									<div class="sidebar-metadata">
-										<div class="meta-item">
-											<span class="label">Platform</span>
-											<span class="value capitalize">{project()?.source}</span>
+						<div class={styles["resource-details-sidebar"]}>
+							<div class={styles["sidebar-scrollable-area"]}>
+								<div class={styles["sidebar-section"]}>
+									<h3 class={styles["sidebar-title"]}>Information</h3>
+									<div class={styles["sidebar-metadata"]}>
+										<div class={styles["meta-item"]}>
+											<span class={styles["label"]}>Platform</span>
+											<span class={`${styles["value"]} ${styles["capitalize"]}`}>{project()?.source}</span>
 										</div>
-										<div class="meta-item">
-											<span class="label">Downloads</span>
-											<span class="value">
+										<div class={styles["meta-item"]}>
+											<span class={styles["label"]}>Downloads</span>
+											<span class={styles["value"]}>
 												{project()?.download_count.toLocaleString()}
 											</span>
 										</div>
-										<div class="meta-item">
-											<span class="label">Type</span>
-											<div class="value-group">
-												<span class="value capitalize">
+										<div class={styles["meta-item"]}>
+											<span class={styles["label"]}>Type</span>
+											<div class={styles["value-group"]}>
+												<span class={`${styles["value"]} ${styles["capitalize"]}`}>
 													{project()?.resource_type}
 												</span>
 												<Show
@@ -1891,18 +1928,18 @@ const ResourceDetailsPage: Component<{
 														) && project()?.resource_type !== "datapack"
 													}
 												>
-													<span class="value capitalize">, Datapack</span>
+													<span class={`${styles["value"]} ${styles["capitalize"]}`}>, Datapack</span>
 												</Show>
 											</div>
 										</div>
 									</div>
 								</div>
 
-								<div class="sidebar-section">
-									<div class="sidebar-section-header">
-										<h3 class="sidebar-title">Recent Versions</h3>
+								<div class={styles["sidebar-section"]}>
+									<div class={styles["sidebar-section-header"]}>
+										<h3 class={styles["sidebar-title"]}>Recent Versions</h3>
 										<button
-											class="view-all-link"
+											class={styles["view-all-link"]}
 											onClick={() =>
 												router()?.updateQuery("activeTab", "versions", true)
 											}
@@ -1910,35 +1947,35 @@ const ResourceDetailsPage: Component<{
 											View All
 										</button>
 									</div>
-									<div class="sidebar-version-list">
+									<div class={styles["sidebar-version-list"]}>
 										<Show
 											when={!resources.state.loading}
 											fallback={<div>Loading...</div>}
 										>
 											<For each={resources.state.versions.slice(0, 5)}>
 												{(version) => (
-													<div class="sidebar-version-item">
-														<div class="sidebar-version-top">
+													<div class={styles["sidebar-version-item"]}>
+														<div class={styles["sidebar-version-top"]}>
 															<span
-																class="version-name"
+																class={styles["version-name"]}
 																title={version.version_number}
 															>
 																{version.version_number}
 															</span>
-															<div class="version-tags-mini">
+															<div class={styles["version-tags-mini"]}>
 																<span
-																	class={`mini-tag ${version.release_type}`}
+																	class={`${styles["mini-tag"]} ${styles[version.release_type]}`}
 																>
 																	{version.release_type.charAt(0).toUpperCase()}
 																</span>
 																<For each={version.loaders.slice(0, 1)}>
 																	{(l) => (
-																		<span class="mini-tag loader">{l}</span>
+																		<span class={`${styles["mini-tag"]} ${styles["loader"]}`}>{l}</span>
 																	)}
 																</For>
 															</div>
 														</div>
-														<div class="sidebar-version-meta">
+														<div class={styles["sidebar-version-meta"]}>
 															<VersionTags versions={version.game_versions} />
 														</div>
 														<Button
@@ -2102,14 +2139,14 @@ const ResourceDetailsPage: Component<{
 
 					<Show when={selectedGalleryItem()}>
 						<div
-							class="gallery-overlay"
+							class={styles["gallery-overlay"]}
 							onClick={() => {
 								setSelectedGalleryItem(null);
 								setIsZoomed(false);
 							}}
 						>
 							<button
-								class="gallery-close-btn"
+								class={styles["gallery-close-btn"]}
 								onClick={() => {
 									setSelectedGalleryItem(null);
 									setIsZoomed(false);
@@ -2118,7 +2155,10 @@ const ResourceDetailsPage: Component<{
 								<CloseIcon />
 							</button>
 							<div
-								class={`gallery-large-view ${isZoomed() ? "zoomed" : ""}`}
+								classList={{
+									[styles["gallery-large-view"]]: true,
+									[styles["zoomed"]]: isZoomed(),
+								}}
 								onClick={(e) => {
 									e.stopPropagation();
 									setIsZoomed(!isZoomed());
@@ -2129,7 +2169,7 @@ const ResourceDetailsPage: Component<{
 									src={selectedGalleryItem() || ""}
 									alt="Project Gallery Full"
 								/>
-								<div class="gallery-info-bar">
+								<div class={styles["gallery-info-bar"]}>
 									<span>Click to {isZoomed() ? "shrink" : "zoom"}</span>
 								</div>
 							</div>
@@ -2155,3 +2195,4 @@ const ResourceDetailsPage: Component<{
 };
 
 export default ResourceDetailsPage;
+

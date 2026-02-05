@@ -1,38 +1,41 @@
-import { PolymorphicProps } from "@kobalte/core";
+import type { Component, ValidComponent } from "solid-js";
+import { splitProps } from "solid-js";
+
+import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as PopoverPrimitive from "@kobalte/core/popover";
-import { ChildrenProp, ClassProp } from "@ui/props";
-import clsx from "clsx";
-import { splitProps, ValidComponent } from "solid-js";
-import "./popover.css";
+
+import { clsx } from "clsx";
+
+import styles from "./popover.module.css";
 
 const PopoverTrigger = PopoverPrimitive.Trigger;
 const PopoverAnchor = PopoverPrimitive.Anchor;
 const PopoverCloseButton = PopoverPrimitive.CloseButton;
 
-function Popover(props: PopoverPrimitive.PopoverRootProps) {
+const Popover: Component<PopoverPrimitive.PopoverRootProps> = (props) => {
 	return <PopoverPrimitive.Root gutter={4} {...props} />;
-}
+};
 
-type PopoverContent = PopoverPrimitive.PopoverContentProps & ClassProp;
+type PopoverContentProps<T extends ValidComponent = "div"> =
+	PopoverPrimitive.PopoverContentProps<T> & { class?: string | undefined };
 
-function PopoverContent<T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, PopoverContent>,
-) {
-	const [local, others] = splitProps(props as PopoverContent, ["class"]);
+const PopoverContent = <T extends ValidComponent = "div">(
+	props: PolymorphicProps<T, PopoverContentProps<T>>,
+) => {
+	const [local, others] = splitProps(props as PopoverContentProps, ["class"]);
 	return (
 		<PopoverPrimitive.Portal>
 			<PopoverPrimitive.Content
-				class={clsx("popover__content", "liquid-glass", local.class)}
+				class={clsx(
+					styles["popover__content"],
+					"liquid-glass",
+					"outline-none",
+					local.class,
+				)}
 				{...others}
 			/>
 		</PopoverPrimitive.Portal>
 	);
-}
-
-export {
-	Popover,
-	PopoverTrigger,
-	PopoverAnchor,
-	PopoverCloseButton,
-	PopoverContent,
 };
+
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverCloseButton };

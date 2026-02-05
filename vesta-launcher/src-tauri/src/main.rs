@@ -13,7 +13,11 @@ mod tasks;
 pub mod utils;
 
 use tauri::Emitter;
-use utils::config::{get_config, set_config, update_config_field, update_config_fields};
+#[allow(unused_imports)]
+use tauri::Manager;
+#[allow(unused_imports)]
+use utils::config::{get_config, set_config, update_config_field, update_config_fields, get_app_config};
+#[allow(unused_imports)]
 use utils::windows::launch_window;
 
 // Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
@@ -57,6 +61,11 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_macos_permissions::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            let _ = app.get_webview_window("main")
+                       .expect("no main window")
+                       .set_focus();
+        }))
         .invoke_handler(tauri::generate_handler![
             launch_window,
             get_config,
@@ -76,6 +85,10 @@ fn main() {
             commands::app::get_network_status,
             commands::app::set_network_status,
             commands::app::refresh_network_status,
+            commands::app::get_tray_settings,
+            commands::app::set_tray_icon_visibility,
+            commands::app::set_minimize_to_tray,
+            commands::app::show_window_from_tray,
             utils::db::get_db_status,
             utils::file_drop::create_file_drop_overlay,
             utils::file_drop::position_overlay,
@@ -159,11 +172,15 @@ fn main() {
             commands::resources::check_resource_updates,
         ])
         .on_window_event(|window, event| {
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
-                    api.prevent_close();
-                    let _ = window.emit("core://exit-requested", ());
+            match event {
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    if window.label() == "main" {
+                        api.prevent_close();
+                        let _ = window.emit("core://exit-requested", ());
+                    }
                 }
+                // TODO: Add minimize-to-tray functionality when WindowEvent::Minimized is available
+                _ => {}
             }
         })
         .run(tauri::generate_context!())

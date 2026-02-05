@@ -108,8 +108,8 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
  */
 export const PRESET_THEMES: ThemeConfig[] = [
 	{
-		id: "midnight",
-		name: "Midnight",
+		id: "blue",
+		name: "Blue",
 		description: "Signature deep blue glass with gradient - Classic Vesta look",
 		primaryHue: 220,
 		style: "glass",
@@ -186,9 +186,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowBorderChange: false,
 	},
 	{
-		id: "oled",
-		name: "OLED",
-		description: "Ultra-dark OLED mode — pure black surfaces for true blacks",
+		id: "midnight",
+		name: "Midnight",
+		description: "Ultra-dark Midnight mode — pure black surfaces for true blacks",
 		primaryHue: 0, // Neutral
 		style: "solid",
 		colorScheme: "dark",
@@ -197,7 +197,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowStyleChange: false,
 		allowBorderChange: false,
 		customCss: `:root {
-			/* Force truly black surfaces for OLED panels */
+			/* Force truly black surfaces for Midnight panels */
 			--surface-base: hsl(0 0% 0%);
 			--surface-raised: hsl(0 0% 2%);
 			--surface-overlay: hsl(0 0% 3%);
@@ -206,7 +206,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 			--text-secondary: hsl(0 0% 70%);
 			--text-tertiary: hsl(0 0% 50%);
 			--text-disabled: hsl(0 0% 30%);
-			/* Use the primary hue for accents, but keep them somewhat muted for OLED */
+			/* Use the primary hue for accents, but keep them somewhat muted for Midnight */
 			--accent-primary: hsl(var(--color__primary-hue) 50% 50%);
 			--accent-primary-hover: hsl(var(--color__primary-hue) 60% 60%);
 			--interactive-base: hsl(var(--color__primary-hue) 50% 50%);
@@ -222,10 +222,25 @@ export const PRESET_THEMES: ThemeConfig[] = [
 			--liquid-backdrop-filter: none;
 			--effect-blur: 0px;
 			--glass-blur: none;
-			/* OLED-optimized shadows (minimal to avoid grey halos) */
+			/* Midnight-optimized shadows (minimal to avoid grey halos) */
 			--liquid-box-shadow: 0 4px 12px hsl(0 0% 0% / 0.8);
 			--effect-shadow-depth: 2px;
-		}`,
+		}
+
+		/* Mini-window border for Midnight */
+		[class*="page-viewer-root"] {
+			border: 1px solid hsl(var(--color__primary-hue) 50% 25% / 0.6);
+		}
+
+		[class*="page-viewer-root"]::before {
+			content: "";
+			position: absolute;
+			inset: 0;
+			border-radius: inherit;
+			border: 1px solid hsl(var(--color__primary-hue) 50% 40% / 0.1);
+			pointer-events: none;
+		}
+		`,
 	},
 	{
 		id: "oldschool",

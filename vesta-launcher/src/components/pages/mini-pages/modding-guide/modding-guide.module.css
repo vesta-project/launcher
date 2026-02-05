@@ -8,7 +8,6 @@
 .page_header {
 	padding: 2.5rem 2rem;
 	background: linear-gradient(to right, var(--surface-raised), transparent);
-	border-bottom: 1px solid var(--border-subtle);
 	backdrop-filter: blur(8px);
 	-webkit-backdrop-filter: blur(8px);
 	flex-shrink: 0;
@@ -148,7 +147,6 @@
 .loader_header {
 	padding: 1.25rem;
 	background: var(--surface-raised);
-	border-bottom: 1px solid var(--border-subtle);
 }
 
 .loader_name {

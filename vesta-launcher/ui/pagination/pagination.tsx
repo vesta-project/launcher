@@ -3,7 +3,8 @@ import { Show, splitProps } from "solid-js";
 import * as PaginationPrimitive from "@kobalte/core/pagination";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import { cn } from "@utils/ui";
-import "./pagination.css";
+import styles from "./pagination.module.css";
+import buttonStyles from "../button/button.module.css";
 
 export const PaginationItems = PaginationPrimitive.Items;
 
@@ -16,7 +17,7 @@ export const Pagination = <T extends ValidComponent = "nav">(
   const [local, others] = splitProps(props as PaginationRootProps, ["class"]);
   return (
     <PaginationPrimitive.Root
-      class={cn("pagination-root", local.class)}
+      class={cn(styles["pagination-root"], local.class)}
       {...others}
     />
   );
@@ -32,7 +33,9 @@ export const PaginationItem = <T extends ValidComponent = "button">(
   return (
     <PaginationPrimitive.Item
       class={cn(
-        "launcher-button launcher-button--ghost pagination-item",
+        buttonStyles["launcher-button"],
+        buttonStyles["launcher-button--ghost"],
+        styles["pagination-item"],
         local.class
       )}
       {...others}
@@ -51,7 +54,7 @@ export const PaginationEllipsis = <T extends ValidComponent = "div">(
   const [local, others] = splitProps(props as PaginationEllipsisProps, ["class"]);
   return (
     <PaginationPrimitive.Ellipsis
-      class={cn("pagination-ellipsis", local.class)}
+      class={cn(styles["pagination-ellipsis"], local.class)}
       {...others}
     >
       <svg
@@ -62,13 +65,13 @@ export const PaginationEllipsis = <T extends ValidComponent = "div">(
         stroke-width="2"
         stroke-linecap="round"
         stroke-linejoin="round"
-        class="size-4"
+        class={styles["size-4"]}
       >
         <circle cx="12" cy="12" r="1" />
         <circle cx="19" cy="12" r="1" />
         <circle cx="5" cy="12" r="1" />
       </svg>
-      <span class="sr-only">More pages</span>
+      <span class={styles["sr-only"]}>More pages</span>
     </PaginationPrimitive.Ellipsis>
   );
 };
@@ -86,7 +89,9 @@ export const PaginationPrevious = <T extends ValidComponent = "button">(
   return (
     <PaginationPrimitive.Previous
       class={cn(
-        "launcher-button launcher-button--ghost pagination-nav-btn",
+        buttonStyles["launcher-button"],
+        buttonStyles["launcher-button--ghost"],
+        styles["pagination-nav-btn"],
         local.class
       )}
       {...others}
@@ -103,7 +108,7 @@ export const PaginationPrevious = <T extends ValidComponent = "button">(
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
-              class="size-4"
+              class={styles["size-4"]}
             >
               <path d="M15 6l-6 6l6 6" />
             </svg>
@@ -130,7 +135,9 @@ export const PaginationNext = <T extends ValidComponent = "button">(
   return (
     <PaginationPrimitive.Next
       class={cn(
-        "launcher-button launcher-button--ghost pagination-nav-btn",
+        buttonStyles["launcher-button"],
+        buttonStyles["launcher-button--ghost"],
+        styles["pagination-nav-btn"],
         local.class
       )}
       {...others}
@@ -148,7 +155,7 @@ export const PaginationNext = <T extends ValidComponent = "button">(
               stroke-width="2"
               stroke-linecap="round"
               stroke-linejoin="round"
-              class="size-4"
+              class={styles["size-4"]}
             >
               <path d="M9 6l6 6l-6 6" />
             </svg>

@@ -1,5 +1,6 @@
 import { Component, For } from "solid-js";
 import { HELP_CONTENT } from "../../../../utils/help-content";
+import { Separator } from "@ui/separator/separator";
 import styles from "./modding-guide.module.css";
 
 export const ModdingGuideContent: Component = () => {
@@ -223,6 +224,7 @@ export const ModdingGuideContent: Component = () => {
 								<div class={styles.loader_header}>
 									<h3 class={styles.loader_name}>{loader.title}</h3>
 								</div>
+								<Separator />
 								<div class={styles.loader_body}>
 									<p class={styles.loader_description}>{loader.description}</p>
 								</div>
@@ -401,7 +403,9 @@ export const ModdingGuidePage: Component = () => {
 				<h1>{HELP_CONTENT.GUIDE_PAGE.title}</h1>
 				<p>{HELP_CONTENT.GUIDE_PAGE.description}</p>
 			</header>
+			<Separator />
 			<ModdingGuideContent />
 		</div>
 	);
 };
+

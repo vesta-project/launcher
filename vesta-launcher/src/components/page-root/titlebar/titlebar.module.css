@@ -1,0 +1,139 @@
+.titlebar {
+	grid-column: 1 / -1;
+	grid-row: 1;
+
+	padding-left: 12px;
+	width: 100%;
+	height: 32px;
+	display: flex;
+	flex-direction: row;
+
+	--titlebar__opacity: calc(var(--background-opacity) * 1.5);
+
+	background: linear-gradient(
+		var(--rotation, 90deg),
+		hsl(var(--color__primary-hue) 100% 7% / var(--titlebar__opacity)) 10%,
+		hsl(var(--color__primary-hue) 100% 60% / var(--titlebar__opacity)) 50%,
+		hsl(var(--hue-secondary) 50% 30% / var(--titlebar__opacity)) 100%
+	);
+
+	--titlebar__svg--color: var(--icon-primary);
+
+	& svg path {
+		fill: var(--titlebar__svg--color);
+	}
+
+	& > .titlebar__window-controls {
+		width: fit-content;
+		padding: 0;
+	}
+
+	&:is(.titlebar--right) {
+		flex-direction: row-reverse;
+		background: linear-gradient(
+			90deg,
+			hsla(var(--color__primary-hue) 0% 0% / 0%) 10%,
+			hsl(var(--color__primary-hue) 100% 7% / var(--titlebar__opacity)) 20%,
+			hsl(var(--color__primary-hue) 100% 60% / var(--titlebar__opacity)) 50%,
+			hsl(var(--hue-secondary) 50% 30% / var(--titlebar__opacity)) 100%
+		);
+	}
+
+	&:is(.titlebar--white) {
+		--titlebar__svg--color: var(--icon-primary);
+	}
+}
+
+.guest-pill {
+	margin-left: 8px;
+	background: var(--primary);
+	color: white;
+	font-size: 10px;
+	font-weight: 800;
+	padding: 1px 6px;
+	border-radius: 100px;
+	letter-spacing: 0.5px;
+	box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
+	display: inline-flex;
+	align-items: center;
+	height: 16px;
+	text-transform: uppercase;
+}
+
+
+/* Light mode titlebar gradient overrides */
+@media (prefers-color-scheme: light) {
+	.titlebar {
+		background: linear-gradient(
+			var(--rotation, 90deg),
+			hsl(var(--color__primary-hue) 60% 75% / var(--titlebar__opacity)) 10%,
+			hsl(var(--color__primary-hue) 70% 70% / var(--titlebar__opacity)) 50%,
+			hsl(var(--hue-secondary) 65% 70% / var(--titlebar__opacity)) 100%
+		);
+	}
+
+	.titlebar:is(.titlebar--right) {
+		background: linear-gradient(
+			var(--rotation, 90deg),
+			hsl(var(--color__primary-hue) 0% 0% / 0%) 10%,
+			hsl(var(--color__primary-hue) 60% 75% / var(--titlebar__opacity)) 20%,
+			hsl(var(--color__primary-hue) 70% 70% / var(--titlebar__opacity)) 50%,
+			hsl(var(--hue-secondary) 65% 70% / var(--titlebar__opacity)) 100%
+		);
+	}
+}
+
+/*
+Used a workaround to make resizing the window from the top easier.
+https://github.com/tauri-apps/tauri/issues/9510
+*/
+.titlebar__grab {
+	width: 100%;
+	height: 100%;
+	display: flex;
+}
+
+.titlebar__content {
+	user-select: none;
+	color: var(--text-primary);
+	align-items: center;
+	width: 100%;
+	display: flex;
+	justify-content: flex-end;
+	padding: 0 16px;
+	font-size: var(--font-xsmall);
+
+	& > * {
+		user-select: none;
+	}
+}
+
+.titlebar__help-btn {
+	background: none;
+	border: none;
+	padding: 0.35em;
+	margin-left: 0.5em;
+	cursor: pointer;
+	color: var(--text-primary);
+	opacity: 0.5;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.2s ease;
+	border-radius: 50%;
+	flex-shrink: 0;
+	overflow: visible;
+}
+
+.titlebar__help-btn:hover {
+	opacity: 1;
+	background: rgba(255, 255, 255, 0.1);
+	color: var(--primary);
+}
+
+.titlebar__help-btn svg {
+	width: 1.1em;
+	height: 1.1em;
+	display: block;
+	overflow: visible;
+}

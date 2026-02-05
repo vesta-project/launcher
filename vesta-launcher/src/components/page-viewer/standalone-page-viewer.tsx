@@ -10,15 +10,32 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ensureOsType } from "@utils/os";
 import { createMemo, createSignal, onMount, Show } from "solid-js";
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import "./standalone-page-viewer.css";
+import styles from "./standalone-page-viewer.module.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
 	const [osType, setOsType] = createSignal<string>("windows");
 
-	onMount(async () => {
-		const os = await ensureOsType();
-		setOsType(os || "windows");
+	const tryParse = (val: string) => {
+		if (typeof val !== "string") return val;
+		if (val === "true") return true;
+		if (val === "false") return false;
+		if (val === "null") return null;
+		if (val === "undefined") return undefined;
+		if (/^-?\d+$/.test(val)) return parseInt(val, 10);
+		if (/^-?\d*\.\d+$/.test(val)) return parseFloat(val);
+		if (val.startsWith("{") || val.startsWith("[")) {
+			try {
+				return JSON.parse(val);
+			} catch {
+				return val;
+			}
+		}
+		return val;
+	};
+
+	onMount(() => {
+		ensureOsType().then((os) => setOsType(os || "windows"));
 
 		const initialPath = (searchParams.path as string) || "/config";
 		console.log("[Standalone] Initial currentPath from URL:", initialPath);
@@ -28,24 +45,6 @@ function StandalonePageViewer() {
 		let initialProps: Record<string, unknown> = {};
 		let historyPast: any[] = [];
 		let historyFuture: any[] = [];
-
-		const tryParse = (val: string) => {
-			if (typeof val !== "string") return val;
-			if (val === "true") return true;
-			if (val === "false") return false;
-			if (val === "null") return null;
-			if (val === "undefined") return undefined;
-			if (/^-?\d+$/.test(val)) return parseInt(val, 10);
-			if (/^-?\d*\.\d+$/.test(val)) return parseFloat(val);
-			if (val.startsWith("{") || val.startsWith("[")) {
-				try {
-					return JSON.parse(val);
-				} catch {
-					return val;
-				}
-			}
-			return val;
-		};
 
 		// Check for handoff data in localStorage
 		const handoffId = searchParams.handoffId as string;
@@ -173,7 +172,7 @@ function StandalonePageViewer() {
 					onClose={() => getCurrentWindow().close()}
 					windowControls={
 						<WindowControls
-							class="standalone-page-viewer__controls"
+							class={styles["standalone-page-viewer__controls"]}
 							platform={
 								osType() === "linux"
 									? "gnome"

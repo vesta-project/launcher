@@ -2,7 +2,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { open } from "@tauri-apps/plugin-shell";
 import LauncherButton from "@ui/button/button";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
-import "./login-page.css";
+import styles from "./login-page.module.css";
 
 interface LoginPageProps {
 	onClose?: () => void;
@@ -81,43 +81,43 @@ function LoginPage(_props: LoginPageProps) {
 	};
 
 	return (
-		<div class="login-page">
-			<div class="login-page__content">
-				<h1 class="login-page__title">Sign in to Microsoft</h1>
+		<div class={styles["login-page"]}>
+			<div class={styles["login-page__content"]}>
+				<h1 class={styles["login-page__title"]}>Sign in to Microsoft</h1>
 
 				<Show when={!isAuthenticating()}>
-					<p class="login-page__description">
+					<p class={styles["login-page__description"]}>
 						Sign in with your Microsoft account to access Minecraft
 					</p>
 					<Show when={errorMessage()}>
-						<p class="login-page__error">{errorMessage()}</p>
+						<p class={styles["login-page__error"]}>{errorMessage()}</p>
 					</Show>
-					<LauncherButton onClick={handleLogin} class="login-page__button">
+					<LauncherButton onClick={handleLogin} class={styles["login-page__button"]}>
 						Sign in with Microsoft
 					</LauncherButton>
 				</Show>
 
 				<Show when={isAuthenticating()}>
-					<div class="login-page__auth-box">
-						<p class="login-page__auth-instruction">
+					<div class={styles["login-page__auth-box"]}>
+						<p class={styles["login-page__auth-instruction"]}>
 							Copy this code and sign in with your Microsoft account:
 						</p>
-						<div class="login-page__code-container">
-							<code class="login-page__code">{authCode()}</code>
+						<div class={styles["login-page__code-container"]}>
+							<code class={styles["login-page__code"]}>{authCode()}</code>
 							<LauncherButton
 								onClick={copyCode}
-								class="login-page__copy-button"
+								class={styles["login-page__copy-button"]}
 							>
 								{copied() ? "Copied!" : "Copy"}
 							</LauncherButton>
 						</div>
-						<div class="login-page__button-group">
-							<LauncherButton onClick={openUrl} class="login-page__button">
+						<div class={styles["login-page__button-group"]}>
+							<LauncherButton onClick={openUrl} class={styles["login-page__button"]}>
 								Open Sign-in Page
 							</LauncherButton>
 							<LauncherButton
 								onClick={handleCancel}
-								class="login-page__button login-page__button--secondary"
+								class={`${styles["login-page__button"]} ${styles["login-page__button--secondary"]}`}
 							>
 								Cancel
 							</LauncherButton>

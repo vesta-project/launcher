@@ -1,0 +1,39 @@
+.popover__content {
+	/* Layout & Animation only - Visuals handled by .liquid-glass utility */
+	border-radius: 6px;
+	padding: 12px;
+	transform-origin: var(--kb-popover-content-transform-origin);
+	animation: contentHide 250ms ease-in forwards;
+	z-index: 50; /* Ensure it sits above other elements */
+	opacity: 0;
+	pointer-events: none;
+}
+
+.popover__content[data-expanded] {
+	animation: contentShow 250ms ease-out;
+	opacity: 1;
+	pointer-events: auto;
+}
+
+/* Animation keyframes for popover show/hide */
+@keyframes contentShow {
+	from {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes contentHide {
+	from {
+		opacity: 1;
+		transform: scale(1);
+	}
+	to {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+}

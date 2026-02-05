@@ -1,0 +1,216 @@
+/* Icon Picker Component Styles */
+
+.icon-picker__anchor {
+	display: inline-block;
+	position: relative;
+}
+
+.icon-picker__trigger {
+	all: unset;
+	cursor: pointer;
+	border-radius: 14px;
+	width: 64px;
+	height: 64px;
+	background-size: cover;
+	background-position: center;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+	border: 1px solid transparent;
+}
+
+.icon-picker__trigger:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px hsl(0 0% 0% / 0.2);
+}
+
+.icon-picker__trigger:focus-visible {
+	outline: 2px solid hsl(var(--color__primary-hue) 80% 60%);
+	outline-offset: 2px;
+}
+
+.icon-picker__content {
+	min-width: 200px;
+	padding: 16px;
+	background: var(--bg-surface);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	border: 1px solid var(--border-subtle);
+	border-radius: 12px;
+	box-shadow: 0 10px 30px hsl(0 0% 0% / 0.5);
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	z-index: 100;
+}
+
+.icon-picker__grid {
+	display: grid;
+	gap: 8px;
+	/* Dynamic grid-template-columns set via style prop */
+}
+
+.icon-picker__option {
+	all: unset;
+	width: 56px;
+	height: 56px;
+	border-radius: 12px;
+	cursor: pointer;
+	transition: transform 0.1s, box-shadow 0.1s;
+	background-size: cover;
+	background-position: center;
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	/* Match instance-header-image styling */
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
+	flex-shrink: 0;
+}
+
+.icon-picker__option:hover {
+	transform: scale(1.05);
+	box-shadow: 0 4px 8px hsl(0 0% 0% / 0.15);
+}
+
+.icon-picker__option:focus-visible {
+	outline: none;
+	border-color: hsl(var(--color__primary-hue) 80% 60%);
+	box-shadow: 0 0 0 2px hsl(var(--color__primary-hue) 80% 60% / 0.3);
+}
+
+/* Selected state with background filter and tick overlay */
+.icon-picker__option--selected {
+	transform: scale(1.05);
+	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px hsl(0 0% 0% / 0.2);
+}
+
+.icon-picker__option--selected::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: hsl(0 0% 0% / 0.3);
+	border-radius: 12px;
+	pointer-events: none;
+}
+
+.icon-picker__option--selected:hover {
+	transform: scale(1.08);
+}
+
+/* Tick icon styling */
+.icon-picker__tick {
+	position: relative;
+	z-index: 1;
+	filter: drop-shadow(0 2px 4px hsl(0 0% 0% / 0.5));
+}
+
+.icon-picker__option-badge {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	width: 18px;
+	height: 18px;
+	background: hsl(var(--color__primary-hue) 80% 60%);
+	color: white;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 3;
+	border: 2px solid var(--bg-surface);
+	box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+/* Upload button styling (plus icon) */
+.icon-picker__upload-btn {
+	background: var(--bg-surface-hover);
+	border: 2px dashed var(--border-subtle) !important;
+	color: hsl(var(--color__primary-hue) 10% 70%);
+	transition: all 0.1s;
+	box-shadow: inset 0 0 0 2px transparent, 0 1px 3px hsl(0 0% 0% / 0.08) !important;
+}
+
+.icon-picker__upload-btn:hover {
+	background: hsl(var(--color__primary-hue) 60% 50% / 0.1);
+	border-color: hsl(var(--color__primary-hue) 60% 50%) !important;
+	color: hsl(var(--color__primary-hue) 60% 60%);
+	transform: scale(1.05);
+}
+
+.icon-picker__upload-btn svg {
+	width: 20px;
+	height: 20px;
+}
+
+/* No scrollbar needed - dynamic sizing prevents overflow */
+/* Edit overlay for trigger */
+.icon-picker__edit-overlay {
+position: absolute;
+inset: 0;
+background: rgba(0, 0, 0, 0.4);
+color: white;
+display: flex;
+align-items: center;
+justify-content: center;
+opacity: 0;
+transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+border-radius: 12px;
+pointer-events: none;
+backdrop-filter: blur(2px);
+}
+
+.icon-picker__trigger:hover .icon-picker__edit-overlay {
+opacity: 1;
+}
+
+/* Hint badge for onboarding */
+.icon-picker__trigger--hint {
+	border: 2px dashed var(--primary) !important;
+	animation: pulse-border 2s infinite;
+}
+
+@keyframes pulse-border {
+	0% { border-color: var(--primary-low); }
+	50% { border-color: var(--primary); }
+	100% { border-color: var(--primary-low); }
+}
+
+.icon-picker__hint-badge {
+	position: absolute;
+	top: -8px;
+	right: -8px;
+	background: var(--primary);
+	color: white;
+	width: 22px;
+	height: 22px;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+	border: 2px solid var(--bg-surface);
+	z-index: 10;
+	animation: nudge 2s infinite;
+}
+
+.icon-picker__trigger-badge {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	width: 18px;
+	height: 18px;
+	background: hsl(var(--color__primary-hue) 80% 60%);
+	color: white;
+	border-radius: 50%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 3;
+	border: 2px solid var(--bg-surface);
+	box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}

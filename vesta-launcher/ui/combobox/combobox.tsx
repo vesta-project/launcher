@@ -3,7 +3,7 @@ import * as ComboboxPrimitive from "@kobalte/core/combobox";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { Component, splitProps, ValidComponent } from "solid-js";
-import "./combobox.css";
+import styles from "./combobox.module.css";
 
 const Combobox = ComboboxPrimitive.Combobox;
 
@@ -16,7 +16,7 @@ function ComboboxItem<T extends ValidComponent = "li">(
 
 	return (
 		<ComboboxPrimitive.Item
-			class={clsx("combobox__item", local.class)}
+			class={clsx(styles["combobox__item"], local.class)}
 			{...rest}
 		>
 			<ComboboxPrimitive.ItemLabel>{local.children}</ComboboxPrimitive.ItemLabel>
@@ -47,7 +47,7 @@ function ComboboxItemIndicator<T extends ValidComponent = "div">(
 					stroke-width="2"
 					stroke-linecap="round"
 					stroke-linejoin="round"
-					class="size-4"
+					class={styles["size-4"]}
 				>
 					<path d="M5 12l5 5l10 -10" />
 				</svg>
@@ -64,7 +64,7 @@ function ComboboxSection<T extends ValidComponent = "li">(
 	const [_, rest] = splitProps(props as ComboboxSectionProps, ["class"]);
 	return (
 		<ComboboxPrimitive.Section
-			class={clsx("combobox__section", props.class)}
+			class={clsx(styles["combobox__section"], props.class)}
 			{...rest}
 		/>
 	);
@@ -79,7 +79,7 @@ function ComboboxControl<T, U extends ValidComponent = "div">(
 	const [_, rest] = splitProps(props as ComboboxControlProps<T>, ["class"]);
 	return (
 		<ComboboxPrimitive.Control
-			class={clsx("combobox__control", props.class)}
+			class={clsx(styles["combobox__control"], props.class)}
 			{...rest}
 		/>
 	);
@@ -93,7 +93,7 @@ function ComboboxInput<T extends ValidComponent = "input">(
 	const [_, rest] = splitProps(props as ComboboxInputProps, ["class"]);
 	return (
 		<ComboboxPrimitive.Input
-			class={clsx("combobox__input", props.class)}
+			class={clsx(styles["combobox__input"], props.class)}
 			{...rest}
 		/>
 	);
@@ -114,7 +114,7 @@ function ComboboxTrigger<T extends ValidComponent = "button">(
 	]);
 	return (
 		<ComboboxPrimitive.Trigger
-			class={clsx("combobox__trigger", props.class)}
+			class={clsx(styles["combobox__trigger"], props.class)}
 			{...rest}
 		>
 			<ComboboxPrimitive.Icon>
@@ -127,7 +127,7 @@ function ComboboxTrigger<T extends ValidComponent = "button">(
 						stroke-width="2"
 						stroke-linecap="round"
 						stroke-linejoin="round"
-						class="size-4"
+						class={styles["size-4"]}
 					>
 						<path d="M8 9l4 -4l4 4" />
 						<path d="M16 15l-4 4l-4 -4" />
@@ -147,10 +147,10 @@ function ComboboxContent<T extends ValidComponent = "div">(
 	return (
 		<ComboboxPrimitive.Portal>
 			<ComboboxPrimitive.Content
-				class={clsx("combobox__content relative z-50", local.class)}
+				class={clsx(styles["combobox__content"], styles["relative"], styles["z-50"], local.class)}
 				{...rest}
 			>
-				<ComboboxPrimitive.Listbox class="combobox__listbox">
+				<ComboboxPrimitive.Listbox class={styles["combobox__listbox"]}>
 					{local.children as any}
 				</ComboboxPrimitive.Listbox>
 			</ComboboxPrimitive.Content>

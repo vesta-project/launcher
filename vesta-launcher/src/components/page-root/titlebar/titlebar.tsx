@@ -10,7 +10,7 @@ import {
 	getActiveAccount,
 	type Account,
 } from "@utils/auth";
-import "./titlebar.css";
+import styles from "./titlebar.module.css";
 
 interface TitleBarProps {
 	pageViewerOpen?: boolean;
@@ -40,14 +40,14 @@ function TitleBar(props: TitleBarProps) {
 	return (
 		<div
 			classList={{
-				titlebar: true,
-				"titlebar--right": props.os !== "macos",
-				"titlebar--white": props.os === "windows",
+				[styles.titlebar]: true,
+				[styles["titlebar--right"]]: props.os !== "macos",
+				[styles["titlebar--white"]]: props.os === "windows",
 				[props.class ?? ""]: !!props.class,
 			}}
 		>
 			<WindowControls
-				class={"titlebar__window-controls"}
+				class={styles["titlebar__window-controls"]}
 				hide={props.pageViewerOpen}
 				platform={
 					props.os === "linux"
@@ -57,14 +57,14 @@ function TitleBar(props: TitleBarProps) {
 							: "windows"
 				}
 			/>
-			<div class={"titlebar__grab"} data-tauri-drag-region={true}>
-				<div data-tauri-drag-region={true} class={"titlebar__content"}>
+			<div class={styles["titlebar__grab"]} data-tauri-drag-region={true}>
+				<div data-tauri-drag-region={true} class={styles["titlebar__content"]}>
 					<span data-tauri-drag-region={true}>
 						Vesta Launcher {version() ? `v${version()}` : "..."}
 					</span>
 					<Show when={activeAccount()?.account_type === ACCOUNT_TYPE_GUEST}>
 						<div
-							class="guest-pill"
+							class={styles["guest-pill"]}
 							style={{
 								"margin-left": "8px",
 								background: "var(--primary)",
@@ -87,7 +87,7 @@ function TitleBar(props: TitleBarProps) {
 					<NetworkPill />
 					<Show when={!props.hideHelp}>
 						<button
-							class="titlebar__help-btn"
+							class={styles["titlebar__help-btn"]}
 							onClick={handleHelpClick}
 							title="Help & Modding Guide"
 						>

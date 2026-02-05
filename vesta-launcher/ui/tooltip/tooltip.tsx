@@ -2,7 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as TooltipPrimitive from "@kobalte/core/tooltip";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import { children, splitProps, ValidComponent } from "solid-js";
-import "./tooltip.css";
+import styles from "./tooltip.module.css";
 
 type BasePlacement = "top" | "bottom" | "left" | "right";
 type Placement =
@@ -17,11 +17,11 @@ function Tooltip(props: TooltipPrimitive.TooltipRootProps) {
 function TooltipContent(
 	props: TooltipPrimitive.TooltipContentProps & ClassProp & ChildrenProp,
 ) {
-	const [_, others] = splitProps(props, ["class", "children"]);
+	const [local, others] = splitProps(props, ["class", "children"]);
 	const c = children(() => props.children);
 	return (
 		<TooltipPrimitive.Portal>
-			<TooltipPrimitive.Content class={"tooltip__content"} {...others}>
+			<TooltipPrimitive.Content class={styles["tooltip__content"]} {...others}>
 				{c()}
 			</TooltipPrimitive.Content>
 		</TooltipPrimitive.Portal>

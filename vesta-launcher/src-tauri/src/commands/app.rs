@@ -243,3 +243,45 @@ pub async fn refresh_network_status(
     network_manager.set_status(status);
     Ok(status)
 }
+
+#[tauri::command]
+pub fn get_tray_settings() -> Result<TraySettings, String> {
+    let config = crate::utils::config::get_app_config()
+        .map_err(|e| format!("Failed to get config: {}", e))?;
+    
+    Ok(TraySettings {
+        show_tray_icon: config.show_tray_icon,
+        minimize_to_tray: config.minimize_to_tray,
+    })
+}
+
+#[tauri::command]
+pub fn set_tray_icon_visibility(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
+    crate::utils::config::update_config_field(app, "show_tray_icon".to_string(), serde_json::json!(visible))
+        .map_err(|e| format!("Failed to update tray icon visibility: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_minimize_to_tray(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    crate::utils::config::update_config_field(app, "minimize_to_tray".to_string(), serde_json::json!(enabled))
+        .map_err(|e| format!("Failed to update minimize to tray setting: {}", e))?;
+    Ok(())
+}
+
+#[tauri::command]
+pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show()
+            .map_err(|e| format!("Failed to show window: {}", e))?;
+        window.set_focus()
+            .map_err(|e| format!("Failed to focus window: {}", e))?;
+    }
+    Ok(())
+}
+
+#[derive(serde::Serialize)]
+pub struct TraySettings {
+    pub show_tray_icon: bool,
+    pub minimize_to_tray: bool,
+}

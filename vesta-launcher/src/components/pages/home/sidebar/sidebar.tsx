@@ -12,6 +12,7 @@ import {
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
 import { invoke } from "@tauri-apps/api/core";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { Separator } from "@ui/separator/separator";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
 	closeAlert,
@@ -33,7 +34,7 @@ import {
 	onMount,
 } from "solid-js";
 // Transition and getOsType are unused in this file; remove imports to clean code.
-import "./sidebar.css";
+import styles from "./sidebar.module.css";
 
 interface SidebarProps {
 	setPageViewerOpen: (value: boolean) => void;
@@ -117,18 +118,17 @@ function Sidebar(props: SidebarProps) {
 	return (
 		<div
 			ref={ref}
-			id={"sidebar"}
-			classList={{ macos: props.os === "macos", "sidebar--open": props.open }}
+			classList={{ [styles.sidebar]: true, [styles.macos]: props.os === "macos", [styles["sidebar--open"]]: props.open }}
 		>
-			<div class={"sidebar__root"}>
-				<div class={"sidebar__section"}>
+			<div class={styles["sidebar__root"]}>
+				<div class={styles["sidebar__section"]}>
 					<SidebarProfileButton
 						id={"profile-selector"}
 						tooltip_text={"Profile"}
 						open={accountMenuOpen()}
 						onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
 					/>
-					<div class={"sidebar__section actions"}>
+					<div class={`${styles["sidebar__section"]} ${styles["actions"]}`}>
 						<SidebarActionButton
 							id={"sidebar-new"}
 							tooltip_text={"New Instance"}
@@ -144,6 +144,7 @@ function Sidebar(props: SidebarProps) {
 						>
 							<SearchIcon />
 						</SidebarActionButton>
+
 						<SidebarPageButton
 							tooltip_text={"Instance Name"}
 							onClick={() =>
@@ -158,7 +159,7 @@ function Sidebar(props: SidebarProps) {
 						/>
 					</div>
 				</div>
-				<div class={"sidebar__section"}>
+				<div class={styles["sidebar__section"]}>
 					<SidebarActionButton
 						onClick={() => props.openChanged(!props.open)}
 						tooltip_text={"Notifications"}
@@ -168,7 +169,7 @@ function Sidebar(props: SidebarProps) {
 							{notifData().hasActiveTask && (
 								<Tooltip placement="top">
 									<TooltipTrigger>
-										<div class="notification-spinner" />
+										<div class={styles["notification-spinner"]} />
 									</TooltipTrigger>
 									<TooltipContent>Task in progress</TooltipContent>
 								</Tooltip>
@@ -176,7 +177,7 @@ function Sidebar(props: SidebarProps) {
 							{notifData().totalCount > 0 && (
 								<Tooltip placement="top">
 									<TooltipTrigger>
-										<div class="notification-badge">
+										<div class={styles["notification-badge"]}>
 											{notifData().totalCount}
 										</div>
 									</TooltipTrigger>
@@ -223,3 +224,4 @@ function Sidebar(props: SidebarProps) {
 }
 
 export default Sidebar;
+

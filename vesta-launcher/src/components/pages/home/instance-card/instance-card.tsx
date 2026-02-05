@@ -13,6 +13,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {
 	ContextMenu,
@@ -33,6 +34,14 @@ import {
 	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
+import { ResourceAvatar } from "@ui/avatar";
+import {
+	handleDuplicate,
+	handleRepair,
+	handleHardReset,
+	handleUninstall,
+	handleLaunch,
+} from "../../../../handlers/instance-handler";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
@@ -63,8 +72,8 @@ import {
 	Show,
 	Switch,
 } from "solid-js";
-import "./instance-card.css";
-import { ExportDialog } from "@components/pages/mini-pages/instance-details/components/ExportDialog";
+import styles from "./instance-card.module.css";
+import { ExportDialog } from "@ui/export-dialog";
 
 // getInstanceSlug now imported above
 
@@ -386,40 +395,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setPageViewerOpen(true);
 	};
 
-	// Handler for context-menu Repair action
-	const handleRepair = async () => {
-		if (busy()) return;
-		const confirmRepair = await window.confirm(
-			`Repair instance \"${props.instance.name}\"? This will verify and redownload missing or corrupted files.`,
-		);
-		if (!confirmRepair) return;
-		setBusy(true);
-		try {
-			const idNum = getInstanceId(props.instance);
-			if (idNum) await repairInstance(idNum);
-			showToast({
-				title: "Repair started",
-				description: `Repairing \"${props.instance.name}\"`,
-				severity: "Info",
-				duration: 3000,
-			});
-		} catch (err) {
-			console.error("Repair failed", err);
-			showToast({
-				title: "Repair failed",
-				description: String(err),
-				severity: "Error",
-				duration: 5000,
-			});
-		}
-		setBusy(false);
-	};
-
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger
 				as="div"
-				class={`instance-card${isFailed() ? " failed" : ""}${isInterrupted() ? " interrupted" : ""}${leaveAnim() ? " instance-card-leave" : ""}`}
+				class={`${styles["instance-card"]}${isFailed() ? ` ${styles.failed}` : ""}${isInterrupted() ? ` ${styles.interrupted}` : ""}${leaveAnim() ? ` ${styles["instance-card-leave"]}` : ""}`}
 				onMouseOver={() => {
 					setHover(true);
 					setLeaveAnim(false);
@@ -444,8 +424,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 			>
 				<Switch>
 					<Match when={isInstalling()}>
-						<div class="instance-card-centered">
-							<div class="instance-card-spinner"></div>
+						<div class={styles["instance-card-centered"]}>
+							<div class={styles["instance-card-spinner"]}></div>
 							<h1
 								style={{
 									margin: 0,
@@ -460,7 +440,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 					</Match>
 					<Match when={isFailed()}>
-						<div class="instance-card-centered failure-overlay">
+						<div class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}>
 							<ErrorIcon style={{ width: "24px", height: "24px", color: "#ff5252" }} />
 							<h1
 								style={{
@@ -488,34 +468,32 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 					</Match>
 					<Match when={true}>
-						<div class="instance-card-top">
-							<div class="instance-card-indicators">
+						<div class={styles["instance-card-top"]}>
+							<div class={styles["instance-card-indicators"]}>
 								<Show when={isRunning()}>
-									<span class="running">
-										<div class="status-dot" />
+									<Badge variant="success" dot={true}>
 										Running
-									</span>
+									</Badge>
 								</Show>
 								<Show when={isInterrupted()}>
-									<span class="interrupted-pill">
-										<div class="status-dot" />
+									<Badge variant="warning" dot={true}>
 										Interrupted
-									</span>
+									</Badge>
 								</Show>
 								<Show when={hasCrashed()}>
 									<Tooltip placement="top">
 										<TooltipTrigger>
-											<span
-												class="crashed"
+											<Badge
+												variant="error"
+												dot={true}
 												onClick={(e) => {
 													e.stopPropagation();
 													setShowCrashModal(true);
 												}}
 												style={{ cursor: "pointer" }}
 											>
-												<div class="status-dot" />
 												Crashed
-											</span>
+											</Badge>
 										</TooltipTrigger>
 										<TooltipContent>Click to view crash details</TooltipContent>
 									</Tooltip>
@@ -524,22 +502,22 @@ export default function InstanceCard(props: InstanceCardProps) {
 							<Tooltip placement="top">
 								<TooltipTrigger>
 									<button
-										class={`play-button ${
+										class={`${styles["play-button"]} ${
 											isInstalling() || launching()
-												? "installing"
+												? styles["installing"]
 												: isInterrupted()
-													? "resume"
+													? styles["resume"]
 													: needsInstallation()
-														? "install"
+														? styles["install"]
 														: isRunning()
-															? "kill"
-															: "launch"
+															? styles["kill"]
+															: styles["launch"]
 										}`}
 										onClick={handleClick}
 										disabled={isInstalling() || launching()}
 									>
 										{isInstalling() || launching() ? (
-											<div class="instance-card-spinner" />
+											<div class={styles["instance-card-spinner"]} />
 										) : isInterrupted() ? (
 											<RefreshIcon />
 										) : needsInstallation() ? (
@@ -554,11 +532,11 @@ export default function InstanceCard(props: InstanceCardProps) {
 								<TooltipContent>{playButtonTooltip()}</TooltipContent>
 							</Tooltip>
 						</div>
-						<div class="instance-card-bottom">
+						<div class={styles["instance-card-bottom"]}>
 							<h1>{props.instance.name}</h1>
-							<div class="instance-card-bottom-version">
+							<div class={styles["instance-card-bottom-version"]}>
 								<p>{props.instance.minecraftVersion}</p>
-								<div class="instance-card-bottom-version-modloader">
+								<div class={styles["instance-card-bottom-version-modloader"]}>
 									<Switch fallback="">
 										<Match when={props.instance.modloader === "forge"}>
 											<ForgeLogo />
@@ -611,7 +589,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 					<ContextMenuItem
 						onSelect={() => {
-							void handleRepair();
+							void handleRepair(props.instance);
 						}}
 					>
 						Repair
@@ -619,15 +597,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 					</ContextMenuItem>
 
 					<ContextMenuItem
-						onSelect={async () => {
-							const name = window.prompt(
-								"Enter name for the copy:",
-								`${props.instance.name} (Copy)`,
-							);
-							if (name) {
-								const idNum = getInstanceId(props.instance);
-								if (idNum) await duplicateInstance(idNum, name);
-							}
+						onSelect={() => {
+							handleDuplicate(props.instance);
 						}}
 					>
 						Duplicate
@@ -638,17 +609,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 					</ContextMenuItem>
 
 					<ContextMenuItem
-						onSelect={async () => {
-							const idNum = getInstanceId(props.instance);
-							if (!idNum) return;
-							if (
-								await ask(
-									"Are you sure you want to perform a hard reset? This will wipe the ENTIRE instance folder and reinstall everything from scratch. This action cannot be undone and your worlds, screenshots, and configs will be lost.",
-									{ title: "Vesta Launcher - Hard Reset", kind: "error" },
-								)
-							) {
-								await resetInstance(idNum);
-							}
+						onSelect={() => {
+							handleHardReset(props.instance);
 						}}
 					>
 						Hard Reset
@@ -657,35 +619,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 					<ContextMenuSeparator />
 
 					<ContextMenuItem
-						onSelect={async () => {
-							// confirm uninstall: this removes the instance entry (does not clear shared game files)
-							const confirmUninstall = await window.confirm(
-								`Uninstall instance \"${props.instance.name}\"? This will permanently remove the instance and all its files from your computer.`,
-							);
-							if (!confirmUninstall) return;
-							setBusy(true);
-							try {
-								const idNum = getInstanceId(props.instance);
-								if (idNum === null) {
-									throw new Error("Invalid instance id");
-								}
-								await deleteInstance(idNum);
-								showToast({
-									title: "Uninstalled",
-									description: `Instance \"${props.instance.name}\" removed`,
-									severity: "Info",
-									duration: 3000,
-								});
-							} catch (err) {
-								console.error("Uninstall failed", err);
-								showToast({
-									title: "Uninstall failed",
-									description: String(err),
-									severity: "Error",
-									duration: 5000,
-								});
-							}
-							setBusy(false);
+						onSelect={() => {
+							handleUninstall(props.instance);
 						}}
 					>
 						Uninstall
@@ -712,3 +647,4 @@ export default function InstanceCard(props: InstanceCardProps) {
 		</ContextMenu>
 	);
 }
+

@@ -6,7 +6,7 @@ import {
 	onCleanup,
 	onMount,
 } from "solid-js";
-import "./drop-zone.css";
+import styles from "./drop-zone.module.css";
 
 export interface DropZoneProps {
 	onFileDrop: (files: string[]) => void;
@@ -49,7 +49,7 @@ export function DropZone(props: DropZoneProps) {
 				const filtered = manager.filterPaths(paths, props);
 				
 				if (paths.length > 0 && filtered.length > 0) {
-					element.classList.add("drop-zone--active");
+					element.classList.add(styles["drop-zone--active"]);
 				}
 				
 				manager.setIsDragActive(true);
@@ -66,12 +66,12 @@ export function DropZone(props: DropZoneProps) {
 				// Only show "copy" cursor and highlight if we have matching paths
 				if (paths.length > 0 && filtered.length > 0) {
 					e.dataTransfer.dropEffect = "copy";
-					if (!element.classList.contains("drop-zone--active")) {
-						element.classList.add("drop-zone--active");
+					if (!element.classList.contains(styles["drop-zone--active"])) {
+						element.classList.add(styles["drop-zone--active"]);
 					}
 				} else {
 					e.dataTransfer.dropEffect = "none";
-					element.classList.remove("drop-zone--active");
+					element.classList.remove(styles["drop-zone--active"]);
 				}
 			}
 		};
@@ -81,14 +81,14 @@ export function DropZone(props: DropZoneProps) {
 			dragCounter--;
 			if (dragCounter <= 0) {
 				dragCounter = 0;
-				element.classList.remove("drop-zone--active");
+				element.classList.remove(styles["drop-zone--active"]);
 			}
 		};
 
 		const handleDrop = (e: DragEvent) => {
 			e.preventDefault();
 			dragCounter = 0;
-			element.classList.remove("drop-zone--active");
+			element.classList.remove(styles["drop-zone--active"]);
 
 			const paths = manager.getSniffedPaths();
 			const filtered = manager.filterPaths(paths, props);

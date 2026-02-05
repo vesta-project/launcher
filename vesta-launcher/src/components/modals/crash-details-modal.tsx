@@ -7,8 +7,9 @@ import {
 	DialogTitle,
 } from "@ui/dialog/dialog";
 import { getCrashDetails } from "@utils/crash-handler";
+import { Separator } from "@ui/separator/separator";
 import { createSignal, Match, Show, Switch } from "solid-js";
-import "./crash-details-modal.css";
+import styles from "./crash-details-modal.module.css";
 
 interface CrashDetailsModalProps {
 	instanceId: string;
@@ -74,10 +75,10 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 
 	return (
 		<Dialog open={props.isOpen} onOpenChange={props.onClose}>
-			<DialogContent class="crash-details-modal">
+			<DialogContent class={styles["crash-details-modal"]}>
 				<DialogHeader>
-					<DialogTitle class="crash-title">
-						<span class="crash-icon">
+					<DialogTitle class={styles["crash-title"]}>
+						<span class={styles["crash-icon"]}>
 							<Switch fallback={<span>❌</span>}>
 								<Match when={crashDetails()?.crash_type === "runtime"}>
 									<span>⚠️</span>
@@ -115,30 +116,30 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 
 				<Show when={crashDetails()}>
 					{(details) => (
-						<div class="crash-details-content">
-							<div class="crash-description">
+						<div class={styles["crash-details-content"]}>
+							<div class={styles["crash-description"]}>
 								<p>{getCrashTypeDescription(details().crash_type)}</p>
 							</div>
 
-							<div class="crash-info">
-								<div class="info-section">
+							<div class={styles["crash-info"]}>
+								<div class={styles["info-section"]}>
 									<h3>Error Message</h3>
-									<div class="error-message">
+									<div class={styles["error-message"]}>
 										{details().message || "No error message available"}
 									</div>
 								</div>
 
-								<div class="info-section">
+								<div class={styles["info-section"]}>
 									<h3>Timestamp</h3>
-									<p class="timestamp">
+									<p class={styles["timestamp"]}>
 										{new Date(details().timestamp).toLocaleString()}
 									</p>
 								</div>
 
 								<Show when={details().report_path}>
-									<div class="info-section">
+									<div class={styles["info-section"]}>
 										<h3>Crash Report</h3>
-										<p class="report-path">{details().report_path}</p>
+										<p class={styles["report-path"]}>{details().report_path}</p>
 										<LauncherButton
 											onClick={openCrashReport}
 											variant="outline"
@@ -150,8 +151,8 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 								</Show>
 							</div>
 
-							<div class="crash-actions">
-								<p class="action-hint">Try these steps to fix the crash:</p>
+							<div class={styles["crash-actions"]}>
+								<p class={styles["action-hint"]}>Try these steps to fix the crash:</p>
 								<ul>
 									<Switch>
 										<Match when={crashDetails()?.crash_type === "launch_mod"}>
@@ -176,7 +177,9 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 					)}
 				</Show>
 
-				<div class="crash-buttons">
+				<Separator />
+
+				<div class={styles["crash-buttons"]}>
 					<LauncherButton onClick={props.onClose} variant="outline">
 						Close
 					</LauncherButton>
@@ -185,3 +188,4 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 		</Dialog>
 	);
 }
+

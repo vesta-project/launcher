@@ -107,12 +107,112 @@ function Root(props: ChildrenProp) {
 	let unlistenExit: UnlistenFn | null = null;
 	let unlistenLogout: UnlistenFn | null = null;
 
-	onMount(async () => {
-		unlistenLogout = await listen("core://logout-guest", () => {
-			window.location.href = "/";
-		});
+	// Global window-level drag events to manage the sniffer
+	const manager = getDropZoneManager();
+	let leaveTimeout: any;
 
-		unlistenExit = await listen("core://exit-requested", async () => {
+	const handleWindowDragEnter = (e: DragEvent) => {
+		e.preventDefault();
+		if (leaveTimeout) {
+			clearTimeout(leaveTimeout);
+			leaveTimeout = undefined;
+		}
+
+		// Detect if it's a file drag
+		const isFileDrag = e.dataTransfer?.types.includes("Files");
+		if (!isFileDrag) {
+			// If they drag text or something else, we reset the sniffer session
+			// so they can drag a file again later without having to fully leave the window
+			if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
+				console.log("[App] Non-file drag detected: resetting sniffer state");
+				manager.clearSniffedPaths();
+				manager.hideSniffer();
+			}
+			return;
+		}
+
+		// Add global dragging class for UI feedback
+		document.body.classList.add("window--dragging");
+
+		// Summon if we haven't sniffed yet AND the window isn't already active
+		if (
+			manager.getSniffedPaths().length === 0 &&
+			!manager.isSnifferVisible() &&
+			!manager.isDragging()
+		) {
+			manager.showSniffer();
+		}
+	};
+
+	const handleWindowDragLeave = (e: DragEvent) => {
+		e.preventDefault();
+		// Only clear if we actually left the window (no relatedTarget)
+		if (!e.relatedTarget) {
+			if (leaveTimeout) clearTimeout(leaveTimeout);
+			leaveTimeout = setTimeout(() => {
+				console.log("[App] Final DragLeave: clearing state");
+				document.body.classList.remove("window--dragging");
+				manager.clearSniffedPaths();
+				manager.hideSniffer();
+				leaveTimeout = undefined;
+			}, 300); // Increased timeout to handle focus swap jitter
+		}
+	};
+
+	const handleWindowDrop = (e: DragEvent) => {
+		if (leaveTimeout) {
+			clearTimeout(leaveTimeout);
+			leaveTimeout = undefined;
+		}
+		document.body.classList.remove("window--dragging");
+		// Component handles the actual drop data, but we make sure state is reset
+		// for next drag session if they dropped on a non-zone area
+		manager.hideSniffer();
+		setTimeout(() => {
+			if (!manager.isDragging()) {
+				manager.clearSniffedPaths();
+			}
+		}, 100);
+	};
+
+	const handleWindowDragOver = (e: DragEvent) => {
+		e.preventDefault();
+
+		if (leaveTimeout) {
+			clearTimeout(leaveTimeout);
+			leaveTimeout = undefined;
+		}
+
+		// Detect if it's a file drag
+		const isFileDrag = e.dataTransfer?.types.includes("Files");
+		if (!isFileDrag) {
+			if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
+				manager.clearSniffedPaths();
+				manager.hideSniffer();
+			}
+			return;
+		}
+
+		if (!document.body.classList.contains("window--dragging")) {
+			document.body.classList.add("window--dragging");
+		}
+
+		// Summon if we haven't sniffed yet AND the window isn't already active
+		if (
+			manager.getSniffedPaths().length === 0 &&
+			!manager.isSnifferVisible() &&
+			!manager.isDragging()
+		) {
+			manager.showSniffer();
+		}
+	};
+
+	onMount(() => {
+		listen("core://logout-guest", () => {
+			window.location.href = "/";
+		}).then((u) => (unlistenLogout = u));
+
+		listen("core://exit-requested", async () => {
 			try {
 				const check = await invoke<ExitCheckResponse>("exit_check");
 				if (check.can_exit) {
@@ -128,32 +228,22 @@ function Root(props: ChildrenProp) {
 				// User explicitly asked for exit, so let's try to exit if check itself fails.
 				await invoke("exit_app");
 			}
-		});
-
-		// Critical: Setup crash handler immediately
-		unlisten = await listen<{
-			title: string;
-			description: string;
-		}>("core://crash", (event) => {
-			console.log("Crash");
-			setFatalInfo(event.payload);
-			navigate("/fatal", { replace: true });
-		});
+		}).then((u) => (unlistenExit = u));
 
 		// Setup deep-link handler for vesta:// URLs
-		try {
-			unlistenDeepLink = await onOpenUrl((urls) => {
-				console.log("Deep link received:", urls);
+		onOpenUrl((urls) => {
+			console.log("Deep link received:", urls);
 
-				// Handle the first URL in the array
-				if (urls && urls.length > 0) {
-					const url = urls[0];
-					handleDeepLink(url, navigate);
-				}
+			// Handle the first URL in the array
+			if (urls && urls.length > 0) {
+				const url = urls[0];
+				handleDeepLink(url, navigate);
+			}
+		})
+			.then((u) => (unlistenDeepLink = u))
+			.catch((error) => {
+				console.error("Failed to setup deep-link handler:", error);
 			});
-		} catch (error) {
-			console.error("Failed to setup deep-link handler:", error);
-		}
 
 		// Defer non-critical initialization to not block UI render
 		// This allows the window to show immediately while background tasks start
@@ -255,117 +345,10 @@ function Root(props: ChildrenProp) {
 			});
 		}, 100); // 100ms delay to ensure UI renders first
 
-		// Global window-level drag events to manage the sniffer
-		const manager = getDropZoneManager();
-		let leaveTimeout: any;
-
-		const handleWindowDragEnter = (e: DragEvent) => {
-			e.preventDefault();
-			if (leaveTimeout) {
-				clearTimeout(leaveTimeout);
-				leaveTimeout = undefined;
-			}
-
-			// Detect if it's a file drag
-			const isFileDrag = e.dataTransfer?.types.includes("Files");
-			if (!isFileDrag) {
-				// If they drag text or something else, we reset the sniffer session
-				// so they can drag a file again later without having to fully leave the window
-				if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
-					console.log("[App] Non-file drag detected: resetting sniffer state");
-					manager.clearSniffedPaths();
-					manager.hideSniffer();
-				}
-				return;
-			}
-
-			// Add global dragging class for UI feedback
-			document.body.classList.add("window--dragging");
-
-			// Summon if we haven't sniffed yet AND the window isn't already active
-			if (
-				manager.getSniffedPaths().length === 0 &&
-				!manager.isSnifferVisible() &&
-				!manager.isDragging()
-			) {
-				manager.showSniffer();
-			}
-		};
-
-		const handleWindowDragLeave = (e: DragEvent) => {
-			e.preventDefault();
-			// Only clear if we actually left the window (no relatedTarget)
-			if (!e.relatedTarget) {
-				if (leaveTimeout) clearTimeout(leaveTimeout);
-				leaveTimeout = setTimeout(() => {
-					console.log("[App] Final DragLeave: clearing state");
-					document.body.classList.remove("window--dragging");
-					manager.clearSniffedPaths();
-					manager.hideSniffer();
-					leaveTimeout = undefined;
-				}, 300); // Increased timeout to handle focus swap jitter
-			}
-		};
-
-		const handleWindowDrop = (e: DragEvent) => {
-			if (leaveTimeout) {
-				clearTimeout(leaveTimeout);
-				leaveTimeout = undefined;
-			}
-			document.body.classList.remove("window--dragging");
-			// Component handles the actual drop data, but we make sure state is reset
-			// for next drag session if they dropped on a non-zone area
-			manager.hideSniffer();
-			setTimeout(() => {
-				if (!manager.isDragging()) {
-					manager.clearSniffedPaths();
-				}
-			}, 100);
-		};
-
-		const handleWindowDragOver = (e: DragEvent) => {
-			e.preventDefault();
-
-			if (leaveTimeout) {
-				clearTimeout(leaveTimeout);
-				leaveTimeout = undefined;
-			}
-
-			// Detect if it's a file drag
-			const isFileDrag = e.dataTransfer?.types.includes("Files");
-			if (!isFileDrag) {
-				if (manager.getSniffedPaths().length > 0 || manager.isDragging()) {
-					manager.clearSniffedPaths();
-					manager.hideSniffer();
-				}
-				return;
-			}
-
-			if (!document.body.classList.contains("window--dragging")) {
-				document.body.classList.add("window--dragging");
-			}
-
-			// Summon if we haven't sniffed yet AND the window isn't already active
-			if (
-				manager.getSniffedPaths().length === 0 &&
-				!manager.isSnifferVisible() &&
-				!manager.isDragging()
-			) {
-				manager.showSniffer();
-			}
-		};
-
 		window.addEventListener("dragenter", handleWindowDragEnter);
 		window.addEventListener("dragover", handleWindowDragOver);
 		window.addEventListener("dragleave", handleWindowDragLeave);
 		window.addEventListener("drop", handleWindowDrop);
-
-		onCleanup(() => {
-			window.removeEventListener("dragenter", handleWindowDragEnter);
-			window.removeEventListener("dragover", handleWindowDragOver);
-			window.removeEventListener("dragleave", handleWindowDragLeave);
-			window.removeEventListener("drop", handleWindowDrop);
-		});
 	});
 
 	onCleanup(() => {
@@ -377,6 +360,11 @@ function Root(props: ChildrenProp) {
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		cleanupFileDropSystem();
+
+		window.removeEventListener("dragenter", handleWindowDragEnter);
+		window.removeEventListener("dragover", handleWindowDragOver);
+		window.removeEventListener("dragleave", handleWindowDragLeave);
+		window.removeEventListener("drop", handleWindowDrop);
 	});
 
 	// Hide loader on first paint rather than a fixed timeout

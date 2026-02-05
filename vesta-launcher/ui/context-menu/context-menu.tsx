@@ -8,7 +8,7 @@ import {
 	splitProps,
 	ValidComponent,
 } from "solid-js";
-import "./context-menu.css";
+import styles from "./context-menu.module.css";
 
 function ContextMenu(props: ContextMenuPrimitive.ContextMenuRootProps) {
 	return <ContextMenuPrimitive.ContextMenu gutter={4} {...props} />;
@@ -29,7 +29,7 @@ function ContextMenuContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.Content
-				class={clsx("context-menu__content liquid-glass", props.class)}
+				class={clsx(styles["context-menu__content"], props.class)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
@@ -40,7 +40,7 @@ function ContextMenuLabel(props: ComponentProps<"div">) {
 	const [_, rest] = splitProps(props, ["class", "children"]);
 
 	return (
-		<div class={clsx("context-menu__label", props.class)} {...rest}>
+		<div class={clsx(styles["context-menu__label"], props.class)} {...rest}>
 			{props.children}
 		</div>
 	);
@@ -54,7 +54,7 @@ function ContextMenuItem<T extends ValidComponent = "div">(
 ) {
 	const [_, rest] = splitProps(props as ContextMenuItemProps, ["class"]);
 
-	return <ContextMenuPrimitive.Item class={"context-menu__item"} {...rest} />;
+	return <ContextMenuPrimitive.Item class={styles["context-menu__item"]} {...rest} />;
 }
 
 const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
@@ -62,7 +62,7 @@ const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
 function ContextMenuShortcut(props: ComponentProps<"span">) {
 	const [_, rest] = splitProps(props, ["class"]);
 
-	return <span class={clsx("context-menu__shortcut", props.class)} {...rest} />;
+	return <span class={clsx(styles["context-menu__shortcut"], props.class)} {...rest} />;
 }
 
 type ContextMenuSeparatorProps =
@@ -74,7 +74,7 @@ function ContextMenuSeparator<T extends ValidComponent = "hr">(
 	const [, rest] = splitProps(props as ContextMenuSeparatorProps, ["class"]);
 	return (
 		<ContextMenuPrimitive.Separator
-			class={"context-menu__separator"}
+			class={styles["context-menu__separator"]}
 			{...rest}
 		/>
 	);
@@ -94,7 +94,7 @@ function ContextMenuSubTrigger<T extends ValidComponent = "div">(
 	]);
 	return (
 		<ContextMenuPrimitive.SubTrigger
-			class={"context-menu__sub-trigger"}
+			class={styles["context-menu__sub-trigger"]}
 			{...rest}
 		>
 			{props.children}
@@ -124,7 +124,7 @@ function ContextMenuSubContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.SubContent
-				class={clsx("context-menu__sub-content liquid-glass", props.class)}
+				class={clsx(styles["context-menu__sub-content"], "liquid-glass", props.class)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
@@ -143,8 +143,8 @@ function ContextMenuCheckboxItem<T extends ValidComponent = "div">(
 	]);
 
 	return (
-		<ContextMenuPrimitive.CheckboxItem class={"context-menu__select"} {...rest}>
-			<span class="context-menu__select__span">
+		<ContextMenuPrimitive.CheckboxItem class={clsx(styles["context-menu__select"], props.class)} {...rest}>
+			<span class={styles["context-menu__select__span"]}>
 				<ContextMenuPrimitive.ItemIndicator>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -177,7 +177,7 @@ function ContextMenuGroupLabel<T extends ValidComponent = "span">(
 	const [, rest] = splitProps(props as ContextMenuGroupLabelProps, ["class"]);
 	return (
 		<ContextMenuPrimitive.GroupLabel
-			class={"context-menu__group-label"}
+			class={clsx(styles["context-menu__group-label"], props.class)}
 			{...rest}
 		/>
 	);
@@ -197,8 +197,8 @@ function ContextMenuRadioItem<T extends ValidComponent = "div">(
 	]);
 
 	return (
-		<ContextMenuPrimitive.RadioItem class={"context-menu__select"} {...rest}>
-			<span class="context-menu__select__span">
+		<ContextMenuPrimitive.RadioItem class={clsx(styles["context-menu__select"], props.class)} {...rest}>
+			<span class={styles["context-menu__select__span"]}>
 				<ContextMenuPrimitive.ItemIndicator>
 					<svg
 						xmlns="http://www.w3.org/2000/svg"

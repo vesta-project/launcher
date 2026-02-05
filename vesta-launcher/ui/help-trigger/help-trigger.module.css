@@ -1,0 +1,63 @@
+.help-trigger {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 1.1em;
+	height: 1.1em;
+	border-radius: 50%;
+	background-color: transparent;
+	color: var(--text-primary);
+	opacity: 0.5;
+	cursor: help;
+	transition: all 0.2s ease;
+	user-select: none;
+	margin-left: 0.4em;
+	position: relative;
+	/* Optical alignment: nudge slightly up to center on cap-height */
+	top: -0.05em;
+	/* Ensure no cropping occurs due to overflow */
+	overflow: visible;
+	flex-shrink: 0;
+}
+
+.help-trigger:hover {
+	opacity: 1;
+	color: var(--primary);
+	background-color: var(--primary-10);
+}
+
+.help-trigger-icon {
+	width: 0.8em;
+	height: 0.8em;
+	display: block;
+	overflow: visible;
+}
+
+.help-trigger-anchor {
+	display: inline-flex;
+	align-items: center;
+	vertical-align: middle;
+}
+
+.help-trigger-tooltip-content {
+	max-width: 250px;
+}
+
+.help-trigger-popover-content {
+	max-width: 350px;
+	padding: 8px;
+}
+
+.help-trigger-title {
+	margin: 0 0 6px 0;
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--vesta-primary-100);
+}
+
+.help-trigger-description {
+	margin: 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: var(--vesta-text-primary);
+}

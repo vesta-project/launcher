@@ -47,12 +47,14 @@ import {
 	ThemeConfig,
 } from "../../../themes/presets";
 import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
+import styles from "./init.module.css";
 import {
 	updateThemeConfigLocal,
 	currentThemeConfig,
 } from "../../../utils/config-sync";
 import { ModdingGuideContent } from "../mini-pages/modding-guide/guide";
-import { HelpTrigger } from "../../ui/help-trigger";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import { Separator } from "@ui/separator/separator";
 import {
 	createInstance,
 	DEFAULT_ICONS,
@@ -88,7 +90,7 @@ function InitFirstPage(props: InitPagesProps) {
 	return (
 		<>
 			<div
-				class={"init-page__top"}
+				class={styles["init-page__top"]}
 				style={{
 					"text-align": "center",
 					"margin-bottom": "3vh",
@@ -96,7 +98,7 @@ function InitFirstPage(props: InitPagesProps) {
 				}}
 			>
 				<h1
-					class="init-page__header-title"
+					class={styles["init-page__header-title"]}
 					style={{
 						"font-size": "clamp(32px, 5vh, 48px)",
 						"font-weight": "800",
@@ -123,7 +125,7 @@ function InitFirstPage(props: InitPagesProps) {
 				</p>
 			</div>
 			<div
-				class={"init-page__middle"}
+				class={styles["init-page__middle"]}
 				style={{
 					display: "flex",
 					"flex-direction": "column",
@@ -146,8 +148,8 @@ function InitFirstPage(props: InitPagesProps) {
 						"flex-shrink": 0,
 					}}
 				>
-					<div class="welcome-flare__glow" />
-					<div class="welcome-flare__icon">🚀</div>
+					<div class={styles["welcome-flare__glow"]} />
+					<div class={styles["welcome-flare__icon"]}>🚀</div>
 				</div>
 				<p
 					style={{
@@ -165,7 +167,7 @@ function InitFirstPage(props: InitPagesProps) {
 				</p>
 			</div>
 			<div
-				class={"init-page__bottom"}
+				class={styles["init-page__bottom"]}
 				style={{
 					display: "flex",
 					"flex-direction": "column",
@@ -217,7 +219,7 @@ function InitGuidePage(props: InitPagesProps) {
 	return (
 		<>
 			<div
-				class={"init-page__top"}
+				class={styles["init-page__top"]}
 				style={{ "text-align": "left", "margin-bottom": "12px", width: "100%" }}
 			>
 				<h1
@@ -232,7 +234,7 @@ function InitGuidePage(props: InitPagesProps) {
 				</p>
 			</div>
 			<div
-				class={"init-page__middle"}
+				class={styles["init-page__middle"]}
 				style={{
 					"overflow-y": "auto",
 					"padding-right": "8px",
@@ -241,7 +243,7 @@ function InitGuidePage(props: InitPagesProps) {
 			>
 				<ModdingGuideContent />
 			</div>
-			<div class={"init-page__bottom"} style={{ "margin-top": "20px" }}>
+			<div class={styles["init-page__bottom"]} style={{ "margin-top": "20px" }}>
 				<Button
 					color="primary"
 					onClick={() => props.changeInitStep(2)} // Move to Login
@@ -321,7 +323,7 @@ function InitDataStoragePage(props: InitPagesProps) {
 
 	return (
 		<>
-			<div class={"init-page__top"} style={{ "text-align": "left" }}>
+			<div class={styles["init-page__top"]} style={{ "text-align": "left" }}>
 				<h1
 					style={{
 						"font-size": "24px",
@@ -344,7 +346,7 @@ function InitDataStoragePage(props: InitPagesProps) {
 			</div>
 
 			<div
-				class={"init-page__middle"}
+				class={styles["init-page__middle"]}
 				style={{
 					display: "flex",
 					"flex-direction": "column",
@@ -474,7 +476,7 @@ function InitDataStoragePage(props: InitPagesProps) {
 			</div>
 
 			<div
-				class={"init-page__bottom"}
+				class={styles["init-page__bottom"]}
 				style={{ display: "flex", gap: "12px", "justify-content": "center" }}
 			>
 				<Show when={!props.hasInstalledInstance}>
@@ -669,7 +671,7 @@ function InitInstallationPage(props: InitPagesProps) {
 
 	return (
 		<>
-			<div class={"init-page__top"} style={{ "text-align": "left" }}>
+			<div class={styles["init-page__top"]} style={{ "text-align": "left" }}>
 				<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>
 					Create Your First Instance
 				</h1>
@@ -679,7 +681,7 @@ function InitInstallationPage(props: InitPagesProps) {
 			</div>
 
 			<div
-				class={"init-page__middle"}
+				class={styles["init-page__middle"]}
 				style={{
 					display: "flex",
 					"flex-direction": "column",
@@ -711,7 +713,7 @@ function InitInstallationPage(props: InitPagesProps) {
 						}}
 					>
 						<TextFieldRoot>
-							<TextFieldLabel class="init-form-label">
+							<TextFieldLabel class={styles["init-form-label"]}>
 								Instance Name
 							</TextFieldLabel>
 							<TextFieldInput
@@ -725,16 +727,16 @@ function InitInstallationPage(props: InitPagesProps) {
 						</TextFieldRoot>
 
 						{/* Modloader Selection */}
-						<div class="init-form-field">
-							<label class="init-form-label">Modloader</label>
+						<div class={styles["init-form-field"]}>
+							<label class={styles["init-form-label"]}>Modloader</label>
 							<ToggleGroup
 								value={selectedModloader()}
-								onChange={(val) => val && setSelectedModloader(val)}
-								class="modloader-pills"
+								onChange={(val) => val && setSelectedModloader(val as string)}
+								class={styles["modloader-pills"]}
 							>
 								<For each={availableModloaders()}>
 									{(loader) => (
-										<ToggleGroupItem value={loader}>
+										<ToggleGroupItem value={loader} class="badge badge--pill badge--clickable badge--variant-surface">
 											{loader.charAt(0).toUpperCase() + loader.slice(1)}
 										</ToggleGroupItem>
 									)}
@@ -743,8 +745,8 @@ function InitInstallationPage(props: InitPagesProps) {
 						</div>
 
 						<div style={{ display: "flex", gap: "15px" }}>
-							<div class="init-form-field" style={{ flex: 1 }}>
-								<label class="init-form-label">Minecraft Version</label>
+							<div class={styles["init-form-field"]} style={{ flex: 1 }}>
+								<label class={styles["init-form-label"]}>Minecraft Version</label>
 								<Combobox
 									options={
 										metadata()
@@ -777,8 +779,8 @@ function InitInstallationPage(props: InitPagesProps) {
 									availableLoaderVersions().length > 0
 								}
 							>
-								<div class="init-form-field" style={{ flex: 1 }}>
-									<label class="init-form-label">
+								<div class={styles["init-form-field"]} style={{ flex: 1 }}>
+									<label class={styles["init-form-label"]}>
 										{selectedModloader()} Version
 									</label>
 									<Combobox
@@ -825,7 +827,7 @@ function InitInstallationPage(props: InitPagesProps) {
 			</div>
 
 			<div
-				class={"init-page__bottom"}
+				class={styles["init-page__bottom"]}
 				style={{ display: "flex", gap: "12px", "justify-content": "center" }}
 			>
 				<Button variant="ghost" onClick={handleSkip} disabled={isInstalling()}>
@@ -861,12 +863,12 @@ function InitFinishedPage(props: InitPagesProps) {
 
 	return (
 		<>
-			<div class={"init-page__top"}>
+			<div class={styles["init-page__top"]}>
 				<h1 style={"font-size: 40px"}>You're All Set!</h1>
 				<p>Vesta is fully configured and ready for action.</p>
 			</div>
 			<div
-				class={"init-page__middle"}
+				class={styles["init-page__middle"]}
 				style={{
 					display: "flex",
 					"flex-direction": "column",
@@ -924,7 +926,7 @@ function InitFinishedPage(props: InitPagesProps) {
 					</Button>
 				</div>
 			</div>
-			<div class={"init-page__bottom"}>
+			<div class={styles["init-page__bottom"]}>
 				<Show when={!props.hasInstalledInstance}>
 					<Button
 						variant="ghost"
@@ -1062,7 +1064,7 @@ function InitLoginPage(props: InitPagesProps) {
 	return (
 		<>
 			<div
-				class={"init-page__top"}
+				class={styles["init-page__top"]}
 				style={{ "text-align": "center", "margin-bottom": "3vh" }}
 			>
 				<h1
@@ -1092,11 +1094,11 @@ function InitLoginPage(props: InitPagesProps) {
 				</p>
 			</div>
 
-			<div class={"init-page__middle"}>
-				<div class="login-page__container">
+			<div class={styles["init-page__middle"]}>
+				<div class={styles["login-page__container"]}>
 					<Show when={!isAuthenticating()}>
 						<div
-							class="login-page__auth-box"
+							class={styles["login-page__auth-box"]}
 							style={"background: transparent; border: none; box-shadow: none;"}
 						>
 							<Show
@@ -1134,7 +1136,7 @@ function InitLoginPage(props: InitPagesProps) {
 														gap: "10px",
 													}}
 												>
-													<div class="spinner--small" />
+													<div class={styles["spinner--small"]} />
 													<span>Connecting...</span>
 												</div>
 											</Show>
@@ -1175,7 +1177,7 @@ function InitLoginPage(props: InitPagesProps) {
 							<div style={"margin-top: 16px;"}>
 								<button
 									onClick={handleGuestMode}
-									class="init-link"
+									class={styles["login-page__url"]}
 									style={
 										"background: none; border: none; color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: underline; transition: color 0.2s;"
 									}
@@ -1211,7 +1213,7 @@ function InitLoginPage(props: InitPagesProps) {
 					</Show>
 
 					<Show when={isAuthenticating()}>
-						<div class="login-page__auth-box" style={{ padding: "24px 32px" }}>
+						<div class={styles["login-page__auth-box"]} style={{ padding: "24px 32px" }}>
 							<div
 								style={{
 									display: "flex",
@@ -1223,7 +1225,7 @@ function InitLoginPage(props: InitPagesProps) {
 							>
 								<div style={{ flex: 1 }}>
 									<div
-										class="login-page__instructions"
+										class={styles["login-page__instructions"]}
 										style={{ "text-align": "left", margin: 0 }}
 									>
 										<p style={{ "font-size": "16px" }}>
@@ -1276,7 +1278,7 @@ function InitLoginPage(props: InitPagesProps) {
 									}}
 								>
 									<div
-										class="login-page__code-container"
+										class={styles["login-page__code-container"]}
 										style={{
 											margin: 0,
 											"flex-direction": "column",
@@ -1284,7 +1286,7 @@ function InitLoginPage(props: InitPagesProps) {
 										}}
 									>
 										<div
-											class="login-page__code"
+											class={styles["login-page__code"]}
 											style={{ "font-size": "36px", padding: "12px 20px" }}
 										>
 											{authCode()}
@@ -1306,7 +1308,7 @@ function InitLoginPage(props: InitPagesProps) {
 										}}
 									>
 										<p
-											class={`login-page__timer ${timeLeft() < 30 ? "login-page__timer--low" : ""}`}
+											class={`${styles["login-page__timer"]} ${timeLeft() < 30 ? styles["login-page__timer--low"] : ""}`}
 											style={{ margin: 0 }}
 										>
 											{timeLeft() <= 0
@@ -1327,20 +1329,20 @@ function InitLoginPage(props: InitPagesProps) {
 								</div>
 							</div>
 
+							<Separator style={{ opacity: 0.1, "margin-top": "16px" }} />
+
 							<div
 								style={{
 									display: "flex",
 									"align-items": "center",
 									gap: "8px",
-									"margin-top": "16px",
+									"margin-top": "12px",
 									opacity: 0.8,
 									width: "100%",
 									"justify-content": "center",
-									"border-top": "1px solid rgba(255,255,255,0.05)",
-									"padding-top": "12px",
 								}}
 							>
-								<div class="spinner--small"></div>
+								<div class={styles["spinner--small"]}></div>
 								<span style={{ "font-size": "13px" }}>
 									Waiting for Microsoft authentication...
 								</span>
@@ -1350,7 +1352,7 @@ function InitLoginPage(props: InitPagesProps) {
 				</div>
 			</div>
 
-			<div class={"init-page__bottom"}>
+			<div class={styles["init-page__bottom"]}>
 				<Show
 					when={
 						!props.isLoginOnly &&
@@ -1527,7 +1529,7 @@ function InitJavaPage(props: InitPagesProps) {
 							"text-align": "center",
 						}}
 					>
-						<div class="spinner" />
+						<div class={styles.spinner} />
 						<div>
 							<h2 style={{ "margin-bottom": "8px" }}>Fetching Requirements</h2>
 							<p style={{ opacity: 0.6, "font-size": "14px" }}>
@@ -1563,7 +1565,7 @@ function InitJavaPage(props: InitPagesProps) {
 				}
 			>
 				<div
-					class={"init-page__top"}
+					class={styles["init-page__top"]}
 					style={{ "text-align": "left", "margin-bottom": "8px" }}
 				>
 					<div
@@ -1612,7 +1614,7 @@ function InitJavaPage(props: InitPagesProps) {
 					</div>
 				</div>
 				<div
-					class={"init-page__middle"}
+					class={styles["init-page__middle"]}
 					style={{
 						display: "grid",
 						"grid-template-columns": "repeat(auto-fit, minmax(300px, 1fr))",
@@ -1852,7 +1854,7 @@ function InitJavaPage(props: InitPagesProps) {
 											opacity: 0.6,
 										}}
 									>
-										<div class="spinner--small" />
+										<div class={styles["spinner--small"]} />
 										<p style={{ "font-size": "12px" }}>
 											Verifying selection...
 										</p>
@@ -1863,7 +1865,7 @@ function InitJavaPage(props: InitPagesProps) {
 					</For>
 				</div>
 				<div
-					class={"init-page__bottom"}
+					class={styles["init-page__bottom"]}
 					style={{
 						display: "flex",
 						gap: "12px",
@@ -1993,7 +1995,7 @@ function InitAppearancePage(props: InitPagesProps) {
 	return (
 		<>
 			<div
-				class={"init-page__top"}
+				class={styles["init-page__top"]}
 				style={{ "margin-bottom": "16px", "text-align": "left" }}
 			>
 				<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>
@@ -2005,7 +2007,7 @@ function InitAppearancePage(props: InitPagesProps) {
 				</p>
 			</div>
 			<div
-				class={"init-page__middle"}
+				class={styles["init-page__middle"]}
 				style={{
 					display: "flex",
 					"flex-direction": "column",
@@ -2050,7 +2052,7 @@ function InitAppearancePage(props: InitPagesProps) {
 							minValue={0}
 							maxValue={360}
 							step={1}
-							class="hue-track"
+							class={styles["hue-track"]}
 						>
 							<div
 								style={{
@@ -2075,7 +2077,7 @@ function InitAppearancePage(props: InitPagesProps) {
 				</Show>
 			</div>
 			<div
-				class={"init-page__bottom"}
+				class={styles["init-page__bottom"]}
 				style={{
 					display: "flex",
 					gap: "12px",
@@ -2114,3 +2116,4 @@ export {
 	InitDataStoragePage,
 	InitInstallationPage,
 };
+

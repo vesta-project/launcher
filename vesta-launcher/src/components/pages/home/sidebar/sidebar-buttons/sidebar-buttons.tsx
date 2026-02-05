@@ -22,7 +22,7 @@ import {
 	Show,
 	splitProps,
 } from "solid-js";
-import "./sidebar-buttons.css";
+import styles from "./sidebar-buttons.module.css";
 
 interface SidebarButtonProps extends ComponentProps<"button"> {
 	tooltip_text?: string;
@@ -43,7 +43,7 @@ function SidebarButton(props: SidebarButtonProps) {
 			{/* @ts-ignore error with the props. But the props are valid.*/}
 			<TooltipTrigger
 				as={Button}
-				class={clsx("sidebar-button", local.class)}
+				class={clsx(styles["sidebar-button"], local.class)}
 				onClick={props.onClick}
 				{...others}
 			>
@@ -132,7 +132,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 
 	return (
 		<SidebarButton
-			class="sidebar-profile-button"
+			class={styles["sidebar-profile-button"]}
 			onClick={toggleMenu}
 			style={{
 				"background-image": avatarUrl()
@@ -144,7 +144,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 			{...others}
 		>
 			<Show when={activeAccount() === undefined}>
-				<div class="profile-loading-spinner" />
+				<div class={styles["profile-loading-spinner"]} />
 			</Show>
 			{c()}
 		</SidebarButton>
@@ -158,7 +158,7 @@ function SidebarActionButton(props: SidebarActionButtonProps) {
 	const [_, others] = splitProps(props, ["children"]);
 
 	return (
-		<SidebarButton class={"sidebar-action-button"} {...others}>
+		<SidebarButton class={styles["sidebar-action-button"]} {...others}>
 			{c()}
 		</SidebarButton>
 	);

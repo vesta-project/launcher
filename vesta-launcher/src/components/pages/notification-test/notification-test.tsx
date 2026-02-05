@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { PROGRESS_INDETERMINATE } from "@utils/notifications";
 import { createSignal } from "solid-js";
-import "./notification-test.css";
+import styles from "./notification-test.module.css";
 
 function NotificationTestPage() {
 	const [loading, setLoading] = createSignal(false);
@@ -127,21 +127,21 @@ function NotificationTestPage() {
 	};
 
 	return (
-		<div class="notification-test-page">
+		<div class={styles["notification-test-page"]}>
 			<h1>Notification System Test Page</h1>
 
-			<div class="test-section">
+			<div class={styles["test-section"]}>
 				<h2>Task System</h2>
-				<div class="button-group">
+				<div class={styles["button-group"]}>
 					<Button onClick={submitCancellableTask} disabled={loading()}>
 						Submit Cancellable Task (15s)
 					</Button>
 				</div>
 			</div>
 
-			<div class="test-section">
+			<div class={styles["test-section"]}>
 				<h2>Ephemeral Notifications (Toast Only)</h2>
-				<div class="button-group">
+				<div class={styles["button-group"]}>
 					<Button onClick={testEphemeralInfo} disabled={loading()}>
 						Info Toast
 					</Button>
@@ -151,9 +151,9 @@ function NotificationTestPage() {
 				</div>
 			</div>
 
-			<div class="test-section">
+			<div class={styles["test-section"]}>
 				<h2>Persistent Notifications (Sidebar + Toast)</h2>
-				<div class="button-group">
+				<div class={styles["button-group"]}>
 					<Button onClick={testPersistentWarning} disabled={loading()}>
 						Warning (Persistent)
 					</Button>
@@ -163,9 +163,9 @@ function NotificationTestPage() {
 				</div>
 			</div>
 
-			<div class="test-section">
+			<div class={styles["test-section"]}>
 				<h2>Progress Notifications</h2>
-				<div class="button-group">
+				<div class={styles["button-group"]}>
 					<Button onClick={testProgressPulsing} disabled={loading()}>
 						Pulsing Progress (-1)
 					</Button>
@@ -175,18 +175,18 @@ function NotificationTestPage() {
 				</div>
 			</div>
 
-			<div class="test-section">
+			<div class={styles["test-section"]}>
 				<h2>Batch Operations</h2>
-				<div class="button-group">
+				<div class={styles["button-group"]}>
 					<Button onClick={testMultipleNotifications} disabled={loading()}>
 						Send Multiple Toasts
 					</Button>
 				</div>
 			</div>
 
-			<div class="test-section">
+			<div class={styles["test-section"]}>
 				<h2>Debug</h2>
-				<div class="button-group">
+				<div class={styles["button-group"]}>
 					<Button onClick={checkTables} disabled={loading()}>
 						Check Tables
 					</Button>
@@ -196,7 +196,7 @@ function NotificationTestPage() {
 				</div>
 			</div>
 
-			<div class="info-box">
+			<div class={styles["info-box"]}>
 				<h3>How to Test:</h3>
 				<ul>
 					<li>

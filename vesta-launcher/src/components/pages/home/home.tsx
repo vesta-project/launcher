@@ -26,7 +26,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import "./home.css";
+import styles from "./home.module.css";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
 import { startAppTutorial } from "@utils/tutorial";
@@ -58,7 +58,7 @@ function HomePage() {
 	});
 
 	return (
-		<div id={"home__root"} draggable={false}>
+		<div class={styles["home__root"]} draggable={false}>
 			<TitleBar os={os} />
 			<Sidebar
 				os={os}
@@ -112,9 +112,9 @@ function MainMenu() {
 	);
 
 	return (
-		<div class={"main-menu"}>
-			<div class={"instance-wrapper"}>
-				<div class={"instance-container"}>
+		<div class={styles["main-menu"]}>
+			<div class={styles["instance-wrapper"]}>
+				<div class={styles["instance-container"]}>
 					<Show when={instancesLoading() && instancesStore().length === 0}>
 						<>
 							{Array.from({ length: 8 }).map(() => (

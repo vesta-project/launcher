@@ -19,7 +19,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getOsType } from "@utils/os";
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { applyTheme, configToTheme } from "../../../themes/presets";
-import "./init.css";
+import styles from "./init.module.css";
 
 const os = getOsType() ?? "windows";
 
@@ -104,9 +104,12 @@ function InitPage() {
 	}, 1000);*/
 
 	return (
-		<div id={"init-page__root"}>
-			<TitleBar os={os} hideHelp={true} />
-			<div id={"init-page__wrapper"}>
+		<div
+			class={`${styles["animate--hue"]} ${styles["init-page__root"]}`}
+			data-tauri-drag-region
+		>
+			<TitleBar os={os} animate={true} />
+			<div class={styles["init-page__wrapper"]}>
 				<Switch>
 					<Match when={isLoading()}>
 						<div

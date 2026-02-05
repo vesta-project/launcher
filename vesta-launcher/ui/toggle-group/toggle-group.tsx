@@ -3,25 +3,29 @@ import * as ToggleGroupPrimitive from "@kobalte/core/toggle-group";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { children, splitProps, ValidComponent } from "solid-js";
-import "./toggle-group.css";
+import styles from "./toggle-group.module.css";
 
-type ToggleGroupRootProps = ToggleGroupPrimitive.ToggleGroupRootProps &
+type ToggleGroupRootProps<T extends ValidComponent = "div"> = ToggleGroupPrimitive.ToggleGroupRootProps<T> &
 	ClassProp &
-	ChildrenProp;
+	ChildrenProp & {
+		onChange?: (value: string | string[] | null) => void;
+	};
 
 function ToggleGroup<T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, ToggleGroupRootProps>,
+	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,
 ) {
-	const [_, rest] = splitProps(props as ToggleGroupRootProps, [
+	const [local, rest] = splitProps(props as any, [
 		"class",
 		"children",
+		"onChange",
 	]);
 	return (
 		<ToggleGroupPrimitive.ToggleGroup
-			class={clsx("toggle-group", props.class)}
+			class={clsx(styles["toggle-group"], local.class)}
+			onValueChange={local.onChange}
 			{...rest}
 		>
-			{props.children}
+			{local.children}
 		</ToggleGroupPrimitive.ToggleGroup>
 	);
 }
@@ -39,7 +43,7 @@ function ToggleGroupItem<T extends ValidComponent = "button">(
 	return (
 		<ToggleGroupPrimitive.Item
 			aria-label={props.value}
-			class={clsx("toggle-group__item", props.class)}
+			class={clsx(styles["toggle-group__item"], props.class)}
 			{...rest}
 		>
 			{props.children}

@@ -1,7 +1,8 @@
 import { PolymorphicProps } from "@kobalte/core";
 import * as TabsPrimitive from "@kobalte/core/tabs";
 import { splitProps, type ValidComponent } from "solid-js";
-import "./tabs.css";
+import clsx from "clsx";
+import styles from "./tabs.module.css";
 
 type TabsRootProps<T extends ValidComponent = "div"> = TabsPrimitive.TabsRootProps<T> & {
 	class?: string;
@@ -14,7 +15,7 @@ export function Tabs<T extends ValidComponent = "div">(
 	
 	return (
 		<TabsPrimitive.Root
-			class={`tabs ${local.class || ""}`}
+			class={clsx(styles["tabs"], local.class)}
 			{...others}
 		/>
 	);
@@ -31,7 +32,7 @@ export function TabsList<T extends ValidComponent = "div">(
 	
 	return (
 		<TabsPrimitive.List
-			class={`tabs__list ${local.class || ""}`}
+			class={clsx(styles["tabs__list"], local.class)}
 			{...others}
 		/>
 	);
@@ -48,7 +49,7 @@ export function TabsTrigger<T extends ValidComponent = "button">(
 	
 	return (
 		<TabsPrimitive.Trigger
-			class={`tabs__trigger ${local.class || ""}`}
+			class={clsx(styles["tabs__trigger"], local.class)}
 			{...others}
 		/>
 	);
@@ -65,7 +66,7 @@ export function TabsContent<T extends ValidComponent = "div">(
 	
 	return (
 		<TabsPrimitive.Content
-			class={`tabs__content ${local.class || ""}`}
+			class={clsx(styles["tabs__content"], local.class)}
 			{...others}
 		/>
 	);
@@ -82,7 +83,7 @@ export function TabsIndicator<T extends ValidComponent = "div">(
 	
 	return (
 		<TabsPrimitive.Indicator
-			class={`tabs__indicator ${local.class || ""}`}
+			class={clsx(styles["tabs__indicator"], local.class)}
 			{...others}
 		/>
 	);

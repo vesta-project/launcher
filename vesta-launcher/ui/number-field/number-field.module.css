@@ -1,0 +1,95 @@
+.number-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.number-field__group {
+	position: relative;
+	display: flex;
+	align-items: center;
+}
+
+.number-field__input {
+	display: block;
+	width: 100%;
+	border: 1px solid var(--border-subtle);
+	border-radius: 6px;
+	line-height: 1.4;
+	color: var(--text-primary);
+	background-color: var(--surface-raised);
+	padding: 0.5rem 0.75rem;
+	padding-right: 2rem; /* Space for triggers */
+	transition:
+		box-shadow 150ms ease,
+		border-color 150ms ease,
+		background-color 150ms ease;
+	font-size: 14px;
+}
+
+.number-field__input:focus {
+	outline: none;
+	border-color: hsl(var(--color__primary-hue) 58% 55% / 70%);
+	box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 58% 55% / 10%);
+}
+
+.number-field__input[disabled] {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.number-field__label {
+	font-weight: 600;
+	font-size: 13px;
+	color: var(--text-primary);
+}
+
+.number-field__increment-trigger,
+.number-field__decrement-trigger {
+	position: absolute;
+	right: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 14px;
+	border-radius: 3px;
+	border: none;
+	background: transparent;
+	color: var(--text-tertiary);
+	cursor: pointer;
+	transition: all 0.15s ease;
+}
+
+.number-field__increment-trigger:hover,
+.number-field__decrement-trigger:hover {
+	background-color: var(--surface-overlay);
+	color: var(--text-primary);
+}
+
+.number-field__increment-trigger {
+	top: 4px;
+}
+
+.number-field__decrement-trigger {
+	bottom: 4px;
+}
+
+.number-field__increment-trigger svg,
+.number-field__decrement-trigger svg {
+	width: 12px;
+	height: 12px;
+}
+
+.number-field__description,
+.number-field__error-message {
+	font-size: 12px;
+}
+
+.number-field__description {
+	color: var(--text-tertiary);
+}
+
+.number-field__error-message {
+	color: hsl(var(--hue-error) 70% 55%);
+}

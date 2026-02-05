@@ -1,0 +1,118 @@
+.sidebar {
+	/* If the background gradient is not in a variable, the background would be transparent */
+	--bg: linear-gradient(
+		90deg,
+		hsl(
+				var(--color__primary-hue) 100% 7% /
+				calc(var(--gradient-enabled) * 0.05)
+			)
+			0%,
+		hsl(
+				var(--color__primary-hue) 81% 40% /
+				calc(var(--gradient-enabled) * 0.05)
+			)
+			35%,
+		hsl(
+				var(--color__primary-hue) 81% 40% /
+				calc(var(--gradient-enabled) * 0.05)
+			)
+			100%
+	);
+	color: contrast-color(var(--bg));
+
+	z-index: 1;
+	padding: 13px 0 13px 13px;
+	grid-column: 1;
+	grid-row: 1 / 3;
+	grid-gap: 0;
+	height: 100%;
+	display: grid;
+	grid-template-columns: auto 1fr;
+	grid-template-rows: 100%;
+	background: transparent;
+	border-radius: 0 6px 6px 0;
+	transition:
+		background 300ms,
+		grid-gap 200ms,
+		box-shadow 200ms;
+	transition-timing-function: ease-in-out;
+	position: absolute;
+	left: 0;
+
+	&:is(.macos) {
+		grid-row: 2 / 3;
+	}
+
+	&:is(.sidebar--open) {
+		z-index: 3;
+		transition:
+			background 250ms,
+			grid-gap 200ms;
+		background: var(--sidebar-bg);
+		box-shadow: hsl(0deg 0% 0% / 32%) 6px 6px 5px;
+		backdrop-filter: blur(var(--blur-base));
+		grid-gap: 16px;
+	}
+}
+
+.sidebar__root {
+	width: fit-content;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	justify-content: space-between;
+	gap: 32px;
+}
+
+.sidebar__section {
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+
+	& .actions {
+		gap: 16px;
+	}
+}
+
+/* Notification badge (unread count) */
+.notification-badge {
+	position: absolute;
+	top: -6px;
+	right: -6px;
+	background: var(--semantic-error);
+	color: white;
+	font-size: 10px;
+	font-weight: bold;
+	border-radius: 50%;
+	min-width: 16px;
+	height: 16px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0 4px;
+	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.3);
+}
+
+/* Notification spinner (active tasks) */
+.notification-spinner {
+	position: absolute;
+	top: -4px;
+	right: -4px;
+	width: 12px;
+	height: 12px;
+	border: 2px solid transparent;
+	border-top-color: var(--semantic-info);
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
+}

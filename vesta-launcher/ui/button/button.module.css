@@ -1,0 +1,127 @@
+.launcher-button {
+	--button-color: hsla(
+		var(--accent-base)  / 1
+	); /* To fix intellisese errors */
+
+	border: 2px solid transparent;
+	border-radius: 0.5rem;
+	user-select: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	white-space: nowrap;
+}
+
+.launcher-button:hover:not(:disabled) {
+	filter: brightness(110%);
+	box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+}
+
+.launcher-button:hover:not(:disabled) > * {
+	transform: scale(108%);
+}
+
+.launcher-button:active:not(:disabled) {
+	color: var(--text-primary);
+	transition-duration: 50ms;
+}
+
+.launcher-button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+	filter: grayscale(50%);
+}
+
+.launcher-button--icon-only {
+	aspect-ratio: 1;
+	height: fit-content;
+	width: fit-content;
+}
+
+.launcher-button--solid {
+	background-color: var(--button-color);
+}
+
+.launcher-button--outline {
+	background-color: transparent;
+	color: var(--button-color);
+	border: 2px solid var(--button-color);
+}
+
+.launcher-button--ghost {
+	background-color: transparent;
+	border: none;
+	color: var(--button-color);
+
+	&:hover:not(:disabled) {
+		background-color: hsla(0 0% 100% / 0.1);
+	}
+}
+
+.launcher-button--shadow {
+	background-color: hsla(0 0% 0% / 0.15);
+	box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+	&:hover:not(:disabled) {
+		background-color: hsla(0 0% 0% / 0.2);
+	}
+}
+
+.launcher-button--primary {
+	--button-color: hsla(var(--color__primary-hue) 60% 50% / 1);
+	color: var(--text-on-accent);
+}
+
+.launcher-button--secondary {
+	--button-color: var(--surface-raised);
+	color: var(--text-primary);
+}
+
+.launcher-button--accent {
+	--button-color: hsla(var(--color__primary-hue) 80% 60% / 1);
+	color: var(--text-on-accent);
+}
+
+.launcher-button--destructive {
+	--button-color: hsla(0 100% 50% / 0.8);
+	color: white;
+}
+
+/* Size modifications */
+.launcher-button--sm {
+	padding: 0.25rem 0.5rem;
+	font-size: 0.8rem;
+}
+
+.launcher-button--md {
+	padding: 0.5rem 1rem;
+	font-size: 0.95rem;
+}
+
+.launcher-button--lg {
+	padding: 0.75rem 1.5rem;
+	font-size: 1.1rem;
+}
+
+.launcher-button--xl {
+	padding: 0.75rem 1.5rem;
+	font-size: 1.25rem;
+	font-weight: 700;
+}
+
+.launcher-button--loading {
+	cursor: wait;
+	opacity: 0.7;
+}
+
+@keyframes spin {
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
+}
+
+.button-spinner {
+	animation: spin 1s linear infinite;
+	width: 1.2rem;
+	height: 1.2rem;
+}

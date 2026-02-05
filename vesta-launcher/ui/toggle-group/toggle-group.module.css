@@ -1,0 +1,44 @@
+.toggle-group {
+	width: fit-content;
+	display: flex;
+	border-radius: 6px;
+	background-color: var(--surface-raised);
+	overflow: hidden;
+}
+
+.toggle-group[data-orientation="vertical"] {
+	flex-direction: column;
+}
+
+.toggle-group__item {
+	padding: 0.5rem;
+	appearance: none;
+	user-select: none;
+	outline: none;
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	font-size: 0.875rem;
+	font-weight: 500;
+	color: var(--text-secondary);
+	border-radius: 0;
+	border: none;
+	background: none;
+	cursor: pointer;
+	transition: 200ms;
+}
+
+.toggle-group__item:hover {
+	background-color: rgba(255, 255, 255, 0.05);
+	color: var(--text-primary);
+}
+
+.toggle-group__item[data-pressed] {
+	background-color: var(--accent-primary);
+	color: white;
+}
+
+.toggle-group__item[data-disabled] {
+	opacity: 0.5;
+	cursor: not-allowed;
+}

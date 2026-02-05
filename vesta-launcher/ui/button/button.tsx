@@ -8,7 +8,7 @@ import {
 	TooltipTrigger,
 } from "@ui/tooltip/tooltip";
 import { children, mergeProps, Show, splitProps } from "solid-js";
-import "./button.css";
+import styles from "./button.module.css";
 
 interface ButtonProps
 	extends PolymorphicProps<
@@ -17,7 +17,7 @@ interface ButtonProps
 	> {
 	color?: "none" | "primary" | "secondary" | "destructive" | "warning";
 	variant?: "solid" | "outline" | "ghost" | "shadow";
-	size?: "sm" | "md" | "lg" | "icon";
+	size?: "sm" | "md" | "lg" | "xl" | "icon";
 	icon_only?: boolean;
 	onClick?: (e: MouseEvent) => void;
 	tooltip_text?: string;
@@ -60,15 +60,16 @@ function Button(p: ButtonProps) {
 			<TooltipTrigger
 				as={ButtonPrimitive.Button}
 				classList={{
-					"launcher-button": true,
-					"launcher-button--sm": local.size === "sm",
-					"launcher-button--md": local.size === "md",
-					"launcher-button--lg": local.size === "lg",
-					"launcher-button--solid": local.variant === "solid",
-					"launcher-button--outline": local.variant === "outline",
-					"launcher-button--ghost": local.variant === "ghost",
-					"launcher-button--shadow": local.variant === "shadow",
-					"launcher-button--icon-only": local.icon_only,
+					[styles["launcher-button"]]: true,
+					[styles["launcher-button--sm"]]: local.size === "sm",
+					[styles["launcher-button--md"]]: local.size === "md",
+					[styles["launcher-button--lg"]]: local.size === "lg",
+					[styles["launcher-button--xl"]]: local.size === "xl",
+					[styles["launcher-button--solid"]]: local.variant === "solid",
+					[styles["launcher-button--outline"]]: local.variant === "outline",
+					[styles["launcher-button--ghost"]]: local.variant === "ghost",
+					[styles["launcher-button--shadow"]]: local.variant === "shadow",
+					[styles["launcher-button--icon-only"]]: local.icon_only,
 					[local.class ?? ""]: true,
 				}}
 				style={typeof local.style === "string" 

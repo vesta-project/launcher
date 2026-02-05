@@ -6,16 +6,25 @@ import {
 } from "@components/page-viewer/mini-router-config";
 
 import { invoke } from "@tauri-apps/api/core";
-import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
-import "./page-viewer.css";
+import {
+	createMemo,
+	createRoot,
+	createSignal,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
+import styles from "./page-viewer.module.css";
 
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
 
-const [router, setRouter] = createSignal<MiniRouter>(
-	new MiniRouter({
-		paths: miniRouterPaths,
-		invalid: miniRouterInvalidPage,
-	}),
+const [router, setRouter] = createRoot(() =>
+	createSignal<MiniRouter>(
+		new MiniRouter({
+			paths: miniRouterPaths,
+			invalid: miniRouterInvalidPage,
+		}),
+	),
 );
 
 function PageViewer(props: {
@@ -82,8 +91,8 @@ function PageViewer(props: {
 
 	return (
 		<Show when={props.open !== undefined ? props.open : pageViewerOpen()}>
-			<div class="page-viewer-wrapper">
-				<div class="page-viewer-root">
+			<div class={styles["page-viewer-wrapper"]}>
+				<div class={styles["page-viewer-root"]}>
 					<UnifiedPageViewer
 						router={mini_router}
 						onClose={() => {

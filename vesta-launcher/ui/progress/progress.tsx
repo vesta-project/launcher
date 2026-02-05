@@ -5,7 +5,7 @@ import clsx from "clsx";
 import type { ParentProps, ValidComponent } from "solid-js";
 import { splitProps } from "solid-js";
 import { PROGRESS_INDETERMINATE } from "@utils/notifications";
-import "./progress.css";
+import styles from "./progress.module.css";
 
 export const ProgressLabel = ProgressPrimitive.Label;
 export const ProgressValueLabel = ProgressPrimitive.ValueLabel;
@@ -52,11 +52,11 @@ export const Progress = <T extends ValidComponent = "div">(
 	}
 
 	const className = clsx(
-		"progress",
-		local.severity ? `progress--${local.severity}` : "",
-		local.size ? `progress--${local.size}` : "",
+		styles["progress"],
+		local.severity ? styles[`progress--${local.severity}`] : "",
+		local.size ? styles[`progress--${local.size}`] : "",
 		local.class,
-		isIndeterminate && "progress--indeterminate",
+		isIndeterminate && styles["progress--indeterminate"],
 	);
 
 	const mergedStyle = Object.assign({}, (rest as any).style || {}, cssVars);
@@ -72,16 +72,16 @@ export const Progress = <T extends ValidComponent = "div">(
 		>
 			{local.children}
 			<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-				<ProgressPrimitive.Track class="progress__track" style={{ flex: 1 }}>
+				<ProgressPrimitive.Track class={styles["progress__track"]} style={{ flex: 1 }}>
 					<ProgressPrimitive.Fill
 						class={clsx(
-							"progress__fill",
-							isIndeterminate && "progress__fill--indeterminate",
+							styles["progress__fill"],
+							isIndeterminate && styles["progress__fill--indeterminate"],
 						)}
 					/>
 				</ProgressPrimitive.Track>
 				{local.current_step != null && local.total_steps != null && (
-					<div class="progress__steps">
+					<div class={styles["progress__steps"]}>
 						{local.current_step}/{local.total_steps}
 					</div>
 				)}

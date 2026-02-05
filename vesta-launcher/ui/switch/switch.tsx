@@ -1,84 +1,80 @@
-import { type PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SwitchPrimitive from "@kobalte/core/switch";
+import { type PolymorphicProps } from "@kobalte/core/polymorphic";
 import clsx from "clsx";
-import { type JSX, splitProps, type ValidComponent } from "solid-js";
-import "./switch.css";
+import { type ValidComponent, splitProps, type JSX } from "solid-js";
+import styles from "./switch.module.css";
 
-// Root switch component (alias to primitive)
-const Switch = SwitchPrimitive.Root;
+// Root switch component
+export type SwitchRootProps<T extends ValidComponent = "div"> =
+	SwitchPrimitive.SwitchRootProps<T> & {
+		class?: string;
+		children?: any;
+		onCheckedChange?: (checked: boolean) => void;
+	};
 
-// Switch Control (contains Input + Control wrapper)
-type SwitchControlProps = SwitchPrimitive.SwitchControlProps & {
-	class?: string;
-	children?: JSX.Element;
-};
-
-const SwitchControl = <T extends ValidComponent = "input">(
-	props: PolymorphicProps<T, SwitchControlProps>,
-) => {
-	const [local, others] = splitProps(props as SwitchControlProps, [
-		"class",
-		"children",
-	]);
-
+export function Switch<T extends ValidComponent = "div">(
+	props: PolymorphicProps<T, SwitchRootProps<T>>,
+) {
+	const [local, others] = splitProps(props as any, ["class", "children"]);
 	return (
-		<>
-			<SwitchPrimitive.Input class="switch__input" />
-			<SwitchPrimitive.Control
-				class={clsx("switch__control", local.class)}
-				{...others}
-			>
-				{local.children}
-			</SwitchPrimitive.Control>
-		</>
+		<SwitchPrimitive.Root
+			class={clsx(styles.switch, local.class)}
+			{...others}
+		>
+			<SwitchPrimitive.Input class={styles.switch__input} />
+			{local.children}
+		</SwitchPrimitive.Root>
 	);
-};
+}
+
+// Switch Control
+export type SwitchControlProps<T extends ValidComponent = "div"> = 
+	SwitchPrimitive.SwitchControlProps<T> & { class?: string };
+
+export function SwitchControl<T extends ValidComponent = "div">(
+	props: PolymorphicProps<T, SwitchControlProps<T>>
+) {
+	const [local, others] = splitProps(props as any, ["class"]);
+	return (
+		<SwitchPrimitive.Control
+			class={clsx(styles.switch__control, local.class)}
+			{...others}
+		/>
+	);
+}
 
 // Switch Thumb
-type SwitchThumbProps = SwitchPrimitive.SwitchThumbProps & {
-	class?: string;
-};
+export type SwitchThumbProps<T extends ValidComponent = "div"> = 
+	SwitchPrimitive.SwitchThumbProps<T> & { class?: string };
 
-const SwitchThumb = <T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SwitchThumbProps>,
-) => {
-	const [local, others] = splitProps(props as SwitchThumbProps, ["class"]);
-
+export function SwitchThumb<T extends ValidComponent = "div">(
+	props: PolymorphicProps<T, SwitchThumbProps<T>>
+) {
+	const [local, others] = splitProps(props as any, ["class"]);
 	return (
 		<SwitchPrimitive.Thumb
-			class={clsx("switch__thumb", local.class)}
+			class={clsx(styles.switch__thumb, local.class)}
 			{...others}
 		/>
 	);
-};
+}
 
 // Switch Label
-type SwitchLabelProps = SwitchPrimitive.SwitchLabelProps & {
-	class?: string;
-};
+export type SwitchLabelProps<T extends ValidComponent = "label"> = 
+	SwitchPrimitive.SwitchLabelProps<T> & { class?: string };
 
-const SwitchLabel = <T extends ValidComponent = "label">(
-	props: PolymorphicProps<T, SwitchLabelProps>,
-) => {
-	const [local, others] = splitProps(props as SwitchLabelProps, ["class"]);
-
+export function SwitchLabel<T extends ValidComponent = "label">(
+	props: PolymorphicProps<T, SwitchLabelProps<T>>
+) {
+	const [local, others] = splitProps(props as any, ["class"]);
 	return (
 		<SwitchPrimitive.Label
-			class={clsx("switch__label", local.class)}
+			class={clsx(styles.switch__label, local.class)}
 			{...others}
 		/>
 	);
-};
+}
 
-// Re-export Description and ErrorMessage from Kobalte
-const SwitchDescription = SwitchPrimitive.Description;
-const SwitchErrorMessage = SwitchPrimitive.ErrorMessage;
+export const SwitchDescription = SwitchPrimitive.Description;
+export const SwitchErrorMessage = SwitchPrimitive.ErrorMessage;
 
-export {
-	Switch,
-	SwitchControl,
-	SwitchThumb,
-	SwitchLabel,
-	SwitchDescription,
-	SwitchErrorMessage,
-};

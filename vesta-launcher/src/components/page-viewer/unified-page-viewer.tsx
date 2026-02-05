@@ -15,7 +15,7 @@ import {
 	onMount,
 	onCleanup,
 } from "solid-js";
-import "./unified-page-viewer.css";
+import styles from "./unified-page-viewer.module.css";
 
 interface NavbarButtonProps {
 	children: JSX.Element;
@@ -32,7 +32,7 @@ function NavbarButton(props: NavbarButtonProps) {
 		<Tooltip placement={"top"}>
 			<TooltipTrigger>
 				<button
-					class={`page-viewer-navbar-button ${props.class || ""} ${props.loading ? "is-loading" : ""}`}
+					class={`${styles["page-viewer-navbar-button"]} ${props.class || ""} ${props.loading ? styles["is-loading"] : ""}`}
 					onClick={props.onClick}
 					aria-label={props.text}
 					disabled={props.disabled || props.loading}
@@ -102,14 +102,14 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 	});
 
 	return (
-		<div class="unified-page-viewer-root" data-os={props.os}>
+		<div class={styles["unified-page-viewer-root"]} data-os={props.os}>
 			<header
-				class="page-viewer-navbar"
+				class={styles["page-viewer-navbar"]}
 				data-tauri-drag-region={props.showWindowControls}
 			>
-				<div class="page-viewer-navbar-left">
+				<div class={styles["page-viewer-navbar-left"]}>
 					<Show when={isMac()}>
-						<div class="page-viewer-window-controls-wrapper">
+						<div class={styles["page-viewer-window-controls-wrapper"]}>
 							{props.windowControls}
 						</div>
 					</Show>
@@ -137,37 +137,15 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</NavbarButton>
 				</div>
 
-				<div class="page-viewer-navbar-center" data-tauri-drag-region>
-					<span class="page-viewer-title">
+				<div class={styles["page-viewer-navbar-center"]} data-tauri-drag-region>
+					<span class={styles["page-viewer-title"]}>
 						{props.router.customName.get() ||
 							props.router.currentElement().name}
 						{props.titleSuffix && ` - ${props.titleSuffix}`}
-						<Show
-							when={
-								props.router.currentParams.get()?.slug === "vesta-explorer-demo"
-							}
-						>
-							<span
-								style={{
-									"margin-left": "8px",
-									background: "rgba(255,255,255,0.1)",
-									padding: "2px 6px",
-									"border-radius": "4px",
-									"font-size": "10px",
-									color: "var(--primary)",
-									border: "1px solid var(--primary)",
-									"font-weight": "800",
-									"letter-spacing": "0.5px",
-									"vertical-align": "middle",
-								}}
-							>
-								DEMO
-							</span>
-						</Show>
 					</span>
 				</div>
 
-				<div class="page-viewer-navbar-right">
+				<div class={styles["page-viewer-navbar-right"]}>
 					{props.extraNavbarActions}
 
 					<Show when={props.onPopOut}>
@@ -187,7 +165,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</Show>
 
 					<Show when={!isMac()}>
-						<div class="page-viewer-window-controls-wrapper">
+						<div class={styles["page-viewer-window-controls-wrapper"]}>
 							{props.windowControls}
 						</div>
 					</Show>
@@ -196,10 +174,10 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 				</div>
 			</header>
 
-			<main class="page-viewer-content">
+			<main class={styles["page-viewer-content"]}>
 				<Show when={isReloading()}>
-					<div class="page-viewer-reload-overlay">
-						<div class="page-viewer-reload-spinner" />
+					<div class={styles["page-viewer-reload-overlay"]}>
+						<div class={styles["page-viewer-reload-spinner"]} />
 					</div>
 				</Show>
 				{props.router.getRouterView({ close: props.onClose })}

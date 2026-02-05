@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
 import LauncherButton from "@ui/button/button";
+import { Badge } from "@ui/badge";
 import {
 	Slider,
 	SliderFill,
@@ -55,7 +56,9 @@ import {
 	type GradientHarmony,
 } from "../../../../themes/presets";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
-import { HelpTrigger } from "../../../ui/help-trigger";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import { SettingsCard, SettingsField } from "@components/settings";
+import { Separator } from "@ui/separator/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	ContextMenu,
@@ -63,7 +66,7 @@ import {
 	ContextMenuItem,
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
-import "./settings-page.css";
+import styles from "./settings-page.module.css";
 
 interface AppConfig {
 	id: number;
@@ -122,6 +125,7 @@ function SettingsPage(props: { close?: () => void }) {
 	const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
 	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
+	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
 
 	createEffect(() => {
 		setSelectedTab(activeTab());
@@ -260,11 +264,19 @@ function SettingsPage(props: { close?: () => void }) {
 	};
 
 	onMount(async () => {
+		const handleResize = () => setIsDesktop(window.innerWidth >= 800);
+		window.addEventListener("resize", handleResize);
+		onCleanup(() => window.removeEventListener("resize", handleResize));
+
 		if (hasTauriRuntime()) {
-			const unlisten = await listen("java-paths-updated", () => {
+			let unlisten: (() => void) | undefined;
+			onCleanup(() => unlisten && unlisten());
+			
+			listen("java-paths-updated", () => {
 				refreshJavas();
+			}).then((fn) => {
+				unlisten = fn;
 			});
-			onCleanup(() => unlisten());
 		}
 
 		try {
@@ -606,108 +618,87 @@ function SettingsPage(props: { close?: () => void }) {
 	});
 
 	return (
-		<div class="settings-page">
+		<div class={styles["settings-page"]}>
 			<Show
 				when={!loading()}
-				fallback={<div class="settings-loading">Loading settings...</div>}
+				fallback={<div class={styles["settings-loading"]}>Loading settings...</div>}
 			>
 				<Tabs
+					class={styles["settings-tabs"]}
+					orientation={isDesktop() ? "vertical" : "horizontal"}
 					value={selectedTab()}
 					onChange={(v) => {
 						setSelectedTab(v);
 						router()?.updateQuery("activeTab", v, true);
 					}}
 				>
-					<TabsList>
+					<TabsList class={styles["tabs-list"]}>
 						<TabsIndicator />
-						<TabsTrigger value="general">General</TabsTrigger>
-						<TabsTrigger value="appearance">Appearance</TabsTrigger>
-						<TabsTrigger value="java">Java</TabsTrigger>
-						<TabsTrigger value="defaults">Defaults</TabsTrigger>
-						<TabsTrigger value="developer">Developer</TabsTrigger>
-						<TabsTrigger value="help">Help</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="general">General</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="appearance">Appearance</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="java">Java</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="defaults">Defaults</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="developer">Developer</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="help">Help</TabsTrigger>
 					</TabsList>
 
-					<TabsContent value="general">
-						<div class="settings-tab-content">
-							<section class="settings-section">
-								<h2>Accessibility</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Reduced Motion</span>
-										<span class="settings-description">
-											Disable animations and transitions
-										</span>
-									</div>
-									<Switch
-										checked={reducedMotion()}
-										onChange={handleReducedMotionToggle}
-									>
-										<SwitchControl>
-											<SwitchThumb />
-										</SwitchControl>
-									</Switch>
-								</div>
-							</section>
+					<TabsContent class={styles["tabs-content"]} value="general">
+						<div class={styles["settings-tab-content"]}>
+							<SettingsCard header="Accessibility">
+								<SettingsField
+									label="Reduced Motion"
+									description="Disable UI animations for a faster and cleaner experience."
+									layout="inline"
+									control={
+										<Switch
+											checked={reducedMotion()}
+											onCheckedChange={handleReducedMotionToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>Application Data</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">App Data Folder</span>
-										<span class="settings-description">
-											Open the folder where Vesta Launcher stores its data.
-										</span>
-									</div>
-									<LauncherButton onClick={handleOpenAppData}>
-										Open Folder
-									</LauncherButton>
-								</div>
-							</section>
+							<SettingsCard header="Application Data">
+								<SettingsField
+									label="App Data Folder"
+									description="Open the folder where Vesta Launcher stores its data."
+									actionLabel="Open Folder"
+									onAction={handleOpenAppData}
+								/>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>Troubleshooting</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Reset Onboarding</span>
-										<span class="settings-description">
-											Redo the first-time setup process. This will not delete
-											your accounts or instances.
-										</span>
-									</div>
-									<LauncherButton
-										variant="shadow"
-										color="destructive"
-										onClick={async () => {
-											if (
-												await confirm(
-													"Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen.",
-												)
-											) {
-												try {
-													await invoke("reset_onboarding");
-													window.location.href = "/"; // Force reload to root
-												} catch (e) {
-													console.error("Failed to reset onboarding:", e);
-												}
-											}
-										}}
-									>
-										Redo Setup
-									</LauncherButton>
-								</div>
-							</section>
+							<SettingsCard header="Troubleshooting">
+								<SettingsField
+									label="Reset Onboarding"
+									description="Redo the first-time setup process. This will not delete your accounts or instances."
+									actionLabel="Redo Setup"
+									destructive
+									confirmationDesc="Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen."
+									onAction={async () => {
+										try {
+											await invoke("reset_onboarding");
+											window.location.href = "/"; // Force reload to root
+										} catch (e) {
+											console.error("Failed to reset onboarding:", e);
+										}
+									}}
+								/>
+							</SettingsCard>
 						</div>
 					</TabsContent>
 
-					<TabsContent value="appearance">
-						<div class="settings-tab-content">
-							<section class="settings-section">
+					<TabsContent class={styles["tabs-content"]} value="appearance">
+						<div class={styles["settings-tab-content"]}>
+							<section class={styles["settings-section"]}>
 								<h2>Theme Presets</h2>
-								<p class="section-description">
+								<p class={styles["section-description"]}>
 									Choose a pre-designed theme or create your own custom look.
 								</p>
-								<div class="theme-preset-grid">
+								<div class={styles["theme-preset-grid"]}>
 									<For each={PRESET_THEMES}>
 										{(theme) => (
 											<ThemePresetCard
@@ -721,207 +712,213 @@ function SettingsPage(props: { close?: () => void }) {
 							</section>
 
 							<Show when={canChangeHue()}>
-								<section class="settings-section">
-									<h2>Customize Colors</h2>
-									<p class="section-description">
-										Adjust the primary color hue to personalize your theme.
-									</p>
-									<div class="hue-customization">
-										<Slider
-											value={[backgroundHue()]}
-											onChange={handleHueChange}
-											minValue={0}
-											maxValue={360}
-											step={1}
-											class="slider--hue"
-										>
-											<div class="slider__header">
-												<label class="slider__label">Primary Hue</label>
-												<div class="slider__value-label">
-													{backgroundHue()}°
-												</div>
+								<SettingsCard
+									header="Customize Colors"
+									subHeader="Adjust the primary color hue to personalize your theme."
+								>
+									<SettingsField
+										label="Primary Hue"
+										description="The base color used for accents and backgrounds"
+										layout="stack"
+										control={
+											<div class={styles["hue-customization"]} style={{ width: "100%" }}>
+												<Slider
+													value={[backgroundHue()]}
+													onChange={handleHueChange}
+													minValue={0}
+													maxValue={360}
+													step={1}
+													class={styles["slider--hue"]}
+												>
+													<div class={styles["slider__header"]}>
+														<div class={styles["slider__value-label"]}>
+															{backgroundHue()}°
+														</div>
+													</div>
+													<SliderTrack class={styles["slider-track-hue"]}>
+														<SliderFill />
+														<SliderThumb />
+													</SliderTrack>
+												</Slider>
 											</div>
-											<SliderTrack>
-												<SliderFill />
-												<SliderThumb />
-											</SliderTrack>
-										</Slider>
-									</div>
-								</section>
+										}
+									/>
+								</SettingsCard>
 							</Show>
 
 							<Show when={themeId() === "custom"}>
-								<section class="settings-section">
-									<h2>Advanced Style</h2>
-									<p class="section-description">
-										Fine-tune the visual style and effects.
-									</p>
-									<div class="settings-row">
-										<div class="settings-info">
-											<span class="settings-label">Style Mode</span>
-											<span class="settings-description">
-												Choose the visual depth and transparency effects
-											</span>
-										</div>
-										<ToggleGroup
-											value={styleMode() ?? "glass"}
-											onChange={(val) => {
-												if (val)
-													handleStyleModeChange(val as ThemeConfig["style"]);
-											}}
-										>
-											<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
-											<ToggleGroupItem value="satin">Satin</ToggleGroupItem>
-											<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
-											<ToggleGroupItem value="bordered">
-												Bordered
-											</ToggleGroupItem>
-											<ToggleGroupItem value="solid">Solid</ToggleGroupItem>
-										</ToggleGroup>
-									</div>
+								<SettingsCard
+									header="Advanced Style"
+									subHeader="Fine-tune the visual style and effects."
+								>
+									<SettingsField
+										label="Style Mode"
+										description="Choose the visual depth and transparency effects"
+										layout="inline"
+										control={
+											<ToggleGroup
+												value={styleMode() ?? "glass"}
+												onChange={(val) => {
+													if (val)
+														handleStyleModeChange(val as ThemeConfig["style"]);
+												}}
+											>
+												<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
+												<ToggleGroupItem value="satin">Satin</ToggleGroupItem>
+												<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+												<ToggleGroupItem value="bordered">
+													Bordered
+												</ToggleGroupItem>
+												<ToggleGroupItem value="solid">Solid</ToggleGroupItem>
+											</ToggleGroup>
+										}
+									/>
 
-									<div class="settings-row">
-										<div class="settings-info">
-											<span class="settings-label">Background Gradient</span>
-											<span class="settings-description">
-												Enable animated background gradient
-											</span>
-										</div>
-										<Switch
-											checked={gradientEnabled() ?? false}
-											onChange={handleGradientToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									</div>
+									<SettingsField
+										label="Background Gradient"
+										description="Enable animated background gradient"
+										control={
+											<Switch
+												checked={gradientEnabled() ?? false}
+												onCheckedChange={handleGradientToggle}
+											>
+												<SwitchControl>
+													<SwitchThumb />
+												</SwitchControl>
+											</Switch>
+										}
+									/>
 
 									<Show when={gradientEnabled()}>
-										<div class="settings-row">
-											<div class="settings-info">
-												<span class="settings-label">Gradient Type</span>
-												<span class="settings-description">
-													Linear or circular background
-												</span>
-											</div>
-											<ToggleGroup
-												value={gradientType() ?? "linear"}
-												onChange={(val) => {
-													if (val)
-														handleGradientTypeChange(
-															val as "linear" | "radial",
-														);
-												}}
-											>
-												<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
-												<ToggleGroupItem value="radial">
-													Circular
-												</ToggleGroupItem>
-											</ToggleGroup>
-										</div>
+										<SettingsField
+											label="Gradient Type"
+											description="Linear or circular background"
+											layout="inline"
+											control={
+												<ToggleGroup
+													value={gradientType() ?? "linear"}
+													onChange={(val) => {
+														if (val)
+															handleGradientTypeChange(
+																val as "linear" | "radial",
+															);
+													}}
+												>
+													<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
+													<ToggleGroupItem value="radial">
+														Circular
+													</ToggleGroupItem>
+												</ToggleGroup>
+											}
+										/>
 
-										<div class="settings-row--nested">
-											<Slider
-												value={[rotation() ?? 135]}
-												onChange={handleRotationChange}
-												minValue={0}
-												maxValue={360}
-												step={1}
-												class="slider--angle"
-											>
-												<div class="slider__header">
-													<label class="slider__label">Rotation</label>
-													<div class="slider__value-label">{rotation()}°</div>
+										<SettingsField
+											label="Rotation"
+											description="Angle of the background gradient"
+											layout="stack"
+											control={
+												<div style={{ width: "100%" }}>
+													<Slider
+														value={[rotation() ?? 135]}
+														onChange={handleRotationChange}
+														minValue={0}
+														maxValue={360}
+														step={1}
+														class={styles["slider--angle"]}
+													>
+														<div class={styles["slider__header"]}>
+															<div class={styles["slider__value-label"]}>{rotation()}°</div>
+														</div>
+														<SliderTrack>
+															<SliderFill />
+															<SliderThumb />
+														</SliderTrack>
+													</Slider>
 												</div>
-												<SliderTrack>
-													<SliderFill />
-													<SliderThumb />
-												</SliderTrack>
-											</Slider>
-										</div>
+											}
+										/>
 
-										<div class="settings-row">
-											<div class="settings-info">
-												<span class="settings-label">
-													Color Harmony
-													<HelpTrigger topic="GRADIENT_HARMONY" />
-												</span>
-												<span class="settings-description">
-													Choose how secondary colors are generated
-												</span>
-											</div>
-											<ToggleGroup
-												value={gradientHarmony() ?? "none"}
-												onChange={(val) => {
-													if (val)
-														handleGradientHarmonyChange(val as GradientHarmony);
-												}}
-											>
-												<ToggleGroupItem value="none">None</ToggleGroupItem>
-												<ToggleGroupItem value="analogous">
-													Analogous
-												</ToggleGroupItem>
-												<ToggleGroupItem value="complementary">
-													Complementary
-												</ToggleGroupItem>
-												<ToggleGroupItem value="triadic">
-													Triadic
-												</ToggleGroupItem>
-											</ToggleGroup>
-										</div>
+										<SettingsField
+											label="Color Harmony"
+											description="Choose how secondary colors are generated"
+											helpTopic="GRADIENT_HARMONY"
+											layout="inline"
+											control={
+												<ToggleGroup
+													value={gradientHarmony() ?? "none"}
+													onChange={(val) => {
+														if (val)
+															handleGradientHarmonyChange(val as GradientHarmony);
+													}}
+												>
+													<ToggleGroupItem value="none">None</ToggleGroupItem>
+													<ToggleGroupItem value="analogous">
+														Analogous
+													</ToggleGroupItem>
+													<ToggleGroupItem value="complementary">
+														Complementary
+													</ToggleGroupItem>
+													<ToggleGroupItem value="triadic">
+														Triadic
+													</ToggleGroupItem>
+												</ToggleGroup>
+											}
+										/>
 									</Show>
 
 									<Show when={styleMode() === "bordered"}>
-										<Slider
-											value={[borderThickness()]}
-											onChange={handleBorderThicknessChange}
-											minValue={0}
-											maxValue={4}
-											step={1}
-											class="slider--border"
-										>
-											<div class="slider__header">
-												<label class="slider__label">Border Thickness</label>
-												<div class="slider__value-label">
-													{borderThickness()}px
+										<SettingsField
+											label="Border Thickness"
+											description="Width of the element borders in pixels"
+											layout="stack"
+											control={
+												<div style={{ width: "100%" }}>
+													<Slider
+														value={[borderThickness()]}
+														onChange={handleBorderThicknessChange}
+														minValue={0}
+														maxValue={4}
+														step={1}
+														class={styles["slider--border"]}
+													>
+														<div class={styles["slider__header"]}>
+															<div class={styles["slider__value-label"]}>
+																{borderThickness()}px
+															</div>
+														</div>
+														<SliderTrack>
+															<SliderFill />
+															<SliderThumb />
+														</SliderTrack>
+													</Slider>
 												</div>
-											</div>
-											<SliderTrack>
-												<SliderFill />
-												<SliderThumb />
-											</SliderTrack>
-										</Slider>
+											}
+										/>
 									</Show>
-								</section>
+								</SettingsCard>
 							</Show>
 						</div>
 					</TabsContent>
 
-					<TabsContent value="java">
-						<div class="settings-tab-content">
-							<section class="settings-section">
-								<div class="section-header">
-									<div>
-										<h2>
-											Java Environments
-											<HelpTrigger topic="JAVA_MANAGED" />
-										</h2>
-										<p class="section-description">
-											Global defaults for each Java version. Instances follow
-											these by default.
-										</p>
-									</div>
+					<TabsContent class={styles["tabs-content"]} value="java">
+						<div class={styles["settings-tab-content"]}>
+							<SettingsCard
+								header="Java Environments"
+								subHeader="Global defaults for each Java version. Instances follow these by default."
+								helpTopic="JAVA_MANAGED"
+							>
+								<div class={styles["section-actions"]} style={{ "margin-bottom": "16px" }}>
 									<LauncherButton
 										onClick={refreshJavas}
 										disabled={isScanning()}
 										variant="ghost"
+										size="sm"
 									>
 										{isScanning() ? "Scanning..." : "Rescan System"}
 									</LauncherButton>
 								</div>
 
-								<div class="java-requirements-list">
+								<div class={styles["java-requirements-list"]}>
 									<For each={requirements()}>
 										{(req: any) => {
 											const current = () =>
@@ -934,41 +931,36 @@ function SettingsPage(props: { close?: () => void }) {
 												);
 
 											return (
-												<div class="java-req-item">
-													<div class="java-req-header">
+												<div class={styles["java-req-item"]}>
+													<div class={styles["java-req-header"]}>
 														<h3>{req.recommended_name}</h3>
 													</div>
 
-													<div class="java-options-grid">
+													<div class={styles["java-options-grid"]}>
 														{/* Managed Option */}
+														{/* TODO: Fix Floating UI tooltip positioning with nested interactive components */}
 														<ContextMenu>
 															<ContextMenuTrigger>
-																<Tooltip>
-																	<TooltipTrigger
-																		as="div"
-																		style={{ display: "contents" }}
-																	>
-																		<div
-																			class="java-option-card"
-																			classList={{
-																				active: current()?.is_managed,
-																			}}
-																			onClick={() => {
-																				const m = managedVersion();
-																				if (m)
-																					handleSetGlobalPath(
-																						req.major_version,
-																						m.path,
-																						true,
-																					);
-																			}}
-																		>
-																			<div class="option-title">
+																<div
+																	class={styles["java-option-card"]}
+																	classList={{
+																		[styles.active]: current()?.is_managed,
+																	}}
+																	onClick={() => {
+																		const m = managedVersion();
+																		if (m)
+																			handleSetGlobalPath(
+																				req.major_version,
+																				m.path,
+																				true,
+																			);
+																	}}
+																	title={managedVersion()?.path || "No path set"}
+																>
+																			<div class={styles["option-title"]}>
 																				Managed Runtime
 																				<Show when={current()?.is_managed}>
-																					<span class="active-badge">
-																						Active
-																					</span>
+																					<Badge>Active</Badge>
 																				</Show>
 																			</div>
 																			<Show
@@ -998,7 +990,7 @@ function SettingsPage(props: { close?: () => void }) {
 																					const managed = m();
 																					return (
 																						<div
-																							class="option-path"
+																							class={styles["option-path"]}
 																							style={{ "margin-top": "auto" }}
 																						>
 																							{managed.path}
@@ -1007,39 +999,25 @@ function SettingsPage(props: { close?: () => void }) {
 																				}}
 																			</Show>
 																		</div>
-																	</TooltipTrigger>
-																	<TooltipContent>
-																		<Show
-																			when={managedVersion()?.path}
-																			fallback="No path set"
+																	</ContextMenuTrigger>
+																	<ContextMenuContent>
+																		<ContextMenuItem
+																			onClick={() => {
+																				const path = managedVersion()?.path;
+																				if (path) {
+																					navigator.clipboard.writeText(path);
+																					showToast({
+																						title: "Copied",
+																						description: "Path copied to clipboard",
+																						severity: "Success",
+																					});
+																				}
+																			}}
 																		>
-																			{(path) => (
-																				<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
-																					{path()}
-																				</div>
-																			)}
-																		</Show>
-																	</TooltipContent>
-																</Tooltip>
-															</ContextMenuTrigger>
-															<ContextMenuContent>
-																<ContextMenuItem
-																	onClick={() => {
-																		const path = managedVersion()?.path;
-																		if (path) {
-																			navigator.clipboard.writeText(path);
-																			showToast({
-																				title: "Copied",
-																				description: "Path copied to clipboard",
-																				severity: "Success",
-																			});
-																		}
-																	}}
-																>
-																	Copy Full Path
-																</ContextMenuItem>
-															</ContextMenuContent>
-														</ContextMenu>
+																			Copy Full Path
+																		</ContextMenuItem>
+																	</ContextMenuContent>
+																</ContextMenu>
 
 														{/* System Detected */}
 														<For
@@ -1052,66 +1030,54 @@ function SettingsPage(props: { close?: () => void }) {
 																const isActive = () =>
 																	current()?.path === det.path &&
 																	!current()?.is_managed;
+																// TODO: Fix Floating UI tooltip positioning with nested interactive components
 																return (
 																	<ContextMenu>
 																		<ContextMenuTrigger>
-																			<Tooltip>
-																				<TooltipTrigger
-																					as="div"
-																					style={{ display: "contents" }}
-																				>
-																					<div
-																						class="java-option-card"
-																						classList={{ active: isActive() }}
-																						onClick={() =>
-																							handleSetGlobalPath(
-																								req.major_version,
-																								det.path,
-																								false,
-																							)
-																						}
-																					>
-																						<div class="option-title">
+																			<div
+																				class={styles["java-option-card"]}
+																				classList={{ [styles.active]: isActive() }}
+																				onClick={() =>
+																					handleSetGlobalPath(
+																						req.major_version,
+																						det.path,
+																						false,
+																					)
+																				}
+																				title={det.path}
+																			>
+																						<div class={styles["option-title"]}>
 																							System Runtime
 																							<Show when={isActive()}>
-																								<span class="active-badge">
-																									Active
-																								</span>
+																								<Badge>Active</Badge>
 																							</Show>
 																						</div>
 																						<div
-																							class="option-path"
+																							class={styles["option-path"]}
 																							style={{ "margin-top": "auto" }}
 																						>
 																							{det.path}
 																						</div>
 																					</div>
-																				</TooltipTrigger>
-																				<TooltipContent>
-																					<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
-																						{det.path}
-																					</div>
-																				</TooltipContent>
-																			</Tooltip>
-																		</ContextMenuTrigger>
-																		<ContextMenuContent>
-																			<ContextMenuItem
-																				onClick={() => {
-																					navigator.clipboard.writeText(
-																						det.path,
-																					);
-																					showToast({
-																						title: "Copied",
-																						description:
-																							"Path copied to clipboard",
-																						severity: "Success",
-																					});
-																				}}
-																			>
-																				Copy Full Path
-																			</ContextMenuItem>
-																		</ContextMenuContent>
-																	</ContextMenu>
+																				</ContextMenuTrigger>
+																				<ContextMenuContent>
+																					<ContextMenuItem
+																						onClick={() => {
+																							navigator.clipboard.writeText(
+																								det.path,
+																							);
+																							showToast({
+																								title: "Copied",
+																								description:
+																									"Path copied to clipboard",
+																								severity: "Success",
+																							});
+																						}}
+																					>
+																						Copy Full Path
+																					</ContextMenuItem>
+																				</ContextMenuContent>
+																			</ContextMenu>
 																);
 															}}
 														</For>
@@ -1128,73 +1094,62 @@ function SettingsPage(props: { close?: () => void }) {
 																)
 															}
 														>
+															{/* TODO: Fix Floating UI tooltip positioning with nested interactive components */}
 															<ContextMenu>
 																<ContextMenuTrigger>
-																	<Tooltip>
-																		<TooltipTrigger
-																			as="div"
-																			style={{ display: "contents" }}
-																		>
-																			<div
-																				class="java-option-card active"
-																				onClick={() =>
-																					handleManualPickSetGlobal(
-																						req.major_version,
-																					)
-																				}
-																			>
-																				<div class="option-title">
+																	<div
+																		class={styles["java-option-card"]}
+																		classList={{ [styles.active]: true }}
+																		onClick={() =>
+																			handleManualPickSetGlobal(
+																				req.major_version,
+																			)
+																		}
+																		title={current()?.path}
+																	>
+																				<div class={styles["option-title"]}>
 																					Custom Path
-																					<span class="active-badge">
-																						Active
-																					</span>
+																					<Badge>Active</Badge>
 																				</div>
 																				<div
-																					class="option-path"
+																					class={styles["option-path"]}
 																					style={{ "margin-top": "auto" }}
 																				>
 																					{current()?.path}
 																				</div>
 																			</div>
-																		</TooltipTrigger>
-																		<TooltipContent>
-																			<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
-																				{current()?.path}
-																			</div>
-																		</TooltipContent>
-																	</Tooltip>
-																</ContextMenuTrigger>
-																<ContextMenuContent>
-																	<ContextMenuItem
-																		onClick={() => {
-																			const path = current()?.path;
-																			if (path) {
-																				navigator.clipboard.writeText(path);
-																				showToast({
-																					title: "Copied",
-																					description:
-																						"Path copied to clipboard",
-																					severity: "Success",
-																				});
-																			}
-																		}}
-																	>
-																		Copy Full Path
-																	</ContextMenuItem>
-																</ContextMenuContent>
-															</ContextMenu>
+																		</ContextMenuTrigger>
+																		<ContextMenuContent>
+																			<ContextMenuItem
+																				onClick={() => {
+																					const path = current()?.path;
+																					if (path) {
+																						navigator.clipboard.writeText(path);
+																						showToast({
+																							title: "Copied",
+																							description:
+																								"Path copied to clipboard",
+																							severity: "Success",
+																						});
+																					}
+																				}}
+																			>
+																				Copy Full Path
+																			</ContextMenuItem>
+																		</ContextMenuContent>
+																	</ContextMenu>
 														</Show>
 
 														{/* Manual browse */}
 														<div
-															class="java-option-card browse"
+															class={`${styles["java-option-card"]} ${styles.browse}`}
 															onClick={() =>
 																handleManualPickSetGlobal(req.major_version)
 															}
 														>
-															<div class="option-title">+ Browse...</div>
+															<div class={styles["option-title"]}>+ Browse...</div>
 															<div
-																class="option-subtitle"
+																class={styles["option-subtitle"]}
 																style={{ "margin-top": "auto" }}
 															>
 																Select manually
@@ -1206,54 +1161,45 @@ function SettingsPage(props: { close?: () => void }) {
 										}}
 									</For>
 								</div>
-							</section>
+							</SettingsCard>
 						</div>
 					</TabsContent>
 
-					<TabsContent value="help">
-						<div class="settings-tab-content">
-							<section class="settings-section">
-								<h2>Minecraft Modding</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Documentation</span>
-										<span class="settings-description">
-											Technical overview of modding frameworks, runtime
-											environments, and configuration.
-										</span>
-									</div>
-									<LauncherButton
-										onClick={() => router()?.navigate("/modding-guide")}
-									>
-										View Docs
-									</LauncherButton>
-								</div>
-							</section>
+					<TabsContent class={styles["tabs-content"]} value="help">
+						<div class={styles["settings-tab-content"]}>
+							<SettingsCard header="Minecraft Modding">
+								<SettingsField
+									label="Documentation"
+									description="Technical overview of modding frameworks, runtime environments, and configuration."
+									control={
+										<LauncherButton
+											onClick={() => router()?.navigate("/modding-guide")}
+										>
+											View Docs
+										</LauncherButton>
+									}
+								/>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>App Tutorial</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Platform Walkthrough</span>
-										<span class="settings-description">
-											Initiate the interactive walkthrough to familiarize
-											yourself with Vesta's interface.
-										</span>
-									</div>
-									<LauncherButton
-										onClick={() => {
-											props.close?.();
-											setTimeout(() => startAppTutorial(), 100);
-										}}
-									>
-										Run Tutorial
-									</LauncherButton>
-								</div>
-							</section>
+							<SettingsCard header="App Tutorial">
+								<SettingsField
+									label="Platform Walkthrough"
+									description="Initiate the interactive walkthrough to familiarize yourself with Vesta's interface."
+									control={
+										<LauncherButton
+											onClick={() => {
+												props.close?.();
+												setTimeout(() => startAppTutorial(), 100);
+											}}
+										>
+											Run Tutorial
+										</LauncherButton>
+									}
+								/>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>Support</h2>
-								<div class="social-links">
+							<SettingsCard header="Support">
+								<div class={styles["social-links"]} style={{ display: "flex", gap: "8px" }}>
 									<LauncherButton
 										variant="ghost"
 										onClick={() =>
@@ -1262,117 +1208,103 @@ function SettingsPage(props: { close?: () => void }) {
 									>
 										GitHub
 									</LauncherButton>
-									{/* <LauncherButton variant="ghost" onClick={() => open("https://discord.gg/vesta")}>
-										Discord
-									</LauncherButton> */}
 								</div>
-							</section>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>App Updates</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Automatic Updates</span>
-										<span class="settings-description">
-											Download and install updates automatically in the
-											background
-										</span>
-									</div>
-									<Switch
-										checked={autoUpdateEnabled()}
-										onChange={handleAutoUpdateToggle}
-									>
-										<SwitchControl>
-											<SwitchThumb />
-										</SwitchControl>
-									</Switch>
-								</div>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Check on Startup</span>
-										<span class="settings-description">
-											Check for new versions when the launcher starts
-										</span>
-									</div>
-									<Switch
-										checked={startupCheckUpdates()}
-										onChange={handleStartupCheckToggle}
-									>
-										<SwitchControl>
-											<SwitchThumb />
-										</SwitchControl>
-									</Switch>
-								</div>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Check for Updates</span>
-										<span class="settings-description">
-											Manually verify if a newer version is available
-										</span>
-									</div>
-									<LauncherButton onClick={() => checkForAppUpdates()}>
-										Check Now
-									</LauncherButton>
-								</div>
-							</section>
+							<SettingsCard header="App Updates">
+								<SettingsField
+									label="Automatic Updates"
+									description="Download and install updates automatically in the background"
+									control={
+										<Switch
+											checked={autoUpdateEnabled()}
+											onCheckedChange={handleAutoUpdateToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+								<SettingsField
+									label="Check on Startup"
+									description="Check for new versions when the launcher starts"
+									control={
+										<Switch
+											checked={startupCheckUpdates()}
+											onCheckedChange={handleStartupCheckToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+								<SettingsField
+									label="Check for Updates"
+									description="Manually verify if a newer version is available"
+									control={
+										<LauncherButton onClick={() => checkForAppUpdates()}>
+											Check Now
+										</LauncherButton>
+									}
+								/>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>About</h2>
-								<div class="about-info">
-									<div class="about-field">
+							<SettingsCard header="About">
+								<div class={styles["about-info"]}>
+									<div class={styles["about-field"]}>
 										<span>App Version</span>
 										<span>{version() || "..."}</span>
 									</div>
-									<div class="about-field">
+									<div class={styles["about-field"]}>
 										<span>Platform</span>
 										<span>Tauri + SolidJS</span>
 									</div>
-									<div class="about-field">
+									<div class={styles["about-field"]}>
 										<span>License</span>
 										<span>MIT License</span>
 									</div>
 								</div>
-							</section>
+							</SettingsCard>
 						</div>
 					</TabsContent>
 
-					<TabsContent value="defaults">
-						<div class="settings-tab-content">
-							<section class="settings-section">
-								<h2>Instance Defaults</h2>
-								<p class="section-description">
-									Default settings for new instances.
-								</p>
-								<div class="settings-placeholder">
+					<TabsContent class={styles["tabs-content"]} value="defaults">
+						<div class={styles["settings-tab-content"]}>
+							<SettingsCard
+								header="Instance Defaults"
+								subHeader="Default settings for new instances."
+							>
+								<div class={styles["settings-placeholder"]}>
 									<p>
 										Coming soon: Default Java paths, memory settings, and more.
 									</p>
 								</div>
-							</section>
+							</SettingsCard>
 						</div>
 					</TabsContent>
 
-					<TabsContent value="developer">
-						<div class="settings-tab-content">
-							<section class="settings-section">
-								<h2>Debug Settings</h2>
-								<div class="settings-row">
-									<div class="settings-info">
-										<span class="settings-label">Debug Logging</span>
-										<span class="settings-description">
-											Enable verbose logging for troubleshooting
-										</span>
-									</div>
-									<Switch checked={debugLogging()} onChange={handleDebugToggle}>
-										<SwitchControl>
-											<SwitchThumb />
-										</SwitchControl>
-									</Switch>
-								</div>
-							</section>
+					<TabsContent class={styles["tabs-content"]} value="developer">
+						<div class={styles["settings-tab-content"]}>
+							<SettingsCard header="Debug Settings">
+								<SettingsField
+									label="Debug Logging"
+									description="Enable verbose logging for troubleshooting"
+									control={
+										<Switch
+											checked={debugLogging()}
+											onCheckedChange={handleDebugToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+							</SettingsCard>
 
-							<section class="settings-section">
-								<h2>Navigation Test</h2>
+							<SettingsCard header="Navigation Test">
 								<div style="display: flex; gap: 12px; flex-wrap: wrap;">
 									<LauncherButton
 										onClick={() => router()?.navigate("/install")}
@@ -1390,7 +1322,7 @@ function SettingsPage(props: { close?: () => void }) {
 										Navigate to Task System Test
 									</LauncherButton>
 								</div>
-							</section>
+							</SettingsCard>
 						</div>
 					</TabsContent>
 				</Tabs>
@@ -1400,3 +1332,4 @@ function SettingsPage(props: { close?: () => void }) {
 }
 
 export default SettingsPage;
+

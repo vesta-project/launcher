@@ -2,7 +2,7 @@ use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
-use crate::utils::config::init_config_db;
+use crate::utils::config::{init_config_db, get_app_config};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
@@ -10,6 +10,10 @@ use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{
+  menu::{Menu, MenuItem},
+  tray::TrayIconBuilder,
+};
 
 /// Exit status JSON structure written by the exit handler JAR
 #[derive(serde::Deserialize, Debug)]
@@ -605,6 +609,45 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
             .transparent(true)
             .decorations(false);
+
+    // // Setup system tray icon and menu (conditional based on config)
+    // let config = get_app_config()?;
+    // if config.show_tray_icon {
+    //     let show_i = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
+    //     let hide_i = MenuItem::with_id(app, "hide", "Hide Window", true, None::<&str>)?;
+    //     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    //     let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
+
+    //     // Load tray icon
+    //     let icon_path = app.path().resource_dir()?.join("icons").join("32x32.png");
+    //     let icon_data = std::fs::read(&icon_path)
+    //         .map_err(|e| format!("Failed to read tray icon: {}", e))?;
+    //     let icon = tauri::image::Image::new_owned(icon_data, 32, 32);
+
+    //     let _tray = TrayIconBuilder::new()
+    //         .icon(icon)
+    //         .menu(&menu)
+    //         .on_menu_event(|app, event| match event.id.as_ref() {
+    //             "show" => {
+    //                 if let Some(window) = app.get_webview_window("main") {
+    //                     let _ = window.show();
+    //                     let _ = window.set_focus();
+    //                 }
+    //             }
+    //             "hide" => {
+    //                 if let Some(window) = app.get_webview_window("main") {
+    //                     let _ = window.hide();
+    //                 }
+    //             }
+    //             "quit" => {
+    //                 app.exit(0);
+    //             }
+    //             _ => {
+    //                 println!("menu item {:?} not handled", event.id);
+    //             }
+    //         })
+    //         .build(app)?;
+    // }
 
     #[cfg(target_os = "windows")]
     let version = match WindowsVersion::detect() {

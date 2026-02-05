@@ -1,4 +1,5 @@
-﻿import LauncherButton from "@ui/button/button";
+import LauncherButton from "@ui/button/button";
+import { Separator } from "@ui/separator/separator";
 import {
 	Combobox,
 	ComboboxContent,
@@ -28,6 +29,14 @@ import {
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
 import {
+	NumberField,
+	NumberFieldGroup,
+	NumberFieldInput,
+	NumberFieldIncrementTrigger,
+	NumberFieldDecrementTrigger,
+	NumberFieldLabel,
+} from "@ui/number-field/number-field";
+import {
 	DEFAULT_ICONS,
 	GameVersionMetadata,
 	getMinecraftVersions,
@@ -49,7 +58,8 @@ import {
 	Accessor,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { HelpTrigger } from "../../../../../components/ui/help-trigger";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import styles from "../install-page.module.css";
 
 export interface InstallFormProps {
 	compact?: boolean;
@@ -482,20 +492,20 @@ export function InstallForm(props: InstallFormProps) {
 
 	return (
 		<div
-			class="install-form"
+			class={styles["install-form"]}
 			classList={{
-				"install-form--compact": props.compact,
-				"install-form--installing": props.isInstalling,
-				"install-form--fetching": props.isFetchingMetadata,
+				[styles["install-form--compact"]]: props.compact,
+				[styles["install-form--installing"]]: props.isInstalling,
+				[styles["install-form--fetching"]]: props.isFetchingMetadata,
 			}}
 		>
-			<div class="install-form__sections">
+			<div class={styles["install-form__sections"]}>
 				{/* LEFT COLUMN: Identity & Game Settings */}
-				<div class="install-form__main">
+				<div class={styles["install-form__main"]}>
 					{/* IDENTITY SECTION */}
-					<div class="form-section">
-						<div class="form-section-title">Instance Identity</div>
-						<div class="identity-row">
+					<div class={styles["form-section"]}>
+						<div class={styles["form-section-title"]}>Instance Identity</div>
+						<div class={styles["identity-row"]}>
 							<IconPicker
 								value={icon()}
 								onSelect={(newIcon) => {
@@ -511,12 +521,12 @@ export function InstallForm(props: InstallFormProps) {
 									!!props.originalIcon && icon() === props.originalIcon
 								}
 								uploadedIcons={uploadedIcons()}
-								showHint={!isIconDirty() && !props.originalIcon && !icon()}
+								showHint={!isIconDirty()}
 								triggerProps={{
-									class: "form-icon-trigger",
+									class: styles["form-icon-trigger"],
 								}}
 							/>
-							<div class="name-field">
+							<div class={styles["name-field"]}>
 								<TextFieldRoot>
 									<TextFieldLabel>Instance Name</TextFieldLabel>
 									<TextFieldInput
@@ -534,33 +544,33 @@ export function InstallForm(props: InstallFormProps) {
 
 					{/* MODPACK AUTHOR INFO (Moved here) */}
 					<Show when={normalizedIsModpack() && props.modpackInfo}>
-						<div class="form-section info-section">
-							<div class="info-block-grid">
-								<div class="info-block">
-									<span class="info-label">Author</span>
-									<span class="info-value">
+						<div class={`${styles["form-section"]} ${styles["info-section"]}`}>
+							<div class={styles["info-block-grid"]}>
+								<div class={styles["info-block"]}>
+									<span class={styles["info-label"]}>Author</span>
+									<span class={styles["info-value"]}>
 										{props.modpackInfo?.author ||
 											props.initialAuthor ||
 											"Unknown"}
 										<Show
 											when={props.modpackInfo?.modpackId || props.projectId}
 										>
-											<span class="info-id">
+											<span class={styles["info-id"]}>
 												{" "}
 												({props.modpackInfo?.modpackId || props.projectId})
 											</span>
 										</Show>
 									</span>
 								</div>
-								<div class="info-block">
-									<span class="info-label">Pack Version</span>
-									<span class="info-value">
+								<div class={styles["info-block"]}>
+									<span class={styles["info-label"]}>Pack Version</span>
+									<span class={styles["info-value"]}>
 										{props.modpackInfo?.version || "1.0.0"}
 									</span>
 								</div>
 							</div>
 							<Show when={props.modpackInfo?.description}>
-								<div class="info-description">
+								<div class={styles["info-description"]}>
 									{props.modpackInfo?.description}
 								</div>
 							</Show>
@@ -576,23 +586,23 @@ export function InstallForm(props: InstallFormProps) {
 						}
 					>
 						<div
-							class="form-section modpack-context-section"
-							classList={{ "is-fetching": props.isFetchingMetadata }}
+							class={`${styles["form-section"]} ${styles["modpack-context-section"]}`}
+							classList={{ [styles["is-fetching"]]: props.isFetchingMetadata }}
 						>
-							<div class="form-section-title">Modpack Configuration</div>
+							<div class={styles["form-section-title"]}>Modpack Configuration</div>
 
 							<Show
 								when={props.modpackVersions && props.modpackVersions.length > 0}
 								fallback={
-									<div class="modpack-version-placeholder">
+									<div class={styles["modpack-version-placeholder"]}>
 										{props.isFetchingMetadata
 											? "Fetching available versions..."
 											: "No other versions available for this platform."}
 									</div>
 								}
 							>
-								<div class="modpack-version-picker">
-									<div class="field-label-manual">Release Version</div>
+								<div class={styles["modpack-version-picker"]}>
+									<div class={styles["field-label-manual"]}>Release Version</div>
 									<Combobox<any>
 										options={searchableModpackVersions()}
 										value={props.selectedModpackVersionId}
@@ -604,15 +614,15 @@ export function InstallForm(props: InstallFormProps) {
 										placeholder="Select version..."
 										itemComponent={(p) => (
 											<ComboboxItem item={p.item}>
-												<div class="version-item-content">
-													<span class="v-num">
+												<div class={styles["version-item-content"]}>
+													<span class={styles["v-num"]}>
 														{p.item.rawValue.version_number}
 													</span>
-													<span class="v-meta">
+													<span class={styles["v-meta"]}>
 														{(p.item.rawValue.game_versions as string[]).join(
 															", ",
 														)}{" "}
-														• {(p.item.rawValue.loaders as string[]).join(", ")}
+														� {(p.item.rawValue.loaders as string[]).join(", ")}
 													</span>
 												</div>
 											</ComboboxItem>
@@ -643,17 +653,17 @@ export function InstallForm(props: InstallFormProps) {
 								</div>
 							</Show>
 
-							<div class="modpack-meta-grid">
-								<div class="meta-item">
-									<span class="label">Minecraft</span>
-									<span class="value">{mcVersion() || "Loading..."}</span>
+							<div class={styles["modpack-meta-grid"]}>
+								<div class={styles["meta-item"]}>
+									<span class={styles["label"]}>Minecraft</span>
+									<span class={styles["value"]}>{mcVersion() || "Loading..."}</span>
 								</div>
-								<div class="meta-item">
-									<span class="label">
+								<div class={styles["meta-item"]}>
+									<span class={styles["label"]}>
 										Modloader
 										<HelpTrigger topic="MODLOADER_EXPLAINED" />
 									</span>
-									<span class="value">
+									<span class={styles["value"]}>
 										{MODLOADER_DISPLAY_NAMES[loader()] || loader()}{" "}
 										{loaderVer()}
 									</span>
@@ -664,13 +674,13 @@ export function InstallForm(props: InstallFormProps) {
 
 					{/* MANUAL GAME SETTINGS (Visible for non-modpacks OR specialized resources) */}
 					<Show when={!normalizedIsModpack()}>
-						<div class="form-section">
-							<div class="form-section-title">Game Options</div>
+						<div class={styles["form-section"]}>
+							<div class={styles["form-section-title"]}>Game Options</div>
 
-							<div class="standard-settings-grid">
-								<div class="form-row">
-									<div class="flex-grow">
-										<div class="field-label-manual">
+							<div class={styles["standard-settings-grid"]}>
+								<div class={styles["form-row"]}>
+									<div class={styles["flex-grow"]}>
+										<div class={styles["field-label-manual"]}>
 											Minecraft Version
 											<HelpTrigger topic="MINECRAFT_VERSION" />
 										</div>
@@ -697,25 +707,25 @@ export function InstallForm(props: InstallFormProps) {
 											<ComboboxContent />
 										</Combobox>
 									</div>
-									<div class="stable-switch-container">
+									<div class={styles["stable-switch-container"]}>
 										<Switch
 											checked={includeSnapshots()}
-											onChange={setIncludeSnapshots}
-											class="form-switch"
+											onCheckedChange={setIncludeSnapshots}
+											class={styles["form-switch"]}
 										>
-											<SwitchControl class="form-switch__control">
-												<SwitchThumb class="form-switch__thumb" />
+											<SwitchControl class={styles["form-switch__control"]}>
+												<SwitchThumb class={styles["form-switch__thumb"]} />
 											</SwitchControl>
-											<SwitchLabel class="form-switch__label">
+											<SwitchLabel class={styles["form-switch__label"]}>
 												Include Snapshots
 											</SwitchLabel>
 										</Switch>
 									</div>
 								</div>
 
-								<div class="form-row">
-									<div class="flex-grow">
-										<div class="field-label-manual">
+								<div class={styles["form-row"]}>
+									<div class={styles["flex-grow"]}>
+										<div class={styles["field-label-manual"]}>
 											Modloader
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</div>
@@ -744,8 +754,8 @@ export function InstallForm(props: InstallFormProps) {
 									</div>
 
 									<Show when={loader() !== "vanilla"}>
-										<div class="flex-grow">
-											<div class="field-label-manual">Loader Version</div>
+										<div class={styles["flex-grow"]}>
+											<div class={styles["field-label-manual"]}>Loader Version</div>
 											<Combobox<string>
 												options={availableLoaderVers().map((v) => v.version)}
 												value={loaderVer()}
@@ -777,21 +787,21 @@ export function InstallForm(props: InstallFormProps) {
 				</div>
 
 				{/* RIGHT COLUMN: Info & Runtime */}
-				<div class="install-form__side">
-					<div class="form-section">
-						<div class="form-section-title">Memory & Java</div>
+				<div class={styles["install-form__side"]}>
+					<div class={styles["form-section"]}>
+						<div class={styles["form-section-title"]}>Memory & Java</div>
 
 						{/* RAM RANGE SLIDER */}
-						<div class="memory-setting">
-							<div class="memory-header">
-								<div class="memory-labels">
-									<span class="main-label">
+						<div class={styles["memory-setting"]}>
+							<div class={styles["memory-header"]}>
+								<div class={styles["memory-labels"]}>
+									<span class={styles["main-label"]}>
 										Allocation
 										<HelpTrigger topic="MEMORY_ALLOCATION" />
 									</span>
-									<span class="sub-label">Min and Max memory in MB</span>
+									<span class={styles["sub-label"]}>Min and Max memory in MB</span>
 								</div>
-								<div class="memory-range-display">
+								<div class={styles["memory-range-display"]}>
 									{memory()[0]}MB — {memory()[1]}MB
 								</div>
 							</div>
@@ -811,12 +821,12 @@ export function InstallForm(props: InstallFormProps) {
 									<SliderThumb />
 								</SliderTrack>
 							</Slider>
-							<div class="memory-footer">
+							<div class={styles["memory-footer"]}>
 								<Show when={props.modpackInfo?.recommendedRamMb}>
 									<span
-										class="rec-hint"
+										class={styles["rec-hint"]}
 										classList={{
-											"is-low":
+											[styles["is-low"]]:
 												memory()[1] <
 												(props.modpackInfo?.recommendedRamMb ?? 0),
 										}}
@@ -844,38 +854,53 @@ export function InstallForm(props: InstallFormProps) {
 						</TextFieldRoot>
 					</div>
 
-					<div class="form-section">
-						<div class="form-section-title">Window & Display</div>
+					<div class={styles["form-section"]}>
+						<div class={styles["form-section-title"]}>Window & Display</div>
 						{/* RESOLUTION */}
-						<div class="resolution-row">
-							<TextFieldRoot>
-								<TextFieldLabel>Width</TextFieldLabel>
-								<TextFieldInput
-									value={resW()}
-									onInput={(e) => {
-										setResW((e.currentTarget as HTMLInputElement).value);
+						<div class={styles["resolution-row"]}>
+							<NumberField
+								value={resW()}
+								onRawValueChange={(val) => {
+									if (!isNaN(val)) {
+										setResW(val.toString());
 										setDirty("res", true);
-									}}
-								/>
-							</TextFieldRoot>
-							<TextFieldRoot>
-								<TextFieldLabel>Height</TextFieldLabel>
-								<TextFieldInput
-									value={resH()}
-									onInput={(e) => {
-										setResH((e.currentTarget as HTMLInputElement).value);
+									}
+								}}
+								minValue={0}
+							>
+								<NumberFieldLabel>Width</NumberFieldLabel>
+								<NumberFieldGroup>
+									<NumberFieldInput />
+									<NumberFieldIncrementTrigger />
+									<NumberFieldDecrementTrigger />
+								</NumberFieldGroup>
+							</NumberField>
+							<NumberField
+								value={resH()}
+								onRawValueChange={(val) => {
+									if (!isNaN(val)) {
+										setResH(val.toString());
 										setDirty("res", true);
-									}}
-								/>
-							</TextFieldRoot>
+									}
+								}}
+								minValue={0}
+							>
+								<NumberFieldLabel>Height</NumberFieldLabel>
+								<NumberFieldGroup>
+									<NumberFieldInput />
+									<NumberFieldIncrementTrigger />
+									<NumberFieldDecrementTrigger />
+								</NumberFieldGroup>
+							</NumberField>
 						</div>
 					</div>
 				</div>
 			</div>
 
 			{/* FOOTER ACTIONS - MOVED OUTSIDE SCROLL AREA */}
-			<div class="install-form__actions-container">
-				<div class="install-form__actions">
+			<Separator />
+			<div class={styles["install-form__actions-container"]}>
+				<div class={styles["install-form__actions"]}>
 					<Show when={props.onCancel}>
 						<LauncherButton
 							variant="ghost"
@@ -889,7 +914,7 @@ export function InstallForm(props: InstallFormProps) {
 						color="primary"
 						onClick={handleInstall}
 						disabled={!name() || !mcVersion() || props.isInstalling}
-						class="install-submit-btn"
+						class={styles["install-submit-btn"]}
 					>
 						{props.isInstalling
 							? "Installing..."
@@ -902,3 +927,4 @@ export function InstallForm(props: InstallFormProps) {
 		</div>
 	);
 }
+

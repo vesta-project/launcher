@@ -14,7 +14,7 @@ import {
 	ValidComponent,
 } from "solid-js";
 import { Portal } from "solid-js/web";
-import "./toast.css";
+import styles from "./toast.module.css";
 
 type ToastListProps = ToastPrimitive.ToastListProps & ClassProp;
 
@@ -27,7 +27,7 @@ function Toaster<T extends ValidComponent = "ol">(
 		<Portal>
 			<ToastPrimitive.Region limit={5} swipeDirection={"left"}>
 				<ToastPrimitive.List
-					class={clsx("toast__list", local.class)}
+					class={clsx(styles["toast__list"], local.class)}
 					{...others}
 				/>
 			</ToastPrimitive.Region>
@@ -42,7 +42,7 @@ function Toast<T extends ValidComponent = "li">(
 ) {
 	const [local, others] = splitProps(props as ToastRootProps, ["class"]);
 
-	return <ToastPrimitive.Root class={clsx("toast", local.class)} {...others} />;
+	return <ToastPrimitive.Root class={clsx(styles["toast"], local.class)} {...others} />;
 }
 
 type ToastCloseButtonProps = ToastPrimitive.ToastCloseButtonProps & ClassProp;
@@ -53,7 +53,7 @@ function ToastClose<T extends ValidComponent = "button">(
 	const [local, others] = splitProps(props as ToastCloseButtonProps, ["class"]);
 	return (
 		<ToastPrimitive.CloseButton
-			class={clsx("toast__close-btn", local.class)}
+			class={clsx(styles["toast__close-btn"], local.class)}
 			{...others}
 		>
 			<CloseIcon />
@@ -69,7 +69,7 @@ function ToastTitle<T extends ValidComponent = "div">(
 	const [local, others] = splitProps(props as ToastTitleProps, ["class"]);
 	return (
 		<ToastPrimitive.Title
-			class={clsx("toast__title", local.class)}
+			class={clsx(styles["toast__title"], local.class)}
 			{...others}
 		/>
 	);
@@ -83,7 +83,7 @@ function ToastDescription<T extends ValidComponent = "div">(
 	const [local, others] = splitProps(props as ToastDescriptionProps, ["class"]);
 	return (
 		<ToastPrimitive.Description
-			class={clsx("toast__description", local.class)}
+			class={clsx(styles["toast__description"], local.class)}
 			{...others}
 		/>
 	);
@@ -128,7 +128,7 @@ function showToast(props: {
 				onSwipeEnd={() => props.onToastForceClose?.(data.toastId)}
 				onEscapeKeyDown={() => props.onToastForceClose?.(data.toastId)}
 				priority={props.priority}
-				class={props.severity ? `toast-${props.severity.toLowerCase()}` : ""}
+				class={props.severity ? styles[`toast-${props.severity.toLowerCase()}`] : ""}
 				style={{
 					"border-left": `4px solid ${severityColor()}`,
 				}}
@@ -148,13 +148,13 @@ function showToast(props: {
 									? (props.severity.toLowerCase() as any)
 									: undefined
 							}
-							class={"toast__progress"}
+							class={styles["toast__progress"]}
 						/>
 					)}
-					<div class="toast__cancel-area" style="display: flex; gap: 8px; margin-top: 8px;">
+					<div class={styles["toast__cancel-area"]} style="display: flex; gap: 8px; margin-top: 8px;">
 						<Show when={props.cancellable}>
 							<button
-								class="toast__cancel-btn"
+								class={styles["toast__cancel-btn"]}
 								onClick={() => props.onCancel?.()}
 								style={{
 									padding: "4px 8px",
@@ -173,7 +173,7 @@ function showToast(props: {
 							<Switch>
 								<Match when={props.isPaused}>
 									<button
-										class="toast__resume-btn"
+										class={styles["toast__resume-btn"]}
 										onClick={() => props.onResume?.()}
 										style={{
 											padding: "4px 8px",
@@ -191,7 +191,7 @@ function showToast(props: {
 								</Match>
 								<Match when={!props.isPaused}>
 									<button
-										class="toast__pause-btn"
+										class={styles["toast__pause-btn"]}
 										onClick={() => props.onPause?.()}
 										style={{
 											padding: "4px 8px",
@@ -258,7 +258,7 @@ function updateToast(
 				onSwipeEnd={() => props.onToastForceClose?.(data.toastId)}
 				onEscapeKeyDown={() => props.onToastForceClose?.(data.toastId)}
 				priority={props.priority}
-				class={props.severity ? `toast-${props.severity.toLowerCase()}` : ""}
+				class={props.severity ? styles[`toast-${props.severity.toLowerCase()}`] : ""}
 				style={{
 					"border-left": `4px solid ${severityColor()}`,
 				}}
@@ -278,13 +278,13 @@ function updateToast(
 									? (props.severity.toLowerCase() as any)
 									: undefined
 							}
-							class={"toast__progress"}
+							class={styles["toast__progress"]}
 						/>
 					)}
-					<div class="toast__actions-area" style="display: flex; gap: 8px; margin-top: 8px;">
+					<div class={styles["toast__actions-area"]} style="display: flex; gap: 8px; margin-top: 8px;">
 						<Show when={props.cancellable}>
 							<button
-								class="toast__cancel-btn"
+								class={styles["toast__cancel-btn"]}
 								onClick={() => props.onCancel?.()}
 								style={{
 									padding: "4px 8px",
@@ -303,7 +303,7 @@ function updateToast(
 							<Switch>
 								<Match when={props.isPaused}>
 									<button
-										class="toast__resume-btn"
+										class={styles["toast__resume-btn"]}
 										onClick={() => props.onResume?.()}
 										style={{
 											padding: "4px 8px",
@@ -321,7 +321,7 @@ function updateToast(
 								</Match>
 								<Match when={!props.isPaused}>
 									<button
-										class="toast__pause-btn"
+										class={styles["toast__pause-btn"]}
 										onClick={() => props.onPause?.()}
 										style={{
 											padding: "4px 8px",

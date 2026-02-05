@@ -18,7 +18,7 @@ import { DEFAULT_ICONS } from "@utils/instances";
 import { getCompatibilityForInstance } from "@utils/resources";
 import Button from "@ui/button/button";
 import { invoke } from "@tauri-apps/api/core";
-import "./instance-selection-dialog.css";
+import styles from "./instance-selection-dialog.module.css";
 
 interface InstanceSelectionDialogProps {
 	isOpen: boolean;
@@ -146,7 +146,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 					"background-size": "cover",
 					"background-position": "center",
 				};
-		return <div class="instance-select-icon" style={style} />;
+		return <div class={styles["instance-select-icon"]} style={style} />;
 	};
 
 	const getCompatibility = (instance: Instance) => {
@@ -254,15 +254,15 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 			open={props.isOpen}
 			onOpenChange={(open) => !open && props.onClose()}
 		>
-			<DialogContent class="instance-selection-dialog">
+			<DialogContent class={styles["instance-selection-dialog"]}>
 				<DialogHeader>
-					<h2>Select Instance</h2>
-					<p>
+					<h2 class={styles["dialog-title"]}>Select Instance</h2>
+					<p class={styles["dialog-description"]}>
 						Choose where to install {props.project?.name || "this resource"}.
 					</p>
 				</DialogHeader>
 
-				<div class="instance-list-scroll">
+				<div class={styles["instance-list-scroll"]}>
 					<For each={sortedInstances()}>
 						{(instance) => {
 							const comp = createMemo(() => getCompatibility(instance));
@@ -340,11 +340,12 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 
 							return (
 								<button
-									class="instance-select-item"
+									class={styles["instance-select-item"]}
 									classList={{
-										disabled: !canSelect(),
-										installed: isAlreadyInstalled() && !isUpdateAvailable(),
-										update: isUpdateAvailable(),
+										[styles.disabled]: !canSelect(),
+										[styles.installed]:
+											isAlreadyInstalled() && !isUpdateAvailable(),
+										[styles.update]: isUpdateAvailable(),
 									}}
 									onClick={() => canSelect() && props.onSelect(instance)}
 									title={
@@ -357,33 +358,43 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 													: ""
 									}
 								>
-									<div class="instance-item-left">
+									<div class={styles["instance-item-left"]}>
 										<InstanceIcon iconPath={instance.iconPath} />
-										<div class="instance-item-info">
-											<span class="instance-item-name">{instance.name}</span>
-											<span class="instance-item-meta">
+										<div class={styles["instance-item-info"]}>
+											<span class={styles["instance-item-name"]}>
+												{instance.name}
+											</span>
+											<span class={styles["instance-item-meta"]}>
 												{instance.minecraftVersion} •{" "}
 												{instance.modloader || "Vanilla"}
 											</span>
 											<Show when={isDisabled()}>
-												<span class="incompatible-reason">{comp().reason}</span>
+												<span class={styles["incompatible-reason"]}>
+													{comp().reason}
+												</span>
 											</Show>
 											<Show when={isAlreadyInstalled() && !isUpdateAvailable()}>
-												<span class="installed-status">Already installed</span>
+												<span class={styles["installed-status"]}>
+													Already installed
+												</span>
 											</Show>
 											<Show when={isUpdateAvailable()}>
-												<span class="update-status">Update Available</span>
+												<span class={styles["update-status"]}>
+													Update Available
+												</span>
 											</Show>
 										</div>
 									</div>
 									<Show when={isDisabled()}>
-										<span class="incompatible-badge">Incompatible</span>
+										<span class={styles["incompatible-badge"]}>
+											Incompatible
+										</span>
 									</Show>
 									<Show when={isAlreadyInstalled() && !isUpdateAvailable()}>
-										<span class="installed-badge">Installed</span>
+										<span class={styles["installed-badge"]}>Installed</span>
 									</Show>
 									<Show when={isUpdateAvailable()}>
-										<span class="update-badge">Update</span>
+										<span class={styles["update-badge"]}>Update</span>
 									</Show>
 								</button>
 							);
@@ -391,7 +402,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 					</For>
 				</div>
 
-				<div class="dialog-footer">
+				<div class={styles["dialog-footer"]}>
 					<Button
 						variant="outline"
 						onClick={props.onCreateNew}

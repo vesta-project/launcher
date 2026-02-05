@@ -1,4 +1,4 @@
-﻿import {
+import {
 	createSignal,
 	Show,
 	createMemo,
@@ -8,6 +8,8 @@
 	createResource,
 } from "solid-js";
 import { showToast } from "@ui/toast/toast";
+import { Badge } from "@ui/badge";
+import { Separator } from "@ui/separator/separator";
 import { createInstance, installInstance, getInstance } from "@utils/instances";
 import { type Instance } from "@utils/instances";
 import { router } from "@components/page-viewer/page-viewer";
@@ -24,7 +26,7 @@ import { InstallForm } from "./components/InstallForm";
 import SearchIcon from "@assets/search.svg";
 import GlobeIcon from "@assets/earth-globe.svg";
 import CubeIcon from "@assets/cube.svg";
-import "./install-page.css";
+import styles from "./install-page.module.css";
 
 interface InstallPageProps {
 	close?: () => void;
@@ -419,14 +421,14 @@ function InstallPage(props: InstallPageProps) {
 	});
 
 	return (
-		<div class="page-root">
+		<div class={styles["page-root"]}>
 			<Show
 				when={
 					!(props.projectId || modpackUrl() || modpackPath() || isModpackMode())
 				}
 			>
-				<header class="install-page-header">
-					<div class="header-text">
+				<header class={styles["install-page-header"]}>
+					<div class={styles["header-text"]}>
 						<h1>{isModpackMode() ? "Install Modpack" : "New Instance"}</h1>
 						<p>
 							{isModpackMode()
@@ -445,8 +447,10 @@ function InstallPage(props: InstallPageProps) {
 							!isFetchingMetadata()
 						}
 					>
-						<button
-							class="quick-install-pill"
+						<Badge
+							pill={true}
+							clickable={true}
+							variant="surface"
 							onClick={() =>
 								router()?.updateQuery(
 									"mode",
@@ -455,15 +459,13 @@ function InstallPage(props: InstallPageProps) {
 								)
 							}
 						>
-							<span class="pill-text">
-								{isModpackMode() ? "Standard Instance" : "Install Modpack"}
-							</span>
-						</button>
+							{isModpackMode() ? "Standard Instance" : "Install Modpack"}
+						</Badge>
 					</Show>
 				</header>
 			</Show>
 
-			<div class="page-wrapper">
+			<div class={styles["page-wrapper"]}>
 				{/* Context Banner (e.g. "Installing Fabulous Optimized") */}
 				<Show
 					when={
@@ -471,9 +473,9 @@ function InstallPage(props: InstallPageProps) {
 						!shouldShowOverlay()
 					}
 				>
-					<div class="install-resource-context">
+					<div class={styles["install-resource-context"]}>
 						<button
-							class="back-link"
+							class={styles["back-link"]}
 							onClick={() => {
 								if (props.projectId) {
 									router()?.backwards();
@@ -488,7 +490,8 @@ function InstallPage(props: InstallPageProps) {
 						>
 							{props.projectId ? "Back to Browser" : "Back to Source"}
 						</button>
-						<div class="resource-pill">
+						<Separator orientation="vertical" style={{ height: "24px" }} />
+						<div class={styles["resource-pill"]}>
 							<Show when={props.projectIcon || modpackInfo()?.iconUrl}>
 								<img
 									src={
@@ -497,16 +500,16 @@ function InstallPage(props: InstallPageProps) {
 									alt=""
 								/>
 							</Show>
-							<div class="resource-info">
-								<span class="resource-label">
+							<div class={styles["resource-info"]}>
+								<span class={styles["resource-label"]}>
 									{props.resourceType ||
 										(isModpackMode() ? "Modpack" : "Package")}
 								</span>
-								<div class="resource-name-row">
+								<div class={styles["resource-name-row"]}>
 									<span
-										class="resource-name"
+										class={styles["resource-name"]}
 										classList={{
-											"is-analyzing": !modpackInfo() && !props.projectName,
+											[styles["is-analyzing"]]: !modpackInfo() && !props.projectName,
 										}}
 									>
 										{props.projectName ||
@@ -519,12 +522,12 @@ function InstallPage(props: InstallPageProps) {
 											(props.initialVersion && props.initialModloader)
 										}
 									>
-										<div class="resource-meta">
-											<span class="meta-tag">
+										<div class={styles["resource-meta"]}>
+											<span class={styles["meta-tag"]}>
 												{modpackInfo()?.minecraftVersion ||
 													props.initialVersion}
 											</span>
-											<span class="meta-tag capitalize">
+											<span class={`${styles["meta-tag"]} ${styles.capitalize}`}>
 												{modpackInfo()?.modloader || props.initialModloader}
 											</span>
 										</div>
@@ -545,55 +548,55 @@ function InstallPage(props: InstallPageProps) {
 						!props.projectId
 					}
 				>
-					<div class="import-selection-wrapper">
+					<div class={styles["import-selection-wrapper"]}>
 						<Show when={!showUrlInput()}>
-							<div class="import-header">
+							<div class={styles["import-header"]}>
 								<h1>Install Modpack</h1>
 								<p>Choose an installation source to get started.</p>
 							</div>
 
-							<div class="modpack-import-container">
-								<div class="modpack-import-card" onClick={handleLocalImport}>
-									<div class="card-icon">
+							<div class={styles["modpack-import-container"]}>
+								<div class={styles["modpack-import-card"]} onClick={handleLocalImport}>
+									<div class={styles["card-icon"]}>
 										<CubeIcon />
 									</div>
-									<div class="card-content">
-										<div class="title">Local File</div>
-										<div class="description">Upload .zip or .mrpack</div>
+									<div class={styles["card-content"]}>
+										<div class={styles.title}>Local File</div>
+										<div class={styles.description}>Upload .zip or .mrpack</div>
 									</div>
 								</div>
 								<div
-									class="modpack-import-card"
+									class={styles["modpack-import-card"]}
 									onClick={() => {
 										resources.setType("modpack");
 										router()?.navigate("/resources");
 									}}
 								>
-									<div class="card-icon">
+									<div class={styles["card-icon"]}>
 										<SearchIcon />
 									</div>
-									<div class="card-content">
-										<div class="title">Explore</div>
-										<div class="description">Browse Modrinth & CF</div>
+									<div class={styles["card-content"]}>
+										<div class={styles.title}>Explore</div>
+										<div class={styles.description}>Browse Modrinth & CF</div>
 									</div>
 								</div>
 								<div
-									class="modpack-import-card"
+									class={styles["modpack-import-card"]}
 									onClick={() => router()?.updateQuery("source", "url", true)}
 								>
-									<div class="card-icon is-stroke">
+									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
 										<GlobeIcon />
 									</div>
-									<div class="card-content">
-										<div class="title">From URL</div>
-										<div class="description">Direct download link</div>
+									<div class={styles["card-content"]}>
+										<div class={styles.title}>From URL</div>
+										<div class={styles.description}>Direct download link</div>
 									</div>
 								</div>
 							</div>
 
-							<div class="import-footer">
+							<div class={styles["import-footer"]}>
 								<button
-									class="switch-mode-button"
+									class={styles["switch-mode-button"]}
 									onClick={() =>
 										router()?.updateQuery("mode", "standard", true)
 									}
@@ -604,9 +607,9 @@ function InstallPage(props: InstallPageProps) {
 						</Show>
 
 						<Show when={showUrlInput()}>
-							<div class="url-input-container">
-								<div class="url-input-header">
-									<div class="card-icon is-stroke">
+							<div class={styles["url-input-container"]}>
+								<div class={styles["url-input-header"]}>
+									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
 										<GlobeIcon />
 									</div>
 									<h3>Enter Download Link</h3>
@@ -614,7 +617,7 @@ function InstallPage(props: InstallPageProps) {
 										Paste a CurseForge, Modrinth, or direct ZIP/MRPACK link.
 									</p>
 								</div>
-								<div class="url-input-row">
+								<div class={styles["url-input-row"]}>
 									<input
 										type="text"
 										placeholder="https://example.com/pack.zip"
@@ -624,7 +627,7 @@ function InstallPage(props: InstallPageProps) {
 										autofocus
 									/>
 									<button
-										class="import-button"
+										class={styles["import-button"]}
 										onClick={handleUrlSubmit}
 										disabled={!urlInputValue()}
 									>
@@ -632,7 +635,7 @@ function InstallPage(props: InstallPageProps) {
 									</button>
 								</div>
 								<button
-									class="cancel-link"
+									class={styles["cancel-link"]}
 									onClick={() => router()?.removeQuery("source")}
 								>
 									Go Back
@@ -645,16 +648,16 @@ function InstallPage(props: InstallPageProps) {
 				{/* Loading / Fetching State (Initial) */}
 				{/* We only show the full-page fetching overlay if we don't have a project name to show the form for yet */}
 				<Show when={shouldShowOverlay()}>
-					<div class="fetching-metadata-container">
-						<div class="fetching-overlay">
-							<div class="spinner" />
+					<div class={styles["fetching-metadata-container"]}>
+						<div class={styles["fetching-overlay"]}>
+							<div class={styles.spinner} />
 							<p>
 								{projectVersions.loading
 									? "Loading available versions..."
 									: "Fetching modpack details..."}
 							</p>
 							<Show when={!projectVersions.loading}>
-								<span class="fetching-subtext">
+								<span class={styles["fetching-subtext"]}>
 									This usually takes a few seconds as we verify the pack
 									manifest.
 								</span>
@@ -741,3 +744,4 @@ function InstallPage(props: InstallPageProps) {
 }
 
 export default InstallPage;
+
