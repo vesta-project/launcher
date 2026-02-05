@@ -50,7 +50,7 @@ impl NetworkManager {
             // Fallback endpoints for different regions (e.g. Minecraft-specific ones)
             let endpoints = [
                 "https://1.1.1.1",
-                "https://sky.mojang.com/check",
+                "https://session.minecraft.net",
                 "https://www.google.com"
             ];
             let mut detected = NetworkStatus::Offline;
@@ -115,7 +115,7 @@ impl NetworkManager {
         // Ensure we reset is_checking even if we return early or panic
         let (best_detected, _elapsed) = async {
             let endpoints = [
-                "https://sky.mojang.com/check",
+                "https://session.minecraft.net",
                 "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
             ];
             let mut best = NetworkStatus::Offline;
