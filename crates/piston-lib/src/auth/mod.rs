@@ -10,9 +10,22 @@ use oauth2::{
     reqwest::async_http_client,
     AuthUrl, ClientId, DeviceAuthorizationUrl, DeviceCodeErrorResponse, RefreshToken,
     RequestTokenError, Scope, StandardDeviceAuthorizationResponse, TokenUrl,
+    StandardErrorResponse, basic::BasicErrorResponseType,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
+use thiserror::Error;
+
+/// Authentication errors
+#[derive(Debug, Error)]
+pub enum PistonAuthError {
+    #[error("Refresh token expired or invalid (invalid_grant)")]
+    SessionExpired,
+    #[error("Network error: {0}")]
+    NetworkError(String),
+    #[error("Other authentication error: {0}")]
+    Other(String),
+}
 
 /// Microsoft OAuth endpoints
 const AUTHORIZATION_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
@@ -92,7 +105,7 @@ pub async fn poll_for_token(
 pub async fn refresh_access_token(
     client: &BasicClient,
     refresh_token: String,
-) -> Result<BasicTokenResponse> {
+) -> std::result::Result<BasicTokenResponse, PistonAuthError> {
     log::info!("[auth] Attempting to refresh Microsoft access token");
     match client
         .exchange_refresh_token(&RefreshToken::new(refresh_token))
@@ -108,7 +121,19 @@ pub async fn refresh_access_token(
         }
         Err(e) => {
             log::error!("[auth] Failed to refresh Microsoft access token: {:?}", e);
-            Err(anyhow::anyhow!("Failed to refresh access token: {:?}", e))
+            
+            match e {
+                RequestTokenError::ServerResponse(err) => {
+                    if err.error() == &BasicErrorResponseType::InvalidGrant {
+                        return Err(PistonAuthError::SessionExpired);
+                    }
+                    Err(PistonAuthError::Other(format!("Server reported error: {:?}", err)))
+                },
+                RequestTokenError::Request(req) => {
+                    Err(PistonAuthError::NetworkError(format!("Network error: {:?}", req)))
+                },
+                _ => Err(PistonAuthError::Other(format!("Failed to refresh access token: {:?}", e))),
+            }
         }
     }
 }

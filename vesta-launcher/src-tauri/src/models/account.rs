@@ -34,6 +34,7 @@ pub struct Account {
     pub theme_advanced_overrides: Option<String>,
     pub theme_border_width: Option<i32>,
     pub account_type: String,
+    pub is_expired: bool,
 }
 
 /// New account (without id for insertion)
@@ -64,6 +65,7 @@ pub struct NewAccount {
     pub theme_advanced_overrides: Option<String>,
     pub theme_border_width: Option<i32>,
     pub account_type: String,
+    pub is_expired: bool,
 }
 
 impl Default for Account {
@@ -94,6 +96,7 @@ impl Default for Account {
             theme_advanced_overrides: None,
             theme_border_width: None,
             account_type: "Microsoft".to_string(),
+            is_expired: false,
         }
     }
 }
@@ -125,6 +128,7 @@ impl Default for NewAccount {
             theme_advanced_overrides: None,
             theme_border_width: None,
             account_type: "Microsoft".to_string(),
+            is_expired: false,
         }
     }
 }

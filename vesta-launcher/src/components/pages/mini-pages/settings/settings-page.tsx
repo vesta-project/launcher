@@ -67,6 +67,7 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import styles from "./settings-page.module.css";
+import { JavaOptionCard, type JavaOption } from "./java-option-card";
 
 interface AppConfig {
 	id: number;
@@ -191,6 +192,84 @@ function SettingsPage(props: { close?: () => void }) {
 		const id = themeId();
 		return id ? (getThemeById(id)?.allowHueChange ?? false) : false;
 	};
+
+	// Flatten Java options into a simple array
+	const javaOptions = createMemo(() => {
+		const options: JavaOption[] = [];
+		const reqs = requirements() || [];
+		const detectedJavas = detected() || [];
+		const managedJavas = managed() || [];
+		const globalPathsData = globalPaths() || [];
+
+		reqs.forEach((req: any) => {
+			const current = globalPathsData.find(
+				(p: any) => p.major_version === req.major_version,
+			);
+			const managedVersion = managedJavas.find(
+				(m: any) => m.major_version === req.major_version,
+			);
+
+			// Managed option
+			options.push({
+				type: 'managed',
+				version: req.major_version,
+				title: 'Managed Runtime',
+				path: managedVersion?.path,
+				isActive: current?.is_managed || false,
+				onClick: () => {
+					if (managedVersion) {
+						handleSetGlobalPath(req.major_version, managedVersion.path, true);
+					}
+				},
+				onDownload: () => handleDownloadManaged(req.major_version),
+			});
+
+			// System detected options
+			detectedJavas
+				.filter((d: any) => d.major_version === req.major_version)
+				.forEach((det: any) => {
+					options.push({
+						type: 'system',
+						version: req.major_version,
+						title: 'System Runtime',
+						path: det.path,
+						isActive: current?.path === det.path && !current?.is_managed,
+						onClick: () => handleSetGlobalPath(req.major_version, det.path, false),
+					});
+				});
+
+			// Custom active path (if not in detected list)
+			if (
+				current &&
+				!current.is_managed &&
+				!detectedJavas.some(
+					(d: any) =>
+						d.path === current.path &&
+						d.major_version === req.major_version,
+				)
+			) {
+				options.push({
+					type: 'custom',
+					version: req.major_version,
+					title: 'Custom Path',
+					path: current.path,
+					isActive: true,
+					onClick: () => handleManualPickSetGlobal(req.major_version),
+				});
+			}
+
+			// Browse option
+			options.push({
+				type: 'browse',
+				version: req.major_version,
+				title: '+ Browse...',
+				isActive: false,
+				onClick: () => handleManualPickSetGlobal(req.major_version),
+			});
+		});
+
+		return options;
+	});
 
 	let unsubscribeConfigUpdate: (() => void) | null = null;
 
@@ -921,14 +1000,8 @@ function SettingsPage(props: { close?: () => void }) {
 								<div class={styles["java-requirements-list"]}>
 									<For each={requirements()}>
 										{(req: any) => {
-											const current = () =>
-												globalPaths()?.find(
-													(p: any) => p.major_version === req.major_version,
-												);
-											const managedVersion = () =>
-												managed()?.find(
-													(m: any) => m.major_version === req.major_version,
-												);
+											const versionOptions = () =>
+												javaOptions().filter(option => option.version === req.major_version);
 
 											return (
 												<div class={styles["java-req-item"]}>
@@ -937,224 +1010,9 @@ function SettingsPage(props: { close?: () => void }) {
 													</div>
 
 													<div class={styles["java-options-grid"]}>
-														{/* Managed Option */}
-														{/* TODO: Fix Floating UI tooltip positioning with nested interactive components */}
-														<ContextMenu>
-															<ContextMenuTrigger>
-																<div
-																	class={styles["java-option-card"]}
-																	classList={{
-																		[styles.active]: current()?.is_managed,
-																	}}
-																	onClick={() => {
-																		const m = managedVersion();
-																		if (m)
-																			handleSetGlobalPath(
-																				req.major_version,
-																				m.path,
-																				true,
-																			);
-																	}}
-																	title={managedVersion()?.path || "No path set"}
-																>
-																			<div class={styles["option-title"]}>
-																				Managed Runtime
-																				<Show when={current()?.is_managed}>
-																					<Badge>Active</Badge>
-																				</Show>
-																			</div>
-																			<Show
-																				when={managedVersion()}
-																				fallback={
-																					<LauncherButton
-																						size="sm"
-																						variant="ghost"
-																						onClick={(e) => {
-																							e.stopPropagation();
-																							handleDownloadManaged(
-																								req.major_version,
-																							);
-																						}}
-																						style={{
-																							"margin-top": "auto",
-																							width: "100%",
-																							"font-size": "0.75rem",
-																							height: "28px",
-																						}}
-																					>
-																						Download & Use
-																					</LauncherButton>
-																				}
-																			>
-																				{(m) => {
-																					const managed = m();
-																					return (
-																						<div
-																							class={styles["option-path"]}
-																							style={{ "margin-top": "auto" }}
-																						>
-																							{managed.path}
-																						</div>
-																					);
-																				}}
-																			</Show>
-																		</div>
-																	</ContextMenuTrigger>
-																	<ContextMenuContent>
-																		<ContextMenuItem
-																			onClick={() => {
-																				const path = managedVersion()?.path;
-																				if (path) {
-																					navigator.clipboard.writeText(path);
-																					showToast({
-																						title: "Copied",
-																						description: "Path copied to clipboard",
-																						severity: "Success",
-																					});
-																				}
-																			}}
-																		>
-																			Copy Full Path
-																		</ContextMenuItem>
-																	</ContextMenuContent>
-																</ContextMenu>
-
-														{/* System Detected */}
-														<For
-															each={detected()?.filter(
-																(d: any) =>
-																	d.major_version === req.major_version,
-															)}
-														>
-															{(det: any) => {
-																const isActive = () =>
-																	current()?.path === det.path &&
-																	!current()?.is_managed;
-																// TODO: Fix Floating UI tooltip positioning with nested interactive components
-																return (
-																	<ContextMenu>
-																		<ContextMenuTrigger>
-																			<div
-																				class={styles["java-option-card"]}
-																				classList={{ [styles.active]: isActive() }}
-																				onClick={() =>
-																					handleSetGlobalPath(
-																						req.major_version,
-																						det.path,
-																						false,
-																					)
-																				}
-																				title={det.path}
-																			>
-																						<div class={styles["option-title"]}>
-																							System Runtime
-																							<Show when={isActive()}>
-																								<Badge>Active</Badge>
-																							</Show>
-																						</div>
-																						<div
-																							class={styles["option-path"]}
-																							style={{ "margin-top": "auto" }}
-																						>
-																							{det.path}
-																						</div>
-																					</div>
-																				</ContextMenuTrigger>
-																				<ContextMenuContent>
-																					<ContextMenuItem
-																						onClick={() => {
-																							navigator.clipboard.writeText(
-																								det.path,
-																							);
-																							showToast({
-																								title: "Copied",
-																								description:
-																									"Path copied to clipboard",
-																								severity: "Success",
-																							});
-																						}}
-																					>
-																						Copy Full Path
-																					</ContextMenuItem>
-																				</ContextMenuContent>
-																			</ContextMenu>
-																);
-															}}
+														<For each={versionOptions()}>
+															{(option) => <JavaOptionCard option={option} />}
 														</For>
-
-														{/* Custom active path if not in lists */}
-														<Show
-															when={
-																current() &&
-																!current()?.is_managed &&
-																!detected()?.some(
-																	(d) =>
-																		d.path === current()?.path &&
-																		d.major_version === req.major_version,
-																)
-															}
-														>
-															{/* TODO: Fix Floating UI tooltip positioning with nested interactive components */}
-															<ContextMenu>
-																<ContextMenuTrigger>
-																	<div
-																		class={styles["java-option-card"]}
-																		classList={{ [styles.active]: true }}
-																		onClick={() =>
-																			handleManualPickSetGlobal(
-																				req.major_version,
-																			)
-																		}
-																		title={current()?.path}
-																	>
-																				<div class={styles["option-title"]}>
-																					Custom Path
-																					<Badge>Active</Badge>
-																				</div>
-																				<div
-																					class={styles["option-path"]}
-																					style={{ "margin-top": "auto" }}
-																				>
-																					{current()?.path}
-																				</div>
-																			</div>
-																		</ContextMenuTrigger>
-																		<ContextMenuContent>
-																			<ContextMenuItem
-																				onClick={() => {
-																					const path = current()?.path;
-																					if (path) {
-																						navigator.clipboard.writeText(path);
-																						showToast({
-																							title: "Copied",
-																							description:
-																								"Path copied to clipboard",
-																							severity: "Success",
-																						});
-																					}
-																				}}
-																			>
-																				Copy Full Path
-																			</ContextMenuItem>
-																		</ContextMenuContent>
-																	</ContextMenu>
-														</Show>
-
-														{/* Manual browse */}
-														<div
-															class={`${styles["java-option-card"]} ${styles.browse}`}
-															onClick={() =>
-																handleManualPickSetGlobal(req.major_version)
-															}
-														>
-															<div class={styles["option-title"]}>+ Browse...</div>
-															<div
-																class={styles["option-subtitle"]}
-																style={{ "margin-top": "auto" }}
-															>
-																Select manually
-															</div>
-														</div>
 													</div>
 												</div>
 											);

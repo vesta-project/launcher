@@ -982,7 +982,10 @@ function InitLoginPage(props: InitPagesProps) {
 				setIsStartingAuth(false);
 				if (timer) clearInterval(timer);
 
-				if (props.isLoginOnly) {
+				const searchParams = new URLSearchParams(window.location.search);
+				const isForceLogin = searchParams.get("login") === "true";
+
+				if (props.isLoginOnly || isForceLogin) {
 					props.navigate?.("/home", { replace: true });
 				} else {
 					props.changeInitStep(props.initStep + 1);

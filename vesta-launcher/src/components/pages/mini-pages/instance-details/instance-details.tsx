@@ -10,6 +10,8 @@ import { Separator } from "@ui/separator/separator";
 import { SettingsCard, SettingsField } from "@components/settings";
 import Button from "@ui/button/button";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
+import { ModpackVersionSelector } from "./modpack-version-selector";
+import type { ModpackVersion } from "./modpack-version-selector";
 import {
 	Popover,
 	PopoverCloseButton,
@@ -750,6 +752,9 @@ export default function InstanceDetails(
 	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<
 		string | null
 	>(null);
+	const [selectedModpackVersion, setSelectedModpackVersion] = createSignal<
+		ModpackVersion | null
+	>(null);
 
 	const [mcVersions] = createResource(getMinecraftVersions);
 	const [selectedMcVersion, setSelectedMcVersion] = createSignal("");
@@ -779,34 +784,6 @@ export default function InstanceDetails(
 			}
 		},
 	);
-
-	const searchableModpackVersions = createMemo(() => {
-		return (modpackVersions() || []).map((v) => ({
-			...v,
-			id: String(v.id),
-			version_number: String(v.version_number),
-			searchString: `${String(v.version_number)} ${v.game_versions.join(" ")} ${v.loaders.join(" ")} ${String(v.id)}`,
-			displayString: (() => {
-				const mcV = v.game_versions?.[0];
-				const versionStr = String(v.version_number);
-				return mcV ? `${versionStr} (MC ${mcV})` : versionStr;
-			})(),
-		}));
-	});
-
-	const modpackVersionMap = createMemo(() => {
-		const map = new Map<string, any>();
-		for (const v of searchableModpackVersions()) {
-			map.set(v.id, v);
-		}
-		return map;
-	});
-
-	const selectedModpackVersionMetadata = createMemo(() => {
-		const vid = selectedModpackVersionId();
-		if (!vid) return null;
-		return modpackVersionMap().get(vid) || null;
-	});
 
 	const searchableMcVersions = createMemo(() => {
 		return (mcVersions()?.game_versions || []).map((v) => ({
@@ -885,6 +862,11 @@ export default function InstanceDetails(
 			});
 		}
 	});
+
+	const handleModpackVersionSelect = (versionId: string, version?: ModpackVersion) => {
+		setSelectedModpackVersionId(versionId);
+		setSelectedModpackVersion(version || null);
+	};
 
 	// Reset selections when switching instances
 	createEffect(() => {
@@ -2403,102 +2385,14 @@ export default function InstanceDetails(
 														</div>
 													</div>
 
-													<SettingsField
-														label="Modpack Version"
-														description="Switch between available versions of this modpack."
-														layout="stack"
-													>
-														<div style="display: flex; gap: 12px; align-items: flex-end; width: 100%;">
-															<div style="flex: 1;">
-																<Show
-																	when={!modpackVersions.loading}
-																	fallback={
-																		<Skeleton
-																			class={styles["skeleton-picker"]}
-																		/>
-																	}
-																>
-																	<Combobox<any>
-																		options={searchableModpackVersions()}
-																		value={selectedModpackVersionId()}
-																		disabled={isGuest()}
-																		onChange={(id: any) => {
-																			if (id !== undefined && id !== null) {
-																				setSelectedModpackVersionId(String(id));
-																			}
-																		}}
-																		optionValue={(v) => v.id}
-																		optionTextValue={(v) => v.searchString}
-																		placeholder="Select version..."
-																		itemComponent={(p) => (
-																			<ComboboxItem item={p.item}>
-																				<div style="display: flex; flex-direction: column; gap: 2px;">
-																					<span style="font-weight: 500;">
-																						{p.item.rawValue.version_number} (
-																						{p.item.rawValue.release_type})
-																					</span>
-																					<span style="font-size: 0.75rem; opacity: 0.7;">
-																						MC{" "}
-																						{p.item.rawValue.game_versions[0]} •{" "}
-																						{p.item.rawValue.loaders.join(", ")}
-																					</span>
-																				</div>
-																			</ComboboxItem>
-																		)}
-																	>
-																		<ComboboxControl
-																			aria-label="Modpack Version Selection"
-																			style="width: 100%;"
-																		>
-																			<ComboboxInput
-																				as="input"
-																				value={
-																					selectedModpackVersionMetadata()
-																						?.displayString ||
-																					selectedModpackVersionId() ||
-																					""
-																				}
-																			/>
-																			<ComboboxTrigger />
-																		</ComboboxControl>
-																		<ComboboxContent />
-																	</Combobox>
-																</Show>
-															</div>
-															<Show
-																when={
-																	String(selectedModpackVersionId() ?? "") !==
-																	String(inst().modpackVersionId ?? "")
-																}
-															>
-																<Button
-																	onClick={() => rolloutModpackUpdate()}
-																	disabled={
-																		busy() || isInstalling() || isGuest()
-																	}
-																	color="primary"
-																	variant="shadow"
-																>
-																	Update
-																</Button>
-															</Show>
-														</div>
-													</SettingsField>
-
-													<SettingsField
-														label="Effective Engine"
-														description="The Minecraft and Modloader versions defined by this modpack version."
-													>
-														<div class={styles["engine-pill"]}>
-															{selectedModpackVersionMetadata()
-																?.game_versions?.[0] ||
-																inst().minecraftVersion}{" "}
-															•{" "}
-															{selectedModpackVersionMetadata()?.loaders?.[0] ||
-																inst().modloader ||
-																"Vanilla"}
-														</div>
-													</SettingsField>
+													<ModpackVersionSelector
+														versions={modpackVersions()}
+														loading={modpackVersions.loading}
+														currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
+														onVersionSelect={handleModpackVersionSelect}
+														onUpdate={rolloutModpackUpdate}
+														disabled={busy() || isInstalling() || isGuest()}
+													/>
 												</SettingsCard>
 
 												<SettingsCard header="Modpack Maintenance" destructive>

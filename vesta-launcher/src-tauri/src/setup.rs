@@ -719,6 +719,19 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 Ok(_) => log::info!("GenerateManifestTask submitted successfully"),
                 Err(e) => log::error!("Failed to submit GenerateManifestTask: {}", e),
             }
+
+            // Proactively check active account session
+            tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+            log::info!("[setup] Performing proactive session validation...");
+            if let Ok(Some(acc)) = crate::auth::get_active_account() {
+                if acc.uuid != "00000000000000000000000000000000" {
+                    if let Err(e) = crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid).await {
+                        log::warn!("[setup] Proactive session validation failed: {}", e);
+                    } else {
+                        log::info!("[setup] Proactive session validation successful.");
+                    }
+                }
+            }
         });
     }
 

@@ -1053,7 +1053,7 @@ pub async fn launch_instance(
                 "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
             );
         } else if !is_offline {
-            if let Err(e) = crate::auth::ensure_account_tokens_valid(acc.uuid.clone()).await {
+            if let Err(e) = crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid.clone()).await {
                 log::error!("[launch_instance] Failed to refresh token: {}", e);
                 return Err(format!("Failed to refresh authentication: {}", e));
             }

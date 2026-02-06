@@ -566,7 +566,7 @@
 .category-tag {
 	display: flex;
 	align-items: center;
-	justify-content: left;
+	justify-content: space-between;
 	gap: 8px;
 	padding: 0 10px;
 	height: 30px;

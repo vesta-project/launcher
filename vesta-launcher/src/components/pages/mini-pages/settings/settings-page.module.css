@@ -189,6 +189,19 @@
 	background: var(--surface-raised);
 }
 
+.java-option-card.browse {
+	border-style: dashed;
+	border-color: var(--border-strong);
+	background: var(--surface-low);
+	justify-content: center;
+	text-align: center;
+}
+
+.java-option-card.browse:hover {
+	border-color: var(--accent-primary);
+	background: var(--surface-raised);
+}
+
 .option-title {
 	display: flex;
 	align-items: center;
@@ -196,6 +209,12 @@
 	font-size: 0.85rem;
 	font-weight: 500;
 	color: var(--text-primary);
+}
+
+.option-subtitle {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	font-weight: 400;
 }
 
 .option-path {

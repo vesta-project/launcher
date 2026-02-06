@@ -411,6 +411,7 @@ async fn process_login_completion(
                 skin_url.eq(skin_url_val),
                 cape_url.eq(cape_url_val),
                 is_active.eq(true),
+                is_expired.eq(false),
                 updated_at.eq(Some(now_str.clone())),
             ))
             .execute(&mut conn)
@@ -475,7 +476,10 @@ pub fn get_active_account() -> Result<Option<Account>, String> {
 }
 
 /// Ensure account tokens are valid and refresh if they are near expiry
-pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), String> {
+pub async fn ensure_account_tokens_valid(
+    app_handle: tauri::AppHandle,
+    target_uuid: String,
+) -> Result<(), String> {
     // Normalize UUID
     let target_uuid = target_uuid.replace("-", "");
 
@@ -523,7 +527,7 @@ pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), Stri
             target_uuid
         );
         // Call our refresh function
-        match refresh_account_tokens(target_uuid.clone()).await {
+        match refresh_account_tokens(app_handle, target_uuid.clone()).await {
             Ok(_) => {
                 log::info!(
                     "[auth] Token refresh successful for account {}",
@@ -548,7 +552,10 @@ pub async fn ensure_account_tokens_valid(target_uuid: String) -> Result<(), Stri
 
 /// Refresh the tokens for the given account
 #[tauri::command]
-pub async fn refresh_account_tokens(target_uuid: String) -> Result<(), String> {
+pub async fn refresh_account_tokens(
+    app_handle: tauri::AppHandle,
+    target_uuid: String,
+) -> Result<(), String> {
     // Normalize UUID
     let target_uuid = target_uuid.replace("-", "");
 
@@ -592,9 +599,35 @@ pub async fn refresh_account_tokens(target_uuid: String) -> Result<(), String> {
             Ok(t) => t,
             Err(e) => {
                 log::error!("[auth] Refresh failed for account {}: {}", target_uuid, e);
+                
+                // If the session expired, mark it in the database
+                if matches!(e, piston_lib::auth::PistonAuthError::SessionExpired) {
+                    log::warn!("[auth] Refresh token for {} is revoked or expired. Marking account as expired.", target_uuid);
+                    if let Ok(mut conn) = get_vesta_conn() {
+                        use crate::schema::account::dsl::*;
+                        let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
+                            .set(is_expired.eq(true))
+                            .execute(&mut conn);
+                        
+                        // Notify UI that accounts have changed (expired status updated)
+                        let _ = app_handle.emit("core://accounts-changed", ());
+                    }
+                }
+
                 return Err(format!("Failed to refresh token: {}", e));
             }
         };
+
+    // If we're here, refresh succeeded, so ensure is_expired is false
+    if let Ok(mut conn) = get_vesta_conn() {
+        use crate::schema::account::dsl::*;
+        let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
+            .set(is_expired.eq(false))
+            .execute(&mut conn);
+        
+        // Notify UI that accounts have changed (expired status updated)
+        let _ = app_handle.emit("core://accounts-changed", ());
+    }
 
     // Exchange for Minecraft token
     let ms_access_token = token_response.access_token().secret().clone();

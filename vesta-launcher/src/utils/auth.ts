@@ -22,6 +22,7 @@ export interface Account {
 	created_at: string | null;
 	updated_at: string | null;
 	account_type: string;
+	is_expired: boolean;
 }
 
 export type AuthStage =

@@ -31,6 +31,7 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
 import { initializeInstances, setupInstanceListeners } from "@stores/instances";
 import { ConfirmExitDialog } from "@components/confirm-exit-dialog";
+import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -101,7 +102,6 @@ function Root(props: ChildrenProp) {
 	const [blockingTasks, setBlockingTasks] = createSignal<string[]>([]);
 	const [runningInstances, setRunningInstances] = createSignal<string[]>([]);
 
-	let unlisten: UnlistenFn | null = null;
 	let unlistenDeepLink: (() => void) | null = null;
 	let unlistenCrash: (() => void) | null = null;
 	let unlistenExit: UnlistenFn | null = null;
@@ -210,7 +210,7 @@ function Root(props: ChildrenProp) {
 	onMount(() => {
 		listen("core://logout-guest", () => {
 			window.location.href = "/";
-		}).then((u) => (unlistenLogout = u));
+		}).then((u) => { unlistenLogout = u; });
 
 		listen("core://exit-requested", async () => {
 			try {
@@ -228,7 +228,7 @@ function Root(props: ChildrenProp) {
 				// User explicitly asked for exit, so let's try to exit if check itself fails.
 				await invoke("exit_app");
 			}
-		}).then((u) => (unlistenExit = u));
+		}).then((u) => { unlistenExit = u; });
 
 		// Setup deep-link handler for vesta:// URLs
 		onOpenUrl((urls) => {
@@ -240,7 +240,7 @@ function Root(props: ChildrenProp) {
 				handleDeepLink(url, navigate);
 			}
 		})
-			.then((u) => (unlistenDeepLink = u))
+			.then((u) => { unlistenDeepLink = u; })
 			.catch((error) => {
 				console.error("Failed to setup deep-link handler:", error);
 			});
@@ -352,7 +352,6 @@ function Root(props: ChildrenProp) {
 	});
 
 	onCleanup(() => {
-		unlisten?.();
 		unlistenDeepLink?.();
 		unlistenCrash?.();
 		unlistenExit?.();
@@ -387,6 +386,7 @@ function Root(props: ChildrenProp) {
 				onConfirm={() => invoke("exit_app")}
 				onCancel={() => setExitDialogOpen(false)}
 			/>
+			<SessionExpiredDialog />
 		</>
 	);
 }

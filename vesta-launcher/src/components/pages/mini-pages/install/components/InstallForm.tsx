@@ -512,7 +512,7 @@ export function InstallForm(props: InstallFormProps) {
 									setIcon(newIcon);
 									setDirty("icon", true);
 								}}
-								suggestedIcon={
+								modpackIcon={
 									normalizedIsModpack() || props.projectId
 										? props.originalIcon
 										: undefined

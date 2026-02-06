@@ -1,4 +1,4 @@
-// @generated automatically by Diesel CLI.
+﻿// @generated automatically by Diesel CLI.
 
 diesel::table! {
     account (id) {
@@ -27,6 +27,7 @@ diesel::table! {
         theme_advanced_overrides -> Nullable<Text>,
         theme_border_width -> Nullable<Integer>,
         account_type -> Text,
+        is_expired -> Bool,
     }
 }
 
@@ -106,7 +107,7 @@ diesel::table! {
 
 diesel::table! {
     resource_metadata_cache (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         source -> Text,
         remote_id -> Text,
         project_data -> Text,

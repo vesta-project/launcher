@@ -41,12 +41,12 @@ function InitPage() {
 				const account = await invoke<any>("get_active_account");
 
 				if (config.setup_completed) {
-					if (account && !forceLoginRequested) {
-						// Setup done and logged in (including Guest) -> Home
+					if (account && !account.is_expired && !forceLoginRequested) {
+						// Setup done and logged in (including Guest) and session not expired -> Home
 						navigate("/home", { replace: true });
 						return;
 					} else {
-						// Setup done but logged out OR force login -> Jump to Login
+						// Setup done but logged out OR session expired OR force login -> Jump to Login
 						setIsLoginOnly(true);
 						setInitStep(2); // Step 2 is Login
 					}
@@ -54,8 +54,8 @@ function InitPage() {
 					// Setup not done -> Resume or start onboarding
 					let resumeStep = config.setup_step || 0;
 
-					// If we are resuming at login but already have an account, skip to Java
-					if (resumeStep === 2 && account) {
+					// If we are resuming at login but already have a valid account, skip to Java
+					if (resumeStep === 2 && account && !account.is_expired) {
 						resumeStep = 3;
 						await invoke("set_setup_step", { step: 3 });
 					}
@@ -73,10 +73,10 @@ function InitPage() {
 	const handleStepChange = async (nextStep: number) => {
 		let step = nextStep;
 
-		// If going to login step, check if already authenticated
+		// If going to login step, check if already authenticated with valid session
 		if (step === 2 && !isLoginOnly()) {
-			const account = await invoke("get_active_account");
-			if (account) {
+			const account = await invoke<any>("get_active_account");
+			if (account && !account.is_expired) {
 				if (nextStep < initStep()) {
 					// User is going back from Java or later, skip login backwards
 					step = 0;

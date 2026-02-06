@@ -191,6 +191,9 @@ function AccountListItem(props: AccountListItemProps) {
 					<Show when={props.isActive}>
 						<div class={styles["account-active-badge"]}>Active</div>
 					</Show>
+					<Show when={props.account.is_expired}>
+						<div class={styles["account-expired-badge"]}>Expired</div>
+					</Show>
 					<Show when={props.account.account_type === ACCOUNT_TYPE_GUEST}>
 						<div
 							class={styles["account-active-badge"]}

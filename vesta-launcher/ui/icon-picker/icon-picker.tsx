@@ -55,8 +55,6 @@ export function IconPicker(props: IconPickerProps) {
 		});
 	};
 	
-	let popoverRef: any;
-	
 	const [isOpen, setIsOpen] = createSignal(false);
 	
 	const totalIcons = () => {
