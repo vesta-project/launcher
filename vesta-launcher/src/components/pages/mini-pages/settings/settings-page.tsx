@@ -1,4 +1,5 @@
 import { router } from "@components/page-viewer/page-viewer";
+import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
 import { listen } from "@tauri-apps/api/event";
@@ -330,8 +331,10 @@ function SettingsPage(props: { close?: () => void }) {
 			if (path) {
 				const info = await invoke<any>("verify_java_path", { pathStr: path });
 				if (info.major_version !== version) {
-					alert(
+					await dialogStore.alert(
+						"Invalid Java Version",
 						`Selected Java is version ${info.major_version}, but ${version} is required.`,
+						"error"
 					);
 				} else {
 					await handleSetGlobalPath(version, path, false);
@@ -1178,6 +1181,11 @@ function SettingsPage(props: { close?: () => void }) {
 										onClick={() => router()?.navigate("/task-test")}
 									>
 										Navigate to Task System Test
+									</LauncherButton>
+									<LauncherButton
+										onClick={() => router()?.navigate("/notification-test")}
+									>
+										Navigate to Notification Test
 									</LauncherButton>
 								</div>
 							</SettingsCard>

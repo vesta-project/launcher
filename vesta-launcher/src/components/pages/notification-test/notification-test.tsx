@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { dialogStore } from "@stores/dialog-store";
 import Button from "@ui/button/button";
 import { PROGRESS_INDETERMINATE } from "@utils/notifications";
 import { createSignal } from "solid-js";
@@ -89,10 +90,10 @@ function NotificationTestPage() {
 		try {
 			const tables = await invoke<string[]>("debug_check_tables");
 			console.log("Database tables:", tables);
-			alert("Tables: " + tables.join(", "));
+			await dialogStore.alert("Database Tables", tables.join(", "));
 		} catch (error) {
 			console.error("Failed to check tables:", error);
-			alert("Error: " + error);
+			await dialogStore.alert("Database Error", String(error), "error");
 		} finally {
 			setLoading(false);
 		}
@@ -103,10 +104,10 @@ function NotificationTestPage() {
 		try {
 			const result = await invoke<string>("debug_rerun_migrations");
 			console.log(result);
-			alert(result);
+			await dialogStore.alert("Migrations Result", result);
 		} catch (error) {
 			console.error("Failed to rerun migrations:", error);
-			alert("Error: " + error);
+			await dialogStore.alert("Migration Error", String(error), "error");
 		} finally {
 			setLoading(false);
 		}
@@ -121,6 +122,20 @@ function NotificationTestPage() {
 			});
 		} catch (error) {
 			console.error("Failed to submit task:", error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const testBackendDialog = async () => {
+		setLoading(true);
+		try {
+			const result = await invoke<string>("test_blocking_dialog");
+			console.log("Backend dialog result:", result);
+			await dialogStore.alert("Backend Result", result);
+		} catch (error) {
+			console.error("Failed to test backend dialog:", error);
+			await dialogStore.alert("Error", String(error), "error");
 		} finally {
 			setLoading(false);
 		}
@@ -192,6 +207,9 @@ function NotificationTestPage() {
 					</Button>
 					<Button onClick={rerunMigrations} disabled={loading()}>
 						Rerun Migrations
+					</Button>
+					<Button onClick={testBackendDialog} disabled={loading()}>
+						Test Backend Blocking Dialog
 					</Button>
 				</div>
 			</div>

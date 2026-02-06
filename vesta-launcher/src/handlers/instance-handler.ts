@@ -1,5 +1,5 @@
-import { ask, confirm } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
+import { dialogStore } from "@stores/dialog-store";
 import {
 	Instance,
 	duplicateInstance,
@@ -13,9 +13,10 @@ import {
  * Handles duplicating an instance with user prompt for name.
  */
 export const handleDuplicate = async (instance: Instance) => {
-	const newName = window.prompt(
+	const newName = await dialogStore.prompt(
+		"Duplicate Instance",
 		"Enter name for the copy:",
-		`${instance.name} (Copy)`,
+		{ defaultValue: `${instance.name} (Copy)` }
 	);
 	if (newName) {
 		try {
@@ -39,12 +40,10 @@ export const handleDuplicate = async (instance: Instance) => {
  * Handles repairing an instance with confirmation.
  */
 export const handleRepair = async (instance: Instance) => {
-	const confirmed = await confirm(
+	const confirmed = await dialogStore.confirm(
+		"Repair Instance",
 		`Are you sure you want to repair "${instance.name}"? This will re-verify all game files and modloader versions.`,
-		{
-			title: "Repair Instance",
-			kind: "info",
-		},
+		{ severity: "info" }
 	);
 
 	if (confirmed) {
@@ -69,12 +68,10 @@ export const handleRepair = async (instance: Instance) => {
  * Handles hard-resetting an instance with extreme warning.
  */
 export const handleHardReset = async (instance: Instance) => {
-	const confirmed = await ask(
+	const confirmed = await dialogStore.confirm(
+		"Hard Reset",
 		`This will wipe the ENTIRE instance folder for "${instance.name}".\n\nAll worlds, screenshots, and custom mods will be DELETED! This action cannot be undone.\n\nAre you absolutely sure?`,
-		{
-			title: "Vesta Launcher - Hard Reset",
-			kind: "error",
-		},
+		{ severity: "error", okLabel: "Hard Reset", isDestructive: true }
 	);
 
 	if (confirmed) {
@@ -102,12 +99,10 @@ export const handleUninstall = async (
 	instance: Instance,
 	onSuccess?: () => void,
 ) => {
-	const confirmed = await ask(
+	const confirmed = await dialogStore.confirm(
+		"Uninstall Instance",
 		`Are you sure you want to uninstall "${instance.name}"?\n\nThis will permanently delete the instance and its files.`,
-		{
-			title: "Uninstall Instance",
-			kind: "warning",
-		},
+		{ severity: "warning", okLabel: "Uninstall", isDestructive: true }
 	);
 
 	if (confirmed) {

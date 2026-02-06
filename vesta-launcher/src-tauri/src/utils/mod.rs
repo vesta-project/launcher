@@ -1,5 +1,6 @@
 pub mod config;
 pub mod crash_parser;
+pub mod dialog_manager;
 pub mod hash;
 pub mod java;
 pub mod network;

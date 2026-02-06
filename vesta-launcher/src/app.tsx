@@ -30,8 +30,9 @@ import {
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
 import { initializeInstances, setupInstanceListeners } from "@stores/instances";
-import { ConfirmExitDialog } from "@components/confirm-exit-dialog";
 import SessionExpiredDialog from "@components/auth/session-expired-dialog";
+import { DialogRoot } from "@components/dialog/dialog-root";
+import { cleanupDialogSystem, initializeDialogSystem, dialogStore } from "@stores/dialog-store";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -97,10 +98,6 @@ function App() {
 
 function Root(props: ChildrenProp) {
 	const navigate = useNavigate();
-
-	const [exitDialogOpen, setExitDialogOpen] = createSignal(false);
-	const [blockingTasks, setBlockingTasks] = createSignal<string[]>([]);
-	const [runningInstances, setRunningInstances] = createSignal<string[]>([]);
 
 	let unlistenDeepLink: (() => void) | null = null;
 	let unlistenCrash: (() => void) | null = null;
@@ -218,9 +215,22 @@ function Root(props: ChildrenProp) {
 				if (check.can_exit) {
 					await invoke("exit_app");
 				} else {
-					setBlockingTasks(check.blocking_tasks);
-					setRunningInstances(check.running_instances);
-					setExitDialogOpen(true);
+					const confirmed = await dialogStore.confirm(
+						"Active Processes Detected",
+						`The launcher is still performing some actions or games are running:\n\n${[
+							...check.running_instances.map((i) => `• ${i}`),
+							...check.blocking_tasks.map((t) => `• ${t}`),
+						].join("\n")}\n\nClosing now may cause issues.`,
+						{
+							okLabel: "Exit Anyway",
+							cancelLabel: "Stay Open",
+							isDestructive: true,
+							severity: "warning",
+						},
+					);
+					if (confirmed) {
+						await invoke("exit_app");
+					}
 				}
 			} catch (e) {
 				console.error("Failed to perform exit check:", e);
@@ -258,6 +268,15 @@ function Root(props: ChildrenProp) {
 			subscribeToBackendNotifications().catch((error) => {
 				console.error("Failed to initialize notification system:", error);
 			});
+
+			// Setup unified dialog system
+			initializeDialogSystem()
+				.then(() => {
+					console.log("Dialog system initialized");
+				})
+				.catch((error) => {
+					console.error("Failed to initialize dialog system:", error);
+				});
 
 			// Setup crash event listener (non-blocking)
 			subscribeToCrashEvents()
@@ -356,6 +375,7 @@ function Root(props: ChildrenProp) {
 		unlistenCrash?.();
 		unlistenExit?.();
 		unlistenLogout?.();
+		cleanupDialogSystem();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
 		cleanupFileDropSystem();
@@ -378,15 +398,8 @@ function Root(props: ChildrenProp) {
 	return (
 		<>
 			{props.children}
-			<ConfirmExitDialog
-				open={exitDialogOpen()}
-				onOpenChange={setExitDialogOpen}
-				blockingTasks={blockingTasks()}
-				runningInstances={runningInstances()}
-				onConfirm={() => invoke("exit_app")}
-				onCancel={() => setExitDialogOpen(false)}
-			/>
 			<SessionExpiredDialog />
+			<DialogRoot />
 		</>
 	);
 }

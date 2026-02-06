@@ -54,6 +54,7 @@ fn main() {
 
     tauri::Builder::default()
         .setup(setup::init)
+        .manage(utils::dialog_manager::DialogManager::new())
         .plugin(log_plugin)
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
@@ -77,6 +78,7 @@ fn main() {
             commands::app::open_instance_folder,
             commands::app::restart_app,
             commands::app::exit_check,
+            commands::app::test_blocking_dialog,
             commands::app::exit_app,
             commands::app::close_all_windows_and_reset,
             commands::app::get_default_instance_dir,
@@ -170,6 +172,7 @@ fn main() {
             commands::resources::sync_instance_resources,
             commands::resources::get_installed_resources,
             commands::resources::check_resource_updates,
+            utils::dialog_manager::submit_dialog_response,
         ])
         .on_window_event(|window, event| {
             match event {

@@ -1,5 +1,41 @@
 use crate::utils::db_manager::get_app_config_dir;
+use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
 use tauri::Manager;
+
+#[tauri::command]
+pub async fn test_blocking_dialog(
+    app_handle: tauri::AppHandle,
+    dialog_manager: tauri::State<'_, DialogManager>,
+) -> Result<String, String> {
+    let request = DialogRequest {
+        id: uuid::Uuid::new_v4(),
+        title: "Backend Blocking Test".to_string(),
+        description: Some("This dialog was triggered by the backend! Do you want to continue?".to_string()),
+        severity: DialogSeverity::Question,
+        actions: vec![
+            DialogAction {
+                id: "no".to_string(),
+                label: "No, Stop!".to_string(),
+                color: Some("none".to_string()),
+                variant: Some("ghost".to_string()),
+            },
+            DialogAction {
+                id: "yes".to_string(),
+                label: "Yes, Proceed".to_string(),
+                color: Some("primary".to_string()),
+                variant: Some("solid".to_string()),
+            },
+        ],
+        input: None,
+    };
+
+    let response = dialog_manager
+        .show_dialog(&app_handle, request)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(format!("User chose: {}", response.action_id))
+}
 
 #[tauri::command]
 pub async fn exit_check(

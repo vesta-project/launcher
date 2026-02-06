@@ -2,7 +2,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import { ask, confirm } from "@tauri-apps/plugin-dialog";
+import { dialogStore } from "@stores/dialog-store";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
@@ -685,8 +685,10 @@ export default function InstanceDetails(
 		const inst = instance();
 		if (selectedCount === 0 || !inst) return;
 
-		const confirmed = await confirm(
+		const confirmed = await dialogStore.confirm(
+			"Delete Resources",
 			`Are you sure you want to delete ${selectedCount} selected resources?`,
+			{ severity: "warning", isDestructive: true }
 		);
 		if (!confirmed) return;
 
@@ -905,8 +907,10 @@ export default function InstanceDetails(
 		const inst = instance();
 		if (!inst) return;
 
-		const confirmed = await confirm(
+		const confirmed = await dialogStore.confirm(
+			"Unlink Modpack",
 			"Are you sure you want to unlink this instance from the modpack? You will no longer receive updates from the platform, but your files will remain intact.",
+			{ severity: "warning" }
 		);
 		if (!confirmed) return;
 
@@ -1282,8 +1286,10 @@ export default function InstanceDetails(
 						size="icon"
 						onClick={async () => {
 							if (
-								await confirm(
+								await dialogStore.confirm(
+									"Delete Resource",
 									`Are you sure you want to delete ${info.row.original.display_name}? This will remove the file from your instance.`,
+									{ severity: "warning", isDestructive: true }
 								)
 							) {
 								const previous = installedResources.latest;
@@ -2597,10 +2603,11 @@ export default function InstanceDetails(
 													label="Duplicate Instance"
 													description="Create an exact clone of this instance."
 													actionLabel="Duplicate"
-													onAction={() => {
-														const name = window.prompt(
+													onAction={async () => {
+														const name = await dialogStore.prompt(
+															"Duplicate Instance",
 															"Enter name for the copy:",
-															`${inst().name} (Copy)`,
+															{ defaultValue: `${inst().name} (Copy)` }
 														);
 														if (name) duplicateInstance(inst().id, name);
 													}}
