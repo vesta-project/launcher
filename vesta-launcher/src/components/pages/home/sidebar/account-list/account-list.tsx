@@ -77,10 +77,17 @@ function AccountList(props: AccountListProps) {
 		}
 	};
 
-	const handleSwitchAccount = async (uuid: string) => {
+	const handleSwitchAccount = async (account: Account) => {
 		try {
-			console.log("[AccountList] Switching to account:", uuid);
-			await setActiveAccount(uuid);
+			if (account.is_expired) {
+				const { authStore } = await import("@stores/auth");
+				authStore.setExpiredAccount(account);
+				props.onClose();
+				return;
+			}
+
+			console.log("[AccountList] Switching to account:", account.uuid);
+			await setActiveAccount(account.uuid);
 
 			// Give the backend a moment to emit events and the UI to react
 			// before we close the modal
@@ -104,7 +111,7 @@ function AccountList(props: AccountListProps) {
 				await invoke("close_all_windows_and_reset");
 			} else if (isActive) {
 				// Removed active account, switch to the first available account
-				await handleSwitchAccount(remainingAccounts[0].uuid);
+				await handleSwitchAccount(remainingAccounts[0]);
 			} else {
 				// Removed a non-active account, just refetch
 				await refetchAccounts();
@@ -129,7 +136,7 @@ function AccountList(props: AccountListProps) {
 							<AccountListItem
 								account={account}
 								isActive={account.uuid === activeAccount()?.uuid}
-								onSwitch={() => handleSwitchAccount(account.uuid)}
+								onSwitch={() => handleSwitchAccount(account)}
 								onRemove={() => handleRemoveAccount(account.uuid)}
 								getAvatarUrl={getAvatarUrl}
 								avatarTimestamp={avatarTimestamp()}
@@ -159,16 +166,13 @@ interface AccountListItemProps {
 }
 
 function AccountListItem(props: AccountListItemProps) {
-	const [avatarUrl] = createResource(
-		() => ({ uuid: props.account.uuid, t: props.avatarTimestamp }),
-		({ uuid }) => props.getAvatarUrl(uuid),
-	);
 	const handleClick = (e: MouseEvent) => {
 		// Don't switch if clicking the remove button
 		if ((e.target as HTMLElement).closest(`.${styles["account-remove-button"]}`)) {
 			return;
 		}
-		if (!props.isActive) {
+		// If it's not active OR if it's expired, allow "switching" (which triggers the dialog)
+		if (!props.isActive || props.account.is_expired) {
 			props.onSwitch();
 		}
 	};

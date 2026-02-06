@@ -723,8 +723,30 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             // Proactively check active account session
             tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
             log::info!("[setup] Performing proactive session validation...");
-            if let Ok(Some(acc)) = crate::auth::get_active_account() {
-                if acc.uuid != "00000000000000000000000000000000" {
+
+            let active_acc = match crate::auth::get_active_account() {
+                Ok(Some(acc)) => Some(acc),
+                Ok(None) => {
+                    // Check if config thinks we have an active account. If so, it's missing from DB.
+                    if let Ok(config) = crate::utils::config::get_app_config() {
+                        if config.active_account_uuid.is_some() {
+                            log::warn!("[setup] Active account in config missing from database. repairing...");
+                            crate::auth::repair_active_account(app_handle.clone()).ok().flatten()
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    }
+                }
+                Err(e) => {
+                    log::error!("[setup] Failed to get active account: {}", e);
+                    None
+                }
+            };
+
+            if let Some(acc) = active_acc {
+                if acc.uuid != crate::auth::GUEST_UUID {
                     if let Err(e) = crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid).await {
                         log::warn!("[setup] Proactive session validation failed: {}", e);
                     } else {

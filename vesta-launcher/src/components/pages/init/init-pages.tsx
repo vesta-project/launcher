@@ -1025,6 +1025,12 @@ function InitLoginPage(props: InitPagesProps) {
 		try {
 			setErrorMessage("");
 			const { invoke } = await import("@tauri-apps/api/core");
+
+			if (props.isLoginOnly && hasAccount()) {
+				window.location.href = "/home";
+				return;
+			}
+
 			await invoke("start_guest_session");
 			await invoke("update_config_field", {
 				field: "setup_completed",

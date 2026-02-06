@@ -752,9 +752,6 @@ export default function InstanceDetails(
 	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<
 		string | null
 	>(null);
-	const [selectedModpackVersion, setSelectedModpackVersion] = createSignal<
-		ModpackVersion | null
-	>(null);
 
 	const [mcVersions] = createResource(getMinecraftVersions);
 	const [selectedMcVersion, setSelectedMcVersion] = createSignal("");
@@ -865,7 +862,6 @@ export default function InstanceDetails(
 
 	const handleModpackVersionSelect = (versionId: string, version?: ModpackVersion) => {
 		setSelectedModpackVersionId(versionId);
-		setSelectedModpackVersion(version || null);
 	};
 
 	// Reset selections when switching instances

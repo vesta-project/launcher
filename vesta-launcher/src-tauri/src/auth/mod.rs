@@ -150,13 +150,9 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     std::fs::File::create(&marker_path)
         .map_err(|e| format!("Failed to create guest marker: {}", e))?;
 
-    // Generate accurate offline UUID (MD5 v3 of "OfflinePlayer:LocalGuest")
-    // This matches how Minecraft generates offline player UUIDs
+    // Use the constant zeros for Guest UUID to ensure consistent detection
+    let guest_uuid = GUEST_UUID.to_string();
     let username_v = "LocalGuest";
-    let seed = format!("OfflinePlayer:{}", username_v);
-    
-    // Use ::uuid to avoid shadowing with diesel schema column
-    let guest_uuid = ::uuid::Uuid::new_v3(&::uuid::Uuid::nil(), seed.as_bytes()).to_string();
 
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
@@ -187,6 +183,15 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     let mut config = get_app_config().map_err(|e| e.to_string())?;
     config.active_account_uuid = Some(guest_uuid.clone());
     update_app_config(&config).map_err(|e| e.to_string())?;
+
+    // Emit config update event so UI knows active account changed
+    let _ = app_handle.emit(
+        "config-updated",
+        serde_json::json!({
+            "field": "active_account_uuid",
+            "value": guest_uuid
+        }),
+    );
 
     // Notify UI
     app_handle
@@ -483,12 +488,30 @@ pub async fn ensure_account_tokens_valid(
     // Normalize UUID
     let target_uuid = target_uuid.replace("-", "");
 
+    // Skip all token validation for Guest accounts
+    if target_uuid == GUEST_UUID {
+        return Ok(());
+    }
+
     // Load account
-    // Use the existing public getter rather than raw DB to avoid duplication
-    let accounts = get_accounts().map_err(|e| format!("Failed to get accounts: {}", e))?;
-    let acct = match accounts.into_iter().find(|a| a.uuid == target_uuid) {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let acct = account
+        .filter(uuid.eq(&target_uuid))
+        .first::<Account>(&mut conn)
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let acct = match acct {
         Some(a) => a,
-        None => return Err("Account not found".to_string()),
+        None => {
+            log::warn!("[auth] Account {} not found in database during token validation.", target_uuid);
+            // If this was the active account, try to repair it
+            let config = get_app_config().map_err(|e| e.to_string())?;
+            if config.active_account_uuid == Some(target_uuid) {
+                repair_active_account(app_handle)?;
+            }
+            return Err("Account not found".to_string());
+        }
     };
 
     // Skip all token validation for Guest accounts
@@ -562,11 +585,22 @@ pub async fn refresh_account_tokens(
     log::info!("[auth] Refresh requested for account: {}", target_uuid);
 
     // Load account to get refresh token
-    let accounts = get_accounts().map_err(|e| format!("Failed to get accounts: {}", e))?;
-    let mut acct = match accounts.into_iter().find(|a| a.uuid == target_uuid) {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let acct = account
+        .filter(uuid.eq(&target_uuid))
+        .first::<Account>(&mut conn)
+        .optional()
+        .map_err(|e| e.to_string())?;
+
+    let mut acct = match acct {
         Some(a) => a,
         None => {
             log::error!("[auth] No account found to refresh: {}", target_uuid);
+            // If this was the active account, try to repair it
+            let config = get_app_config().map_err(|e| e.to_string())?;
+            if config.active_account_uuid == Some(target_uuid) {
+                repair_active_account(app_handle)?;
+            }
             return Err("Account not found".to_string());
         }
     };
@@ -881,4 +915,45 @@ pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
     let _ = app.emit("core://account-heads-updated", ());
 
     Ok(())
+}
+
+/// Repair auth state if the active account is missing from database
+pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    // Load available accounts
+    let all_accounts = account
+        .load::<Account>(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    if let Some(next_acc) = all_accounts.first() {
+        log::info!("[auth] Active account missing, switching to available fallback: {}", next_acc.uuid);
+        
+        // We call our internal command
+        set_active_account(app_handle.clone(), next_acc.uuid.clone())?;
+
+        // Return the new active account
+        let config = get_app_config().map_err(|e| e.to_string())?;
+        if let Some(new_uuid) = config.active_account_uuid {
+            let acct = account
+                .filter(uuid.eq(new_uuid.replace("-", "")))
+                .first::<Account>(&mut conn)
+                .optional()
+                .map_err(|e| e.to_string())?;
+            return Ok(acct);
+        }
+    } else {
+        log::warn!("[auth] Active account missing and no other accounts found. Resetting session...");
+        let mut config = get_app_config().map_err(|e| e.to_string())?;
+        config.active_account_uuid = None;
+        update_app_config(&config).map_err(|e| e.to_string())?;
+
+        // Notify UI
+        let _ = app_handle.emit("core://account-heads-updated", ());
+
+        // Trigger full reset (redirects to onboarding)
+        let _ = crate::commands::app::close_all_windows_and_reset(app_handle);
+    }
+
+    Ok(None)
 }

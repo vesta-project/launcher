@@ -15,10 +15,6 @@
 	animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.session-expired-dialog .dialog__close-btn {
-	display: none;
-}
-
 .icon-wrapper {
 	width: 64px;
 	height: 64px;
@@ -50,6 +46,87 @@
 	color: var(--text-secondary);
 }
 
+.header {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	position: relative;
+	margin-bottom: 8px;
+}
+
+.header h2 {
+	margin: 0;
+	font-size: 18px;
+	font-weight: 700;
+}
+
+.account-list {
+	width: 100%;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	max-height: 240px;
+	overflow-y: auto;
+	padding: 4px;
+}
+
+.account-item {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	width: 100%;
+	text-align: left;
+}
+
+.account-item:hover:not(:disabled) {
+	background: var(--surface-medium);
+	border-color: var(--border-medium);
+	transform: translateX(2px);
+}
+
+.account-item:disabled {
+	opacity: 0.6;
+	cursor: default;
+	border-color: var(--hue-primary);
+	background: hsl(var(--primary-hue) 50% 10% / 0.1);
+}
+
+.account-info {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+}
+
+.account-name {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.account-status-expired {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--hue-error);
+}
+
+.active-indicator {
+	font-size: 10px;
+	font-weight: 800;
+	text-transform: uppercase;
+	color: var(--hue-primary);
+	background: hsl(var(--primary-hue) 100% 50% / 0.1);
+	padding: 2px 6px;
+	border-radius: 4px;
+	letter-spacing: 0.5px;
+}
+
 .username {
 	color: var(--text-primary);
 	font-weight: 700;
@@ -67,6 +144,10 @@
 	display: grid;
 	grid-template-columns: 1fr 1fr;
 	gap: 10px;
+}
+
+.primary-actions.single {
+	grid-template-columns: 1fr;
 }
 
 .full-width {

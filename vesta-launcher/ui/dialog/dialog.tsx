@@ -6,6 +6,7 @@ import {
 	Component,
 	ComponentProps,
 	JSX,
+	Show,
 	splitProps,
 	ValidComponent,
 } from "solid-js";
@@ -42,6 +43,7 @@ type DialogContentProps<T extends ValidComponent = "div"> =
 	DialogPrimitive.DialogContentProps<T> &
 		ClassProp & {
 			children?: JSX.Element;
+			hideCloseButton?: boolean;
 		};
 
 const DialogContent = <T extends ValidComponent = "div">(
@@ -50,6 +52,7 @@ const DialogContent = <T extends ValidComponent = "div">(
 	const [local, rest] = splitProps(props as DialogContentProps, [
 		"class",
 		"children",
+		"hideCloseButton",
 	]);
 	return (
 		<DialogPortal>
@@ -59,36 +62,38 @@ const DialogContent = <T extends ValidComponent = "div">(
 				{...rest}
 			>
 				{local.children}
-				<DialogPrimitive.CloseButton class={styles["dialog__close-btn"]}>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 24 24"
-						fill="none"
-						stroke="currentColor"
-						stroke-width="2"
-						stroke-linecap="round"
-						stroke-linejoin="round"
-					>
-						<path d="M18 6l-12 12" />
-						<path d="M6 6l12 12" />
-					</svg>
-					<span
-						class="sr-only"
-						style={{
-							position: "absolute",
-							width: "1px",
-							height: "1px",
-							padding: 0,
-							margin: "-1px",
-							overflow: "hidden",
-							clip: "rect(0, 0, 0, 0)",
-							"white-space": "nowrap",
-							"border-width": 0,
-						}}
-					>
-						Close
-					</span>
-				</DialogPrimitive.CloseButton>
+				<Show when={!local.hideCloseButton}>
+					<DialogPrimitive.CloseButton class={styles["dialog__close-btn"]}>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
+							<path d="M18 6l-12 12" />
+							<path d="M6 6l12 12" />
+						</svg>
+						<span
+							class="sr-only"
+							style={{
+								position: "absolute",
+								width: "1px",
+								height: "1px",
+								padding: 0,
+								margin: "-1px",
+								overflow: "hidden",
+								clip: "rect(0, 0, 0, 0)",
+								"white-space": "nowrap",
+								"border-width": 0,
+							}}
+						>
+							Close
+						</span>
+					</DialogPrimitive.CloseButton>
+				</Show>
 			</DialogPrimitive.Content>
 		</DialogPortal>
 	);
