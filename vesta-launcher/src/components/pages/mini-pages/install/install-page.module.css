@@ -181,7 +181,7 @@
 	border-left: 1px solid var(--border-subtle);
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
 	.install-form__sections {
 		grid-template-columns: 1fr;
 		overflow-y: auto;
@@ -314,7 +314,7 @@
 }
 
 /* Responsive adjustments */
-@media (max-width: 1100px) {
+@media (max-width: 900px) {
 	.install-form__sections {
 		grid-template-columns: 1fr;
 		gap: 20px;
@@ -1080,6 +1080,13 @@
 	padding: 4px 8px;
 	border-radius: 4px;
 	border: 1px solid var(--border-subtle);
+	transition: all 0.2s ease;
+	cursor: pointer;
+}
+
+.memory-range-display:hover {
+	background: var(--bg-surface-hover);
+	border-color: var(--border);
 }
 
 .memory-footer {

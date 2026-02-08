@@ -23,7 +23,6 @@
 	box-shadow:
 		2px 0 20px hsl(0 0% 0% / 0.4), /* Strong shadow border on right */
 		inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2); /* Subtle inner highlight */
-	z-index: 500; /* Stays above sticky table content */
 	position: relative;
 }
 
@@ -1944,22 +1943,22 @@ width: 100%;
 }
 
 .settings-metadata-section {
-padding: 24px;
-background: var(--bg-surface);
-border: 1px solid var(--border-subtle);
-border-radius: 16px;
-margin-bottom: 24px;
+	padding: 24px;
+	background: var(--bg-surface);
+	border: 1px solid var(--border-subtle);
+	border-radius: 16px;
+	margin-bottom: 24px;
 }
 
 .metadata-main-info {
-display: flex;
-gap: 24px;
-align-items: center;
+	display: flex;
+	gap: 24px;
+	align-items: center;
 }
 
 .metadata-icon-container {
-position: relative;
-flex-shrink: 0;
+	position: relative;
+	flex-shrink: 0;
 }
 
 

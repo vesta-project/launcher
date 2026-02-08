@@ -143,6 +143,7 @@ export function InstallForm(props: InstallFormProps) {
 		props.initialData?.minMemory || props.initialMinMemory || 2048,
 		props.initialData?.maxMemory || props.initialMaxMemory || 4096,
 	]);
+	const [memoryUnit, setMemoryUnit] = createSignal<"MB" | "GB">("MB");
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(
 		(props.initialData as any)?.includeSnapshots ??
 			props.initialIncludeSnapshots ??
@@ -166,6 +167,17 @@ export function InstallForm(props: InstallFormProps) {
 			_dirty: { ...dirty },
 		} as any);
 	});
+
+	const toggleMemoryUnit = () => {
+		setMemoryUnit(memoryUnit() === "MB" ? "GB" : "MB");
+	};
+
+	const formatMemory = (value: number) => {
+		if (memoryUnit() === "GB") {
+			return (value / 1024).toFixed(1);
+		}
+		return value.toString();
+	};
 
 	// --- Performance State ---
 	const [totalRam, setTotalRam] = createSignal(16384);
@@ -801,10 +813,13 @@ export function InstallForm(props: InstallFormProps) {
 										Allocation
 										<HelpTrigger topic="MEMORY_ALLOCATION" />
 									</span>
-									<span class={styles["sub-label"]}>Min and Max memory in MB</span>
+									<span class={styles["sub-label"]}>Min and Max memory in {memoryUnit()}</span>
 								</div>
-								<div class={styles["memory-range-display"]}>
-									{memory()[0]}MB — {memory()[1]}MB
+								<div
+									class={styles["memory-range-display"]}
+									onClick={toggleMemoryUnit}
+								>
+									{formatMemory(memory()[0])}{memoryUnit()} — {formatMemory(memory()[1])}{memoryUnit()}
 								</div>
 							</div>
 							<Slider
@@ -833,7 +848,7 @@ export function InstallForm(props: InstallFormProps) {
 												(props.modpackInfo?.recommendedRamMb ?? 0),
 										}}
 									>
-										Recommended: {props.modpackInfo?.recommendedRamMb} MB
+										Recommended: {formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)} {memoryUnit()}
 									</span>
 								</Show>
 							</div>

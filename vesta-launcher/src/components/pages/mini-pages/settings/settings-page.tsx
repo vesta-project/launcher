@@ -1,4 +1,5 @@
 import { router } from "@components/page-viewer/page-viewer";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
@@ -113,13 +114,14 @@ interface AppConfig {
 /**
  * Settings Page
  */
-function SettingsPage(props: { close?: () => void }) {
+function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
+	const activeRouter = createMemo(() => props.router || router());
 	const [version] = createResource(getVersion);
 
 	// Derive active tab from router params if available, fallback to default
 	const activeTab = createMemo(() => {
-		if (router()?.currentPath.get() !== "/config") return "general";
-		const params = router()?.currentParams.get();
+		if (activeRouter()?.currentPath.get() !== "/config") return "general";
+		const params = activeRouter()?.currentParams.get();
 		return (params?.activeTab as string) || "general";
 	});
 
@@ -135,7 +137,7 @@ function SettingsPage(props: { close?: () => void }) {
 
 	onMount(() => {
 		// Register state for pop-out window handoff
-		router()?.registerStateProvider("/config", () => ({
+		activeRouter()?.registerStateProvider("/config", () => ({
 			activeTab: activeTab(),
 		}));
 	});
@@ -712,7 +714,7 @@ function SettingsPage(props: { close?: () => void }) {
 					value={selectedTab()}
 					onChange={(v) => {
 						setSelectedTab(v);
-						router()?.updateQuery("activeTab", v, true);
+						activeRouter()?.updateQuery("activeTab", v, true);
 					}}
 				>
 					<TabsList class={styles["tabs-list"]}>
@@ -1027,7 +1029,7 @@ function SettingsPage(props: { close?: () => void }) {
 									description="Technical overview of modding frameworks, runtime environments, and configuration."
 									control={
 										<LauncherButton
-											onClick={() => router()?.navigate("/modding-guide")}
+											onClick={() => activeRouter()?.navigate("/modding-guide")}
 										>
 											View Docs
 										</LauncherButton>
@@ -1154,22 +1156,22 @@ function SettingsPage(props: { close?: () => void }) {
 							<SettingsCard header="Navigation Test">
 								<div style="display: flex; gap: 12px; flex-wrap: wrap;">
 									<LauncherButton
-										onClick={() => router()?.navigate("/install")}
+										onClick={() => activeRouter()?.navigate("/install")}
 									>
 										Navigate to Install
 									</LauncherButton>
 									<LauncherButton
-										onClick={() => router()?.navigate("/file-drop")}
+										onClick={() => activeRouter()?.navigate("/file-drop")}
 									>
 										Navigate to File Drop Test
 									</LauncherButton>
 									<LauncherButton
-										onClick={() => router()?.navigate("/task-test")}
+										onClick={() => activeRouter()?.navigate("/task-test")}
 									>
 										Navigate to Task System Test
 									</LauncherButton>
 									<LauncherButton
-										onClick={() => router()?.navigate("/notification-test")}
+										onClick={() => activeRouter()?.navigate("/notification-test")}
 									>
 										Navigate to Notification Test
 									</LauncherButton>

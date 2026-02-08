@@ -41,6 +41,7 @@ import {
 } from "@ui/pagination/pagination";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { router } from "@components/page-viewer/page-viewer";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import { showToast } from "@ui/toast/toast";
 import { openExternal } from "@utils/external-link";
 import { marked } from "marked";
@@ -114,7 +115,9 @@ const DependencyItem = (props: {
 	dependency: ResourceDependency;
 	platform: SourcePlatform;
 	project?: ResourceProject;
+	router?: MiniRouter;
 }) => {
+	const activeRouter = createMemo(() => props.router || router());
 	const [data] = createResource(
 		() => {
 			if (props.project) return null; // already have data
@@ -137,7 +140,7 @@ const DependencyItem = (props: {
 				onClick={() => {
 					const p = displayData();
 					if (p) {
-						router()?.navigate(
+						activeRouter()?.navigate(
 							"/resource-details",
 							{
 								projectId: p.id,
@@ -191,7 +194,9 @@ const ResourceDetailsPage: Component<{
 	projectId?: string;
 	platform?: SourcePlatform;
 	setRefetch?: (fn: () => Promise<void>) => void;
+	router?: MiniRouter;
 }> = (props) => {
+	const activeRouter = createMemo(() => props.router || router());
 	const [project, setProject] = createSignal<ResourceProject | undefined>(
 		props.project,
 	);
@@ -200,7 +205,7 @@ const ResourceDetailsPage: Component<{
 
 	// Derived from router query params for persistence and history
 	const activeTab = createMemo(() => {
-		const params = router()?.currentParams.get();
+		const params = activeRouter()?.currentParams.get();
 		return (
 			(params?.activeTab as
 				| "description"
@@ -240,19 +245,19 @@ const ResourceDetailsPage: Component<{
 		};
 
 		props.setRefetch?.(handleRefetch);
-		router()?.setRefetch(handleRefetch);
+		activeRouter()?.setRefetch(handleRefetch);
 	});
 
 	// --- Dynamic Title Support ---
 	createEffect(() => {
 		const name = project()?.name;
 		if (name) {
-			router()?.customName.set(name);
+			activeRouter()?.customName.set(name);
 		}
 	});
 
 	onCleanup(() => {
-		router()?.customName.set(null);
+		activeRouter()?.customName.set(null);
 	});
 
 	const bestVersionForCurrent = createMemo(() => {
@@ -474,10 +479,10 @@ const ResourceDetailsPage: Component<{
 				if (id && id !== prevId) {
 					// Only clear the tab if it's currently set, to avoid unnecessary router updates
 					const currentTab = untrack(
-						() => router()?.currentParams.get().activeTab,
+						() => activeRouter()?.currentParams.get().activeTab,
 					);
 					if (currentTab) {
-						router()?.removeQuery("activeTab");
+						activeRouter()?.removeQuery("activeTab");
 					}
 					setVersionFilter("");
 					setVersionPage(1);
@@ -589,7 +594,7 @@ const ResourceDetailsPage: Component<{
 	const handleQuickAction = () => {
 		if (isProjectIncompatible() && !isProjectInstalled()) {
 			if (hasAnyCompatibleVersion()) {
-				router()?.updateQuery("activeTab", "versions", true);
+				activeRouter()?.updateQuery("activeTab", "versions", true);
 			}
 			return;
 		}
@@ -636,7 +641,7 @@ const ResourceDetailsPage: Component<{
 		if (best) {
 			handleInstall(best);
 		} else {
-			router()?.updateQuery("activeTab", "versions", true);
+			activeRouter()?.updateQuery("activeTab", "versions", true);
 			showToast({
 				title: "Choose version",
 				description:
@@ -708,11 +713,11 @@ const ResourceDetailsPage: Component<{
 				// If we're already on this project, just update the tab
 				const current = project();
 				if (current && current.id === id && current.source === platform) {
-					router()?.updateQuery("activeTab", activeTab || "description", true);
+					activeRouter()?.updateQuery("activeTab", activeTab || "description", true);
 					return;
 				}
 
-				router()?.navigate("/resource-details", {
+				activeRouter()?.navigate("/resource-details", {
 					projectId: id,
 					platform,
 					activeTab,
@@ -834,7 +839,7 @@ const ResourceDetailsPage: Component<{
 		const p = project();
 
 		if (p?.resource_type === "modpack") {
-			router()?.navigate("/install", {
+			activeRouter()?.navigate("/install", {
 				projectId: p.id,
 				platform: p.source,
 				isModpack: true,
@@ -973,7 +978,7 @@ const ResourceDetailsPage: Component<{
 		setIsInstanceDialogOpen(false);
 		const p = project();
 		if (p) {
-			router()?.navigate("/install", {
+			activeRouter()?.navigate("/install", {
 				projectId: p.id,
 				platform: p.source,
 				isModpack: p.resource_type === "modpack",
@@ -1032,8 +1037,8 @@ const ResourceDetailsPage: Component<{
 						<h2 class={styles["error-title"]}>Unable to load project</h2>
 						<p class={styles["error-description"]}>{error()}</p>
 						<div class={styles["error-actions"]}>
-							<Button onClick={() => router()?.reload()}>Try Again</Button>
-							<Button variant="ghost" onClick={() => router()?.backwards()}>
+							<Button onClick={() => activeRouter()?.reload()}>Try Again</Button>
+							<Button variant="ghost" onClick={() => activeRouter()?.backwards()}>
 								Go Back
 							</Button>
 						</div>
@@ -1081,7 +1086,7 @@ const ResourceDetailsPage: Component<{
 															if (project()?.source === "modrinth") return;
 															const peer = peerProject();
 															if (peer && peer.source === "modrinth") {
-																router()?.navigate("/resource-details", {
+																activeRouter()?.navigate("/resource-details", {
 																	projectId: peer.id,
 																	platform: "modrinth",
 																});
@@ -1100,7 +1105,7 @@ const ResourceDetailsPage: Component<{
 															if (project()?.source === "curseforge") return;
 															const peer = peerProject();
 															if (peer && peer.source === "curseforge") {
-																router()?.navigate("/resource-details", {
+																activeRouter()?.navigate("/resource-details", {
 																	projectId: peer.id,
 																	platform: "curseforge",
 																});
@@ -1425,7 +1430,7 @@ const ResourceDetailsPage: Component<{
 														const filterId = categoryObj()?.id || cat;
 														resources.setCategories([filterId]);
 														resources.setOffset(0);
-														router()?.navigate("/resources");
+														activeRouter()?.navigate("/resources");
 													}}
 												>
 													{categoryObj()?.name || cat}
@@ -1445,7 +1450,7 @@ const ResourceDetailsPage: Component<{
 									class={styles["tab-btn"]}
 									classList={{ [styles.active]: activeTab() === "description" }}
 									onClick={() =>
-										router()?.updateQuery("activeTab", "description", true)
+										activeRouter()?.updateQuery("activeTab", "description", true)
 									}
 								>
 									Description
@@ -1454,7 +1459,7 @@ const ResourceDetailsPage: Component<{
 									class={styles["tab-btn"]}
 									classList={{ [styles.active]: activeTab() === "versions" }}
 									onClick={() =>
-										router()?.updateQuery("activeTab", "versions", true)
+										activeRouter()?.updateQuery("activeTab", "versions", true)
 									}
 								>
 									Versions ({resources.state.versions.length})
@@ -1463,7 +1468,7 @@ const ResourceDetailsPage: Component<{
 									class={styles["tab-btn"]}
 									classList={{ [styles.active]: activeTab() === "dependencies" }}
 									onClick={() =>
-										router()?.updateQuery("activeTab", "dependencies", true)
+										activeRouter()?.updateQuery("activeTab", "dependencies", true)
 									}
 								>
 									Dependencies ({primaryVersion()?.dependencies?.length || 0})
@@ -1473,7 +1478,7 @@ const ResourceDetailsPage: Component<{
 										class={styles["tab-btn"]}
 										classList={{ [styles.active]: activeTab() === "gallery" }}
 										onClick={() =>
-											router()?.updateQuery("activeTab", "gallery", true)
+											activeRouter()?.updateQuery("activeTab", "gallery", true)
 										}
 									>
 										Gallery ({project()?.gallery?.length})
@@ -1618,7 +1623,7 @@ const ResourceDetailsPage: Component<{
 																	<div class={styles["dependency-list"]}>
 																		<For each={required}>
 																			{(dep) => (
-																				<DependencyItem
+																				<DependencyItem router={activeRouter()}
 																					dependency={dep}
 																					platform={currentProject.source}
 																					project={dependencyData()?.get(
@@ -1641,7 +1646,7 @@ const ResourceDetailsPage: Component<{
 																	<div class={styles["dependency-list"]}>
 																		<For each={optional}>
 																			{(dep) => (
-																				<DependencyItem
+																				<DependencyItem router={activeRouter()}
 																					dependency={dep}
 																					platform={currentProject.source}
 																					project={dependencyData()?.get(
@@ -1664,7 +1669,7 @@ const ResourceDetailsPage: Component<{
 																	<div class={styles["dependency-list"]}>
 																		<For each={incompatible}>
 																			{(dep) => (
-																				<DependencyItem
+																				<DependencyItem router={activeRouter()}
 																					dependency={dep}
 																					platform={currentProject.source}
 																					project={dependencyData()?.get(
@@ -1980,7 +1985,7 @@ const ResourceDetailsPage: Component<{
 										<button
 											class={styles["view-all-link"]}
 											onClick={() =>
-												router()?.updateQuery("activeTab", "versions", true)
+												activeRouter()?.updateQuery("activeTab", "versions", true)
 											}
 										>
 											View All

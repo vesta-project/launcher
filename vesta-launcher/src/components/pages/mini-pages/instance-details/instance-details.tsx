@@ -1,4 +1,5 @@
 import { router } from "@components/page-viewer/page-viewer";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
@@ -204,8 +205,11 @@ export const areIconsEqual = (a?: string | null, b?: string | null) => {
 export default function InstanceDetails(
 	props: InstanceDetailsProps & {
 		setRefetch?: (fn: () => Promise<void>) => void;
+		router?: MiniRouter;
 	},
 ) {
+	const activeRouter = createMemo(() => props.router || router());
+
 	const loadersList = [
 		{ label: "Vanilla", value: "vanilla" },
 		{ label: "Fabric", value: "fabric" },
@@ -217,7 +221,7 @@ export default function InstanceDetails(
 	// Handle slug from props first, then fallback to router params
 	const getSlug = () => {
 		if (props.slug) return props.slug;
-		const params = router()?.currentParams.get();
+		const params = activeRouter()?.currentParams.get();
 		return params?.slug as string | undefined;
 	};
 
@@ -485,10 +489,10 @@ export default function InstanceDetails(
 
 	onMount(() => {
 		props.setRefetch?.(handleRefetch);
-		router()?.setRefetch(handleRefetch);
+		activeRouter()?.setRefetch(handleRefetch);
 
 		// Navigation guard for unsaved changes
-		router()?.setCanExit(async () => {
+		activeRouter()?.setCanExit(async () => {
 			if (isDirty()) {
 				const confirmed = await dialogStore.confirm({
 					title: "Unsaved Changes",
@@ -508,48 +512,51 @@ export default function InstanceDetails(
 		});
 		onCleanup(() => {
 			unlistenPromise.then((unlisten) => unlisten());
-			router()?.setCanExit(null);
+			activeRouter()?.setCanExit(null);
 		});
 
 		// Register state provider for pop-out window handoff
-		router()?.registerStateProvider("/instance", () => ({
-			...props,
-			slug: slug(),
-			activeTab: activeTab(),
-			// Capture unsaved settings
-			initialName: name(),
-			initialIconPath: iconPath(),
-			initialMinMemory: minMemory()[0],
-			initialMaxMemory: maxMemory()[0],
-			initialJavaArgs: javaArgs(),
-			initialJavaPath: javaPath(),
-			_dirty: {
-				name: isNameDirty(),
-				icon: isIconDirty(),
-				minMem: isMinMemDirty(),
-				maxMem: isMaxMemDirty(),
-				jvm: isJvmDirty(),
-				javaPath: isJavaPathDirty(),
-			},
-		}));
+		activeRouter()?.registerStateProvider("/instance", () => {
+			const { router: _, ...cleanProps } = props;
+			return {
+				...cleanProps,
+				slug: slug(),
+				activeTab: activeTab(),
+				// Capture unsaved settings
+				initialName: name(),
+				initialIconPath: iconPath(),
+				initialMinMemory: minMemory()[0],
+				initialMaxMemory: maxMemory()[0],
+				initialJavaArgs: javaArgs(),
+				initialJavaPath: javaPath(),
+				_dirty: {
+					name: isNameDirty(),
+					icon: isIconDirty(),
+					minMem: isMinMemDirty(),
+					maxMem: isMaxMemDirty(),
+					jvm: isJvmDirty(),
+					javaPath: isJavaPathDirty(),
+				},
+			};
+		});
 	});
 
 	// --- Dynamic Title Support ---
 	createEffect(() => {
 		const nameLabel = instance()?.name;
 		if (nameLabel) {
-			router()?.customName.set(nameLabel);
+			activeRouter()?.customName.set(nameLabel);
 		}
 	});
 
 	onCleanup(() => {
-		router()?.customName.set(null);
-		router()?.setRefetch(() => Promise.resolve());
+		activeRouter()?.customName.set(null);
+		activeRouter()?.setRefetch(() => Promise.resolve());
 	});
 
 	// Tab state - initialized from query param if available
 	const activeTab = createMemo<TabType>(() => {
-		const params = router()?.currentParams.get();
+		const params = activeRouter()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
 		return tab &&
 			["home", "console", "resources", "settings", "versioning"].includes(tab)
@@ -721,7 +728,7 @@ export default function InstanceDetails(
 					resources.setLoader(inst.modloader);
 				}
 
-				router()?.navigate("/resource-details", {
+				activeRouter()?.navigate("/resource-details", {
 					projectId: row.original.remote_id,
 					platform: row.original.platform,
 				});
@@ -929,7 +936,7 @@ export default function InstanceDetails(
 
 	// Reset selections when switching instances
 	createEffect(() => {
-		const slug = router()?.currentParams.get()?.slug;
+		const slug = activeRouter()?.currentParams.get()?.slug;
 		if (slug) {
 			setSelectedMcVersion("");
 			setSelectedLoader("vanilla");
@@ -1659,7 +1666,7 @@ export default function InstanceDetails(
 	// Handle tab changes - use updateQuery for stable state preservation
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
-		router()?.updateQuery("activeTab", tab, true); // Push to history
+		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
 	};
 
 	const [isScrolled, setIsScrolled] = createSignal(false);
@@ -1731,7 +1738,7 @@ export default function InstanceDetails(
 										No instance data available.{" "}
 										{slug() ? `(Slug: ${slug()})` : "No slug provided."}
 									</p>
-									<Button onClick={() => router()?.navigate("/")}>
+									<Button onClick={() => activeRouter()?.navigate("/")}>
 										Back to Home
 									</Button>
 								</div>
@@ -1881,7 +1888,7 @@ export default function InstanceDetails(
 											table={table}
 											resourcesStore={resources}
 											installedResources={installedResources}
-											router={router()}
+											router={activeRouter()}
 											handleBatchUpdate={handleBatchUpdate}
 											handleBatchDelete={handleBatchDelete}
 											onRowClick={handleRowClick}
@@ -1905,7 +1912,7 @@ export default function InstanceDetails(
 												handleModpackVersionSelect={handleModpackVersionSelect}
 												rolloutModpackUpdate={rolloutModpackUpdate}
 												handleUnlink={handleUnlink}
-												router={router()}
+												router={activeRouter()}
 												searchableMcVersions={searchableMcVersions}
 												selectedMcVersion={selectedMcVersion}
 												setSelectedMcVersion={setSelectedMcVersion}
@@ -1927,7 +1934,7 @@ export default function InstanceDetails(
 												}}
 												handleHardReset={() => handleHardReset(inst())}
 												handleUninstall={() =>
-													handleUninstall(inst(), () => router()?.navigate("/"))
+													handleUninstall(inst(), () => activeRouter()?.navigate("/"))
 												}
 												repairInstance={repairInstance}
 												mcVersions={mcVersions}

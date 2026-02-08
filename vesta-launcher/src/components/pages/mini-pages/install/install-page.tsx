@@ -13,6 +13,7 @@ import { Separator } from "@ui/separator/separator";
 import { createInstance, installInstance, getInstance } from "@utils/instances";
 import { type Instance } from "@utils/instances";
 import { router } from "@components/page-viewer/page-viewer";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
 	getModpackInfo,
@@ -63,10 +64,11 @@ interface InstallPageProps {
  * 3. Metadata fetching for modpacks
  * 4. Communication with the InstallForm
  */
-function InstallPage(props: InstallPageProps) {
+function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
+	const activeRouter = createMemo(() => props.router || router());
 	// Derive states from router params for navigable history
 	const isModpackMode = createMemo(() => {
-		const params = router()?.currentParams.get();
+		const params = activeRouter()?.currentParams.get();
 		if (params?.mode === "modpack") return true;
 		if (params?.mode === "standard") return false;
 
@@ -83,7 +85,7 @@ function InstallPage(props: InstallPageProps) {
 	});
 
 	const showUrlInput = createMemo(() => {
-		return router()?.currentParams.get()?.sourceView === "url";
+		return activeRouter()?.currentParams.get()?.sourceView === "url";
 	});
 
 	// --- Fundamental State ---
@@ -109,7 +111,7 @@ function InstallPage(props: InstallPageProps) {
 
 	onMount(() => {
 		// Register state provider for pop-out
-		router()?.registerStateProvider("/install", () => ({
+		activeRouter()?.registerStateProvider("/install", () => ({
 			...props, // Include routing params
 			modpackUrl: modpackUrl(),
 			modpackPath: modpackPath(),
@@ -357,7 +359,7 @@ function InstallPage(props: InstallPageProps) {
 			// Navigate back after starting
 			setTimeout(() => {
 				if (props.close) props.close();
-				else router()?.navigate("/home");
+				else activeRouter()?.navigate("/home");
 			}, 500);
 		} catch (e) {
 			console.error("[Install] ERROR:", e);
@@ -386,7 +388,7 @@ function InstallPage(props: InstallPageProps) {
 		if (val) {
 			setModpackUrl(val);
 			setModpackPath("");
-			router()?.removeQuery("source");
+			activeRouter()?.removeQuery("source");
 			setUrlInputValue("");
 		}
 	};
@@ -452,7 +454,7 @@ function InstallPage(props: InstallPageProps) {
 							clickable={true}
 							variant="surface"
 							onClick={() =>
-								router()?.updateQuery(
+								activeRouter()?.updateQuery(
 									"mode",
 									isModpackMode() ? "standard" : "modpack",
 									true,
@@ -478,7 +480,7 @@ function InstallPage(props: InstallPageProps) {
 							class={styles["back-link"]}
 							onClick={() => {
 								if (props.projectId) {
-									router()?.backwards();
+									activeRouter()?.backwards();
 								} else {
 									batch(() => {
 										setModpackUrl("");
@@ -569,7 +571,7 @@ function InstallPage(props: InstallPageProps) {
 									class={styles["modpack-import-card"]}
 									onClick={() => {
 										resources.setType("modpack");
-										router()?.navigate("/resources");
+										activeRouter()?.navigate("/resources");
 									}}
 								>
 									<div class={styles["card-icon"]}>
@@ -582,7 +584,7 @@ function InstallPage(props: InstallPageProps) {
 								</div>
 								<div
 									class={styles["modpack-import-card"]}
-									onClick={() => router()?.updateQuery("source", "url", true)}
+									onClick={() => activeRouter()?.updateQuery("source", "url", true)}
 								>
 									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
 										<GlobeIcon />
@@ -598,7 +600,7 @@ function InstallPage(props: InstallPageProps) {
 								<button
 									class={styles["switch-mode-button"]}
 									onClick={() =>
-										router()?.updateQuery("mode", "standard", true)
+										activeRouter()?.updateQuery("mode", "standard", true)
 									}
 								>
 									Switch to Standard Instance
@@ -636,7 +638,7 @@ function InstallPage(props: InstallPageProps) {
 								</div>
 								<button
 									class={styles["cancel-link"]}
-									onClick={() => router()?.removeQuery("source")}
+									onClick={() => activeRouter()?.removeQuery("source")}
 								>
 									Go Back
 								</button>
@@ -732,7 +734,7 @@ function InstallPage(props: InstallPageProps) {
 								});
 							} else if (props.close) props.close();
 							else
-								router()?.navigate(props.projectName ? "/resources" : "/home");
+								activeRouter()?.navigate(props.projectName ? "/resources" : "/home");
 						}}
 						isInstalling={isInstalling()}
 						isFetchingMetadata={isFetchingMetadata() || projectVersions.loading}

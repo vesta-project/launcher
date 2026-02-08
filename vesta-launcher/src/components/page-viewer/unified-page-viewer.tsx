@@ -202,7 +202,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						<div class={styles["page-viewer-reload-spinner"]} />
 					</div>
 				</Show>
-				{props.router.getRouterView({ close: props.onClose })}
+				{props.router.getRouterView({ close: props.onClose, router: props.router })}
 			</main>
 		</div>
 	);

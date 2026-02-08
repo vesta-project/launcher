@@ -53,6 +53,7 @@ import {
 } from "@utils/resources";
 import { sanitizeSvg } from "@utils/security";
 import { router } from "@components/page-viewer/page-viewer";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import styles from "./resource-browser.module.css";
@@ -158,7 +159,8 @@ const VERSION_OPTIONS = [
 
 // Common categories across platforms
 
-const InstanceSelector: Component = () => {
+const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
+	const activeRouter = createMemo(() => p.router || router());
 	const selectedInstance = createMemo(() =>
 		instancesState.instances.find(
 			(i) => i.id === resources.state.selectedInstanceId,
@@ -228,9 +230,9 @@ const InstanceSelector: Component = () => {
 						}
 
 						// Sync with router
-						router()?.updateQuery("selectedInstanceId", id);
-						router()?.updateQuery("gameVersion", resources.state.gameVersion);
-						router()?.updateQuery("loader", resources.state.loader);
+						activeRouter()?.updateQuery("selectedInstanceId", id);
+						activeRouter()?.updateQuery("gameVersion", resources.state.gameVersion);
+						activeRouter()?.updateQuery("loader", resources.state.loader);
 					});
 				}}
 				optionValue="id"
@@ -268,7 +270,9 @@ const InstanceSelector: Component = () => {
 const ResourceCard: Component<{
 	project: ResourceProject;
 	viewMode: "grid" | "list";
+	router?: MiniRouter;
 }> = (props) => {
+	const activeRouter = createMemo(() => props.router || router());
 	const isInstalled = createMemo(() => {
 		const instanceId = resources.state.selectedInstanceId;
 		const mainId = props.project.id.toLowerCase();
@@ -477,7 +481,7 @@ const ResourceCard: Component<{
 
 	const navigateToDetails = () => {
 		resources.setRequestInstall(null);
-		router()?.navigate(
+		activeRouter()?.navigate(
 			"/resource-details",
 			{
 				projectId: props.project.id,
@@ -493,7 +497,7 @@ const ResourceCard: Component<{
 		e.stopPropagation();
 
 		if (props.project.resource_type === "modpack") {
-			router()?.navigate("/install", {
+			activeRouter()?.navigate("/install", {
 				projectId: props.project.id,
 				platform: props.project.source,
 				isModpack: true,
@@ -822,7 +826,8 @@ const ResourceCard: Component<{
 	);
 };
 
-const FiltersPanel: Component = () => {
+const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
+	const activeRouter = createMemo(() => props.router || router());
 	const [mcVersions] = createResource(getMinecraftVersions);
 
 	onMount(() => {
@@ -1021,7 +1026,7 @@ const FiltersPanel: Component = () => {
 
 			<div class={`${styles["filter-section"]} ${styles["mobile-only-instance"]}`}>
 				<label class={styles["filter-label"]}>Target Instance</label>
-				<InstanceSelector />
+				<InstanceSelector router={activeRouter()} />
 			</div>
 
 			<div class={styles["filter-section"]}>
@@ -1062,7 +1067,7 @@ const FiltersPanel: Component = () => {
 									batch(() => {
 										resources.setType(type);
 										resources.setOffset(0);
-										router()?.updateQuery("resourceType", type);
+										activeRouter()?.updateQuery("resourceType", type);
 									});
 								}}
 							>
@@ -1084,7 +1089,7 @@ const FiltersPanel: Component = () => {
 								const val = v === "All versions" || !v ? null : v;
 								resources.setGameVersion(val);
 								resources.setOffset(0);
-								router()?.updateQuery("gameVersion", val);
+								activeRouter()?.updateQuery("gameVersion", val);
 							});
 						}}
 						itemComponent={(props) => (
@@ -1116,7 +1121,7 @@ const FiltersPanel: Component = () => {
 								const val = v === "All Loaders" || !v ? null : v.toLowerCase();
 								resources.setLoader(val);
 								resources.setOffset(0);
-								router()?.updateQuery("loader", val);
+								activeRouter()?.updateQuery("loader", val);
 							});
 						}}
 						itemComponent={(props) => (
@@ -1162,7 +1167,7 @@ const FiltersPanel: Component = () => {
 														batch(() => {
 															resources.toggleCategory(groupId);
 															resources.setOffset(0);
-															router()?.updateQuery(
+															activeRouter()?.updateQuery(
 																"categories",
 																resources.state.categories,
 															);
@@ -1300,7 +1305,9 @@ const ResourceBrowser: Component<{
 	offset?: number;
 	viewMode?: "grid" | "list";
 	expandedCategoryGroups?: string[];
+	router?: MiniRouter;
 }> = (props) => {
+	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(false);
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
@@ -1424,7 +1431,7 @@ const ResourceBrowser: Component<{
 		setIsInstanceDialogOpen(false);
 		resources.setRequestInstall(null);
 
-		router()?.navigate("/install", {
+		activeRouter()?.navigate("/install", {
 			projectId: project.id,
 			platform: project.source,
 			isModpack: project.resource_type === "modpack",
@@ -1509,7 +1516,7 @@ const ResourceBrowser: Component<{
 		});
 
 		// Register state provider for pop-out window handoff
-		router()?.registerStateProvider("/resources", () => ({
+		activeRouter()?.registerStateProvider("/resources", () => ({
 			query: resources.state.query,
 			resourceType: resources.state.resourceType,
 			gameVersion: resources.state.gameVersion,
@@ -1580,9 +1587,9 @@ const ResourceBrowser: Component<{
 			// Only update the router query if the search value hasn't changed
 			// and it's actually different from the current router state.
 			untrack(() => {
-				const currentRouterQuery = router()?.currentParams.get().query;
+				const currentRouterQuery = activeRouter()?.currentParams.get().query;
 				if (resources.state.query === value && currentRouterQuery !== value) {
-					router()?.updateQuery("query", value);
+					activeRouter()?.updateQuery("query", value);
 				}
 			});
 		}, 500);
@@ -1648,7 +1655,7 @@ const ResourceBrowser: Component<{
 	return (
 		<div class={styles["resource-browser"]}>
 			<Show when={resources.state.showFilters}>
-				<FiltersPanel />
+				<FiltersPanel router={activeRouter()} />
 			</Show>
 
 			<div class={styles["resource-browser-main"]}>
@@ -1713,7 +1720,7 @@ const ResourceBrowser: Component<{
 					</div>
 
 					<div class={styles["toolbar-center"]}>
-						<InstanceSelector />
+						<InstanceSelector router={activeRouter()} />
 					</div>
 
 					<div class={styles["toolbar-right"]}>
@@ -1727,7 +1734,7 @@ const ResourceBrowser: Component<{
 									batch(() => {
 										resources.setSource("modrinth");
 										resources.setOffset(0);
-										router()?.updateQuery("activeSource", "modrinth");
+										activeRouter()?.updateQuery("activeSource", "modrinth");
 									});
 								}}
 							>
@@ -1742,7 +1749,7 @@ const ResourceBrowser: Component<{
 									batch(() => {
 										resources.setSource("curseforge");
 										resources.setOffset(0);
-										router()?.updateQuery("activeSource", "curseforge");
+										activeRouter()?.updateQuery("activeSource", "curseforge");
 									});
 								}}
 							>
@@ -1821,7 +1828,7 @@ const ResourceBrowser: Component<{
 									const sval = val?.value || "relevance";
 									resources.setSortBy(sval);
 									resources.setOffset(0);
-									router()?.updateQuery("sortBy", sval);
+									activeRouter()?.updateQuery("sortBy", sval);
 								});
 							}}
 							itemComponent={(props) => (
@@ -1890,6 +1897,7 @@ const ResourceBrowser: Component<{
 										<ResourceCard
 											project={project}
 											viewMode={resources.state.viewMode}
+											router={activeRouter()}
 										/>
 									)}
 								</For>

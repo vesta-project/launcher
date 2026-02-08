@@ -44,10 +44,12 @@ function PageViewer(props: {
 		const serializeRecord = (rec: Record<string, unknown> | undefined) => {
 			if (!rec) return {};
 			return Object.fromEntries(
-				Object.entries(rec).map(([k, v]) => [
-					k,
-					typeof v === "object" ? JSON.stringify(v) : String(v),
-				]),
+				Object.entries(rec)
+					.filter(([k]) => k !== "router" && k !== "close" && k !== "setRefetch")
+					.map(([k, v]) => [
+						k,
+						typeof v === "object" ? JSON.stringify(v) : String(v),
+					]),
 			);
 		};
 
