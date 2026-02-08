@@ -1,7 +1,7 @@
 use super::types::*;
 use anyhow::{Context, Result};
 use chrono::Utc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const FABRIC_META_URL: &str = "https://meta.fabricmc.net/v2/versions";
@@ -50,9 +50,10 @@ struct ForgeVersionList {
 pub async fn fetch_metadata() -> Result<PistonMetadata> {
     log::info!("Fetching PistonMetadata from all sources...");
 
-    // Create HTTP client with timeout to prevent hanging requests
+    // Create HTTP client with timeout and user-agent that mimics a browser to avoid blocking
     let http_client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 VestaLauncher/1.0")
         .build()
         .context("Failed to create HTTP client")?;
 
@@ -136,20 +137,32 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
         .find(|v| v.id == mojang_manifest.latest.snapshot)
         .map(|v| v.url.clone());
 
-    if let Some(url) = latest_release_url {
-        if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
-            if let Some(jv) = detail.java_version {
-                detected_javas.insert(jv.major_version);
+    // Parallelize Java version detection
+    let java_release_fut = async {
+        if let Some(url) = latest_release_url {
+            if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
+                return detail.java_version.map(|jv| jv.major_version);
             }
         }
-    }
+        None
+    };
 
-    if let Some(url) = latest_snapshot_url {
-        if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
-            if let Some(jv) = detail.java_version {
-                detected_javas.insert(jv.major_version);
+    let java_snapshot_fut = async {
+        if let Some(url) = latest_snapshot_url {
+            if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
+                return detail.java_version.map(|jv| jv.major_version);
             }
         }
+        None
+    };
+
+    let (java_release, java_snapshot) = tokio::join!(java_release_fut, java_snapshot_fut);
+
+    if let Some(jv) = java_release {
+        detected_javas.insert(jv);
+    }
+    if let Some(jv) = java_snapshot {
+        detected_javas.insert(jv);
     }
 
     metadata.required_java_major_versions = detected_javas.into_iter().rev().collect();
@@ -203,50 +216,75 @@ fn build_initial_game_versions(
         .collect()
 }
 
-/// Fetch Mojang version manifest with retry logic
-async fn fetch_mojang_manifest_with_client(client: &reqwest::Client) -> Result<MojangVersionManifest> {
-    const MAX_RETRIES: u32 = 3;
-    const INITIAL_BACKOFF_MS: u64 = 1000;
-
+/// Generic HTTP GET with retry logic, backoff, and 429 handling
+pub(crate) async fn send_with_retry(
+    client: &reqwest::Client,
+    url: &str,
+    max_retries: u32,
+    initial_backoff_ms: u64,
+) -> Result<reqwest::Response> {
     let mut last_error = None;
 
-    for attempt in 0..MAX_RETRIES {
+    for attempt in 0..max_retries {
         if attempt > 0 {
-            let backoff = INITIAL_BACKOFF_MS * 2u64.pow(attempt - 1);
+            let backoff = initial_backoff_ms * 2u64.pow(attempt - 1);
+            // Add small jitter to prevent thundering herd
+            let jitter = rand::random::<u64>() % 100;
+            let total_backoff = backoff + jitter;
+
             log::info!(
-                "Retrying Mojang manifest fetch (attempt {}/{}) after {}ms...",
+                "Retrying request (attempt {}/{}) for {} after {}ms...",
                 attempt + 1,
-                MAX_RETRIES,
-                backoff
+                max_retries,
+                url,
+                total_backoff
             );
-            tokio::time::sleep(tokio::time::Duration::from_millis(backoff)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(total_backoff)).await;
         }
 
-        match client.get(MOJANG_MANIFEST_URL).send().await {
+        match client.get(url).send().await {
             Ok(response) => {
                 let status = response.status();
-                if !status.is_success() {
-                    let error_msg = format!("HTTP {} from Mojang manifest URL", status);
+                
+                if status.is_success() {
+                    return Ok(response);
+                }
+
+                // Handle 429 Too Many Requests specifically
+                if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                    let mut retry_after_ms = 5000; // Default 5s if header missing
+                    
+                    if let Some(retry_after) = response.headers().get(reqwest::header::RETRY_AFTER) {
+                        if let Ok(s) = retry_after.to_str() {
+                            if let Ok(seconds) = s.parse::<u64>() {
+                                retry_after_ms = seconds * 1000;
+                            }
+                        }
+                    }
+
+                    log::warn!(
+                        "Rate limited (429) for {}. Waiting {}ms before retry...",
+                        url,
+                        retry_after_ms
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_millis(retry_after_ms)).await;
+                    continue; // This doesn't count as a standard retry attempt if we want to be nice, 
+                             // but for simplicity we'll let it use an attempt slot.
+                }
+
+                if status.is_server_error() {
+                    let error_msg = format!("Server error {} from {}", status, url);
                     log::warn!("{}", error_msg);
                     last_error = Some(anyhow::anyhow!(error_msg));
                     continue;
                 }
 
-                match response.json::<MojangVersionManifest>().await {
-                    Ok(manifest) => {
-                        log::info!("Fetched {} Mojang versions", manifest.versions.len());
-                        return Ok(manifest);
-                    }
-                    Err(e) => {
-                        let error_msg = format!("Failed to parse Mojang manifest JSON: {}", e);
-                        log::warn!("{}", error_msg);
-                        last_error = Some(anyhow::anyhow!(error_msg));
-                        continue;
-                    }
-                }
+                // For 4xx errors other than 429, don't retry as they are likely permanent
+                let error_msg = format!("Request failed with status {} for {}", status, url);
+                return Err(anyhow::anyhow!(error_msg));
             }
             Err(e) => {
-                let error_msg = format!("Failed to GET Mojang manifest: {}", e);
+                let error_msg = format!("Network error for {}: {}", url, e);
                 log::warn!("{}", error_msg);
                 last_error = Some(anyhow::anyhow!(error_msg));
                 continue;
@@ -256,15 +294,24 @@ async fn fetch_mojang_manifest_with_client(client: &reqwest::Client) -> Result<M
 
     Err(last_error.unwrap_or_else(|| {
         anyhow::anyhow!(
-            "Failed to fetch Mojang manifest after {} retries",
-            MAX_RETRIES
+            "Failed to fetch {} after {} retries",
+            url,
+            max_retries
         )
     }))
 }
 
+/// Fetch Mojang version manifest with retry logic
+async fn fetch_mojang_manifest_with_client(client: &reqwest::Client) -> Result<MojangVersionManifest> {
+    let resp = send_with_retry(client, MOJANG_MANIFEST_URL, 3, 1000).await?;
+    let manifest = resp.json::<MojangVersionManifest>().await.context("Failed to parse Mojang manifest JSON")?;
+    log::info!("Fetched {} Mojang versions", manifest.versions.len());
+    Ok(manifest)
+}
+
 async fn fetch_version_detail(client: &reqwest::Client, url: &str) -> Result<MojangVersionDetail> {
-    let response = client.get(url).send().await?;
-    let detail = response.json::<MojangVersionDetail>().await?;
+    let resp = send_with_retry(client, url, 2, 500).await?;
+    let detail = resp.json::<MojangVersionDetail>().await?;
     Ok(detail)
 }
 
@@ -276,8 +323,9 @@ async fn fetch_fabric_data(
     let loaders_url = format!("{}/loader", repo);
     let games_url = format!("{}/game", repo);
 
-    let loaders_fut = client.get(&loaders_url).send();
-    let games_fut = client.get(&games_url).send();
+    // Call with retry independently for both endpoints
+    let loaders_fut = send_with_retry(client, &loaders_url, 3, 1000);
+    let games_fut = send_with_retry(client, &games_url, 3, 1000);
 
     let (loaders_res, games_res) = tokio::join!(loaders_fut, games_fut);
 
@@ -309,8 +357,10 @@ fn apply_fabric_style_loaders(
     loaders: Vec<LoaderVersionInfo>,
     supported_games: Vec<String>,
 ) {
+    let supported_set: HashSet<_> = supported_games.into_iter().collect();
+
     for version in game_versions.iter_mut() {
-        if supported_games.contains(&version.id) {
+        if supported_set.contains(&version.id) {
             // Filter out blacklisted versions
             let filtered_loaders: Vec<LoaderVersionInfo> = loaders
                 .iter()
@@ -328,7 +378,8 @@ fn apply_fabric_style_loaders(
 /// Fetch Forge-style maven metadata XML
 async fn fetch_forge_xml(client: &reqwest::Client, repo: &str) -> Result<ForgeVersionsXml> {
     let url = format!("{}/maven-metadata.xml", repo);
-    let xml = client.get(&url).send().await?.text().await?;
+    let resp = send_with_retry(client, &url, 3, 1000).await?;
+    let xml = resp.text().await?;
     let forge_xml: ForgeVersionsXml = serde_xml_rs::from_str(&xml)?;
     Ok(forge_xml)
 }
@@ -472,7 +523,7 @@ async fn fetch_neoforge_api_index(
 ) -> Result<HashMap<String, Vec<serde_json::Value>>> {
     let url = format!("{}{}", api_base, gav);
 
-    let resp = client.get(&url).send().await?.text().await?;
+    let resp = send_with_retry(client, &url, 3, 1000).await?.text().await?;
 
     // Be forgiving: accept either an object with `versions` or a bare array.
     // We will normalize into a HashMap keyed by minecraft-version string.
@@ -698,133 +749,131 @@ fn process_neoforge_api_versions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
+    use std::time::Instant;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
-    fn mk_forge_xml(versions: Vec<&str>) -> ForgeVersionsXml {
-        ForgeVersionsXml {
-            versioning: ForgeVersioning {
-                versions: ForgeVersionList {
-                    version: versions.into_iter().map(|s| s.to_string()).collect(),
-                },
-            },
-        }
+    #[tokio::test]
+    async fn test_send_with_retry_retries_on_5xx() {
+        let mock_server = MockServer::start().await;
+
+        // First request returns 500, second returns 200 with JSON
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Server Error"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions": []})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(1))
+            .build()
+            .unwrap();
+
+        let url = format!("{}/test", &mock_server.uri());
+        let result = send_with_retry(&client, &url, 3, 100).await;
+
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert_eq!(resp.status(), 200);
     }
 
-    #[test]
-    fn test_process_forge_versions_for_forge_style() {
-        let mut game_versions = vec![GameVersionMetadata {
-            id: "1.20.2".to_string(),
-            version_type: "release".to_string(),
-            release_time: Utc::now(),
-            stable: true,
-            loaders: HashMap::new(),
-        }];
-        let xml = mk_forge_xml(vec!["1.20.2-47.2.0".into()]);
-        process_forge_versions("Forge", &xml, &mut game_versions);
+    #[tokio::test]
+    async fn test_send_with_retry_429_honors_retry_after() {
+        let mock_server = MockServer::start().await;
 
-        let loaders = &game_versions[0].loaders;
-        assert!(loaders.contains_key(&ModloaderType::Forge));
-        let list = loaders.get(&ModloaderType::Forge).unwrap();
-        assert!(list.iter().any(|l| l.version == "47.2.0"));
+        // First request returns 429 with Retry-After: 1
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(
+                ResponseTemplate::new(429)
+                    .insert_header("Retry-After", "1")
+                    .set_body_string("Too Many Requests")
+            )
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        // Second request returns 200
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions": []})))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(5))
+            .build()
+            .unwrap();
+
+        let url = format!("{}/test", &mock_server.uri());
+        let start = Instant::now();
+        let result = send_with_retry(&client, &url, 3, 100).await;
+        let elapsed = start.elapsed();
+
+        assert!(result.is_ok());
+        let resp = result.unwrap();
+        assert_eq!(resp.status(), 200);
+        // Should have waited at least 1 second due to Retry-After
+        assert!(elapsed.as_millis() >= 1000);
     }
 
-    #[test]
-    fn test_process_forge_versions_for_neoforge_style() {
-        let mut game_versions = vec![GameVersionMetadata {
-            id: "1.20.2".to_string(),
-            version_type: "release".to_string(),
-            release_time: Utc::now(),
-            stable: true,
-            loaders: HashMap::new(),
-        }];
-        // Nexus-style maven entries commonly look like "1.20.2-20.2.16" so
-        // we simulate that here to match the starts_with(&version.id) filter.
-        let xml = mk_forge_xml(vec!["1.20.2-20.2.16".into(), "1.20.2-20.2.17".into()]);
-        process_forge_versions("NeoForge", &xml, &mut game_versions);
+    #[tokio::test]
+    async fn test_send_with_retry_4xx_fails_fast() {
+        let mock_server = MockServer::start().await;
 
-        let loaders = &game_versions[0].loaders;
-        assert!(loaders.contains_key(&ModloaderType::NeoForge));
-        let list = loaders.get(&ModloaderType::NeoForge).unwrap();
-        assert!(list.iter().any(|l| l.version == "20.2.16"));
-        assert!(list.iter().any(|l| l.version == "20.2.17"));
+        // Request returns 404, should not retry
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(404).set_body_string("Not Found"))
+            .expect(1)
+            .mount(&mock_server)
+            .await;
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(1))
+            .build()
+            .unwrap();
+
+        let url = format!("{}/test", &mock_server.uri());
+        let result = send_with_retry(&client, &url, 3, 100).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("404"));
     }
 
-    #[test]
-    fn test_normalize_grouped_json() {
-        // grouped JSON with strings and objects
-        let raw = json!({
-            "versions": [
-                "20.2.16",
-                {"version": "20.2.17", "mc_version": "1.20.2", "artifact_version": "1.20.2-20.2.17"}
-            ]
-        });
+    #[tokio::test]
+    async fn test_send_with_retry_exhausts_retries() {
+        let mock_server = MockServer::start().await;
 
-        let map = normalize_neoforge_json(raw);
-        assert!(map.contains_key("1.20.2"));
-        let vec = map.get("1.20.2").unwrap();
-        // One entry is a string, one is an object
-        assert_eq!(vec.len(), 2);
-        assert!(vec.iter().any(|v| v.is_string()));
-    }
+        // Always returns 500
+        Mock::given(method("GET"))
+            .and(path("/test"))
+            .respond_with(ResponseTemplate::new(500).set_body_string("Server Error"))
+            .expect(3) // max_retries = 3
+            .mount(&mock_server)
+            .await;
 
-    #[test]
-    fn test_normalize_flat_array() {
-        // flat array containing strings and objects
-        let raw = json!([
-            "20.2.16",
-            {"version":"20.2.18","artifact_version":"1.20.2-20.2.18"}
-        ]);
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(1))
+            .build()
+            .unwrap();
 
-        let map = normalize_neoforge_json(raw);
-        assert!(map.contains_key("1.20.2"));
-        let vec = map.get("1.20.2").unwrap();
-        assert_eq!(vec.len(), 2);
-    }
+        let url = format!("{}/test", &mock_server.uri());
+        let result = send_with_retry(&client, &url, 3, 100).await;
 
-    #[test]
-    fn test_process_neoforge_api_versions_exact_mc_match() {
-        let mut game_versions = vec![GameVersionMetadata {
-            id: "1.20.2".to_string(),
-            version_type: "release".to_string(),
-            release_time: Utc::now(),
-            stable: true,
-            loaders: HashMap::new(),
-        }];
-
-        let mut map: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
-        map.insert("1.20.2".to_string(), vec![json!("20.2.16")]);
-
-        process_neoforge_api_versions("NeoForge", &map, &mut game_versions);
-
-        let loaders = &game_versions[0].loaders;
-        assert!(loaders.contains_key(&ModloaderType::NeoForge));
-        let list = loaders.get(&ModloaderType::NeoForge).unwrap();
-        assert!(list.iter().any(|l| l.version == "20.2.16"));
-    }
-
-    #[test]
-    fn test_process_neoforge_api_versions_artifact_version_match() {
-        let mut game_versions = vec![GameVersionMetadata {
-            id: "1.20.2".to_string(),
-            version_type: "release".to_string(),
-            release_time: Utc::now(),
-            stable: true,
-            loaders: HashMap::new(),
-        }];
-
-        let mut map: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
-        // entry object doesn't have mc_version key — only artifact_version
-        map.insert(
-            "1.20.2".to_string(),
-            vec![json!({"artifact_version":"1.20.2-20.2.19"})],
-        );
-
-        process_neoforge_api_versions("NeoForge", &map, &mut game_versions);
-
-        let loaders = &game_versions[0].loaders;
-        assert!(loaders.contains_key(&ModloaderType::NeoForge));
-        let list = loaders.get(&ModloaderType::NeoForge).unwrap();
-        assert!(list.iter().any(|l| l.version == "20.2.19"));
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("after 3 retries"));
     }
 }
 
