@@ -119,14 +119,10 @@
 	justify-content: flex-start;
 }
 
-.settings-field--stack .settings-field-control > *,
-.settings-field--stack .settings-field-control .toggle-group {
+.settings-field--stack .settings-field-control > * {
 	width: 100%; /* Ensure children like sliders and toggle groups fill the width */
 }
 
-.settings-field--stack .settings-field-control .toggle-group__item {
-	flex: 1; /* Stretch toggle items to fill the group width */
-}
 
 .settings-field-info {
 	display: flex;

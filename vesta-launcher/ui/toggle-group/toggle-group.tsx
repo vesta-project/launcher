@@ -19,6 +19,7 @@ function ToggleGroup<T extends ValidComponent = "div">(
 		"children",
 		"onChange",
 	]);
+
 	return (
 		<ToggleGroupPrimitive.ToggleGroup
 			class={clsx(styles["toggle-group"], local.class)}
@@ -31,12 +32,12 @@ function ToggleGroup<T extends ValidComponent = "div">(
 }
 
 type ToggleGroupItemProps = ToggleGroupPrimitive.ToggleGroupItemProps &
-	ClassProp;
+	ClassProp & ChildrenProp;
 
 function ToggleGroupItem<T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, ToggleGroupItemProps>,
 ) {
-	const [_, rest] = splitProps(props as ToggleGroupItemProps, [
+	const [local, rest] = splitProps(props, [
 		"class",
 		"children",
 	]);
@@ -46,7 +47,7 @@ function ToggleGroupItem<T extends ValidComponent = "button">(
 			class={clsx(styles["toggle-group__item"], props.class)}
 			{...rest}
 		>
-			{props.children}
+			{local.children}
 		</ToggleGroupPrimitive.Item>
 	);
 }

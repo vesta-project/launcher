@@ -8,7 +8,7 @@ import { useSearchParams } from "@solidjs/router";
 import { WindowControls } from "@tauri-controls/solid";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { ensureOsType } from "@utils/os";
-import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { createMemo, createSignal, onMount, Show, onCleanup } from "solid-js";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import styles from "./standalone-page-viewer.module.css";
 
@@ -159,6 +159,27 @@ function StandalonePageViewer() {
 		}
 
 		setRouter(mini_router);
+
+		// Handle native window close button
+		const unlistenCloseRequested = getCurrentWindow().onCloseRequested(
+			async (event) => {
+				if (mini_router.skipNextExitCheck) return;
+
+				const canExit = mini_router.getCanExit();
+				if (canExit) {
+					event.preventDefault();
+					const ok = await canExit();
+					if (ok) {
+						mini_router.skipNextExitCheck = true;
+						getCurrentWindow().close();
+					}
+				}
+			},
+		);
+
+		onCleanup(() => {
+			unlistenCloseRequested.then((unlisten) => unlisten());
+		});
 	});
 
 	return (

@@ -4,8 +4,8 @@
 	gap: 0.5em;
 	cursor: pointer;
 	border-radius: 6px;
-	background-color: var(--surface-raised);
 	padding: 0.5rem;
+	position: relative;
 	transition-property: background-color, color;
 	transition-duration: 150ms;
 	transition-timing-function: ease-in-out;
@@ -13,8 +13,14 @@
 
 .checkbox__input {
 	position: absolute;
-	opacity: 0;
-	pointer-events: none;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
 }
 
 .checkbox__control {
@@ -28,6 +34,7 @@
 	background: var(--surface-base);
 	color: var(--text-primary);
 	transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+	cursor: pointer;
 }
 
 .checkbox__control:focus-within {

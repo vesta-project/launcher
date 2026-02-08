@@ -65,6 +65,26 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 	const isReloading = createMemo(() => props.router.isReloading());
 	const isMac = createMemo(() => props.os === "macos");
 
+	const handleBack = async () => {
+		const canExit = props.router.getCanExit();
+		if (canExit) {
+			const ok = await canExit();
+			if (!ok) return;
+		}
+		props.router.backwards();
+	};
+
+	const handleClose = async () => {
+		const canExit = props.router.getCanExit();
+		if (canExit) {
+			const ok = await canExit();
+			if (!ok) return;
+			// If we confirmed here, tell the router to skip the next native check (to avoid double prompt)
+			props.router.skipNextExitCheck = true;
+		}
+		if (props.onClose) props.onClose();
+	};
+
 	const copyUrl = async () => {
 		const url = props.router.generateUrl();
 		if (!url) return;
@@ -84,11 +104,11 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 			}
 			if (event.key === "w" && props.onClose) {
 				event.preventDefault();
-				props.onClose();
+				handleClose();
 			}
 		}
 		if (event.altKey) {
-			if (event.key === "ArrowLeft") props.router.backwards();
+			if (event.key === "ArrowLeft") handleBack();
 			if (event.key === "ArrowRight") props.router.forwards();
 		}
 	};
@@ -115,7 +135,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</Show>
 
 					<NavbarButton
-						onClick={() => props.router.backwards()}
+						onClick={handleBack}
 						text="Back"
 						disabled={!canGoBack()}
 					>
@@ -128,13 +148,15 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					>
 						<ForwardsArrowIcon />
 					</NavbarButton>
-					<NavbarButton
-						onClick={() => props.router.reload()}
-						text="Reload"
-						loading={isReloading()}
-					>
-						<RefreshIcon />
-					</NavbarButton>
+					<Show when={props.router.getRefetch()}>
+						<NavbarButton
+							onClick={() => props.router.reload()}
+							text="Reload"
+							loading={isReloading()}
+						>
+							<RefreshIcon />
+						</NavbarButton>
+					</Show>
 				</div>
 
 				<div class={styles["page-viewer-navbar-center"]} data-tauri-drag-region>
@@ -159,7 +181,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</NavbarButton>
 
 					<Show when={props.onClose && !props.windowControls}>
-						<NavbarButton onClick={props.onClose} text="Close">
+						<NavbarButton onClick={handleClose} text="Close">
 							<CloseIcon />
 						</NavbarButton>
 					</Show>

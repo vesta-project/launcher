@@ -8,17 +8,13 @@ import styles from "./checkbox.module.css";
 export type CheckboxRootProps<T extends ValidComponent = "div"> =
 	CheckboxPrimitive.CheckboxRootProps<T> & { 
 		class?: string; 
-		children?: any;
-		onCheckedChange?: (checked: boolean) => void;
 	};
 
 export function Checkbox<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, CheckboxRootProps<T>>,
 ) {
-	const [local, others] = splitProps(props as any, [
-		"class",
-		"children",
-	]);
+		const [local, others] = splitProps(props as any, ["class"]);
+
 	return (
 		<CheckboxPrimitive.Root
 			class={clsx(styles["checkbox"], local.class)}
@@ -34,7 +30,7 @@ export function Checkbox<T extends ValidComponent = "div">(
 								class={styles["checkbox__icon"]}
 								aria-hidden="true"
 							>
-								<rect x="5" y="11" width="14" height="2" rx="1" fill="currentColor" />
+								<path d="M5 12h14" stroke="currentColor" stroke-width="2" />
 							</svg>
 						</Match>
 						<Match when={others.checked}>
@@ -51,46 +47,12 @@ export function Checkbox<T extends ValidComponent = "div">(
 								/>
 							</svg>
 						</Match>
-						<Match when={!others.checked && !others.indeterminate}>
-							<svg
-								viewBox="0 0 24 24"
-								class={styles["checkbox__icon"]}
-								aria-hidden="true"
-							>
-								<rect
-									x="4"
-									y="4"
-									width="16"
-									height="16"
-									rx="4"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-								/>
-							</svg>
-						</Match>
 					</Switch>
 				</CheckboxPrimitive.Indicator>
 			</CheckboxPrimitive.Control>
-			{local.children}
 		</CheckboxPrimitive.Root>
 	);
 }
 
-// Checkbox group/fieldset support
-export type CheckboxGroupProps = {
-	class?: string;
-	children?: any;
-	label?: string;
-};
 
-export function CheckboxGroup(props: CheckboxGroupProps) {
-	return (
-		<fieldset class={clsx(styles["checkbox-group"], props.class)}>
-			{props.label && (
-				<legend class={styles["checkbox-group__label"]}>{props.label}</legend>
-			)}
-			<div class={styles["checkbox-group__items"]}>{props.children}</div>
-		</fieldset>
-	);
-}
+

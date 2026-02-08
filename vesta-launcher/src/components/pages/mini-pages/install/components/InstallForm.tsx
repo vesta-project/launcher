@@ -144,7 +144,9 @@ export function InstallForm(props: InstallFormProps) {
 		props.initialData?.maxMemory || props.initialMaxMemory || 4096,
 	]);
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(
-		props.initialIncludeSnapshots || false,
+		(props.initialData as any)?.includeSnapshots ??
+			props.initialIncludeSnapshots ??
+			false,
 	);
 
 	// --- State Propagation ---

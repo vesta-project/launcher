@@ -623,6 +623,7 @@ function SettingsPage(props: { close?: () => void }) {
 	};
 
 	const handleDebugToggle = async (checked: boolean) => {
+		console.log("Toggling debug logging:", checked);
 		setDebugLogging(checked);
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
@@ -732,21 +733,17 @@ function SettingsPage(props: { close?: () => void }) {
 									description="Disable UI animations for a faster and cleaner experience."
 									layout="inline"
 									control={
-										<Switch
-											checked={reducedMotion()}
-											onCheckedChange={handleReducedMotionToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-							</SettingsCard>
+							<Switch checked={reducedMotion()} onCheckedChange={handleReducedMotionToggle}>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+						/>
+					</SettingsCard>
 
-							<SettingsCard header="Application Data">
-								<SettingsField
-									label="App Data Folder"
+					<SettingsCard header="Application Data">
+						<SettingsField
 									description="Open the folder where Vesta Launcher stores its data."
 									actionLabel="Open Folder"
 									onAction={handleOpenAppData}
@@ -860,18 +857,14 @@ function SettingsPage(props: { close?: () => void }) {
 										label="Background Gradient"
 										description="Enable animated background gradient"
 										control={
-											<Switch
-												checked={gradientEnabled() ?? false}
-												onCheckedChange={handleGradientToggle}
-											>
-												<SwitchControl>
-													<SwitchThumb />
-												</SwitchControl>
-											</Switch>
-										}
-									/>
-
-									<Show when={gradientEnabled()}>
+						<Switch checked={gradientEnabled() ?? false} onCheckedChange={handleGradientToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+						}
+						/>
+						<Show when={gradientEnabled()}>
 										<SettingsField
 											label="Gradient Type"
 											description="Linear or circular background"
@@ -1077,39 +1070,31 @@ function SettingsPage(props: { close?: () => void }) {
 									label="Automatic Updates"
 									description="Download and install updates automatically in the background"
 									control={
-										<Switch
-											checked={autoUpdateEnabled()}
-											onCheckedChange={handleAutoUpdateToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-								<SettingsField
-									label="Check on Startup"
-									description="Check for new versions when the launcher starts"
-									control={
-										<Switch
-											checked={startupCheckUpdates()}
-											onCheckedChange={handleStartupCheckToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-								<SettingsField
-									label="Check for Updates"
-									description="Manually verify if a newer version is available"
-									control={
-										<LauncherButton onClick={() => checkForAppUpdates()}>
-											Check Now
-										</LauncherButton>
-									}
-								/>
+							<Switch checked={autoUpdateEnabled()} onCheckedChange={handleAutoUpdateToggle}>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+					<SettingsField
+						label="Check on Startup"
+						description="Check for new versions when the launcher starts"
+						control={
+							<Switch checked={startupCheckUpdates()} onCheckedChange={handleStartupCheckToggle}>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+					<SettingsField
+						control={
+							<LauncherButton onClick={() => checkForAppUpdates()}>
+								Check Now
+							</LauncherButton>
+						}
+					/>
 							</SettingsCard>
 
 							<SettingsCard header="About">
@@ -1163,6 +1148,7 @@ function SettingsPage(props: { close?: () => void }) {
 										</Switch>
 									}
 								/>
+								
 							</SettingsCard>
 
 							<SettingsCard header="Navigation Test">

@@ -1,6 +1,7 @@
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { batch } from "solid-js";
 import {
 	applyTheme,
 	configToTheme,
@@ -15,7 +16,6 @@ interface ConfigUpdateEvent {
 type ConfigUpdateHandler = (field: string, value: any) => void;
 
 let configUnlisten: UnlistenFn | null = null;
-let currentWindowLabel: string | null = null;
 const updateHandlers: Set<ConfigUpdateHandler> = new Set();
 
 function setReducedMotion(enabled: boolean): void {
@@ -51,48 +51,39 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 	if (setupPromise) return setupPromise;
 
 	setupPromise = (async () => {
-		// Get current window label to track update source
-		try {
-			currentWindowLabel = getCurrentWindow().label;
-		} catch (error) {
-			console.error("Failed to get current window label:", error);
-		}
+		let updateQueue: ConfigUpdateEvent[] = [];
+		let batchTimeout: any = null;
 
 		configUnlisten = await listen<ConfigUpdateEvent>(
 			"config-updated",
 			(event) => {
-				const { field, value } = event.payload;
+				updateQueue.push(event.payload);
 
-				try {
-					// Notify all registered handlers
-					updateHandlers.forEach((handler) => {
-						try {
-							handler(field, value);
-						} catch (error) {
-							console.error(
-								`Handler failed for config update ${field}:`,
-								error,
-							);
+				if (batchTimeout) return;
+
+				batchTimeout = setTimeout(() => {
+					const currentUpdates = [...updateQueue];
+					updateQueue = [];
+					batchTimeout = null;
+
+					batch(() => {
+						for (const { field, value } of currentUpdates) {
+							// Notify all registered handlers
+							updateHandlers.forEach((handler) => {
+								try {
+									handler(field, value);
+								} catch (error) {
+									console.error(
+										`Handler failed for config update ${field}:`,
+										error,
+									);
+								}
+							});
+
+							console.log(`Config synced (batched): ${field} = ${value}`);
 						}
 					});
-
-					console.log(`Config synced: ${field} = ${value}`);
-				} catch (error) {
-					const errorMsg = `Failed to process config update: ${field} = ${value}`;
-					console.error(errorMsg, error);
-
-					// Broadcast error event for other windows to be aware
-					if (hasTauriRuntime()) {
-						import("@tauri-apps/api/event").then(({ emit }) => {
-							emit("config-update-error", {
-								field,
-								value,
-								error: error instanceof Error ? error.message : String(error),
-								window: currentWindowLabel,
-							});
-						});
-					}
-				}
+				}, 16); // ~1 frame at 60fps
 			},
 		);
 	})();

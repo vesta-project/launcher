@@ -85,12 +85,23 @@ class MiniRouter {
 	canGoBack: () => boolean;
 	canGoForward: () => boolean;
 	generateUrl: () => string;
+	getCanExit: () => (() => Promise<boolean>) | null;
+	setCanExit: (fn: (() => Promise<boolean>) | null) => void;
+	skipNextExitCheck: boolean = false;
 	private refetchFn: (() => Promise<void>) | undefined;
+	private canExitBlock: (() => Promise<boolean>) | null = null;
 
 	constructor(props: MiniRouterProps) {
 		this.paths = props.paths;
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
+
+		const [getCanExit, setCanExitSignal] = createSignal<
+			(() => Promise<boolean>) | null
+		>(null);
+		
+		this.getCanExit = getCanExit;
+		this.setCanExit = (fn) => setCanExitSignal(() => fn);
 
 		const [getCurrentPath, setCurrentPath] = createSignal<string>(
 			props.currentPath ?? "",

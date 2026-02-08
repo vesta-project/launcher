@@ -1,5 +1,23 @@
 .header {
     margin-bottom: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+}
+
+.headerTitle {
+    font-size: 0.875rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    opacity: 0.9;
+    letter-spacing: -0.01em;
+}
+
+.headerSubtitle {
+    font-size: 11px;
+    color: var(--text-tertiary);
+    font-weight: 500;
 }
 
 .disabled {

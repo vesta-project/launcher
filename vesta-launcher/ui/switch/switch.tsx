@@ -1,80 +1,65 @@
+import { cn } from "@utils/ui";
+import type { PolymorphicProps } from "@kobalte/core/polymorphic";
+import type {
+	SwitchControlProps,
+	SwitchThumbProps,
+} from "@kobalte/core/switch";
 import * as SwitchPrimitive from "@kobalte/core/switch";
-import { type PolymorphicProps } from "@kobalte/core/polymorphic";
-import clsx from "clsx";
-import { type ValidComponent, splitProps, type JSX } from "solid-js";
+import type { ParentProps, ValidComponent, VoidProps } from "solid-js";
+import { splitProps } from "solid-js";
 import styles from "./switch.module.css";
 
-// Root switch component
-export type SwitchRootProps<T extends ValidComponent = "div"> =
-	SwitchPrimitive.SwitchRootProps<T> & {
-		class?: string;
-		children?: any;
-		onCheckedChange?: (checked: boolean) => void;
-	};
+export const SwitchLabel = SwitchPrimitive.Label;
 
-export function Switch<T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SwitchRootProps<T>>,
-) {
-	const [local, others] = splitProps(props as any, ["class", "children"]);
+// Backwards-compatible wrapper: keep supporting <Switch checked=...> while encouraging <Switch.Root>
+export function Switch(props: any) {
+	return <SwitchPrimitive.Root {...props} onChange={props.onCheckedChange}>{props.children}</SwitchPrimitive.Root>;
+}
+
+Object.assign(Switch, SwitchPrimitive);
+
+export const SwitchErrorMessage = SwitchPrimitive.ErrorMessage;
+export const SwitchDescription = SwitchPrimitive.Description;
+
+type switchControlProps<T extends ValidComponent = "input"> = ParentProps<
+	SwitchControlProps<T> & { class?: string }
+>;
+
+export const SwitchControl = <T extends ValidComponent = "input">(
+	props: PolymorphicProps<T, switchControlProps<T>>,
+) => {
+	const [local, rest] = splitProps(props as switchControlProps, [
+		"class",
+		"children",
+	]);
+
 	return (
-		<SwitchPrimitive.Root
-			class={clsx(styles.switch, local.class)}
-			{...others}
-		>
+		<>
 			<SwitchPrimitive.Input class={styles.switch__input} />
-			{local.children}
-		</SwitchPrimitive.Root>
+			<SwitchPrimitive.Control
+				class={cn(styles["switch__control"], local.class)}
+				{...rest}
+			>
+				{local.children}
+			</SwitchPrimitive.Control>
+		</>
 	);
-}
+};
 
-// Switch Control
-export type SwitchControlProps<T extends ValidComponent = "div"> = 
-	SwitchPrimitive.SwitchControlProps<T> & { class?: string };
+type switchThumbProps<T extends ValidComponent = "div"> = VoidProps<
+	SwitchThumbProps<T> & { class?: string }
+>;
 
-export function SwitchControl<T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SwitchControlProps<T>>
-) {
-	const [local, others] = splitProps(props as any, ["class"]);
-	return (
-		<SwitchPrimitive.Control
-			class={clsx(styles.switch__control, local.class)}
-			{...others}
-		/>
-	);
-}
+export const SwitchThumb = <T extends ValidComponent = "div">(
+	props: PolymorphicProps<T, switchThumbProps<T>>,
+) => {
+	const [local, rest] = splitProps(props as switchThumbProps, ["class"]);
 
-// Switch Thumb
-export type SwitchThumbProps<T extends ValidComponent = "div"> = 
-	SwitchPrimitive.SwitchThumbProps<T> & { class?: string };
-
-export function SwitchThumb<T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SwitchThumbProps<T>>
-) {
-	const [local, others] = splitProps(props as any, ["class"]);
 	return (
 		<SwitchPrimitive.Thumb
-			class={clsx(styles.switch__thumb, local.class)}
-			{...others}
+			class={cn(styles["switch__thumb"], local.class)}
+			{...rest}
 		/>
 	);
-}
-
-// Switch Label
-export type SwitchLabelProps<T extends ValidComponent = "label"> = 
-	SwitchPrimitive.SwitchLabelProps<T> & { class?: string };
-
-export function SwitchLabel<T extends ValidComponent = "label">(
-	props: PolymorphicProps<T, SwitchLabelProps<T>>
-) {
-	const [local, others] = splitProps(props as any, ["class"]);
-	return (
-		<SwitchPrimitive.Label
-			class={clsx(styles.switch__label, local.class)}
-			{...others}
-		/>
-	);
-}
-
-export const SwitchDescription = SwitchPrimitive.Description;
-export const SwitchErrorMessage = SwitchPrimitive.ErrorMessage;
+};
 

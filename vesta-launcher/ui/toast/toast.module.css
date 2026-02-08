@@ -14,9 +14,11 @@
 	list-style: none;
 	z-index: 9999;
 	outline: none;
+	pointer-events: none;
 }
 
 .toast {
+	pointer-events: auto;
 	display: flex;
 	flex-direction: row;
 	justify-content: space-between;

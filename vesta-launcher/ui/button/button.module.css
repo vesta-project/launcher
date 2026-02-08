@@ -37,6 +37,11 @@
 	aspect-ratio: 1;
 	height: fit-content;
 	width: fit-content;
+
+	& svg {
+		width: 1rem;
+		height: 1rem;
+	}
 }
 
 .launcher-button--solid {

@@ -3,6 +3,7 @@
 	align-items: center;
 	gap: 0.5rem;
 	cursor: pointer;
+	position: relative;
 }
 
 .switch__input {
@@ -34,6 +35,8 @@
 	background-color: var(--surface-sunken);
 	cursor: pointer;
 	transition: background-color 150ms ease-in-out;
+	pointer-events: auto; /* ensure control receives pointer events */
+	z-index: 1; /* bring above potential overlays */
 }
 
 .switch__control[data-checked] {
@@ -56,6 +59,7 @@
 	transform: translateX(2px);
 	transition: transform 180ms ease-in-out;
 	pointer-events: none;
+	z-index: 2; /* above control */
 }
 
 .switch__thumb[data-checked] {

@@ -11,6 +11,23 @@ import CubeIcon from "@assets/cube.svg";
 import styles from "./icon-picker.module.css";
 import { ClassProp } from "@ui/props";
 
+/**
+ * Robustly compares two icon paths/values.
+ * If both are data URLs, compares only the base64 content to ignore mime-type differences.
+ */
+export const areIconsEqual = (a?: string | null, b?: string | null) => {
+	if (a === b) return true;
+	if (!a || !b) return false;
+
+	if (a.startsWith("data:image/") && b.startsWith("data:image/")) {
+		const partA = a.split(",")[1];
+		const partB = b.split(",")[1];
+		if (partA && partB) return partA === partB;
+	}
+
+	return false;
+};
+
 // Icon picker props interface
 interface IconPickerProps extends ClassProp {
 	/** Current selected icon (can be image URL, gradient, or null) */
@@ -148,7 +165,7 @@ export function IconPicker(props: IconPickerProps) {
 							</svg>
 						</div>
 					</Show>
-					<Show when={local.modpackIcon && (local.value === local.modpackIcon || local.isSuggestedSelected)}>
+					<Show when={local.modpackIcon && (areIconsEqual(local.value, local.modpackIcon) || local.isSuggestedSelected)}>
 						<div class={styles["icon-picker__trigger-badge"]}>
 							<CubeIcon fill="currentColor" width="12" height="12" />
 						</div>
@@ -175,11 +192,11 @@ export function IconPicker(props: IconPickerProps) {
 
 						<For each={local.uploadedIcons || []}>
 							{(icon) => {
-								const isSelected = local.value === icon || (icon === local.modpackIcon && local.isSuggestedSelected);
+								const isSelected = areIconsEqual(local.value, icon) || (areIconsEqual(icon, local.modpackIcon) && local.isSuggestedSelected);
 								console.log('IconPicker uploaded icon:', {
 									icon: icon?.substring(0, 30) + '...',
-									isValueMatch: local.value === icon,
-									isModpackMatch: icon === local.modpackIcon,
+									isValueMatch: areIconsEqual(local.value, icon),
+									isModpackMatch: areIconsEqual(icon, local.modpackIcon),
 									isSuggestedSelected: local.isSuggestedSelected,
 									isSelected: isSelected
 								});
@@ -194,7 +211,7 @@ export function IconPicker(props: IconPickerProps) {
 											<path d="M20 6L9 17L4 12" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
 										</svg>
 									</Show>
-									<Show when={icon === local.modpackIcon}>
+									<Show when={areIconsEqual(icon, local.modpackIcon)}>
 										<div class={styles["icon-picker__option-badge"]}>
 											<CubeIcon fill="currentColor" width="12" height="12" />
 										</div>
@@ -204,24 +221,26 @@ export function IconPicker(props: IconPickerProps) {
 						</For>
 
 						<For each={DEFAULT_ICONS}>
-							{(icon) => (
+							{(icon) => {
+								const isSelected = areIconsEqual(local.value, icon) || (areIconsEqual(icon, local.modpackIcon) && local.isSuggestedSelected);
+								return (
 								<PopoverCloseButton
-									class={clsx(styles["icon-picker__option"], (local.value === icon || (icon === local.modpackIcon && local.isSuggestedSelected)) && styles["icon-picker__option--selected"])}
+									class={clsx(styles["icon-picker__option"], isSelected && styles["icon-picker__option--selected"])}
 									style={getIconStyle(icon)}
 									onClick={() => { local.onSelect?.(icon); console.log('Icon selected:', icon); }}
 								>
-									<Show when={local.value === icon || (icon === local.modpackIcon && local.isSuggestedSelected)}>
+									<Show when={isSelected}>
 										<svg class={styles["icon-picker__tick"]} width="20" height="20" viewBox="0 0 24 24" fill="none">
 											<path d="M20 6L9 17L4 12" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
 										</svg>
 									</Show>
-									<Show when={icon === local.modpackIcon}>
+									<Show when={areIconsEqual(icon, local.modpackIcon)}>
 										<div class={styles["icon-picker__option-badge"]}>
 											<CubeIcon fill="currentColor" width="12" height="12" />
 										</div>
 									</Show>
 								</PopoverCloseButton>
-							)}
+							)}}
 						</For>
 					</div>
 				</PopoverContent>

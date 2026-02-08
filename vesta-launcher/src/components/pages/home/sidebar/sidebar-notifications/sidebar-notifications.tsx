@@ -101,6 +101,8 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 					tooltip_text={"Close"}
 					onClick={() => props.openChanged(false)}
 					tooltip_placement={"right"}
+					size="sm"
+					variant="ghost"
 				>
 					<CloseIcon />
 				</Button>

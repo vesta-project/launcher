@@ -322,7 +322,6 @@ export function ExportDialog(props: ExportDialogProps) {
 							checked={selected()}
 							indeterminate={indeterminate()}
 							onChange={(checked: boolean) => toggleItem(p.item, checked)}
-							style={{ background: "none", padding: 0 }}
 						/>
 					</div>
 

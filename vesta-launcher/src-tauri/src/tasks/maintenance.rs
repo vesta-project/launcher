@@ -139,7 +139,7 @@ impl Task for CloneInstanceTask {
             use tauri::Emitter;
             let _ = ctx
                 .app_handle
-                .emit("core://instance-created", inserted_inst);
+                .emit("core://instance-created", crate::commands::instances::process_instance_icon(inserted_inst));
 
             Ok(())
         })

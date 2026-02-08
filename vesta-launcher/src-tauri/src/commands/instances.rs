@@ -263,7 +263,7 @@ pub async fn install_instance(
     }
 }
 
-fn process_instance_icon(mut inst: Instance) -> Instance {
+pub fn process_instance_icon(mut inst: Instance) -> Instance {
     // If we have icon_data, we should prefer serving it via base64 for offline compatibility,
     // unless the icon_path is a gradient (which doesn't use icon_data).
     let is_gradient = inst

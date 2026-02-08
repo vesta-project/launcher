@@ -85,12 +85,12 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 
 	return (
 		<div>
-			<div class={clsx("flex items-center justify-between px-1", styles.header)}>
-				<div class="flex flex-col gap-0.5">
-					<span class="text-sm font-bold text-foreground/90 tracking-tight">
+			<div class={styles.header}>
+				<div style="display: flex; flex-direction: column; gap: 2px;">
+					<span class={styles.headerTitle}>
 						Modpack Version
 					</span>
-					<span class="text-[11px] text-muted-foreground font-medium">
+					<span class={styles.headerSubtitle}>
 						Manage installed builds and engine settings.
 					</span>
 				</div>

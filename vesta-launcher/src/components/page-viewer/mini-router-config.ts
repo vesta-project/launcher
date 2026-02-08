@@ -8,6 +8,7 @@ import ResourceBrowser from "@components/pages/mini-pages/resources/resource-bro
 import ResourceDetailsPage from "@components/pages/mini-pages/resources/resource-details";
 import SettingsPage from "@components/pages/mini-pages/settings/settings-page";
 import TaskTestPage from "@components/pages/mini-pages/task-test/task-test-page";
+import DebugTestPage from "@components/pages/mini-pages/debug-test";
 import NotificationTestPage from "@components/pages/notification-test/notification-test";
 import { ModdingGuidePage } from "../pages/mini-pages/modding-guide/guide";
 
@@ -31,6 +32,7 @@ export const miniRouterPaths = {
 		"Notification Test",
 	),
 	...CreateMiniRouterPath("/task-test", TaskTestPage, "Task System Test"),
+	...CreateMiniRouterPath("/debug-test", DebugTestPage, "Debug Interaction Test"),
 };
 
 export const miniRouterInvalidPage = InvalidPage;

@@ -115,6 +115,19 @@ import styles from "./instance-details.module.css";
 import { formatDate } from "@utils/date";
 import { ExportDialog } from "@ui/export-dialog";
 
+// Tabs
+import { HomeTab } from "./tabs/HomeTab";
+import { ConsoleTab } from "./tabs/ConsoleTab";
+import { ResourcesTab } from "./tabs/ResourcesTab";
+import { VersioningTab } from "./tabs/VersioningTab";
+import { SettingsTab } from "./tabs/SettingsTab";
+import FolderIcon from "@assets/folder.svg";
+import TrashIcon from "@assets/trash.svg";
+import InfoIcon from "@assets/help.svg";
+import SettingsIcon from "@assets/gear.svg";
+import PlayIcon from "@assets/play.svg";
+import LinkIcon from "@assets/link.svg";
+
 type TabType = "home" | "console" | "resources" | "settings" | "versioning";
 
 interface InstanceDetailsProps {
@@ -169,6 +182,23 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 			)}
 		</Show>
 	);
+};
+
+/**
+ * Robustly compares two icon paths/values.
+ * If both are data URLs, compares only the base64 content to ignore mime-type differences (e.g., png vs jpeg).
+ */
+export const areIconsEqual = (a?: string | null, b?: string | null) => {
+	if (a === b) return true;
+	if (!a || !b) return false;
+
+	if (a.startsWith("data:image/") && b.startsWith("data:image/")) {
+		const partA = a.split(",")[1];
+		const partB = b.split(",")[1];
+		if (partA && partB) return partA === partB;
+	}
+
+	return false;
 };
 
 export default function InstanceDetails(
@@ -287,6 +317,19 @@ export default function InstanceDetails(
 		string[]
 	>([]);
 
+	const inst = () => instance();
+
+	const isDirty = createMemo(() => {
+		return (
+			isNameDirty() ||
+			isIconDirty() ||
+			isMinMemDirty() ||
+			isMaxMemDirty() ||
+			isJvmDirty() ||
+			isJavaPathDirty()
+		);
+	});
+
 	const [modpackIconBase64] = createResource(
 		() => instance()?.modpackIconUrl,
 		async (url) => {
@@ -325,9 +368,9 @@ export default function InstanceDetails(
 		if (
 			current &&
 			!DEFAULT_ICONS.includes(current) &&
-			current !== originalIcon &&
-			current !== modpackIcon &&
-			!result.includes(current)
+			!areIconsEqual(current, originalIcon) &&
+			!areIconsEqual(current, modpackIcon) &&
+			!result.some((icon) => areIconsEqual(icon, current))
 		) {
 			result = [current, ...result];
 			console.log("[InstanceDetails] uploadedIcons - added current icon");
@@ -335,8 +378,8 @@ export default function InstanceDetails(
 
 		// Always add modpack icon first if it exists (regardless of session filtering)
 		if (modpackIcon && !DEFAULT_ICONS.includes(modpackIcon)) {
-			// Remove any existing instances first
-			result = result.filter((icon) => icon !== modpackIcon);
+			// Remove any existing instances (using robust comparison)
+			result = result.filter((icon) => !areIconsEqual(icon, modpackIcon));
 			// Add at the beginning
 			result = [modpackIcon, ...result];
 			console.log(
@@ -372,7 +415,7 @@ export default function InstanceDetails(
 				prev.map((icon) => icon?.substring(0, 30) + "..."),
 			);
 			// Start with previous icons, filtering out any that are now known to be modpack icons
-			let filtered = prev.filter((icon) => icon !== modpackIcon);
+			let filtered = prev.filter((icon) => !areIconsEqual(icon, modpackIcon));
 			const modpackRemoved = prev.length - filtered.length;
 			if (modpackRemoved > 0) {
 				console.log(
@@ -386,18 +429,15 @@ export default function InstanceDetails(
 			if (
 				modpackIcon &&
 				current &&
-				current !== modpackIcon &&
+				!areIconsEqual(current, modpackIcon) &&
 				current.startsWith("data:image/") &&
 				!DEFAULT_ICONS.includes(current)
 			) {
+				// This branch is rarely hit now due to areIconsEqual being used above, 
+				// but we keep it for extra safety in case of partial matches.
 				const beforeFilter = filtered.length;
-				filtered = filtered.filter((icon) => icon !== current);
+				filtered = filtered.filter((icon) => !areIconsEqual(icon, current));
 				currentIsModpackEquivalent = beforeFilter > filtered.length;
-				if (currentIsModpackEquivalent) {
-					console.log(
-						"[InstanceDetails] createEffect - removed current icon as it matches modpack icon (different format)",
-					);
-				}
 			}
 			console.log(
 				"[InstanceDetails] createEffect - after filtering:",
@@ -408,9 +448,9 @@ export default function InstanceDetails(
 			if (
 				current &&
 				!DEFAULT_ICONS.includes(current) &&
-				current !== modpackIcon &&
+				!areIconsEqual(current, modpackIcon) &&
 				!currentIsModpackEquivalent &&
-				!filtered.includes(current)
+				!filtered.some((icon) => areIconsEqual(icon, current))
 			) {
 				filtered = [current, ...filtered];
 				console.log(
@@ -447,6 +487,20 @@ export default function InstanceDetails(
 		props.setRefetch?.(handleRefetch);
 		router()?.setRefetch(handleRefetch);
 
+		// Navigation guard for unsaved changes
+		router()?.setCanExit(async () => {
+			if (isDirty()) {
+				const confirmed = await dialogStore.confirm({
+					title: "Unsaved Changes",
+					description: "You have unsaved changes to this instance. Are you sure you want to leave without saving?",
+					confirmLabel: "Leave",
+					cancelLabel: "Stay",
+				});
+				return confirmed;
+			}
+			return true;
+		});
+
 		const unlistenPromise = listen("java-paths-updated", () => {
 			refetchManaged();
 			refetchGlobal();
@@ -454,6 +508,7 @@ export default function InstanceDetails(
 		});
 		onCleanup(() => {
 			unlistenPromise.then((unlisten) => unlisten());
+			router()?.setCanExit(null);
 		});
 
 		// Register state provider for pop-out window handoff
@@ -589,23 +644,6 @@ export default function InstanceDetails(
 		return opts;
 	});
 
-	const currentSelection = createMemo(() => {
-		if (isCustomMode()) return "__custom__";
-		const path = javaPath();
-		if (path === "") return "__default__";
-
-		const options = jreOptions();
-		const match = options.find(
-			(o) =>
-				o.value === path &&
-				o.value !== "__default__" &&
-				o.value !== "__custom__",
-		);
-		if (match) return match.value;
-
-		return "__custom__";
-	});
-
 	// Check if instance is currently being installed/repaired/updated
 	const isInstalling = createMemo(() => {
 		const inst = instance();
@@ -635,6 +673,19 @@ export default function InstanceDetails(
 	let lastSelectedRowId: string | null = null;
 
 	const handleRowClick = (row: any, event: MouseEvent) => {
+		const target = event.target as HTMLElement;
+		// Prevent navigation if clicking interactive elements inside the row
+		if (
+			target.closest("button") ||
+			target.closest("a") ||
+			target.closest("input") ||
+			target.closest(".v-switch") ||
+			target.getAttribute("role") === "checkbox" ||
+			target.getAttribute("role") === "switch"
+		) {
+			return;
+		}
+
 		const rowId = row.id;
 
 		if (event.shiftKey && lastSelectedRowId) {
@@ -748,6 +799,16 @@ export default function InstanceDetails(
 		{},
 	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
+	const [totalRam, setTotalRam] = createSignal(16384);
+
+	onMount(async () => {
+		try {
+			const ram = await invoke("get_system_memory_mb");
+			if (typeof ram === "number" && ram > 0) setTotalRam(ram);
+		} catch (e) {
+			console.error("Failed to get total RAM:", e);
+		}
+	});
 	const [lastCheckTime, setLastCheckTime] = createSignal<number>(0);
 
 	// Modpack versions for picker
@@ -1072,22 +1133,6 @@ export default function InstanceDetails(
 		}
 	};
 
-	const updateAll = async () => {
-		const available = updates();
-		const ids = Object.keys(available).map(Number);
-		if (ids.length === 0) return;
-
-		setBusy(true);
-		for (const id of ids) {
-			const res = (installedResources() || []).find((r) => r.id === id);
-			const version = available[id];
-			if (res && version) {
-				await handleUpdate(res, version);
-			}
-		}
-		setBusy(false);
-	};
-
 	const selectedToUpdateCount = createMemo(() => {
 		const sel = resources.state.selection;
 		const ups = updates();
@@ -1121,25 +1166,23 @@ export default function InstanceDetails(
 			size: 64, // Sync with CSS
 			header: ({ table }) => (
 				<div
-					class={`${styles["col-selection-wrapper"]} ${styles.header}`}
-					onClick={(e) => e.stopPropagation()}
+					class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}
 				>
 					<Checkbox
 						class={styles["header-checkbox"]}
 						checked={table.getIsAllPageRowsSelected()}
 						indeterminate={table.getIsSomePageRowsSelected()}
-						onCheckedChange={(checked: boolean) => {
-							table.toggleAllPageRowsSelected(!!checked);
-						}}
+						onChange={(checked) => table.toggleAllPageRowsSelected(checked)}
 					/>
 				</div>
 			),
 			cell: (info) => (
 				<div
-					class={styles["col-selection-wrapper"]}
-					onClick={(e) => e.stopPropagation()}
+					class={`${styles["col-selection-wrapper"]} v-col-selection`}
 				>
-					<div class={styles["select-icon-container"]}>
+					<div class={styles["select-icon-container"]}
+						onClick={(e: MouseEvent) => e.stopPropagation()}
+						>
 						<ResourceIcon
 							record={projectRecords()?.[info.row.original.remote_id]}
 							name={info.row.original.display_name}
@@ -1148,9 +1191,7 @@ export default function InstanceDetails(
 							class={styles["row-checkbox"]}
 							checked={info.row.getIsSelected()}
 							disabled={!info.row.getCanSelect()}
-							onCheckedChange={(checked: boolean) => {
-								info.row.toggleSelected(!!checked);
-							}}
+							onChange={(checked) => info.row.toggleSelected(checked)}
 						/>
 					</div>
 				</div>
@@ -1158,7 +1199,7 @@ export default function InstanceDetails(
 		}),
 		columnHelper.accessor("display_name", {
 			header: "Name",
-			size: 250, // Updated to match CSS precisely
+			size: 150, // Default size makes it flexible in ResourcesTab
 			cell: (info) => (
 				<div class={styles["res-info-cell"]}>
 					<div class={styles["res-title-group"]}>
@@ -1172,6 +1213,7 @@ export default function InstanceDetails(
 		}),
 		columnHelper.accessor("resource_type", {
 			header: "Type",
+			size: 90,
 			cell: (info) => {
 				const type = info.getValue().toLowerCase();
 				const variant =
@@ -1189,6 +1231,7 @@ export default function InstanceDetails(
 		}),
 		columnHelper.accessor("current_version", {
 			header: "Version",
+			size: 110,
 			cell: (info) => {
 				const currentUpdate = () => updates()[info.row.original.id];
 				return (
@@ -1207,20 +1250,8 @@ export default function InstanceDetails(
 										if (u) handleUpdate(info.row.original, u);
 									}}
 								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										width="14"
-										height="14"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2"
-										stroke-linecap="round"
-										stroke-linejoin="round"
-									>
-										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-										<polyline points="7 10 12 15 17 10"></polyline>
-										<line x1="12" y1="15" x2="12" y2="3"></line>
+									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/>
 									</svg>
 								</TooltipTrigger>
 								<TooltipContent>
@@ -1233,14 +1264,16 @@ export default function InstanceDetails(
 			},
 		}),
 		columnHelper.accessor("is_enabled", {
-			header: () => <div style="text-align: right">Enabled</div>,
+			header: () => <div style="text-align: right; width: 100%;">Enabled</div>,
+			size: 80,
 			cell: (info) => (
 				<div
 					style="display: flex; justify-content: flex-end; width: 100%;"
-					onClick={(e) => e.stopPropagation()}
+					onClick={(e: MouseEvent) => e.stopPropagation()}
 				>
 					<Switch
 						checked={info.getValue()}
+						
 						onCheckedChange={async (enabled: boolean) => {
 							const previous = installedResources.latest;
 							// Optimistic update
@@ -1276,10 +1309,10 @@ export default function InstanceDetails(
 		columnHelper.display({
 			id: "actions",
 			header: "",
+			size: 50,
 			cell: (info) => (
 				<div
 					style="display: flex; justify-content: flex-end;"
-					onClick={(e) => e.stopPropagation()}
 				>
 					<Button
 						variant="ghost"
@@ -1312,22 +1345,7 @@ export default function InstanceDetails(
 							}
 						}}
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							width="16"
-							height="16"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2"
-							stroke-linecap="round"
-							stroke-linejoin="round"
-						>
-							<polyline points="3 6 5 6 21 6" />
-							<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-							<line x1="10" y1="11" x2="10" y2="17" />
-							<line x1="14" y1="11" x2="14" y2="17" />
-						</svg>
+						<TrashIcon />
 					</Button>
 				</div>
 			),
@@ -1354,14 +1372,10 @@ export default function InstanceDetails(
 			return filteredData();
 		},
 		columns,
-		state: {
-			get rowSelection() {
-				return resources.state.selection;
-			},
-			get sorting() {
-				return resources.state.sorting;
-			},
-		},
+		state: createMemo(() => ({
+			rowSelection: resources.state.selection,
+			sorting: resources.state.sorting,
+		})),
 		onRowSelectionChange: (updater) => {
 			batch(() => {
 				if (typeof updater === "function") {
@@ -1645,7 +1659,6 @@ export default function InstanceDetails(
 	// Handle tab changes - use updateQuery for stable state preservation
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
-
 		router()?.updateQuery("activeTab", tab, true); // Push to history
 	};
 
@@ -1826,110 +1839,18 @@ export default function InstanceDetails(
 
 								<div class={styles["instance-tab-content"]}>
 									<Show when={activeTab() === "home"}>
-										<Show when={instance.loading}>
+										<Show when={instance.loading && !instance.latest}>
 											<div class={styles["skeleton-grid"]}>
-												{Array.from({ length: 7 }).map(() => (
+												{Array.from({ length: 4 }).map(() => (
 													<Skeleton class={styles["skeleton-item"]} />
 												))}
 											</div>
 										</Show>
-										<Show when={!instance.loading}>
-											<section class={styles["tab-home"]}>
-												{/* Quick Stats Grid */}
-												<div class={styles["stats-grid"]}>
-													<div class={styles["stat-card"]}>
-														<div class={styles["stat-icon"]}>⧗</div>
-														<div class={styles["stat-content"]}>
-															<div class={styles["stat-value"]}>
-																{Math.floor(
-																	(inst().totalPlaytimeMinutes ?? 0) / 60,
-																)}
-																h {(inst().totalPlaytimeMinutes ?? 0) % 60}m
-															</div>
-															<div class={styles["stat-label"]}>Playtime</div>
-														</div>
-													</div>
-
-													<div class={styles["stat-card"]}>
-														<div class={styles["stat-icon"]}>❒</div>
-														<div class={styles["stat-content"]}>
-															<div class={styles["stat-value"]}>
-																{(installedResources() || []).length}
-															</div>
-															<div class={styles["stat-label"]}>Resources</div>
-														</div>
-													</div>
-
-													<div class={styles["stat-card"]}>
-														<div class={styles["stat-icon"]}>⬡</div>
-														<div class={styles["stat-content"]}>
-															<div class={styles["stat-value"]}>
-																{inst().minMemory}/{inst().maxMemory}
-															</div>
-															<div class={styles["stat-label"]}>
-																Memory (MB)
-															</div>
-														</div>
-													</div>
-
-													<div class={styles["stat-card"]}>
-														<div class={styles["stat-icon"]}>
-															{inst().installationStatus === "installed"
-																? "◆"
-																: inst().installationStatus === "interrupted"
-																	? "▲"
-																	: inst().installationStatus === "installing"
-																		? "◇"
-																		: "◈"}
-														</div>
-														<div class={styles["stat-content"]}>
-															<div class={styles["stat-value"]}>
-																{inst().installationStatus || "Unknown"}
-															</div>
-															<div class={styles["stat-label"]}>Status</div>
-														</div>
-													</div>
-												</div>
-
-												{/* Recent Activity */}
-												<div class={styles["activity-section"]}>
-													<h3 class={styles["section-title"]}>
-														Recent Activity
-													</h3>
-													<div class={styles["activity-list"]}>
-														<div class={styles["activity-item"]}>
-															<div class={styles["activity-icon"]}>◈</div>
-															<div class={styles["activity-content"]}>
-																<div class={styles["activity-primary"]}>
-																	Last played{" "}
-																	{inst().lastPlayed
-																		? formatDate(inst().lastPlayed as string)
-																		: "Never"}
-																</div>
-																<div class={styles["activity-secondary"]}>
-																	{isRunning()
-																		? "Currently running"
-																		: "Ready to launch"}
-																</div>
-															</div>
-														</div>
-														<div class={styles["activity-item"]}>
-															<div class={styles["activity-icon"]}>◇</div>
-															<div class={styles["activity-content"]}>
-																<div class={styles["activity-primary"]}>
-																	Created{" "}
-																	{inst().createdAt
-																		? formatDate(inst().createdAt as string)
-																		: "Unknown"}
-																</div>
-																<div class={styles["activity-secondary"]}>
-																	Instance initialization
-																</div>
-															</div>
-														</div>
-													</div>
-												</div>
-											</section>
+										<Show when={instance.latest}>
+											<HomeTab
+												instance={inst()}
+												installedResources={installedResources() || []}
+											/>
 										</Show>
 									</Show>
 
@@ -1938,728 +1859,80 @@ export default function InstanceDetails(
 											<Skeleton class={styles["skeleton-console"]} />
 										</Show>
 										<Show when={instance.latest}>
-											<section
-												class={styles["tab-console"]}
-												classList={{ [styles.refetching]: instance.loading }}
-											>
-												<div class={styles["console-toolbar"]}>
-													<span class={styles["console-title"]}>
-														Game Console
-													</span>
-													<div class={styles["console-toolbar-buttons"]}>
-														<Tooltip placement="top">
-															<TooltipTrigger
-																onClick={openLogsFolder}
-																as={Button}
-															>
-																📁 Logs
-															</TooltipTrigger>
-															<TooltipContent>
-																Open logs folder in file explorer
-															</TooltipContent>
-														</Tooltip>
-														<button
-															class={styles["console-clear"]}
-															onClick={clearConsole}
-														>
-															Clear
-														</button>
-													</div>
-												</div>
-												<div class={styles["console-output"]} ref={consoleRef}>
-													<Show when={lines().length === 0}>
-														<div class={styles["console-placeholder"]}>
-															No output yet. Launch the game to see console
-															output.
-														</div>
-													</Show>
-													<For each={lines()}>
-														{(line) => (
-															<div class={styles["console-line"]}>{line}</div>
-														)}
-													</For>
-												</div>
-											</section>
+											<ConsoleTab
+												lines={lines()}
+												consoleRef={(el) => {
+													consoleRef = el;
+												}}
+												openLogsFolder={openLogsFolder}
+												clearConsole={clearConsole}
+											/>
 										</Show>
 									</Show>
 
 									<Show when={activeTab() === "resources"}>
-										<section class={styles["tab-resources"]}>
-											<div
-												class={styles["resources-toolbar"]}
-												classList={{ [styles["is-stuck"]]: isScrolled() }}
-											>
-												<div class={styles["toolbar-search-filter"]}>
-													<div class={styles["filter-group"]}>
-														<For
-															each={[
-																{ id: "All", label: "All" },
-																{ id: "mod", label: "Mods" },
-																{ id: "resourcepack", label: "Packs" },
-																{ id: "shader", label: "Shaders" },
-																{ id: "datapack", label: "Datapacks" },
-															]}
-														>
-															{(option) => (
-																<button
-																	class={styles["filter-btn"]}
-																	classList={{
-																		[styles.active]:
-																			resourceTypeFilter() === option.id,
-																	}}
-																	onClick={() =>
-																		setResourceTypeFilter(option.id)
-																	}
-																>
-																	{option.label}
-																</button>
-															)}
-														</For>
-													</div>
-													<div class={styles["search-box"]}>
-														<input
-															type="text"
-															placeholder="Search installed..."
-															value={resourceSearch()}
-															onInput={(e) =>
-																setResourceSearch(e.currentTarget.value)
-															}
-														/>
-													</div>
-												</div>
-
-												<Show
-													when={Object.values(resources.state.selection).some(
-														(v) => v,
-													)}
-													fallback={
-														<>
-															<Separator />
-															<div class={styles["toolbar-actions"]}>
-																<Button
-																	size="sm"
-																	variant="ghost"
-																	class={styles["check-updates-btn"]}
-																	onClick={checkUpdates}
-																	disabled={checkingUpdates() || busy()}
-																>
-																	<Show
-																		when={checkingUpdates()}
-																		fallback={
-																			<svg
-																				xmlns="http://www.w3.org/2000/svg"
-																				width="14"
-																				height="14"
-																				viewBox="0 0 24 24"
-																				fill="none"
-																				stroke="currentColor"
-																				stroke-width="2"
-																				stroke-linecap="round"
-																				stroke-linejoin="round"
-																			>
-																				<path d="M21 2v6h-6"></path>
-																				<path d="M3 12a9 9 0 0 1 15-6.7L21 8"></path>
-																				<path d="M3 22v-6h6"></path>
-																				<path d="M21 12a9 9 0 0 1-15 6.7L3 16"></path>
-																			</svg>
-																		}
-																	>
-																		<span
-																			class={styles["checking-updates-spinner"]}
-																		/>
-																	</Show>
-																	<span>
-																		{checkingUpdates()
-																			? "Checking..."
-																			: "Check for Updates"}
-																	</span>
-																</Button>
-
-																<Show when={Object.keys(updates()).length > 0}>
-																	<Button
-																		size="sm"
-																		color="primary"
-																		variant="solid"
-																		class={styles["update-all-btn"]}
-																		onClick={updateAll}
-																		disabled={busy()}
-																	>
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="14"
-																			height="14"
-																			viewBox="0 0 24 24"
-																			fill="none"
-																			stroke="currentColor"
-																			stroke-width="2"
-																			stroke-linecap="round"
-																			stroke-linejoin="round"
-																		>
-																			<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-																			<polyline points="7 10 12 15 17 10"></polyline>
-																			<line
-																				x1="12"
-																				y1="15"
-																				x2="12"
-																				y2="3"
-																			></line>
-																		</svg>
-																		Update All ({Object.keys(updates()).length})
-																	</Button>
-																</Show>
-
-																<div
-																	class={styles.spacer}
-																	style={{ flex: 1 }}
-																/>
-
-																<Button
-																	size="sm"
-																	variant="outline"
-																	class={styles["browse-resources-btn"]}
-																	onClick={() => {
-																		const inst = instance();
-																		if (inst) {
-																			resources.setInstance(inst.id);
-																			resources.setGameVersion(
-																				inst.minecraftVersion,
-																			);
-																			resources.setLoader(inst.modloader);
-																			router()?.navigate("/resources");
-																		}
-																	}}
-																>
-																	<svg
-																		xmlns="http://www.w3.org/2000/svg"
-																		width="14"
-																		height="14"
-																		viewBox="0 0 24 24"
-																		fill="none"
-																		stroke="currentColor"
-																		stroke-width="2"
-																		stroke-linecap="round"
-																		stroke-linejoin="round"
-																	>
-																		<circle cx="11" cy="11" r="8"></circle>
-																		<line
-																			x1="21"
-																			y1="21"
-																			x2="16.65"
-																			y2="16.65"
-																		></line>
-																		<line x1="11" y1="8" x2="11" y2="14"></line>
-																		<line x1="8" y1="11" x2="14" y2="11"></line>
-																	</svg>
-																	Browse Resources
-																</Button>
-															</div>
-														</>
-													}
-												>
-													<div class={styles["selection-action-bar"]}>
-														<div class={styles["selection-info"]}>
-															<button
-																class={styles["clear-selection"]}
-																onClick={() => resources.clearSelection()}
-															>
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	width="16"
-																	height="16"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																>
-																	<line x1="18" y1="6" x2="6" y2="18"></line>
-																	<line x1="6" y1="6" x2="18" y2="18"></line>
-																</svg>
-															</button>
-															<span class={styles["selection-count"]}>
-																{
-																	Object.values(
-																		resources.state.selection,
-																	).filter((v) => v).length
-																}{" "}
-																items selected
-															</span>
-														</div>
-														<div class={styles["selection-actions"]}>
-															<Button
-																size="sm"
-																variant="ghost"
-																onClick={handleBatchUpdate}
-																disabled={
-																	busy() || selectedToUpdateCount() === 0
-																}
-															>
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	width="14"
-																	height="14"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																>
-																	<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-																	<polyline points="7 10 12 15 17 10"></polyline>
-																	<line x1="12" y1="15" x2="12" y2="3"></line>
-																</svg>
-																Update Selected ({selectedToUpdateCount()})
-															</Button>
-															<Button
-																size="sm"
-																variant="ghost"
-																class={styles["delete-selected"]}
-																onClick={handleBatchDelete}
-																disabled={busy()}
-															>
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	width="14"
-																	height="14"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																>
-																	<polyline points="3 6 5 6 21 6"></polyline>
-																	<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-																	<line x1="10" y1="11" x2="10" y2="17"></line>
-																	<line x1="14" y1="11" x2="14" y2="17"></line>
-																</svg>
-																Delete Selected
-															</Button>
-														</div>
-													</div>
-												</Show>
-											</div>
-
-											<div class={styles["installed-resources-list"]}>
-												<Show
-													when={
-														installedResources.loading &&
-														!installedResources.latest
-													}
-												>
-													<Skeleton class={styles["skeleton-resources"]} />
-												</Show>
-												<Show when={installedResources.latest}>
-													<div
-														class={styles["vesta-table-container"]}
-														classList={{
-															[styles.refetching]: installedResources.loading,
-														}}
-													>
-														<table class={styles["vesta-table"]}>
-															<thead>
-																<For each={table.getHeaderGroups()}>
-																	{(headerGroup) => (
-																		<tr>
-																			<For each={headerGroup.headers}>
-																				{(header) => (
-																					<th
-																						style={{
-																							width:
-																								header.getSize() === 150
-																									? "auto"
-																									: `${header.getSize()}px`,
-																							"min-width": `${header.column.columnDef.minSize || 0}px`,
-																							"max-width": header.column
-																								.columnDef.maxSize
-																								? `${header.column.columnDef.maxSize}px`
-																								: "none",
-																						}}
-																					>
-																						{header.isPlaceholder
-																							? null
-																							: flexRender(
-																									header.column.columnDef
-																										.header,
-																									header.getContext(),
-																								)}
-																					</th>
-																				)}
-																			</For>
-																		</tr>
-																	)}
-																</For>
-															</thead>
-															<tbody>
-																<For each={table.getRowModel().rows}>
-																	{(row) => (
-																		<tr
-																			classList={{
-																				[styles["row-disabled"]]:
-																					!row.original.is_enabled,
-																				[styles["row-selected"]]:
-																					row.getIsSelected(),
-																			}}
-																			onClick={(e) => handleRowClick(row, e)}
-																			style={{
-																				cursor:
-																					row.original.remote_id &&
-																					row.original.platform !== "manual" &&
-																					row.original.platform !== "unknown"
-																						? "pointer"
-																						: "default",
-																			}}
-																		>
-																			<For each={row.getVisibleCells()}>
-																				{(cell) => (
-																					<td>
-																						{flexRender(
-																							cell.column.columnDef.cell,
-																							cell.getContext(),
-																						)}
-																					</td>
-																				)}
-																			</For>
-																		</tr>
-																	)}
-																</For>
-															</tbody>
-														</table>
-
-														<Show when={table.getRowModel().rows.length === 0}>
-															<div class={styles["resources-empty-state"]}>
-																<p>
-																	No{" "}
-																	{resourceTypeFilter() !== "All"
-																		? resourceTypeFilter().toLowerCase() + "s"
-																		: "resources"}{" "}
-																	found.
-																</p>
-															</div>
-														</Show>
-													</div>
-												</Show>
-											</div>
-										</section>
+										<ResourcesTab
+											instance={inst()}
+											isScrolled={isScrolled()}
+											resourceTypeFilter={resourceTypeFilter()}
+											resourceSearch={resourceSearch()}
+											setResourceSearch={setResourceSearch}
+											setResourceTypeFilter={setResourceTypeFilter}
+											table={table}
+											resourcesStore={resources}
+											installedResources={installedResources}
+											router={router()}
+											handleBatchUpdate={handleBatchUpdate}
+											handleBatchDelete={handleBatchDelete}
+											onRowClick={handleRowClick}
+											selectedToUpdateCount={selectedToUpdateCount()}
+											busy={busy()}
+											checkingUpdates={checkingUpdates()}
+											checkUpdates={checkUpdates}
+										/>
 									</Show>
 
 									<Show when={activeTab() === "versioning"}>
-										<div class={styles["tab-versioning"]}>
-											{/* Linked Modpack Section */}
-											<Show when={inst().modpackId}>
-												<SettingsCard
-													header="Modpack Management"
-													subHeader="Manage updates and versioning for this linked modpack."
-													variant="bordered"
-												>
-													<div class={styles["modpack-hero"]}>
-														<div class={styles["modpack-hero-icon-container"]}>
-															<img
-																src={inst().modpackIconUrl || "/icon.png"}
-																alt="Modpack Icon"
-																class={styles["modpack-hero-icon"]}
-															/>
-														</div>
-														<div class={styles["modpack-hero-info"]}>
-															<div class={styles["modpack-hero-header"]}>
-																<h3 class={styles["modpack-hero-title"]}>
-																	{inst().modpackPlatform === "modrinth"
-																		? "Modrinth"
-																		: "CurseForge"}{" "}
-																	Modpack
-																</h3>
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	onClick={checkUpdates}
-																	disabled={checkingUpdates() || isGuest()}
-																>
-																	{checkingUpdates()
-																		? "Checking..."
-																		: "Refresh Updates"}
-																</Button>
-															</div>
-															<p class={styles["modpack-hero-subtitle"]}>
-																Project ID: {inst().modpackId}
-															</p>
-														</div>
-													</div>
-
-													<ModpackVersionSelector
-														versions={modpackVersions()}
-														loading={modpackVersions.loading}
-														currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
-														onVersionSelect={handleModpackVersionSelect}
-														onUpdate={rolloutModpackUpdate}
-														disabled={busy() || isInstalling() || isGuest()}
-													/>
-												</SettingsCard>
-
-												<SettingsCard header="Modpack Maintenance" destructive>
-													<SettingsField
-														label="Repair Files"
-														description="Verify all modpack assets and re-download missing files."
-														actionLabel="Repair"
-														onAction={() => {
-															repairInstance(inst().id);
-														}}
-													/>
-													<SettingsField
-														label="Unlink Connection"
-														description="Disconnect from the source to manage files manually. This is irreversible."
-														actionLabel="Unlink"
-														destructive
-														onAction={() => {
-															handleUnlink();
-														}}
-														disabled={busy() || isInstalling() || isGuest()}
-													/>
-												</SettingsCard>
-											</Show>
-
-											{/* Version Selectors for Standard Instances */}
-											<Show when={!inst().modpackId}>
-												<SettingsCard
-													header="Core Configuration"
-													subHeader="Define the Minecraft version and modloader for this instance."
-													variant="bordered"
-												>
-													<SettingsField
-														label="Minecraft Version"
-														description="The base version of the game to run."
-														layout="stack"
-													>
-														<Combobox<any>
-															options={searchableMcVersions()}
-															optionValue="id"
-															optionTextValue="searchString"
-															value={selectedMcVersion()}
-															disabled={isGuest()}
-															onChange={(id: string | null) => {
-																if (!id) return;
-																setSelectedMcVersion(id);
-																const vMeta = mcVersions()?.game_versions.find(
-																	(gv) => gv.id === id,
-																);
-																if (vMeta) {
-																	setSelectedLoader("vanilla");
-																	setSelectedLoaderVersion("");
-																}
-															}}
-															placeholder="Select version..."
-															itemComponent={(props) => (
-																<ComboboxItem item={props.item}>
-																	{props.item.rawValue.id}
-																</ComboboxItem>
-															)}
-														>
-															<ComboboxControl
-																aria-label="Version Picker"
-																style="width: 100%;"
-															>
-																<ComboboxInput
-																	as="input"
-																	value={selectedMcVersion()}
-																/>
-																<ComboboxTrigger />
-															</ComboboxControl>
-															<ComboboxContent />
-														</Combobox>
-													</SettingsField>
-
-													<SettingsField
-														label="Modloader Engine"
-														description="Choose between Vanilla, Forge, Fabric, or others."
-														layout="stack"
-													>
-														<Combobox<any>
-															options={loadersList}
-															optionValue="value"
-															optionTextValue="label"
-															value={selectedLoader()}
-															disabled={isGuest()}
-															onChange={(val: string | null) => {
-																if (!val) return;
-																setSelectedLoader(val);
-																setSelectedLoaderVersion("");
-															}}
-															placeholder="Select loader..."
-															itemComponent={(props) => (
-																<ComboboxItem item={props.item}>
-																	{props.item.rawValue.label}
-																</ComboboxItem>
-															)}
-														>
-															<ComboboxControl
-																aria-label="Loader Picker"
-																style="width: 100%;"
-															>
-																<ComboboxInput
-																	as="input"
-																	value={
-																		loadersList.find(
-																			(l) => l.value === selectedLoader(),
-																		)?.label || "Vanilla"
-																	}
-																/>
-																<ComboboxTrigger />
-															</ComboboxControl>
-															<ComboboxContent />
-														</Combobox>
-													</SettingsField>
-
-													<Show
-														when={
-															selectedLoader() &&
-															selectedLoader().toLowerCase() !== "vanilla"
-														}
-													>
-														<SettingsField
-															label="Loader Version"
-															description="Specific version of the selected modloader."
-															layout="stack"
-														>
-															<div style="display: flex; gap: 12px; align-items: flex-end; width: 100%;">
-																<div style="flex: 1;">
-																	<Show
-																		when={!mcVersions.loading}
-																		fallback={
-																			<Skeleton
-																				class={styles["skeleton-picker"]}
-																			/>
-																		}
-																	>
-																		<Combobox<any>
-																			options={searchableLoaderVersions()}
-																			optionValue="id"
-																			optionTextValue="searchString"
-																			value={selectedLoaderVersion()}
-																			disabled={isGuest()}
-																			onChange={(id: string | null) => {
-																				if (id) setSelectedLoaderVersion(id);
-																			}}
-																			placeholder="Select loader version..."
-																			itemComponent={(p) => (
-																				<ComboboxItem item={p.item}>
-																					{p.item.rawValue.id}
-																				</ComboboxItem>
-																			)}
-																		>
-																			<ComboboxControl
-																				aria-label="Loader Version Selection"
-																				style="width: 100%;"
-																			>
-																				<ComboboxInput
-																					as="input"
-																					value={selectedLoaderVersion()}
-																				/>
-																				<ComboboxTrigger />
-																			</ComboboxControl>
-																			<ComboboxContent />
-																		</Combobox>
-																	</Show>
-																</div>
-
-																<Show
-																	when={
-																		selectedLoader() !==
-																			(inst().modloader || "vanilla") ||
-																		selectedLoaderVersion() !==
-																			(inst().modloaderVersion || "") ||
-																		selectedMcVersion() !==
-																			inst().minecraftVersion
-																	}
-																>
-																	<Button
-																		onClick={() => handleStandardUpdate()}
-																		disabled={
-																			busy() || isInstalling() || isGuest()
-																		}
-																		color="primary"
-																		variant="shadow"
-																	>
-																		Switch Engine
-																	</Button>
-																</Show>
-															</div>
-														</SettingsField>
-													</Show>
-												</SettingsCard>
-											</Show>
-
-											<SettingsCard header="Maintenance">
-												<SettingsField
-													label="Export Instance"
-													description="Pack this instance into a file for sharing or backup."
-													actionLabel="Export..."
-													onAction={() => {
-														setShowExportDialog(true);
-													}}
-													disabled={isGuest()}
-												/>
-												<SettingsField
-													label="Duplicate Instance"
-													description="Create an exact clone of this instance."
-													actionLabel="Duplicate"
-													onAction={async () => {
-														const name = await dialogStore.prompt(
-															"Duplicate Instance",
-															"Enter name for the copy:",
-															{ defaultValue: `${inst().name} (Copy)` }
-														);
-														if (name) duplicateInstance(inst().id, name);
-													}}
-												/>
-												<Show when={!inst().modpackId}>
-													<SettingsField
-														label="Repair Instance"
-														description="Force a re-check of all files and re-download any missing components."
-														actionLabel="Repair"
-														onAction={() => {
-															repairInstance(inst().id);
-														}}
-													/>
-												</Show>
-											</SettingsCard>
-
-											<SettingsCard header="Danger Zone" destructive>
-												<SettingsField
-													label="Hard Reset"
-													description={
-														<span>
-															Reinstalls the game from scratch. This{" "}
-															<strong>permanently deletes</strong> your worlds,
-															configs, and screenshots!
-														</span>
-													}
-													actionLabel="Reset"
-													destructive
-													onAction={() => {
-														handleHardReset(inst());
-													}}
-												/>
-
-												<SettingsField
-													label="Uninstall Instance"
-													description={
-														<span>
-															Remove this instance and all its files from your
-															computer. This action is{" "}
-															<strong>permanent and irreversible</strong>.
-														</span>
-													}
-													actionLabel="Uninstall"
-													destructive
-													onAction={() => {
-														handleUninstall(inst(), () =>
-															router()?.navigate("/"),
-														);
-													}}
-												/>
-											</SettingsCard>
-										</div>
+										<Show when={instance.latest}>
+											<VersioningTab
+												instance={inst()}
+												isGuest={isGuest()}
+												busy={busy()}
+												isInstalling={isInstalling}
+												checkingUpdates={checkingUpdates()}
+												checkUpdates={checkUpdates}
+												modpackVersions={modpackVersions}
+												handleModpackVersionSelect={handleModpackVersionSelect}
+												rolloutModpackUpdate={rolloutModpackUpdate}
+												handleUnlink={handleUnlink}
+												router={router()}
+												searchableMcVersions={searchableMcVersions}
+												selectedMcVersion={selectedMcVersion}
+												setSelectedMcVersion={setSelectedMcVersion}
+												selectedLoader={selectedLoader}
+												setSelectedLoader={setSelectedLoader}
+												selectedLoaderVersion={selectedLoaderVersion}
+												setSelectedLoaderVersion={setSelectedLoaderVersion}
+												loadersList={loadersList}
+												searchableLoaderVersions={searchableLoaderVersions}
+												handleStandardUpdate={handleStandardUpdate}
+												setShowExportDialog={setShowExportDialog}
+												handleDuplicate={async () => {
+													const n = await dialogStore.prompt(
+														"Duplicate Instance",
+														"Enter name for the copy:",
+														{ defaultValue: `${inst().name} (Copy)` },
+													);
+													if (n) duplicateInstance(inst().id, n);
+												}}
+												handleHardReset={() => handleHardReset(inst())}
+												handleUninstall={() =>
+													handleUninstall(inst(), () => router()?.navigate("/"))
+												}
+												repairInstance={repairInstance}
+												mcVersions={mcVersions}
+											/>
+										</Show>
 									</Show>
 
 									<Show when={activeTab() === "settings"}>
@@ -2670,343 +1943,39 @@ export default function InstanceDetails(
 											</div>
 										</Show>
 										<Show when={instance.latest}>
-											<div
-												class={styles["tab-settings"]}
-												classList={{ [styles.refetching]: instance.loading }}
-											>
-												<SettingsCard header="General Settings">
-													<div
-														class={styles["form-row"]}
-														style="align-items: flex-start; gap: 16px;"
-													>
-														{(() => {
-															const currentIconPath = iconPath();
-															const modpackBase64 = modpackIconBase64();
-															const isSelected = !!(
-																modpackBase64 &&
-																currentIconPath?.startsWith("data:image/")
-															);
-
-															return (
-																<IconPicker
-																	value={currentIconPath}
-																	onSelect={(icon) => {
-																		setIconPath(icon);
-																		setIsIconDirty(true);
-																	}}
-																	uploadedIcons={uploadedIcons()}
-																	modpackIcon={modpackBase64}
-																	isSuggestedSelected={isSelected}
-																	allowUpload={true}
-																	showHint={true}
-																/>
-															);
-														})()}
-														<TextFieldRoot style="flex: 1">
-															<TextFieldLabel>Instance Name</TextFieldLabel>
-															<TextFieldInput
-																value={name()}
-																onInput={(e: any) => {
-																	setName(e.currentTarget.value);
-																	setIsNameDirty(true);
-																}}
-																disabled={isInstalling()}
-															/>
-														</TextFieldRoot>
-													</div>
-												</SettingsCard>
-
-												<SettingsCard header="Java Configuration">
-													<SettingsField
-														label="Java Executable"
-														description="The Java runtime used to launch this instance."
-														helpTopic="JAVA_MANAGED"
-														layout="stack"
-														control={
-															<div style="display: flex; flex-direction: column; gap: 8px;">
-																<Select<any>
-																	options={jreOptions()}
-																	optionValue="value"
-																	optionTextValue="label"
-																	value={jreOptions().find(
-																		(o) => o.value === currentSelection(),
-																	)}
-																	onChange={(val) => {
-																		if (val.value === "__default__") {
-																			setJavaPath("");
-																			setIsCustomMode(false);
-																			setIsJavaPathDirty(true);
-																		} else if (val.value === "__custom__") {
-																			setIsCustomMode(true);
-																		} else if (
-																			val.value.startsWith("__download_")
-																		) {
-																			const version = parseInt(
-																				val.value.split("_")[2],
-																			);
-																			invoke("download_managed_java", {
-																				version,
-																			})
-																				.then(() => {
-																					showToast({
-																						title: "Download Started",
-																						description: `Java ${version} is being downloaded.`,
-																						severity: "Info",
-																					});
-																				})
-																				.catch(() => {
-																					showToast({
-																						title: "Error",
-																						description:
-																							"Failed to start Java download.",
-																						severity: "Error",
-																					});
-																				});
-																			// Keep current selection or go to default until download finishes
-																			setJavaPath("");
-																			setIsCustomMode(false);
-																			setIsJavaPathDirty(true);
-																		} else {
-																			setJavaPath(val.value);
-																			setIsCustomMode(false);
-																			setIsJavaPathDirty(true);
-																		}
-																	}}
-																	itemComponent={(props) => (
-																		<SelectItem item={props.item}>
-																			<div style="display: flex; flex-direction: column; line-height: 1.2;">
-																				<span style="font-weight: 600; font-size: 13px;">
-																					{props.item.rawValue.label}
-																				</span>
-																				<span style="font-size: 10px; opacity: 0.5; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;">
-																					{props.item.rawValue.description}
-																				</span>
-																			</div>
-																		</SelectItem>
-																	)}
-																>
-																	<ContextMenu>
-																		<Tooltip>
-																			<TooltipTrigger
-																				style="width: 100%; display: block;"
-																				as="div"
-																			>
-																				<ContextMenuTrigger
-																					style="width: 100%;"
-																					as="div"
-																				>
-																					<SelectTrigger style="width: 100%;">
-																						<SelectValue<any>>
-																							{(state) => (
-																								<div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
-																									<span style="font-size: 13px;">
-																										{
-																											state.selectedOption()
-																												.label
-																										}
-																									</span>
-																									<span style="font-size: 10px; opacity: 0.5; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px;">
-																										{
-																											state.selectedOption()
-																												.description
-																										}
-																									</span>
-																								</div>
-																							)}
-																						</SelectValue>
-																					</SelectTrigger>
-																				</ContextMenuTrigger>
-																			</TooltipTrigger>
-																			<TooltipContent>
-																				<Show
-																					when={
-																						jreOptions().find(
-																							(o) =>
-																								o.value === currentSelection(),
-																						)?.description
-																					}
-																					fallback="No path set"
-																				>
-																					{(desc) => (
-																						<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
-																							{desc().startsWith("→ ")
-																								? desc().substring(2)
-																								: desc()}
-																						</div>
-																					)}
-																				</Show>
-																			</TooltipContent>
-																		</Tooltip>
-																		<ContextMenuContent>
-																			<ContextMenuItem
-																				onClick={() => {
-																					const current = jreOptions().find(
-																						(o) =>
-																							o.value === currentSelection(),
-																					);
-																					if (
-																						current &&
-																						current.description &&
-																						current.description !== "(not set)"
-																					) {
-																						let path = current.description;
-																						if (path.startsWith("→ "))
-																							path = path.substring(2);
-																						navigator.clipboard.writeText(path);
-																						showToast({
-																							title: "Copied",
-																							description:
-																								"Java path copied to clipboard",
-																							severity: "Success",
-																						});
-																					}
-																				}}
-																			>
-																				Copy Full Path
-																			</ContextMenuItem>
-																		</ContextMenuContent>
-																	</ContextMenu>
-
-																	<SelectContent />
-																</Select>
-
-																<Show
-																	when={currentSelection() === "__custom__"}
-																>
-																	<div style="display: flex; gap: 8px; margin-top: 4px;">
-																		<TextFieldRoot style="flex: 1">
-																			<TextFieldInput
-																				value={javaPath()}
-																				placeholder="Path to java executable"
-																				onInput={(e) => {
-																					setJavaPath(
-																						(
-																							e.currentTarget as HTMLInputElement
-																						).value,
-																					);
-																					setIsJavaPathDirty(true);
-																				}}
-																			/>
-																		</TextFieldRoot>
-																		<Button
-																			variant="ghost"
-																			size="sm"
-																			onClick={async () => {
-																				const path = await invoke<
-																					string | null
-																				>("pick_java_path");
-																				if (path) {
-																					setJavaPath(path);
-																					setIsCustomMode(false);
-																					setIsJavaPathDirty(true);
-																				}
-																			}}
-																		>
-																			Browse...
-																		</Button>
-																	</div>
-																</Show>
-															</div>
-														}
-													/>
-
-													<SettingsField
-														label="Java Arguments"
-														description="Custom JVM arguments for this instance."
-														layout="stack"
-														control={
-															<TextFieldRoot>
-																<TextFieldInput
-																	value={javaArgs()}
-																	onInput={(e: any) => {
-																		setJavaArgs(e.currentTarget.value);
-																		setIsJvmDirty(true);
-																	}}
-																	placeholder="-XX:+UseG1GC -XX:+ParallelRefProcEnabled"
-																/>
-															</TextFieldRoot>
-														}
-													/>
-												</SettingsCard>
-
-												<SettingsCard header="Memory Management">
-													<SettingsField
-														label="Minimum Memory"
-														description="Initial RAM allocated (-Xms)."
-														layout="stack"
-														control={
-															<Slider
-																value={minMemory()}
-																onChange={(val) => {
-																	setMinMemory(val);
-																	setIsMinMemDirty(true);
-																}}
-																minValue={512}
-																maxValue={16384}
-																step={512}
-															>
-																<div class={styles["slider__header"]}>
-																	<div class={styles["slider__value-label"]}>
-																		{minMemory()[0] >= 1024
-																			? `${(minMemory()[0] / 1024).toFixed(1)} GB`
-																			: `${minMemory()[0]} MB`}
-																	</div>
-																</div>
-																<SliderTrack>
-																	<SliderFill />
-																	<SliderThumb />
-																</SliderTrack>
-															</Slider>
-														}
-													/>
-
-													<SettingsField
-														label="Maximum Memory"
-														description="Maximum RAM allocated (-Xmx)."
-														layout="stack"
-														control={
-															<Slider
-																value={maxMemory()}
-																onChange={(val) => {
-																	setMaxMemory(val);
-																	setIsMaxMemDirty(true);
-																}}
-																minValue={512}
-																maxValue={16384}
-																step={512}
-															>
-																<div class={styles["slider__header"]}>
-																	<div class={styles["slider__value-label"]}>
-																		{maxMemory()[0] >= 1024
-																			? `${(maxMemory()[0] / 1024).toFixed(1)} GB`
-																			: `${maxMemory()[0]} MB`}
-																	</div>
-																</div>
-																<SliderTrack>
-																	<SliderFill />
-																	<SliderThumb />
-																</SliderTrack>
-															</Slider>
-														}
-													/>
-												</SettingsCard>
-
-												<div
-													class={styles["settings-actions"]}
-													style="display: flex; gap: 12px;"
-												>
-													<Button
-														onClick={handleSave}
-														disabled={saving() || isInstalling()}
-													>
-														{saving()
-															? "Saving…"
-															: isInstalling()
-																? "Installing..."
-																: "Save Settings"}
-													</Button>
-												</div>
-											</div>
+											<SettingsTab
+												instance={inst()}
+												name={name()}
+												setName={setName}
+												setIsNameDirty={setIsNameDirty}
+												iconPath={iconPath()}
+												setIconPath={setIconPath}
+												setIsIconDirty={setIsIconDirty}
+												uploadedIcons={uploadedIcons}
+												modpackIcon={modpackIconBase64}
+												isSuggestedSelected={() => areIconsEqual(modpackIconBase64(), iconPath())}
+												isInstalling={isInstalling}
+												jreOptions={jreOptions}
+												javaPath={javaPath()}
+												setJavaPath={setJavaPath}
+												setIsJavaPathDirty={setIsJavaPathDirty}
+												isCustomMode={isCustomMode()}
+												setIsCustomMode={setIsCustomMode}
+												javaArgs={javaArgs()}
+												setJavaArgs={setJavaArgs}
+												setIsJvmDirty={setIsJvmDirty}
+												minMemory={minMemory()}
+												setMinMemory={setMinMemory}
+												setIsMinMemDirty={setIsMinMemDirty}
+												maxMemory={maxMemory()}
+												setMaxMemory={setMaxMemory}
+												setIsMaxMemDirty={setIsMaxMemDirty}
+												handleSave={handleSave}
+												saving={saving}
+												totalRam={totalRam()}
+												invoke={invoke}
+												showToast={showToast}
+											/>
 										</Show>
 									</Show>
 								</div>
@@ -3015,6 +1984,45 @@ export default function InstanceDetails(
 					</Show>
 				</div>
 			</main>
+
+			<Show when={isDirty()}>
+				<div class={styles["floating-save-footer"]}>
+					<div class={styles["save-footer-content"]}>
+						<p>You have unsaved changes</p>
+						<div class={styles["save-footer-actions"]}>
+							<Button
+								variant="ghost"
+								onClick={() => {
+									setName(inst().name);
+									setIconPath(inst().iconPath || DEFAULT_ICONS[0]);
+									setMinMemory([inst().minMemory]);
+									setMaxMemory([inst().maxMemory]);
+									setJavaArgs(inst().javaArgs || "");
+									setJavaPath(inst().javaPath || "");
+									setIsNameDirty(false);
+									setIsIconDirty(false);
+									setIsMinMemDirty(false);
+									setIsMaxMemDirty(false);
+									setIsJvmDirty(false);
+									setIsJavaPathDirty(false);
+								}}
+							>
+								Reset
+							</Button>
+							<Button
+								variant="primary"
+								onClick={handleSave}
+								disabled={saving()}
+							>
+								<Show when={saving()} fallback={"Save Changes"}>
+									<span class={styles["btn-spinner"]} />
+									Saving...
+								</Show>
+							</Button>
+						</div>
+					</div>
+				</div>
+			</Show>
 
 			<Show when={instance()}>
 				{(inst) => (
