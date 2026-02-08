@@ -1,7 +1,7 @@
 import { useNavigate, NavigateOptions } from "@solidjs/router";
 import networkStore from "@stores/network";
 import { invoke } from "@tauri-apps/api/core";
-import { open as openUrl } from "@tauri-apps/plugin-shell";
+import { openExternal as openUrl } from "@utils/external-link";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import Button from "@ui/button/button";
 import {

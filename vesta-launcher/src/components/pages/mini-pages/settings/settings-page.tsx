@@ -32,7 +32,7 @@ import {
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { showToast } from "@ui/toast/toast";
-import { open } from "@tauri-apps/plugin-shell";
+import { openExternal } from "@utils/external-link";
 import { startAppTutorial } from "@utils/tutorial";
 import { checkForAppUpdates } from "@utils/updater";
 import {
@@ -1057,7 +1057,7 @@ function SettingsPage(props: { close?: () => void }) {
 									<LauncherButton
 										variant="ghost"
 										onClick={() =>
-											open("https://github.com/vesta-project/launcher")
+											openExternal("https://github.com/vesta-project/launcher")
 										}
 									>
 										GitHub

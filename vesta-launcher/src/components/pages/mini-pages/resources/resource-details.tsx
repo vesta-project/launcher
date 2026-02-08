@@ -42,7 +42,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { router } from "@components/page-viewer/page-viewer";
 import { showToast } from "@ui/toast/toast";
-import { open } from "@tauri-apps/plugin-shell";
+import { openExternal } from "@utils/external-link";
 import { marked } from "marked";
 import { formatDate } from "@utils/date";
 import { DEFAULT_ICONS } from "@utils/instances";
@@ -220,6 +220,7 @@ const ResourceDetailsPage: Component<{
 	const [manualVersionId, setManualVersionId] = createSignal<string | null>(
 		null,
 	);
+	const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
 
 	// Register refetch so the navbar reload button works
 	onMount(() => {
@@ -650,6 +651,7 @@ const ResourceDetailsPage: Component<{
 			const parsedUrl = new URL(url);
 			let platform: SourcePlatform | null = null;
 			let id: string | null = null;
+			let activeTab: string | undefined = undefined;
 
 			// Modrinth
 			if (
@@ -657,10 +659,9 @@ const ResourceDetailsPage: Component<{
 				parsedUrl.hostname.endsWith(".modrinth.com")
 			) {
 				const pathParts = parsedUrl.pathname.split("/").filter((p) => p);
-				// URL structure: /<type>/<slug>
+				// URL structure: /<type>/<slug>/[gallery|versions]
 				if (pathParts.length >= 2) {
-					const type = pathParts[0];
-					const slug = pathParts[1];
+					const [type, slug, tab] = pathParts;
 					const validTypes = [
 						"mod",
 						"resourcepack",
@@ -671,6 +672,9 @@ const ResourceDetailsPage: Component<{
 					if (validTypes.includes(type)) {
 						platform = "modrinth";
 						id = slug;
+
+						if (tab === "gallery") activeTab = "gallery";
+						else if (tab === "versions") activeTab = "versions";
 					}
 				}
 			}
@@ -680,27 +684,48 @@ const ResourceDetailsPage: Component<{
 				parsedUrl.hostname === "curseforge.com"
 			) {
 				const pathParts = parsedUrl.pathname.split("/").filter((p) => p);
-				// Expected: /minecraft/mc-mods/<slug>
+				// Expected: /minecraft/<type>/<slug>/[gallery|files|files/all]
 				if (pathParts.length >= 3 && pathParts[0] === "minecraft") {
 					platform = "curseforge";
 					id = pathParts[2]; // This is the slug
+
+					const subPath = pathParts.slice(3).join("/");
+					if (subPath === "gallery") {
+						activeTab = "gallery";
+					} else if (subPath.startsWith("files")) {
+						activeTab = "versions";
+					}
 				}
 			}
 
 			if (platform && id) {
 				console.log(
-					`[ResourceDetails] Intercepted link to ${platform} resource: ${id}`,
+					`[ResourceDetails] Intercepted link to ${platform} resource: ${id}${
+						activeTab ? ` (Tab: ${activeTab})` : ""
+					}`,
 				);
-				router()?.navigate("/resource-details", { projectId: id, platform });
+
+				// If we're already on this project, just update the tab
+				const current = project();
+				if (current && current.id === id && current.source === platform) {
+					router()?.updateQuery("activeTab", activeTab || "description", true);
+					return;
+				}
+
+				router()?.navigate("/resource-details", {
+					projectId: id,
+					platform,
+					activeTab,
+				});
 				return;
 			}
 
 			// Fallback: Open in browser
-			await open(url);
+			await openExternal(url);
 		} catch (e) {
 			console.error("[ResourceDetails] Link handling error:", e);
 			try {
-				await open(url);
+				await openExternal(url);
 			} catch (inner) {
 				console.error("[ResourceDetails] Failed to open in browser:", inner);
 			}
@@ -841,7 +866,7 @@ const ResourceDetailsPage: Component<{
 					"CurseForge requires this mod to be downloaded through their website. Opening link...",
 				severity: "Info",
 			});
-			await open(p?.web_url || "");
+			await openExternal(p?.web_url || "");
 			return;
 		}
 
@@ -1089,7 +1114,7 @@ const ResourceDetailsPage: Component<{
 											<Button
 												variant="outline"
 												size="sm"
-												onClick={() => open(project()?.web_url ?? "")}
+												onClick={() => openExternal(project()?.web_url ?? "")}
 												class={styles["header-web-link"]}
 												tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
 											>
@@ -1461,6 +1486,20 @@ const ResourceDetailsPage: Component<{
 									<div
 										class={styles.description}
 										innerHTML={renderedDescription() as string}
+										onMouseOver={(e) => {
+											const target = e.target as HTMLElement;
+											const anchor = target.closest("a");
+											if (anchor) {
+												setHoveredLink(anchor.href);
+											}
+										}}
+										onMouseOut={(e) => {
+											const target = e.target as HTMLElement;
+											const anchor = target.closest("a");
+											if (anchor) {
+												setHoveredLink(null);
+											}
+										}}
 										onClick={(e) => {
 											const target = e.target as HTMLElement;
 											const anchor = target.closest("a");
@@ -2174,6 +2213,9 @@ const ResourceDetailsPage: Component<{
 								</div>
 							</div>
 						</div>
+					</Show>
+					<Show when={hoveredLink()}>
+						<div class={styles["link-preview-statusBar"]}>{hoveredLink()}</div>
 					</Show>
 				</div>
 				<InstanceSelectionDialog

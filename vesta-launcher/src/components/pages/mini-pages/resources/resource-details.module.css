@@ -1145,3 +1145,34 @@
 		opacity: 0.6;
 	}
 }
+
+.link-preview-statusBar {
+	position: fixed;
+	bottom: 8px;
+	left: 8px;
+	background: var(--surface-high);
+	color: var(--text-secondary);
+	padding: 2px 8px;
+	border-radius: 4px;
+	font-size: 11px;
+	max-width: 400px;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	border: 1px solid var(--border-subtle);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+	z-index: 10000;
+	pointer-events: none;
+	animation: slideUp 0.15s ease-out;
+}
+
+@keyframes slideUp {
+	from {
+		transform: translateY(10px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}

@@ -1,5 +1,5 @@
 import { router } from "@components/page-viewer/page-viewer";
-import { open } from "@tauri-apps/plugin-shell";
+import { openExternal } from "@utils/external-link";
 import LauncherButton from "@ui/button/button";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./login-page.module.css";
@@ -74,7 +74,7 @@ function LoginPage(_props: LoginPageProps) {
 
 	const openUrl = async () => {
 		try {
-			await open(authUrl());
+			await openExternal(authUrl());
 		} catch (error) {
 			console.error("Failed to open URL:", error);
 		}
