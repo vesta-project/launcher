@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
+#[cfg(target_os = "windows")]
 use winver::WindowsVersion;
 
 static WINDOW_ID: Mutex<i32> = Mutex::new(0);

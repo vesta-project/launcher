@@ -6,6 +6,7 @@ use crate::utils::config::{init_config_db, get_app_config};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
+#[cfg(target_os = "windows")]
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;

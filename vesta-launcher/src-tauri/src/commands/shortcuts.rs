@@ -176,7 +176,7 @@ pub async fn create_desktop_shortcut(
             target_args,
             icon_val
         );
-        std::fs::write(desktop_file_path, content).map_err(|e| e.to_string())?;
+        std::fs::write(&desktop_file_path, content).map_err(|e| e.to_string())?;
         
         // Make it executable
         #[cfg(unix)]
