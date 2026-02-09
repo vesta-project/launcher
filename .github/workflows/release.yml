@@ -74,7 +74,7 @@ jobs:
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
             name: 'Windows ARM64'
             target: 'aarch64-pc-windows-msvc'
-          - platform: 'macos-13'
+          - platform: 'macos-latest'
             args: '--target x86_64-apple-darwin'
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
             name: 'macOS x64'
@@ -84,7 +84,7 @@ jobs:
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
             name: 'macOS ARM64'
             target: 'aarch64-apple-darwin'
-          - platform: 'ubuntu-22.04'
+          - platform: 'ubuntu-latest'
             args: '--target x86_64-unknown-linux-gnu'
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
             name: 'Linux x64'
@@ -138,11 +138,6 @@ jobs:
       - name: Upload to Cloudflare R2
         if: matrix.enabled
         run: |
-          # Install AWS CLI
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
-          
           # Configure AWS for R2
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -156,11 +151,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install AWS CLI
-        run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
       - name: Configure AWS for R2
         run: |
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -180,6 +170,10 @@ jobs:
             "platforms": {
               "windows-x86_64": {
                 "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_x64.msi",
+                "signature": ""
+              },
+              "windows-aarch64": {
+                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_arm64.msi",
                 "signature": ""
               },
               "darwin-x86_64": {
