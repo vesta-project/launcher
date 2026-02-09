@@ -283,6 +283,24 @@ impl OsType {
             _ => ":",
         }
     }
+
+    /// Get the architecture string compatible with Rust's std::env::consts::ARCH
+    pub fn rust_arch_str(&self) -> &'static str {
+        match self {
+            OsType::Windows | OsType::MacOS | OsType::Linux => "x86_64",
+            OsType::WindowsArm64 | OsType::MacOSArm64 | OsType::LinuxArm64 => "aarch64",
+            OsType::LinuxArm32 => "arm",
+        }
+    }
+
+    /// Get the architecture enum for this OS
+    pub fn arch(&self) -> Arch {
+        match self {
+            OsType::Windows | OsType::MacOS | OsType::Linux => Arch::X64,
+            OsType::WindowsArm64 | OsType::MacOSArm64 | OsType::LinuxArm64 => Arch::Arm64,
+            OsType::LinuxArm32 => Arch::Arm32,
+        }
+    }
 }
 
 /// Architecture types

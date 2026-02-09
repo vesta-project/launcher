@@ -119,6 +119,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Cache Rust dependencies
+        if: matrix.enabled
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            vesta-launcher/src-tauri -> target
+            crates/piston-lib -> target
+          cache-all-crates: true
+
       - name: Install frontend dependencies
         if: matrix.enabled
         run: bun install

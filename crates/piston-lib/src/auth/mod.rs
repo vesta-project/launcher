@@ -10,7 +10,7 @@ use oauth2::{
     reqwest::async_http_client,
     AuthUrl, ClientId, DeviceAuthorizationUrl, DeviceCodeErrorResponse, RefreshToken,
     RequestTokenError, Scope, StandardDeviceAuthorizationResponse, TokenUrl,
-    StandardErrorResponse, basic::BasicErrorResponseType,
+    basic::BasicErrorResponseType,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

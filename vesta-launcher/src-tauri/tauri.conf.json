@@ -32,6 +32,11 @@
 		}
 	},
 	"bundle": {
+		"windows": {
+			"wix": {
+				"version": "0.1.0.1"
+			}
+		},
 		"shortDescription": "Vesta Launcher",
 		"active": true,
 		"targets": "all",

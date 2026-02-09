@@ -141,7 +141,10 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
 fn is_cross_device_link(err: &std::io::Error) -> bool {
     #[cfg(target_family = "unix")]
     {
-        err.kind() == ErrorKind::CrossDeviceLink
+        use std::io::ErrorKind;
+        // CrossDeviceLink was stabilized in 1.35, but sometimes it doesn't resolve correctly
+        // in all environments or older toolchains. We also check the raw OS error for EXDEV.
+        err.kind() == ErrorKind::CrossDeviceLink || err.raw_os_error() == Some(18)
     }
 
     #[cfg(not(target_family = "unix"))]

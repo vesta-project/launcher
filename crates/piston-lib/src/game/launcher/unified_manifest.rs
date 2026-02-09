@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use crate::game::launcher::version_parser::{AssetIndex, JavaVersion, Library, ExtractRules, VersionManifest, Argument, Rule, RuleAction};
-use crate::game::installer::types::{OsType, Arch};
+use crate::game::installer::types::OsType;
 use std::collections::HashMap;
 
 /// A unified manifest that combines vanilla and modloader requirements.
@@ -322,26 +322,10 @@ impl UnifiedLibrary {
         if native_classifier.is_none() {
             if let Some(downloads) = &lib.downloads {
                 if let Some(classifiers) = &downloads.classifiers {
-                    let os_name = match os {
-                        OsType::Windows | OsType::WindowsArm64 => "windows",
-                        OsType::MacOS | OsType::MacOSArm64 => "osx",
-                        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
-                    };
-                    
                     for key in classifiers.keys() {
-                        if classifier_key_matches_os(key, os_name) {
-                            let host_arch = std::env::consts::ARCH;
-                            // Prioritize exact architecture matches
-                            let is_exact_arch = key.contains(host_arch)
-                                || (host_arch == "x86_64" && (key.contains("x64") || key.contains("amd64")));
-
-                            if is_exact_arch {
-                                native_classifier = Some(key.clone());
-                                break; // Found exact match, stop searching
-                            } else if native_classifier.is_none() {
-                                // Store compatible fallback (e.g. x86 on x64) but keep looking for exact match
-                                native_classifier = Some(key.clone());
-                            }
+                        if classifier_key_matches_os(key, os) {
+                            native_classifier = Some(key.clone());
+                            break;
                         }
                     }
                 }
@@ -349,7 +333,12 @@ impl UnifiedLibrary {
         }
 
         if let Some(classifier) = native_classifier {
-            let classifier = classifier.replace("${arch}", Arch::current().as_str());
+            let arch_str = match os {
+                OsType::Windows | OsType::MacOS | OsType::Linux => "64",
+                OsType::WindowsArm64 | OsType::MacOSArm64 | OsType::LinuxArm64 => "arm64",
+                OsType::LinuxArm32 => "arm32",
+            };
+            let classifier = classifier.replace("${arch}", arch_str);
             let mut path = String::new();
             let mut url = None;
             let mut sha1 = None;
@@ -421,7 +410,11 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
         }
         
         if let Some(ref arch) = os_rule.arch {
-            let host_arch = std::env::consts::ARCH;
+            let target_arch = match os {
+                OsType::Windows | OsType::MacOS | OsType::Linux => "x86_64",
+                OsType::WindowsArm64 | OsType::MacOSArm64 | OsType::LinuxArm64 => "aarch64",
+                OsType::LinuxArm32 => "arm",
+            };
             let normalized_arch = match arch.as_str() {
                 "x64" | "amd64" => "x86_64",
                 "x86" => "x86",
@@ -429,7 +422,7 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
                 _ => arch.as_str(),
             };
 
-            if normalized_arch != host_arch {
+            if normalized_arch != target_arch {
                 return false;
             }
         }
@@ -506,34 +499,46 @@ fn resolve_maven_url_with_classifier(name: &str, classifier: &str, ml_type: Opti
     }
 }
 
-fn classifier_key_matches_os(key: &str, os_name: &str) -> bool {
+fn classifier_key_matches_os(key: &str, target_os: OsType) -> bool {
     let key = key.to_lowercase();
-    let os_name = os_name.to_lowercase();
-    let host_arch = std::env::consts::ARCH;
+    
+    let is_macos = matches!(target_os, OsType::MacOS | OsType::MacOSArm64);
+    let is_windows = matches!(target_os, OsType::Windows | OsType::WindowsArm64);
+    let is_linux = matches!(target_os, OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64);
 
-    let os_match = key.contains(&os_name)
-        || (os_name == "osx" && key.contains("macos"))
-        || (os_name == "macos" && key.contains("osx"));
+    let os_match = if is_macos {
+        key.contains("osx") || key.contains("macos")
+    } else if is_windows {
+        key.contains("windows") || key.contains("win")
+    } else if is_linux {
+        key.contains("linux")
+    } else {
+        false
+    };
 
     if !os_match {
         return false;
     }
 
-    // Strict architecture matching for ARM
+    // Architecture matching
+    let target_is_arm64 = matches!(target_os, OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::WindowsArm64);
+    let target_is_arm32 = matches!(target_os, OsType::LinuxArm32);
+    let target_is_x64 = matches!(target_os, OsType::Windows | OsType::MacOS | OsType::Linux);
+
     if key.contains("arm64") || key.contains("aarch64") {
-        return host_arch == "aarch64";
+        return target_is_arm64;
     }
     if key.contains("arm32") || key.contains("armv7") || key.contains("armhf") {
-        return host_arch == "arm";
-    }
-
-    // Allow x86 on x86_64 as fallback
-    if key.contains("x86") && !key.contains("x86_64") {
-        return host_arch == "x86" || host_arch == "x86_64";
+        return target_is_arm32;
     }
 
     if key.contains("x86_64") || key.contains("x64") || key.contains("amd64") {
-        return host_arch == "x86_64";
+        return target_is_x64;
+    }
+
+    // Allow x86 on x64 as fallback for Windows/Linux
+    if key.contains("x86") && !key.contains("x86_64") {
+        return matches!(target_os, OsType::Windows | OsType::Linux);
     }
 
     true

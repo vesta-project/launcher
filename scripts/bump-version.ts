@@ -46,8 +46,14 @@ function formatVersion(v: { major: number, minor: number, patch: number, suffix:
     return base;
 }
 
+function formatMsiVersion(v: { major: number, minor: number, patch: number, suffix: string | null, preRelease: number | null }): string {
+    return `${v.major}.${v.minor}.${v.patch}${v.preRelease !== null ? `.${v.preRelease}` : ""}`;
+}
+
 function bumpVersion(newVersion: string) {
     console.log(`Bumping version to: ${newVersion}`);
+    const v = parseVersion(newVersion);
+    const msiVersion = formatMsiVersion(v);
 
     for (const file of filesToUpdate) {
         try {
@@ -56,6 +62,11 @@ function bumpVersion(newVersion: string) {
             if (file.type === "json") {
                 const json = JSON.parse(content);
                 json.version = newVersion;
+
+                if (file.path.endsWith("tauri.conf.json") && json.bundle?.windows?.wix) {
+                    json.bundle.windows.wix.version = msiVersion;
+                }
+
                 writeFileSync(file.path, JSON.stringify(json, null, "\t") + "\n");
             } else if (file.type === "toml" && file.regex && file.replace) {
                 const newContent = content.replace(file.regex, file.replace(newVersion));

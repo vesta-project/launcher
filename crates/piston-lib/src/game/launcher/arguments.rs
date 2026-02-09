@@ -13,6 +13,7 @@ pub fn build_jvm_arguments(
     manifest: &UnifiedManifest,
     natives_dir: &Path,
     classpath: &str,
+    os: OsType,
 ) -> Vec<String> {
     let mut args = Vec::new();
 
@@ -38,6 +39,7 @@ pub fn build_jvm_arguments(
             "-XX:+UnlockExperimentalVMOptions".to_string(),
             "-XX:G1NewSizePercent=20".to_string(),
             "-XX:G1ReservePercent=20".to_string(),
+            "-XX:G1ReservePercent=20".to_string(),
             "-XX:MaxGCPauseMillis=50".to_string(),
             "-XX:G1HeapRegionSize=32M".to_string(),
         ]);
@@ -52,11 +54,11 @@ pub fn build_jvm_arguments(
 
     // Collect manifest JVM arguments first to check for duplicates
     let mut manifest_args = Vec::new();
-    let variables = build_jvm_variables(spec, manifest, natives_dir, classpath);
+    let variables = build_jvm_variables(spec, manifest, natives_dir, classpath, os);
 
     for arg in &manifest.jvm_arguments {
         // Use special processing for JVM args to avoid splitting quoted strings with spaces
-        let parts = process_jvm_argument(arg, &variables, OsType::current(), spec);
+        let parts = process_jvm_argument(arg, &variables, os, spec);
         for p in parts {
             if p.trim().is_empty() {
                 continue;
@@ -100,14 +102,18 @@ pub fn build_jvm_arguments(
 }
 
 /// Build game arguments for launching the game
-pub fn build_game_arguments(spec: &LaunchSpec, manifest: &UnifiedManifest) -> Vec<String> {
+pub fn build_game_arguments(
+    spec: &LaunchSpec,
+    manifest: &UnifiedManifest,
+    os: OsType,
+) -> Vec<String> {
     let mut args = Vec::new();
 
     let variables = build_game_variables(spec, manifest);
 
     // Handle modern arguments format
     for arg in &manifest.game_arguments {
-        let parts = process_argument(arg, &variables, OsType::current(), spec);
+        let parts = process_argument(arg, &variables, os, spec);
         for p in parts {
             if p.trim().is_empty() {
                 // ignore empty game-argument tokens that might come from optional quick-play params
@@ -257,7 +263,7 @@ fn evaluate_rules(
             // OS arch
             if matches {
                 if let Some(ref arch) = os_rule.arch {
-                    let host_arch = std::env::consts::ARCH;
+                    let host_arch = os.rust_arch_str();
                     let normalized_arch = match arch.as_str() {
                         "x64" | "amd64" => "x86_64",
                         "x86" => "x86",
@@ -438,6 +444,7 @@ fn build_jvm_variables(
     manifest: &UnifiedManifest,
     natives_dir: &Path,
     classpath: &str,
+    os: OsType,
 ) -> HashMap<String, String> {
     let mut vars = HashMap::new();
 
@@ -457,9 +464,9 @@ fn build_jvm_variables(
     vars.insert("library_directory".to_string(), lib_canon);
     vars.insert(
         "classpath_separator".to_string(),
-        OsType::current().classpath_separator().to_string(),
+        os.classpath_separator().to_string(),
     );
-    vars.insert("arch".to_string(), crate::game::installer::types::Arch::current().as_str().to_string());
+    vars.insert("arch".to_string(), os.arch().as_str().to_string());
     vars.insert("version_name".to_string(), manifest.id.clone());
     vars.insert("mc_version_name".to_string(), spec.version_id.clone());
 

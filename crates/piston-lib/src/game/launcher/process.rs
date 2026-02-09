@@ -69,7 +69,7 @@ fn is_process_stalled_unix(pid: i32) -> bool {
     let mut system = System::new();
     let pid_sys = SysPid::from(pid as usize);
 
-    system.refresh_processes_specifics(pid_sys, ProcessRefreshKind::new().with_cpu().with_status());
+    system.refresh_process_specifics(pid_sys, ProcessRefreshKind::nothing().with_cpu().with_status());
 
     if let Some(proc1) = system.process(pid_sys) {
         if matches!(proc1.status(), ProcessStatus::Dead | ProcessStatus::Zombie | ProcessStatus::Stop) {
@@ -78,7 +78,7 @@ fn is_process_stalled_unix(pid: i32) -> bool {
 
         let cpu1 = proc1.cpu_usage();
         std::thread::sleep(std::time::Duration::from_secs(1));
-        system.refresh_processes_specifics(pid_sys, ProcessRefreshKind::new().with_cpu());
+        system.refresh_process_specifics(pid_sys, ProcessRefreshKind::nothing().with_cpu());
 
         if let Some(proc2) = system.process(pid_sys) {
             let cpu2 = proc2.cpu_usage();
@@ -99,10 +99,12 @@ pub async fn launch_game(
     log_callback: Option<LogCallback>,
 ) -> Result<LaunchResult> {
     log::info!("Launching game instance: {}", spec.instance_id);
+    let os = OsType::current();
     log::info!(
-        "[launch_game] start: instance_id={}, version_id={}",
+        "[launch_game] start: instance_id={}, version_id={}, os={:?}",
         spec.instance_id,
-        spec.version_id
+        spec.version_id,
+        os
     );
 
     // 1. Resolve version chain (handle inheritsFrom)
@@ -192,7 +194,7 @@ pub async fn launch_game(
         &manifest.libraries,
         &spec.libraries_dir(),
         &natives_dir,
-        OsType::current(),
+        os,
     )
     .await
     .context("Failed to extract native libraries")?;
@@ -208,32 +210,33 @@ pub async fn launch_game(
 
     // Use a recursive check because some versions (especially Forge/Legacy) 
     // extract into subdirectories which must be scanned.
-    fn check_natives_recursive(dir: &Path, files: &mut Vec<String>, found: &mut bool) {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    check_natives_recursive(&path, files, found);
-                } else if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
-                    let lower = fname.to_lowercase();
-                    let is_native_ext = if cfg!(target_os = "windows") {
-                        lower.ends_with(".dll")
-                    } else if cfg!(target_os = "macos") {
-                        lower.ends_with(".dylib") || lower.ends_with(".jnilib")
-                    } else {
-                        lower.ends_with(".so")
-                    };
+    let check_natives_recursive = |dir: &Path, files: &mut Vec<String>, found: &mut bool, os: OsType| {
+        fn recursive(dir: &Path, files: &mut Vec<String>, found: &mut bool, os: OsType) {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_dir() {
+                        recursive(&path, files, found, os);
+                    } else if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
+                        let lower = fname.to_lowercase();
+                        let is_native_ext = match os {
+                            OsType::Windows | OsType::WindowsArm64 => lower.ends_with(".dll"),
+                            OsType::MacOS | OsType::MacOSArm64 => lower.ends_with(".dylib") || lower.ends_with(".jnilib"),
+                            OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => lower.ends_with(".so"),
+                        };
 
-                    if is_native_ext {
-                        files.push(path.to_string_lossy().to_string());
-                        *found = true;
+                        if is_native_ext {
+                            files.push(path.to_string_lossy().to_string());
+                            *found = true;
+                        }
                     }
                 }
             }
         }
-    }
+        recursive(dir, files, found, os);
+    };
 
-    check_natives_recursive(&natives_dir, &mut native_files, &mut found_native);
+    check_natives_recursive(&natives_dir, &mut native_files, &mut found_native, os);
 
     if !found_native {
         if expected_native_jars == 0 {
@@ -299,7 +302,7 @@ pub async fn launch_game(
     let validation = validate_classpath(
         &libraries_for_classpath,
         &spec.libraries_dir(),
-        OsType::current(),
+        os,
     ).context("Classpath validation failed")?;
 
     if !validation.missing_libraries.is_empty() {
@@ -356,7 +359,7 @@ pub async fn launch_game(
     let mut classpath = build_classpath_filtered(
         &libraries_for_classpath,
         &spec.libraries_dir(),
-        OsType::current(),
+        os,
         &excluded_from_classpath,
     )
     .context("Failed to build classpath")?;
@@ -386,7 +389,7 @@ pub async fn launch_game(
         return Err(anyhow::anyhow!("Main game JAR not found (looked for {:?}). Please try reinstalling the version.", game_jar));
     }
 
-    let separator = OsType::current().classpath_separator();
+    let separator = os.classpath_separator();
     
     // Check if the manifest libraries already include the game's JAR (common in modern Forge).
     // If it's already there, we SHOULD NOT add the vanilla/installed JAR manually 
@@ -422,12 +425,12 @@ pub async fn launch_game(
 
     // 5. Build JVM arguments (substitutes ${classpath} in manifest with our classpath string)
     log::debug!("Building JVM arguments");
-    let jvm_args = build_jvm_arguments(&spec, &manifest, &natives_dir, &classpath);
+    let jvm_args = build_jvm_arguments(&spec, &manifest, &natives_dir, &classpath, os);
     log::info!("Launch JVM arguments: {:?}", jvm_args);
 
     // 6. Build game arguments
     log::debug!("Building game arguments");
-    let game_args = build_game_arguments(&spec, &manifest);
+    let game_args = build_game_arguments(&spec, &manifest, os);
 
     // 7. Get main class
     let main_class = manifest.main_class.clone();
@@ -500,7 +503,6 @@ pub async fn launch_game(
 
     #[cfg(unix)]
     {
-        use std::os::unix::process::CommandExt;
         // Create a new session so the process is not a child of the launcher
         // This allows it to survive when the launcher exits
         unsafe {
