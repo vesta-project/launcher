@@ -62,10 +62,14 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_macos_permissions::init())
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
             let _ = app.get_webview_window("main")
                        .expect("no main window")
                        .set_focus();
+            
+            if args.len() > 1 {
+                let _ = app.emit("core://handle-cli", args);
+            }
         }))
         .invoke_handler(tauri::generate_handler![
             launch_window,
@@ -94,6 +98,11 @@ fn main() {
             utils::db::get_db_status,
             utils::file_drop::create_file_drop_overlay,
             utils::file_drop::position_overlay,
+            commands::pinning::get_pinned_pages,
+            commands::pinning::add_pinned_page,
+            commands::pinning::remove_pinned_page,
+            commands::pinning::reorder_pinned_pages,
+            commands::shortcuts::create_desktop_shortcut,
             utils::file_drop::show_overlay,
             utils::file_drop::hide_overlay,
             utils::file_drop::set_overlay_visual_state,
@@ -118,6 +127,11 @@ fn main() {
             commands::notifications::clear_all_dismissible_notifications,
             commands::tasks::set_worker_limit,
             commands::tasks::cancel_task,
+            commands::pinning::get_pinned_pages,
+            commands::pinning::add_pinned_page,
+            commands::pinning::remove_pinned_page,
+            commands::pinning::reorder_pinned_pages,
+            commands::shortcuts::create_desktop_shortcut,
             commands::instances::install_instance,
             commands::instances::list_instances,
             commands::instances::create_instance,

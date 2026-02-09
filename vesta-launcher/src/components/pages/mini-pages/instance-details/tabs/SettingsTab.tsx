@@ -39,7 +39,7 @@ interface SettingsTabProps {
 	uploadedIcons: () => string[];
 	modpackIcon: () => string | null;
 	isSuggestedSelected: () => boolean;
-	isInstalling: () => boolean;
+	isInstalling: boolean;
 	jreOptions: () => any[];
 	javaPath: string;
 	setJavaPath: (v: string) => void;
@@ -107,12 +107,12 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								class={styles["metadata-name-input"]}
 								value={p.name}
 								onInput={(e) => {
-									const val = e.currentTarget.value;
+									const val = (e.currentTarget as HTMLInputElement).value;
 									if (val === p.name) return;
 									p.setName(val);
 									p.setIsNameDirty(true);
 								}}
-								disabled={p.isInstalling()}
+								disabled={p.isInstalling}
 								placeholder="Instance Name"
 							/>
 						</TextFieldRoot>
@@ -243,7 +243,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 										value={p.javaPath}
 										placeholder="Path to java executable"
 										onInput={(e) => {
-											const val = e.currentTarget.value;
+											const val = (e.currentTarget as HTMLInputElement).value;
 											if (val === p.javaPath) return;
 											p.setJavaPath(val);
 											p.setIsJavaPathDirty(true);
@@ -274,7 +274,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 						<TextFieldInput
 							value={p.javaArgs}
 							onInput={(e: any) => {
-								const val = e.currentTarget.value;
+								const val = (e.currentTarget as HTMLInputElement).value;
 								if (val === p.javaArgs) return;
 								p.setJavaArgs(val);
 								p.setIsJvmDirty(true);
@@ -325,8 +325,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 			</SettingsCard>
 
 			<div class={styles["settings-actions"]} style="display: flex; gap: 12px; margin-top: 24px;">
-				<Button onClick={p.handleSave} disabled={p.saving() || p.isInstalling()}>
-					{p.saving() ? "Saving…" : p.isInstalling() ? "Installing..." : "Save Settings"}
+				<Button onClick={p.handleSave} disabled={p.saving() || p.isInstalling}>
+					{p.saving() ? "Saving…" : p.isInstalling ? "Installing..." : "Save Settings"}
 				</Button>
 			</div>
 		</div>

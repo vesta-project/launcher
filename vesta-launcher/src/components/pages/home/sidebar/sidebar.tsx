@@ -1,3 +1,12 @@
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import BellIcon from "@assets/bell.svg";
 import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
@@ -23,16 +32,10 @@ import {
 	PROGRESS_INDETERMINATE,
 	showAlert,
 } from "@utils/notifications";
-import { openModpackInstall } from "@stores/modpack-install";
-import { open } from "@tauri-apps/plugin-dialog";
-import {
-	createEffect,
-	createResource,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-} from "solid-js";
+import { startAppTutorial } from "@utils/tutorial";
+import { pinning, type PinnedPage } from "@stores/pinning";
+import { instancesState } from "@stores/instances";
+import { PinnedItem } from "./pinned-items";
 // Transition and getOsType are unused in this file; remove imports to clean code.
 import styles from "./sidebar.module.css";
 
@@ -64,9 +67,9 @@ function Sidebar(props: SidebarProps) {
 
 	// Check for notification counts and active tasks - refetch when trigger changes
 	const [notifData] = createResource(
-		() => (ready() ? persistentNotificationTrigger() : false),
-		async (isReady) => {
-			if (!isReady) return { totalCount: 0, hasActiveTask: false };
+		() => (ready() ? persistentNotificationTrigger() : -1),
+		async (trigger) => {
+			if (trigger === -1) return { totalCount: 0, hasActiveTask: false };
 			try {
 				// Fetch all notifications (includes Immediate which are in-memory only)
 				const persistent = await listNotifications();
@@ -145,18 +148,16 @@ function Sidebar(props: SidebarProps) {
 							<SearchIcon />
 						</SidebarActionButton>
 
-						<SidebarPageButton
-							tooltip_text={"Instance Name"}
-							onClick={() =>
-								createNotification({
-									title: "SomeTitle",
-									description: "SomeDescription",
-									severity: "info",
-									notification_type: "immediate",
-									dismissible: true,
-								})
-							}
-						/>
+						<Show when={pinning.pins.length > 0}>
+							<div class={styles["sidebar__pins-container"]}>
+								<Separator class={styles["pins-separator"]} />
+								<div class={styles["sidebar__pins"]}>
+									<For each={pinning.pins}>{(pin: PinnedPage) => <PinnedItem pin={pin} />}</For>
+								</div>
+							</div>
+						</Show>
+
+						{/* Deleted placeholder SidebarPageButton */}
 					</div>
 				</div>
 				<div class={styles["sidebar__section"]}>
@@ -166,15 +167,15 @@ function Sidebar(props: SidebarProps) {
 					>
 						<div style={{ position: "relative", display: "flex" }}>
 							<BellIcon />
-							{notifData().hasActiveTask && (
+							<Show when={notifData().hasActiveTask}>
 								<Tooltip placement="top">
 									<TooltipTrigger>
 										<div class={styles["notification-spinner"]} />
 									</TooltipTrigger>
 									<TooltipContent>Task in progress</TooltipContent>
 								</Tooltip>
-							)}
-							{notifData().totalCount > 0 && (
+							</Show>
+							<Show when={notifData().totalCount > 0}>
 								<Tooltip placement="top">
 									<TooltipTrigger>
 										<div class={styles["notification-badge"]}>
@@ -183,7 +184,7 @@ function Sidebar(props: SidebarProps) {
 									</TooltipTrigger>
 									<TooltipContent>{`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}</TooltipContent>
 								</Tooltip>
-							)}
+							</Show>
 						</div>
 					</SidebarActionButton>
 					<SidebarActionButton

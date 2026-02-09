@@ -554,7 +554,7 @@ impl ResourceManager {
         let record = rmc_dsl::resource_metadata_cache
             .filter(rmc_dsl::source.eq(&platform_str))
             .filter(rmc_dsl::remote_id.eq(id))
-            .filter(rmc_dsl::expires_at.gt(chrono::Utc::now().naive_utc()))
+            .filter(rmc_dsl::expires_at.gt(chrono::Utc::now().to_rfc3339()))
             .first::<ResourceMetadataCacheRecord>(&mut conn)
             .optional()?;
 
@@ -577,7 +577,7 @@ impl ResourceManager {
         let record = rmc_dsl::resource_metadata_cache
             .filter(rmc_dsl::source.eq(&platform_str))
             .filter(rmc_dsl::remote_id.eq(id))
-            .filter(rmc_dsl::expires_at.gt(chrono::Utc::now().naive_utc()))
+            .filter(rmc_dsl::expires_at.gt(chrono::Utc::now().to_rfc3339()))
             .first::<ResourceMetadataCacheRecord>(&mut conn)
             .optional()?;
 
@@ -601,23 +601,25 @@ impl ResourceManager {
         let project_json = serde_json::to_string(project)?;
         let mut conn = get_vesta_conn()?;
 
-        let now = chrono::Utc::now().naive_utc();
+        let now = chrono::Utc::now();
         let expires = now + chrono::Duration::hours(24);
+        let now_str = now.to_rfc3339();
+        let expires_str = expires.to_rfc3339();
 
         diesel::insert_into(rmc_dsl::resource_metadata_cache)
             .values((
                 rmc_dsl::source.eq(&platform_str),
                 rmc_dsl::remote_id.eq(id),
                 rmc_dsl::project_data.eq(project_json),
-                rmc_dsl::last_updated.eq(now),
-                rmc_dsl::expires_at.eq(expires),
+                rmc_dsl::last_updated.eq(&now_str),
+                rmc_dsl::expires_at.eq(&expires_str),
             ))
             .on_conflict((rmc_dsl::source, rmc_dsl::remote_id))
             .do_update()
             .set((
                 rmc_dsl::project_data.eq(&serde_json::to_string(project)?),
-                rmc_dsl::last_updated.eq(now),
-                rmc_dsl::expires_at.eq(expires),
+                rmc_dsl::last_updated.eq(&now_str),
+                rmc_dsl::expires_at.eq(&expires_str),
             ))
             .execute(&mut conn)?;
 
@@ -634,8 +636,10 @@ impl ResourceManager {
         let versions_json = serde_json::to_string(versions)?;
         let mut conn = get_vesta_conn()?;
 
-        let now = chrono::Utc::now().naive_utc();
+        let now = chrono::Utc::now();
         let expires = now + chrono::Duration::hours(24);
+        let now_str = now.to_rfc3339();
+        let expires_str = expires.to_rfc3339();
 
         let affected = diesel::update(
             rmc_dsl::resource_metadata_cache
@@ -644,8 +648,8 @@ impl ResourceManager {
         )
         .set((
             rmc_dsl::versions_data.eq(versions_json),
-            rmc_dsl::last_updated.eq(now),
-            rmc_dsl::expires_at.eq(expires),
+            rmc_dsl::last_updated.eq(now_str),
+            rmc_dsl::expires_at.eq(expires_str),
         ))
         .execute(&mut conn)?;
 
@@ -675,7 +679,7 @@ impl ResourceManager {
         project: &ResourceProject,
     ) -> Result<()> {
         let mut conn = get_vesta_conn()?;
-        let now = chrono::Utc::now().naive_utc();
+        let now = chrono::Utc::now().to_rfc3339();
 
         // 1. Check if we have an existing record with icon_data
         let existing: Option<ResourceProjectRecord> = rp_dsl::resource_project

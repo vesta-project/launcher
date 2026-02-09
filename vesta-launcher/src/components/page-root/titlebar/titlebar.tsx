@@ -4,6 +4,7 @@ import { createResource, createSignal, Show } from "solid-js";
 import NetworkPill from "./network-pill";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import HelpIcon from "@assets/help.svg";
+import { PageOptionsMenu } from "./page-options-menu";
 import { getVersion } from "@tauri-apps/api/app";
 import {
 	ACCOUNT_TYPE_GUEST,

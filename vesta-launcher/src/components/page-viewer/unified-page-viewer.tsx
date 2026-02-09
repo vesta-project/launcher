@@ -5,6 +5,7 @@ import OpenIcon from "@assets/open.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import ForwardsArrowIcon from "@assets/right-arrow.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
+import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	children,
@@ -165,20 +166,26 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 							props.router.currentElement().name}
 						{props.titleSuffix && ` - ${props.titleSuffix}`}
 					</span>
+
+					<NavbarButton
+						onClick={copyUrl}
+						text="Copy URL"
+						class={styles["navbar-copy-button"]}
+					>
+						<LinkIcon />
+					</NavbarButton>
 				</div>
 
 				<div class={styles["page-viewer-navbar-right"]}>
 					{props.extraNavbarActions}
+
+					<PageOptionsMenu router={props.router} />
 
 					<Show when={props.onPopOut}>
 						<NavbarButton onClick={props.onPopOut} text="Open in new window">
 							<OpenIcon />
 						</NavbarButton>
 					</Show>
-
-					<NavbarButton onClick={copyUrl} text="Copy URL">
-						<LinkIcon />
-					</NavbarButton>
 
 					<Show when={props.onClose && !props.windowControls}>
 						<NavbarButton onClick={handleClose} text="Close">

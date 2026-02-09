@@ -30,6 +30,7 @@ import styles from "./home.module.css";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
 import { startAppTutorial } from "@utils/tutorial";
+import { initializePinning } from "@stores/pinning";
 import {
 	instances as instancesStore,
 	instancesLoading,
@@ -43,6 +44,7 @@ const os = getOsType() ?? "windows";
 
 function HomePage() {
 	onMount(async () => {
+		void initializePinning();
 		const config = await invoke<any>("get_config");
 		if (!config.tutorial_completed) {
 			// Small delay to ensure UI is ready

@@ -5,6 +5,7 @@ pub mod installed_resource;
 pub mod instance;
 pub mod java;
 pub mod notification;
+pub mod pinning;
 pub mod resource;
 pub mod task_state;
 pub mod user_version_tracking;

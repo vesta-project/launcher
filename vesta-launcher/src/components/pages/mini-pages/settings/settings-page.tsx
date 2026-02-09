@@ -746,6 +746,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 
 					<SettingsCard header="Application Data">
 						<SettingsField
+									label="AppData Directory"
 									description="Open the folder where Vesta Launcher stores its data."
 									actionLabel="Open Folder"
 									onAction={handleOpenAppData}
@@ -1091,6 +1092,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 						}
 					/>
 					<SettingsField
+						label="Update Check"
 						control={
 							<LauncherButton onClick={() => checkForAppUpdates()}>
 								Check Now

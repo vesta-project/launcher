@@ -55,7 +55,9 @@ open = "5.3.1"
 urlencoding = "2.1"
 which = "8.0.0"
 sysinfo = "0.38.0"
-reqwest = { version = "0.12", features = ["json", "stream"] }
+reqwest = { version = "0.11", features = ["json", "stream"] }
+image = { version = "0.25", features = ["png", "jpeg", "ico"] }
+base64 = "0.22"
 futures-util = "0.3"
 async-trait = "0.1"
 dotenvy = "0.15"
@@ -69,7 +71,6 @@ minecraft-msa-auth = "0.4.0"
 lazy_static = "1.5"
 walkdir = "2.5.0"
 murmur2 = "0.1.0"
-base64 = "0.22.1"
 tempfile = "3"
 uuid = { version = "1.20.0", features = ["v3", "v4", "v1", "serde"] }
 

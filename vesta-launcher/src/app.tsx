@@ -50,24 +50,40 @@ export interface ExitCheckResponse {
  */
 function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
 	try {
-		// Parse URL: vesta://path?param1=value1&param2=value2
+		// Parse URL: vesta://path/segment?param1=value1
 		const urlObj = new URL(url);
-		const path = urlObj.hostname; // In vesta://instance, hostname is "instance"
-		const searchParams = urlObj.searchParams;
+		const action = urlObj.hostname; // e.g. "open-instance"
+		const segments = urlObj.pathname.split("/").filter(Boolean); // e.g. ["slug"]
 
 		console.log("Deep link parsed:", {
-			path,
-			params: Object.fromEntries(searchParams),
+			action,
+			segments,
+			params: Object.fromEntries(urlObj.searchParams),
 		});
 
-		// Navigate to standalone page viewer with path and params
-		// The standalone page viewer will handle the mini-router navigation
 		const params = new URLSearchParams();
-		params.set("path", path);
+		
+		// Map actions to mini-router paths
+		if (action === "open-instance" || action === "launch-instance") {
+			params.set("path", "/instance");
+			if (segments[0]) params.set("slug", segments[0]);
+			if (action === "launch-instance") params.set("autoLaunch", "true");
+		} else if (action === "open-resource") {
+			params.set("path", "/resource-details");
+			if (segments[0]) params.set("platform", segments[0]);
+			if (segments[1]) params.set("projectId", segments[1]);
+		} else if (action === "instance") {
+			// Legacy/Compatibility: vesta://instance?slug=xxx
+			params.set("path", "/instance");
+			const slug = urlObj.searchParams.get("slug") || segments[0];
+			if (slug) params.set("slug", slug);
+		} else {
+			params.set("path", action);
+		}
 
-		// Add all query parameters
-		for (const [key, value] of searchParams) {
-			params.set(key, value);
+		// Add all remaining query parameters
+		for (const [key, value] of urlObj.searchParams) {
+			if (!params.has(key)) params.set(key, value);
 		}
 
 		navigate(`/standalone?${params.toString()}`);
@@ -312,6 +328,47 @@ function Root(props: ChildrenProp) {
 			// This ensures skins are up to date on launch
 			invoke("preload_account_heads").catch((error) => {
 				console.error("Failed to preload account heads:", error);
+			});
+
+			// Handle CLI Arguments & Deep Links
+			const handleCLI = async (args: string[]) => {
+				console.log("[App] Received CLI args:", args);
+				for (let i = 0; i < args.length; i++) {
+					const arg = args[i];
+					if (arg.startsWith("vesta://")) {
+						handleDeepLink(arg, navigate);
+						continue;
+					}
+
+					if (arg === "--launch-instance" && args[i + 1]) {
+						const slug = args[i + 1];
+						const { instancesState, setLaunching, initializeInstances } = await import("@stores/instances");
+						await initializeInstances();
+						const inst = instancesState.instances.find(inst => (inst as any).slug === slug || inst.name.toLowerCase().replace(/ /g, "-") === slug);
+						if (inst) {
+							setLaunching(slug, true);
+							await invoke("launch_instance", { instanceData: inst });
+						}
+						i++;
+					} else if (arg === "--open-instance" && args[i + 1]) {
+						const slug = args[i + 1];
+						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
+						router()?.navigate("/instance", { slug });
+						setPageViewerOpen(true);
+						i++;
+					} else if (arg === "--open-resource" && args[i + 2]) {
+						const platform = args[i + 1];
+						const id = args[i + 2];
+						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
+						router()?.navigate("/resource-details", { platform, projectId: id });
+						setPageViewerOpen(true);
+						i += 2;
+					}
+				}
+			};
+
+			listen<string[]>("core://handle-cli", (event) => {
+				handleCLI(event.payload);
 			});
 
 			// Preload Minecraft versions metadata in background (non-blocking)

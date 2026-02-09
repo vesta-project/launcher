@@ -1,4 +1,4 @@
-﻿// @generated automatically by Diesel CLI.
+// @generated automatically by Diesel CLI.
 
 diesel::table! {
     account (id) {
@@ -32,6 +32,41 @@ diesel::table! {
 }
 
 diesel::table! {
+    app_config (id) {
+        id -> Integer,
+        background_hue -> Integer,
+        theme -> Text,
+        language -> Text,
+        max_download_threads -> Integer,
+        max_memory_mb -> Integer,
+        java_path -> Nullable<Text>,
+        default_game_dir -> Nullable<Text>,
+        auto_update_enabled -> Bool,
+        notification_enabled -> Bool,
+        startup_check_updates -> Bool,
+        show_tray_icon -> Bool,
+        minimize_to_tray -> Bool,
+        reduced_motion -> Bool,
+        last_window_width -> Integer,
+        last_window_height -> Integer,
+        debug_logging -> Bool,
+        notification_retention_days -> Integer,
+        active_account_uuid -> Nullable<Text>,
+        theme_id -> Text,
+        theme_mode -> Text,
+        theme_primary_hue -> Integer,
+        theme_primary_sat -> Nullable<Integer>,
+        theme_primary_light -> Nullable<Integer>,
+        theme_style -> Text,
+        theme_gradient_enabled -> Bool,
+        theme_gradient_angle -> Nullable<Integer>,
+        theme_gradient_harmony -> Nullable<Text>,
+        theme_advanced_overrides -> Nullable<Text>,
+        theme_gradient_type -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     installed_resource (id) {
         id -> Integer,
         instance_id -> Integer,
@@ -44,7 +79,7 @@ diesel::table! {
         current_version -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
-        last_updated -> Timestamp,
+        last_updated -> Text,
         release_type -> Text,
         hash -> Nullable<Text>,
         file_size -> BigInt,
@@ -106,14 +141,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    pinned_page (id) {
+        id -> Integer,
+        page_type -> Text,
+        target_id -> Text,
+        platform -> Nullable<Text>,
+        label -> Text,
+        icon_url -> Nullable<Text>,
+        order_index -> Integer,
+        created_at -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     resource_metadata_cache (id) {
         id -> Integer,
         source -> Text,
         remote_id -> Text,
         project_data -> Text,
         versions_data -> Nullable<Text>,
-        last_updated -> Timestamp,
-        expires_at -> Timestamp,
+        last_updated -> Text,
+        expires_at -> Text,
     }
 }
 
@@ -126,7 +174,7 @@ diesel::table! {
         icon_url -> Nullable<Text>,
         icon_data -> Nullable<Binary>,
         project_type -> Text,
-        last_updated -> Timestamp,
+        last_updated -> Text,
     }
 }
 
@@ -157,9 +205,11 @@ diesel::joinable!(installed_resource -> instance (instance_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
+    app_config,
     installed_resource,
     instance,
     notification,
+    pinned_page,
     resource_metadata_cache,
     resource_project,
     task_state,

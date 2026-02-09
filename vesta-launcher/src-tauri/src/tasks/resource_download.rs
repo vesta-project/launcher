@@ -251,7 +251,7 @@ impl Task for ResourceDownloadTask {
                         .eq(format!("{:?}", version.release_type).to_lowercase()),
                     installed_dsl::is_manual.eq(false),
                     installed_dsl::is_enabled.eq(true),
-                    installed_dsl::last_updated.eq(Utc::now().naive_utc()),
+                    installed_dsl::last_updated.eq(Utc::now().to_rfc3339()),
                     installed_dsl::file_size.eq(file_size),
                     installed_dsl::file_mtime.eq(file_mtime),
                 ))
@@ -293,7 +293,7 @@ impl Task for ResourceDownloadTask {
                     release_type: format!("{:?}", version.release_type).to_lowercase(),
                     is_manual: false,
                     is_enabled: true,
-                    last_updated: Utc::now().naive_utc(),
+                    last_updated: Utc::now().to_rfc3339(),
                     hash: Some(version.hash.clone()),
                     file_size,
                     file_mtime,

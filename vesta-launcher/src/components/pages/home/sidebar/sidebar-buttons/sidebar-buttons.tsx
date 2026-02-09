@@ -30,7 +30,7 @@ interface SidebarButtonProps extends ComponentProps<"button"> {
 	onClick?: () => void;
 }
 
-function SidebarButton(props: SidebarButtonProps) {
+export function SidebarButton(props: SidebarButtonProps) {
 	const c = children(() => props.children);
 	const [local, others] = splitProps(
 		mergeProps({ tooltip_placement: "right", tooltip_text: "" }, props),

@@ -64,6 +64,34 @@
 	gap: 32px;
 }
 
+.sidebar__pins {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	margin-top: 16px;
+	/* Removed border and padding as handled by pins-separator */
+}
+
+.pins-separator {
+	margin: 8px 0;
+	background-color: var(--border-subtle);
+}
+
+.sidebar__pins-container {
+	animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideIn {
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
 .sidebar__section {
 	padding: 0;
 	margin: 0;

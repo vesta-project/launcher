@@ -757,6 +757,18 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
+    // Initial CLI Arguments Handling
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() > 1 {
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            // Give the frontend enough time to mount and register listeners
+            tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+            use tauri::Emitter;
+            let _ = handle.emit("core://handle-cli", args);
+        });
+    }
+
     Ok(())
 }
 

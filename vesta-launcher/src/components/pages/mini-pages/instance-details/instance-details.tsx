@@ -72,6 +72,8 @@ import {
 	type ResourceVersion,
 	type InstalledResource,
 } from "@stores/resources";
+import { pinning, isPinned as isPinnedInStore, pinPage, unpinPage } from "@stores/pinning";
+import { instancesState } from "@stores/instances";
 import {
 	DEFAULT_ICONS,
 	deleteInstance,
@@ -128,6 +130,8 @@ import InfoIcon from "@assets/help.svg";
 import SettingsIcon from "@assets/gear.svg";
 import PlayIcon from "@assets/play.svg";
 import LinkIcon from "@assets/link.svg";
+import PinIcon from "@assets/pin.svg";
+import PinOffIcon from "@assets/pin-off.svg";
 
 type TabType = "home" | "console" | "resources" | "settings" | "versioning";
 
@@ -209,6 +213,31 @@ export default function InstanceDetails(
 	},
 ) {
 	const activeRouter = createMemo(() => props.router || router());
+
+	const isPinned = createMemo(() =>
+		props.slug ? isPinnedInStore("instance", props.slug) : false,
+	);
+
+	const handlePin = async () => {
+		if (!props.slug) return;
+		if (isPinned()) {
+			const pin = pinning.pins.find(
+				(p) => p.page_type === "instance" && p.target_id === props.slug,
+			);
+			if (pin) unpinPage(pin.id);
+		} else {
+			const inst = instance();
+			if (!inst) return;
+			await pinPage({
+				page_type: "instance",
+				target_id: props.slug,
+				label: inst.name,
+				icon_url: inst.modpackIconUrl || inst.iconPath || null,
+				platform: null,
+				order_index: pinning.pins.length,
+			});
+		}
+	};
 
 	const loadersList = [
 		{ label: "Vanilla", value: "vanilla" },
@@ -322,6 +351,12 @@ export default function InstanceDetails(
 	>([]);
 
 	const inst = () => instance();
+	const isLaunchingGlobal = createMemo(
+		() => (props.slug ? instancesState.launchingIds[props.slug] : false) || false,
+	);
+	const isRunningGlobal = createMemo(
+		() => (props.slug ? instancesState.runningIds[props.slug] : false) || false,
+	);
 
 	const isDirty = createMemo(() => {
 		return (
@@ -491,15 +526,29 @@ export default function InstanceDetails(
 		props.setRefetch?.(handleRefetch);
 		activeRouter()?.setRefetch(handleRefetch);
 
+		// Handle auto-launch from deep links or shortcuts
+		const params = activeRouter()?.currentParams.get();
+		if (params?.autoLaunch === "true") {
+			const checkAndLaunch = () => {
+				const inst = instance.latest;
+				if (inst && !isRunningGlobal() && !isLaunchingGlobal() && !busy()) {
+					handlePlay();
+				} else if (!inst && instance.loading) {
+					// Wait for load
+					setTimeout(checkAndLaunch, 100);
+				}
+			};
+			setTimeout(checkAndLaunch, 500);
+		}
+
 		// Navigation guard for unsaved changes
 		activeRouter()?.setCanExit(async () => {
 			if (isDirty()) {
-				const confirmed = await dialogStore.confirm({
-					title: "Unsaved Changes",
-					description: "You have unsaved changes to this instance. Are you sure you want to leave without saving?",
-					confirmLabel: "Leave",
-					cancelLabel: "Stay",
-				});
+				const confirmed = await dialogStore.confirm(
+					"Unsaved Changes",
+					"You have unsaved changes to this instance. Are you sure you want to leave without saving?",
+					{ okLabel: "Leave", cancelLabel: "Stay" },
+				);
 				return confirmed;
 			}
 			return true;
@@ -1379,10 +1428,12 @@ export default function InstanceDetails(
 			return filteredData();
 		},
 		columns,
-		state: createMemo(() => ({
-			rowSelection: resources.state.selection,
-			sorting: resources.state.sorting,
-		})),
+		get state() {
+			return {
+				rowSelection: resources.state.selection,
+				sorting: resources.state.sorting,
+			};
+		},
 		onRowSelectionChange: (updater) => {
 			batch(() => {
 				if (typeof updater === "function") {
@@ -1824,6 +1875,19 @@ export default function InstanceDetails(
 													<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
 												</svg>
 											</Button>
+
+											<Button
+												variant="ghost"
+												size="md"
+												onClick={handlePin}
+												title={isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}
+												class={styles["header-square-button"]}
+											>
+												<Show when={isPinned()} fallback={<PinIcon width="18" height="18" />}>
+													<PinOffIcon width="18" height="18" />
+												</Show>
+											</Button>
+
 											<Button
 												onClick={isRunning() ? handleKill : handlePlay}
 												disabled={busy() || isInstalling()}
@@ -1905,7 +1969,7 @@ export default function InstanceDetails(
 												instance={inst()}
 												isGuest={isGuest()}
 												busy={busy()}
-												isInstalling={isInstalling}
+												isInstalling={isInstalling()}
 												checkingUpdates={checkingUpdates()}
 												checkUpdates={checkUpdates}
 												modpackVersions={modpackVersions}
@@ -1959,9 +2023,9 @@ export default function InstanceDetails(
 												setIconPath={setIconPath}
 												setIsIconDirty={setIsIconDirty}
 												uploadedIcons={uploadedIcons}
-												modpackIcon={modpackIconBase64}
+												modpackIcon={() => modpackIconBase64() || null}
 												isSuggestedSelected={() => areIconsEqual(modpackIconBase64(), iconPath())}
-												isInstalling={isInstalling}
+												isInstalling={isInstalling()}
 												jreOptions={jreOptions}
 												javaPath={javaPath()}
 												setJavaPath={setJavaPath}
@@ -2000,12 +2064,14 @@ export default function InstanceDetails(
 							<Button
 								variant="ghost"
 								onClick={() => {
-									setName(inst().name);
-									setIconPath(inst().iconPath || DEFAULT_ICONS[0]);
-									setMinMemory([inst().minMemory]);
-									setMaxMemory([inst().maxMemory]);
-									setJavaArgs(inst().javaArgs || "");
-									setJavaPath(inst().javaPath || "");
+									const i = inst();
+									if (!i) return;
+									setName(i.name);
+									setIconPath(i.iconPath || DEFAULT_ICONS[0]);
+									setMinMemory([i.minMemory]);
+									setMaxMemory([i.maxMemory]);
+									setJavaArgs(i.javaArgs || "");
+									setJavaPath(i.javaPath || "");
 									setIsNameDirty(false);
 									setIsIconDirty(false);
 									setIsMinMemDirty(false);
@@ -2017,7 +2083,8 @@ export default function InstanceDetails(
 								Reset
 							</Button>
 							<Button
-								variant="primary"
+								color="primary"
+								variant="solid"
 								onClick={handleSave}
 								disabled={saving()}
 							>
@@ -2032,14 +2099,12 @@ export default function InstanceDetails(
 			</Show>
 
 			<Show when={instance()}>
-				{(inst) => (
-					<ExportDialog
-						isOpen={showExportDialog()}
-						onClose={() => setShowExportDialog(false)}
-						instanceId={inst().id}
-						instanceName={inst().name}
-					/>
-				)}
+				<ExportDialog
+					isOpen={showExportDialog()}
+					onClose={() => setShowExportDialog(false)}
+					instanceId={instance()?.id || 0}
+					instanceName={instance()?.name || ""}
+				/>
 			</Show>
 		</div>
 	);

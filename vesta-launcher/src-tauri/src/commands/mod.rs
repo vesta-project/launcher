@@ -3,5 +3,7 @@ pub mod instances;
 pub mod modpacks;
 pub mod notifications;
 pub mod onboarding;
+pub mod pinning;
 pub mod resources;
+pub mod shortcuts;
 pub mod tasks;

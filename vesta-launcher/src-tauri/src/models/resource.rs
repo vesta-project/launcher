@@ -28,8 +28,8 @@ pub struct ResourceMetadataCacheRecord {
     pub remote_id: String,
     pub project_data: String,
     pub versions_data: Option<String>,
-    pub last_updated: chrono::NaiveDateTime,
-    pub expires_at: chrono::NaiveDateTime,
+    pub last_updated: String,
+    pub expires_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -102,7 +102,7 @@ pub struct ResourceProjectRecord {
     pub icon_url: Option<String>,
     pub icon_data: Option<Vec<u8>>,
     pub project_type: String,
-    pub last_updated: chrono::NaiveDateTime,
+    pub last_updated: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

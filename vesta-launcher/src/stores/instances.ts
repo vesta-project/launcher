@@ -12,6 +12,8 @@ export type { Instance };
 
 type InstancesState = {
 	instances: Instance[];
+	launchingIds: Record<string, boolean>;
+	runningIds: Record<string, boolean>;
 	loading: boolean;
 	error: string | null;
 };
@@ -19,9 +21,15 @@ type InstancesState = {
 // Create store
 const [instancesState, setInstancesState] = createStore<InstancesState>({
 	instances: [],
+	launchingIds: {},
+	runningIds: {},
 	loading: false,
 	error: null,
 });
+
+export function setLaunching(slug: string, launching: boolean) {
+	setInstancesState("launchingIds", (prev) => ({ ...prev, [slug]: launching }));
+}
 
 // Initialize instances from backend
 export async function initializeInstances() {
@@ -96,9 +104,26 @@ export function setupInstanceListeners() {
 			updateInstance(event.payload);
 		});
 
-		// Listen for launch events (updates lastPlayed, playtime)
-		await listen<Instance>("core://instance-launched", (event) => {
-			updateInstance(event.payload);
+		// Listen for launch initiated (this is for UI responsiveness)
+		await listen<{ instance_id: string }>("core://instance-launch-request", (event) => {
+			setLaunching(event.payload.instance_id, true);
+		});
+
+		// Listen for launch events (updates when process successfully started)
+		await listen<{ instance_id: string; pid: number }>("core://instance-launched", (event) => {
+			const slug = event.payload.instance_id;
+			setLaunching(slug, false);
+			setInstancesState("runningIds", slug, true);
+		});
+
+		// Listen for instance exit/crash
+		await listen<{ instance_id: string; crashed: boolean }>("core://instance-exited", (event) => {
+			const slug = event.payload.instance_id;
+			setLaunching(slug, false);
+			setInstancesState("runningIds", slug, undefined);
+			
+			// Refresh instance metadata if crashed/playtime updated
+			initializeInstances();
 		});
 
 		// Listen for account changes to re-initialize instances (important for Guest -> Real transition)

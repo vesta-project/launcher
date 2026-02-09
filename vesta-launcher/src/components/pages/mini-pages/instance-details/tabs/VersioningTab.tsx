@@ -41,7 +41,7 @@ interface VersioningTabProps {
 	handleDuplicate: () => void;
 	handleHardReset: () => void;
 	handleUninstall: () => void;
-	repairInstance: (id: string) => void;
+	repairInstance: (id: number) => void;
 	mcVersions: any;
 }
 
@@ -83,7 +83,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 								</h3>
 								<Button
 									variant="ghost"
-									size="xs"
+									size="sm"
 									onClick={(e: MouseEvent) => {
 										e.stopPropagation();
 										props.handleUnlink();
@@ -104,7 +104,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
 						onVersionSelect={props.handleModpackVersionSelect}
 						onUpdate={props.rolloutModpackUpdate}
-						disabled={props.busy || props.isInstalling() || props.isGuest}
+						disabled={props.busy || props.isInstalling || props.isGuest}
 					/>
 				</SettingsCard>
 			</Show>
@@ -189,7 +189,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 								>
 									<Button
 										onClick={props.handleStandardUpdate}
-										disabled={props.busy || props.isInstalling() || props.isGuest}
+										disabled={props.busy || props.isInstalling || props.isGuest}
 										color="primary"
 										variant="shadow"
 									>
@@ -234,7 +234,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						actionLabel="Unlink"
 						destructive
 						onAction={props.handleUnlink}
-						disabled={props.busy || props.isInstalling() || props.isGuest}
+						disabled={props.busy || props.isInstalling || props.isGuest}
 					/>
 				</Show>
 				<SettingsField
