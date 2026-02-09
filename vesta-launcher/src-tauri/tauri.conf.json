@@ -26,7 +26,7 @@
 		},
 		"updater": {
 			"endpoints": [
-				"https://releases.vesta.ms/{{target}}-{{arch}}/{{current_version}}"
+				"https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/latest.json"
 			],
 			"pubkey": "CONTENT_SIGNING_PUB_KEY_PLACEHOLDER"
 		}

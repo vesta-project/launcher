@@ -125,15 +125,77 @@ jobs:
 
       - name: Build Tauri App
         if: matrix.enabled
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'Vesta Launcher v__VERSION__'
-          releaseBody: 'Automatic release'
-          releaseDraft: true
-          prerelease: ${{ contains(github.ref, 'alpha') || contains(github.ref, 'beta') || (github.event_name == 'workflow_dispatch' && (github.event.inputs.bump == 'alpha' || github.event.inputs.bump == 'beta')) }}
+          includeRelease: false
           args: ${{ matrix.args }}
           projectPath: './vesta-launcher'
+
+      - name: Upload to Cloudflare R2
+        if: matrix.enabled
+        run: |
+          # Install AWS CLI
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          
+          # Configure AWS for R2
+          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws configure set region auto
+          
+          # Upload artifacts
+          aws s3 cp ${{ steps.tauri.outputs.bundlePath }}/ s3://vesta-project/launcher/releases/ --recursive --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
+
+  generate-manifest:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install AWS CLI
+        run: |
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+      - name: Configure AWS for R2
+        run: |
+          aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          aws configure set region auto
+      - name: Generate and upload latest.json
+        run: |
+          VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+          PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          NOTES="Automatic release"
+          
+          cat > latest.json << EOF
+          {
+            "version": "$VERSION",
+            "notes": "$NOTES",
+            "pub_date": "$PUB_DATE",
+            "platforms": {
+              "windows-x86_64": {
+                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_x64.msi",
+                "signature": ""
+              },
+              "darwin-x86_64": {
+                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_x64.dmg",
+                "signature": ""
+              },
+              "darwin-aarch64": {
+                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_aarch64.dmg",
+                "signature": ""
+              },
+              "linux-x86_64": {
+                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_amd64.AppImage",
+                "signature": ""
+              }
+            }
+          }
+          EOF
+          
+          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
