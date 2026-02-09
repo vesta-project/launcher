@@ -689,13 +689,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         )
     };
 
-    #[cfg(target_os = "macos")]
-    let win_builder = win_builder.effects(
-        tauri::window::EffectsBuilder::new()
-            .effect(tauri::window::Effect::Vibrancy)
-            .build(),
-    );
-
     let _main_win = win_builder.build()?;
 
     // Setup sniffer window immediately

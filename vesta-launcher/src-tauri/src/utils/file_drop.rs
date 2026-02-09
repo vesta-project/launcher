@@ -40,7 +40,7 @@ pub async fn create_file_drop_overlay(app_handle: AppHandle) -> Result<(), Strin
 
     // On macOS, we also need to explicitly disable the shadow via private API or standard methods
     #[cfg(target_os = "macos")]
-    let _ = overlay.set_has_shadow(false);
+    let _ = overlay.set_shadow(false);
 
     #[cfg(target_os = "windows")]
     {

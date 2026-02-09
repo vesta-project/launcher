@@ -75,13 +75,6 @@ pub async fn launch_window(
         )
     };
 
-    #[cfg(target_os = "macos")]
-    let win_builder = win_builder.effects(
-        tauri::window::EffectsBuilder::new()
-            .effect(tauri::window::Effect::Vibrancy)
-            .build(),
-    );
-
     win_builder.build()?;
 
     Ok(())
