@@ -135,20 +135,9 @@ jobs:
             bun run tauri build --target ${{ matrix.target }}
           fi
         shell: bash
-        run: |
-          cd vesta-launcher
-          if [ "${{ matrix.platform }}" == "macos-latest" ]; then
-            bun run tauri build --target ${{ matrix.target }} --bundles dmg
-          elif [ "${{ matrix.platform }}" == "ubuntu-latest" ]; then
-            bun run tauri build --target ${{ matrix.target }} --bundles deb
-          else
-            bun run tauri build --target ${{ matrix.target }}
-          fi
-        shell: bash
 
       - name: Upload to Cloudflare R2
         if: matrix.enabled
-        shell: bash
         shell: bash
         run: |
           # Configure AWS for R2
@@ -200,7 +189,6 @@ jobs:
                 "signature": ""
               },
               "linux-x86_64": {
-                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/vesta-launcher_${VERSION}_amd64.deb",
                 "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/vesta-launcher_${VERSION}_amd64.deb",
                 "signature": ""
               }
