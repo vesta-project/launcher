@@ -91,7 +91,6 @@ impl r2d2::CustomizeConnection<SqliteConnection, r2d2::Error> for SqliteCustomiz
 }
 
 // Embed migrations at compile time
-pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("../../migrations");
 // Separate migration sets for different databases
 pub const VESTA_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/vesta");
 pub const CONFIG_MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations/config");

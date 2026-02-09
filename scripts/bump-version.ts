@@ -7,7 +7,7 @@ const filesToUpdate = [
     {
         path: join(projectRoot, "Cargo.toml"),
         type: "toml",
-        regex: /\[workspace\.package\]\nversion = "[^"]+"/,
+        regex: /\[workspace\.package\]\r?\nversion = "[^"]+"/,
         replace: (version: string) => `[workspace.package]\nversion = "${version}"`
     },
     {
@@ -19,6 +19,32 @@ const filesToUpdate = [
         type: "json"
     }
 ];
+
+function getVersion(): string {
+    const tauriConfPath = join(projectRoot, "vesta-launcher", "src-tauri", "tauri.conf.json");
+    const content = readFileSync(tauriConfPath, "utf8");
+    return JSON.parse(content).version;
+}
+
+function parseVersion(v: string) {
+    const match = v.match(/^(\d+)\.(\d+)\.(\d+)(-(alpha|beta)\.(\d+))?$/);
+    if (!match) throw new Error(`Invalid version format: ${v}`);
+    return {
+        major: parseInt(match[1]),
+        minor: parseInt(match[2]),
+        patch: parseInt(match[3]),
+        suffix: match[5] || null,
+        preRelease: (match[6] !== undefined && match[6] !== null) ? parseInt(match[6]) : null
+    };
+}
+
+function formatVersion(v: { major: number, minor: number, patch: number, suffix: string | null, preRelease: number | null }): string {
+    let base = `${v.major}.${v.minor}.${v.patch}`;
+    if (v.suffix) {
+        base += `-${v.suffix}.${v.preRelease ?? 1}`;
+    }
+    return base;
+}
 
 function bumpVersion(newVersion: string) {
     console.log(`Bumping version to: ${newVersion}`);
@@ -44,9 +70,37 @@ function bumpVersion(newVersion: string) {
 }
 
 const args = process.argv.slice(2);
+const currentVersionStr = getVersion();
+let nextVersion = "";
+
 if (args.length === 0) {
-    console.log("Usage: bun scripts/bump-version.ts <new-version>");
+    console.log(`Current version: ${currentVersionStr}`);
+    console.log("Usage: bun scripts/bump-version.ts <version|type>");
+    console.log("Types: patch, minor, major, alpha, beta");
     process.exit(1);
 }
 
-bumpVersion(args[0]);
+const action = args[0];
+
+if (["patch", "minor", "major", "alpha", "beta"].includes(action)) {
+    const v = parseVersion(currentVersionStr);
+    if (action === "major") {
+        v.major++; v.minor = 0; v.patch = 0; v.suffix = null; v.preRelease = null;
+    } else if (action === "minor") {
+        v.minor++; v.patch = 0; v.suffix = null; v.preRelease = null;
+    } else if (action === "patch") {
+        v.patch++; v.suffix = null; v.preRelease = null;
+    } else if (action === "alpha" || action === "beta") {
+        if (v.suffix === action) {
+            v.preRelease = (v.preRelease ?? 0) + 1;
+        } else {
+            v.suffix = action;
+            v.preRelease = 1;
+        }
+    }
+    nextVersion = formatVersion(v);
+} else {
+    nextVersion = action;
+}
+
+bumpVersion(nextVersion);
