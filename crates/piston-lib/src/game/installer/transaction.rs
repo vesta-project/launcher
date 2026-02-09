@@ -2,9 +2,6 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-#[cfg(target_family = "unix")]
-use std::io::ErrorKind;
-
 /// InstallTransaction encapsulates atomic writes and rollback handling inside piston-lib.
 pub struct InstallTransaction {
     version_id: String,
@@ -141,10 +138,10 @@ fn copy_dir_recursive(src: &Path, dest: &Path) -> Result<()> {
 fn is_cross_device_link(err: &std::io::Error) -> bool {
     #[cfg(target_family = "unix")]
     {
-        use std::io::ErrorKind;
-        // CrossDeviceLink was stabilized in 1.35, but sometimes it doesn't resolve correctly
-        // in all environments or older toolchains. We also check the raw OS error for EXDEV.
-        err.kind() == ErrorKind::CrossDeviceLink || err.raw_os_error() == Some(18)
+        // EXDEV (18) is the standard error for cross-device links on Unix.
+        // We check the raw OS error primarily to avoid compatibility issues with 
+        // older Rust toolchains that might not have ErrorKind::CrossDeviceLink.
+        err.raw_os_error() == Some(18)
     }
 
     #[cfg(not(target_family = "unix"))]

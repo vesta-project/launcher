@@ -156,7 +156,7 @@ jobs:
           aws configure set region auto
           
           # Upload only the specific installer bundles
-          for file in $(find vesta-launcher/src-tauri/target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" \)); do
+          for file in $(find target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" \)); do
             aws s3 cp "$file" s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
           done
 

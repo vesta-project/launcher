@@ -16,7 +16,7 @@ use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
 #[cfg(unix)]
-use sysinfo::{Pid as SysPid, ProcessRefreshKind, ProcessStatus, System};
+use sysinfo::{Pid as SysPid, ProcessRefreshKind, ProcessStatus, System, ProcessesToUpdate};
 
 #[cfg(windows)]
 use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsHungAppWindow, IsWindowVisible, PostMessageW, WM_CLOSE};
@@ -69,16 +69,27 @@ fn is_process_stalled_unix(pid: i32) -> bool {
     let mut system = System::new();
     let pid_sys = SysPid::from(pid as usize);
 
-    system.refresh_process_specifics(pid_sys, ProcessRefreshKind::nothing().with_cpu().with_status());
+    system.refresh_processes_specifics(
+        ProcessesToUpdate::Some(&[pid_sys]),
+        true,
+        ProcessRefreshKind::nothing().with_cpu(),
+    );
 
     if let Some(proc1) = system.process(pid_sys) {
-        if matches!(proc1.status(), ProcessStatus::Dead | ProcessStatus::Zombie | ProcessStatus::Stop) {
+        if matches!(
+            proc1.status(),
+            ProcessStatus::Dead | ProcessStatus::Zombie | ProcessStatus::Stop
+        ) {
             return true;
         }
 
         let cpu1 = proc1.cpu_usage();
         std::thread::sleep(std::time::Duration::from_secs(1));
-        system.refresh_process_specifics(pid_sys, ProcessRefreshKind::nothing().with_cpu());
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&[pid_sys]),
+            true,
+            ProcessRefreshKind::nothing().with_cpu(),
+        );
 
         if let Some(proc2) = system.process(pid_sys) {
             let cpu2 = proc2.cpu_usage();
