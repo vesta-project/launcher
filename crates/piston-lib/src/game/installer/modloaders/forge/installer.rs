@@ -6,6 +6,7 @@ use super::parser::{
     extract_main_class_from_jar, extract_maven_libraries_sync, parse_install_profile,
     parse_version_json,
 };
+use crate::utils::process::PistonCommandExt;
 use crate::game::installer::core::library::LibraryDownloader;
 use crate::game::installer::types::{InstallSpec, ProgressReporter, OsType};
 use crate::game::installer::vanilla::install_vanilla;
@@ -1078,6 +1079,7 @@ async fn execute_single_processor(
         .arg(&classpath)
         .arg(&main_class)
         .args(&args)
+        .suppress_console()
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 

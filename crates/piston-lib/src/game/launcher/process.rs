@@ -1,5 +1,6 @@
 /// Process management and game launch orchestration
 use crate::game::installer::types::OsType;
+use crate::utils::process::PistonCommandExt;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
     classpath::{build_classpath_filtered, validate_classpath},
@@ -501,28 +502,8 @@ pub async fn launch_game(
     command.stderr(Stdio::piped());
 
     // Configure process to be detached so it survives launcher close
-    // On Windows: Use CREATE_NEW_PROCESS_GROUP to detach from launcher
-    // On Unix: Use setsid() to create new session
-    #[cfg(windows)]
-    {
-        const CREATE_NEW_PROCESS_GROUP: u32 = 0x00000200;
-        // Note: We don't use DETACHED_PROCESS (0x8) as it would prevent stdout/stderr piping
-        // CREATE_NEW_PROCESS_GROUP alone allows the process to survive parent exit while
-        // still allowing us to capture output
-        command.creation_flags(CREATE_NEW_PROCESS_GROUP);
-    }
-
-    #[cfg(unix)]
-    {
-        // Create a new session so the process is not a child of the launcher
-        // This allows it to survive when the launcher exits
-        unsafe {
-            command.pre_exec(|| {
-                libc::setsid();
-                Ok(())
-            });
-        }
-    }
+    // We use our unified suppress_console and detach helper
+    command.detach();
 
     // 10. Ensure working dir exists and is a directory, then spawn process
     if !spec.game_dir.exists() {
@@ -835,6 +816,7 @@ pub async fn kill_instance(instance_id: &str) -> Result<String> {
                 log::warn!("Process didn't respond to WM_CLOSE, force killing");
                 let output = std::process::Command::new("taskkill")
                     .args(["/PID", &instance.pid.to_string(), "/T", "/F"])
+                    .suppress_console()
                     .output()
                     .context("Failed to execute taskkill")?;
 

@@ -2,12 +2,7 @@ use tauri::{command, AppHandle, Manager};
 use std::process::Command;
 use std::path::PathBuf;
 use std::fs;
-
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
-
-#[cfg(target_os = "windows")]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+use piston_lib::utils::process::PistonCommandExt;
 
 async fn process_icon(app_handle: &AppHandle, input: Option<String>) -> Option<PathBuf> {
     let input = input?;
@@ -109,9 +104,7 @@ pub async fn create_desktop_shortcut(
 
         let mut cmd = Command::new("powershell");
         cmd.args(["-NoProfile", "-Command", &ps_script]);
-
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
+        cmd.suppress_console();
 
         let output = cmd.output().map_err(|e| e.to_string())?;
 

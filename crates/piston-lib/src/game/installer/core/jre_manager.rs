@@ -1,6 +1,7 @@
 use super::downloader::extract_zip;
 use crate::game::installer::track_artifact_from_path;
 use crate::game::installer::types::{Arch, OsType, ProgressReporter};
+use crate::utils::process::PistonCommandExt;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -316,7 +317,11 @@ fn detect_system_java_from_path() -> Option<PathBuf> {
     // Try to find the java executable path
     #[cfg(windows)]
     {
-        if let Ok(output) = std::process::Command::new("where").arg("java").output() {
+        if let Ok(output) = std::process::Command::new("where")
+            .arg("java")
+            .suppress_console()
+            .output()
+        {
             if let Ok(path_str) = String::from_utf8(output.stdout) {
                 if let Some(first_line) = path_str.lines().next() {
                     return Some(PathBuf::from(first_line.trim()));
@@ -346,6 +351,7 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
     // Note: java -version outputs to STDERR unusually
     let output = std::process::Command::new(path)
         .arg("-version")
+        .suppress_console()
         .output()
         .context("Failed to run java -version")?;
 

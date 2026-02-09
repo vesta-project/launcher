@@ -79,19 +79,31 @@ pub async fn get_required_java_versions(
 }
 
 #[tauri::command]
-pub fn detect_java() -> Result<Vec<jre_manager::DetectedJava>, String> {
-    Ok(crate::utils::java::scan_system_javas_filtered())
+pub async fn detect_java() -> Result<Vec<jre_manager::DetectedJava>, String> {
+    tokio::task::spawn_blocking(move || {
+        Ok(crate::utils::java::scan_system_javas_filtered())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn get_managed_javas() -> Result<Vec<jre_manager::DetectedJava>, String> {
-    Ok(crate::utils::java::get_managed_javas())
+pub async fn get_managed_javas() -> Result<Vec<jre_manager::DetectedJava>, String> {
+    tokio::task::spawn_blocking(move || {
+        Ok(crate::utils::java::get_managed_javas())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
-pub fn verify_java_path(path_str: String) -> Result<jre_manager::DetectedJava, String> {
+pub async fn verify_java_path(path_str: String) -> Result<jre_manager::DetectedJava, String> {
     let path_buf = std::path::PathBuf::from(path_str);
-    jre_manager::verify_java(&path_buf).map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || {
+        jre_manager::verify_java(&path_buf).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
