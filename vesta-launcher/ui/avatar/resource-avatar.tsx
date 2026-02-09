@@ -9,6 +9,7 @@ import {
 	Show,
 } from "solid-js";
 import { invoke, convertFileSrc } from "@tauri-apps/api/core";
+import { resolveResourceUrl } from "@utils/assets";
 import styles from "./avatar.module.css";
 
 export interface ResourceAvatarProps {
@@ -61,7 +62,7 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 		if (blobUrl()) return blobUrl();
 		if (playerHeadPath()) return playerHeadPath();
 		if (typeof props.icon === "string" && !props.icon.startsWith("linear-gradient")) {
-			return props.icon;
+			return resolveResourceUrl(props.icon);
 		}
 		return null;
 	});

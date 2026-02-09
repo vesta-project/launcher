@@ -1,3 +1,4 @@
+import { resolveResourceUrl } from "@utils/assets";
 import { router } from "@components/page-viewer/page-viewer";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { invoke } from "@tauri-apps/api/core";
@@ -165,7 +166,7 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 			setIconUrl(url);
 			onCleanup(() => URL.revokeObjectURL(url));
 		} else if (props.record?.icon_url) {
-			setIconUrl(props.record.icon_url);
+			setIconUrl(resolveResourceUrl(props.record.icon_url) || null);
 		} else {
 			setIconUrl(null);
 		}
@@ -1809,7 +1810,7 @@ export default function InstanceDetails(
 												"linear-gradient",
 											)
 												? inst().iconPath || ""
-												: `url('${inst().iconPath || DEFAULT_ICONS[0]}')`,
+												: `url('${resolveResourceUrl(inst().iconPath || DEFAULT_ICONS[0])}')`,
 										}}
 									/>
 									<div class={styles["header-content"]}>

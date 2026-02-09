@@ -1,5 +1,6 @@
 // Instance Card component with play/kill button and toast notifications
 
+import { resolveResourceUrl } from "@utils/assets";
 import ErrorIcon from "@assets/error.svg";
 import FabricLogo from "@assets/fabric-logo.svg";
 import ForgeLogo from "@assets/forge-logo.svg";
@@ -417,7 +418,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 								background: props.instance.iconPath!,
 							}
 						: {
-								"background-image": `url('${props.instance.iconPath || DEFAULT_ICONS[0]}')`,
+								"background-image": `url('${resolveResourceUrl(props.instance.iconPath || DEFAULT_ICONS[0])}')`,
 							}
 				}
 				data-instance={instanceSlug}

@@ -33,7 +33,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 				type: "instance" as const,
 				id: slug,
 				label: instance?.name || slug,
-				icon: null, // Could use instance icon path
+				icon: instance?.iconPath || null,
 				platform: null,
 			};
 		}

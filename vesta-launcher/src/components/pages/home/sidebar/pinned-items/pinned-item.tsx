@@ -1,3 +1,4 @@
+import { resolveResourceUrl } from "@utils/assets";
 import { pinning, type PinnedPage, unpinPage } from "@stores/pinning";
 import { instancesState, setLaunching } from "@stores/instances";
 import { SidebarButton } from "../sidebar-buttons/sidebar-buttons";
@@ -168,7 +169,7 @@ export function PinnedItem(props: PinnedItemProps) {
                         <div class={styles["icon-wrapper"]}>
                             <Show when={props.pin.icon_url} fallback={<div class={styles["icon-placeholder"]}>{props.pin.label[0]}</div>}>
 								<div class={styles["icon-bg-blur"]} />
-                                <img src={props.pin.icon_url as string} alt="" class={styles["pin-icon"]} />
+                                <img src={resolveResourceUrl(props.pin.icon_url as string)} alt="" class={styles["pin-icon"]} />
                             </Show>
                             
                             <Show when={isLaunching()}>
