@@ -109,6 +109,7 @@ jobs:
     steps:
       - name: Determine checkout ref
         id: ref
+        shell: bash
         run: |
           if [ "${{ needs.bump-version.result }}" = "success" ]; then
             REF="refs/tags/v${{ needs.bump-version.outputs.new_version }}"
@@ -244,6 +245,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate R2 secrets
+        shell: bash
         run: |
           if [ -z "${{ secrets.R2_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.R2_SECRET_ACCESS_KEY }}" ]; then
             echo "R2 secrets not configured, skipping manifest generation"
@@ -309,6 +311,7 @@ jobs:
       
       - name: Determine version
         id: version
+        shell: bash
         run: |
           if [ "${{ needs.bump-version.result }}" = "success" ]; then
             # Version bump was performed
@@ -327,9 +330,11 @@ jobs:
           path: artifacts/
       
       - name: List downloaded artifacts
+        shell: bash
         run: find artifacts/ -type f -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" | sort
       
       - name: Validate artifacts
+        shell: bash
         run: |
           ARTIFACT_COUNT=$(find artifacts/ -type f \( -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" \) | wc -l)
           if [ "$ARTIFACT_COUNT" -lt 3 ]; then
@@ -341,6 +346,7 @@ jobs:
       
       - name: Generate changelog
         id: changelog
+        shell: bash
         run: |
           # Get the current tag
           CURRENT_TAG="v${{ steps.version.outputs.version }}"
