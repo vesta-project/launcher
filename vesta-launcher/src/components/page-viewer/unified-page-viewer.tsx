@@ -1,6 +1,5 @@
 import BackArrowIcon from "@assets/back-arrow.svg";
 import CloseIcon from "@assets/close.svg";
-import LinkIcon from "@assets/link.svg";
 import OpenIcon from "@assets/open.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import ForwardsArrowIcon from "@assets/right-arrow.svg";
@@ -86,17 +85,6 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 		if (props.onClose) props.onClose();
 	};
 
-	const copyUrl = async () => {
-		const url = props.router.generateUrl();
-		if (!url) return;
-		try {
-			await navigator.clipboard.writeText(url);
-			console.log("URL copied to clipboard:", url);
-		} catch (e) {
-			console.error("Failed to copy URL:", e);
-		}
-	};
-
 	const handleKeyDown = (event: KeyboardEvent) => {
 		if (event.ctrlKey || event.metaKey) {
 			if (event.key === "r") {
@@ -166,14 +154,6 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 							props.router.currentElement().name}
 						{props.titleSuffix && ` - ${props.titleSuffix}`}
 					</span>
-
-					<NavbarButton
-						onClick={copyUrl}
-						text="Copy URL"
-						class={styles["navbar-copy-button"]}
-					>
-						<LinkIcon />
-					</NavbarButton>
 				</div>
 
 				<div class={styles["page-viewer-navbar-right"]}>

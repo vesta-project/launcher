@@ -2,6 +2,7 @@ import EllipsisVIcon from "@assets/ellipsis-v.svg";
 import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
 import DesktopAddIcon from "@assets/desktop-add.svg";
+import LinkIcon from "@assets/link.svg";
 import { router } from "@components/page-viewer/page-viewer";
 import { pinning, isPinned, pinPage, unpinPage } from "@stores/pinning";
 import { instancesState } from "@stores/instances";
@@ -129,6 +130,29 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		}
 	};
 
+	const copyUrl = async () => {
+		const url = activeRouter()?.generateUrl();
+		if (!url) return;
+
+		setIsOpen(false);
+
+		try {
+			await navigator.clipboard.writeText(url);
+			showToast({
+				title: "URL Copied",
+				description: "Page URL copied to clipboard",
+				severity: "Success",
+			});
+		} catch (e) {
+			console.error("Failed to copy URL:", e);
+			showToast({
+				title: "Copy Failed",
+				description: "Failed to copy URL",
+				severity: "Error",
+			});
+		}
+	};
+
 	return (
 		<Show when={pageInfo()}>
 			<Popover open={isOpen()} onOpenChange={setIsOpen}>
@@ -154,6 +178,11 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 						<button class={styles["menu-item"]} onClick={() => handleCreateShortcut(false)}>
 							<DesktopAddIcon />
 							<span>Add Page to Desktop</span>
+						</button>
+						
+						<button class={styles["menu-item"]} onClick={copyUrl}>
+							<LinkIcon />
+							<span>Copy URL</span>
 						</button>
 					</div>
 				</PopoverContent>
