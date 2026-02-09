@@ -1,6 +1,6 @@
 {
 	"productName": "Vesta Launcher",
-	"version": "0.1.0-alpha.1",
+	"version": "0.1.0-alpha.2",
 	"identifier": "net.vesta.launcher",
 	"build": {
 		"beforeDevCommand": "npm run dev",
@@ -14,14 +14,20 @@
 			"csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' https: asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
 			"assetProtocol": {
 				"enable": true,
-				"scope": ["$APPLOCALDATA/**", "$APPCACHE/**", "$APPDATA/.VestaLauncher/**"]
+				"scope": [
+					"$APPLOCALDATA/**",
+					"$APPCACHE/**",
+					"$APPDATA/.VestaLauncher/**"
+				]
 			}
 		}
 	},
 	"plugins": {
 		"deep-link": {
 			"desktop": {
-				"schemes": ["vesta"]
+				"schemes": [
+					"vesta"
+				]
 			}
 		},
 		"updater": {
@@ -34,7 +40,7 @@
 	"bundle": {
 		"windows": {
 			"wix": {
-				"version": "0.1.0.1"
+				"version": "0.1.0.2"
 			}
 		},
 		"shortDescription": "Vesta Launcher",
