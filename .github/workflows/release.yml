@@ -98,7 +98,7 @@ jobs:
           ref: ${{ needs.bump-version.outputs.new_version && format('v{0}', needs.bump-version.outputs.new_version) || github.ref }}
 
       - name: Install dependencies (Linux only)
-        if: matrix.enabled && matrix.platform == 'ubuntu-22.04'
+        if: matrix.enabled && matrix.platform == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
@@ -125,26 +125,30 @@ jobs:
 
       - name: Build Tauri App
         if: matrix.enabled
-        id: tauri
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
-        with:
-          includeRelease: false
-          args: ${{ matrix.args }}
-          projectPath: './vesta-launcher'
+        run: |
+          cd vesta-launcher
+          if [ "${{ matrix.platform }}" == "macos-latest" ]; then
+            bun run tauri build --target ${{ matrix.target }} --bundles dmg
+          elif [ "${{ matrix.platform }}" == "ubuntu-latest" ]; then
+            bun run tauri build --target ${{ matrix.target }} --bundles deb
+          else
+            bun run tauri build --target ${{ matrix.target }}
+          fi
+        shell: bash
 
       - name: Upload to Cloudflare R2
         if: matrix.enabled
+        shell: bash
         run: |
           # Configure AWS for R2
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
           
-          # Upload artifacts
-          aws s3 cp ${{ steps.tauri.outputs.bundlePath }}/ s3://vesta-project/launcher/releases/ --recursive --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
+          # Upload only the specific installer bundles
+          for file in $(find vesta-launcher/src-tauri/target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" \)); do
+            aws s3 cp "$file" s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
+          done
 
   generate-manifest:
     needs: build
@@ -185,7 +189,7 @@ jobs:
                 "signature": ""
               },
               "linux-x86_64": {
-                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/Vesta_Launcher_${VERSION}_amd64.AppImage",
+                "url": "https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com/vesta-project/launcher/releases/vesta-launcher_${VERSION}_amd64.deb",
                 "signature": ""
               }
             }
