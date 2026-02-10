@@ -320,6 +320,10 @@ jobs:
             # Workflow dispatch - use bump-version output
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           fi
+          if [ -z "$VERSION" ]; then
+            echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Generate and upload latest.json
         run: |
@@ -439,6 +443,10 @@ jobs:
             # Workflow dispatch - use bump-version output
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           fi
+          if [ -z "$VERSION" ]; then
+            echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       
       - name: Download all build artifacts
@@ -493,7 +501,7 @@ jobs:
           } >> $GITHUB_OUTPUT
       
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: Vesta Launcher v${{ steps.version.outputs.version }}
@@ -509,6 +517,12 @@ jobs:
             
             ### CDN Distribution
             This release is also available via CDN for auto-updating launchers.
-          files: artifacts/**/*
+          files: |
+            artifacts/**/Vesta_Launcher_*.msi
+            artifacts/**/Vesta_Launcher_*.dmg
+            artifacts/**/vesta-launcher_*.deb
+            artifacts/**/Vesta_Launcher_*.AppImage
+            artifacts/**/Vesta_Launcher_*.tar.gz
+          overwrite: true
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}

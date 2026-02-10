@@ -26,15 +26,56 @@ export const DEFAULT_ICONS = [
 	PlaceholderImage8,
 	PlaceholderImage9,
 	PlaceholderImage10,
-	// "linear-gradient(135deg, #FF6B6B 0%, #EE5D5D 100%)",
-	// "linear-gradient(135deg, #4FACFE 0%, #00F2FE 100%)",
-	// "linear-gradient(135deg, #43E97B 0%, #38F9D7 100%)",
-	// "linear-gradient(135deg, #FA709A 0%, #FEE140 100%)",
-	// "linear-gradient(135deg, #667EEA 0%, #764BA2 100%)",
-	// "linear-gradient(135deg, #F6D365 0%, #FDA085 100%)",
-	// "linear-gradient(135deg, #B721FF 0%, #21D4FD 100%)",
-	// "linear-gradient(135deg, #0BA360 0%, #3CBA92 100%)",
 ];
+
+export const BUILTIN_ICON_PREFIX = "builtin:placeholder-";
+
+/**
+ * Returns a stable identifier for a default launcher icon.
+ * If the path is already a stable ID, returns it.
+ * If the path contains "placeholder-imageX", returns "builtin:placeholder-X".
+ * Otherwise returns the input as-is.
+ */
+export function getStableIconId(path: string | null | undefined): string | null | undefined {
+	if (!path) return path;
+	if (path.startsWith(BUILTIN_ICON_PREFIX)) return path;
+
+	const match = path.match(/placeholder-image(\d+)/i);
+	if (match && match[1]) {
+		const index = parseInt(match[1]);
+		if (index >= 1 && index <= DEFAULT_ICONS.length) {
+			return `${BUILTIN_ICON_PREFIX}${index}`;
+		}
+	}
+
+	return path;
+}
+
+/**
+ * Resolves a stable identifier or a legacy hashed path to the current build's icon URL.
+ * If the path contains "placeholder-imageX" or "placeholder-X",
+ * it returns the corresponding URL from the current DEFAULT_ICONS array.
+ */
+export function resolveBuiltinIcon(path: string): string {
+	const match = path.match(/placeholder-image(\d+)/i) || path.match(/placeholder-(\d+)/i);
+	if (match && match[1]) {
+		const index = parseInt(match[1]);
+		if (index >= 1 && index <= DEFAULT_ICONS.length) {
+			return DEFAULT_ICONS[index - 1];
+		}
+	}
+	return path;
+}
+
+/**
+ * Checks if a given path or ID refers to a default launcher icon.
+ */
+export function isDefaultIcon(path: string | null | undefined): boolean {
+	if (!path) return false;
+	if (path.startsWith(BUILTIN_ICON_PREFIX)) return true;
+	if (DEFAULT_ICONS.includes(path)) return true;
+	return /placeholder-image(\d+)/i.test(path);
+}
 
 // Instance type matching Rust struct
 export interface Instance {

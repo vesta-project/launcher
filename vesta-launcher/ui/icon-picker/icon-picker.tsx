@@ -6,7 +6,8 @@ import {
 } from "@ui/popover/popover";
 import { clsx } from "clsx";
 import { createSignal, For, Show, splitProps } from "solid-js";
-import { DEFAULT_ICONS } from "@utils/instances";
+import { DEFAULT_ICONS, getStableIconId } from "@utils/instances";
+import { resolveResourceUrl } from "@utils/assets";
 import CubeIcon from "@assets/cube.svg";
 import styles from "./icon-picker.module.css";
 import { ClassProp } from "@ui/props";
@@ -18,6 +19,11 @@ import { ClassProp } from "@ui/props";
 export const areIconsEqual = (a?: string | null, b?: string | null) => {
 	if (a === b) return true;
 	if (!a || !b) return false;
+
+	// Normalize builtin icons for comparison
+	const stableA = getStableIconId(a);
+	const stableB = getStableIconId(b);
+	if (stableA === stableB) return true;
 
 	if (a.startsWith("data:image/") && b.startsWith("data:image/")) {
 		const partA = a.split(",")[1];
@@ -85,8 +91,10 @@ export function IconPicker(props: IconPickerProps) {
 	const getIconStyle = (icon?: string | null) => {
 		let target = icon || DEFAULT_ICONS[0];
 		if (target.startsWith("linear-gradient")) return { background: target };
+		
+		const resolved = resolveResourceUrl(target);
 		return {
-			"background-image": `url('${target}')`,
+			"background-image": `url('${resolved}')`,
 			"background-size": "cover",
 			"background-position": "center",
 		};
@@ -204,7 +212,11 @@ export function IconPicker(props: IconPickerProps) {
 								<PopoverCloseButton
 									class={clsx(styles["icon-picker__option"], isSelected && styles["icon-picker__option--selected"])}
 									style={getIconStyle(icon)}
-									onClick={() => { local.onSelect?.(icon); console.log('Icon selected:', icon); }}
+									onClick={() => { 
+										const stableId = getStableIconId(icon);
+										local.onSelect?.(stableId || icon); 
+										console.log('Uploaded Icon selected:', stableId); 
+									}}
 								>
 									<Show when={isSelected}>
 										<svg class={styles["icon-picker__tick"]} width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -227,7 +239,11 @@ export function IconPicker(props: IconPickerProps) {
 								<PopoverCloseButton
 									class={clsx(styles["icon-picker__option"], isSelected && styles["icon-picker__option--selected"])}
 									style={getIconStyle(icon)}
-									onClick={() => { local.onSelect?.(icon); console.log('Icon selected:', icon); }}
+									onClick={() => { 
+										const stableId = getStableIconId(icon);
+										local.onSelect?.(stableId || icon); 
+										console.log('Default Icon selected:', stableId); 
+									}}
 								>
 									<Show when={isSelected}>
 										<svg class={styles["icon-picker__tick"]} width="20" height="20" viewBox="0 0 24 24" fill="none">

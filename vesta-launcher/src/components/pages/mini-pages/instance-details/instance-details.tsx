@@ -81,6 +81,8 @@ import {
 	duplicateInstance,
 	getInstanceBySlug,
 	getMinecraftVersions,
+	getStableIconId,
+	isDefaultIcon,
 	isInstanceRunning,
 	installInstance,
 	killInstance,
@@ -407,7 +409,7 @@ export default function InstanceDetails(
 		// Add current icon if it's not a default, not the original, not the modpack icon, and not already in the list
 		if (
 			current &&
-			!DEFAULT_ICONS.includes(current) &&
+			!isDefaultIcon(current) &&
 			!areIconsEqual(current, originalIcon) &&
 			!areIconsEqual(current, modpackIcon) &&
 			!result.some((icon) => areIconsEqual(icon, current))
@@ -417,7 +419,7 @@ export default function InstanceDetails(
 		}
 
 		// Always add modpack icon first if it exists (regardless of session filtering)
-		if (modpackIcon && !DEFAULT_ICONS.includes(modpackIcon)) {
+		if (modpackIcon && !isDefaultIcon(modpackIcon)) {
 			// Remove any existing instances (using robust comparison)
 			result = result.filter((icon) => !areIconsEqual(icon, modpackIcon));
 			// Add at the beginning
@@ -471,7 +473,7 @@ export default function InstanceDetails(
 				current &&
 				!areIconsEqual(current, modpackIcon) &&
 				current.startsWith("data:image/") &&
-				!DEFAULT_ICONS.includes(current)
+				!isDefaultIcon(current)
 			) {
 				// This branch is rarely hit now due to areIconsEqual being used above, 
 				// but we keep it for extra safety in case of partial matches.
@@ -487,7 +489,7 @@ export default function InstanceDetails(
 			// Add current icon if it's not a default, not the modpack icon, not equivalent to modpack icon, and not already in the filtered list
 			if (
 				current &&
-				!DEFAULT_ICONS.includes(current) &&
+				!isDefaultIcon(current) &&
 				!areIconsEqual(current, modpackIcon) &&
 				!currentIsModpackEquivalent &&
 				!filtered.some((icon) => areIconsEqual(icon, current))
@@ -2068,7 +2070,7 @@ export default function InstanceDetails(
 									const i = inst();
 									if (!i) return;
 									setName(i.name);
-									setIconPath(i.iconPath || DEFAULT_ICONS[0]);
+									setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
 									setMinMemory([i.minMemory]);
 									setMaxMemory([i.maxMemory]);
 									setJavaArgs(i.javaArgs || "");

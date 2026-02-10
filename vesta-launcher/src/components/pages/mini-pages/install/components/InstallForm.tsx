@@ -40,6 +40,8 @@ import {
 	DEFAULT_ICONS,
 	GameVersionMetadata,
 	getMinecraftVersions,
+	getStableIconId,
+	isDefaultIcon,
 	Instance,
 	LoaderVersionInfo,
 	PistonMetadata,
@@ -128,7 +130,7 @@ export function InstallForm(props: InstallFormProps) {
 		props.initialData?.name || props.initialName || "",
 	);
 	const [icon, setIcon] = createSignal<string | null>(
-		props.initialData?.iconPath || props.initialIcon || DEFAULT_ICONS[0],
+		props.initialData?.iconPath || props.initialIcon || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0],
 	);
 	const [mcVersion, setMcVersion] = createSignal(
 		props.initialData?.minecraftVersion || props.initialVersion || "",
@@ -154,7 +156,7 @@ export function InstallForm(props: InstallFormProps) {
 	createEffect(() => {
 		props.onStateChange?.({
 			name: name(),
-			iconPath: icon() || DEFAULT_ICONS[0],
+			iconPath: icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0],
 			minecraftVersion: mcVersion(),
 			modloader: loader(),
 			modloaderVersion: loaderVer(),
@@ -234,7 +236,7 @@ export function InstallForm(props: InstallFormProps) {
 		const current = icon();
 		if (
 			current &&
-			!DEFAULT_ICONS.includes(current) &&
+			!isDefaultIcon(current) &&
 			current !== props.initialIcon &&
 			!result.includes(current)
 		) {
@@ -248,7 +250,7 @@ export function InstallForm(props: InstallFormProps) {
 		const current = icon();
 		if (
 			current &&
-			!DEFAULT_ICONS.includes(current) &&
+			!isDefaultIcon(current) &&
 			current !== props.initialIcon
 		) {
 			setCustomIconsThisSession((prev) => {
@@ -478,7 +480,7 @@ export function InstallForm(props: InstallFormProps) {
 			loader: loader(),
 			loaderVer: loaderVer(),
 		});
-		const effectiveIcon = icon() || DEFAULT_ICONS[0];
+		const effectiveIcon = icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0];
 		const data: Partial<Instance> = {
 			name: name(),
 			iconPath: effectiveIcon,

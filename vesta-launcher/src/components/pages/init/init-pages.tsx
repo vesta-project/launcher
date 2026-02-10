@@ -59,7 +59,9 @@ import {
 	createInstance,
 	DEFAULT_ICONS,
 	getMinecraftVersions,
+	getStableIconId,
 	installInstance,
+	isDefaultIcon,
 	type CreateInstanceData,
 	type Instance,
 	type PistonMetadata,
@@ -519,7 +521,7 @@ function InitInstallationPage(props: InitPagesProps) {
 		const current = iconPath();
 		if (
 			current &&
-			!DEFAULT_ICONS.includes(current) &&
+			!isDefaultIcon(current) &&
 			!result.includes(current)
 		) {
 			return [current, ...result];
@@ -530,7 +532,7 @@ function InitInstallationPage(props: InitPagesProps) {
 	// Track custom icons in session list
 	createEffect(() => {
 		const current = iconPath();
-		if (current && !DEFAULT_ICONS.includes(current)) {
+		if (current && !isDefaultIcon(current)) {
 			setCustomIconsThisSession((prev) => {
 				if (prev.includes(current)) return prev;
 				return [current, ...prev];
@@ -698,7 +700,7 @@ function InitInstallationPage(props: InitPagesProps) {
 				>
 					<div style={{ flex: "0 0 auto" }}>
 						<IconPicker
-							value={iconPath() || DEFAULT_ICONS[0]}
+							value={iconPath() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]}
 							onSelect={setIconPath}
 							uploadedIcons={uploadedIcons()}
 							showHint={true}
