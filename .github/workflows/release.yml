@@ -254,10 +254,8 @@ jobs:
         with:
           name: build-artifacts-${{ matrix.name }}
           path: |
-            target/${{ matrix.target }}/release/bundle/*.msi
-            target/${{ matrix.target }}/release/bundle/*.dmg
-            target/${{ matrix.target }}/release/bundle/*.deb
-            target/${{ matrix.target }}/release/bundle/*.AppImage
+            target/${{ matrix.target }}/release/bundle/**/*
+          if-no-files-found: warn
 
   generate-manifest:
     needs: build
