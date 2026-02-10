@@ -138,8 +138,16 @@ jobs:
           node-version: lts/*
 
       - name: Setup Bun
-        if: matrix.enabled
+        if: matrix.enabled && matrix.platform != 'windows-11-arm'
         uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Bun (Windows ARM64 - Node.js fallback)
+        if: matrix.enabled && matrix.platform == 'windows-11-arm'
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
 
       - name: Setup Rust
         if: matrix.enabled
@@ -159,7 +167,12 @@ jobs:
 
       - name: Install frontend dependencies
         if: matrix.enabled
-        run: bun install
+        run: |
+          if [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
+            npm install
+          else
+            bun install
+          fi
 
       - name: Build Tauri App
         if: matrix.enabled
@@ -174,6 +187,8 @@ jobs:
             else
               bun run tauri build --target ${{ matrix.target }} --bundles deb
             fi
+          elif [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
+            npm run tauri build --target ${{ matrix.target }}
           else
             bun run tauri build --target ${{ matrix.target }}
           fi
