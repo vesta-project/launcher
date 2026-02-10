@@ -507,7 +507,7 @@ jobs:
           fi
           
           # Use a unique delimiter for multiline output
-          DELIMITER=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64 | tr -dc 'a-zA-Z0-9')
+          DELIMITER="CHANGELOG_DELIMITER_$(date +%s%N)"
           echo "changelog<<${DELIMITER}" >> $GITHUB_OUTPUT
           cat changelog.md >> $GITHUB_OUTPUT
           echo "${DELIMITER}" >> $GITHUB_OUTPUT
@@ -525,7 +525,7 @@ jobs:
             ### Downloads
             All platform installers are attached to this release as assets.
             
-            ${{ steps.changelog.outputs.changelog }}
+            ${{ steps.generate-changelog.outputs.changelog }}
             
             ### CDN Distribution
             This release is also available via CDN for auto-updating launchers.
