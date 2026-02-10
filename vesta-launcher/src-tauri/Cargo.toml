@@ -53,6 +53,7 @@ directories = "6.0.0"
 version-compare = "0.2.0"
 open = "5.3.1"
 urlencoding = "2.1"
+url = "2.5"
 which = "8.0.0"
 sysinfo = "0.38.0"
 reqwest = { version = "0.11", features = ["json", "stream"] }

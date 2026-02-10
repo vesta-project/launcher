@@ -33,6 +33,9 @@ import { initializeInstances, setupInstanceListeners } from "@stores/instances";
 import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
 import { cleanupDialogSystem, initializeDialogSystem, dialogStore } from "@stores/dialog-store";
+import { showToast } from "@ui/toast/toast";
+import { getActiveAccount, ACCOUNT_TYPE_GUEST } from "@utils/auth";
+import { setPageViewerOpen, router } from "@components/page-viewer/page-viewer";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -45,50 +48,88 @@ export interface ExitCheckResponse {
 }
 
 /**
- * Handles deep-link URLs like vesta://instance?slug=my-instance
- * Parses the URL and navigates to the appropriate page
+ * Handles deep-link URLs like vesta://install?projectId=X&platform=Y
+ * Parses the URL via Rust backend and navigates if initialized and authenticated
  */
-function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
+async function handleDeepLink(
+	url: string,
+	navigate: ReturnType<typeof useNavigate>,
+) {
 	try {
-		// Parse URL: vesta://path/segment?param1=value1
-		const urlObj = new URL(url);
-		const action = urlObj.hostname; // e.g. "open-instance"
-		const segments = urlObj.pathname.split("/").filter(Boolean); // e.g. ["slug"]
+		// 1. Check if app is initialized
+		const config = await invoke<any>("get_config");
+		if (!config || !config.setup_completed) {
+			showToast({
+				title: "Setup Required",
+				description:
+					"Please complete the onboarding process before using 'Open in Vesta'.",
+				severity: "Error",
+				duration: 5000,
+			});
+			return;
+		}
 
-		console.log("Deep link parsed:", {
-			action,
-			segments,
-			params: Object.fromEntries(urlObj.searchParams),
-		});
+		// 2. Check if authenticated
+		const account = await getActiveAccount();
+		if (
+			!account ||
+			account.account_type === ACCOUNT_TYPE_GUEST ||
+			account.is_expired
+		) {
+			showToast({
+				title: "Authentication Required",
+				description:
+					"Please sign in to a valid account to use 'Open in Vesta'.",
+				severity: "Error",
+				duration: 5000,
+			});
+			return;
+		}
 
-		const params = new URLSearchParams();
-		
-		// Map actions to mini-router paths
-		if (action === "open-instance" || action === "launch-instance") {
-			params.set("path", "/instance");
-			if (segments[0]) params.set("slug", segments[0]);
-			if (action === "launch-instance") params.set("autoLaunch", "true");
-		} else if (action === "open-resource") {
-			params.set("path", "/resource-details");
-			if (segments[0]) params.set("platform", segments[0]);
-			if (segments[1]) params.set("projectId", segments[1]);
-		} else if (action === "instance") {
-			// Legacy/Compatibility: vesta://instance?slug=xxx
-			params.set("path", "/instance");
-			const slug = urlObj.searchParams.get("slug") || segments[0];
-			if (slug) params.set("slug", slug);
+		// 3. Parse URL via backend
+		const metadata = await invoke<{
+			target: string;
+			params: Record<string, string>;
+		}>("parse_vesta_url", { url });
+
+		console.log("Deep link parsed via Rust:", metadata);
+
+		// Map targets to mini-router paths
+		let path = "";
+		switch (metadata.target) {
+			case "install":
+				path = "/install";
+				break;
+			case "resource-details":
+				path = "/resource-details";
+				break;
+			default:
+				console.warn("Unknown deep link target:", metadata.target);
+				path = "/config"; // Fallback
+		}
+
+		// Always use the integrated PageViewer in the main window
+		const mini_router = router();
+		if (mini_router) {
+			mini_router.navigate(path, metadata.params);
+			setPageViewerOpen(true);
 		} else {
-			params.set("path", action);
+			// If router isn't ready, show error - no standalone fallback
+			showToast({
+				title: "App Not Ready",
+				description: "Please wait for the app to fully load before using 'Open in Vesta'.",
+				severity: "Error",
+				duration: 5000,
+			});
 		}
-
-		// Add all remaining query parameters
-		for (const [key, value] of urlObj.searchParams) {
-			if (!params.has(key)) params.set(key, value);
-		}
-
-		navigate(`/standalone?${params.toString()}`);
 	} catch (error) {
 		console.error("Failed to parse deep link:", url, error);
+		showToast({
+			title: "Invalid Link",
+			description: "The Vesta link you clicked is invalid or unsupported.",
+			severity: "Error",
+			duration: 5000,
+		});
 	}
 }
 
@@ -268,7 +309,7 @@ function Root(props: ChildrenProp) {
 			// Handle the first URL in the array
 			if (urls && urls.length > 0) {
 				const url = urls[0];
-				handleDeepLink(url, navigate);
+				void handleDeepLink(url, navigate);
 			}
 		})
 			.then((u) => { unlistenDeepLink = u; })
@@ -341,7 +382,7 @@ function Root(props: ChildrenProp) {
 				for (let i = 0; i < args.length; i++) {
 					const arg = args[i];
 					if (arg.startsWith("vesta://")) {
-						handleDeepLink(arg, navigate);
+						await handleDeepLink(arg, navigate);
 						continue;
 					}
 

@@ -321,3 +321,74 @@ pub struct TraySettings {
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
 }
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[serde(rename_all = "kebab-case")]
+pub enum DeepLinkTarget {
+    Install,
+    ResourceDetails,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug)]
+pub struct DeepLinkMetadata {
+    pub target: DeepLinkTarget,
+    pub params: std::collections::HashMap<String, String>,
+}
+
+#[tauri::command]
+pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
+    use url::Url;
+    let parsed_url = Url::parse(&url).map_err(|e| format!("Invalid URL: {}", e))?;
+
+    if parsed_url.scheme() != "vesta" {
+        return Err("Invalid protocol".to_string());
+    }
+
+    let action = parsed_url.host_str().unwrap_or("");
+    let mut params = std::collections::HashMap::new();
+
+    // Collect query parameters
+    for (key, value) in parsed_url.query_pairs() {
+        params.insert(key.into_owned(), value.into_owned());
+    }
+
+    // Capture segments from path if any
+    let segments: Vec<&str> = parsed_url
+        .path_segments()
+        .map(|s| s.filter(|segment| !segment.is_empty()).collect())
+        .unwrap_or_default();
+
+    match action {
+        "install" => {
+            Ok(DeepLinkMetadata {
+                target: DeepLinkTarget::Install,
+                params,
+            })
+        }
+        "standalone" => {
+            let resource_type = params.get("type").map(|s| s.as_str()).unwrap_or("");
+            if resource_type == "modpack" {
+                Ok(DeepLinkMetadata {
+                    target: DeepLinkTarget::Install,
+                    params,
+                })
+            } else {
+                Ok(DeepLinkMetadata {
+                    target: DeepLinkTarget::ResourceDetails,
+                    params,
+                })
+            }
+        }
+        "open-resource" => {
+            if segments.len() >= 2 {
+                params.insert("platform".to_string(), segments[0].to_string());
+                params.insert("projectId".to_string(), segments[1].to_string());
+            }
+            Ok(DeepLinkMetadata {
+                target: DeepLinkTarget::ResourceDetails,
+                params,
+            })
+        }
+        _ => Err(format!("Unknown action: {}", action)),
+    }
+}

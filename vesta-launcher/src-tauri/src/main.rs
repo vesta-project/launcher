@@ -95,6 +95,7 @@ fn main() {
             commands::app::set_tray_icon_visibility,
             commands::app::set_minimize_to_tray,
             commands::app::show_window_from_tray,
+            commands::app::parse_vesta_url,
             utils::db::get_db_status,
             utils::file_drop::create_file_drop_overlay,
             utils::file_drop::position_overlay,
