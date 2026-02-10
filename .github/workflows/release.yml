@@ -169,6 +169,7 @@ jobs:
         if: matrix.enabled
         shell: bash
         run: |
+          cd vesta-launcher
           if [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
             npm install
           else

@@ -8,7 +8,7 @@
 		"dev": "vite",
 		"vesta:dev": "vite",
 		"build": "vite build",
-		"version:bump": "bun ../scripts/bump-version.ts",
+		"version:bump": "tsx ../scripts/bump-version.ts",
 		"serve": "vite preview",
 		"tauri": "tauri",
 		"test": "vitest"
@@ -43,6 +43,7 @@
 		"stylelint": "^17.1.0",
 		"stylelint-config-standard": "^40.0.0",
 		"stylelint-selector-bem-pattern": "^4.0.1",
+		"tsx": "^4.7.0",
 		"typescript": "^5.9.3",
 		"vite": "^7.3.1",
 		"vite-plugin-solid": "^2.11.10",
