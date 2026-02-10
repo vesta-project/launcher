@@ -307,9 +307,23 @@ jobs:
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          # Check if this is a tag push or workflow dispatch
+          if [ "${{ github.event_name }}" = "push" ]; then
+            # Tag push - extract version from tag
+            VERSION="${{ github.ref_name }}"
+            VERSION="${VERSION#v}"
+          else
+            # Workflow dispatch - use bump-version output
+            VERSION="${{ needs.bump-version.outputs.new_version }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Generate and upload latest.json
         run: |
-          VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+          VERSION=${{ steps.version.outputs.version }}
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           NOTES="Automatic release"
           
