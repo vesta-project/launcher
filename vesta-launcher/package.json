@@ -28,7 +28,8 @@
 		"@tauri-controls/solid": "^0.4.0",
 		"driver.js": "^1.4.0",
 		"marked": "^17.0.1",
-		"solid-js": "^1.9.11"
+		"solid-js": "^1.9.11",
+		"tailwind-merge": "^2.5.4"
 	},
 	"devDependencies": {
 		"@csstools/postcss-contrast-color-function": "^3.0.1",
