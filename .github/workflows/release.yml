@@ -190,7 +190,7 @@ jobs:
               bun run tauri build --target ${{ matrix.target }} --bundles deb
             fi
           elif [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
-            npm run tauri build --target ${{ matrix.target }}
+            npx tauri build --target ${{ matrix.target }}
           else
             bun run tauri build --target ${{ matrix.target }}
           fi

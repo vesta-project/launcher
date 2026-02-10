@@ -1,128 +1,171 @@
-# Quick Reference: Vesta Database System
+# Quick Reference: Vesta Database System (Diesel)
 
 ## 🚀 Quick Start: Add a New Table
 
+```bash
+# 1. Generate migration
+cd vesta-launcher/src-tauri
+diesel migration generate create_your_table --migration-dir migrations/vesta
+```
+
+```sql
+-- 2. Edit up.sql
+CREATE TABLE your_table (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT 1,
+    optional_field TEXT
+);
+
+-- 3. Edit down.sql
+DROP TABLE your_table;
+```
+
 ```rust
-// 1. Define struct with SqlTable
-#[derive(Serialize, Deserialize, Debug, Clone, SqlTable)]
-#[migration_version("0.X.0")]
-#[migration_description("Your table description")]
+// 4. Run migration and update schema.rs
+diesel migration run --migration-dir migrations/vesta
+```
+
+```rust
+// 5. Define models in src/models/your_table.rs
+use diesel::prelude::*;
+use crate::schema::your_table;
+
+#[derive(Queryable, Identifiable, Debug)]
+#[diesel(table_name = your_table)]
 pub struct YourTable {
-    #[primary_key]
-    #[autoincrement]
-    id: AUTOINCREMENT,
-    name: String,
-    is_active: bool,
-    optional_field: Option<String>,
+    pub id: i32,
+    pub name: String,
+    pub is_active: bool,
+    pub optional_field: Option<String>,
 }
 
-// 2. Add migration in definitions.rs
-fn migration_00X_your_table() -> Migration {
-    let schema_sql = YourTable::schema_sql();
-    Migration {
-        version: YourTable::migration_version(),
-        description: YourTable::migration_description(),
-        up_sql: vec![schema_sql],
-        down_sql: vec![format!("DROP TABLE IF EXISTS {}", YourTable::name())],
-    }
-}
-
-// 3. Add to get_all_migrations()
-pub fn get_all_migrations() -> Vec<Migration> {
-    vec![
-        // ... existing migrations ...
-        migration_00X_your_table(),
-    ]
+#[derive(Insertable)]
+#[diesel(table_name = your_table)]
+pub struct NewYourTable<'a> {
+    pub name: &'a str,
+    pub is_active: bool,
+    pub optional_field: Option<&'a str>,
 }
 ```
 
 ## 📝 CRUD Operations Cheat Sheet
 
 ```rust
-// CREATE
-let item = MyStruct::new(...);
-db.insert_data_serde(&item)?;
+use diesel::prelude::*;
+use crate::models::your_table::{YourTable, NewYourTable};
+use crate::schema::your_table;
 
-// READ (by column)
-let items: Vec<MyStruct> = db.search_data_serde::<MyStruct, i32, MyStruct>(
-    SQLiteSelect::ALL,
-    "column_name",
-    search_value
-)?;
+// CREATE
+let new_item = NewYourTable {
+    name: "example",
+    is_active: true,
+    optional_field: None,
+};
+let conn = &mut get_vesta_conn()?;
+diesel::insert_into(your_table::table)
+    .values(&new_item)
+    .execute(conn)?;
+
+// READ (by ID)
+let item = your_table::table.find(item_id).first::<YourTable>(conn)?;
 
 // READ (all)
-let all: Vec<MyStruct> = db.get_all_data_serde::<MyStruct, MyStruct>()?;
+let items = your_table::table.load::<YourTable>(conn)?;
+
+// READ (filtered)
+let active_items = your_table::table
+    .filter(your_table::is_active.eq(true))
+    .load::<YourTable>(conn)?;
 
 // UPDATE
-let mut item = items[0].clone();
-item.field = new_value;
-db.update_data_serde(&item, "id", item.id)?;
+diesel::update(your_table::table.find(item_id))
+    .set(your_table::name.eq("new name"))
+    .execute(conn)?;
+
+// DELETE
+diesel::delete(your_table::table.find(item_id)).execute(conn)?;
 ```
 
-## 🏷️ Attributes Quick Reference
+## 🏷️ Diesel Derive Attributes
 
-### Struct Attributes
+### Queryable (for reading)
 ```rust
-#[migration_version("0.X.0")]         // Required: schema version
-#[migration_description("Description")] // Required: what this table does
+#[derive(Queryable, Identifiable, Debug)]
+#[diesel(table_name = your_table)]
+pub struct YourTable {
+    // fields...
+}
 ```
 
-### Field Attributes
+### Insertable (for creating)
 ```rust
-#[primary_key]      // Make this the primary key
-#[autoincrement]    // Auto-increment (requires AUTOINCREMENT type)
-#[unique]          // Add UNIQUE constraint
-#[not_null]        // Add NOT NULL constraint
+#[derive(Insertable)]
+#[diesel(table_name = your_table)]
+pub struct NewYourTable<'a> {
+    // fields without id...
+}
+```
+
+### AsChangeset (for updating)
+```rust
+#[derive(AsChangeset)]
+#[diesel(table_name = your_table)]
+pub struct UpdateYourTable<'a> {
+    pub name: Option<&'a str>,
+    pub is_active: Option<bool>,
+}
 ```
 
 ## 📊 Type Mapping
 
-| Rust | SQLite | Notes |
-|------|--------|-------|
-| `i32`, `i64` | `INTEGER` | - |
-| `String` | `TEXT` | - |
-| `bool` | `INTEGER` | Auto-converts 0/1 |
-| `Option<T>` | `T` | NULL when None |
-| `AUTOINCREMENT` | `INTEGER` | For auto-increment IDs |
+| Rust | Diesel Type | SQLite |
+|------|-------------|--------|
+| `i32` | `Integer` | INTEGER |
+| `i64` | `BigInt` | INTEGER |
+| `String` | `Text` | TEXT |
+| `bool` | `Bool` | BOOLEAN |
+| `Option<T>` | `Nullable<T>` | NULLABLE |
+| `Vec<u8>` | `Binary` | BLOB |
+| `chrono::NaiveDateTime` | `Timestamp` | TIMESTAMP |
 
 ## 🔄 Adding Fields (Migration Pattern)
 
+```bash
+# 1. Generate migration
+diesel migration generate add_field_to_your_table --migration-dir migrations/vesta
+```
+
+```sql
+-- up.sql
+ALTER TABLE your_table ADD COLUMN new_field TEXT DEFAULT 'default_value';
+```
+
+```sql
+-- down.sql
+ALTER TABLE your_table DROP COLUMN new_field;
+```
+
 ```rust
-// 1. Add field to struct
-pub struct AppConfig {
-    // ... existing ...
-    pub new_field: bool,  // ← Add here
-}
-
-// 2. Update Default::new()
-Self::new(
-    // ... existing ...
-    true,  // ← Add default
-)
-
-// 3. Create ALTER TABLE migration
-fn migration_00X_add_field() -> Migration {
-    create_migration(
-        "0.X.0",
-        "Add new_field to app_config",
-        vec!["ALTER TABLE app_config ADD COLUMN new_field INTEGER DEFAULT 1"],
-        vec!["ALTER TABLE app_config DROP COLUMN new_field"],
-    )
+// 2. Update model struct
+#[derive(Queryable, Identifiable, Debug)]
+#[diesel(table_name = your_table)]
+pub struct YourTable {
+    // ... existing fields ...
+    pub new_field: String,  // Add here
 }
 ```
 
-## ⚙️ Database Initialization
+## ⚙️ Database Connections
 
 ```rust
-// In main.rs setup hook:
-use crate::utils::config::initialize_config_db;
+// Main database
+use crate::utils::db::get_vesta_conn;
+let conn = &mut get_vesta_conn()?;
 
-tauri::Builder::default()
-    .setup(|app| {
-        // Initialize database with migrations
-        initialize_config_db()?;
-        Ok(())
-    })
+// Config database
+use crate::utils::db::get_config_conn;
+let conn = &mut get_config_conn()?;
 ```
 
 ## 🧪 Testing
@@ -132,7 +175,7 @@ tauri::Builder::default()
 cargo test
 
 # Run specific test
-cargo test config
+cargo test your_table
 
 # Build and check
 cargo build
@@ -140,30 +183,30 @@ cargo build
 
 ## 📋 Migration Checklist
 
-- [ ] Increment version number (0.X.0)
-- [ ] Add migration function
-- [ ] Add to `get_all_migrations()`
+- [ ] Generate migration with `diesel migration generate`
+- [ ] Edit `up.sql` and `down.sql`
+- [ ] Run `diesel migration run`
+- [ ] Update model structs
 - [ ] Test with `cargo test`
-- [ ] Update Default impl if needed
-- [ ] Document changes
+- [ ] Update queries if needed
 
 ## 🚨 Common Pitfalls
 
 ❌ **Don't:**
-- Edit old migrations
-- Skip version numbers
-- Forget to add to `get_all_migrations()`
-- Use `bool` without knowing it becomes INTEGER
+- Edit existing migration files
+- Forget to run migrations after editing
+- Use wrong table name in `#[diesel(table_name = ...)]`
+- Mix up main vs config database
 
 ✅ **Do:**
-- Create new migrations for changes
-- Use sequential version numbers
-- Test before deploying
-- Provide rollback SQL
+- Use `diesel migration run` to apply changes
+- Test migrations with `diesel migration revert`
+- Keep model structs in sync with schema
+- Use proper Diesel derives
 
 ## 📚 Examples
 
 Full examples in codebase:
-- `src/utils/config/mod.rs` - AppConfig
-- `src/utils/sqlite.rs` - CustomTableStruct test
-- `src/utils/migrations/definitions.rs` - All migrations
+- `src-tauri/src/schema.rs` - Table definitions
+- `src-tauri/src/models/` - Model structs
+- `src-tauri/migrations/` - Migration files

@@ -1,31 +1,41 @@
 # Developer Guide
 
-This document covers typical developer workflows, code conventions and where to make common changes.
+This document covers typical developer workflows, code conventions, and where to make common changes.
 
-Workflows
-- Start development server (frontend + backend):
-
+## Workflows
+- **Start Development Server (Frontend + Backend):**
+  ```
   bun run vesta:dev
+  ```
+  (Runs Tauri + Vite from the root directory.)
 
-- Run backend unit tests:
+- **Frontend Only:**
+  ```
+  cd vesta-launcher
+  bun run dev
+  ```
 
+- **Run Backend Unit Tests:**
+  ```
   cargo test -p piston-lib --lib
+  ```
 
-- Build backend for release:
-
-  cd src-tauri
+- **Build Backend for Release:**
+  ```
+  cd vesta-launcher/src-tauri
   cargo build --release
+  ```
 
-Key places to change
-- Database schemas: Modify Rust structs with `#[derive(SqlTable)]` and add a migration in `src-tauri/src/utils/migrations/definitions.rs`.
-- Installer logic: `crates/piston-lib/src/game/installer/` (loader-specific logic and shared helpers).
-- Frontend components/styles: `vesta-launcher/src/`
+## Key Places to Change
+- **Database Schemas:** Generate Diesel migrations in `src-tauri/migrations/vesta` or `src-tauri/migrations/config`, then update models in `src-tauri/src/models` or `utils/config`.
+- **Installer Logic:** `crates/piston-lib/src/game/installer/` (loader-specific logic and shared helpers).
+- **Frontend Components/Styles:** `vesta-launcher/src/`
 
-Coding conventions & notes
+## Coding Conventions & Notes
 - Prefer `anyhow::Result` for fallible functions in the backend.
 - Tasks report progress via the `NotificationManager`. Use `client_key` to update existing notifications.
-- When changing the installer model (e.g., altering where files are extracted), add unit tests in `crates/piston-lib/tests` or the matching module tests in `src/`.
+- When changing the installer model (e.g., altering where files are extracted), add unit tests in `crates/piston-lib/tests` or matching module tests.
 
-Troubleshooting
-- Environment dependent tests: ensure Java is installed and PATH entries are correct.
-- File not found in processors: processors often expect resources under `data/` — the installer extracts `data/*` entries into the instance `data_dir`.
+## Troubleshooting
+- **Environment Dependent Tests:** Ensure Java is installed and PATH entries are correct.
+- **File Not Found in Processors:** Processors often expect resources under `data/` — the installer extracts `data/*` entries into the instance `data_dir`.

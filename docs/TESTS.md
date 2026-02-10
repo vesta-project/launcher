@@ -61,7 +61,7 @@ CI and automation
 References in code
 - Installer logic & tests: `crates/piston-lib/src/game/installer/` and `crates/piston-lib/tests/`.
 - Processor invocation tests: `crates/piston-lib/src/game/installer/forge_processor.rs` and related unit tests that assert argument normalization and file extraction.
-- Migration and DB tests: `src-tauri/src/utils/migrations/` and `crates/piston-macros/` tests for `SqlTable` derive behavior.
+- Migration and DB tests: `src-tauri/migrations/` and Diesel model tests in `src-tauri/src/models/`.
 
 If you want, I can also:
 - Generate a machine-readable list of all test names in the workspace (requires running `cargo test -- --list` or parsing `cargo metadata`).

@@ -2,346 +2,247 @@
 
 ## Overview
 
-The Vesta project uses a **SqlTable-based** system where Rust structs are the single source of truth for database schemas. This eliminates duplication and ensures type safety.
+The Vesta project uses **Diesel ORM** for database interactions with SQLite. Schemas are defined in `src-tauri/src/schema.rs`, models in `src-tauri/src/models` and `utils/config`, and migrations are managed via Diesel CLI in `src-tauri/migrations/vesta` and `src-tauri/migrations/config`.
 
 ## Current System Architecture
 
-### 1. **SqlTable Trait** (Single Source of Truth)
+### 1. **Schema Definition** (Single Source of Truth)
 
-Every database table is defined as a Rust struct with `#[derive(SqlTable)]`:
+Database tables are defined in `src-tauri/src/schema.rs` using Diesel's `table!` macro:
 
 ```rust
-#[derive(Serialize, Deserialize, Debug, SqlTable)]
-#[migration_version("0.5.0")]           // ← Schema version
-#[migration_description("User settings")] // ← What this table is for
-pub struct UserSettings {
-    #[primary_key]
-    pub id: i32,
-    pub theme: String,
-    pub dark_mode: bool,                // ← Bool auto-converts to INTEGER
-    pub custom_path: Option<String>,    // ← Option types fully supported
+table! {
+    users (id) {
+        id -> Integer,
+        username -> Text,
+        email -> Nullable<Text>,
+        created_at -> Timestamp,
+    }
 }
 ```
 
-**What you get automatically:**
-- ✅ CREATE TABLE SQL generation
-- ✅ INSERT/UPDATE/SELECT methods
-- ✅ Type-safe CRUD operations
-- ✅ Migration metadata
-- ✅ No manual SQL writing needed
+### 2. **Models**
 
-### 2. **Migration System** (Version Tracking)
+Models are defined in `src-tauri/src/models` using Diesel's derive macros:
 
-Migrations are stored in `src/utils/migrations/definitions.rs` and run automatically on app startup.
+```rust
+use diesel::prelude::*;
+use crate::schema::users;
 
-**Current migrations:**
-- `0.1.0` - Initial schema (migration tracking table)
-- `0.2.0` - App configuration (uses SqlTable)
-- `0.3.0` - Instances table (old style - needs conversion)
-- `0.4.0` - Accounts table (old style - needs conversion)
+#[derive(Queryable, Identifiable, Debug)]
+#[diesel(table_name = users)]
+pub struct User {
+    pub id: i32,
+    pub username: String,
+    pub email: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+}
+
+#[derive(Insertable)]
+#[diesel(table_name = users)]
+pub struct NewUser<'a> {
+    pub username: &'a str,
+    pub email: Option<&'a str>,
+}
+```
+
+### 3. **Migration System**
+
+Migrations are created using Diesel CLI and stored in `src-tauri/migrations/vesta` (for main data) and `src-tauri/migrations/config` (for app config).
+
+**Commands:**
+- Generate migration: `diesel migration generate <name> --migration-dir migrations/vesta`
+- Run migrations: Automatic on app startup via `utils::db::run_migrations`.
 
 ## How To: Common Tasks
 
 ### ✅ Add a New Table
 
-**Step 1: Define the struct**
+**Step 1: Generate Migration**
 
-Create your struct in the appropriate module (e.g., `src/models/user_prefs.rs`):
+```bash
+cd vesta-launcher/src-tauri
+diesel migration generate create_users_table --migration-dir migrations/vesta
+```
+
+**Step 2: Edit Migration Files**
+
+In `migrations/vesta/<timestamp>_create_users_table/up.sql`:
+
+```sql
+CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+In `down.sql`:
+
+```sql
+DROP TABLE users;
+```
+
+**Step 3: Update Schema**
+
+Run the migration to update `src-tauri/src/schema.rs`:
+
+```bash
+diesel migration run --migration-dir migrations/vesta
+```
+
+**Step 4: Define Models**
+
+In `src-tauri/src/models/users.rs`:
 
 ```rust
-use serde::{Deserialize, Serialize};
-use piston_macros::SqlTable;
-use crate::utils::sqlite::AUTOINCREMENT;
+use diesel::prelude::*;
+use crate::schema::users;
 
-#[derive(Serialize, Deserialize, Debug, Clone, SqlTable)]
-#[migration_version("0.5.0")]  // ← Increment from last migration
-#[migration_description("User preferences table")]
-pub struct UserPreferences {
-    #[primary_key]
-    #[autoincrement]
-    id: AUTOINCREMENT,
-    
-    user_id: i32,
-    
-    #[unique]
-    setting_key: String,
-    
-    setting_value: String,
-    
-    #[not_null]
-    category: String,
+#[derive(Queryable, Identifiable, Debug)]
+#[diesel(table_name = users)]
+pub struct User {
+    pub id: i32,
+    pub username: String,
+    pub email: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
 }
 
-// Optional: Provide default data
-impl UserPreferences {
-    pub fn get_default_data_sql() -> Vec<String> {
-        vec![
-            format!(
-                "INSERT INTO {} (user_id, setting_key, setting_value, category) \
-                 VALUES (1, 'theme', 'dark', 'appearance')",
-                Self::name()
-            )
-        ]
-    }
+#[derive(Insertable)]
+#[diesel(table_name = users)]
+pub struct NewUser<'a> {
+    pub username: &'a str,
+    pub email: Option<&'a str>,
 }
 ```
 
-**Step 2: Create the migration**
-
-In `src/utils/migrations/definitions.rs`:
+**Step 5: Use in Code**
 
 ```rust
-// Add this function
-fn migration_005_user_preferences() -> Migration {
-    let schema_sql = UserPreferences::schema_sql();
-    let default_data = UserPreferences::get_default_data_sql();
-    
-    let mut up_sql = vec![schema_sql];
-    up_sql.extend(default_data);
-    
-    Migration {
-        version: UserPreferences::migration_version(),
-        description: UserPreferences::migration_description(),
-        up_sql,
-        down_sql: vec![format!("DROP TABLE IF EXISTS {}", UserPreferences::name())],
-    }
+use diesel::prelude::*;
+use crate::models::users::{User, NewUser};
+use crate::utils::db::get_vesta_conn;
+
+fn create_user(username: &str, email: Option<&str>) -> Result<User, diesel::result::Error> {
+    let conn = &mut get_vesta_conn()?;
+    let new_user = NewUser { username, email };
+    diesel::insert_into(users::table)
+        .values(&new_user)
+        .get_result(conn)
 }
-
-// Update get_all_migrations()
-pub fn get_all_migrations() -> Vec<Migration> {
-    vec![
-        migration_001_initial_schema(),
-        migration_002_app_config(),
-        migration_003_instances_table(),
-        migration_004_accounts_table(),
-        migration_005_user_preferences(),  // ← Add here
-    ]
-}
-```
-
-**Step 3: Use it!**
-
-```rust
-// Insert
-let pref = UserPreferences::new(1, "font_size".to_string(), "14".to_string(), "appearance".to_string());
-db.insert_data_serde(&pref)?;
-
-// Query
-let prefs: Vec<UserPreferences> = db.search_data_serde::<UserPreferences, i32, UserPreferences>(
-    SQLiteSelect::ALL,
-    "user_id",
-    1
-)?;
-
-// Update
-let mut pref = prefs[0].clone();
-pref.setting_value = "16".to_string();
-db.update_data_serde(&pref, "id", pref.id)?;
 ```
 
 ### ✅ Add a Field to Existing Table
 
-**Step 1: Add field to struct**
+**Step 1: Generate Migration**
+
+```bash
+diesel migration generate add_verified_to_users --migration-dir migrations/vesta
+```
+
+**Step 2: Edit Migration**
+
+`up.sql`:
+```sql
+ALTER TABLE users ADD COLUMN verified BOOLEAN DEFAULT FALSE;
+```
+
+`down.sql`:
+```sql
+ALTER TABLE users DROP COLUMN verified;
+```
+
+**Step 3: Update Schema and Models**
+
+Run migration, then update `schema.rs` and add the field to the `User` struct.
+
+### ✅ Query Data
 
 ```rust
-#[derive(Serialize, Deserialize, Debug, Clone, SqlTable)]
-#[migration_version("0.2.0")]  // ← Keep same version
-pub struct AppConfig {
-    #[primary_key]
-    pub id: i32,
-    // ... existing fields ...
-    pub new_feature_enabled: bool,  // ← Add new field
+use diesel::prelude::*;
+use crate::models::users::User;
+use crate::schema::users;
+
+fn get_user_by_id(user_id: i32) -> Result<User, diesel::result::Error> {
+    let conn = &mut get_vesta_conn()?;
+    users::table.find(user_id).first(conn)
+}
+
+fn get_all_users() -> Result<Vec<User>, diesel::result::Error> {
+    let conn = &mut get_vesta_conn()?;
+    users::table.load(conn)
 }
 ```
 
-**Step 2: Update Default impl**
+### ✅ Update Data
 
 ```rust
-impl Default for AppConfig {
-    fn default() -> Self {
-        Self::new(
-            1,
-            // ... existing defaults ...
-            true,  // ← Add default for new field
-        )
-    }
+use diesel::prelude::*;
+use crate::models::users::User;
+use crate::schema::users;
+
+fn verify_user(user_id: i32) -> Result<(), diesel::result::Error> {
+    let conn = &mut get_vesta_conn()?;
+    diesel::update(users::table.find(user_id))
+        .set(users::verified.eq(true))
+        .execute(conn)?;
+    Ok(())
 }
 ```
 
-**Step 3: Create ALTER TABLE migration**
-
-In `src/utils/migrations/definitions.rs`:
+### ✅ Delete Data
 
 ```rust
-fn migration_006_add_new_feature_flag() -> Migration {
-    create_migration(
-        "0.6.0",  // ← New version
-        "Add new_feature_enabled flag to app_config",
-        vec![
-            "ALTER TABLE app_config ADD COLUMN new_feature_enabled INTEGER DEFAULT 1",
-        ],
-        vec![
-            "ALTER TABLE app_config DROP COLUMN new_feature_enabled",
-        ],
-    )
-}
+use diesel::prelude::*;
+use crate::schema::users;
 
-// Add to get_all_migrations()
-```
-
-**That's it!** The SqlTable trait will automatically handle the new field in all queries.
-
-### ✅ Supported Field Types
-
-| Rust Type | SQLite Type | Notes |
-|-----------|-------------|-------|
-| `i32`, `i64` | `INTEGER` | - |
-| `f32`, `f64` | `REAL` | - |
-| `String` | `TEXT` | - |
-| `bool` | `INTEGER` | Auto-converts to 0/1 |
-| `Option<T>` | Same as `T` | NULL if None |
-| `AUTOINCREMENT` | `INTEGER` | Special enum for auto-increment PKs |
-| `Vec<u8>` | `BLOB` | Binary data |
-
-### ✅ Supported Attributes
-
-On the struct:
-- `#[migration_version("x.y.z")]` - Schema version
-- `#[migration_description("...")]` - Migration description
-
-On fields:
-- `#[primary_key]` - Make field primary key
-- `#[autoincrement]` - Auto-increment (use with `AUTOINCREMENT` type)
-- `#[unique]` - Add UNIQUE constraint
-- `#[not_null]` - Add NOT NULL constraint
-- `#[table_name]` - Use field value as table name (advanced)
-
-## Removing Old System (TODO)
-
-### Tables Still Using Old System:
-
-1. **migration_003_instances_table** (line 66)
-2. **migration_004_accounts_table** (line 97)
-
-### How to Convert:
-
-**Before (Old System):**
-```rust
-fn migration_003_instances_table() -> Migration {
-    create_migration(
-        "0.3.0",
-        "Create instances table",
-        vec![
-            "CREATE TABLE instances (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                // ... 50 lines of SQL ...
-            )",
-        ],
-        // ...
-    )
+fn delete_user(user_id: i32) -> Result<(), diesel::result::Error> {
+    let conn = &mut get_vesta_conn()?;
+    diesel::delete(users::table.find(user_id)).execute(conn)?;
+    Ok(())
 }
 ```
 
-**After (New System):**
-```rust
-// 1. Create the struct
-#[derive(Serialize, Deserialize, Debug, Clone, SqlTable)]
-#[migration_version("0.3.0")]
-#[migration_description("Minecraft instance management")]
-pub struct Instance {
-    #[primary_key]
-    #[autoincrement]
-    id: AUTOINCREMENT,
-    
-    #[not_null]
-    name: String,
-    
-    #[not_null]
-    minecraft_version: String,
-    
-    modloader: Option<String>,
-    // ... etc
-}
+## Supported Field Types
 
-// 2. Use SqlTable for migration
-fn migration_003_instances_table() -> Migration {
-    let schema_sql = Instance::schema_sql();
-    
-    Migration {
-        version: Instance::migration_version(),
-        description: Instance::migration_description(),
-        up_sql: vec![
-            schema_sql,
-            // Add indexes separately (SqlTable doesn't handle these yet)
-            "CREATE INDEX idx_instances_name ON instances(name)".to_string(),
-        ],
-        down_sql: vec![
-            "DROP INDEX IF EXISTS idx_instances_name".to_string(),
-            format!("DROP TABLE IF EXISTS {}", Instance::name()),
-        ],
-    }
-}
-```
-
-## Database Operations Reference
-
-### Insert
-```rust
-let item = MyStruct::new(...);
-db.insert_data_serde(&item)?;
-
-// Or insert only if doesn't exist (for AUTOINCREMENT tables)
-db.insert_data_if_not_exists_serde(&item)?;
-```
-
-### Query
-```rust
-// Search by column
-let results: Vec<MyStruct> = db.search_data_serde::<MyStruct, i32, MyStruct>(
-    SQLiteSelect::ALL,  // or SQLiteSelect::ONLY(vec!["col1", "col2"])
-    "column_name",
-    search_value
-)?;
-
-// Get all records
-let all: Vec<MyStruct> = db.get_all_data_serde::<MyStruct, MyStruct>()?;
-```
-
-### Update
-```rust
-let mut item = /* ... get from database ... */;
-item.field = new_value;
-db.update_data_serde(&item, "id", item.id)?;
-```
+| Rust Type | Diesel Type | SQLite Type |
+|-----------|-------------|-------------|
+| `i32` | `Integer` | INTEGER |
+| `i64` | `BigInt` | INTEGER |
+| `f32` | `Float` | REAL |
+| `f64` | `Double` | REAL |
+| `String` | `Text` | TEXT |
+| `bool` | `Bool` | BOOLEAN |
+| `Option<T>` | `Nullable<T>` | NULLABLE |
+| `Vec<u8>` | `Binary` | BLOB |
+| `chrono::NaiveDateTime` | `Timestamp` | TIMESTAMP |
 
 ## Migration Best Practices
 
-1. **Never edit old migrations** - Always create new ones
-2. **Sequential versions** - Use semantic versioning (0.1.0, 0.2.0, etc.)
-3. **Test migrations** - Run `cargo test` before deploying
-4. **Provide rollback** - Always include `down_sql` for rollbacks
-5. **One concern per migration** - Don't mix table creation with data changes
+1. **Use Diesel CLI** for generating migrations
+2. **Test migrations** locally before committing
+3. **Provide rollback** in `down.sql`
+4. **One change per migration** for clarity
+5. **Run migrations** automatically on startup
 
-## Benefits of This System
+## Connections
 
-✅ **Type Safety** - Compiler catches schema errors  
-✅ **No SQL Duplication** - Schema defined once in Rust  
-✅ **Auto-Generated Queries** - CRUD methods generated automatically  
-✅ **Migration Tracking** - Version control built-in  
-✅ **Easy Maintenance** - Add fields in one place, everything updates  
-✅ **Testable** - All operations are type-checked at compile time  
+- **Main database:** `get_vesta_conn()` for user data
+- **Config database:** `get_config_conn()` for app settings
 
-## Next Steps
+## Benefits of Diesel
 
-1. **Convert migration_003 and migration_004** to use SqlTable
-2. **Create Instance and Account structs** with SqlTable derive
-3. **Update documentation** once conversion is complete
-4. **Add more SqlTable features** (CHECK constraints, indexes, etc.)
+✅ **Type Safety** - Compile-time query checking  
+✅ **Performance** - Efficient SQL generation  
+✅ **Migrations** - Built-in version control  
+✅ **Ecosystem** - Active maintenance and features  
+✅ **Flexibility** - Raw SQL when needed  
 
 ## Questions?
 
-Check the examples in:
-- `src/utils/config/mod.rs` - AppConfig (full example)
-- `src/utils/sqlite.rs` - CustomTableStruct (test example)
-- `src/utils/migrations/definitions.rs` - All migrations
+Check:
+- `src-tauri/src/schema.rs` - Table definitions
+- `src-tauri/src/models/` - Model structs
+- `src-tauri/migrations/` - Migration files
+- `src-tauri/src/utils/db.rs` - Connection utilities

@@ -8,9 +8,8 @@ Quick links
 
 - Source root: this repository
 - Frontend app: `vesta-launcher/`
-- Backend / Tauri: `src-tauri/`
+- Backend / Tauri: `vesta-launcher/src-tauri/`
 - Core Rust library: `crates/piston-lib/`
-- Proc-macros: `crates/piston-macros/`
 - Docs: `docs/`
 - Launch process addendum: `docs/launch_process_addendum.md`
 - Storage & naming preferences: `docs/vesta_preferences.md`
@@ -29,7 +28,7 @@ Quick start (development)
 
 - Build backend crate(s):
 
-  cd src-tauri
+  cd vesta-launcher/src-tauri
   cargo build
 
 - Run an example installer (core library):
@@ -43,14 +42,13 @@ Quick start (development)
 Repository structure (short)
 
 - `vesta-launcher/`: SolidJS frontend (Vite). UI components, styles, and app entrypoints.
-- `src-tauri/`: Tauri backend integration and Rust-based app entrypoint and configuration.
+- `vesta-launcher/src-tauri/`: Tauri backend integration and Rust-based app entrypoint and configuration.
 - `crates/piston-lib/`: Core installer/launcher logic. Contains installers (Vanilla, Fabric, Forge/NeoForge, Quilt), updater logic, and task/reporting abstractions.
-- `crates/piston-macros/`: Procedural macro helpers (e.g., `SqlTable`).
 - `docs/`: high-level developer documentation (architecture, install, dev workflow, contributing).
 
 Important patterns & conventions
 
-- Database schema: Use `SqlTable` derive (in `piston-macros`) as the single source of truth for schemas. Add migrations in `src-tauri/src/utils/migrations/definitions.rs` when changing schemas.
+- Database schema: Use Diesel ORM for schema definitions in `src-tauri/src/schema.rs` and models in `src-tauri/src/models`. Migrations managed via Diesel CLI in `src-tauri/migrations/vesta` and `src-tauri/migrations/config`.
 - Tasks & notifications: Long-running operations are implemented as `Task`s and reported via `NotificationManager` semantics. Use `client_key` for updating notifications; progress is 0..100 or indeterminate.
 - Processor/JAR handling: Installer processors (Java-based) may rely on files in `data/*`. The Rust installer extracts `data/*` entries into the install `data_dir` so Java processors can access them.
 - Cross-platform paths: Code normalizes forward/back slashes where necessary; prefer using path abstractions for file operations and canonicalization.

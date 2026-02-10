@@ -44,7 +44,7 @@ On-disk JSON and schema conventions
 
 Naming conventions across code
 
-- Rust (backend crates): snake_case for functions and files; types in PascalCase. SQL table structs use the `SqlTable` derive and migration metadata.
+- Rust (backend crates): snake_case for functions and files; types in PascalCase. SQL table models use Diesel derives and schema definitions.
 - TypeScript / frontend: camelCase for identifiers and JSON keys when used by the frontend. When transferring data between Rust and TypeScript use the agreed conversion layer (Tauri argument conversion).
 - On-disk artifacts and URLs: lowercase, hyphen-separated when multi-word (e.g., `neoforge-20.2.29-beta-installer.jar`).
 
@@ -89,7 +89,7 @@ Style / documentation and PR conventions
 
 - Documentation: keep machine-facing docs under `docs/` with clear file names (e.g., `forge_installation.md`, `launch_process.md`, `vesta_preferences.md`).
 - Commits: keep commits focused; use conventional commit messages (optional) and include a short description of schema/migration changes when altering on-disk formats.
-- Migrations: when adding or changing on-disk schemas, create migration functions and add a migration entry in `src-tauri/src/utils/migrations/definitions.rs` (or equivalent) with `migration_version("x.y.z")` and a description.
+- Migrations: when adding or changing on-disk schemas, use Diesel CLI to generate migrations in `src-tauri/migrations/vesta` or `src-tauri/migrations/config`, edit `up.sql` and `down.sql`, update Rust structs, and run migrations automatically on startup.
 
 Appendix: quick rules
 
