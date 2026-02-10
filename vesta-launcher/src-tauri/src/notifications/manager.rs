@@ -103,6 +103,19 @@ impl ActionHandler for RestartAppHandler {
     }
 }
 
+/// Handler that triggers an update installation in the frontend
+struct InstallUpdateHandler {}
+
+impl ActionHandler for InstallUpdateHandler {
+    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+        let handle = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = handle.emit("core://install-app-update", ());
+        });
+        Ok(())
+    }
+}
+
 /// Handler that logs out of guest mode and returns to onboarding
 struct LogoutGuestHandler {}
 
@@ -429,6 +442,7 @@ impl NotificationManager {
             Arc::new(ResumeInstanceOperationHandler {}),
         );
         manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
+        manager.register_action("install_app_update", Arc::new(InstallUpdateHandler {}));
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
         // Future handlers (pause, resume, etc.) can be added here

@@ -506,12 +506,11 @@ jobs:
             echo "- Initial release or patch update" >> changelog.md
           fi
           
-          # Escape newlines for GitHub Actions output
-          {
-            echo 'changelog<<EOF'
-            cat changelog.md
-            echo EOF
-          } >> $GITHUB_OUTPUT
+          # Use a unique delimiter for multiline output
+          DELIMITER=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64 | tr -dc 'a-zA-Z0-9')
+          echo "changelog<<${DELIMITER}" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          echo "${DELIMITER}" >> $GITHUB_OUTPUT
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

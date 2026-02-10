@@ -1,13 +1,43 @@
-import { check } from "@tauri-apps/plugin-updater";
+import { check, type Update } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { showToast } from "@ui/toast/toast";
 import { PROGRESS_INDETERMINATE } from "./notifications";
 
+let pendingUpdate: Update | null = null;
+let isListenerInitialized = false;
+
+function initUpdateListener() {
+	if (isListenerInitialized) return;
+	listen("core://install-app-update", async () => {
+		if (pendingUpdate) {
+			try {
+				showToast({
+					title: "Installing Update",
+					description: "Applying changes and restarting...",
+					severity: "Info",
+				});
+				await pendingUpdate.install();
+			} catch (error) {
+				console.error("Failed to install update:", error);
+				showToast({
+					title: "Update Error",
+					description: "Failed to install the update. Please try again.",
+					severity: "Error",
+				});
+			}
+		}
+	});
+	isListenerInitialized = true;
+}
+
 export async function checkForAppUpdates(silent = false) {
+	initUpdateListener();
 	try {
 		const update = await check();
 
 		if (update) {
+			pendingUpdate = update;
 			if (!silent) {
 				showToast({
 					title: "Update Available",
@@ -31,7 +61,7 @@ export async function checkForAppUpdates(silent = false) {
 			let downloaded = 0;
 			let contentLength = 0;
 
-			await update.downloadAndInstall((event) => {
+			await update.download((event) => {
 				switch (event.event) {
 					case "Started": {
 						contentLength = event.data.contentLength || 0;
@@ -52,19 +82,19 @@ export async function checkForAppUpdates(silent = false) {
 						break;
 					}
 					case "Finished": {
-						// Convert to Patient with Restart action
+						// Convert to Patient with Install action
 						const actions = [
 							{
-								id: "restart_app",
-								label: "Restart now",
+								id: "install_app_update",
+								label: "Install & Restart",
 								type: "primary",
 							},
 						];
 
 						invoke("create_notification", {
 							payload: {
-								title: "Update Ready",
-								description: `Vesta has been updated to v${update.version}. Please restart to apply changes.`,
+								title: "Update Downloaded",
+								description: `Vesta v${update.version} is ready to install. Restart to apply changes.`,
 								notification_type: "patient",
 								severity: "success",
 								dismissible: true,
@@ -127,11 +157,11 @@ export async function simulateUpdateProcess() {
 			});
 		}
 
-		// Convert to Patient with Restart action
+		// Convert to Patient with Install action
 		const actions = [
 			{
-				id: "restart_app",
-				label: "Restart now",
+				id: "install_app_update",
+				label: "Install & Restart",
 				type: "primary",
 			},
 		];
