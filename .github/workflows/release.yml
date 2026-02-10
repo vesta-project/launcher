@@ -167,6 +167,7 @@ jobs:
 
       - name: Install frontend dependencies
         if: matrix.enabled
+        shell: bash
         run: |
           if [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
             npm install
