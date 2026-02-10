@@ -317,16 +317,14 @@ jobs:
             # Tag push - extract version from tag
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"
-          else
-            # Workflow dispatch - use bump-version output
+          elif [ "${{ needs.bump-version.result }}" = "success" ]; then
+            # Workflow dispatch with version bump
             VERSION="${{ needs.bump-version.outputs.new_version }}"
-          fi
-          
-          # Fallback: if VERSION is still empty, read from tauri.conf.json
-          if [ -z "$VERSION" ]; then
+          else
+            # Workflow dispatch without bump - read current version
             VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           fi
-
+          
           if [ -z "$VERSION" ]; then
             echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
             exit 1
@@ -426,7 +424,7 @@ jobs:
           
           aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
-  create-github-release:
+  release:
     needs: [build, generate-manifest, bump-version]
     if: always() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
@@ -446,16 +444,14 @@ jobs:
             # Tag push - extract version from tag
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"
-          else
-            # Workflow dispatch - use bump-version output
+          elif [ "${{ needs.bump-version.result }}" = "success" ]; then
+            # Workflow dispatch with version bump
             VERSION="${{ needs.bump-version.outputs.new_version }}"
-          fi
-          
-          # Fallback: if VERSION is still empty, read from tauri.conf.json
-          if [ -z "$VERSION" ]; then
+          else
+            # Workflow dispatch without bump - read current version
             VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           fi
-
+          
           if [ -z "$VERSION" ]; then
             echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
             exit 1
@@ -525,7 +521,7 @@ jobs:
             ### Downloads
             All platform installers are attached to this release as assets.
             
-            ${{ steps.generate-changelog.outputs.changelog }}
+            ${{ steps.changelog.outputs.changelog }}
             
             ### CDN Distribution
             This release is also available via CDN for auto-updating launchers.
@@ -535,6 +531,5 @@ jobs:
             artifacts/**/vesta-launcher_*.deb
             artifacts/**/Vesta_Launcher_*.AppImage
             artifacts/**/Vesta_Launcher_*.tar.gz
-          overwrite: true
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
