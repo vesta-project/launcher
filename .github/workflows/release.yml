@@ -171,7 +171,7 @@ jobs:
         run: |
           cd vesta-launcher
           if [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
-            npm install
+            npm install --legacy-peer-deps
           else
             bun install
           fi
