@@ -284,7 +284,8 @@ jobs:
 
 
   generate-manifest:
-    needs: build
+    needs: [build, bump-version]
+    if: always() && (needs.build.result == 'success')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -320,6 +321,12 @@ jobs:
             # Workflow dispatch - use bump-version output
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           fi
+          
+          # Fallback: if VERSION is still empty, read from tauri.conf.json
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+          fi
+
           if [ -z "$VERSION" ]; then
             echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
             exit 1
@@ -420,8 +427,8 @@ jobs:
           aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
   create-github-release:
-    needs: [build, generate-manifest]
-    if: needs.build.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    needs: [build, generate-manifest, bump-version]
+    if: always() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -443,6 +450,12 @@ jobs:
             # Workflow dispatch - use bump-version output
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           fi
+          
+          # Fallback: if VERSION is still empty, read from tauri.conf.json
+          if [ -z "$VERSION" ]; then
+            VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+          fi
+
           if [ -z "$VERSION" ]; then
             echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
             exit 1
