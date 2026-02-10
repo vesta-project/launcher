@@ -6,6 +6,7 @@ use crate::utils::config::{init_config_db, get_app_config};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
+use tauri_plugin_updater::UpdaterExt;
 #[cfg(target_os = "windows")]
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
@@ -762,6 +763,61 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             let _ = handle.emit("core://handle-cli", args);
         });
     }
+
+    // Check for updates on startup
+    let handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        // Wait for system to settle
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        match handle.updater() {
+            Ok(updater) => {
+                match updater.check().await {
+                    Ok(Some(update)) => {
+                        log::info!("Update found: {}", update.version);
+
+                        // Emit event for frontend
+                        use tauri::Emitter;
+                        let _ = handle.emit("core://update-available", &update.version);
+
+                        // Create a notification via NotificationManager
+                        if let Some(manager) = handle.try_state::<NotificationManager>() {
+                            use crate::notifications::models::{
+                                CreateNotificationInput, NotificationAction, NotificationType,
+                            };
+
+                            let actions = vec![NotificationAction {
+                                action_id: "open_update_dialog".to_string(),
+                                label: "Update Now".to_string(),
+                                action_type: "primary".to_string(),
+                            }];
+
+                            let _ = manager.create(CreateNotificationInput {
+                                client_key: Some("app_update_available".to_string()),
+                                title: Some("Update Available".to_string()),
+                                description: Some(format!(
+                                    "Vesta Launcher v{} is now available!",
+                                    update.version
+                                )),
+                                severity: Some("info".to_string()),
+                                notification_type: Some(NotificationType::Patient),
+                                dismissible: Some(true),
+                                actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
+                                progress: None,
+                                current_step: None,
+                                total_steps: None,
+                                metadata: None,
+                                show_on_completion: None,
+                            });
+                        }
+                    }
+                    Ok(None) => log::info!("No updates found."),
+                    Err(e) => log::error!("Failed to check for updates: {}", e),
+                }
+            }
+            Err(e) => log::error!("Updater not available: {}", e),
+        }
+    });
 
     Ok(())
 }

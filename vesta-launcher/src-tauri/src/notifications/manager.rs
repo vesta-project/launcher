@@ -150,6 +150,19 @@ impl ActionHandler for LogoutGuestHandler {
     }
 }
 
+/// Handler that opens the update dialog
+struct OpenUpdateDialogHandler {}
+
+impl ActionHandler for OpenUpdateDialogHandler {
+    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+        let handle = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = handle.emit("core://open-update-ui", ());
+        });
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -417,6 +430,7 @@ impl NotificationManager {
         );
         manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
+        manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager

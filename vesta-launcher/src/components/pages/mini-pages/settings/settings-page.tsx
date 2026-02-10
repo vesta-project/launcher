@@ -35,7 +35,7 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { showToast } from "@ui/toast/toast";
 import { openExternal } from "@utils/external-link";
 import { startAppTutorial } from "@utils/tutorial";
-import { checkForAppUpdates } from "@utils/updater";
+import { checkForAppUpdates, simulateUpdateProcess } from "@utils/updater";
 import {
 	createEffect,
 	createMemo,
@@ -1153,6 +1153,50 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 									}
 								/>
 								
+							</SettingsCard>
+
+							<SettingsCard header="Updater Simulation">
+								<SettingsField
+									label="Simulate App Update"
+									description="Trigger a full update flow simulation (Toast -> Progress -> Ready)"
+									control={
+										<LauncherButton
+											onClick={() => simulateUpdateProcess()}
+										>
+											Simulate Full Update
+										</LauncherButton>
+									}
+								/>
+								<SettingsField
+									label="Simulate Discovery"
+									description="Trigger only the 'Update Available' notification (Native Notification)"
+									control={
+										<LauncherButton
+											onClick={async () => {
+												const actions = [
+													{
+														id: "open_update_dialog",
+														label: "Update Now",
+														type: "primary",
+													},
+												];
+												await invoke("create_notification", {
+													payload: {
+														client_key: "app_update_available",
+														title: "Update Available (Simulated)",
+														description: "Vesta Launcher v9.9.9 is now available!",
+														severity: "info",
+														notification_type: "patient",
+														dismissible: true,
+														actions: JSON.stringify(actions),
+													},
+												});
+											}}
+										>
+											Simulate Discovery
+										</LauncherButton>
+									}
+								/>
 							</SettingsCard>
 
 							<SettingsCard header="Navigation Test">

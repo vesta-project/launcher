@@ -119,6 +119,7 @@ function Root(props: ChildrenProp) {
 	let unlistenCrash: (() => void) | null = null;
 	let unlistenExit: UnlistenFn | null = null;
 	let unlistenLogout: UnlistenFn | null = null;
+	let unlistenUpdate: UnlistenFn | null = null;
 
 	// Global window-level drag events to manage the sniffer
 	const manager = getDropZoneManager();
@@ -224,6 +225,10 @@ function Root(props: ChildrenProp) {
 		listen("core://logout-guest", () => {
 			window.location.href = "/";
 		}).then((u) => { unlistenLogout = u; });
+
+		listen("core://open-update-ui", () => {
+			checkForAppUpdates();
+		}).then((u) => { unlistenUpdate = u; });
 
 		listen("core://exit-requested", async () => {
 			try {
@@ -432,6 +437,7 @@ function Root(props: ChildrenProp) {
 		unlistenCrash?.();
 		unlistenExit?.();
 		unlistenLogout?.();
+		unlistenUpdate?.();
 		cleanupDialogSystem();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
