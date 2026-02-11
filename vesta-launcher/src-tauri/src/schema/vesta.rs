@@ -32,41 +32,6 @@ diesel::table! {
 }
 
 diesel::table! {
-    app_config (id) {
-        id -> Integer,
-        background_hue -> Integer,
-        theme -> Text,
-        language -> Text,
-        max_download_threads -> Integer,
-        max_memory_mb -> Integer,
-        java_path -> Nullable<Text>,
-        default_game_dir -> Nullable<Text>,
-        auto_update_enabled -> Bool,
-        notification_enabled -> Bool,
-        startup_check_updates -> Bool,
-        show_tray_icon -> Bool,
-        minimize_to_tray -> Bool,
-        reduced_motion -> Bool,
-        last_window_width -> Integer,
-        last_window_height -> Integer,
-        debug_logging -> Bool,
-        notification_retention_days -> Integer,
-        active_account_uuid -> Nullable<Text>,
-        theme_id -> Text,
-        theme_mode -> Text,
-        theme_primary_hue -> Integer,
-        theme_primary_sat -> Nullable<Integer>,
-        theme_primary_light -> Nullable<Integer>,
-        theme_style -> Text,
-        theme_gradient_enabled -> Bool,
-        theme_gradient_angle -> Nullable<Integer>,
-        theme_gradient_harmony -> Nullable<Text>,
-        theme_advanced_overrides -> Nullable<Text>,
-        theme_gradient_type -> Nullable<Text>,
-    }
-}
-
-diesel::table! {
     installed_resource (id) {
         id -> Integer,
         instance_id -> Integer,
@@ -205,7 +170,6 @@ diesel::joinable!(installed_resource -> instance (instance_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
-    app_config,
     installed_resource,
     instance,
     notification,

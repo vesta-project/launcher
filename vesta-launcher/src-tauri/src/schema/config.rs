@@ -1,4 +1,4 @@
-// @generated automatically by Diesel CLI.
+﻿// @generated automatically by Diesel CLI.
 
 diesel::table! {
     app_config (id) {
@@ -36,6 +36,7 @@ diesel::table! {
         setup_completed -> Bool,
         setup_step -> Integer,
         tutorial_completed -> Bool,
+        use_dedicated_gpu -> Bool,
     }
 }
 

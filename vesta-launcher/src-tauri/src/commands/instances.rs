@@ -1106,6 +1106,29 @@ pub async fn launch_instance(
             .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string())
     };
 
+    // Prepare GPU environment and preferences
+    let app_config = crate::utils::config::get_app_config().unwrap_or_default();
+    let mut env_vars = std::collections::HashMap::new();
+
+    if app_config.use_dedicated_gpu {
+        #[cfg(target_os = "linux")]
+        {
+            log::info!("[launch_instance] Enabling dedicated GPU variables for Linux (NVIDIA Prime / Mesa)");
+            env_vars.insert("__NV_PRIME_RENDER_OFFLOAD".to_string(), "1".to_string());
+            env_vars.insert("__GLX_VENDOR_LIBRARY_NAME".to_string(), "nvidia".to_string());
+            env_vars.insert("DRI_PRIME".to_string(), "1".to_string());
+        }
+
+        #[cfg(target_os = "windows")]
+        {
+            log::info!("[launch_instance] Setting Windows GPU preference for High Performance");
+            // Set Windows registry preference for the specific Java executable
+            let _ = crate::utils::windows::set_windows_gpu_preference(std::path::Path::new(&java_path_str));
+            // Hint for older drivers/wrappers
+            env_vars.insert("SHHighPerformanceGpuSelection".to_string(), "1".to_string());
+        }
+    }
+
     let spec = piston_lib::game::launcher::LaunchSpec {
         instance_id: instance_id.clone(),
         version_id: instance_data.minecraft_version.clone(),
@@ -1138,6 +1161,7 @@ pub async fn launch_instance(
         window_height: Some(instance_data.height as u32),
         exit_handler_jar,
         log_file: Some(log_file),
+        env_vars,
     };
 
     log::info!(

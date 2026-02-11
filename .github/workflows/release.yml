@@ -424,7 +424,7 @@ jobs:
           
           aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
-  release:
+  create-github-release:
     needs: [build, generate-manifest, bump-version]
     if: always() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest

@@ -79,3 +79,36 @@ pub async fn launch_window(
 
     Ok(())
 }
+
+/// Set Windows-level GPU preference for a specific executable
+/// Uses the DirectX UserGpuPreferences registry key to force "High Performance"
+#[cfg(target_os = "windows")]
+pub fn set_windows_gpu_preference(executable_path: &std::path::Path) -> Result<(), anyhow::Error> {
+    let path_str = executable_path.to_string_lossy();
+
+    log::info!("Setting Windows GPU preference to High Performance for: {}", path_str);
+
+    // GpuPreference=2 is "High Performance" (typically Dedicated GPU)
+    // We use the 'reg' command to avoid complex Win32 API calls for a simple registry update
+    let output = std::process::Command::new("reg")
+        .args([
+            "add",
+            "HKCU\\Software\\Microsoft\\DirectX\\UserGpuPreferences",
+            "/v",
+            &path_str,
+            "/t",
+            "REG_SZ",
+            "/d",
+            "GpuPreference=2;",
+            "/f",
+        ])
+        .output()?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        log::error!("Failed to set Windows GPU preference: {}", stderr);
+        anyhow::bail!("Registry update failed: {}", stderr);
+    }
+
+    Ok(())
+}

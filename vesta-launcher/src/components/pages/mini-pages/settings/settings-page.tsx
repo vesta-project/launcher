@@ -108,6 +108,7 @@ interface AppConfig {
 	setup_completed: boolean;
 	setup_step: number;
 	tutorial_completed: boolean;
+	use_dedicated_gpu: boolean;
 	[key: string]: any;
 }
 
@@ -128,6 +129,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 	const [debugLogging, setDebugLogging] = createSignal(false);
 	const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
 	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
+	const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
 
@@ -371,6 +373,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				setReducedMotion(config.reduced_motion ?? false);
 				setAutoUpdateEnabled(config.auto_update_enabled ?? true);
 				setStartupCheckUpdates(config.startup_check_updates ?? true);
+				setUseDedicatedGpu(config.use_dedicated_gpu ?? true);
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
@@ -412,6 +415,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				if (field === "debug_logging") setDebugLogging(value);
 				if (field === "auto_update_enabled") setAutoUpdateEnabled(value);
 				if (field === "startup_check_updates") setStartupCheckUpdates(value);
+				if (field === "use_dedicated_gpu") setUseDedicatedGpu(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
 				if (field === "theme_id" && value) setThemeId(value);
 				if (field === "theme_primary_hue" && value !== null)
@@ -650,6 +654,16 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
 				field: "startup_check_updates",
+				value: checked,
+			});
+		}
+	};
+
+	const handleGpuToggle = async (checked: boolean) => {
+		setUseDedicatedGpu(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "use_dedicated_gpu",
 				value: checked,
 			});
 		}
@@ -1018,6 +1032,27 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 										}}
 									</For>
 								</div>
+							</SettingsCard>
+
+							<SettingsCard
+								header="Performance & Graphics"
+								subHeader="Optimization settings for game performance."
+							>
+								<SettingsField
+									label="Use Dedicated GPU"
+									description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
+									layout="inline"
+									control={
+										<Switch
+											checked={useDedicatedGpu()}
+											onCheckedChange={handleGpuToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
 							</SettingsCard>
 						</div>
 					</TabsContent>

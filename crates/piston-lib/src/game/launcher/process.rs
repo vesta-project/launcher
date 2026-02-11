@@ -496,6 +496,7 @@ pub async fn launch_game(
     }
     
     command.current_dir(&spec.game_dir);
+    command.envs(&spec.env_vars);
 
     // Pipe stdout and stderr for real-time console streaming
     command.stdout(Stdio::piped());

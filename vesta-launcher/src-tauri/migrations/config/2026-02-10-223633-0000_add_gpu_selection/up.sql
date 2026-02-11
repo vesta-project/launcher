@@ -1,0 +1,1 @@
+ALTER TABLE app_config ADD COLUMN use_dedicated_gpu BOOLEAN NOT NULL DEFAULT 1;

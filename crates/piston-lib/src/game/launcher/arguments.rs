@@ -604,6 +604,7 @@ mod tests {
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
+            env_vars: HashMap::new(),
         };
 
         let manifest = UnifiedManifest::from(VersionManifest {
@@ -674,6 +675,7 @@ mod tests {
             max_memory: None,
             exit_handler_jar: None,
             log_file: None,
+            env_vars: HashMap::new(),
         };
 
         let manifest = VersionManifest {
@@ -753,6 +755,7 @@ mod tests {
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
+            env_vars: HashMap::new(),
         };
 
         let mut vars = HashMap::new();
@@ -821,6 +824,7 @@ mod tests {
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
+            env_vars: HashMap::new(),
         };
 
         // Rule requiring demo user should match

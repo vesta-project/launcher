@@ -138,6 +138,9 @@ pub struct AppConfig {
     pub setup_completed: bool,
     pub setup_step: i32,
     pub tutorial_completed: bool,
+
+    // Graphics settings
+    pub use_dedicated_gpu: bool,
 }
 
 impl Default for AppConfig {
@@ -180,6 +183,8 @@ impl Default for AppConfig {
             setup_completed: false,
             setup_step: 0,
             tutorial_completed: false,
+
+            use_dedicated_gpu: true,
         }
     }
 }

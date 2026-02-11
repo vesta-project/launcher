@@ -1,6 +1,7 @@
 /// Core types for game launching
 use crate::game::metadata::ModloaderType;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 /// Specification for launching a game instance
@@ -68,6 +69,9 @@ pub struct LaunchSpec {
 
     /// Path to log file for this instance
     pub log_file: Option<PathBuf>,
+
+    /// Environment variables for the game process
+    pub env_vars: HashMap<String, String>,
 }
 
 impl LaunchSpec {
@@ -240,6 +244,7 @@ mod tests {
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
+            env_vars: HashMap::new(),
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -269,6 +274,7 @@ mod tests {
             client_id: "cid".to_string(),
             exit_handler_jar: None,
             log_file: None,
+            env_vars: HashMap::new(),
         };
 
         assert_eq!(spec.installed_version_id(), "forge-loader-47.2.0-1.20.1");
