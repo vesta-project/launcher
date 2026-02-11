@@ -477,9 +477,10 @@ function Root(props: ChildrenProp) {
 				});
 
 			// Initialize file drop system
-			initializeFileDropSystem().catch((error) => {
-				console.error("Failed to initialize file drop system:", error);
-			});
+			// Temporarily disabled
+			// initializeFileDropSystem().catch((error) => {
+			// 	console.error("Failed to initialize file drop system:", error);
+			// });
 		}, 100); // 100ms delay to ensure UI renders first
 
 		window.addEventListener("dragenter", handleWindowDragEnter);

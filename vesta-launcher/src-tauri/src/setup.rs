@@ -697,11 +697,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let _main_win = win_builder.build()?;
 
     // Setup sniffer window immediately
-    let app_handle_for_sniffer = app.handle().clone();
+    // Temporarily disabled file drop sniffer
+    // let app_handle_for_sniffer = app.handle().clone();
     tauri::async_runtime::spawn(async move {
         // Wait a small amount for the main window to settle before creating the primed sniffer
         tokio::time::sleep(tokio::time::Duration::from_millis(50)).await;
-        let _ = crate::utils::file_drop::create_file_drop_overlay(app_handle_for_sniffer).await;
+        // Temporarily disabled file drop sniffer
+        // let _ = crate::utils::file_drop::create_file_drop_overlay(app_handle_for_sniffer).await;
     });
 
     // Generate PistonManifest in background on launch
