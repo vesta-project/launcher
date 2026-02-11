@@ -20,6 +20,25 @@ document.addEventListener("keydown", (e) => {
 	}
 });
 
+// Disable webview context menu in production
+function disableMenu() {
+	if (window.location.hostname !== 'tauri.localhost') {
+		return
+	}
+
+	document.addEventListener('contextmenu', e => {
+		e.preventDefault();
+		return false;
+	}, { capture: true })
+
+	document.addEventListener('selectstart', e => {
+		e.preventDefault();
+		return false;
+	}, { capture: true })
+}
+
+disableMenu();
+
 // Start theme initialization
 initTheme().catch((err) => {
 	console.error("Theme init failed; using defaults:", err);
