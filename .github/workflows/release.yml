@@ -69,7 +69,7 @@ jobs:
     needs: [bump-version]
     if: always() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
     permissions:
-      contents: write
+      contents: read
     strategy:
       fail-fast: true
       matrix:
@@ -287,6 +287,8 @@ jobs:
     needs: [build, bump-version]
     if: always() && (needs.build.result == 'success')
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
       - name: Debug job execution

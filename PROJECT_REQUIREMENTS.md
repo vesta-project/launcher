@@ -309,9 +309,6 @@ VestaProject/
 │       │   └── page-viewer/  # Built-in browser
 │       ├── ui/              # Reusable UI component library
 │       └── utils/           # Frontend utilities
-│
-└── ui-playground/           # Component testing sandbox
-```
 
 ### 🎯 Current State Summary
 

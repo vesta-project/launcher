@@ -12,7 +12,6 @@
 	"scripts": {
 		"vesta:dev": "cd vesta-launcher && bun run tauri dev",
 		"vesta:build": "cd vesta-launcher && bun run tauri build",
-		"playground:dev": "cd ui-playground && bun run dev",
 		"version:bump": "bun run scripts/bump-version.ts",
 		"install": "cd vesta-launcher && bun install",
 		"i": "cd vesta-launcher && bun i",
