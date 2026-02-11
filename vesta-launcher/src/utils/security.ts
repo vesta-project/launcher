@@ -29,10 +29,15 @@ export function sanitizeSvg(svg: string): string {
 				if (attrName.startsWith("on")) {
 					el.removeAttribute(attrs[i].name);
 				}
-				// Sanitize links to prevent javascript: URIs
+				// Sanitize links to prevent executable URIs
 				if (attrName === "href" || attrName === "xlink:href") {
 					const value = el.getAttribute(attrs[i].name);
-					if (value?.toLowerCase().startsWith("javascript:")) {
+					const normalized = value?.trim().toLowerCase();
+					if (
+						normalized?.startsWith("javascript:") ||
+						normalized?.startsWith("data:") ||
+						normalized?.startsWith("vbscript:")
+					) {
 						el.removeAttribute(attrs[i].name);
 					}
 				}
