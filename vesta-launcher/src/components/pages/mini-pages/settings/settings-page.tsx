@@ -1100,6 +1100,14 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 									>
 										GitHub
 									</LauncherButton>
+									<LauncherButton
+										variant="ghost"
+										onClick={() =>
+											openExternal("https://discord.gg/zuDNHNHk8E")
+										}
+									>
+										Discord
+									</LauncherButton>
 								</div>
 							</SettingsCard>
 
