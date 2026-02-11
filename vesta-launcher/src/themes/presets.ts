@@ -108,16 +108,21 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
  */
 export const PRESET_THEMES: ThemeConfig[] = [
 	{
-		id: "blue",
-		name: "Blue",
-		description: "Signature deep blue glass with gradient - Classic Vesta look",
-		primaryHue: 220,
+		id: "vesta",
+		name: "Vesta",
+		description: "Signature teal to purple to orange gradient",
+		primaryHue: 180,
 		style: "glass",
 		gradientEnabled: true,
-		rotation: 135,
+		rotation: 180,
 		gradientType: "linear",
-		gradientHarmony: "complementary",
-		allowHueChange: false, // Locked to signature blue
+		gradientHarmony: "triadic",
+		customCss: `
+			:root {
+				--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));
+			}
+		`,
+		allowHueChange: false, // Locked to signature colors
 		allowStyleChange: false,
 		allowBorderChange: false,
 	},
@@ -189,7 +194,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		id: "midnight",
 		name: "Midnight",
 		description: "Ultra-dark Midnight mode — pure black surfaces for true blacks",
-		primaryHue: 0, // Neutral
+		primaryHue: 240, // Dark blue for midnight theme preview
 		style: "solid",
 		colorScheme: "dark",
 		gradientEnabled: false,
