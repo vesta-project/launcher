@@ -14,7 +14,7 @@ import {
 	findBestVersion,
 	resources,
 } from "@stores/resources";
-import { DEFAULT_ICONS } from "@utils/instances";
+import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import { getCompatibilityForInstance } from "@utils/resources";
 import Button from "@ui/button/button";
 import { invoke } from "@tauri-apps/api/core";
@@ -137,16 +137,34 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 		}
 	});
 
-	const InstanceIcon = (iconProps: { iconPath?: string | null }) => {
-		const path = iconProps.iconPath || DEFAULT_ICONS[0];
-		const style = path.startsWith("linear-gradient")
-			? { background: path }
-			: {
-					"background-image": `url('${path}')`,
-					"background-size": "cover",
-					"background-position": "center",
-				};
-		return <div class={styles["instance-select-icon"]} style={style} />;
+	const InstanceIcon = (iconProps: { instance: Instance }) => {
+		const iconPath = () => iconProps.instance.iconPath || DEFAULT_ICONS[0];
+		const displayChar = createMemo(() => {
+			const name = iconProps.instance.name || "?";
+			const match = name.match(/[a-zA-Z]/);
+			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+		});
+		return (
+			<Show
+				when={!isDefaultIcon(iconPath())}
+				fallback={
+					<div class={styles["instance-select-icon-placeholder"]}>{displayChar()}</div>
+				}
+			>
+				<div
+					class={styles["instance-select-icon"]}
+					style={
+						iconPath().startsWith("linear-gradient")
+							? { background: iconPath() }
+							: {
+									"background-image": `url('${iconPath()}')`,
+									"background-size": "cover",
+									"background-position": "center",
+								}
+					}
+				/>
+			</Show>
+		);
 	};
 
 	const getCompatibility = (instance: Instance) => {
@@ -359,7 +377,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 									}
 								>
 									<div class={styles["instance-item-left"]}>
-										<InstanceIcon iconPath={instance.iconPath} />
+										<InstanceIcon instance={instance} />
 										<div class={styles["instance-item-info"]}>
 											<span class={styles["instance-item-name"]}>
 												{instance.name}

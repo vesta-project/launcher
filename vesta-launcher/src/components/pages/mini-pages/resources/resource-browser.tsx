@@ -46,7 +46,7 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "@ui/pagination/pagination";
-import { getMinecraftVersions, DEFAULT_ICONS } from "@utils/instances";
+import { getMinecraftVersions, DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import {
 	getShaderEnginesInOrder,
 	type ShaderEngineInfo,
@@ -171,20 +171,32 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 
 	const InstanceIcon = (props: { instance?: Instance | null }) => {
 		const iconPath = () => props.instance?.iconPath || DEFAULT_ICONS[0];
+		const displayChar = createMemo(() => {
+			const name = props.instance?.name || "?";
+			const match = name.match(/[a-zA-Z]/);
+			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+		});
 		return (
 			<Show when={props.instance}>
-				<div
-					class={styles["instance-item-icon"]}
-					style={
-						iconPath().startsWith("linear-gradient")
-							? { background: iconPath() }
-							: {
-									"background-image": `url('${iconPath()}')`,
-									"background-size": "cover",
-									"background-position": "center",
-								}
+				<Show
+					when={!isDefaultIcon(iconPath())}
+					fallback={
+						<div class={styles["instance-item-icon-placeholder"]}>{displayChar()}</div>
 					}
-				/>
+				>
+					<div
+						class={styles["instance-item-icon"]}
+						style={
+							iconPath().startsWith("linear-gradient")
+								? { background: iconPath() }
+								: {
+										"background-image": `url('${iconPath()}')`,
+										"background-size": "cover",
+										"background-position": "center",
+									}
+						}
+					/>
+				</Show>
 			</Show>
 		);
 	};
@@ -698,7 +710,15 @@ const ResourceCard: Component<{
 			<div class={styles["resource-card-icon"]}>
 				<Show
 					when={props.project.icon_url}
-					fallback={<div class={styles["icon-placeholder"]} />}
+					fallback={
+						<div class={styles["icon-placeholder"]}>
+							{(() => {
+								const name = props.project.name || "?";
+								const match = name.match(/[a-zA-Z]/);
+								return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+							})()}
+						</div>
+					}
 				>
 					<img src={props.project.icon_url ?? ""} alt={props.project.name} />
 				</Show>

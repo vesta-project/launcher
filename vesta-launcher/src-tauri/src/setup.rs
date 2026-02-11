@@ -12,10 +12,6 @@ use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{
-  menu::{Menu, MenuItem},
-  tray::TrayIconBuilder,
-};
 
 /// Exit status JSON structure written by the exit handler JAR
 #[derive(serde::Deserialize, Debug)]
@@ -770,52 +766,19 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         // Wait for system to settle
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 
-        match handle.updater() {
-            Ok(updater) => {
-                match updater.check().await {
-                    Ok(Some(update)) => {
-                        log::info!("Update found: {}", update.version);
-
-                        // Emit event for frontend
-                        use tauri::Emitter;
-                        let _ = handle.emit("core://update-available", &update.version);
-
-                        // Create a notification via NotificationManager
-                        if let Some(manager) = handle.try_state::<NotificationManager>() {
-                            use crate::notifications::models::{
-                                CreateNotificationInput, NotificationAction, NotificationType,
-                            };
-
-                            let actions = vec![NotificationAction {
-                                action_id: "open_update_dialog".to_string(),
-                                label: "Update Now".to_string(),
-                                action_type: "primary".to_string(),
-                            }];
-
-                            let _ = manager.create(CreateNotificationInput {
-                                client_key: Some("app_update_available".to_string()),
-                                title: Some("Update Available".to_string()),
-                                description: Some(format!(
-                                    "Vesta Launcher v{} is now available!",
-                                    update.version
-                                )),
-                                severity: Some("info".to_string()),
-                                notification_type: Some(NotificationType::Patient),
-                                dismissible: Some(true),
-                                actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
-                                progress: None,
-                                current_step: None,
-                                total_steps: None,
-                                metadata: None,
-                                show_on_completion: None,
-                            });
-                        }
-                    }
-                    Ok(None) => log::info!("No updates found."),
-                    Err(e) => log::error!("Failed to check for updates: {}", e),
-                }
+        // Get config to check startup_check_updates
+        let config = match get_app_config() {
+            Ok(c) => c,
+            Err(e) => {
+                log::error!("Failed to get app config for update check: {}", e);
+                return;
             }
-            Err(e) => log::error!("Updater not available: {}", e),
+        };
+
+        if config.startup_check_updates {
+            // Emit event to frontend to check for updates
+            use tauri::Emitter;
+            let _ = handle.emit("core://check-for-updates", ());
         }
     });
 

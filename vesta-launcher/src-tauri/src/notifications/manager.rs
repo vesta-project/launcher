@@ -163,6 +163,19 @@ impl ActionHandler for LogoutGuestHandler {
     }
 }
 
+/// Handler that triggers an update download in the frontend
+struct DownloadUpdateHandler {}
+
+impl ActionHandler for DownloadUpdateHandler {
+    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+        let handle = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = handle.emit("core://download-app-update", ());
+        });
+        Ok(())
+    }
+}
+
 /// Handler that opens the update dialog
 struct OpenUpdateDialogHandler {}
 
@@ -443,6 +456,7 @@ impl NotificationManager {
         );
         manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
         manager.register_action("install_app_update", Arc::new(InstallUpdateHandler {}));
+        manager.register_action("download_update", Arc::new(DownloadUpdateHandler {}));
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
         // Future handlers (pause, resume, etc.) can be added here

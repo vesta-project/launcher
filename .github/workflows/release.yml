@@ -502,10 +502,15 @@ jobs:
             echo "- Initial release or patch update" >> changelog.md
           fi
           
+          # Safety check: ensure changelog.md exists and has content
+          if [ ! -s changelog.md ]; then
+            echo "- No changes or initial release" > changelog.md
+          fi
+          
           # Use a unique delimiter for multiline output
           DELIMITER="CHANGELOG_DELIMITER_$(date +%s%N)"
           echo "changelog<<${DELIMITER}" >> $GITHUB_OUTPUT
-          cat changelog.md >> $GITHUB_OUTPUT
+          { cat changelog.md 2>/dev/null || echo "- Changelog unavailable"; } >> $GITHUB_OUTPUT
           echo "${DELIMITER}" >> $GITHUB_OUTPUT
       
       - name: Create GitHub Release

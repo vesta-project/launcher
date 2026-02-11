@@ -46,7 +46,7 @@ import { showToast } from "@ui/toast/toast";
 import { openExternal } from "@utils/external-link";
 import { marked } from "marked";
 import { formatDate } from "@utils/date";
-import { DEFAULT_ICONS } from "@utils/instances";
+import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import {
 	getCompatibilityForInstance,
 	getShaderEnginesInOrder,
@@ -323,20 +323,32 @@ const ResourceDetailsPage: Component<{
 
 	const InstanceIcon = (iconProps: { instance?: any }) => {
 		const iconPath = () => iconProps.instance?.iconPath || DEFAULT_ICONS[0];
+		const displayChar = createMemo(() => {
+			const name = iconProps.instance?.name || "?";
+			const match = name.match(/[a-zA-Z]/);
+			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+		});
 		return (
 			<Show when={iconProps.instance && iconProps.instance.id !== null}>
-				<div
-					class={styles["instance-item-icon"]}
-					style={
-						iconPath().startsWith("linear-gradient")
-							? { background: iconPath() }
-							: {
-									"background-image": `url('${iconPath()}')`,
-									"background-size": "cover",
-									"background-position": "center",
-								}
+				<Show
+					when={!isDefaultIcon(iconPath())}
+					fallback={
+						<div class={styles["instance-item-icon-placeholder"]}>{displayChar()}</div>
 					}
-				/>
+				>
+					<div
+						class={styles["instance-item-icon"]}
+						style={
+							iconPath().startsWith("linear-gradient")
+								? { background: iconPath() }
+								: {
+										"background-image": `url('${iconPath()}')`,
+										"background-size": "cover",
+										"background-position": "center",
+									}
+						}
+					/>
+				</Show>
 			</Show>
 		);
 	};

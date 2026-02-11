@@ -21,7 +21,7 @@ import {
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
 import { getMinecraftVersions } from "@utils/instances";
-import { checkForAppUpdates } from "@utils/updater";
+import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
@@ -161,6 +161,9 @@ function Root(props: ChildrenProp) {
 	let unlistenExit: UnlistenFn | null = null;
 	let unlistenLogout: UnlistenFn | null = null;
 	let unlistenUpdate: UnlistenFn | null = null;
+	let unlistenCheckUpdates: UnlistenFn | null = null;
+
+	let hasCheckedForUpdatesOnStartup = false;
 
 	// Global window-level drag events to manage the sniffer
 	const manager = getDropZoneManager();
@@ -263,6 +266,14 @@ function Root(props: ChildrenProp) {
 	};
 
 	onMount(() => {
+		initUpdateListener();
+		listen("core://check-for-updates", () => {
+			if (!hasCheckedForUpdatesOnStartup) {
+				hasCheckedForUpdatesOnStartup = true;
+				checkForAppUpdates(true);
+			}
+		}).then((u) => { unlistenCheckUpdates = u; });
+
 		listen("core://logout-guest", () => {
 			window.location.href = "/";
 		}).then((u) => { unlistenLogout = u; });
@@ -479,6 +490,7 @@ function Root(props: ChildrenProp) {
 		unlistenExit?.();
 		unlistenLogout?.();
 		unlistenUpdate?.();
+		unlistenCheckUpdates?.();
 		cleanupDialogSystem();
 		unsubscribeFromBackendNotifications();
 		unsubscribeFromConfigUpdates();
