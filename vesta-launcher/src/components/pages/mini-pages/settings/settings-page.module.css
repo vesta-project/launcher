@@ -122,6 +122,15 @@
 	height: 12px;
 }
 
+.slider--hue .slider__thumb {
+	border-color: hsl(var(--color__primary-hue) 60% 45%);
+	background-color: hsl(var(--color__primary-hue) 80% 70%);
+	box-shadow:
+		0 0 0 2px var(--surface-overlay),
+		0 4px 12px rgba(0, 0, 0, 0.3);
+	border: 2px solid white;
+}
+
 .slider__header {
 	display: flex;
 	justify-content: space-between;

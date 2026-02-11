@@ -861,7 +861,6 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 														</div>
 													</div>
 													<SliderTrack class={styles["slider-track-hue"]}>
-														<SliderFill />
 														<SliderThumb />
 													</SliderTrack>
 												</Slider>
