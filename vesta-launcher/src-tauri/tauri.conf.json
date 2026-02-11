@@ -1,6 +1,6 @@
 {
 	"productName": "Vesta Launcher",
-	"version": "0.1.0-alpha.8",
+	"version": "0.1.0-alpha.9",
 	"identifier": "net.vesta.launcher",
 	"build": {
 		"beforeDevCommand": "npm run dev",
@@ -41,7 +41,7 @@
 		"createUpdaterArtifacts": true,
 		"windows": {
 			"wix": {
-				"version": "0.1.0.8"
+				"version": "0.1.0.9"
 			}
 		},
 		"shortDescription": "Vesta Launcher",
