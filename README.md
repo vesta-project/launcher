@@ -1,75 +1,53 @@
-# Vesta Launcher
+<p align="center">
+  <img src="public/vesta.png" alt="Vesta Launcher" width="400" />
+</p>
 
-Vesta Launcher is a desktop Minecraft launcher built with Tauri (Rust) for the backend and SolidJS (TypeScript) for the frontend. This repository contains the launcher, core libraries, installer logic, and supporting tools used by the app.
+<h3 align="center">Vesta Launcher</h3>
 
-This README provides a high-level overview and quick developer instructions. More detailed design and developer guides live in the `docs/` directory.
+<p align="center">
+  A modern desktop Minecraft launcher that supports multiple mod loaders including Fabric, Forge, NeoForge, and Quilt. Easily manage instances, install mods, and launch Minecraft with a clean, intuitive interface.
+</p>
 
-Quick links
+---
 
-- Source root: this repository
-- Frontend app: `vesta-launcher/`
-- Backend / Tauri: `vesta-launcher/src-tauri/`
-- Core Rust library: `crates/piston-lib/`
-- Docs: `docs/`
-- Launch process addendum: `docs/launch_process_addendum.md`
-- Storage & naming preferences: `docs/vesta_preferences.md`
+### Features
 
-Prerequisites
+- Multi-loader support (Vanilla, Fabric, Forge, NeoForge, Quilt)
+- Instance management
+- Automatic updates
+- Cross-platform (Windows, macOS, Linux)
 
-- Rust toolchain (stable) with Cargo
-- Bun (for frontend scripts) or Node.js + npm/yarn/pnpm if you prefer
-- Java (optional, required for some installer processors and some tests)
+### Installation
 
-Quick start (development)
+Download the latest version from [GitHub Releases](https://github.com/vesta-project/launcher/releases).
 
-- Start frontend + Tauri dev server (recommended):
+### Usage
 
-  bun run vesta:dev
+1. Run the installer.
+2. Create a new instance.
+3. Select your Minecraft version and mod loader.
+4. Add mods if desired.
+5. Launch!
 
-- Build backend crate(s):
+### For Developers
 
-  cd vesta-launcher/src-tauri
-  cargo build
+This repository contains the source code for Vesta Launcher, built with Tauri (Rust backend) and SolidJS (TypeScript frontend).
 
-- Run an example installer (core library):
+#### Prerequisites
 
-  cargo run -p piston-lib --example test_install
+- Rust toolchain (stable)
+- Bun or Node.js
+- Java (for some features)
 
-- Run tests (example: crate `piston-lib`):
+#### Quick Start
 
-  cargo test -p piston-lib --lib
+```bash
+bun run vesta:dev
+```
 
-Repository structure (short)
+See [docs/README.md](docs/README.md) for detailed development guides.
 
-- `vesta-launcher/`: SolidJS frontend (Vite). UI components, styles, and app entrypoints.
-- `vesta-launcher/src-tauri/`: Tauri backend integration and Rust-based app entrypoint and configuration.
-- `crates/piston-lib/`: Core installer/launcher logic. Contains installers (Vanilla, Fabric, Forge/NeoForge, Quilt), updater logic, and task/reporting abstractions.
-- `docs/`: high-level developer documentation (architecture, install, dev workflow, contributing).
-
-Important patterns & conventions
-
-- Database schema: Use Diesel ORM for schema definitions in `src-tauri/src/schema.rs` and models in `src-tauri/src/models`. Migrations managed via Diesel CLI in `src-tauri/migrations/vesta` and `src-tauri/migrations/config`.
-- Tasks & notifications: Long-running operations are implemented as `Task`s and reported via `NotificationManager` semantics. Use `client_key` for updating notifications; progress is 0..100 or indeterminate.
-- Processor/JAR handling: Installer processors (Java-based) may rely on files in `data/*`. The Rust installer extracts `data/*` entries into the install `data_dir` so Java processors can access them.
-- Cross-platform paths: Code normalizes forward/back slashes where necessary; prefer using path abstractions for file operations and canonicalization.
-
-Tests & environment notes
-
-- Some tests are environment-dependent (e.g., Java verification, path canonicalization). If a test fails locally, check that Java is installed and on `PATH` and that the filesystem canonicalization works for your OS.
-
-Where to get help
-
-- See `docs/` for developer-focused documentation and the existing guides in the repo root (e.g., `DATABASE_GUIDE.md`, `NOTIFICATION_USAGE.md`, `MIGRATION_GUIDE.md`).
-
-Configuration references
-
-- Use `docs/launch_process_addendum.md` for integrity, rollback, and server guidance referenced by installers.
-- Storage, naming, and path rules live in `docs/vesta_preferences.md`.
-- Sample config surfaces live in `docs/vesta.config.example.json` and `docs/mirrors.example.json` (remove `$comment` keys before shipping).
-
-License
-
-- See `LICENSE` at repository root.
-
---
-This README is a concise entrypoint. For architecture and developer workflows, see `docs/ARCHITECTURE.md` and `docs/DEVELOPMENT.md`.
+---
+<p align="center">
+  <sub>This project is licensed under the <a href="LICENSE">GNU General Public License v3.0</a>.</sub>
+</p>

@@ -2,28 +2,58 @@
 
 This document covers typical developer workflows, code conventions, and where to make common changes.
 
+## Prerequisites
+- **Rust:** Stable toolchain (Cargo).
+- **Bun:** Required for frontend tasks and project scripts. [Install Bun](https://bun.sh/).
+- **Java:** Required for certain installer processors and tests.
+
 ## Workflows
-- **Start Development Server (Frontend + Backend):**
+
+### Setup & Dependencies
+- **Install All Dependencies:**
+  ```bash
+  bun install
   ```
+  (This runs `bun install` in the `vesta-launcher` directory as well.)
+
+### Development
+- **Start Development Server (Frontend + Backend):**
+  ```bash
   bun run vesta:dev
   ```
-  (Runs Tauri + Vite from the root directory.)
+  (Runs Tauri + Vite with hot-reloading.)
 
 - **Frontend Only:**
-  ```
+  ```bash
   cd vesta-launcher
   bun run dev
   ```
 
 - **Run Backend Unit Tests:**
-  ```
+  ```bash
   cargo test -p piston-lib --lib
   ```
 
-- **Build Backend for Release:**
+### Building & Versioning
+- **Build for Production (Installer/Executable):**
+  ```bash
+  bun run vesta:build
   ```
-  cd vesta-launcher/src-tauri
-  cargo build --release
+
+- **Bump Version:**
+  ```bash
+  bun run version:bump
+  ```
+
+### Linting & Formatting
+We use **Biome** for JavaScript/TypeScript and standard Rust formatting.
+- **Check/Fix Frontend Code:**
+  ```bash
+  bunx biome check --apply .
+  ```
+- **Format Rust Code:**
+  ```bash
+  cargo fmt
   ```
 
 ## Key Places to Change

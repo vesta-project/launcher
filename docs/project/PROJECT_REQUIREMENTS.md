@@ -145,11 +145,11 @@
 - [ ] 🤖 ⏳ Instance directory structure (.minecraft folders)
 - [ ] 🤖 ⏳ Mod storage organization
 - [ ] 🤖 ⏳ Downloaded file cache (mods, assets, libraries)
-- [ ] 🤖 ⏳ Cache database schema
+- [x] 🚧 Cache database schema (design documented)
 - [ ] 🤖 ⏳ LRU cache eviction policy
-- [ ] 🤖 ⏳ Cache integrity verification (checksums)
-- [ ] 🤖 ⏳ Shared cache across instances
-- [ ] 🤖 ⏳ Cache statistics and management UI
+- [x] 🚧 Cache integrity verification (checksums documented)
+- [x] 🚧 Shared cache across instances (design documented)
+- [x] 🚧 Cache statistics and management UI (design documented)
 - [ ] 🤖 ⏳ Temporary file cleanup
 - [ ] 🤖 ⏳ Backup and restore functionality
 
@@ -189,7 +189,7 @@
 - [x] 🚧 Notification categories (info, warning, error, success, debug)
 - [x] 🚧 Progress notifications with pulsing and step tracking
 - [ ] 🤖 ⏳ Notification action buttons
-- [ ] ⏳ System tray notifications (Windows/Mac/Linux)
+- [x] ✅ System tray settings/configuration (show_tray_icon, minimize_to_tray)
 - [ ] 🤖 ⏳ Notification center UI (sidebar exists, needs backend integration)
 - [ ] 🤖 ⏳ Notification preferences
 - [x] 🚧 Notification retention (30 days default, cleanup on startup)
@@ -256,7 +256,7 @@
 ### 🧪 Testing & Quality
 
 - [ ] 🤖 ⏳ Unit tests for services
-- [ ] 🤖 ⏳ Integration tests for repositories
+- [x] 🚧 Integration tests for repositories (examples documented)
 - [ ] ⏳ E2E tests for critical flows
 - [ ] 🤖 ⏳ Test coverage reporting
 - [ ] 🤖 ⏳ Performance benchmarks
@@ -266,10 +266,10 @@
 
 - [ ] 🤖 ⏳ User documentation/help
 - [ ] 🤖 ⏳ API documentation for piston-lib
-- [ ] 🤖 ⏳ Architecture decision records (ADRs)
-- [ ] 🤖 ⏳ Component documentation
-- [ ] 🤖 ⏳ Developer setup guide
-- [ ] 🤖 ⏳ Contributing guidelines
+- [x] ✅ Architecture decision records (ADRs)
+- [x] ✅ Component documentation
+- [x] ✅ Developer setup guide
+- [x] ✅ Contributing guidelines
 
 ---
 
@@ -617,5 +617,5 @@ Closes #42
 
 ---
 
-**Last Updated**: November 16, 2025  
+**Last Updated**: February 11, 2026  
 **Review Cycle**: Weekly during active development

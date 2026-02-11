@@ -196,6 +196,26 @@ UPDATE AppConfig SET notification_retention_days = 60 WHERE id = 1;  -- 60-day r
 - `success` - Green (`#27ae60`)
 - `info` - Blue (`#3498db`)
 
+## Notification Types and Lifecycle
+
+### Types
+- **Immediate**: Toast-only notifications that appear instantly and auto-dismiss. Used for quick feedback like "Saved successfully".
+- **Progress**: Active tasks with progress bars. Show pulsing animation (-1) or percentage (0-100). Convert to Patient when complete.
+- **Patient**: Completed or passive notifications. Dismissible by user. Former Progress notifications become Patient at 100%.
+- **Task**: Similar to Progress but for background operations. May have different UI treatment.
+
+### Lifecycle
+1. **Creation**: Notification created with initial state
+2. **Updates**: Progress notifications updated via `client_key` until completion
+3. **Completion**: Progress >= 100 converts to Patient (dismissible)
+4. **Dismissal**: User can dismiss Patient notifications
+5. **Cleanup**: Old notifications auto-deleted after retention period
+
+### Type Transitions
+- Progress → Patient (when progress >= 100)
+- Immediate notifications never persist
+- Task notifications may have special handling for background work
+
 ## UI Components
 
 ### Toast Notifications
@@ -218,7 +238,29 @@ Bell icon shows:
 - **Spinner overlay** - Active tasks in progress (progress < 100 or progress = -1)
 - **Badge with count** - Number of unread persistent notifications
 
-## Database Schema
+## Backend Implementation Details
+
+### NotificationManager
+The `NotificationManager` handles all notification operations:
+- Creates notifications with unique IDs
+- Updates progress via `client_key` (prevents duplicates)
+- Emits events to frontend (`core://notification`, `core://notification-progress`)
+- Manages database persistence and cleanup
+
+### Key Concepts
+- **client_key**: Unique identifier for updatable notifications. Use for tasks that report progress.
+- **persist**: Whether to store in database (true) or show as toast only (false)
+- **progress**: -1 for pulsing, 0-100 for percentage, null for no progress
+- **notification_type**: Determines UI behavior and lifecycle
+
+### Event Flow
+1. Backend creates/updates notification
+2. Event emitted to frontend
+3. Frontend updates UI state
+4. Toast/sidebar reflects changes
+5. Database updated if persistent
+
+## Advanced Usage
 
 ```sql
 CREATE TABLE Notification (
