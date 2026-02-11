@@ -37,6 +37,7 @@ diesel::table! {
         setup_step -> Integer,
         tutorial_completed -> Bool,
         use_dedicated_gpu -> Bool,
+        discord_presence_enabled -> Bool,
     }
 }
 

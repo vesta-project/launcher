@@ -69,6 +69,7 @@ sha2 = "0.10"
 # OAuth2 and Microsoft authentication
 oauth2 = "4.4.2"
 minecraft-msa-auth = "0.4.0"
+discord-rich-presence = "0.2"
 lazy_static = "1.5"
 walkdir = "2.5.0"
 murmur2 = "0.1.0"

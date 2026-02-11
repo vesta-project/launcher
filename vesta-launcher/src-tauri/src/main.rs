@@ -3,6 +3,7 @@
 
 pub mod auth;
 mod commands;
+pub mod discord;
 mod metadata_cache;
 pub mod models;
 mod notifications;

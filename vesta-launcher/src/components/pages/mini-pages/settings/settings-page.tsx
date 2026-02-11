@@ -109,6 +109,7 @@ interface AppConfig {
 	setup_step: number;
 	tutorial_completed: boolean;
 	use_dedicated_gpu: boolean;
+	discord_presence_enabled: boolean;
 	[key: string]: any;
 }
 
@@ -130,6 +131,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 	const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
 	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 	const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
+	const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
 
@@ -374,6 +376,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				setAutoUpdateEnabled(config.auto_update_enabled ?? true);
 				setStartupCheckUpdates(config.startup_check_updates ?? true);
 				setUseDedicatedGpu(config.use_dedicated_gpu ?? true);
+				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
@@ -416,6 +419,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				if (field === "auto_update_enabled") setAutoUpdateEnabled(value);
 				if (field === "startup_check_updates") setStartupCheckUpdates(value);
 				if (field === "use_dedicated_gpu") setUseDedicatedGpu(value ?? true);
+				if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
 				if (field === "theme_id" && value) setThemeId(value);
 				if (field === "theme_primary_hue" && value !== null)
@@ -669,6 +673,16 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 		}
 	};
 
+	const handleDiscordToggle = async (checked: boolean) => {
+		setDiscordPresenceEnabled(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "discord_presence_enabled",
+				value: checked,
+			});
+		}
+	};
+
 	const handleOpenAppData = async () => {
 		if (hasTauriRuntime()) {
 			await invoke("open_app_config_dir");
@@ -755,6 +769,21 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 								</SwitchControl>
 							</Switch>
 						}
+						/>
+					</SettingsCard>
+
+					<SettingsCard header="Privacy & Integration">
+						<SettingsField
+							label="Discord Rich Presence"
+							description="Show your current game and status on Discord."
+							layout="inline"
+							control={
+								<Switch checked={discordPresenceEnabled()} onCheckedChange={handleDiscordToggle}>
+									<SwitchControl>
+										<SwitchThumb />
+									</SwitchControl>
+								</Switch>
+							}
 						/>
 					</SettingsCard>
 

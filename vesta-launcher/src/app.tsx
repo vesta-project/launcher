@@ -103,6 +103,10 @@ async function handleDeepLink(
 			case "resource-details":
 				path = "/resource-details";
 				break;
+			case "home":
+				// Just focus the app, which is done by the single-instance plugin
+				// and this handler means we're already here.
+				return;
 			default:
 				console.warn("Unknown deep link target:", metadata.target);
 				path = "/config"; // Fallback

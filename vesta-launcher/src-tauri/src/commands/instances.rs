@@ -5,6 +5,7 @@ use crate::schema::instance::dsl::*;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::maintenance::{CloneInstanceTask, RepairInstanceTask, ResetInstanceTask};
 use crate::tasks::manager::TaskManager;
+use crate::discord::DiscordManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
@@ -1269,9 +1270,15 @@ pub async fn launch_instance(
                 serde_json::json!({ "instance_id": instance_id, "name": instance_data.name, "pid": result.instance.pid }),
             );
 
+            // Update Discord activity
+            if let Some(dm) = app_handle.try_state::<DiscordManager>() {
+                dm.add_running_instance(&instance_data.name).await;
+            }
+
             // Monitor process
             let app_handle_monitor = app_handle.clone();
             let instance_id_monitor = instance_id.clone();
+            let instance_name_monitor = instance_data.name.clone();
             let pid_monitor = result.instance.pid;
             let started_at_monitor = result.instance.started_at.to_rfc3339();
             let game_dir_monitor = result.instance.game_dir.clone();
@@ -1286,6 +1293,11 @@ pub async fn launch_instance(
                     sys.refresh_all();
                     if sys.process(sysinfo::Pid::from_u32(pid_monitor)).is_none() {
                         log::info!("Process exited");
+
+                        // Update Discord activity on exit
+                        if let Some(dm) = app_handle_monitor.try_state::<DiscordManager>() {
+                            dm.remove_running_instance(&instance_name_monitor).await;
+                        }
 
                         // Check exit status
                         let exit_status_path =

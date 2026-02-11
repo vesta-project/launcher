@@ -141,6 +141,9 @@ pub struct AppConfig {
 
     // Graphics settings
     pub use_dedicated_gpu: bool,
+
+    // Discord integration
+    pub discord_presence_enabled: bool,
 }
 
 impl Default for AppConfig {
@@ -185,6 +188,7 @@ impl Default for AppConfig {
             tutorial_completed: false,
 
             use_dedicated_gpu: true,
+            discord_presence_enabled: true,
         }
     }
 }

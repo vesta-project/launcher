@@ -487,21 +487,22 @@ jobs:
           # Get the current tag
           CURRENT_TAG="v${{ steps.version.outputs.version }}"
           
-          # Get the previous tag (if it exists)
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD~1 2>/dev/null || git describe --tags --abbrev=0 2>/dev/null || echo "")
+          # Get the previous tag (second most recent by version)
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
           
           echo "## Changelog" > changelog.md
           echo "" >> changelog.md
           
-          if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$CURRENT_TAG" ]; then
-            # Check if the range has commits
-            if git rev-list --count ${PREVIOUS_TAG}..${CURRENT_TAG} >/dev/null 2>&1; then
-              git log --pretty=format:"- %s (%h)" --no-merges ${PREVIOUS_TAG}..${CURRENT_TAG} >> changelog.md 2>/dev/null || echo "- Release notes" >> changelog.md
+          if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+            # Check if there are commits between previous and current tag
+            COMMIT_COUNT=$(git rev-list --count ${PREVIOUS_TAG}..${CURRENT_TAG} 2>/dev/null || echo "0")
+            if [ "$COMMIT_COUNT" -gt 0 ]; then
+              git log --pretty=format:"- %s (%h)" --no-merges --grep="chore: bump version" --invert-grep ${PREVIOUS_TAG}..${CURRENT_TAG} >> changelog.md 2>/dev/null || echo "- Release notes" >> changelog.md
             else
-              echo "- Release notes" >> changelog.md
+              echo "- No changes since last release" >> changelog.md
             fi
           else
-            echo "- Initial release or patch update" >> changelog.md
+            echo "- Initial release" >> changelog.md
           fi
           
           # Safety check: ensure changelog.md exists and has content
@@ -509,11 +510,10 @@ jobs:
             echo "- No changes or initial release" > changelog.md
           fi
           
-          # Use a unique delimiter for multiline output
-          DELIMITER="CHANGELOG_DELIMITER_$(date +%s%N)"
-          echo "changelog<<${DELIMITER}" >> $GITHUB_OUTPUT
-          { cat changelog.md 2>/dev/null || echo "- Changelog unavailable"; } >> $GITHUB_OUTPUT
-          echo "${DELIMITER}" >> $GITHUB_OUTPUT
+          # Use a unique delimiter for multiline output (fixed to avoid conflicts with content)
+          echo "changelog<<CHANGELOG_EOF_DELIMITER_ABC123XYZ" >> $GITHUB_OUTPUT
+          cat changelog.md >> $GITHUB_OUTPUT
+          echo "CHANGELOG_EOF_DELIMITER_ABC123XYZ" >> $GITHUB_OUTPUT
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

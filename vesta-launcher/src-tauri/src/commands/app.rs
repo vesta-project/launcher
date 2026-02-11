@@ -327,6 +327,7 @@ pub struct TraySettings {
 pub enum DeepLinkTarget {
     Install,
     ResourceDetails,
+    Home,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -362,6 +363,12 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
         "install" => {
             Ok(DeepLinkMetadata {
                 target: DeepLinkTarget::Install,
+                params,
+            })
+        }
+        "home" => {
+            Ok(DeepLinkMetadata {
+                target: DeepLinkTarget::Home,
                 params,
             })
         }

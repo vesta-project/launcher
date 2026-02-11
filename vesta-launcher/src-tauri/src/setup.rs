@@ -1,5 +1,6 @@
 use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
+use crate::discord::DiscordManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::config::{init_config_db, get_app_config};
@@ -295,10 +296,17 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     app.manage(notification_manager);
 
+    // Initialize DiscordManager
+    let discord_manager = DiscordManager::new(app.handle().clone());
+    let dm = discord_manager.clone();
+    tauri::async_runtime::spawn(async move {
+        dm.init().await;
+    });
+    app.manage(discord_manager);
+
     // Initialize TaskManager
     let task_manager = TaskManager::new(app.handle().clone());
     app.manage(task_manager);
-
     // Initialize NetworkManager
     let network_manager = crate::utils::network::NetworkManager::new(app.handle().clone());
     app.manage(network_manager);
