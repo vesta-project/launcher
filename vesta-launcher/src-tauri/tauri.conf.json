@@ -44,6 +44,9 @@
 				"version": "0.1.0.9"
 			}
 		},
+		"macOS": {
+			"entitlements": "entitlements/default.plist"
+		},
 		"shortDescription": "Vesta Launcher",
 		"active": true,
 		"targets": "all",
