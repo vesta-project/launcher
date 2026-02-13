@@ -125,6 +125,7 @@ import { ExportDialog } from "@ui/export-dialog";
 import { HomeTab } from "./tabs/HomeTab";
 import { ConsoleTab } from "./tabs/ConsoleTab";
 import { ResourcesTab } from "./tabs/ResourcesTab";
+import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
 import { VersioningTab } from "./tabs/VersioningTab";
 import { SettingsTab } from "./tabs/SettingsTab";
 import FolderIcon from "@assets/folder.svg";
@@ -136,7 +137,7 @@ import LinkIcon from "@assets/link.svg";
 import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
 
-type TabType = "home" | "console" | "resources" | "settings" | "versioning";
+type TabType = "home" | "console" | "resources" | "settings" | "versioning" | "screenshots";
 
 interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
@@ -611,7 +612,7 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
 		return tab &&
-			["home", "console", "resources", "settings", "versioning"].includes(tab)
+			["home", "console", "resources", "screenshots", "settings", "versioning"].includes(tab)
 			? tab
 			: "home";
 	});
@@ -1755,6 +1756,12 @@ export default function InstanceDetails(
 						Resources
 					</button>
 					<button
+						classList={{ [styles.active]: activeTab() === "screenshots" }}
+						onClick={() => handleTabChange("screenshots")}
+					>
+						Screenshots
+					</button>
+					<button
 						classList={{ [styles.active]: activeTab() === "versioning" }}
 						onClick={() => handleTabChange("versioning")}
 					>
@@ -1964,6 +1971,10 @@ export default function InstanceDetails(
 											checkingUpdates={checkingUpdates()}
 											checkUpdates={checkUpdates}
 										/>
+									</Show>
+
+									<Show when={activeTab() === "screenshots"}>
+										<ScreenshotsTab instanceIdSlug={slug()} />
 									</Show>
 
 									<Show when={activeTab() === "versioning"}>

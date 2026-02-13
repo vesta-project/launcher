@@ -1,6 +1,7 @@
 pub mod app;
 pub mod instances;
 pub mod modpacks;
+pub mod screenshots;
 pub mod notifications;
 pub mod onboarding;
 pub mod pinning;

@@ -10,7 +10,7 @@ import {
 import { children, mergeProps, Show, splitProps } from "solid-js";
 import styles from "./button.module.css";
 
-interface ButtonProps
+export interface ButtonProps
 	extends PolymorphicProps<
 		"button",
 		ButtonPrimitive.ButtonRootProps & ChildrenProp

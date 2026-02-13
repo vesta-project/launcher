@@ -86,7 +86,10 @@ pub async fn launch_window(
 pub fn set_windows_gpu_preference(executable_path: &std::path::Path) -> Result<(), anyhow::Error> {
     let path_str = executable_path.to_string_lossy();
 
-    log::info!("Setting Windows GPU preference to High Performance for: {}", path_str);
+    log::info!(
+        "Setting Windows GPU preference to High Performance for: {}",
+        path_str
+    );
 
     // GpuPreference=2 is "High Performance" (typically Dedicated GPU)
     // We use the 'reg' command to avoid complex Win32 API calls for a simple registry update

@@ -11,6 +11,7 @@ import {
 	on,
 	createResource,
 } from "solid-js";
+import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import { Badge } from "@ui/badge";
 import {
 	resources,
@@ -219,7 +220,6 @@ const ResourceDetailsPage: Component<{
 	const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<
 		string | null
 	>(null);
-	const [isZoomed, setIsZoomed] = createSignal(false);
 	const [versionPage, setVersionPage] = createSignal(1);
 	const versionsPerPage = 15;
 	const [manualVersionId, setManualVersionId] = createSignal<string | null>(
@@ -469,7 +469,6 @@ const ResourceDetailsPage: Component<{
 				e.stopImmediatePropagation();
 				e.preventDefault();
 				setSelectedGalleryItem(null);
-				setIsZoomed(false);
 			}
 		};
 
@@ -2193,44 +2192,18 @@ const ResourceDetailsPage: Component<{
 						</div>
 					</div>
 
-					<Show when={selectedGalleryItem()}>
-						<div
-							class={styles["gallery-overlay"]}
-							onClick={() => {
-								setSelectedGalleryItem(null);
-								setIsZoomed(false);
-							}}
-						>
-							<button
-								class={styles["gallery-close-btn"]}
-								onClick={() => {
-									setSelectedGalleryItem(null);
-									setIsZoomed(false);
-								}}
-							>
-								<CloseIcon />
-							</button>
-							<div
-								classList={{
-									[styles["gallery-large-view"]]: true,
-									[styles["zoomed"]]: isZoomed(),
-								}}
-								onClick={(e) => {
-									e.stopPropagation();
-									setIsZoomed(!isZoomed());
-									console.log("Zoom toggled:", !isZoomed());
-								}}
-							>
-								<img
-									src={selectedGalleryItem() || ""}
-									alt="Project Gallery Full"
-								/>
-								<div class={styles["gallery-info-bar"]}>
-									<span>Click to {isZoomed() ? "shrink" : "zoom"}</span>
-								</div>
-							</div>
-						</div>
-					</Show>
+					<ImageViewer
+						src={selectedGalleryItem()}
+						images={project()?.gallery?.map(item => ({
+							src: item,
+							title: project()?.display_name || "Resource Gallery"
+						}))}
+						title={project()?.display_name || "Resource Gallery"}
+						showDelete={false}
+						onClose={() => {
+							setSelectedGalleryItem(null);
+						}}
+					/>
 					<Show when={hoveredLink()}>
 						<div class={styles["link-preview-statusBar"]}>{hoveredLink()}</div>
 					</Show>

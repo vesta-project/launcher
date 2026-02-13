@@ -10,7 +10,9 @@ pub async fn test_blocking_dialog(
     let request = DialogRequest {
         id: uuid::Uuid::new_v4(),
         title: "Backend Blocking Test".to_string(),
-        description: Some("This dialog was triggered by the backend! Do you want to continue?".to_string()),
+        description: Some(
+            "This dialog was triggered by the backend! Do you want to continue?".to_string(),
+        ),
         severity: DialogSeverity::Question,
         actions: vec![
             DialogAction {
@@ -284,7 +286,7 @@ pub async fn refresh_network_status(
 pub fn get_tray_settings() -> Result<TraySettings, String> {
     let config = crate::utils::config::get_app_config()
         .map_err(|e| format!("Failed to get config: {}", e))?;
-    
+
     Ok(TraySettings {
         show_tray_icon: config.show_tray_icon,
         minimize_to_tray: config.minimize_to_tray,
@@ -293,24 +295,34 @@ pub fn get_tray_settings() -> Result<TraySettings, String> {
 
 #[tauri::command]
 pub fn set_tray_icon_visibility(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
-    crate::utils::config::update_config_field(app, "show_tray_icon".to_string(), serde_json::json!(visible))
-        .map_err(|e| format!("Failed to update tray icon visibility: {}", e))?;
+    crate::utils::config::update_config_field(
+        app,
+        "show_tray_icon".to_string(),
+        serde_json::json!(visible),
+    )
+    .map_err(|e| format!("Failed to update tray icon visibility: {}", e))?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn set_minimize_to_tray(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    crate::utils::config::update_config_field(app, "minimize_to_tray".to_string(), serde_json::json!(enabled))
-        .map_err(|e| format!("Failed to update minimize to tray setting: {}", e))?;
+    crate::utils::config::update_config_field(
+        app,
+        "minimize_to_tray".to_string(),
+        serde_json::json!(enabled),
+    )
+    .map_err(|e| format!("Failed to update minimize to tray setting: {}", e))?;
     Ok(())
 }
 
 #[tauri::command]
 pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("main") {
-        window.show()
+        window
+            .show()
             .map_err(|e| format!("Failed to show window: {}", e))?;
-        window.set_focus()
+        window
+            .set_focus()
             .map_err(|e| format!("Failed to focus window: {}", e))?;
     }
     Ok(())
@@ -360,18 +372,14 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
         .unwrap_or_default();
 
     match action {
-        "install" => {
-            Ok(DeepLinkMetadata {
-                target: DeepLinkTarget::Install,
-                params,
-            })
-        }
-        "home" => {
-            Ok(DeepLinkMetadata {
-                target: DeepLinkTarget::Home,
-                params,
-            })
-        }
+        "install" => Ok(DeepLinkMetadata {
+            target: DeepLinkTarget::Install,
+            params,
+        }),
+        "home" => Ok(DeepLinkMetadata {
+            target: DeepLinkTarget::Home,
+            params,
+        }),
         "standalone" => {
             let resource_type = params.get("type").map(|s| s.as_str()).unwrap_or("");
             if resource_type == "modpack" {

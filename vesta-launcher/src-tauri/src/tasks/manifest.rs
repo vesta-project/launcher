@@ -122,7 +122,8 @@ impl Task for GenerateManifestTask {
                     .await
             };
 
-            network_manager.report_request_result(start.elapsed().as_millis(), metadata_res.is_ok());
+            network_manager
+                .report_request_result(start.elapsed().as_millis(), metadata_res.is_ok());
 
             let metadata = metadata_res.map_err(|e| {
                 log::error!("Failed to load/fetch metadata: {}", e);

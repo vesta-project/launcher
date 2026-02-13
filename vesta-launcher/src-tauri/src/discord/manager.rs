@@ -125,17 +125,19 @@ impl DiscordManager {
         }
         let name = instance_name.to_string();
         drop(state);
-        self.update_presence("Playing Minecraft", Some(&name), true).await;
+        self.update_presence("Playing Minecraft", Some(&name), true)
+            .await;
     }
 
     /// Remove a running instance and update status
     pub async fn remove_running_instance(&self, instance_name: &str) {
         let mut state = self.state.lock().await;
         state.running_instances.retain(|i| i != instance_name);
-        
+
         if let Some(last) = state.running_instances.last().cloned() {
             drop(state);
-            self.update_presence("Playing Minecraft", Some(&last), true).await;
+            self.update_presence("Playing Minecraft", Some(&last), true)
+                .await;
         } else {
             state.last_start_time = SystemTime::now()
                 .duration_since(UNIX_EPOCH)
@@ -161,7 +163,11 @@ impl DiscordManager {
         };
         drop(state); // Drop the lock before blocking operation
 
-        log::debug!("[DiscordManager] Updating presence: {} - {:?}", details, state_text);
+        log::debug!(
+            "[DiscordManager] Updating presence: {} - {:?}",
+            details,
+            state_text
+        );
 
         let assets = activity::Assets::new()
             .large_image("logo")

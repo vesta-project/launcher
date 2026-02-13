@@ -68,12 +68,13 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
     // Request device code
     let start = std::time::Instant::now();
     let device_code_res = get_device_code(&client).await;
-    
+
     if let Some(nm) = app.try_state::<crate::utils::network::NetworkManager>() {
         nm.report_request_result(start.elapsed().as_millis(), device_code_res.is_ok());
     }
 
-    let device_code_response = device_code_res.map_err(|e| format!("Failed to get device code: {}", e))?;
+    let device_code_response =
+        device_code_res.map_err(|e| format!("Failed to get device code: {}", e))?;
 
     let details = device_code_to_details(&device_code_response);
 
@@ -504,7 +505,10 @@ pub async fn ensure_account_tokens_valid(
     let acct = match acct {
         Some(a) => a,
         None => {
-            log::warn!("[auth] Account {} not found in database during token validation.", target_uuid);
+            log::warn!(
+                "[auth] Account {} not found in database during token validation.",
+                target_uuid
+            );
             // If this was the active account, try to repair it
             let config = get_app_config().map_err(|e| e.to_string())?;
             if config.active_account_uuid == Some(target_uuid) {
@@ -628,29 +632,33 @@ pub async fn refresh_account_tokens(
     log::info!("[auth] Attempting refresh for account: {}", target_uuid);
 
     // Attempt refresh
-    let token_response =
-        match piston_lib::auth::refresh_access_token(&client, refresh_token_val.clone()).await {
-            Ok(t) => t,
-            Err(e) => {
-                log::error!("[auth] Refresh failed for account {}: {}", target_uuid, e);
-                
-                // If the session expired, mark it in the database
-                if matches!(e, piston_lib::auth::PistonAuthError::SessionExpired) {
-                    log::warn!("[auth] Refresh token for {} is revoked or expired. Marking account as expired.", target_uuid);
-                    if let Ok(mut conn) = get_vesta_conn() {
-                        use crate::schema::account::dsl::*;
-                        let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
-                            .set(is_expired.eq(true))
-                            .execute(&mut conn);
-                        
-                        // Notify UI that accounts have changed (expired status updated)
-                        let _ = app_handle.emit("core://accounts-changed", ());
-                    }
-                }
+    let token_response = match piston_lib::auth::refresh_access_token(
+        &client,
+        refresh_token_val.clone(),
+    )
+    .await
+    {
+        Ok(t) => t,
+        Err(e) => {
+            log::error!("[auth] Refresh failed for account {}: {}", target_uuid, e);
 
-                return Err(format!("Failed to refresh token: {}", e));
+            // If the session expired, mark it in the database
+            if matches!(e, piston_lib::auth::PistonAuthError::SessionExpired) {
+                log::warn!("[auth] Refresh token for {} is revoked or expired. Marking account as expired.", target_uuid);
+                if let Ok(mut conn) = get_vesta_conn() {
+                    use crate::schema::account::dsl::*;
+                    let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
+                        .set(is_expired.eq(true))
+                        .execute(&mut conn);
+
+                    // Notify UI that accounts have changed (expired status updated)
+                    let _ = app_handle.emit("core://accounts-changed", ());
+                }
             }
-        };
+
+            return Err(format!("Failed to refresh token: {}", e));
+        }
+    };
 
     // If we're here, refresh succeeded, so ensure is_expired is false
     if let Ok(mut conn) = get_vesta_conn() {
@@ -658,7 +666,7 @@ pub async fn refresh_account_tokens(
         let _ = diesel::update(account.filter(uuid.eq(target_uuid.clone())))
             .set(is_expired.eq(false))
             .execute(&mut conn);
-        
+
         // Notify UI that accounts have changed (expired status updated)
         let _ = app_handle.emit("core://accounts-changed", ());
     }
@@ -927,8 +935,11 @@ pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, S
         .map_err(|e| e.to_string())?;
 
     if let Some(next_acc) = all_accounts.first() {
-        log::info!("[auth] Active account missing, switching to available fallback: {}", next_acc.uuid);
-        
+        log::info!(
+            "[auth] Active account missing, switching to available fallback: {}",
+            next_acc.uuid
+        );
+
         // We call our internal command
         set_active_account(app_handle.clone(), next_acc.uuid.clone())?;
 
@@ -943,7 +954,9 @@ pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, S
             return Ok(acct);
         }
     } else {
-        log::warn!("[auth] Active account missing and no other accounts found. Resetting session...");
+        log::warn!(
+            "[auth] Active account missing and no other accounts found. Resetting session..."
+        );
         let mut config = get_app_config().map_err(|e| e.to_string())?;
         config.active_account_uuid = None;
         update_app_config(&config).map_err(|e| e.to_string())?;

@@ -1,5 +1,4 @@
 use crate::schema::installed_resource;
-use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 

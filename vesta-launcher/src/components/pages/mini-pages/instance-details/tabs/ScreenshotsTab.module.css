@@ -1,0 +1,161 @@
+.container {
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	height: 100%;
+}
+
+.toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 0;
+	border-bottom: 1px solid var(--border);
+	position: sticky;
+	top: 0;
+	background: var(--surface);
+	z-index: 5;
+}
+
+.group {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.select {
+	background: var(--surface-low);
+	border: 1px solid var(--border);
+	color: var(--text);
+	border-radius: 6px;
+	padding: 4px 8px;
+	font-size: 13px;
+	outline: none;
+}
+
+.grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+	gap: 16px;
+	padding-bottom: 24px;
+}
+
+.gridItem {
+	background: var(--surface-low);
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	overflow: hidden;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.gridItem:hover {
+	border-color: var(--primary);
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.gridItem .preview {
+	aspect-ratio: 16 / 9;
+	background: #000;
+}
+
+.gridItem .preview img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.gridItem .details {
+	padding: 8px;
+	display: flex;
+	flex-direction: column;
+}
+
+.name {
+	font-size: 13px;
+	font-weight: 500;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.date {
+	font-size: 11px;
+	color: var(--text-muted);
+}
+
+.list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	padding-bottom: 24px;
+}
+
+.listItem {
+	display: flex;
+	align-items: center;
+	padding: 8px;
+	gap: 16px;
+	background: var(--surface-low);
+	border: 1px solid var(--border);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.listItem:hover {
+	border-color: var(--primary);
+	background: var(--surface-hover);
+}
+
+.listItem .preview {
+	width: 120px;
+	aspect-ratio: 16 / 9;
+	border-radius: 4px;
+	overflow: hidden;
+	background: #000;
+	flex-shrink: 0;
+}
+
+.listItem .preview img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.listItem .details {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.loading, .selectTrigger {
+	min-width: 140px;
+	height: 32px;
+}
+
+.empty {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 200px;
+	color: var(--text-muted);
+}
+
+.menuItem {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.menuItem svg {
+	width: 14px;
+	height: 14px;
+	color: currentColor;
+}
+
+.deleteAction {
+	color: var(--destructive);
+}

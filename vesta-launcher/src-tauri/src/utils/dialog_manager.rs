@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
-use tauri::{AppHandle, Emitter, Manager, Runtime};
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::sync::{oneshot, Mutex};
 use uuid::Uuid;
 
@@ -78,7 +78,10 @@ impl DialogManager {
             // If emit fails, remove the entry and return error
             let mut pending = self.pending_dialogs.lock().await;
             pending.remove(&id);
-            return Err(anyhow::anyhow!("Failed to emit dialog request: {}", emit_error));
+            return Err(anyhow::anyhow!(
+                "Failed to emit dialog request: {}",
+                emit_error
+            ));
         }
 
         // Wait for response
@@ -88,7 +91,9 @@ impl DialogManager {
                 // If receiver is dropped or sender is gone, clean up and return error
                 let mut pending = self.pending_dialogs.lock().await;
                 pending.remove(&id);
-                Err(anyhow::anyhow!("Dialog request cancelled or sender dropped"))
+                Err(anyhow::anyhow!(
+                    "Dialog request cancelled or sender dropped"
+                ))
             }
         }
     }

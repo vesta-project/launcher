@@ -1,11 +1,11 @@
 use crate::auth::ACCOUNT_TYPE_GUEST;
+use crate::discord::DiscordManager;
 use crate::models::instance::{Instance, NewInstance};
 use crate::resources::ResourceWatcher;
 use crate::schema::instance::dsl::*;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::maintenance::{CloneInstanceTask, RepairInstanceTask, ResetInstanceTask};
 use crate::tasks::manager::TaskManager;
-use crate::discord::DiscordManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
@@ -76,7 +76,10 @@ fn update_instance_playtime(
             // Fetch the updated instance to emit
             if let Ok(updated_inst) = instance.find(inst.id).first::<Instance>(&mut conn) {
                 use tauri::Emitter;
-                let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated_inst));
+                let _ = app_handle.emit(
+                    "core://instance-updated",
+                    process_instance_icon(updated_inst),
+                );
             }
 
             return Ok(());
@@ -499,7 +502,10 @@ pub async fn create_instance(
     // Fetch the full instance and emit created event
     if let Ok(full_instance) = instance.find(inserted_id).first::<Instance>(&mut conn) {
         use tauri::Emitter;
-        let _ = app_handle.emit("core://instance-created", process_instance_icon(full_instance));
+        let _ = app_handle.emit(
+            "core://instance-created",
+            process_instance_icon(full_instance),
+        );
     }
 
     // Set initial installation_status to "pending"
@@ -581,12 +587,19 @@ pub async fn update_instance(
 
     // Download icon for offline use if we have a URL but no bytes (e.g. newly linked or recently updated)
     // We only do this if the user hasn't opted for a specific preset or gradient
-    let is_using_custom_preset = final_instance.icon_path.as_ref().map(|p| {
-        (!p.starts_with("internal://") && Some(p) != final_instance.modpack_icon_url.as_ref()) || 
-        p.starts_with("linear-gradient")
-    }).unwrap_or(false);
+    let is_using_custom_preset = final_instance
+        .icon_path
+        .as_ref()
+        .map(|p| {
+            (!p.starts_with("internal://") && Some(p) != final_instance.modpack_icon_url.as_ref())
+                || p.starts_with("linear-gradient")
+        })
+        .unwrap_or(false);
 
-    if !is_using_custom_preset && final_instance.modpack_icon_url.is_some() && final_instance.icon_data.is_none() {
+    if !is_using_custom_preset
+        && final_instance.modpack_icon_url.is_some()
+        && final_instance.icon_data.is_none()
+    {
         if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(
             final_instance.modpack_icon_url.as_ref().unwrap(),
         )
@@ -1054,7 +1067,9 @@ pub async fn launch_instance(
                 "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
             );
         } else if !is_offline {
-            if let Err(e) = crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid.clone()).await {
+            if let Err(e) =
+                crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid.clone()).await
+            {
                 log::error!("[launch_instance] Failed to refresh token: {}", e);
                 return Err(format!("Failed to refresh authentication: {}", e));
             }
@@ -1116,7 +1131,10 @@ pub async fn launch_instance(
         {
             log::info!("[launch_instance] Enabling dedicated GPU variables for Linux (NVIDIA Prime / Mesa)");
             env_vars.insert("__NV_PRIME_RENDER_OFFLOAD".to_string(), "1".to_string());
-            env_vars.insert("__GLX_VENDOR_LIBRARY_NAME".to_string(), "nvidia".to_string());
+            env_vars.insert(
+                "__GLX_VENDOR_LIBRARY_NAME".to_string(),
+                "nvidia".to_string(),
+            );
             env_vars.insert("DRI_PRIME".to_string(), "1".to_string());
         }
 
@@ -1124,7 +1142,9 @@ pub async fn launch_instance(
         {
             log::info!("[launch_instance] Setting Windows GPU preference for High Performance");
             // Set Windows registry preference for the specific Java executable
-            let _ = crate::utils::windows::set_windows_gpu_preference(std::path::Path::new(&java_path_str));
+            let _ = crate::utils::windows::set_windows_gpu_preference(std::path::Path::new(
+                &java_path_str,
+            ));
             // Hint for older drivers/wrappers
             env_vars.insert("SHHighPerformanceGpuSelection".to_string(), "1".to_string());
         }

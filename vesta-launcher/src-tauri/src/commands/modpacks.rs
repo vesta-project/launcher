@@ -367,7 +367,7 @@ pub async fn get_modpack_info(
 }).await;
 
     nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
-    
+
     let info_val = res.map_err(|e| e.to_string())?;
     Ok(info_val)
 }
@@ -863,8 +863,8 @@ pub async fn get_modpack_info_from_url(
     Ok(info)
 }).await;
 
-nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
-res
+    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
+    res
 }
 
 fn get_recommended_java_version(mc_version: &str) -> i32 {

@@ -1,13 +1,12 @@
+use crate::discord::DiscordManager;
 use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
-use crate::discord::DiscordManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
-use crate::utils::config::{init_config_db, get_app_config};
+use crate::utils::config::{get_app_config, init_config_db};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
-use tauri_plugin_updater::UpdaterExt;
 #[cfg(target_os = "windows")]
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
@@ -156,6 +155,10 @@ fn store_crash_details_setup(
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Get app data directory
     let app_data_dir = get_app_config_dir()?;
+
+    // Allow the asset protocol to access the app data directory
+    // This fixes 403 Forbidden errors when loading local images/screenshots
+    app.asset_protocol_scope().allow_directory(&app_data_dir, true)?;
 
     // CRITICAL: Initialize Diesel connection pools FIRST before any other code runs
     // This ensures migrations are applied before any queries are executed
@@ -732,7 +735,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     if let Ok(config) = crate::utils::config::get_app_config() {
                         if config.active_account_uuid.is_some() {
                             log::warn!("[setup] Active account in config missing from database. repairing...");
-                            crate::auth::repair_active_account(app_handle.clone()).ok().flatten()
+                            crate::auth::repair_active_account(app_handle.clone())
+                                .ok()
+                                .flatten()
                         } else {
                             None
                         }
@@ -748,7 +753,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
             if let Some(acc) = active_acc {
                 if acc.uuid != crate::auth::GUEST_UUID {
-                    if let Err(e) = crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid).await {
+                    if let Err(e) =
+                        crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid).await
+                    {
                         log::warn!("[setup] Proactive session validation failed: {}", e);
                     } else {
                         log::info!("[setup] Proactive session validation successful.");

@@ -137,9 +137,10 @@ impl Task for CloneInstanceTask {
                 .map_err(|e| format!("Failed to fetch cloned instance: {}", e))?;
 
             use tauri::Emitter;
-            let _ = ctx
-                .app_handle
-                .emit("core://instance-created", crate::commands::instances::process_instance_icon(inserted_inst));
+            let _ = ctx.app_handle.emit(
+                "core://instance-created",
+                crate::commands::instances::process_instance_icon(inserted_inst),
+            );
 
             Ok(())
         })

@@ -17,7 +17,9 @@ use tauri::Emitter;
 #[allow(unused_imports)]
 use tauri::Manager;
 #[allow(unused_imports)]
-use utils::config::{get_config, set_config, update_config_field, update_config_fields, get_app_config};
+use utils::config::{
+    get_app_config, get_config, set_config, update_config_field, update_config_fields,
+};
 #[allow(unused_imports)]
 use utils::windows::launch_window;
 
@@ -54,6 +56,7 @@ fn main() {
         .build();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(setup::init)
         .manage(utils::dialog_manager::DialogManager::new())
         .plugin(log_plugin)
@@ -63,11 +66,13 @@ fn main() {
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_macos_permissions::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let _ = app.get_webview_window("main")
-                       .expect("no main window")
-                       .set_focus();
-            
+            let _ = app
+                .get_webview_window("main")
+                .expect("no main window")
+                .set_focus();
+
             if args.len() > 1 {
                 let _ = app.emit("core://handle-cli", args);
             }
@@ -81,6 +86,10 @@ fn main() {
             commands::app::open_app_config_dir,
             commands::app::open_logs_folder,
             commands::app::open_instance_folder,
+            commands::screenshots::get_screenshots,
+            commands::screenshots::delete_screenshot,
+            commands::screenshots::copy_screenshot_to_clipboard,
+            commands::screenshots::open_screenshot_in_folder,
             commands::app::restart_app,
             commands::app::exit_check,
             commands::app::test_blocking_dialog,

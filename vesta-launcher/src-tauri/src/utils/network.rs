@@ -51,7 +51,7 @@ impl NetworkManager {
             let endpoints = [
                 "https://1.1.1.1",
                 "https://session.minecraft.net",
-                "https://www.google.com"
+                "https://www.google.com",
             ];
             let mut detected = NetworkStatus::Offline;
 
@@ -116,7 +116,7 @@ impl NetworkManager {
         let (best_detected, _elapsed) = async {
             let endpoints = [
                 "https://session.minecraft.net",
-                "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
+                "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
             ];
             let mut best = NetworkStatus::Offline;
             let mut total_duration = 0;
@@ -124,7 +124,7 @@ impl NetworkManager {
             for endpoint in endpoints {
                 let start = std::time::Instant::now();
                 let is_throughput_test = endpoint.contains("piston-meta");
-                
+
                 // For throughput, we download a small chunk (10KB)
                 let request = if is_throughput_test {
                     self.client.get(endpoint).header("Range", "bytes=0-10240")
@@ -141,7 +141,7 @@ impl NetworkManager {
 
                         let duration = start.elapsed().as_millis();
                         total_duration += duration;
-                        
+
                         let is_slow = if is_throughput_test {
                             duration > 2000 // 10KB should be fast
                         } else {
@@ -160,7 +160,8 @@ impl NetworkManager {
                 }
             }
             (best, total_duration)
-        }.await;
+        }
+        .await;
 
         let result = {
             let current_status = self.get_status();
@@ -202,7 +203,10 @@ impl NetworkManager {
     }
 
     pub fn get_status(&self) -> NetworkStatus {
-        self.status.lock().map(|s| *s).unwrap_or(NetworkStatus::Offline)
+        self.status
+            .lock()
+            .map(|s| *s)
+            .unwrap_or(NetworkStatus::Offline)
     }
 
     pub fn set_status(&self, new_status: NetworkStatus) {
@@ -210,7 +214,7 @@ impl NetworkManager {
             Ok(l) => l,
             Err(_) => return,
         };
-        
+
         if *status != new_status {
             *status = new_status;
             log::info!("[NetworkManager] Status changed to: {:?}", new_status);
@@ -221,7 +225,7 @@ impl NetworkManager {
     }
 
     pub fn report_request_result(&self, duration_ms: u128, success: bool) {
-        // TODO: In the future, we could pass the result of this check back into 
+        // TODO: In the future, we could pass the result of this check back into
         // piston-lib to dynamically adjust retry strategies for the current session.
 
         let current = self.get_status();

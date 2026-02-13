@@ -1,0 +1,86 @@
+.carousel {
+	position: relative;
+	width: 100%;
+}
+
+.carousel-content-wrapper {
+	overflow: hidden;
+}
+
+.carousel-content {
+	display: flex;
+}
+
+.carousel-content--horizontal {
+	margin-left: -1rem;
+}
+
+.carousel-content--vertical {
+	margin-top: -1rem;
+	flex-direction: column;
+}
+
+.carousel-item {
+	min-width: 0;
+	flex-shrink: 0;
+	flex-grow: 0;
+	flex-basis: 100%;
+}
+
+.carousel-item--horizontal {
+	padding-left: 1rem;
+}
+
+.carousel-item--vertical {
+	padding-top: 1rem;
+}
+
+.carousel-control {
+	position: absolute;
+	width: 2rem;
+	height: 2rem;
+	touch-action: manipulation;
+	border-radius: 9999px;
+	z-index: 10;
+}
+
+.carousel-control--prev--horizontal {
+	left: -3rem;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.carousel-control--prev--vertical {
+	top: -3rem;
+	left: 50%;
+	transform: translateX(-50%) rotate(90deg);
+}
+
+.carousel-control--next--horizontal {
+	right: -3rem;
+	top: 50%;
+	transform: translateY(-50%);
+}
+
+.carousel-control--next--vertical {
+	bottom: -3rem;
+	left: 50%;
+	transform: translateX(-50%) rotate(90deg);
+}
+
+.carousel-control-icon {
+	width: 1rem;
+	height: 1rem;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border-width: 0;
+}

@@ -243,27 +243,31 @@ impl Task for InstallModpackTask {
                 Some(resolver),
                 java_path,
             )
-            .await {
+            .await
+            {
                 Ok(res) => res,
                 Err(e) => {
                     log::error!("[ModpackTask] Installation failed: {}", e);
-                    
+
                     // Update database status to 'failed' with reason
                     let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
                     use crate::schema::instance::dsl as inst_dsl;
                     use diesel::prelude::*;
-                    
+
                     let status_val = format!("failed:{}", e);
                     let _ = diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
                         .set(inst_dsl::installation_status.eq(Some(status_val)))
                         .execute(&mut conn);
-                        
+
                     // Emit update event to refresh UI with failure reason
-                    if let Ok(updated_inst) = inst_dsl::instance.find(instance.id).first::<Instance>(&mut conn) {
+                    if let Ok(updated_inst) = inst_dsl::instance
+                        .find(instance.id)
+                        .first::<Instance>(&mut conn)
+                    {
                         use tauri::Emitter;
                         let _ = app_handle.emit("core://instance-updated", updated_inst);
                     }
-                    
+
                     return Err(e.to_string());
                 }
             };
