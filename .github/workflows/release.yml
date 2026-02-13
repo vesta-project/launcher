@@ -484,36 +484,64 @@ jobs:
         id: changelog
         shell: bash
         run: |
+          echo "::group::Changelog Generation Debug Logs"
+          
           # Get the current tag
           CURRENT_TAG="v${{ steps.version.outputs.version }}"
+          echo "Current tag: $CURRENT_TAG"
           
           # Get the previous tag (second most recent by version)
           PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
+          echo "Previous tag: $PREVIOUS_TAG"
+          
+          # Show all available tags for debugging
+          echo "All tags (sorted by version):"
+          git tag --sort=-version:refname | head -5 || echo "No tags found"
           
           echo "## Changelog" > changelog.md
           echo "" >> changelog.md
           
           if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+            echo "Tag validation passed - both tags exist"
             # Check if there are commits between previous and current tag
             COMMIT_COUNT=$(git rev-list --count ${PREVIOUS_TAG}..${CURRENT_TAG} 2>/dev/null || echo "0")
+            echo "Commit count between $PREVIOUS_TAG..$CURRENT_TAG: $COMMIT_COUNT"
             if [ "$COMMIT_COUNT" -gt 0 ]; then
+              echo "Generating changelog from git log..."
               git log --pretty=format:"- %s (%h)" --no-merges --grep="chore: bump version" --invert-grep ${PREVIOUS_TAG}..${CURRENT_TAG} >> changelog.md 2>/dev/null || echo "- Release notes" >> changelog.md
             else
+              echo "No commits found, adding fallback message"
               echo "- No changes since last release" >> changelog.md
             fi
           else
+            echo "Tag validation failed - using initial release message"
             echo "- Initial release" >> changelog.md
           fi
           
+          echo "Changelog content after generation:"
+          cat changelog.md
+          
           # Safety check: ensure changelog.md exists and has content
           if [ ! -s changelog.md ]; then
+            echo "Safety check: changelog.md is empty, adding fallback content"
             echo "- No changes or initial release" > changelog.md
+          else
+            echo "Safety check: changelog.md has content"
           fi
           
-          # Use a unique delimiter for multiline output (fixed to avoid conflicts with content)
-          echo "changelog<<CHANGELOG_EOF_DELIMITER_ABC123XYZ" >> $GITHUB_OUTPUT
+          # Use a highly unique delimiter for multiline output (timestamp + random to avoid conflicts)
+          DELIMITER="EOF_CHANGELOG_$(date +%s)_$(echo $RANDOM)_UNIQUE_ABC123XYZ"
+          echo "Using delimiter: $DELIMITER"
+          
+          echo "Writing to GITHUB_OUTPUT..."
+          echo "changelog<<$DELIMITER" >> $GITHUB_OUTPUT
           cat changelog.md >> $GITHUB_OUTPUT
-          echo "CHANGELOG_EOF_DELIMITER_ABC123XYZ" >> $GITHUB_OUTPUT
+          echo "$DELIMITER" >> $GITHUB_OUTPUT
+          
+          echo "GITHUB_OUTPUT content preview:"
+          tail -10 $GITHUB_OUTPUT || echo "Could not read GITHUB_OUTPUT"
+          
+          echo "::endgroup::"
       
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
