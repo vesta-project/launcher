@@ -179,7 +179,7 @@ impl DiscordManager {
             .timestamps(activity::Timestamps::new().start(last_start_time))
             .buttons(vec![activity::Button::new(
                 "Visit Website",
-                "https://vestalauncher.net",
+                "https://www.vestalauncher.com",
             )]);
 
         if let Some(s) = state_text {
