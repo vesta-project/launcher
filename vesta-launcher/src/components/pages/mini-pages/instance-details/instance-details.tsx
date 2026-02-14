@@ -75,6 +75,7 @@ import {
 } from "@stores/resources";
 import { pinning, isPinned as isPinnedInStore, pinPage, unpinPage } from "@stores/pinning";
 import { instancesState } from "@stores/instances";
+import { consoleStore } from "@stores/console";
 import {
 	DEFAULT_ICONS,
 	deleteInstance,
@@ -847,10 +848,6 @@ export default function InstanceDetails(
 		}
 	};
 
-	// Console state
-	const [lines, setLines] = createSignal<string[]>([]);
-	let consoleRef: HTMLDivElement | undefined;
-
 	// Resources Tab State
 	const [resourceTypeFilter, setResourceTypeFilter] =
 		createSignal<string>("All");
@@ -1466,86 +1463,15 @@ export default function InstanceDetails(
 	// Subscribe to console logs
 	const cleanups: (() => void)[] = [];
 	onMount(async () => {
-		// Load last 500 lines from log file if instance is running (for re-attachment scenario)
-		const inst = instance();
-		if (inst) {
-			try {
-				const running = await isInstanceRunning(inst);
-				if (running) {
-					// Try to load existing log lines from file
-					const logLines = (await invoke("read_instance_log", {
-						instanceIdSlug: slug(),
-						lastLines: 500,
-					}).catch(() => [])) as string[];
-					if (logLines.length > 0) {
-						setLines(logLines);
-					}
-				}
-			} catch (e) {
-				console.error("Failed to load existing logs:", e);
-			}
-		}
-
-		cleanups.push(
-			await listen("core://instance-log", (ev) => {
-				const payload =
-					(ev as { payload: Record<string, unknown> }).payload || {};
-				const currentSlug = slug();
-
-				// Handle batched format: { lines: [...] }
-				if (payload.lines && Array.isArray(payload.lines)) {
-					const newLines: string[] = [];
-					for (const item of payload.lines as Array<{
-						instance_id?: string;
-						line?: string;
-					}>) {
-						if (item.instance_id && item.instance_id !== currentSlug) {
-							continue;
-						}
-						if (item.line) {
-							newLines.push(item.line);
-						}
-					}
-					if (newLines.length > 0) {
-						setLines((prev) => {
-							const next = [...prev, ...newLines];
-							// Keep last 500 lines
-							if (next.length > 500) {
-								return next.slice(next.length - 500);
-							}
-							return next;
-						});
-					}
-					return;
-				}
-
-				// Legacy single-line format
-				if (payload.instance_id && payload.instance_id !== currentSlug) {
-					return;
-				}
-
-				const line =
-					payload.line ??
-					payload.text ??
-					payload.message ??
-					JSON.stringify(payload);
-				setLines((prev) => {
-					const next = [...prev, String(line)];
-					if (next.length > 500) {
-						return next.slice(next.length - 500);
-					}
-					return next;
-				});
-			}),
-		);
-
+		// Unified cleaning - actual log handling moved to ConsoleTab/ConsoleStore
+		
 		cleanups.push(
 			await listen("core://instance-launched", (ev) => {
 				const payload = (ev as { payload: { instance_id?: string } }).payload;
 				if (payload.instance_id === slug()) {
 					setIsRunning(true);
-					// Clear console on new launch
-					setLines([]);
+					// Clear console store on new launch
+					consoleStore.clear();
 				}
 			}),
 		);
@@ -1602,16 +1528,6 @@ export default function InstanceDetails(
 	onCleanup(() => {
 		for (const cb of cleanups) cb();
 		resources.clearSelection();
-	});
-
-	// Auto-scroll console when lines change
-	createEffect(() => {
-		lines();
-		setTimeout(() => {
-			if (consoleRef) {
-				consoleRef.scrollTop = consoleRef.scrollHeight;
-			}
-		}, 0);
 	});
 
 	const playButtonText = createMemo(() => {
@@ -1699,8 +1615,6 @@ export default function InstanceDetails(
 	};
 
 	// Icon path is now handled by the IconPicker component directly
-
-	const clearConsole = () => setLines([]);
 
 	const openLogsFolder = async () => {
 		try {
@@ -1941,12 +1855,8 @@ export default function InstanceDetails(
 										</Show>
 										<Show when={instance.latest}>
 											<ConsoleTab
-												lines={lines()}
-												consoleRef={(el) => {
-													consoleRef = el;
-												}}
+												instanceSlug={slug()}
 												openLogsFolder={openLogsFolder}
-												clearConsole={clearConsole}
 											/>
 										</Show>
 									</Show>

@@ -159,6 +159,8 @@ fn main() {
             commands::instances::get_minecraft_versions,
             commands::instances::regenerate_piston_manifest,
             commands::instances::read_instance_log,
+            commands::instances::get_instance_log_history,
+            commands::instances::read_specific_log_file,
             commands::instances::duplicate_instance,
             commands::instances::repair_instance,
             commands::instances::reset_instance,

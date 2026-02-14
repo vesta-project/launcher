@@ -67,6 +67,31 @@ pub struct VersionManifest {
     /// Time
     #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<String>,
+
+    /// Logging configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logging: Option<LoggingConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LoggingConfig {
+    pub client: Option<LoggingClient>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LoggingClient {
+    pub argument: String,
+    pub file: LoggingFile,
+    #[serde(rename = "type")]
+    pub logging_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct LoggingFile {
+    pub id: String,
+    pub sha1: String,
+    pub size: u64,
+    pub url: String,
 }
 
 /// Downloads for the version (client, server, data, etc.)

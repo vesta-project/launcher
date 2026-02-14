@@ -91,6 +91,22 @@ pub fn build_jvm_arguments(
     // Add manifest arguments
     args.extend(manifest_args);
 
+    // 4. Add Logging Arguments
+    if let Some(logging) = &manifest.logging {
+        if let Some(client) = &logging.client {
+            // Find the logging config file in assets
+            let config_path = spec
+                .assets_dir()
+                .join("log_configs")
+                .join(&client.file.id);
+            
+            if config_path.exists() {
+                let log_config_arg = client.argument.replace("${path}", &config_path.to_string_lossy());
+                args.push(log_config_arg);
+            }
+        }
+    }
+
     // For legacy versions (like 1.0) that don't have JVM args in manifest, add classpath manually
     let has_classpath = args.iter().any(|arg| arg == "-cp" || arg.starts_with("-cp=") || arg.starts_with("-classpath"));
     if !has_classpath && manifest.jvm_arguments.is_empty() {

@@ -83,7 +83,8 @@ export function ImageViewer(props: ImageViewerProps) {
 		if (props.src && props.images && api()) {
 			const index = props.images.findIndex(img => img.src === props.src);
 			if (index !== -1) {
-				api()?.().scrollTo(index, true);
+				const embla = api()?.();
+				if (embla) embla.scrollTo(index, true);
 			}
 		}
 	});

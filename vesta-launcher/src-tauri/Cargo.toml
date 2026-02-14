@@ -76,6 +76,7 @@ murmur2 = "0.1.0"
 tempfile = "3"
 uuid = { version = "1.20.0", features = ["v3", "v4", "v1", "serde"] }
 tauri-plugin-clipboard-manager = "2"
+flate2 = "1.1.9"
 
 [target."cfg(target_os = \"macos\")".dependencies]
 cocoa = "0.26.1"

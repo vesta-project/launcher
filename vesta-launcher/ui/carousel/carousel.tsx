@@ -104,20 +104,21 @@ const Carousel: Component<CarouselProps & ComponentProps<"div">> = (
 		if (!api() || !local.setApi) {
 			return;
 		}
-		local.setApi(() => api);
+		local.setApi(api);
 	});
 
 	createEffect(() => {
-		if (!api()) {
+		const a = api();
+		if (!a) {
 			return;
 		}
 
-		onSelect(api()!);
-		api()!.on("reInit", onSelect);
-		api()!.on("select", onSelect);
+		onSelect(a);
+		a.on("reInit", onSelect);
+		a.on("select", onSelect);
 
 		return () => {
-			api()?.off("select", onSelect);
+			a.off("select", onSelect);
 		};
 	});
 

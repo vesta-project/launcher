@@ -10,6 +10,7 @@ use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use std::sync::Arc;
+use std::time::UNIX_EPOCH;
 use tauri::{Manager, State};
 
 /// Compute canonical instance game directory path under the given instances root
@@ -1287,7 +1288,12 @@ pub async fn launch_instance(
             use tauri::Emitter;
             let _ = app_handle.emit(
                 "core://instance-launched",
-                serde_json::json!({ "instance_id": instance_id, "name": instance_data.name, "pid": result.instance.pid }),
+                serde_json::json!({ 
+                    "instance_id": instance_id, 
+                    "name": instance_data.name, 
+                    "pid": result.instance.pid,
+                    "start_time": std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
+                }),
             );
 
             // Update Discord activity
@@ -1560,6 +1566,7 @@ pub fn update_installation_status(
 pub fn read_instance_log(
     instance_id_slug: String,
     last_lines: Option<usize>,
+    since: Option<u64>,
 ) -> Result<Vec<String>, String> {
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
@@ -1570,6 +1577,18 @@ pub fn read_instance_log(
 
     if !log_file.exists() {
         return Ok(vec![]);
+    }
+
+    if let Some(s) = since {
+        if let Ok(meta) = std::fs::metadata(&log_file) {
+            if let Ok(mtime) = meta.modified() {
+                if let Ok(duration) = mtime.duration_since(UNIX_EPOCH) {
+                    if duration.as_secs() < s {
+                        return Ok(vec![]);
+                    }
+                }
+            }
+        }
     }
 
     let file =
@@ -1584,6 +1603,111 @@ pub fn read_instance_log(
         }
     }
     Ok(lines)
+}
+
+#[derive(serde::Serialize)]
+pub struct LogFileInfo {
+    pub name: String,
+    pub path: String,
+    pub size: u64,
+    pub last_modified: u64,
+}
+
+#[tauri::command]
+pub fn get_instance_log_history(instance_id_slug: String) -> Result<Vec<LogFileInfo>, String> {
+    let data_dir = crate::utils::db_manager::get_app_config_dir()
+        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
+
+    // We check both the app-captured log and the game's logs folder
+    let mut logs = Vec::new();
+
+    // 1. App-captured log
+    let session_log = data_dir
+        .join("data")
+        .join("logs")
+        .join(format!("{}.log", instance_id_slug));
+
+    if session_log.exists() {
+        if let Ok(meta) = std::fs::metadata(&session_log) {
+            logs.push(LogFileInfo {
+                name: "Current Session (Launcher Captured)".to_string(),
+                path: session_log.to_string_lossy().to_string(),
+                size: meta.len(),
+                last_modified: meta
+                    .modified()
+                    .unwrap_or_else(|_| std::time::SystemTime::now())
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs(),
+            });
+        }
+    }
+
+    // 2. Game logs folder
+    // We need to find the instance directory.
+    let instances_dir = data_dir.join("instances").join(&instance_id_slug);
+    let game_logs_dir = instances_dir.join("logs");
+
+    if game_logs_dir.exists() {
+        if let Ok(entries) = std::fs::read_dir(game_logs_dir) {
+            for entry in entries.filter_map(Result::ok) {
+                let path = entry.path();
+                if path.is_file() {
+                    let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
+                    if ext == "log" || ext == "gz" {
+                        if let Ok(meta) = entry.metadata() {
+                            logs.push(LogFileInfo {
+                                name: entry.file_name().to_string_lossy().to_string(),
+                                path: path.to_string_lossy().to_string(),
+                                size: meta.len(),
+                                last_modified: meta
+                                    .modified()
+                                    .unwrap_or_else(|_| std::time::SystemTime::now())
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap_or_default()
+                                    .as_secs(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Sort by last modified descending
+    logs.sort_by(|a, b| b.last_modified.cmp(&a.last_modified));
+
+    Ok(logs)
+}
+
+#[tauri::command]
+pub fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
+    let path_buf = std::path::PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err("Log file does not exist".to_string());
+    }
+
+    let file = std::fs::File::open(&path_buf).map_err(|e| format!("Failed to open file: {}", e))?;
+
+    let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
+    use std::io::{BufRead, BufReader};
+
+    if ext == "gz" {
+        use flate2::read::GzDecoder;
+        let decoder = GzDecoder::new(file);
+        let reader = BufReader::new(decoder);
+        let mut lines = Vec::new();
+        for line in reader.lines() {
+            if let Ok(l) = line {
+                lines.push(l);
+            }
+        }
+        Ok(lines)
+    } else {
+        let reader = BufReader::new(file);
+        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+        Ok(lines)
+    }
 }
 
 /// Check for new Minecraft versions and create notifications if found

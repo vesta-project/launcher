@@ -10,10 +10,15 @@ import {
 
 export type { Instance };
 
+type RunningMetadata = {
+	pid: number;
+	startTime: number;
+};
+
 type InstancesState = {
 	instances: Instance[];
 	launchingIds: Record<string, boolean>;
-	runningIds: Record<string, boolean>;
+	runningIds: Record<string, RunningMetadata>;
 	loading: boolean;
 	error: string | null;
 };
@@ -110,10 +115,13 @@ export function setupInstanceListeners() {
 		});
 
 		// Listen for launch events (updates when process successfully started)
-		await listen<{ instance_id: string; pid: number }>("core://instance-launched", (event) => {
+		await listen<{ instance_id: string; pid: number; start_time?: number }>("core://instance-launched", (event) => {
 			const slug = event.payload.instance_id;
 			setLaunching(slug, false);
-			setInstancesState("runningIds", slug, true);
+			setInstancesState("runningIds", slug, {
+				pid: event.payload.pid,
+				startTime: event.payload.start_time || Math.floor(Date.now() / 1000),
+			});
 		});
 
 		// Listen for instance exit/crash

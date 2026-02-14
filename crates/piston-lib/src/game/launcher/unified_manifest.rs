@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::game::launcher::version_parser::{AssetIndex, JavaVersion, Library, ExtractRules, VersionManifest, Argument, Rule, RuleAction};
+use crate::game::launcher::version_parser::{AssetIndex, JavaVersion, Library, ExtractRules, VersionManifest, Argument, Rule, RuleAction, LoggingConfig};
 use crate::game::installer::types::OsType;
 use std::collections::HashMap;
 
@@ -25,6 +25,8 @@ pub struct UnifiedManifest {
     #[serde(skip_serializing_if = "Option::is_none", rename = "type")]
     pub version_type: Option<String>,
     pub is_legacy: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logging: Option<LoggingConfig>,
 }
 
 /// A resolved library with all conditional rules already applied.
@@ -156,6 +158,7 @@ impl UnifiedManifest {
             assets: vanilla.assets.clone(),
             version_type: vanilla.version_type.clone(),
             is_legacy: vanilla.minecraft_arguments.is_some() && vanilla.arguments.is_none(),
+            logging: vanilla.logging.clone(),
         }
     }
 
