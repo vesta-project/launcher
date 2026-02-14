@@ -529,13 +529,14 @@ jobs:
             echo "Safety check: changelog.md has content"
           fi
           
-          # Use a highly unique delimiter for multiline output (timestamp + random to avoid conflicts)
-          DELIMITER="EOF_CHANGELOG_$(date +%s)_$(echo $RANDOM)_UNIQUE_ABC123XYZ"
+          # Use a highly unique delimiter for multiline output (random base64 to avoid conflicts)
+          DELIMITER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr -d '\n')
           echo "Using delimiter: $DELIMITER"
           
           echo "Writing to GITHUB_OUTPUT..."
           echo "changelog<<$DELIMITER" >> $GITHUB_OUTPUT
           cat changelog.md >> $GITHUB_OUTPUT
+          echo "" >> $GITHUB_OUTPUT
           echo "$DELIMITER" >> $GITHUB_OUTPUT
           
           echo "GITHUB_OUTPUT content preview:"
