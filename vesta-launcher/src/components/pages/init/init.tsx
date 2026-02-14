@@ -108,7 +108,7 @@ function InitPage() {
 			class={`${styles["animate--hue"]} ${styles["init-page__root"]}`}
 			data-tauri-drag-region
 		>
-			<TitleBar os={os} animate={true} />
+			<TitleBar os={os} />
 			<div class={styles["init-page__wrapper"]}>
 				<Switch>
 					<Match when={isLoading()}>

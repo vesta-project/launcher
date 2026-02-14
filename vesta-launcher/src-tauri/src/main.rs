@@ -96,7 +96,6 @@ fn main() {
             commands::app::exit_app,
             commands::app::close_all_windows_and_reset,
             commands::app::get_default_instance_dir,
-            commands::app::os_type,
             commands::app::path_exists,
             commands::app::get_network_status,
             commands::app::set_network_status,

@@ -8,6 +8,11 @@
 	overflow: hidden;
 }
 
+/* Fix windows icon styling */
+.unified-page-viewer-root[data-os="windows"] header div .page-viewer-window-controls-wrapper div button svg path {
+	fill: var(--text-color);
+}
+
 .page-viewer-navbar {
 	display: flex;
 	align-items: center;
@@ -40,19 +45,13 @@
 	pointer-events: auto;
 }
 
-.page-viewer-window-controls-wrapper > * {
-	display: flex;
-	align-items: stretch;
-	height: 100%;
-	pointer-events: auto;
+.page-viewer-controls-controls-wrapper--mac {
+	padding-right: 8px;
 }
+
 
 .page-viewer-window-controls-wrapper button {
 	pointer-events: auto !important;
-}
-
-.page-viewer-window-controls-wrapper svg path {
-	fill: var(--page-viewer-nav-color, var(--theme-text));
 }
 
 .page-viewer-navbar-center {

@@ -35,7 +35,8 @@
 				"https://pub-f5abfd388a694b88b657a52e2e95b451.r2.dev/launcher/releases/latest.json"
 			],
 			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUxNUU3NUE0MjVERTI1NUUKUldSZUpkNGxwSFZlVVY3QWRoeS9HeU81bDVibG9Md2NTM2w4cjZ5WGZuRzZ6bDdoMHI3MmFyb0MK"
-		}
+		},
+		"os": {}
 	},
 	"bundle": {
 		"createUpdaterArtifacts": true,

@@ -118,6 +118,7 @@ function Sidebar(props: SidebarProps) {
 		});
 	});
 
+
 	return (
 		<div
 			ref={ref}

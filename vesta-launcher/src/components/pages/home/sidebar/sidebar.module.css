@@ -40,7 +40,8 @@
 	left: 0;
 
 	&:is(.macos) {
-		grid-row: 2 / 3;
+		top: 32px;
+		height: calc(100% - 32px);
 	}
 
 	&:is(.sidebar--open) {

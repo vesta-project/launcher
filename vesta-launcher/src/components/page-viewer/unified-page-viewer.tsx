@@ -116,13 +116,12 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 				class={styles["page-viewer-navbar"]}
 				data-tauri-drag-region={props.showWindowControls}
 			>
-				<div class={styles["page-viewer-navbar-left"]}>
-					<Show when={isMac()}>
-						<div class={styles["page-viewer-window-controls-wrapper"]}>
+				<Show when={isMac()}>
+						<div class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}>
 							{props.windowControls}
 						</div>
-					</Show>
-
+				</Show>
+				<div class={styles["page-viewer-navbar-left"]}>
 					<NavbarButton
 						onClick={handleBack}
 						text="Back"

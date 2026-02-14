@@ -7,14 +7,14 @@ import { router, setRouter } from "@components/page-viewer/page-viewer";
 import { useSearchParams } from "@solidjs/router";
 import { WindowControls } from "@tauri-controls/solid";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { ensureOsType } from "@utils/os";
+import { getOsType } from "@utils/os";
 import { createMemo, createSignal, onMount, Show, onCleanup } from "solid-js";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import styles from "./standalone-page-viewer.module.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
-	const [osType, setOsType] = createSignal<string>("windows");
+	const osType = getOsType() ?? "windows";
 
 	const tryParse = (val: string) => {
 		if (typeof val !== "string") return val;
@@ -35,8 +35,6 @@ function StandalonePageViewer() {
 	};
 
 	onMount(() => {
-		ensureOsType().then((os) => setOsType(os || "windows"));
-
 		const initialPath = (searchParams.path as string) || "/config";
 		console.log("[Standalone] Initial currentPath from URL:", initialPath);
 
@@ -189,15 +187,15 @@ function StandalonePageViewer() {
 					router={r()}
 					showWindowControls={true}
 					titleSuffix="Standalone"
-					os={osType()}
+					os={osType}
 					onClose={() => getCurrentWindow().close()}
 					windowControls={
 						<WindowControls
-							class={styles["standalone-page-viewer__controls"]}
+							class={styles["standalone-page-viewer__controls"] + (osType === "macos" ? ` ${styles["standalone-page-viewer__controls--macos"]}` : "")}
 							platform={
-								osType() === "linux"
+								osType === "linux"
 									? "gnome"
-									: osType() === "macos"
+									: osType === "macos"
 										? "macos"
 										: "windows"
 							}

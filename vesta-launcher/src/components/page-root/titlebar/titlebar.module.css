@@ -11,17 +11,13 @@
 	--titlebar__opacity: calc(var(--background-opacity) * 1.5);
 
 	background: linear-gradient(
-		var(--rotation, 90deg),
+		90deg,
 		hsl(var(--color__primary-hue) 100% 7% / var(--titlebar__opacity)) 10%,
 		hsl(var(--color__primary-hue) 100% 60% / var(--titlebar__opacity)) 50%,
 		hsl(var(--hue-secondary) 50% 30% / var(--titlebar__opacity)) 100%
 	);
 
 	--titlebar__svg--color: var(--icon-primary);
-
-	& svg path {
-		fill: var(--titlebar__svg--color);
-	}
 
 	& > .titlebar__window-controls {
 		width: fit-content;
@@ -43,6 +39,10 @@
 		--titlebar__svg--color: var(--icon-primary);
 	}
 }
+
+:root[data-os="windows"] div .titlebar .titlebar__window-controls button svg path {
+	fill: var(--titlebar__svg--color);
+} 
 
 .guest-pill {
 	margin-left: 8px;

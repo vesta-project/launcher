@@ -503,6 +503,13 @@ body {
 		box-shadow: hsl(0deg 0% 0% / 0.12) 4px 4px 8px;
 	}
 }
+#app > div > header > div._page-viewer-navbar-right_12sex_28 > div > div > button:nth-child(1) > svg > path
+/* Dark mode hover for standalone controls */
+:root:not([data-theme="light"]) .standalone-page-viewer__controls button:hover {
+	background: hsla(0, 0%, 50%, 0.15);
+}
+
+
 
 /* Light mode + Flat/Bordered style: fully opaque surfaces with hue tint */
 :root[data-theme="light"]:is([data-style="flat"], [data-bordered="true"]) {

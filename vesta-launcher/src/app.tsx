@@ -28,6 +28,7 @@ import {
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { getOsType, ensureOsType } from "@utils/os";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
 import { initializeInstances, setupInstanceListeners } from "@stores/instances";
 import SessionExpiredDialog from "@components/auth/session-expired-dialog";
@@ -270,7 +271,18 @@ function Root(props: ChildrenProp) {
 	};
 
 	onMount(() => {
+		// Initialize update listener and set OS attribute on root for global CSS
 		initUpdateListener();
+
+		// Set initial OS on document root so global CSS can target it
+		const initialOs = getOsType();
+		if (initialOs) {
+			document.documentElement.setAttribute("data-os", initialOs);
+		} else {
+			ensureOsType().then((os) => {
+				if (os) document.documentElement.setAttribute("data-os", os);
+			});
+		}
 		listen("core://check-for-updates", () => {
 			if (!hasCheckedForUpdatesOnStartup) {
 				hasCheckedForUpdatesOnStartup = true;
