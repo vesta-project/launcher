@@ -52,11 +52,18 @@ export interface ExitCheckResponse {
  * Handles deep-link URLs like vesta://install?projectId=X&platform=Y
  * Parses the URL via Rust backend and navigates if initialized and authenticated
  */
-async function handleDeepLink(
+export async function handleDeepLink(
 	url: string,
 	navigate: ReturnType<typeof useNavigate>,
 ) {
 	try {
+		if (hasTauriRuntime()) {
+			try {
+				await invoke("show_window_from_tray");
+			} catch (e) {
+				console.warn("Failed to show window for deep link:", e);
+			}
+		} 
 		// 1. Check if app is initialized
 		const config = await invoke<any>("get_config");
 		if (!config || !config.setup_completed) {
@@ -404,8 +411,13 @@ function Root(props: ChildrenProp) {
 			});
 
 			// Handle CLI Arguments & Deep Links
-			const handleCLI = async (args: string[]) => {
-				console.log("[App] Received CLI args:", args);
+			const handleCLI = async (args: string[]) => {			if (hasTauriRuntime()) {
+				try {
+					await invoke("show_window_from_tray");
+				} catch (e) {
+					console.warn("Failed to show window for CLI args:", e);
+				}
+			}				console.log("[App] Received CLI args:", args);
 				for (let i = 0; i < args.length; i++) {
 					const arg = args[i];
 					if (arg.startsWith("vesta://")) {

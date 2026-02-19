@@ -68,10 +68,8 @@ fn main() {
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            let _ = app
-                .get_webview_window("main")
-                .expect("no main window")
-                .set_focus();
+            // Ensure the main window is visible and focused for second-instance handling
+            let _ = crate::utils::windows::ensure_main_window_visible(&app);
 
             if args.len() > 1 {
                 let _ = app.emit("core://handle-cli", args);

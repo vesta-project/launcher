@@ -305,16 +305,9 @@ pub fn set_minimize_to_tray(app: tauri::AppHandle, enabled: bool) -> Result<(), 
 
 #[tauri::command]
 pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
-    if let Some(window) = app.get_webview_window("main") {
-        window
-            .show()
-            .map_err(|e| format!("Failed to show window: {}", e))?;
-        window
-            .set_focus()
-            .map_err(|e| format!("Failed to focus window: {}", e))?;
-    }
+    crate::utils::windows::ensure_main_window_visible(&app)?;
     Ok(())
-}
+} 
 
 #[derive(serde::Serialize)]
 pub struct TraySettings {

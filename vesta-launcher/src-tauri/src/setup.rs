@@ -1,6 +1,7 @@
 use crate::discord::DiscordManager;
 use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
+use crate::notifications::subscriptions::manager::SubscriptionManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::config::{get_app_config, init_config_db};
@@ -11,6 +12,7 @@ use tauri::Manager;
 use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
+use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Exit status JSON structure written by the exit handler JAR
@@ -264,9 +266,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 action_id: "resume_instance_operation".to_string(),
                                 label: "Resume Now".to_string(),
                                 action_type: "primary".to_string(),
+                                payload: None,
                             }];
 
-                            let _ = manager.create(CreateNotificationInput {
+                            if let Err(e) = manager.create(CreateNotificationInput {
                                 client_key: Some(format!("interrupted_instance_{}", inst.id)),
                                 title: Some("Interrupted Operation Detected".to_string()),
                                 description: Some(description),
@@ -279,7 +282,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 total_steps: None,
                                 metadata: None,
                                 show_on_completion: None,
-                            });
+                            }) {
+                                log::error!(
+                                    "Failed to create interrupted-instance notification for {}: {}",
+                                    inst.name,
+                                    e
+                                );
+                            }
                         }
                     }
                 }
@@ -310,6 +319,15 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize TaskManager
     let task_manager = TaskManager::new(app.handle().clone());
     app.manage(task_manager);
+
+    // Initialize SubscriptionManager
+    let subscription_manager = Arc::new(SubscriptionManager::new(app.handle().clone()));
+    if let Err(e) = subscription_manager.initialize_defaults() {
+        log::error!("Failed to initialize default notification subscriptions: {}", e);
+    }
+    subscription_manager.clone().start_polling();
+    app.manage(subscription_manager);
+
     // Initialize NetworkManager
     let network_manager = crate::utils::network::NetworkManager::new(app.handle().clone());
     app.manage(network_manager);
@@ -773,6 +791,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             // Give the frontend enough time to mount and register listeners
             tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
             use tauri::Emitter;
+            // Ensure main window is visible before forwarding CLI args
+            let _ = crate::utils::windows::ensure_main_window_visible(&handle);
             let _ = handle.emit("core://handle-cli", args);
         });
     }
