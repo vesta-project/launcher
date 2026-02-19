@@ -53,6 +53,7 @@ import {
 	getShaderEnginesInOrder,
 	type ShaderEngineInfo,
 } from "@utils/resources";
+import { parseResourceUrl } from "@utils/resource-url";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import CloseIcon from "@assets/close.svg";
@@ -701,57 +702,10 @@ const ResourceDetailsPage: Component<{
 
 	const handleDescriptionLink = async (url: string) => {
 		try {
-			const parsedUrl = new URL(url);
-			let platform: SourcePlatform | null = null;
-			let id: string | null = null;
-			let activeTab: string | undefined = undefined;
+			const parsed = parseResourceUrl(url);
 
-			// Modrinth
-			if (
-				parsedUrl.hostname === "modrinth.com" ||
-				parsedUrl.hostname.endsWith(".modrinth.com")
-			) {
-				const pathParts = parsedUrl.pathname.split("/").filter((p) => p);
-				// URL structure: /<type>/<slug>/[gallery|versions]
-				if (pathParts.length >= 2) {
-					const [type, slug, tab] = pathParts;
-					const validTypes = [
-						"mod",
-						"resourcepack",
-						"shader",
-						"datapack",
-						"modpack",
-					];
-					if (validTypes.includes(type)) {
-						platform = "modrinth";
-						id = slug;
-
-						if (tab === "gallery") activeTab = "gallery";
-						else if (tab === "versions") activeTab = "versions";
-					}
-				}
-			}
-			// CurseForge
-			else if (
-				parsedUrl.hostname === "www.curseforge.com" ||
-				parsedUrl.hostname === "curseforge.com"
-			) {
-				const pathParts = parsedUrl.pathname.split("/").filter((p) => p);
-				// Expected: /minecraft/<type>/<slug>/[gallery|files|files/all]
-				if (pathParts.length >= 3 && pathParts[0] === "minecraft") {
-					platform = "curseforge";
-					id = pathParts[2]; // This is the slug
-
-					const subPath = pathParts.slice(3).join("/");
-					if (subPath === "gallery") {
-						activeTab = "gallery";
-					} else if (subPath.startsWith("files")) {
-						activeTab = "versions";
-					}
-				}
-			}
-
-			if (platform && id) {
+			if (parsed) {
+				const { platform, id, activeTab } = parsed;
 				console.log(
 					`[ResourceDetails] Intercepted link to ${platform} resource: ${id}${
 						activeTab ? ` (Tab: ${activeTab})` : ""
@@ -2262,9 +2216,9 @@ const ResourceDetailsPage: Component<{
 						src={selectedGalleryItem()}
 						images={project()?.gallery?.map(item => ({
 							src: item,
-							title: project()?.display_name || "Resource Gallery"
+							title: project()?.name || "Resource Gallery"
 						}))}
-						title={project()?.display_name || "Resource Gallery"}
+						title={project()?.name || "Resource Gallery"}
 						showDelete={false}
 						onClose={() => {
 							setSelectedGalleryItem(null);

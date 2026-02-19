@@ -19,6 +19,7 @@ import {
 	ResourceVersion,
 	findBestVersion,
 } from "@stores/resources";
+import { parseResourceUrl } from "@utils/resource-url";
 import { instancesState, type Instance } from "@stores/instances";
 import { TextField } from "@ui/text-field/text-field";
 import Button from "@ui/button/button";
@@ -1598,6 +1599,18 @@ const ResourceBrowser: Component<{
 	});
 
 	const handleSearchInput = (value: string) => {
+		const parsed = parseResourceUrl(value);
+		if (parsed) {
+			activeRouter()?.navigate("/resource-details", {
+				projectId: parsed.id,
+				platform: parsed.platform,
+				activeTab: parsed.activeTab,
+			});
+			// Clear search field
+			resources.setQuery("");
+			return;
+		}
+
 		resources.setQuery(value);
 		if (debounceTimer) clearTimeout(debounceTimer);
 		debounceTimer = window.setTimeout(async () => {

@@ -258,6 +258,39 @@ impl CurseForgeSource {
             }
         }
     }
+
+    async fn resolve_slug_to_id(&self, slug: &str) -> Result<String> {
+        log::info!("[CurseForge] Resolving slug '{}' to numeric ID", slug);
+        // Common types to search in
+        let types = [6, 4471, 12, 6552, 6945];
+
+        for class_id in types {
+            let search_url = format!(
+                "https://api.curseforge.com/v1/mods/search?gameId=432&classId={}&searchFilter={}",
+                class_id, slug
+            );
+
+            let response = self.client.get(&search_url).send().await?;
+            if response.status().is_success() {
+                let search_res: CFSearchResult = response.json().await?;
+                for item in search_res.data {
+                    // Check if website_url ends with the slug or contains it in a way that matches
+                    // website_url is usually ".../mc-mods/slug" or ".../modpacks/slug"
+                    let web_url = item.links.website_url.to_lowercase();
+                    let slug_lower = slug.to_lowercase();
+
+                    if web_url.ends_with(&format!("/{}", slug_lower))
+                        || web_url.ends_with(&slug_lower)
+                    {
+                        log::info!("[CurseForge] Resolved slug '{}' to ID {}", slug, item.id);
+                        return Ok(item.id.to_string());
+                    }
+                }
+            }
+        }
+
+        Err(anyhow!("Could not resolve CurseForge slug: {}", slug))
+    }
 }
 
 #[async_trait]
@@ -446,7 +479,13 @@ impl ResourceSource for CurseForgeSource {
     }
 
     async fn get_project(&self, id: &str) -> Result<ResourceProject> {
-        let url = format!("https://api.curseforge.com/v1/mods/{}", id);
+        let numeric_id = if id.chars().all(|c| c.is_ascii_digit()) {
+            id.to_string()
+        } else {
+            self.resolve_slug_to_id(id).await?
+        };
+
+        let url = format!("https://api.curseforge.com/v1/mods/{}", numeric_id);
         let response = self.client.get(&url).send().await?;
         if !response.status().is_success() {
             let status = response.status();
