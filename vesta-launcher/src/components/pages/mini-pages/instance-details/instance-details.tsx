@@ -237,7 +237,7 @@ export default function InstanceDetails(
 				page_type: "instance",
 				target_id: props.slug,
 				label: inst.name,
-				icon_url: inst.modpackIconUrl || inst.iconPath || null,
+				icon_url: inst.iconPath || inst.modpackIconUrl || null,
 				platform: null,
 				order_index: pinning.pins.length,
 			});

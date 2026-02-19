@@ -36,6 +36,10 @@ export function PinnedItem(props: PinnedItemProps) {
 	const isRunning = createMemo(() => instancesState.runningIds[props.pin.target_id]);
 	const isCrashed = createMemo(() => instance()?.crashed);
 
+	// Derived live metadata (falls back to pin snapshot if instance not found)
+	const displayName = createMemo(() => instance()?.name ?? props.pin.label);
+	const displayIcon = createMemo(() => instance()?.iconPath ?? props.pin.icon_url);
+
 	const handleClick = () => {
 		if (props.pin.page_type === "instance") {
 			router()?.navigate("/instance", { slug: props.pin.target_id });
@@ -161,15 +165,15 @@ export function PinnedItem(props: PinnedItemProps) {
 			<ContextMenuTrigger>
 				<div class={styles["pinned-item-container"]}>
 					<SidebarButton
-						tooltip_text={props.pin.label}
+						tooltip_text={displayName()}
 						tooltip_placement="top"
 						onClick={handleClick}
 						class={styles["pinned-button"]}
 					>
                         <div class={styles["icon-wrapper"]}>
-                            <Show when={props.pin.icon_url} fallback={<div class={styles["icon-placeholder"]}>{props.pin.label[0]}</div>}>
+                            <Show when={displayIcon()} fallback={<div class={styles["icon-placeholder"]}>{displayName()[0]}</div>}>
 								<div class={styles["icon-bg-blur"]} />
-                                <img src={resolveResourceUrl(props.pin.icon_url as string)} alt="" class={styles["pin-icon"]} />
+                                <img src={resolveResourceUrl(displayIcon() as string)} alt="" class={styles["pin-icon"]} />
                             </Show>
                             
                             <Show when={isLaunching()}>
