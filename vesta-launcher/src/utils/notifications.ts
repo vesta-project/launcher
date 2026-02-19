@@ -200,9 +200,13 @@ async function cancelTask(clientKey: string): Promise<void> {
 async function invokeNotificationAction(
 	actionId: string,
 	clientKey?: string,
+	payload?: any,
 ): Promise<void> {
-	console.log(`Invoking notification action: ${actionId}, key: ${clientKey}`);
-	await invoke("invoke_notification_action", { actionId, clientKey });
+	console.log(
+		`Invoking notification action: ${actionId}, key: ${clientKey}, payload:`,
+		payload,
+	);
+	await invoke("invoke_notification_action", { actionId, clientKey, payload });
 }
 
 async function updateNotificationProgress(params: {

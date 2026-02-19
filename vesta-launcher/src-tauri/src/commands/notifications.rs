@@ -1,7 +1,10 @@
+use crate::models::NotificationSubscription;
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, Notification};
 use crate::notifications::store::NotificationStore;
+use crate::notifications::subscriptions::manager::SubscriptionManager;
 use serde::Deserialize;
+use std::sync::Arc;
 use tauri::State;
 
 #[derive(Deserialize)]
@@ -108,9 +111,10 @@ pub async fn invoke_notification_action(
     state: State<'_, NotificationManager>,
     action_id: String,
     client_key: Option<String>,
+    payload: Option<serde_json::Value>,
 ) -> Result<(), String> {
     state
-        .invoke_action(&action_id, client_key)
+        .invoke_action(&action_id, client_key, payload)
         .map_err(|e| e.to_string())
 }
 
@@ -135,4 +139,107 @@ pub async fn clear_all_dismissible_notifications(
     state
         .clear_all_dismissible_notifications()
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_notification_subscriptions(
+    sm: State<'_, Arc<SubscriptionManager>>,
+) -> Result<Vec<NotificationSubscription>, String> {
+    sm.get_all_subscriptions().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_available_notification_sources(
+    sm: State<'_, Arc<SubscriptionManager>>,
+) -> Result<Vec<crate::notifications::subscriptions::AvailableNotificationSource>, String> {
+    Ok(sm.get_available_sources())
+}
+
+#[tauri::command]
+pub async fn reset_notification_system(
+    nm: State<'_, NotificationManager>,
+    sm: State<'_, Arc<SubscriptionManager>>,
+) -> Result<(), String> {
+    // 1. Reset seen items
+    sm.reset_system().map_err(|e| e.to_string())?;
+
+    // 2. Clear all notifications (hard reset)
+    let all = nm.list(false, false).map_err(|e| e.to_string())?;
+    for n in all {
+        if let Some(id) = n.id {
+            let _ = nm.delete(id.to_string());
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn subscribe_to_preset_source(
+    sm: State<'_, Arc<SubscriptionManager>>,
+    source: crate::notifications::subscriptions::AvailableNotificationSource,
+) -> Result<String, String> {
+    sm.subscribe(
+        source.provider_type,
+        source.title,
+        source.target_url,
+        source.target_id,
+        source.metadata,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn toggle_notification_subscription(
+    sm: State<'_, Arc<SubscriptionManager>>,
+    id: String,
+    enabled: bool,
+) -> Result<(), String> {
+    sm.toggle_subscription(id, enabled)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn update_notification_subscription_metadata(
+    sm: State<'_, Arc<SubscriptionManager>>,
+    id: String,
+    metadata: String,
+) -> Result<(), String> {
+    sm.update_metadata(id, metadata)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn delete_notification_subscription(
+    sm: State<'_, Arc<SubscriptionManager>>,
+    id: String,
+) -> Result<(), String> {
+    sm.delete_subscription(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn subscribe_to_resource_updates(
+    sm: State<'_, Arc<SubscriptionManager>>,
+    project_id: String,
+    platform: String,
+    title: String,
+) -> Result<String, String> {
+    sm.subscribe_resource(project_id, platform, title)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn subscribe_to_rss(
+    sm: State<'_, Arc<SubscriptionManager>>,
+    url: String,
+    title: String,
+) -> Result<String, String> {
+    sm.subscribe_rss(url, title).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn check_notifications_now(
+    sm: State<'_, Arc<SubscriptionManager>>,
+) -> Result<(), String> {
+    sm.check_all().await.map_err(|e| e.to_string())
 }

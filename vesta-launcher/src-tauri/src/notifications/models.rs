@@ -98,4 +98,5 @@ pub struct NotificationAction {
     pub action_id: String,
     #[serde(rename = "type")]
     pub action_type: String,
+    pub payload: Option<serde_json::Value>,
 }

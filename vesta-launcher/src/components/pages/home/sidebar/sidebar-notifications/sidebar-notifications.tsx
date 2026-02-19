@@ -27,6 +27,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import { dialogStore } from "@stores/dialog-store";
 import styles from "./sidebar-notifications.module.css";
 
 interface SidebarNotificationProps {
@@ -191,16 +192,46 @@ function NotificationCard(props: {
 		`NotificationCard: ${props.title} - type: ${props.notification_type}, dismissible: ${props.dismissible}, progress: ${props.progress}`,
 	);
 
-	const handleAction = async (actionId: string) => {
+	const handleAction = async (action: NotificationAction) => {
 		try {
-			await invokeNotificationAction(actionId, props.client_key || undefined);
+			if (action.id === "open_url" && action.payload?.url) {
+				try {
+					const confirmed = await dialogStore.confirm(
+						"Open External Link",
+						`This link will open in your default web browser:\n\n${action.payload.url}\n\nDo you want to continue?`,
+						{
+							okLabel: "Open Link",
+							cancelLabel: "Stay in App",
+							severity: "question",
+						},
+					);
+
+					if (confirmed) {
+						await invokeNotificationAction(
+							"open_url",
+							props.client_key || undefined,
+							{ url: action.payload.url },
+						);
+						if (props.dismissible) await handleDelete();
+					}
+				} catch (e) {
+					console.error("Failed to handle open_url action:", e);
+				}
+				return;
+			}
+
+			await invokeNotificationAction(
+				action.id,
+				props.client_key || undefined,
+				action.payload,
+			);
 			// Most actions (like Resume or Cancel) should dismiss the notification once triggered
 			// but we skip this for pause/resume task as those keep the notification active
-			if (actionId !== "pause_task" && actionId !== "resume_task") {
+			if (action.id !== "pause_task" && action.id !== "resume_task") {
 				await handleDelete();
 			}
 		} catch (error) {
-			console.error(`Failed to invoke action ${actionId}:`, error);
+			console.error(`Failed to invoke action ${action.id}:`, error);
 		}
 	};
 
@@ -327,7 +358,7 @@ function NotificationCard(props: {
 							{(action) => (
 								<button
 									class={styles["sidebar__notification__action-btn"]}
-									onClick={() => handleAction(action.id)}
+									onClick={() => handleAction(action)}
 									style={{
 										background:
 											action.type === "destructive"

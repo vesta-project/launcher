@@ -10,14 +10,24 @@ use tauri::{AppHandle, Emitter, Manager};
 
 /// Action handler trait for notification actions
 pub trait ActionHandler: Send + Sync {
-    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()>;
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        client_key: Option<String>,
+        payload: Option<serde_json::Value>,
+    ) -> Result<()>;
 }
 
 /// Handler that cancels running tasks when the notification action 'cancel_task' is invoked.
 struct CancelTaskHandler {}
 
 impl ActionHandler for CancelTaskHandler {
-    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         // Defensive: client_key is required for task cancellation
         let key = match client_key {
             Some(k) => k,
@@ -37,7 +47,12 @@ impl ActionHandler for CancelTaskHandler {
 struct PauseTaskHandler {}
 
 impl ActionHandler for PauseTaskHandler {
-    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let key = match client_key {
             Some(k) => k,
             None => anyhow::bail!("Missing client_key for pause_task action"),
@@ -51,7 +66,12 @@ impl ActionHandler for PauseTaskHandler {
 struct ResumeTaskHandler {}
 
 impl ActionHandler for ResumeTaskHandler {
-    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let key = match client_key {
             Some(k) => k,
             None => anyhow::bail!("Missing client_key for resume_task action"),
@@ -65,7 +85,12 @@ impl ActionHandler for ResumeTaskHandler {
 struct ResumeInstanceOperationHandler {}
 
 impl ActionHandler for ResumeInstanceOperationHandler {
-    fn handle(&self, app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let key = match client_key {
             Some(k) => k,
             None => anyhow::bail!("Missing client_key for resume_instance_operation action"),
@@ -96,7 +121,12 @@ impl ActionHandler for ResumeInstanceOperationHandler {
 struct RestartAppHandler {}
 
 impl ActionHandler for RestartAppHandler {
-    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        _client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         app_handle.restart();
         #[allow(unreachable_code)]
         Ok(())
@@ -107,7 +137,12 @@ impl ActionHandler for RestartAppHandler {
 struct InstallUpdateHandler {}
 
 impl ActionHandler for InstallUpdateHandler {
-    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        _client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             let _ = handle.emit("core://install-app-update", ());
@@ -120,7 +155,12 @@ impl ActionHandler for InstallUpdateHandler {
 struct LogoutGuestHandler {}
 
 impl ActionHandler for LogoutGuestHandler {
-    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        _client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         log::info!("[LogoutGuestHandler] Logging out guest...");
 
         // 1. Cleanup marker file
@@ -167,7 +207,12 @@ impl ActionHandler for LogoutGuestHandler {
 struct DownloadUpdateHandler {}
 
 impl ActionHandler for DownloadUpdateHandler {
-    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        _client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             let _ = handle.emit("core://download-app-update", ());
@@ -180,12 +225,35 @@ impl ActionHandler for DownloadUpdateHandler {
 struct OpenUpdateDialogHandler {}
 
 impl ActionHandler for OpenUpdateDialogHandler {
-    fn handle(&self, app_handle: &AppHandle, _client_key: Option<String>) -> Result<()> {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        _client_key: Option<String>,
+        _payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             let _ = handle.emit("core://open-update-ui", ());
         });
         Ok(())
+    }
+}
+
+/// Handler that opens a URL in the default browser
+struct OpenUrlHandler {}
+
+impl ActionHandler for OpenUrlHandler {
+    fn handle(
+        &self,
+        _app_handle: &AppHandle,
+        _client_key: Option<String>,
+        payload: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let url = payload
+            .and_then(|p| p.get("url").and_then(|u| u.as_str()).map(|s| s.to_string()))
+            .ok_or_else(|| anyhow::anyhow!("Missing URL in open_url action payload"))?;
+
+        open::that(url).map_err(|e| anyhow::anyhow!("Failed to open URL: {}", e))
     }
 }
 
@@ -340,7 +408,12 @@ mod tests {
         }
 
         impl super::ActionHandler for TestHandler {
-            fn handle(&self, _app_handle: &AppHandle, client_key: Option<String>) -> Result<()> {
+            fn handle(
+                &self,
+                _app_handle: &AppHandle,
+                client_key: Option<String>,
+                _payload: Option<serde_json::Value>,
+            ) -> Result<()> {
                 let mut g = self.cap.lock().unwrap();
                 *g = client_key;
                 Ok(())
@@ -350,7 +423,7 @@ mod tests {
         manager.register_action("test_invoker", Arc::new(TestHandler { cap: cap_clone }));
 
         manager
-            .invoke_action("test_invoker", Some("task_abc".to_string()))
+            .invoke_action("test_invoker", Some("task_abc".to_string()), None)
             .unwrap();
 
         // check captured key
@@ -408,7 +481,7 @@ mod tests {
         // Invoke cancel via notification manager
         let notification_manager = handle.state::<NotificationManager>();
         notification_manager
-            .invoke_action("cancel_task", Some(client_key.clone()))
+            .invoke_action("cancel_task", Some(client_key.clone()), None)
             .expect("invoke works");
 
         // Wait for a final patient 'Cancelled' notification to exist
@@ -459,6 +532,7 @@ impl NotificationManager {
         manager.register_action("download_update", Arc::new(DownloadUpdateHandler {}));
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
+        manager.register_action("open_url", Arc::new(OpenUrlHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager
@@ -477,13 +551,33 @@ impl NotificationManager {
     }
 
     /// Invoke an action handler
-    pub fn invoke_action(&self, action_id: &str, client_key: Option<String>) -> Result<()> {
+    pub fn invoke_action(
+        &self,
+        action_id: &str,
+        client_key: Option<String>,
+        payload: Option<serde_json::Value>,
+    ) -> Result<()> {
         let registry = self
             .action_registry
             .lock()
             .map_err(|e| anyhow::anyhow!("Failed to lock action registry: {}", e))?;
         if let Some(handler) = registry.get(action_id) {
-            handler.handle(&self.app_handle, client_key)?;
+            // If payload is not provided, try to find it from the notification in the store
+            let action_payload = if payload.is_some() {
+                payload
+            } else if let Some(ref key) = client_key {
+                NotificationStore::get_by_client_key(key)?
+                    .and_then(|n| {
+                        n.actions
+                            .into_iter()
+                            .find(|a| a.action_id == action_id)
+                            .and_then(|a| a.payload)
+                    })
+            } else {
+                None
+            };
+
+            handler.handle(&self.app_handle, client_key, action_payload)?;
         } else {
             anyhow::bail!("Action handler not found: {}", action_id);
         }

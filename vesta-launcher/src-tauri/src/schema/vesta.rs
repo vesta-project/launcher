@@ -106,6 +106,30 @@ diesel::table! {
 }
 
 diesel::table! {
+    notification_seen_items (id) {
+        id -> Integer,
+        subscription_id -> Text,
+        item_id -> Text,
+        seen_at -> Text,
+    }
+}
+
+diesel::table! {
+    notification_subscriptions (id) {
+        id -> Text,
+        provider_type -> Text,
+        target_url -> Nullable<Text>,
+        target_id -> Nullable<Text>,
+        title -> Text,
+        enabled -> Bool,
+        metadata -> Nullable<Text>,
+        last_checked -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     pinned_page (id) {
         id -> Integer,
         page_type -> Text,
@@ -167,12 +191,15 @@ diesel::table! {
 }
 
 diesel::joinable!(installed_resource -> instance (instance_id));
+diesel::joinable!(notification_seen_items -> notification_subscriptions (subscription_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
     installed_resource,
     instance,
     notification,
+    notification_seen_items,
+    notification_subscriptions,
     pinned_page,
     resource_metadata_cache,
     resource_project,

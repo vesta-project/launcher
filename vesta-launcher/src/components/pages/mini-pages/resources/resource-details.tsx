@@ -57,6 +57,7 @@ import InstanceSelectionDialog from "./instance-selection-dialog";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import CloseIcon from "@assets/close.svg";
 import HeartIcon from "@assets/heart.svg";
+import BellIcon from "@assets/bell.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
 import styles from "./resource-details.module.css";
 
@@ -283,6 +284,42 @@ const ResourceDetailsPage: Component<{
 		if (best) return best;
 		return resources.state.versions[0] || null;
 	});
+
+	const [subscriptions, { refetch: refetchSubscriptions }] = createResource<any[]>(() =>
+		invoke("get_notification_subscriptions"),
+	);
+
+	const isFollowing = createMemo(() => {
+		const subs = subscriptions();
+		const p = project();
+		if (!subs || !p) return false;
+		return subs.some(
+			(s) => s.provider_type === "resource" && s.target_id === p.id && s.enabled,
+		);
+	});
+
+	const handleFollowToggle = async () => {
+		const p = project();
+		if (!p) return;
+
+		if (isFollowing()) {
+			const sub = subscriptions()?.find(
+				(s) => {
+					return s.provider_type === "resource" && s.target_id === p.id;
+				}
+			);
+			if (sub) {
+				await invoke("toggle_notification_subscription", { id: sub.id, enabled: false });
+			}
+		} else {
+			await invoke("subscribe_to_resource_updates", {
+				projectId: p.id,
+				platform: p.source,
+				title: p.name,
+			});
+		}
+		refetchSubscriptions();
+	};
 
 	const [peerProject] = createResource(project, async (p: ResourceProject) => {
 		if (!p) return null;
@@ -1127,6 +1164,35 @@ const ResourceDetailsPage: Component<{
 													</button>
 												</div>
 											</Show>
+											<Button
+												variant={isFollowing() ? "solid" : "outline"}
+												size="sm"
+												onClick={handleFollowToggle}
+												class={styles["header-web-link"]}
+												tooltip_text={
+													isFollowing()
+														? "Disable update notifications"
+														: "Receive notifications for updates"
+												}
+											>
+												<div
+													style={{
+														display: "flex",
+														"align-items": "center",
+														gap: "6px",
+													}}
+												>
+													<BellIcon
+														width="14"
+														height="14"
+														style={{
+															fill: isFollowing() ? "currentColor" : "none",
+															stroke: "currentColor",
+														}}
+													/>
+													<span>{isFollowing() ? "Following" : "Follow"}</span>
+												</div>
+											</Button>
 											<Button
 												variant="outline"
 												size="sm"

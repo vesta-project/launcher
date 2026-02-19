@@ -210,9 +210,10 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
         action_id: "logout_guest".to_string(),
         label: "Sign In".to_string(),
         action_type: "primary".to_string(),
+        payload: None,
     }];
 
-    let _ = manager.create(CreateNotificationInput {
+    if let Err(e) = manager.create(CreateNotificationInput {
         client_key: Some("guest_mode_warning".to_string()),
         title: Some("Guest Mode Active".to_string()),
         description: Some("You are in guest mode. Changes will not be saved, and certain features are restricted.".to_string()),
@@ -225,7 +226,9 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
         total_steps: None,
         metadata: None,
         show_on_completion: None,
-    });
+    }) {
+        log::error!("Failed to create guest-mode notification: {}", e);
+    }
 
     Ok(())
 }

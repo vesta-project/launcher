@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
+use tauri::Manager;
 #[cfg(target_os = "windows")]
 use winver::WindowsVersion;
 
@@ -78,6 +79,21 @@ pub async fn launch_window(
     win_builder.build()?;
 
     Ok(())
+}
+
+/// Ensure the main window is visible and focused (used by deep-links / CLI)
+pub fn ensure_main_window_visible(app: &tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .show()
+            .map_err(|e| format!("Failed to show window: {}", e))?;
+        window
+            .set_focus()
+            .map_err(|e| format!("Failed to focus window: {}", e))?;
+        Ok(())
+    } else {
+        Err("Main window not found".to_string())
+    }
 }
 
 /// Set Windows-level GPU preference for a specific executable

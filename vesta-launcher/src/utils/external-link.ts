@@ -39,12 +39,12 @@ export async function openExternal(
 		/** Custom description message */
 		description?: string;
 	} = {},
-): Promise<void> {
-	if (!url) return;
+): Promise<boolean> {
+	if (!url) return false;
 
 	if (options.skipWarning || isWhitelisted(url)) {
 		await open(url);
-		return;
+		return true;
 	}
 
 	const confirmed = await dialogStore.confirm(
@@ -60,5 +60,8 @@ export async function openExternal(
 
 	if (confirmed) {
 		await open(url);
+		return true;
 	}
+
+	return false;
 }

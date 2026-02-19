@@ -284,7 +284,47 @@
 	margin: 0;
 	font-size: 0.85rem;
 	color: var(--text-secondary);
-	line-height: 1.5;
+	line-height: 1.4;
+}
+
+.subscriptions-list {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.subscription-item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 16px;
+	background: var(--surface-low);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	border-radius: 8px;
+}
+
+.sub-info {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.sub-title {
+	font-size: 0.9rem;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.sub-type {
+	font-size: 0.75rem;
+	color: var(--text-secondary);
+	text-transform: capitalize;
+}
+
+.sub-actions {
+	display: flex;
+	align-items: center;
+	gap: 16px;
 }
 
 .settings-info-box {

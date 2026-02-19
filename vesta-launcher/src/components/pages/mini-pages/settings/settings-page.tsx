@@ -70,6 +70,7 @@ import {
 } from "@ui/context-menu/context-menu";
 import styles from "./settings-page.module.css";
 import { JavaOptionCard, type JavaOption } from "./java-option-card";
+import { NotificationSettingsTab } from "./notification-settings-tab";
 
 interface AppConfig {
 	id: number;
@@ -750,6 +751,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 						<TabsTrigger class={styles["tabs-trigger"]} value="general">General</TabsTrigger>
 						<TabsTrigger class={styles["tabs-trigger"]} value="appearance">Appearance</TabsTrigger>
 						<TabsTrigger class={styles["tabs-trigger"]} value="java">Java</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="notifications">Notifications</TabsTrigger>
 						<TabsTrigger class={styles["tabs-trigger"]} value="defaults">Defaults</TabsTrigger>
 						<TabsTrigger class={styles["tabs-trigger"]} value="developer">Developer</TabsTrigger>
 						<TabsTrigger class={styles["tabs-trigger"]} value="help">Help</TabsTrigger>
@@ -1085,6 +1087,10 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 						</div>
 					</TabsContent>
 
+					<TabsContent class={styles["tabs-content"]} value="notifications">
+						<NotificationSettingsTab />
+					</TabsContent>
+
 					<TabsContent class={styles["tabs-content"]} value="help">
 						<div class={styles["settings-tab-content"]}>
 							<SettingsCard header="Minecraft Modding">
@@ -1223,7 +1229,26 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 										</Switch>
 									}
 								/>
-								
+								<SettingsField
+									label="Reset Notifications"
+									description="Force-reset seen items and clear notification history"
+									control={
+										<LauncherButton
+											type="destructive"
+											onClick={async () => {
+												await invoke("reset_notification_system");
+												showToast({
+													title: "Notifications Reset",
+													description:
+														"Notification history and seen items cleared.",
+													severity: "Success",
+												});
+											}}
+										>
+											Reset System
+										</LauncherButton>
+									}
+								/>
 							</SettingsCard>
 
 							<SettingsCard header="Updater Simulation">

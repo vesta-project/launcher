@@ -167,11 +167,13 @@ impl Task for InstallInstanceTask {
                                 action_id: "cancel_task".to_string(),
                                 label: "Cancel".to_string(),
                                 action_type: "secondary".to_string(),
+                                payload: None,
                             },
                             crate::notifications::models::NotificationAction {
                                 action_id: "resume_task".to_string(),
                                 label: "Resume".to_string(),
                                 action_type: "primary".to_string(),
+                                payload: None,
                             },
                         ]
                     } else {
@@ -180,11 +182,13 @@ impl Task for InstallInstanceTask {
                                 action_id: "cancel_task".to_string(),
                                 label: "Cancel".to_string(),
                                 action_type: "secondary".to_string(),
+                                payload: None,
                             },
                             crate::notifications::models::NotificationAction {
                                 action_id: "pause_task".to_string(),
                                 label: "Pause".to_string(),
                                 action_type: "secondary".to_string(),
+                                payload: None,
                             },
                         ]
                     };

@@ -139,6 +139,7 @@ impl TaskManager {
                         action_id: "cancel_task".to_string(),
                         label: "Cancel".to_string(),
                         action_type: "secondary".to_string(),
+                        payload: None,
                     });
                 }
                 if is_pausable {
@@ -146,6 +147,7 @@ impl TaskManager {
                         action_id: "pause_task".to_string(),
                         label: "Pause".to_string(),
                         action_type: "secondary".to_string(),
+                        payload: None,
                     });
                 }
 
@@ -155,7 +157,7 @@ impl TaskManager {
                     serde_json::to_string(&actions).ok()
                 };
 
-                let _ = manager.create(CreateNotificationInput {
+                if let Err(e) = manager.create(CreateNotificationInput {
                     client_key: Some(client_key.clone()),
                     title: Some(task_name.clone()),
                     description: Some("Waiting for worker...".to_string()),
@@ -168,7 +170,9 @@ impl TaskManager {
                     current_step: Some(0),
                     total_steps: Some(task.total_steps()),
                     metadata: None,
-                });
+                }).map_err(|e| e.to_string()) {
+                    log::error!("Failed to create task-start notification for {}: {}", client_key, e);
+                }
 
                 // Create cancellation channel
                 let (tx, rx) = watch::channel(false);
@@ -210,9 +214,9 @@ impl TaskManager {
 
                 tokio::spawn(async move {
                     // Check if cancelled while waiting
-                    if *rx.borrow() {
+                        if *rx.borrow() {
                         let manager = app.state::<NotificationManager>();
-                        let _ = manager.create(CreateNotificationInput {
+                        if let Err(e) = manager.create(CreateNotificationInput {
                             client_key: Some(key_clone.clone()),
                             title: Some(task_name),
                             description: Some("Task cancelled.".to_string()),
@@ -225,7 +229,9 @@ impl TaskManager {
                             total_steps: None,
                             metadata: None,
                             show_on_completion: None,
-                        });
+                        }) {
+                            log::error!("Failed to create task-cancel notification for {}: {}", key_clone, e);
+                        }
 
                         // Notify frontend about failure if it's a resource download
                         if let Some(task_id) = task.id() {
@@ -278,10 +284,10 @@ impl TaskManager {
                     active_tasks.lock().unwrap().remove(&key_clone);
 
                     let manager = app.state::<NotificationManager>();
-                    match run_result {
+                            match run_result {
                         Ok(_) => {
                             // Auto completion update to 100%
-                            let _ = manager.update_progress_with_description(
+                                    let _ = manager.update_progress_with_description(
                                 key_clone.clone(),
                                 100,
                                 Some(task.total_steps()),
@@ -300,20 +306,22 @@ impl TaskManager {
                             }
 
                             // Convert progress notification to Patient failure
-                            let _ = manager.create(CreateNotificationInput {
-                                client_key: Some(key_clone.clone()),
-                                title: Some(task_name),
-                                description: Some(format!("Failed: {}", e)),
-                                severity: Some("error".to_string()),
-                                notification_type: Some(NotificationType::Patient),
-                                dismissible: Some(true),
-                                actions: None,
-                                progress: None,
-                                current_step: None,
-                                total_steps: None,
-                                metadata: None,
-                                show_on_completion: Some(true),
-                            });
+                                    if let Err(err) = manager.create(CreateNotificationInput {
+                                        client_key: Some(key_clone.clone()),
+                                        title: Some(task_name),
+                                        description: Some(format!("Failed: {}", e)),
+                                        severity: Some("error".to_string()),
+                                        notification_type: Some(NotificationType::Patient),
+                                        dismissible: Some(true),
+                                        actions: None,
+                                        progress: None,
+                                        current_step: None,
+                                        total_steps: None,
+                                        metadata: None,
+                                        show_on_completion: Some(true),
+                                    }) {
+                                        log::error!("Failed to create task-failure notification for {}: {}", key_clone, err);
+                                    }
                         }
                     }
 
@@ -421,12 +429,14 @@ impl TaskManager {
                     action_id: "cancel_task".to_string(),
                     label: "Cancel".to_string(),
                     action_type: "secondary".to_string(),
+                    payload: None,
                 });
             }
             actions.push(NotificationAction {
                 action_id: "resume_task".to_string(),
                 label: "Resume".to_string(),
                 action_type: "primary".to_string(),
+                payload: None,
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
@@ -456,12 +466,14 @@ impl TaskManager {
                     action_id: "cancel_task".to_string(),
                     label: "Cancel".to_string(),
                     action_type: "secondary".to_string(),
+                    payload: None,
                 });
             }
             actions.push(NotificationAction {
                 action_id: "pause_task".to_string(),
                 label: "Pause".to_string(),
                 action_type: "secondary".to_string(),
+                payload: None,
             });
 
             let manager = self.app_handle.state::<NotificationManager>();
@@ -537,11 +549,13 @@ impl Task for TestTask {
                                 action_id: "cancel_task".to_string(),
                                 label: "Cancel".to_string(),
                                 action_type: "secondary".to_string(),
+                                payload: None,
                             },
                             NotificationAction {
                                 action_id: "pause_task".to_string(),
                                 label: "Pause".to_string(),
                                 action_type: "secondary".to_string(),
+                                payload: None,
                             },
                         ])
                         .unwrap(),
@@ -576,11 +590,13 @@ impl Task for TestTask {
                                     action_id: "cancel_task".to_string(),
                                     label: "Cancel".to_string(),
                                     action_type: "secondary".to_string(),
+                                    payload: None,
                                 },
                                 NotificationAction {
                                     action_id: "resume_task".to_string(),
                                     label: "Resume".to_string(),
                                     action_type: "primary".to_string(),
+                                    payload: None,
                                 },
                             ],
                         )
@@ -610,11 +626,13 @@ impl Task for TestTask {
                                                 action_id: "cancel_task".to_string(),
                                                 label: "Cancel".to_string(),
                                                 action_type: "secondary".to_string(),
+                                                payload: None,
                                             },
                                             NotificationAction {
                                                 action_id: "pause_task".to_string(),
                                                 label: "Pause".to_string(),
                                                 action_type: "secondary".to_string(),
+                                                payload: None,
                                             },
                                         ]
                                     ).map_err(|e| e.to_string())?;
