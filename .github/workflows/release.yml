@@ -346,7 +346,7 @@ jobs:
           for file in $FILES; do
             # Skip signature files in this loop
             if [[ "$file" == *.sig ]]; then continue; fi
-            
+
             PLATFORM=""
             case "$file" in
               Vesta_Launcher_${VERSION}_x64.msi)
@@ -355,10 +355,10 @@ jobs:
               Vesta_Launcher_${VERSION}_arm64.msi)
                 PLATFORM="windows-aarch64"
                 ;;
-              Vesta_Launcher_${VERSION}_x64.app.tar.gz)
+              Vesta_Launcher_${VERSION}_x64.dmg)
                 PLATFORM="darwin-x86_64"
                 ;;
-              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz)
+              Vesta_Launcher_${VERSION}_aarch64.dmg)
                 PLATFORM="darwin-aarch64"
                 ;;
               Vesta_Launcher_${VERSION}_x86_64.AppImage)
@@ -375,11 +375,18 @@ jobs:
                 fi
                 ;;
             esac
-            
+
             if [ -n "$PLATFORM" ]; then
-                # Prefer updater artifacts (tar.gz, AppImage) over others if they exist
-                if [ -z "${platform_files[$PLATFORM]}" ] || [[ "$file" == *.tar.gz ]] || [[ "$file" == *.AppImage ]] || [[ "$file" == *.msi ]]; then
+                # For macOS, always prefer .dmg over .tar.gz
+                if [[ "$PLATFORM" == darwin-* ]]; then
+                  if [[ "$file" == *.dmg ]]; then
                     platform_files[$PLATFORM]=$file
+                  fi
+                else
+                  # Prefer updater artifacts (tar.gz, AppImage, msi) over others if they exist
+                  if [ -z "${platform_files[$PLATFORM]}" ] || [[ "$file" == *.tar.gz ]] || [[ "$file" == *.AppImage ]] || [[ "$file" == *.msi ]]; then
+                      platform_files[$PLATFORM]=$file
+                  fi
                 fi
             fi
           done
