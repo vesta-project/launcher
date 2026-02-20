@@ -1,15 +1,15 @@
-import { Component, JSX, Show } from "solid-js";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import LauncherButton from "@ui/button/button";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import { Component, JSX, Show } from "solid-js";
 import styles from "./settings.module.css";
 
 export interface SettingsFieldProps {
 	label: string;
 	description?: string | JSX.Element;
 	helpTopic?: string;
-	
-	/** 
+
+	/**
 	 * Layout style:
 	 * - 'inline': Control on the right (desktop) or stacked right (mobile)
 	 * - 'stack': Control full width below the text (always)
@@ -47,7 +47,7 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 
 	return (
 		<>
-			<div 
+			<div
 				class={styles["settings-field"]}
 				classList={{
 					[styles["settings-field--inline"]]: layout() === "inline",
@@ -63,12 +63,14 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 						</Show>
 					</div>
 					<Show when={props.description}>
-						<div class={styles["settings-field-description"]}>{props.description}</div>
+						<div class={styles["settings-field-description"]}>
+							{props.description}
+						</div>
 					</Show>
 				</div>
 				<div class={styles["settings-field-control"]}>
-					<Show 
-						when={props.control || props.children} 
+					<Show
+						when={props.control || props.children}
 						fallback={
 							<Show when={props.actionLabel}>
 								<LauncherButton
@@ -82,7 +84,10 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 							</Show>
 						}
 					>
-						<div class={styles["settings-field-content-wrapper"]} classList={{ [styles.disabled]: props.disabled }}>
+						<div
+							class={styles["settings-field-content-wrapper"]}
+							classList={{ [styles.disabled]: props.disabled }}
+						>
 							{props.control || props.children}
 						</div>
 					</Show>

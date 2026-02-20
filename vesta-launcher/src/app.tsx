@@ -1,17 +1,23 @@
+import SessionExpiredDialog from "@components/auth/session-expired-dialog";
+import { DialogRoot } from "@components/dialog/dialog-root";
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { FatalPage, setFatalInfo } from "@components/pages/fatal/fatal-page";
-import {
-	initializeFileDropSystem,
-	cleanupFileDropSystem,
-	getDropZoneManager,
-} from "@utils/file-drop";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
+import {
+	cleanupDialogSystem,
+	dialogStore,
+	initializeDialogSystem,
+} from "@stores/dialog-store";
+import { initializeInstances, setupInstanceListeners } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { ChildrenProp } from "@ui/props";
+import { showToast } from "@ui/toast/toast";
+import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import {
 	applyCommonConfigUpdates,
 	applyConfigSnapshot,
@@ -20,23 +26,21 @@ import {
 	unsubscribeFromConfigUpdates,
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
+import {
+	cleanupFileDropSystem,
+	getDropZoneManager,
+	initializeFileDropSystem,
+} from "@utils/file-drop";
 import { getMinecraftVersions } from "@utils/instances";
-import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
+import { ensureOsType, getOsType } from "@utils/os";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { getOsType, ensureOsType } from "@utils/os";
+import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
-import { initializeInstances, setupInstanceListeners } from "@stores/instances";
-import SessionExpiredDialog from "@components/auth/session-expired-dialog";
-import { DialogRoot } from "@components/dialog/dialog-root";
-import { cleanupDialogSystem, initializeDialogSystem, dialogStore } from "@stores/dialog-store";
-import { showToast } from "@ui/toast/toast";
-import { getActiveAccount, ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import { setPageViewerOpen, router } from "@components/page-viewer/page-viewer";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -63,7 +67,7 @@ export async function handleDeepLink(
 			} catch (e) {
 				console.warn("Failed to show window for deep link:", e);
 			}
-		} 
+		}
 		// 1. Check if app is initialized
 		const config = await invoke<any>("get_config");
 		if (!config || !config.setup_completed) {
@@ -129,7 +133,8 @@ export async function handleDeepLink(
 			// If router isn't ready, show error - no standalone fallback
 			showToast({
 				title: "App Not Ready",
-				description: "Please wait for the app to fully load before using 'Open in Vesta'.",
+				description:
+					"Please wait for the app to fully load before using 'Open in Vesta'.",
 				severity: "Error",
 				duration: 5000,
 			});
@@ -295,15 +300,21 @@ function Root(props: ChildrenProp) {
 				hasCheckedForUpdatesOnStartup = true;
 				checkForAppUpdates(true);
 			}
-		}).then((u) => { unlistenCheckUpdates = u; });
+		}).then((u) => {
+			unlistenCheckUpdates = u;
+		});
 
 		listen("core://logout-guest", () => {
 			window.location.href = "/";
-		}).then((u) => { unlistenLogout = u; });
+		}).then((u) => {
+			unlistenLogout = u;
+		});
 
 		listen("core://open-update-ui", () => {
 			checkForAppUpdates();
-		}).then((u) => { unlistenUpdate = u; });
+		}).then((u) => {
+			unlistenUpdate = u;
+		});
 
 		listen("core://exit-requested", async () => {
 			try {
@@ -334,7 +345,9 @@ function Root(props: ChildrenProp) {
 				// User explicitly asked for exit, so let's try to exit if check itself fails.
 				await invoke("exit_app");
 			}
-		}).then((u) => { unlistenExit = u; });
+		}).then((u) => {
+			unlistenExit = u;
+		});
 
 		// Setup deep-link handler for vesta:// URLs
 		onOpenUrl((urls) => {
@@ -346,7 +359,9 @@ function Root(props: ChildrenProp) {
 				void handleDeepLink(url, navigate);
 			}
 		})
-			.then((u) => { unlistenDeepLink = u; })
+			.then((u) => {
+				unlistenDeepLink = u;
+			})
 			.catch((error) => {
 				console.error("Failed to setup deep-link handler:", error);
 			});
@@ -411,13 +426,15 @@ function Root(props: ChildrenProp) {
 			});
 
 			// Handle CLI Arguments & Deep Links
-			const handleCLI = async (args: string[]) => {			if (hasTauriRuntime()) {
-				try {
-					await invoke("show_window_from_tray");
-				} catch (e) {
-					console.warn("Failed to show window for CLI args:", e);
+			const handleCLI = async (args: string[]) => {
+				if (hasTauriRuntime()) {
+					try {
+						await invoke("show_window_from_tray");
+					} catch (e) {
+						console.warn("Failed to show window for CLI args:", e);
+					}
 				}
-			}				console.log("[App] Received CLI args:", args);
+				console.log("[App] Received CLI args:", args);
 				for (let i = 0; i < args.length; i++) {
 					const arg = args[i];
 					if (arg.startsWith("vesta://")) {
@@ -427,9 +444,14 @@ function Root(props: ChildrenProp) {
 
 					if (arg === "--launch-instance" && args[i + 1]) {
 						const slug = args[i + 1];
-						const { instancesState, setLaunching, initializeInstances } = await import("@stores/instances");
+						const { instancesState, setLaunching, initializeInstances } =
+							await import("@stores/instances");
 						await initializeInstances();
-						const inst = instancesState.instances.find(inst => (inst as any).slug === slug || inst.name.toLowerCase().replace(/ /g, "-") === slug);
+						const inst = instancesState.instances.find(
+							(inst) =>
+								(inst as any).slug === slug ||
+								inst.name.toLowerCase().replace(/ /g, "-") === slug,
+						);
 						if (inst) {
 							setLaunching(slug, true);
 							await invoke("launch_instance", { instanceData: inst });
@@ -437,15 +459,22 @@ function Root(props: ChildrenProp) {
 						i++;
 					} else if (arg === "--open-instance" && args[i + 1]) {
 						const slug = args[i + 1];
-						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
+						const { setPageViewerOpen, router } = await import(
+							"@components/page-viewer/page-viewer"
+						);
 						router()?.navigate("/instance", { slug });
 						setPageViewerOpen(true);
 						i++;
 					} else if (arg === "--open-resource" && args[i + 2]) {
 						const platform = args[i + 1];
 						const id = args[i + 2];
-						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
-						router()?.navigate("/resource-details", { platform, projectId: id });
+						const { setPageViewerOpen, router } = await import(
+							"@components/page-viewer/page-viewer"
+						);
+						router()?.navigate("/resource-details", {
+							platform,
+							projectId: id,
+						});
 						setPageViewerOpen(true);
 						i += 2;
 					}

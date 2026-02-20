@@ -6,13 +6,13 @@ import {
 } from "@components/page-viewer/page-viewer";
 import {
 	InitAppearancePage,
+	InitDataStoragePage,
 	InitFinishedPage,
 	InitFirstPage,
 	InitGuidePage,
+	InitInstallationPage,
 	InitJavaPage,
 	InitLoginPage,
-	InitDataStoragePage,
-	InitInstallationPage,
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";

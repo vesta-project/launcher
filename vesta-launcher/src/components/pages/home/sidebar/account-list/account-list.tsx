@@ -1,7 +1,7 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import Button from "@ui/button/button";
 import { ResourceAvatar } from "@ui/avatar";
+import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
 import {
 	ACCOUNT_TYPE_GUEST,
@@ -168,7 +168,9 @@ interface AccountListItemProps {
 function AccountListItem(props: AccountListItemProps) {
 	const handleClick = (e: MouseEvent) => {
 		// Don't switch if clicking the remove button
-		if ((e.target as HTMLElement).closest(`.${styles["account-remove-button"]}`)) {
+		if (
+			(e.target as HTMLElement).closest(`.${styles["account-remove-button"]}`)
+		) {
 			return;
 		}
 		// If it's not active OR if it's expired, allow "switching" (which triggers the dialog)

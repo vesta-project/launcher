@@ -3,17 +3,17 @@ import CloseIcon from "@assets/close.svg";
 import OpenIcon from "@assets/open.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import ForwardsArrowIcon from "@assets/right-arrow.svg";
-import { MiniRouter } from "@components/page-viewer/mini-router";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
+import { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	children,
 	createMemo,
 	createSignal,
-	Show,
 	type JSX,
-	onMount,
 	onCleanup,
+	onMount,
+	Show,
 } from "solid-js";
 import styles from "./unified-page-viewer.module.css";
 
@@ -117,9 +117,11 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 				data-tauri-drag-region={props.showWindowControls}
 			>
 				<Show when={isMac()}>
-						<div class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}>
-							{props.windowControls}
-						</div>
+					<div
+						class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}
+					>
+						{props.windowControls}
+					</div>
 				</Show>
 				<div class={styles["page-viewer-navbar-left"]}>
 					<NavbarButton
@@ -188,7 +190,10 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						<div class={styles["page-viewer-reload-spinner"]} />
 					</div>
 				</Show>
-				{props.router.getRouterView({ close: props.onClose, router: props.router })}
+				{props.router.getRouterView({
+					close: props.onClose,
+					router: props.router,
+				})}
 			</main>
 		</div>
 	);

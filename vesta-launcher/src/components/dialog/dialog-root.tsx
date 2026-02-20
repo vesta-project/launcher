@@ -1,4 +1,5 @@
-import { Component, For, Show, createSignal } from "solid-js";
+import { type DialogInstance, dialogStore } from "@stores/dialog-store";
+import Button from "@ui/button/button";
 import {
 	Dialog,
 	DialogContent,
@@ -7,9 +8,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import Button from "@ui/button/button";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import { dialogStore, type DialogInstance } from "@stores/dialog-store";
+import { Component, createSignal, For, Show } from "solid-js";
 
 export const DialogRoot: Component = () => {
 	return (
@@ -19,8 +19,12 @@ export const DialogRoot: Component = () => {
 	);
 };
 
-const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) => {
-	const [inputValue, setInputValue] = createSignal(props.dialog.input?.defaultValue ?? "");
+const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (
+	props,
+) => {
+	const [inputValue, setInputValue] = createSignal(
+		props.dialog.input?.defaultValue ?? "",
+	);
 
 	const handleAction = (actionId: string) => {
 		dialogStore.submit(
@@ -31,8 +35,12 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) =
 	};
 
 	const isNonDismissible = () => props.dialog.isBackendGenerated;
-	const cancelAction = () => props.dialog.actions.find(a => a.id === "cancel");
-	const primaryAction = () => props.dialog.actions.length > 0 ? props.dialog.actions[props.dialog.actions.length - 1] : null;
+	const cancelAction = () =>
+		props.dialog.actions.find((a) => a.id === "cancel");
+	const primaryAction = () =>
+		props.dialog.actions.length > 0
+			? props.dialog.actions[props.dialog.actions.length - 1]
+			: null;
 
 	return (
 		<Dialog
@@ -71,10 +79,21 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) =
 				</Show>
 
 				<DialogFooter>
-					<div style={{ display: "flex", "justify-content": "flex-end", gap: "0.5rem", width: "100%" }}>
+					<div
+						style={{
+							display: "flex",
+							"justify-content": "flex-end",
+							gap: "0.5rem",
+							width: "100%",
+						}}
+					>
 						<For each={props.dialog.actions}>
 							{(action) => (
-								<Button color={action.color} variant={action.variant} onClick={() => handleAction(action.id)}>
+								<Button
+									color={action.color}
+									variant={action.variant}
+									onClick={() => handleAction(action.id)}
+								>
 									{action.label}
 								</Button>
 							)}

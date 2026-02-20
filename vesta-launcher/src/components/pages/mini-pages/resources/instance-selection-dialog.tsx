@@ -1,23 +1,23 @@
+import { type Instance, instancesState } from "@stores/instances";
 import {
-	Component,
-	For,
-	Show,
-	createSignal,
-	createEffect,
-	createMemo,
-} from "solid-js";
-import { Dialog, DialogContent, DialogHeader } from "@ui/dialog/dialog";
-import { instancesState, type Instance } from "@stores/instances";
-import {
+	findBestVersion,
 	ResourceProject,
 	ResourceVersion,
-	findBestVersion,
 	resources,
 } from "@stores/resources";
+import { invoke } from "@tauri-apps/api/core";
+import Button from "@ui/button/button";
+import { Dialog, DialogContent, DialogHeader } from "@ui/dialog/dialog";
 import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import { getCompatibilityForInstance } from "@utils/resources";
-import Button from "@ui/button/button";
-import { invoke } from "@tauri-apps/api/core";
+import {
+	Component,
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	Show,
+} from "solid-js";
 import styles from "./instance-selection-dialog.module.css";
 
 interface InstanceSelectionDialogProps {
@@ -148,7 +148,9 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 			<Show
 				when={!isDefaultIcon(iconPath())}
 				fallback={
-					<div class={styles["instance-select-icon-placeholder"]}>{displayChar()}</div>
+					<div class={styles["instance-select-icon-placeholder"]}>
+						{displayChar()}
+					</div>
 				}
 			>
 				<div

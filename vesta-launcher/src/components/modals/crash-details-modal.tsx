@@ -6,8 +6,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import { getCrashDetails } from "@utils/crash-handler";
 import { Separator } from "@ui/separator/separator";
+import { getCrashDetails } from "@utils/crash-handler";
 import { createSignal, Match, Show, Switch } from "solid-js";
 import styles from "./crash-details-modal.module.css";
 
@@ -152,7 +152,9 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 							</div>
 
 							<div class={styles["crash-actions"]}>
-								<p class={styles["action-hint"]}>Try these steps to fix the crash:</p>
+								<p class={styles["action-hint"]}>
+									Try these steps to fix the crash:
+								</p>
 								<ul>
 									<Switch>
 										<Match when={crashDetails()?.crash_type === "launch_mod"}>
@@ -188,4 +190,3 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 		</Dialog>
 	);
 }
-

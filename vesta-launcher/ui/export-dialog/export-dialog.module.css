@@ -1,29 +1,29 @@
 .export-tree-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 4px 8px;
-    border-radius: 4px;
-    cursor: pointer;
-    min-height: 32px;
-    user-select: none;
-    transition: background 150ms;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 4px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+	min-height: 32px;
+	user-select: none;
+	transition: background 150ms;
 }
 
 .export-tree-row:hover {
-    background: var(--surface-raised) !important;
+	background: var(--surface-raised) !important;
 }
 
 .expand-arrow {
-    width: 20px;
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s;
+	width: 20px;
+	height: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: transform 0.2s;
 }
 
 .select-files-button:hover > * {
-    transform: none !important;
-    font-weight: 700 !important;
+	transform: none !important;
+	font-weight: 700 !important;
 }

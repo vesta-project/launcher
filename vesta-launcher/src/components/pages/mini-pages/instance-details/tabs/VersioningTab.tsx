@@ -1,18 +1,18 @@
-import { Show } from "solid-js";
-import styles from "../instance-details.module.css";
 import { SettingsCard, SettingsField } from "@components/settings";
-import Button from "@ui/button/button";
-import { Badge } from "@ui/badge";
 import { ResourceAvatar } from "@ui/avatar";
-import { Skeleton } from "@ui/skeleton/skeleton";
+import { Badge } from "@ui/badge";
+import Button from "@ui/button/button";
 import {
 	Combobox,
 	ComboboxContent,
-	ComboboxItem,
-	ComboboxInput,
 	ComboboxControl,
+	ComboboxInput,
+	ComboboxItem,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
+import { Skeleton } from "@ui/skeleton/skeleton";
+import { Show } from "solid-js";
+import styles from "../instance-details.module.css";
 import { ModpackVersionSelector } from "../modpack-version-selector";
 
 interface VersioningTabProps {
@@ -65,10 +65,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					subHeader={`Project ID: ${inst().modpackId}`}
 					variant="bordered"
 				>
-					<div 
-						class={styles["modpack-hero"]} 
-						onClick={navigateToModpack}
-					>
+					<div class={styles["modpack-hero"]} onClick={navigateToModpack}>
 						<div class={styles["modpack-hero-icon-container"]}>
 							<ResourceAvatar
 								icon={inst().modpackIconUrl}
@@ -78,9 +75,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						</div>
 						<div class={styles["modpack-hero-info"]}>
 							<div class={styles["modpack-hero-header"]}>
-								<h3 class={styles["modpack-hero-title"]}>
-									{inst().name}
-								</h3>
+								<h3 class={styles["modpack-hero-title"]}>{inst().name}</h3>
 								<Button
 									variant="ghost"
 									size="sm"
@@ -93,7 +88,10 @@ export const VersioningTab = (props: VersioningTabProps) => {
 								</Button>
 							</div>
 							<p class={styles["modpack-hero-subtitle"]}>
-								{inst().modpackPlatform === "modrinth" ? "Modrinth" : "CurseForge"} • {inst().minecraftVersion}
+								{inst().modpackPlatform === "modrinth"
+									? "Modrinth"
+									: "CurseForge"}{" "}
+								• {inst().minecraftVersion}
 							</p>
 						</div>
 					</div>
@@ -101,7 +99,9 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					<ModpackVersionSelector
 						versions={props.modpackVersions()}
 						loading={props.modpackVersions.loading}
-						currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
+						currentVersionId={
+							inst().modpackVersionId ? String(inst().modpackVersionId) : null
+						}
 						onVersionSelect={props.handleModpackVersionSelect}
 						onUpdate={props.rolloutModpackUpdate}
 						disabled={props.busy || props.isInstalling || props.isGuest}
@@ -115,7 +115,11 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					subHeader="Define the Minecraft version and modloader for this instance."
 					variant="bordered"
 				>
-					<SettingsField label="Minecraft Version" description="The base version of the game to run." layout="stack">
+					<SettingsField
+						label="Minecraft Version"
+						description="The base version of the game to run."
+						layout="stack"
+					>
 						<Combobox<any>
 							options={props.searchableMcVersions()}
 							optionValue="id"
@@ -124,7 +128,9 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							disabled={props.isGuest}
 							onChange={(id) => id && props.setSelectedMcVersion(id)}
 							placeholder="Select version..."
-							itemComponent={(p) => <ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>}
+							itemComponent={(p) => (
+								<ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>
+							)}
 						>
 							<ComboboxControl aria-label="Version Picker" style="width: 100%;">
 								<ComboboxInput as="input" value={props.selectedMcVersion()} />
@@ -134,7 +140,11 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						</Combobox>
 					</SettingsField>
 
-					<SettingsField label="Modloader Engine" description="Choose between Vanilla, Forge, Fabric, or others." layout="stack">
+					<SettingsField
+						label="Modloader Engine"
+						description="Choose between Vanilla, Forge, Fabric, or others."
+						layout="stack"
+					>
 						<Combobox<any>
 							options={props.loadersList}
 							optionValue="value"
@@ -143,12 +153,20 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							disabled={props.isGuest}
 							onChange={(val) => val && props.setSelectedLoader(val)}
 							placeholder="Select loader..."
-							itemComponent={(p) => <ComboboxItem item={p.item}>{p.item.rawValue.label}</ComboboxItem>}
+							itemComponent={(p) => (
+								<ComboboxItem item={p.item}>
+									{p.item.rawValue.label}
+								</ComboboxItem>
+							)}
 						>
 							<ComboboxControl aria-label="Loader Picker" style="width: 100%;">
 								<ComboboxInput
 									as="input"
-									value={props.loadersList.find((l) => l.value === props.selectedLoader())?.label || "Vanilla"}
+									value={
+										props.loadersList.find(
+											(l) => l.value === props.selectedLoader(),
+										)?.label || "Vanilla"
+									}
 								/>
 								<ComboboxTrigger />
 							</ComboboxControl>
@@ -156,23 +174,47 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						</Combobox>
 					</SettingsField>
 
-					<Show when={props.selectedLoader() && props.selectedLoader().toLowerCase() !== "vanilla"}>
-						<SettingsField label="Loader Version" description="Specific version of the selected modloader." layout="stack">
+					<Show
+						when={
+							props.selectedLoader() &&
+							props.selectedLoader().toLowerCase() !== "vanilla"
+						}
+					>
+						<SettingsField
+							label="Loader Version"
+							description="Specific version of the selected modloader."
+							layout="stack"
+						>
 							<div style="display: flex; gap: 12px; align-items: flex-end; width: 100%;">
 								<div style="flex: 1;">
-									<Show when={!props.mcVersions.loading} fallback={<Skeleton class={styles["skeleton-picker"]} />}>
+									<Show
+										when={!props.mcVersions.loading}
+										fallback={<Skeleton class={styles["skeleton-picker"]} />}
+									>
 										<Combobox<any>
 											options={props.searchableLoaderVersions()}
 											optionValue="id"
 											optionTextValue="searchString"
 											value={props.selectedLoaderVersion()}
 											disabled={props.isGuest}
-											onChange={(id) => id && props.setSelectedLoaderVersion(id)}
+											onChange={(id) =>
+												id && props.setSelectedLoaderVersion(id)
+											}
 											placeholder="Select loader version..."
-											itemComponent={(p) => <ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>}
+											itemComponent={(p) => (
+												<ComboboxItem item={p.item}>
+													{p.item.rawValue.id}
+												</ComboboxItem>
+											)}
 										>
-											<ComboboxControl aria-label="Loader Version Selection" style="width: 100%;">
-												<ComboboxInput as="input" value={props.selectedLoaderVersion()} />
+											<ComboboxControl
+												aria-label="Loader Version Selection"
+												style="width: 100%;"
+											>
+												<ComboboxInput
+													as="input"
+													value={props.selectedLoaderVersion()}
+												/>
 												<ComboboxTrigger />
 											</ComboboxControl>
 											<ComboboxContent />
@@ -182,8 +224,10 @@ export const VersioningTab = (props: VersioningTabProps) => {
 
 								<Show
 									when={
-										props.selectedLoader() !== (inst().modloader || "vanilla") ||
-										props.selectedLoaderVersion() !== (inst().modloaderVersion || "") ||
+										props.selectedLoader() !==
+											(inst().modloader || "vanilla") ||
+										props.selectedLoaderVersion() !==
+											(inst().modloaderVersion || "") ||
 										props.selectedMcVersion() !== inst().minecraftVersion
 									}
 								>
@@ -218,9 +262,11 @@ export const VersioningTab = (props: VersioningTabProps) => {
 				/>
 				<SettingsField
 					label={inst().modpackId ? "Repair Files" : "Repair Instance"}
-					description={inst().modpackId 
-						? "Verify all modpack assets and re-download missing files." 
-						: "Force a re-check of all files and re-download any missing components."}
+					description={
+						inst().modpackId
+							? "Verify all modpack assets and re-download missing files."
+							: "Force a re-check of all files and re-download any missing components."
+					}
 					actionLabel="Repair"
 					onAction={() => props.repairInstance(inst().id)}
 				/>
@@ -241,7 +287,9 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					label="Hard Reset"
 					description={
 						<span>
-							Reinstalls the game from scratch. This <strong>permanently deletes</strong> your worlds, configs, and screenshots!
+							Reinstalls the game from scratch. This{" "}
+							<strong>permanently deletes</strong> your worlds, configs, and
+							screenshots!
 						</span>
 					}
 					actionLabel="Reset"
@@ -252,7 +300,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					label="Uninstall Instance"
 					description={
 						<span>
-							Remove this instance and all its files from your computer. This action is <strong>permanent and irreversible</strong>.
+							Remove this instance and all its files from your computer. This
+							action is <strong>permanent and irreversible</strong>.
 						</span>
 					}
 					actionLabel="Uninstall"

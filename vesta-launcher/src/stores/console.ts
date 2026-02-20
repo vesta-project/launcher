@@ -1,9 +1,15 @@
-import { createStore } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { createStore } from "solid-js/store";
 import { instancesState } from "./instances";
 
-export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG" | "FATAL" | "UNKNOWN";
+export type LogLevel =
+	| "INFO"
+	| "WARN"
+	| "ERROR"
+	| "DEBUG"
+	| "FATAL"
+	| "UNKNOWN";
 
 export interface LogLine {
 	id: number;
@@ -107,7 +113,7 @@ export const consoleStore = {
 				instance_id: string;
 				line: string;
 				stream: "stdout" | "stderr";
-			}>
+			}>;
 		}>("core://instance-log", (event) => {
 			if (state.isLive) {
 				const relevantLines = event.payload.lines
@@ -148,7 +154,9 @@ export const consoleStore = {
 		setState("isCatchingUp", true);
 		try {
 			const runningMeta = instancesState.runningIds[instanceSlug];
-			const since = state.lastCatchupTime || (runningMeta ? runningMeta.startTime : undefined);
+			const since =
+				state.lastCatchupTime ||
+				(runningMeta ? runningMeta.startTime : undefined);
 
 			const caughtUpLines = await invoke<string[]>("read_instance_log", {
 				instanceIdSlug: instanceSlug,
@@ -159,7 +167,7 @@ export const consoleStore = {
 			if (state.lines.length === 0) {
 				lineIdCounter = 0;
 			}
-			
+
 			this.appendRawLines(caughtUpLines);
 			setState("lastCatchupTime", Math.floor(Date.now() / 1000));
 		} catch (e) {
@@ -179,11 +187,18 @@ export const consoleStore = {
 	},
 
 	async viewHistoricalLog(path: string) {
-		setState({ isLive: false, currentLogPath: path, isCatchingUp: true, lines: [] });
+		setState({
+			isLive: false,
+			currentLogPath: path,
+			isCatchingUp: true,
+			lines: [],
+		});
 		lineIdCounter = 0;
 
 		try {
-			const rawLines = await invoke<string[]>("read_specific_log_file", { path });
+			const rawLines = await invoke<string[]>("read_specific_log_file", {
+				path,
+			});
 			this.appendRawLines(rawLines);
 		} catch (e) {
 			console.error("Failed to read historical log", e);

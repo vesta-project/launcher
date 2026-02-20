@@ -1,6 +1,6 @@
+import { Separator } from "@ui/separator/separator";
 import { Component, For } from "solid-js";
 import { HELP_CONTENT } from "../../../../utils/help-content";
-import { Separator } from "@ui/separator/separator";
 import styles from "./modding-guide.module.css";
 
 export const ModdingGuideContent: Component = () => {
@@ -408,4 +408,3 @@ export const ModdingGuidePage: Component = () => {
 		</div>
 	);
 };
-

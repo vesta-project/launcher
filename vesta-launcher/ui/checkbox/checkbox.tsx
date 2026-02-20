@@ -6,14 +6,14 @@ import styles from "./checkbox.module.css";
 
 // Props for Checkbox root
 export type CheckboxRootProps<T extends ValidComponent = "div"> =
-	CheckboxPrimitive.CheckboxRootProps<T> & { 
-		class?: string; 
+	CheckboxPrimitive.CheckboxRootProps<T> & {
+		class?: string;
 	};
 
 export function Checkbox<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, CheckboxRootProps<T>>,
 ) {
-		const [local, others] = splitProps(props as any, ["class"]);
+	const [local, others] = splitProps(props as any, ["class"]);
 
 	return (
 		<CheckboxPrimitive.Root
@@ -53,6 +53,3 @@ export function Checkbox<T extends ValidComponent = "div">(
 		</CheckboxPrimitive.Root>
 	);
 }
-
-
-

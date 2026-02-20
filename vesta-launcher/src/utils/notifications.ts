@@ -6,6 +6,8 @@ import { createSignal, JSX } from "solid-js";
 
 const [notifications, setNotifications] = createSignal<Notification[]>([]);
 let _notificationCache: Notification[] = [];
+/** Track client keys that are currently being 'shown' to prevent duplicates due to race conditions */
+const _pendingShowKeys = new Set<string>();
 
 /** Promise-based queue to prevent race conditions in showAlert focus checks */
 let _showAlertQueue: Promise<any> = Promise.resolve();
@@ -29,7 +31,8 @@ interface NotificationAction {
 
 // Frontend notification structure (for toast/ephemeral display)
 interface Notification {
-	id: number;
+	id: number; // Toast ID
+	backend_id?: number | null; // Rust Database ID
 	type: NotificationSeverity;
 	title?: string;
 	description?: string;
@@ -77,6 +80,7 @@ function showAlert(
 	dismissible?: boolean,
 	actions?: NotificationAction[],
 	metadata?: string | null,
+	backend_id?: number | null,
 ): Promise<number> {
 	// Chain onto the showAlertQueue to prevent race conditions during focus checks
 	const ownPromise = _showAlertQueue.then(async () => {
@@ -84,53 +88,39 @@ function showAlert(
 		const isFocused = await getCurrentWebviewWindow().isFocused();
 		if (!isFocused) return NOTIFICATION_NOT_SHOWN;
 
-		console.log(
-			`[Notification] showAlert: ${title}, Key: ${client_key}, Type: ${notification_type}, Actions:`,
-			actions,
-		);
 		// If progress is null/undefined, treat it as indeterminate (PROGRESS_INDETERMINATE)
 		let displayProgress = progress;
-		let displayCurrentStep = current_step;
-		let displayTotalSteps = total_steps;
-
-		if (progress == null) {
+		if (progress == null && notification_type === "progress") {
 			displayProgress = PROGRESS_INDETERMINATE;
 		}
-
-		// Determine if cancellable/pausable based on actions
-		const cancellable = actions?.some((a) => a.id === "cancel_task") ?? false;
-		const pausable =
-			actions?.some((a) => a.id === "pause_task" || a.id === "resume_task") ??
-			false;
-		const isPaused = actions?.some((a) => a.id === "resume_task") ?? false;
 
 		const id = showToast({
 			title,
 			description,
-			duration: 5000,
-			onToastForceClose: (id: number) => closeAlert(id),
-			severity: capitalizeFirstLetter(severity) as
-				| "Info"
-				| "Success"
-				| "Warning"
-				| "Error",
+			duration:
+				notification_type === "progress" && (progress ?? 0) < 100 ? 0 : 5000,
+			severity,
+			notification_type,
 			progress: displayProgress,
-			current_step: displayCurrentStep,
-			total_steps: displayTotalSteps,
-			cancellable: cancellable,
-			onCancel: client_key ? () => cancelTask(client_key) : undefined,
-			pausable: pausable,
-			isPaused: isPaused,
-			onPause: client_key
-				? () => invokeNotificationAction("pause_task", client_key)
-				: undefined,
-			onResume: client_key
-				? () => invokeNotificationAction("resume_task", client_key)
-				: undefined,
+			current_step,
+			total_steps,
+			dismissible,
+			actions,
+			onAction: (actionId, payload) => {
+				invokeNotificationAction(actionId, client_key || undefined, payload);
+			},
+			onToastDismiss: (id) => {
+				closeAlert(id, true);
+			},
+			onToastForceClose: (id: number) => {
+				// If user manually closes the toast via swipe/escape, we keep it in sidebar
+				closeAlert(id, false);
+			},
 		});
 
 		const newNotif: Notification = {
 			id,
+			backend_id,
 			type: severity,
 			title,
 			description,
@@ -162,16 +152,19 @@ function removeAllAlerts() {
 	setNotifications([]);
 }
 
-function closeAlert(id: number) {
-	console.log(`Closing Alert ${id}`);
+function closeAlert(id: number, deleteFromBackend = false) {
+	const notif = _notificationCache.find((n) => n.id === id);
+
+	// Only delete from backend if explicitly requested AND the notification is dismissible
+	const shouldDelete = deleteFromBackend && notif?.dismissible !== false;
+
+	if (shouldDelete && notif?.backend_id) {
+		deleteNotification(notif.backend_id).catch(console.error);
+	}
+
 	_notificationCache = _notificationCache.filter((n) => n.id !== id);
 	setNotifications([..._notificationCache]);
 	tryRemoveToast(id);
-}
-
-// Helper function to capitalize first letter
-function capitalizeFirstLetter(str: string): string {
-	return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 // Tauri command wrappers
@@ -186,15 +179,16 @@ async function createNotification(params: {
 	current_step?: number;
 	total_steps?: number;
 	client_key?: string;
-	metadata?: string;
+	metadata?: any;
 	show_on_completion?: boolean;
 }): Promise<number> {
-	return await invoke<number>("create_notification", { payload: params });
-}
-
-async function cancelTask(clientKey: string): Promise<void> {
-	console.log(`Cancelling task: ${clientKey}`);
-	await invoke("cancel_task", { clientKey });
+	// Backend expects actions and metadata as JSON strings
+	const payload = {
+		...params,
+		actions: params.actions ? JSON.stringify(params.actions) : undefined,
+		metadata: params.metadata ? JSON.stringify(params.metadata) : undefined,
+	};
+	return await invoke<number>("create_notification", { payload });
 }
 
 async function invokeNotificationAction(
@@ -202,10 +196,6 @@ async function invokeNotificationAction(
 	clientKey?: string,
 	payload?: any,
 ): Promise<void> {
-	console.log(
-		`Invoking notification action: ${actionId}, key: ${clientKey}, payload:`,
-		payload,
-	);
 	await invoke("invoke_notification_action", { actionId, clientKey, payload });
 }
 
@@ -272,35 +262,21 @@ async function subscribeToBackendNotifications() {
 			"core://notification",
 			async (event) => {
 				const notif = event.payload;
-				console.log(
-					`[Notification] Event: ${notif.title}, Key: ${notif.client_key}, Cache Size: ${_notificationCache.length}`,
-				);
 
 				// Check if we already have this notification in our ephemeral list
 				let updated = false;
 				if (notif.client_key) {
+					if (_pendingShowKeys.has(notif.client_key)) {
+						return;
+					}
+
 					const existing = _notificationCache.find(
 						(n) => n.client_key === notif.client_key,
 					);
 					if (existing) {
-						console.log(`[Notification] Updating existing: ${existing.id}`);
 						updated = true;
 						// Update existing toast and notification state
 						const clientKey = notif.client_key;
-						// Determine if cancellable/pausable based on actions
-						const cancellable =
-							notif.actions?.some(
-								(a: NotificationAction) => a.id === "cancel_task",
-							) ?? false;
-						const pausable =
-							notif.actions?.some(
-								(a: NotificationAction) =>
-									a.id === "pause_task" || a.id === "resume_task",
-							) ?? false;
-						const isPaused =
-							notif.actions?.some(
-								(a: NotificationAction) => a.id === "resume_task",
-							) ?? false;
 
 						updateToast(existing.id, {
 							title: notif.title,
@@ -308,28 +284,26 @@ async function subscribeToBackendNotifications() {
 							progress: notif.progress,
 							current_step: notif.current_step,
 							total_steps: notif.total_steps,
-							severity: capitalizeFirstLetter(notif.severity) as
-								| "Info"
-								| "Success"
-								| "Warning"
-								| "Error",
-							duration: 5000,
-							cancellable: cancellable,
-							onCancel: clientKey ? () => cancelTask(clientKey) : undefined,
-							pausable: pausable,
-							isPaused: isPaused,
-							onPause: clientKey
-								? () => invokeNotificationAction("pause_task", clientKey)
-								: undefined,
-							onResume: clientKey
-								? () => invokeNotificationAction("resume_task", clientKey)
-								: undefined,
+							severity: notif.severity,
+							notification_type: notif.notification_type,
+							duration:
+								notif.notification_type === "progress" &&
+								(notif.progress ?? 0) < 100
+									? 0
+									: 5000,
+							dismissible: notif.dismissible,
+							actions: notif.actions,
+							onAction: (actionId, payload) => {
+								invokeNotificationAction(
+									actionId,
+									clientKey || undefined,
+									payload,
+								);
+							},
+							onToastDismiss: (id) => closeAlert(id, true),
+							onToastForceClose: (id) => closeAlert(id, false),
 						});
 
-						console.log(
-							`[Notification] Updating cache with actions:`,
-							notif.actions,
-						);
 						_notificationCache = _notificationCache.map((n) =>
 							n.client_key === notif.client_key
 								? {
@@ -351,27 +325,30 @@ async function subscribeToBackendNotifications() {
 				}
 
 				if (!updated) {
-					console.log(
-						`[Notification] Creating new toast for type: ${notif.notification_type}`,
-					);
 					// Show toast for Progress and Immediate notifications
 					if (
 						notif.notification_type === "immediate" ||
 						notif.notification_type === "progress"
 					) {
-						await showAlert(
-							notif.severity,
-							notif.title,
-							notif.description || undefined,
-							notif.progress,
-							notif.current_step,
-							notif.total_steps,
-							notif.client_key,
-							notif.notification_type,
-							notif.dismissible,
-							notif.actions,
-							notif.metadata,
-						);
+						if (notif.client_key) _pendingShowKeys.add(notif.client_key);
+						try {
+							await showAlert(
+								notif.severity,
+								notif.title,
+								notif.description || undefined,
+								notif.progress,
+								notif.current_step,
+								notif.total_steps,
+								notif.client_key,
+								notif.notification_type,
+								notif.dismissible,
+								notif.actions,
+								notif.metadata,
+								notif.id,
+							);
+						} finally {
+							if (notif.client_key) _pendingShowKeys.delete(notif.client_key);
+						}
 					}
 				}
 
@@ -384,7 +361,6 @@ async function subscribeToBackendNotifications() {
 		const unsubProgress = await listen<BackendNotification>(
 			"core://notification-progress",
 			async (event) => {
-				console.log("Received progress event:", event.payload);
 				const notif = event.payload;
 
 				// Always try to update existing toast if we have it in our ephemeral list
@@ -408,13 +384,6 @@ async function subscribeToBackendNotifications() {
 							notif.actions && notif.actions.length > 0
 								? notif.actions
 								: existing.actions;
-						const cancellable =
-							currentActions?.some(
-								(a: NotificationAction) => a.id === "cancel_task",
-							) ?? false;
-
-						// If task just completed, remove the cancel button
-						const shouldShowCancel = !isNowComplete && cancellable;
 
 						updateToast(existing.id, {
 							title: notif.title || existing.title,
@@ -422,23 +391,21 @@ async function subscribeToBackendNotifications() {
 							progress: notif.progress,
 							current_step: notif.current_step,
 							total_steps: notif.total_steps,
-							severity: notif.severity
-								? (capitalizeFirstLetter(notif.severity) as
-										| "Info"
-										| "Success"
-										| "Warning"
-										| "Error")
-								: (capitalizeFirstLetter(existing.type) as
-										| "Info"
-										| "Success"
-										| "Warning"
-										| "Error"),
+							severity: notif.severity || existing.type,
+							notification_type:
+								notif.notification_type || existing.notification_type,
 							duration: isNowComplete ? 5000 : 0, // Auto-dismiss after 5s on completion
-							cancellable: shouldShowCancel,
-							onCancel:
-								shouldShowCancel && clientKey
-									? () => cancelTask(clientKey)
-									: undefined,
+							dismissible: notif.dismissible ?? existing.dismissible,
+							actions: currentActions,
+							onAction: (actionId, payload) => {
+								invokeNotificationAction(
+									actionId,
+									clientKey || undefined,
+									payload,
+								);
+							},
+							onToastDismiss: (id) => closeAlert(id, true),
+							onToastForceClose: (id) => closeAlert(id, false),
 						});
 
 						_notificationCache = _notificationCache.map((n) =>
@@ -462,38 +429,37 @@ async function subscribeToBackendNotifications() {
 								: n,
 						);
 						setNotifications([..._notificationCache]);
-
-						// If just completed, log it
-						if (wasIncomplete && isNowComplete) {
-							console.log(
-								`[Notification] Task completed: ${notif.title || existing.title}`,
-							);
-						}
 					} else {
 						// If we don't have a matching ephemeral toast for this client_key (race / missed event),
 						// create one now so progress updates are visible in the UI.
-						console.log(
-							"No ephemeral toast found for client_key, creating one from progress event:",
-							notif.client_key,
-						);
+
+						if (notif.client_key && _pendingShowKeys.has(notif.client_key)) {
+							return;
+						}
 
 						if (
 							notif.notification_type === "immediate" ||
 							notif.notification_type === "progress"
 						) {
-							await showAlert(
-								notif.severity,
-								notif.title,
-								notif.description || undefined,
-								notif.progress,
-								notif.current_step,
-								notif.total_steps,
-								notif.client_key,
-								notif.notification_type,
-								notif.dismissible,
-								notif.actions,
-								notif.metadata,
-							);
+							if (notif.client_key) _pendingShowKeys.add(notif.client_key);
+							try {
+								await showAlert(
+									notif.severity,
+									notif.title,
+									notif.description || undefined,
+									notif.progress,
+									notif.current_step,
+									notif.total_steps,
+									notif.client_key,
+									notif.notification_type,
+									notif.dismissible,
+									notif.actions,
+									notif.metadata,
+									notif.id,
+								);
+							} finally {
+								if (notif.client_key) _pendingShowKeys.delete(notif.client_key);
+							}
 						}
 					}
 				}

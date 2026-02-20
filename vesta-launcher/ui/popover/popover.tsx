@@ -1,10 +1,8 @@
-import type { Component, ValidComponent } from "solid-js";
-import { splitProps } from "solid-js";
-
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as PopoverPrimitive from "@kobalte/core/popover";
-
 import { clsx } from "clsx";
+import type { Component, ValidComponent } from "solid-js";
+import { splitProps } from "solid-js";
 
 import styles from "./popover.module.css";
 
@@ -38,4 +36,10 @@ const PopoverContent = <T extends ValidComponent = "div">(
 	);
 };
 
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverCloseButton };
+export {
+	Popover,
+	PopoverTrigger,
+	PopoverContent,
+	PopoverAnchor,
+	PopoverCloseButton,
+};

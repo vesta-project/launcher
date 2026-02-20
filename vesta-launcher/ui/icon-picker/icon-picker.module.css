@@ -16,7 +16,10 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+	transition:
+		transform 0.2s,
+		box-shadow 0.2s,
+		border-color 0.2s;
 	border: 1px solid transparent;
 }
 
@@ -57,7 +60,9 @@
 	height: 56px;
 	border-radius: 12px;
 	cursor: pointer;
-	transition: transform 0.1s, box-shadow 0.1s;
+	transition:
+		transform 0.1s,
+		box-shadow 0.1s;
 	background-size: cover;
 	background-position: center;
 	position: relative;
@@ -65,7 +70,9 @@
 	align-items: center;
 	justify-content: center;
 	/* Match instance-header-image styling */
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 1px 3px hsl(0 0% 0% / 0.08);
+	box-shadow:
+		inset 0 0 0 2px var(--border-subtle),
+		0 1px 3px hsl(0 0% 0% / 0.08);
 	flex-shrink: 0;
 }
 
@@ -83,11 +90,13 @@
 /* Selected state with background filter and tick overlay */
 .icon-picker__option--selected {
 	transform: scale(1.05);
-	box-shadow: inset 0 0 0 2px var(--border-subtle), 0 4px 12px hsl(0 0% 0% / 0.2);
+	box-shadow:
+		inset 0 0 0 2px var(--border-subtle),
+		0 4px 12px hsl(0 0% 0% / 0.2);
 }
 
 .icon-picker__option--selected::before {
-	content: '';
+	content: "";
 	position: absolute;
 	top: 0;
 	left: 0;
@@ -123,7 +132,7 @@
 	justify-content: center;
 	z-index: 3;
 	border: 2px solid var(--bg-surface);
-	box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* Upload button styling (plus icon) */
@@ -132,7 +141,9 @@
 	border: 2px dashed var(--border-subtle) !important;
 	color: hsl(var(--color__primary-hue) 10% 70%);
 	transition: all 0.1s;
-	box-shadow: inset 0 0 0 2px transparent, 0 1px 3px hsl(0 0% 0% / 0.08) !important;
+	box-shadow:
+		inset 0 0 0 2px transparent,
+		0 1px 3px hsl(0 0% 0% / 0.08) !important;
 }
 
 .icon-picker__upload-btn:hover {
@@ -150,22 +161,22 @@
 /* No scrollbar needed - dynamic sizing prevents overflow */
 /* Edit overlay for trigger */
 .icon-picker__edit-overlay {
-position: absolute;
-inset: 0;
-background: rgba(0, 0, 0, 0.4);
-color: white;
-display: flex;
-align-items: center;
-justify-content: center;
-opacity: 0;
-transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-border-radius: 12px;
-pointer-events: none;
-backdrop-filter: blur(2px);
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.4);
+	color: white;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	opacity: 0;
+	transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	border-radius: 12px;
+	pointer-events: none;
+	backdrop-filter: blur(2px);
 }
 
 .icon-picker__trigger:hover .icon-picker__edit-overlay {
-opacity: 1;
+	opacity: 1;
 }
 
 /* Hint badge for onboarding */
@@ -175,9 +186,15 @@ opacity: 1;
 }
 
 @keyframes pulse-border {
-	0% { border-color: var(--primary-low); }
-	50% { border-color: var(--primary); }
-	100% { border-color: var(--primary-low); }
+	0% {
+		border-color: var(--primary-low);
+	}
+	50% {
+		border-color: var(--primary);
+	}
+	100% {
+		border-color: var(--primary-low);
+	}
 }
 
 .icon-picker__hint-badge {
@@ -192,7 +209,7 @@ opacity: 1;
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
 	border: 2px solid var(--bg-surface);
 	z-index: 10;
 	animation: nudge 2s infinite;
@@ -212,5 +229,5 @@ opacity: 1;
 	justify-content: center;
 	z-index: 3;
 	border: 2px solid var(--bg-surface);
-	box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }

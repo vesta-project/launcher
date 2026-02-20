@@ -1,6 +1,6 @@
 /* @refresh reload */
 
-import { isThemeReady, initTheme } from "@components/theming";
+import { initTheme, isThemeReady } from "@components/theming";
 import { Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
@@ -22,19 +22,27 @@ document.addEventListener("keydown", (e) => {
 
 // Disable webview context menu in production
 function disableMenu() {
-	if (window.location.hostname !== 'tauri.localhost') {
-		return
+	if (window.location.hostname !== "tauri.localhost") {
+		return;
 	}
 
-	document.addEventListener('contextmenu', e => {
-		e.preventDefault();
-		return false;
-	}, { capture: true })
+	document.addEventListener(
+		"contextmenu",
+		(e) => {
+			e.preventDefault();
+			return false;
+		},
+		{ capture: true },
+	);
 
-	document.addEventListener('selectstart', e => {
-		e.preventDefault();
-		return false;
-	}, { capture: true })
+	document.addEventListener(
+		"selectstart",
+		(e) => {
+			e.preventDefault();
+			return false;
+		},
+		{ capture: true },
+	);
 }
 
 disableMenu();

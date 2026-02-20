@@ -58,7 +58,9 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 
 			{/* Theme Name */}
 			<div class={styles["theme-preset-card__info"]}>
-				<span class={styles["theme-preset-card__name"]}>{props.theme.name}</span>
+				<span class={styles["theme-preset-card__name"]}>
+					{props.theme.name}
+				</span>
 				<span class={styles["theme-preset-card__description"]}>
 					{props.theme.description || props.theme.style}
 				</span>

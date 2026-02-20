@@ -5,11 +5,12 @@ import clsx from "clsx";
 import { children, splitProps, ValidComponent } from "solid-js";
 import styles from "./toggle-group.module.css";
 
-type ToggleGroupRootProps<T extends ValidComponent = "div"> = ToggleGroupPrimitive.ToggleGroupRootProps<T> &
-	ClassProp &
-	ChildrenProp & {
-		onChange?: (value: string | string[] | null) => void;
-	};
+type ToggleGroupRootProps<T extends ValidComponent = "div"> =
+	ToggleGroupPrimitive.ToggleGroupRootProps<T> &
+		ClassProp &
+		ChildrenProp & {
+			onChange?: (value: string | string[] | null) => void;
+		};
 
 function ToggleGroup<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,
@@ -32,15 +33,13 @@ function ToggleGroup<T extends ValidComponent = "div">(
 }
 
 type ToggleGroupItemProps = ToggleGroupPrimitive.ToggleGroupItemProps &
-	ClassProp & ChildrenProp;
+	ClassProp &
+	ChildrenProp;
 
 function ToggleGroupItem<T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, ToggleGroupItemProps>,
 ) {
-	const [local, rest] = splitProps(props, [
-		"class",
-		"children",
-	]);
+	const [local, rest] = splitProps(props, ["class", "children"]);
 	return (
 		<ToggleGroupPrimitive.Item
 			aria-label={props.value}

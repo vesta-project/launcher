@@ -1,19 +1,18 @@
 // Instance Card component with play/kill button and toast notifications
 
-import { resolveResourceUrl } from "@utils/assets";
 import ErrorIcon from "@assets/error.svg";
 import FabricLogo from "@assets/fabric-logo.svg";
 import ForgeLogo from "@assets/forge-logo.svg";
 import NeoForgeLogo from "@assets/neoforge-logo.svg";
 import PlayIcon from "@assets/play.svg";
-import RefreshIcon from "@assets/refresh.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
+import RefreshIcon from "@assets/refresh.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
-import { router } from "@components/page-viewer/page-viewer";
-import { setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { listen } from "@tauri-apps/api/event";
 import { ask } from "@tauri-apps/plugin-dialog";
+import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {
@@ -35,16 +34,10 @@ import {
 	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
-import { ResourceAvatar } from "@ui/avatar";
-import {
-	handleDuplicate,
-	handleRepair,
-	handleHardReset,
-	handleUninstall,
-	handleLaunch,
-} from "../../../../handlers/instance-handler";
+import { ExportDialog } from "@ui/export-dialog";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { resolveResourceUrl } from "@utils/assets";
 import {
 	clearCrashDetails,
 	getCrashDetails,
@@ -73,8 +66,14 @@ import {
 	Show,
 	Switch,
 } from "solid-js";
+import {
+	handleDuplicate,
+	handleHardReset,
+	handleLaunch,
+	handleRepair,
+	handleUninstall,
+} from "../../../../handlers/instance-handler";
 import styles from "./instance-card.module.css";
-import { ExportDialog } from "@ui/export-dialog";
 
 // getInstanceSlug now imported above
 
@@ -441,8 +440,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 					</Match>
 					<Match when={isFailed()}>
-						<div class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}>
-							<ErrorIcon style={{ width: "24px", height: "24px", color: "#ff5252" }} />
+						<div
+							class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}
+						>
+							<ErrorIcon
+								style={{ width: "24px", height: "24px", color: "#ff5252" }}
+							/>
 							<h1
 								style={{
 									margin: "4px 0 0",
@@ -648,4 +651,3 @@ export default function InstanceCard(props: InstanceCardProps) {
 		</ContextMenu>
 	);
 }
-

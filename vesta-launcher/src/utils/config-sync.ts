@@ -3,9 +3,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { batch } from "solid-js";
 import {
+	type AppThemeConfig,
 	applyTheme,
 	configToTheme,
-	type AppThemeConfig,
 } from "../themes/presets";
 
 interface ConfigUpdateEvent {

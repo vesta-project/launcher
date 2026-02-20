@@ -1,12 +1,3 @@
-import {
-	createEffect,
-	createResource,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
 import BellIcon from "@assets/bell.svg";
 import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
@@ -19,22 +10,31 @@ import {
 	SidebarProfileButton,
 } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
+import { instancesState } from "@stores/instances";
+import { type PinnedPage, pinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { Separator } from "@ui/separator/separator";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
 	closeAlert,
 	createNotification,
 	listNotifications,
 	notifications,
-	persistentNotificationTrigger,
 	PROGRESS_INDETERMINATE,
+	persistentNotificationTrigger,
 	showAlert,
 } from "@utils/notifications";
 import { startAppTutorial } from "@utils/tutorial";
-import { pinning, type PinnedPage } from "@stores/pinning";
-import { instancesState } from "@stores/instances";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import { PinnedItem } from "./pinned-items";
 // Transition and getOsType are unused in this file; remove imports to clean code.
 import styles from "./sidebar.module.css";
@@ -118,11 +118,14 @@ function Sidebar(props: SidebarProps) {
 		});
 	});
 
-
 	return (
 		<div
 			ref={ref}
-			classList={{ [styles.sidebar]: true, [styles.macos]: props.os === "macos", [styles["sidebar--open"]]: props.open }}
+			classList={{
+				[styles.sidebar]: true,
+				[styles.macos]: props.os === "macos",
+				[styles["sidebar--open"]]: props.open,
+			}}
 		>
 			<div class={styles["sidebar__root"]}>
 				<div class={styles["sidebar__section"]}>
@@ -153,7 +156,9 @@ function Sidebar(props: SidebarProps) {
 							<div class={styles["sidebar__pins-container"]}>
 								<Separator class={styles["pins-separator"]} />
 								<div class={styles["sidebar__pins"]}>
-									<For each={pinning.pins}>{(pin: PinnedPage) => <PinnedItem pin={pin} />}</For>
+									<For each={pinning.pins}>
+										{(pin: PinnedPage) => <PinnedItem pin={pin} />}
+									</For>
 								</div>
 							</div>
 						</Show>
@@ -226,4 +231,3 @@ function Sidebar(props: SidebarProps) {
 }
 
 export default Sidebar;
-

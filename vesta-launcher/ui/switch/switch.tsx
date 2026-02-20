@@ -1,10 +1,10 @@
-import { cn } from "@utils/ui";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import type {
 	SwitchControlProps,
 	SwitchThumbProps,
 } from "@kobalte/core/switch";
 import * as SwitchPrimitive from "@kobalte/core/switch";
+import { cn } from "@utils/ui";
 import type { ParentProps, ValidComponent, VoidProps } from "solid-js";
 import { splitProps } from "solid-js";
 import styles from "./switch.module.css";
@@ -13,7 +13,11 @@ export const SwitchLabel = SwitchPrimitive.Label;
 
 // Backwards-compatible wrapper: keep supporting <Switch checked=...> while encouraging <Switch.Root>
 export function Switch(props: any) {
-	return <SwitchPrimitive.Root {...props} onChange={props.onCheckedChange}>{props.children}</SwitchPrimitive.Root>;
+	return (
+		<SwitchPrimitive.Root {...props} onChange={props.onCheckedChange}>
+			{props.children}
+		</SwitchPrimitive.Root>
+	);
 }
 
 Object.assign(Switch, SwitchPrimitive);
@@ -62,4 +66,3 @@ export const SwitchThumb = <T extends ValidComponent = "div">(
 		/>
 	);
 };
-

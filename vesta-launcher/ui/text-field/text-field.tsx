@@ -1,5 +1,5 @@
-import * as TextFieldPrimitive from "@kobalte/core/text-field";
 import { PolymorphicProps } from "@kobalte/core/polymorphic";
+import * as TextFieldPrimitive from "@kobalte/core/text-field";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
 import { splitProps, ValidComponent } from "solid-js";
@@ -86,21 +86,27 @@ function TextFieldErrorMessage<T extends ValidComponent = "div">(
 export type TextFieldProps = TextFieldPrimitive.TextFieldRootProps & {
 	placeholder?: string;
 	onInput?: (e: any) => void;
-    onFocus?: (e: any) => void;
-    onBlur?: (e: any) => void;
+	onFocus?: (e: any) => void;
+	onBlur?: (e: any) => void;
 	class?: string;
 };
 
 export function TextField(props: TextFieldProps) {
-	const [local, rest] = splitProps(props, ["placeholder", "onInput", "class", "onFocus", "onBlur"]);
+	const [local, rest] = splitProps(props, [
+		"placeholder",
+		"onInput",
+		"class",
+		"onFocus",
+		"onBlur",
+	]);
 	return (
 		<TextFieldRoot class={clsx(styles["text-field"], local.class)} {...rest}>
-			<TextFieldInput 
-                placeholder={local.placeholder} 
-                onInput={local.onInput} 
-                onFocus={local.onFocus}
-                onBlur={local.onBlur}
-            />
+			<TextFieldInput
+				placeholder={local.placeholder}
+				onInput={local.onInput}
+				onFocus={local.onFocus}
+				onBlur={local.onBlur}
+			/>
 		</TextFieldRoot>
 	);
 }

@@ -1,11 +1,20 @@
-import { router } from "@components/page-viewer/page-viewer";
 import { MiniRouter } from "@components/page-viewer/mini-router";
+import { router } from "@components/page-viewer/page-viewer";
+import { SettingsCard, SettingsField } from "@components/settings";
 import { dialogStore } from "@stores/dialog-store";
-import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from "@tauri-apps/api/app";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import LauncherButton from "@ui/button/button";
 import { Badge } from "@ui/badge";
+import LauncherButton from "@ui/button/button";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@ui/context-menu/context-menu";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import { Separator } from "@ui/separator/separator";
 import {
 	Slider,
 	SliderFill,
@@ -25,15 +34,16 @@ import {
 	TabsList,
 	TabsTrigger,
 } from "@ui/tabs/tabs";
+import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
+	currentThemeConfig,
 	onConfigUpdate,
 	updateThemeConfigLocal,
-	currentThemeConfig,
 } from "@utils/config-sync";
-import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { showToast } from "@ui/toast/toast";
 import { openExternal } from "@utils/external-link";
+import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { startAppTutorial } from "@utils/tutorial";
 import { checkForAppUpdates, simulateUpdateProcess } from "@utils/updater";
 import {
@@ -50,27 +60,17 @@ import {
 import {
 	applyTheme,
 	configToTheme,
+	type GradientHarmony,
 	getThemeById,
 	PRESET_THEMES,
+	type StyleMode,
 	type ThemeConfig,
 	validateTheme,
-	type StyleMode,
-	type GradientHarmony,
 } from "../../../../themes/presets";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import { SettingsCard, SettingsField } from "@components/settings";
-import { Separator } from "@ui/separator/separator";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from "@ui/context-menu/context-menu";
-import styles from "./settings-page.module.css";
-import { JavaOptionCard, type JavaOption } from "./java-option-card";
+import { type JavaOption, JavaOptionCard } from "./java-option-card";
 import { NotificationSettingsTab } from "./notification-settings-tab";
+import styles from "./settings-page.module.css";
 
 interface AppConfig {
 	id: number;
@@ -117,7 +117,7 @@ interface AppConfig {
 /**
  * Settings Page
  */
-function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
+function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const activeRouter = createMemo(() => props.router || router());
 	const [version] = createResource(getVersion);
 
@@ -132,7 +132,8 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 	const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
 	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 	const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
-	const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
+	const [discordPresenceEnabled, setDiscordPresenceEnabled] =
+		createSignal(true);
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
 
@@ -219,9 +220,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 
 			// Managed option
 			options.push({
-				type: 'managed',
+				type: "managed",
 				version: req.major_version,
-				title: 'Managed Runtime',
+				title: "Managed Runtime",
 				path: managedVersion?.path,
 				isActive: current?.is_managed || false,
 				onClick: () => {
@@ -237,12 +238,13 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				.filter((d: any) => d.major_version === req.major_version)
 				.forEach((det: any) => {
 					options.push({
-						type: 'system',
+						type: "system",
 						version: req.major_version,
-						title: 'System Runtime',
+						title: "System Runtime",
 						path: det.path,
 						isActive: current?.path === det.path && !current?.is_managed,
-						onClick: () => handleSetGlobalPath(req.major_version, det.path, false),
+						onClick: () =>
+							handleSetGlobalPath(req.major_version, det.path, false),
 					});
 				});
 
@@ -252,14 +254,13 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				!current.is_managed &&
 				!detectedJavas.some(
 					(d: any) =>
-						d.path === current.path &&
-						d.major_version === req.major_version,
+						d.path === current.path && d.major_version === req.major_version,
 				)
 			) {
 				options.push({
-					type: 'custom',
+					type: "custom",
 					version: req.major_version,
-					title: 'Custom Path',
+					title: "Custom Path",
 					path: current.path,
 					isActive: true,
 					onClick: () => handleManualPickSetGlobal(req.major_version),
@@ -268,9 +269,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 
 			// Browse option
 			options.push({
-				type: 'browse',
+				type: "browse",
 				version: req.major_version,
-				title: '+ Browse...',
+				title: "+ Browse...",
 				isActive: false,
 				onClick: () => handleManualPickSetGlobal(req.major_version),
 			});
@@ -341,7 +342,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 					await dialogStore.alert(
 						"Invalid Java Version",
 						`Selected Java is version ${info.major_version}, but ${version} is required.`,
-						"error"
+						"error",
 					);
 				} else {
 					await handleSetGlobalPath(version, path, false);
@@ -360,7 +361,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 		if (hasTauriRuntime()) {
 			let unlisten: (() => void) | undefined;
 			onCleanup(() => unlisten && unlisten());
-			
+
 			listen("java-paths-updated", () => {
 				refreshJavas();
 			}).then((fn) => {
@@ -420,7 +421,8 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				if (field === "auto_update_enabled") setAutoUpdateEnabled(value);
 				if (field === "startup_check_updates") setStartupCheckUpdates(value);
 				if (field === "use_dedicated_gpu") setUseDedicatedGpu(value ?? true);
-				if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
+				if (field === "discord_presence_enabled")
+					setDiscordPresenceEnabled(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
 				if (field === "theme_id" && value) setThemeId(value);
 				if (field === "theme_primary_hue" && value !== null)
@@ -735,7 +737,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 		<div class={styles["settings-page"]}>
 			<Show
 				when={!loading()}
-				fallback={<div class={styles["settings-loading"]}>Loading settings...</div>}
+				fallback={
+					<div class={styles["settings-loading"]}>Loading settings...</div>
+				}
 			>
 				<Tabs
 					class={styles["settings-tabs"]}
@@ -748,13 +752,27 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 				>
 					<TabsList class={styles["tabs-list"]}>
 						<TabsIndicator />
-						<TabsTrigger class={styles["tabs-trigger"]} value="general">General</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="appearance">Appearance</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="java">Java</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="notifications">Notifications</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="defaults">Defaults</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="developer">Developer</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="help">Help</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="general">
+							General
+						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="appearance">
+							Appearance
+						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="java">
+							Java
+						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="notifications">
+							Notifications
+						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="defaults">
+							Defaults
+						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="developer">
+							Developer
+						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="help">
+							Help
+						</TabsTrigger>
 					</TabsList>
 
 					<TabsContent class={styles["tabs-content"]} value="general">
@@ -765,32 +783,38 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 									description="Disable UI animations for a faster and cleaner experience."
 									layout="inline"
 									control={
-							<Switch checked={reducedMotion()} onCheckedChange={handleReducedMotionToggle}>
-								<SwitchControl>
-									<SwitchThumb />
-								</SwitchControl>
-							</Switch>
-						}
-						/>
-					</SettingsCard>
+										<Switch
+											checked={reducedMotion()}
+											onCheckedChange={handleReducedMotionToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+							</SettingsCard>
 
-					<SettingsCard header="Privacy & Integration">
-						<SettingsField
-							label="Discord Rich Presence"
-							description="Show your current game and status on Discord."
-							layout="inline"
-							control={
-								<Switch checked={discordPresenceEnabled()} onCheckedChange={handleDiscordToggle}>
-									<SwitchControl>
-										<SwitchThumb />
-									</SwitchControl>
-								</Switch>
-							}
-						/>
-					</SettingsCard>
+							<SettingsCard header="Privacy & Integration">
+								<SettingsField
+									label="Discord Rich Presence"
+									description="Show your current game and status on Discord."
+									layout="inline"
+									control={
+										<Switch
+											checked={discordPresenceEnabled()}
+											onCheckedChange={handleDiscordToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+							</SettingsCard>
 
-					<SettingsCard header="Application Data">
-						<SettingsField
+							<SettingsCard header="Application Data">
+								<SettingsField
 									label="AppData Directory"
 									description="Open the folder where Vesta Launcher stores its data."
 									actionLabel="Open Folder"
@@ -848,7 +872,10 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 										description="The base color used for accents and backgrounds"
 										layout="stack"
 										control={
-											<div class={styles["hue-customization"]} style={{ width: "100%" }}>
+											<div
+												class={styles["hue-customization"]}
+												style={{ width: "100%" }}
+											>
 												<Slider
 													value={[backgroundHue()]}
 													onChange={handleHueChange}
@@ -904,14 +931,17 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 										label="Background Gradient"
 										description="Enable animated background gradient"
 										control={
-						<Switch checked={gradientEnabled() ?? false} onCheckedChange={handleGradientToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-						}
-						/>
-						<Show when={gradientEnabled()}>
+											<Switch
+												checked={gradientEnabled() ?? false}
+												onCheckedChange={handleGradientToggle}
+											>
+												<SwitchControl>
+													<SwitchThumb />
+												</SwitchControl>
+											</Switch>
+										}
+									/>
+									<Show when={gradientEnabled()}>
 										<SettingsField
 											label="Gradient Type"
 											description="Linear or circular background"
@@ -926,7 +956,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 															);
 													}}
 												>
-													<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
+													<ToggleGroupItem value="linear">
+														Linear
+													</ToggleGroupItem>
 													<ToggleGroupItem value="radial">
 														Circular
 													</ToggleGroupItem>
@@ -949,7 +981,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 														class={styles["slider--angle"]}
 													>
 														<div class={styles["slider__header"]}>
-															<div class={styles["slider__value-label"]}>{rotation()}°</div>
+															<div class={styles["slider__value-label"]}>
+																{rotation()}°
+															</div>
 														</div>
 														<SliderTrack>
 															<SliderFill />
@@ -970,7 +1004,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 													value={gradientHarmony() ?? "none"}
 													onChange={(val) => {
 														if (val)
-															handleGradientHarmonyChange(val as GradientHarmony);
+															handleGradientHarmonyChange(
+																val as GradientHarmony,
+															);
 													}}
 												>
 													<ToggleGroupItem value="none">None</ToggleGroupItem>
@@ -1029,7 +1065,10 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 								subHeader="Global defaults for each Java version. Instances follow these by default."
 								helpTopic="JAVA_MANAGED"
 							>
-								<div class={styles["section-actions"]} style={{ "margin-bottom": "16px" }}>
+								<div
+									class={styles["section-actions"]}
+									style={{ "margin-bottom": "16px" }}
+								>
 									<LauncherButton
 										onClick={refreshJavas}
 										disabled={isScanning()}
@@ -1044,7 +1083,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 									<For each={requirements()}>
 										{(req: any) => {
 											const versionOptions = () =>
-												javaOptions().filter(option => option.version === req.major_version);
+												javaOptions().filter(
+													(option) => option.version === req.major_version,
+												);
 
 											return (
 												<div class={styles["java-req-item"]}>
@@ -1125,7 +1166,10 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 							</SettingsCard>
 
 							<SettingsCard header="Support">
-								<div class={styles["social-links"]} style={{ display: "flex", gap: "8px" }}>
+								<div
+									class={styles["social-links"]}
+									style={{ display: "flex", gap: "8px" }}
+								>
 									<LauncherButton
 										variant="ghost"
 										onClick={() =>
@@ -1150,32 +1194,38 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 									label="Automatic Updates"
 									description="Download and install updates automatically in the background"
 									control={
-							<Switch checked={autoUpdateEnabled()} onCheckedChange={handleAutoUpdateToggle}>
-								<SwitchControl>
-									<SwitchThumb />
-								</SwitchControl>
-							</Switch>
-						}
-					/>
-					<SettingsField
-						label="Check on Startup"
-						description="Check for new versions when the launcher starts"
-						control={
-							<Switch checked={startupCheckUpdates()} onCheckedChange={handleStartupCheckToggle}>
-								<SwitchControl>
-									<SwitchThumb />
-								</SwitchControl>
-							</Switch>
-						}
-					/>
-					<SettingsField
-						label="Update Check"
-						control={
-							<LauncherButton onClick={() => checkForAppUpdates()}>
-								Check Now
-							</LauncherButton>
-						}
-					/>
+										<Switch
+											checked={autoUpdateEnabled()}
+											onCheckedChange={handleAutoUpdateToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+								<SettingsField
+									label="Check on Startup"
+									description="Check for new versions when the launcher starts"
+									control={
+										<Switch
+											checked={startupCheckUpdates()}
+											onCheckedChange={handleStartupCheckToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+								<SettingsField
+									label="Update Check"
+									control={
+										<LauncherButton onClick={() => checkForAppUpdates()}>
+											Check Now
+										</LauncherButton>
+									}
+								/>
 							</SettingsCard>
 
 							<SettingsCard header="About">
@@ -1256,9 +1306,7 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 									label="Simulate App Update"
 									description="Trigger a full update flow simulation (Toast -> Progress -> Ready)"
 									control={
-										<LauncherButton
-											onClick={() => simulateUpdateProcess()}
-										>
+										<LauncherButton onClick={() => simulateUpdateProcess()}>
 											Simulate Full Update
 										</LauncherButton>
 									}
@@ -1280,7 +1328,8 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 													payload: {
 														client_key: "app_update_available",
 														title: "Update Available (Simulated)",
-														description: "Vesta Launcher v9.9.9 is now available!",
+														description:
+															"Vesta Launcher v9.9.9 is now available!",
 														severity: "info",
 														notification_type: "patient",
 														dismissible: true,
@@ -1313,7 +1362,9 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 										Navigate to Task System Test
 									</LauncherButton>
 									<LauncherButton
-										onClick={() => activeRouter()?.navigate("/notification-test")}
+										onClick={() =>
+											activeRouter()?.navigate("/notification-test")
+										}
 									>
 										Navigate to Notification Test
 									</LauncherButton>
@@ -1328,4 +1379,3 @@ function SettingsPage(props: { close?: () => void, router?: MiniRouter }) {
 }
 
 export default SettingsPage;
-

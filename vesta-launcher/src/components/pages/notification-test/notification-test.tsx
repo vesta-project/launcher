@@ -1,7 +1,11 @@
-import { invoke } from "@tauri-apps/api/core";
 import { dialogStore } from "@stores/dialog-store";
+import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
-import { PROGRESS_INDETERMINATE } from "@utils/notifications";
+import {
+	createNotification,
+	PROGRESS_INDETERMINATE,
+	showAlert,
+} from "@utils/notifications";
 import { createSignal } from "solid-js";
 import styles from "./notification-test.module.css";
 
@@ -11,7 +15,7 @@ function NotificationTestPage() {
 	const testEphemeralInfo = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_info");
+			await showAlert("info", "Test Info", "This is an ephemeral info toast");
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {
@@ -22,7 +26,11 @@ function NotificationTestPage() {
 	const testEphemeralSuccess = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_success");
+			await showAlert(
+				"success",
+				"Test Success",
+				"This is an ephemeral success toast",
+			);
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {

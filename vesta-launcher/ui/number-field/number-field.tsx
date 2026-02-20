@@ -1,7 +1,7 @@
-import type { Component, ComponentProps, JSX, ValidComponent } from "solid-js";
-import { Show, splitProps } from "solid-js";
 import * as NumberFieldPrimitive from "@kobalte/core/number-field";
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
+import type { Component, ComponentProps, JSX, ValidComponent } from "solid-js";
+import { Show, splitProps } from "solid-js";
 import styles from "./number-field.module.css";
 
 const NumberField = NumberFieldPrimitive.Root;
@@ -59,10 +59,10 @@ type NumberFieldIncrementTriggerProps<T extends ValidComponent = "button"> =
 const NumberFieldIncrementTrigger = <T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, NumberFieldIncrementTriggerProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as NumberFieldIncrementTriggerProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(
+		props as NumberFieldIncrementTriggerProps,
+		["class", "children"],
+	);
 	return (
 		<NumberFieldPrimitive.IncrementTrigger
 			class={`${styles["number-field__increment-trigger"]} ${local.class || ""}`}
@@ -99,10 +99,10 @@ type NumberFieldDecrementTriggerProps<T extends ValidComponent = "button"> =
 const NumberFieldDecrementTrigger = <T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, NumberFieldDecrementTriggerProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as NumberFieldDecrementTriggerProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(
+		props as NumberFieldDecrementTriggerProps,
+		["class", "children"],
+	);
 	return (
 		<NumberFieldPrimitive.DecrementTrigger
 			class={`${styles["number-field__decrement-trigger"]} ${local.class || ""}`}
@@ -138,7 +138,9 @@ type NumberFieldDescriptionProps<T extends ValidComponent = "div"> =
 const NumberFieldDescription = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, NumberFieldDescriptionProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as NumberFieldDescriptionProps, ["class"]);
+	const [local, others] = splitProps(props as NumberFieldDescriptionProps, [
+		"class",
+	]);
 	return (
 		<NumberFieldPrimitive.Description
 			class={`${styles["number-field__description"]} ${local.class || ""}`}
@@ -155,7 +157,9 @@ type NumberFieldErrorMessageProps<T extends ValidComponent = "div"> =
 const NumberFieldErrorMessage = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, NumberFieldErrorMessageProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as NumberFieldErrorMessageProps, ["class"]);
+	const [local, others] = splitProps(props as NumberFieldErrorMessageProps, [
+		"class",
+	]);
 	return (
 		<NumberFieldPrimitive.ErrorMessage
 			class={`${styles["number-field__error-message"]} ${local.class || ""}`}

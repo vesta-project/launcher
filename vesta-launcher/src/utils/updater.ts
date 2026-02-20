@@ -1,8 +1,12 @@
-import { check, type Update } from "@tauri-apps/plugin-updater";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { showToast } from "@ui/toast/toast";
-import { PROGRESS_INDETERMINATE } from "./notifications";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import {
+	createNotification,
+	PROGRESS_INDETERMINATE,
+	showAlert,
+	updateNotificationProgress,
+} from "./notifications";
 
 let pendingUpdate: Update | null = null;
 let isListenerInitialized = false;
@@ -13,26 +17,33 @@ let isDownloaded = false;
 export function initUpdateListener() {
 	if (isListenerInitialized) return;
 
-	listen("core://update-available", (event) => {
-		console.log("Update available (from backend):", event.payload);
-	});
-
 	listen("core://install-app-update", async () => {
 		if (pendingUpdate) {
 			try {
-				showToast({
-					title: "Installing Update",
-					description: "Applying changes and restarting...",
-					severity: "Info",
-				});
+				await showAlert(
+					"info",
+					"Installing Update",
+					"Applying changes and restarting...",
+					PROGRESS_INDETERMINATE,
+					null,
+					null,
+					"app_update_install",
+					"progress",
+					false,
+				);
 				await pendingUpdate.install();
 			} catch (error) {
 				console.error("Failed to install update:", error);
-				showToast({
-					title: "Update Error",
-					description: "Failed to install the update. Please try again.",
-					severity: "Error",
-				});
+				await showAlert(
+					"error",
+					"Update Error",
+					"Failed to install the update. Please try again.",
+					null,
+					null,
+					null,
+					null,
+					"immediate",
+				);
 			}
 		}
 	});
@@ -41,7 +52,6 @@ export function initUpdateListener() {
 		if (pendingUpdate) {
 			await downloadUpdate();
 		} else {
-			// If we don't have a pending update object, check for one first
 			checkForAppUpdates(false);
 		}
 	});
@@ -57,19 +67,19 @@ export async function downloadUpdate() {
 
 	try {
 		// Create a progress notification
-		await invoke<number>("create_notification", {
-			payload: {
-				title: "Updating Vesta",
-				description: `Downloading version ${update.version}...`,
-				notification_type: "progress",
-				severity: "info",
-				progress: 0,
-				client_key: "app_update",
-			},
+		await createNotification({
+			title: "Updating Vesta",
+			description: `Downloading version ${update.version}...`,
+			notification_type: "progress",
+			severity: "info",
+			progress: 0,
+			client_key: "app_update",
+			dismissible: false,
 		});
 
 		let downloaded = 0;
 		let contentLength = 0;
+		let lastReportedProgress = -5; // Start low to ensure first update
 
 		await update.download((event) => {
 			switch (event.event) {
@@ -83,12 +93,19 @@ export async function downloadUpdate() {
 						contentLength > 0
 							? Math.round((downloaded / contentLength) * 100)
 							: PROGRESS_INDETERMINATE;
-					invoke("update_notification_progress", {
-						payload: {
+
+					// Only update if progress has changed significantly to avoid IPC spam
+					if (
+						progress === PROGRESS_INDETERMINATE ||
+						progress >= lastReportedProgress + 1 ||
+						progress === 100
+					) {
+						lastReportedProgress = progress;
+						updateNotificationProgress({
 							client_key: "app_update",
 							progress: progress,
-						},
-					});
+						});
+					}
 					break;
 				}
 				case "Finished": {
@@ -103,16 +120,14 @@ export async function downloadUpdate() {
 						},
 					];
 
-					invoke("create_notification", {
-						payload: {
-							title: "Update Downloaded",
-							description: `Vesta v${update.version} is ready to install. Restart to apply changes.`,
-							notification_type: "patient",
-							severity: "success",
-							dismissible: true,
-							actions: JSON.stringify(actions),
-							client_key: "app_update",
-						},
+					createNotification({
+						title: "Update Downloaded",
+						description: `Vesta v${update.version} is ready to install. Restart to apply changes.`,
+						notification_type: "patient",
+						severity: "success",
+						dismissible: false,
+						actions: actions as any,
+						client_key: "app_update",
 					});
 					break;
 				}
@@ -121,11 +136,16 @@ export async function downloadUpdate() {
 	} catch (error) {
 		isDownloading = false;
 		console.error("Failed to download update:", error);
-		showToast({
-			title: "Download Error",
-			description: "Failed to download the update. Please try again.",
-			severity: "Error",
-		});
+		await showAlert(
+			"error",
+			"Download Error",
+			"Failed to download the update. Please try again.",
+			null,
+			null,
+			null,
+			"app_update_error",
+			"immediate",
+		);
 	}
 }
 
@@ -140,64 +160,80 @@ export async function checkForAppUpdates(silent = false) {
 			isDownloaded = false;
 			pendingUpdate = update;
 
-			// Get config to see if we should auto-download
 			const config = await invoke<any>("get_config");
 			const autoUpdate = config.auto_update_enabled ?? true;
 
 			if (autoUpdate) {
 				if (!silent) {
-					showToast({
-						title: "Update Available",
-						description: `Version ${update.version} is available. Downloading now...`,
-						severity: "Info",
-					});
+					await showAlert(
+						"info",
+						"Update Available",
+						`Version ${update.version} is available. Downloading now...`,
+						null,
+						null,
+						null,
+						null,
+						"immediate",
+					);
 				}
 				downloadUpdate();
 			} else {
-				// Show "Update Available" notification with "Download" button
 				const actions = [
 					{
-						id: "download_update",
+						id: "download_app_update",
 						label: "Download",
 						type: "primary",
 					},
 				];
 
-				await invoke("create_notification", {
-					payload: {
-						title: "Update Available",
-						description: `Vesta Launcher v${update.version} is now available!`,
-						notification_type: "patient",
-						severity: "info",
-						dismissible: true,
-						actions: JSON.stringify(actions),
-						client_key: "app_update",
-					},
+				await createNotification({
+					title: "Update Available",
+					description: `Vesta Launcher v${update.version} is now available!`,
+					notification_type: "patient",
+					severity: "info",
+					dismissible: false,
+					actions: actions as any,
+					client_key: "app_update",
 				});
 
 				if (!silent) {
-					showToast({
-						title: "Update Available",
-						description: `Version ${update.version} is available.`,
-						severity: "Info",
-					});
+					await showAlert(
+						"info",
+						"Update Available",
+						`Version ${update.version} is available.`,
+						null,
+						null,
+						null,
+						null,
+						"immediate",
+					);
 				}
 			}
 		} else if (!silent) {
-			showToast({
-				title: "No Updates",
-				description: "You are running the latest version of Vesta.",
-				severity: "Info",
-			});
+			await showAlert(
+				"success",
+				"No Updates",
+				"You are running the latest version of Vesta.",
+				null,
+				null,
+				null,
+				null,
+				"immediate",
+			);
 		}
 	} catch (error) {
 		console.error("Failed to check for updates:", error);
 		if (!silent) {
-			showToast({
-				title: "Update Error",
-				description: "Could not check for updates. Please try again later.",
-				severity: "Error",
-			});
+			await showAlert(
+				"error",
+				"Update Error",
+				"Could not check for updates. Please try again later.",
+				null,
+				null,
+				null,
+				null,
+				"immediate",
+			);
 		}
 	} finally {
 		isChecking = false;
@@ -207,22 +243,20 @@ export async function checkForAppUpdates(silent = false) {
 export async function simulateUpdateProcess() {
 	try {
 		const simulatedVersion = "9.9.9-debug";
-		showToast({
-			title: "Update Available (Simulated)",
-			description: `Version ${simulatedVersion} is available. Downloading now...`,
-			severity: "Info",
-		});
+		showAlert(
+			"info",
+			"Update Available (Simulated)",
+			`Version ${simulatedVersion} is available. Downloading now...`,
+		);
 
 		// Create a progress notification
-		await invoke("create_notification", {
-			payload: {
-				title: "Updating Vesta (Simulated)",
-				description: `Downloading version ${simulatedVersion}...`,
-				notification_type: "progress",
-				severity: "info",
-				progress: 0,
-				client_key: "app_update",
-			},
+		await createNotification({
+			title: "Updating Vesta (Simulated)",
+			description: `Downloading version ${simulatedVersion}...`,
+			notification_type: "progress",
+			severity: "info",
+			progress: 0,
+			client_key: "app_update",
 		});
 
 		// Simulated progress

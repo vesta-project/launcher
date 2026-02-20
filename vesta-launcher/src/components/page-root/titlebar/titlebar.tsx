@@ -1,16 +1,16 @@
+import HelpIcon from "@assets/help.svg";
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { getVersion } from "@tauri-apps/api/app";
 import { WindowControls } from "@tauri-controls/solid";
+import {
+	ACCOUNT_TYPE_GUEST,
+	type Account,
+	getActiveAccount,
+} from "@utils/auth";
 import { getOsType } from "@utils/os";
 import { createResource, createSignal, Show } from "solid-js";
 import NetworkPill from "./network-pill";
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
-import HelpIcon from "@assets/help.svg";
 import { PageOptionsMenu } from "./page-options-menu";
-import { getVersion } from "@tauri-apps/api/app";
-import {
-	ACCOUNT_TYPE_GUEST,
-	getActiveAccount,
-	type Account,
-} from "@utils/auth";
 import styles from "./titlebar.module.css";
 
 interface TitleBarProps {

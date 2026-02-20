@@ -1,5 +1,4 @@
 import LauncherButton from "@ui/button/button";
-import { Separator } from "@ui/separator/separator";
 import {
 	Combobox,
 	ComboboxContent,
@@ -10,7 +9,17 @@ import {
 	ComboboxItemLabel,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
+import {
+	NumberField,
+	NumberFieldDecrementTrigger,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
+	NumberFieldLabel,
+} from "@ui/number-field/number-field";
+import { Separator } from "@ui/separator/separator";
 import {
 	Slider,
 	SliderFill,
@@ -29,25 +38,18 @@ import {
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
 import {
-	NumberField,
-	NumberFieldGroup,
-	NumberFieldInput,
-	NumberFieldIncrementTrigger,
-	NumberFieldDecrementTrigger,
-	NumberFieldLabel,
-} from "@ui/number-field/number-field";
-import {
 	DEFAULT_ICONS,
 	GameVersionMetadata,
 	getMinecraftVersions,
 	getStableIconId,
-	isDefaultIcon,
 	Instance,
+	isDefaultIcon,
 	LoaderVersionInfo,
 	PistonMetadata,
 } from "@utils/instances";
 import { getSystemMemoryMb, ModpackInfo } from "@utils/modpacks";
 import {
+	Accessor,
 	batch,
 	createEffect,
 	createMemo,
@@ -57,10 +59,8 @@ import {
 	on,
 	onMount,
 	Show,
-	Accessor,
 } from "solid-js";
 import { createStore } from "solid-js/store";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import styles from "../install-page.module.css";
 
 export interface InstallFormProps {
@@ -130,7 +130,10 @@ export function InstallForm(props: InstallFormProps) {
 		props.initialData?.name || props.initialName || "",
 	);
 	const [icon, setIcon] = createSignal<string | null>(
-		props.initialData?.iconPath || props.initialIcon || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0],
+		props.initialData?.iconPath ||
+			props.initialIcon ||
+			getStableIconId(DEFAULT_ICONS[0]) ||
+			DEFAULT_ICONS[0],
 	);
 	const [mcVersion, setMcVersion] = createSignal(
 		props.initialData?.minecraftVersion || props.initialVersion || "",
@@ -248,11 +251,7 @@ export function InstallForm(props: InstallFormProps) {
 	// Track custom icons in session list
 	createEffect(() => {
 		const current = icon();
-		if (
-			current &&
-			!isDefaultIcon(current) &&
-			current !== props.initialIcon
-		) {
+		if (current && !isDefaultIcon(current) && current !== props.initialIcon) {
 			setCustomIconsThisSession((prev) => {
 				if (prev.includes(current)) return prev;
 				return [current, ...prev];
@@ -480,7 +479,8 @@ export function InstallForm(props: InstallFormProps) {
 			loader: loader(),
 			loaderVer: loaderVer(),
 		});
-		const effectiveIcon = icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0];
+		const effectiveIcon =
+			icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0];
 		const data: Partial<Instance> = {
 			name: name(),
 			iconPath: effectiveIcon,
@@ -605,7 +605,9 @@ export function InstallForm(props: InstallFormProps) {
 							class={`${styles["form-section"]} ${styles["modpack-context-section"]}`}
 							classList={{ [styles["is-fetching"]]: props.isFetchingMetadata }}
 						>
-							<div class={styles["form-section-title"]}>Modpack Configuration</div>
+							<div class={styles["form-section-title"]}>
+								Modpack Configuration
+							</div>
 
 							<Show
 								when={props.modpackVersions && props.modpackVersions.length > 0}
@@ -618,7 +620,9 @@ export function InstallForm(props: InstallFormProps) {
 								}
 							>
 								<div class={styles["modpack-version-picker"]}>
-									<div class={styles["field-label-manual"]}>Release Version</div>
+									<div class={styles["field-label-manual"]}>
+										Release Version
+									</div>
 									<Combobox<any>
 										options={searchableModpackVersions()}
 										value={props.selectedModpackVersionId}
@@ -672,7 +676,9 @@ export function InstallForm(props: InstallFormProps) {
 							<div class={styles["modpack-meta-grid"]}>
 								<div class={styles["meta-item"]}>
 									<span class={styles["label"]}>Minecraft</span>
-									<span class={styles["value"]}>{mcVersion() || "Loading..."}</span>
+									<span class={styles["value"]}>
+										{mcVersion() || "Loading..."}
+									</span>
 								</div>
 								<div class={styles["meta-item"]}>
 									<span class={styles["label"]}>
@@ -771,7 +777,9 @@ export function InstallForm(props: InstallFormProps) {
 
 									<Show when={loader() !== "vanilla"}>
 										<div class={styles["flex-grow"]}>
-											<div class={styles["field-label-manual"]}>Loader Version</div>
+											<div class={styles["field-label-manual"]}>
+												Loader Version
+											</div>
 											<Combobox<string>
 												options={availableLoaderVers().map((v) => v.version)}
 												value={loaderVer()}
@@ -815,13 +823,17 @@ export function InstallForm(props: InstallFormProps) {
 										Allocation
 										<HelpTrigger topic="MEMORY_ALLOCATION" />
 									</span>
-									<span class={styles["sub-label"]}>Min and Max memory in {memoryUnit()}</span>
+									<span class={styles["sub-label"]}>
+										Min and Max memory in {memoryUnit()}
+									</span>
 								</div>
 								<div
 									class={styles["memory-range-display"]}
 									onClick={toggleMemoryUnit}
 								>
-									{formatMemory(memory()[0])}{memoryUnit()} — {formatMemory(memory()[1])}{memoryUnit()}
+									{formatMemory(memory()[0])}
+									{memoryUnit()} — {formatMemory(memory()[1])}
+									{memoryUnit()}
 								</div>
 							</div>
 							<Slider
@@ -850,7 +862,9 @@ export function InstallForm(props: InstallFormProps) {
 												(props.modpackInfo?.recommendedRamMb ?? 0),
 										}}
 									>
-										Recommended: {formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)} {memoryUnit()}
+										Recommended:{" "}
+										{formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)}{" "}
+										{memoryUnit()}
 									</span>
 								</Show>
 							</div>
@@ -946,4 +960,3 @@ export function InstallForm(props: InstallFormProps) {
 		</div>
 	);
 }
-

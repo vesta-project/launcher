@@ -36,7 +36,9 @@ export const BUILTIN_ICON_PREFIX = "builtin:placeholder-";
  * If the path contains "placeholder-imageX", returns "builtin:placeholder-X".
  * Otherwise returns the input as-is.
  */
-export function getStableIconId(path: string | null | undefined): string | null | undefined {
+export function getStableIconId(
+	path: string | null | undefined,
+): string | null | undefined {
 	if (!path) return path;
 	if (path.startsWith(BUILTIN_ICON_PREFIX)) return path;
 
@@ -57,7 +59,8 @@ export function getStableIconId(path: string | null | undefined): string | null 
  * it returns the corresponding URL from the current DEFAULT_ICONS array.
  */
 export function resolveBuiltinIcon(path: string): string {
-	const match = path.match(/placeholder-image(\d+)/i) || path.match(/placeholder-(\d+)/i);
+	const match =
+		path.match(/placeholder-image(\d+)/i) || path.match(/placeholder-(\d+)/i);
 	if (match && match[1]) {
 		const index = parseInt(match[1]);
 		if (index >= 1 && index <= DEFAULT_ICONS.length) {

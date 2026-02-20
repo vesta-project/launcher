@@ -1,6 +1,6 @@
-import { createMemo, Show } from "solid-js";
 import networkStore from "@stores/network";
 import { Badge } from "@ui/badge";
+import { createMemo, Show } from "solid-js";
 import styles from "./network-pill.module.css";
 
 function NetworkPill() {
@@ -35,12 +35,23 @@ function NetworkPill() {
 					[styles["network-pill"]]: true,
 					[styles["network-pill--refreshing"]]: isRefreshing(),
 				}}
-				title={isRefreshing() ? "Checking connection..." : `${label()} - Click to retry`}
+				title={
+					isRefreshing()
+						? "Checking connection..."
+						: `${label()} - Click to retry`
+				}
 				onClick={handleRetry}
 			>
 				<div class={styles["network-pill__icon"]}>
 					<Show when={isRefreshing()}>
-						<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+						<svg
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2.5"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+						>
 							<path d="M21 12a9 9 0 1 1-6.219-8.56" />
 						</svg>
 					</Show>
@@ -55,7 +66,13 @@ function NetworkPill() {
 						>
 							<path d="M5 9a10 10 0 0 1 14 0" />
 							<path d="M8.5 12.5a6 6 0 0 1 7 0" />
-							<circle cx="12" cy="16" r="1.2" fill="currentColor" stroke="none" />
+							<circle
+								cx="12"
+								cy="16"
+								r="1.2"
+								fill="currentColor"
+								stroke="none"
+							/>
 						</svg>
 					</Show>
 					<Show when={!isRefreshing() && status() === "offline"}>
@@ -83,4 +100,3 @@ function NetworkPill() {
 }
 
 export default NetworkPill;
-

@@ -1,327 +1,327 @@
 .header {
-    margin-bottom: 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 4px;
+	margin-bottom: 0.75rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 0 4px;
 }
 
 .headerTitle {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    opacity: 0.9;
-    letter-spacing: -0.01em;
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--text-primary);
+	opacity: 0.9;
+	letter-spacing: -0.01em;
 }
 
 .headerSubtitle {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    font-weight: 500;
+	font-size: 11px;
+	color: var(--text-tertiary);
+	font-weight: 500;
 }
 
 .disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    pointer-events: none;
+	opacity: 0.5;
+	cursor: not-allowed;
+	pointer-events: none;
 }
 
 .selectionContainer {
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    border-bottom-left-radius: 1.25rem;
-    border-bottom-right-radius: 1.25rem;
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
-    background: var(--surface-overlay);
-    border: 1px solid var(--primary-low);
-    border-top: none;
-    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-    animation: slideDown 0.2s cubic-bezier(0, 0, 0.2, 1);
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-bottom-left-radius: 1.25rem;
+	border-bottom-right-radius: 1.25rem;
+	border-top-left-radius: 0;
+	border-top-right-radius: 0;
+	background: var(--surface-overlay);
+	border: 1px solid var(--primary-low);
+	border-top: none;
+	box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
+	animation: slideDown 0.2s cubic-bezier(0, 0, 0.2, 1);
 }
 
 @keyframes slideDown {
-    from {
-        opacity: 0;
-        transform: translateY(-10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 .searchBarContainer {
-    padding: 0.75rem;
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--surface-sunken);
+	padding: 0.75rem;
+	border-bottom: 1px solid var(--border-subtle);
+	background: var(--surface-sunken);
 }
 
 .searchBar {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0 1rem;
-    height: 2.5rem;
-    background: var(--surface-base);
-    border: 1px solid var(--border-subtle);
-    border-radius: 0.75rem;
-    transition: all 0.2s ease;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	padding: 0 1rem;
+	height: 2.5rem;
+	background: var(--surface-base);
+	border: 1px solid var(--border-subtle);
+	border-radius: 0.75rem;
+	transition: all 0.2s ease;
 }
 
 .searchBar:focus-within {
-    border-color: var(--primary-accent);
-    background: var(--surface-raised);
-    box-shadow: 0 0 0 2px var(--primary-low);
+	border-color: var(--primary-accent);
+	background: var(--surface-raised);
+	box-shadow: 0 0 0 2px var(--primary-low);
 }
 
 .searchBar input {
-    background: transparent;
-    border: none;
-    outline: none;
-    width: 100%;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-primary);
+	background: transparent;
+	border: none;
+	outline: none;
+	width: 100%;
+	font-size: 0.875rem;
+	font-weight: 600;
+	color: var(--text-primary);
 }
 
 .searchBar input::placeholder {
-    color: var(--text-tertiary);
-    font-weight: 500;
+	color: var(--text-tertiary);
+	font-weight: 500;
 }
 
 .versionListContainer {
-    flex: 1;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--text-tertiary) transparent;
+	flex: 1;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--text-tertiary) transparent;
 }
 
 .versionListContainer::-webkit-scrollbar {
-    width: 4px;
+	width: 4px;
 }
 
 .versionListContainer::-webkit-scrollbar-thumb {
-    background: var(--text-tertiary);
-    border-radius: 10px;
+	background: var(--text-tertiary);
+	border-radius: 10px;
 }
 
 .versionRow {
-    position: relative;
-    padding: 0.75rem 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: all 0.2s ease;
-    border-bottom: 1px solid var(--border-subtle);
-    user-select: none;
+	position: relative;
+	padding: 0.75rem 1rem;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	transition: all 0.2s ease;
+	border-bottom: 1px solid var(--border-subtle);
+	user-select: none;
 }
 
 .versionRow:last-child {
-    border-bottom: none;
+	border-bottom: none;
 }
 
 .versionRow:hover {
-    background: var(--surface-raised);
+	background: var(--surface-raised);
 }
 
 .activeRow {
-    background: var(--primary-low) !important;
+	background: var(--primary-low) !important;
 }
 
 .activeRow::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0.5rem;
-    bottom: 0.5rem;
-    width: 3px;
-    background: var(--primary-accent);
-    border-radius: 0 2px 2px 0;
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 0.5rem;
+	bottom: 0.5rem;
+	width: 3px;
+	background: var(--primary-accent);
+	border-radius: 0 2px 2px 0;
 }
 
 .versionInfo {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    min-width: 0;
-    flex: 1;
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	min-width: 0;
+	flex: 1;
 }
 
 .versionIcon {
-    width: 2rem;
-    height: 2rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.625rem;
-    background: var(--surface-low);
-    color: var(--text-secondary);
-    transition: all 0.2s ease;
+	width: 2rem;
+	height: 2rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 0.625rem;
+	background: var(--surface-low);
+	color: var(--text-secondary);
+	transition: all 0.2s ease;
 }
 
 .activeRow .versionIcon {
-    background: var(--primary-accent);
-    color: var(--text-on-primary);
+	background: var(--primary-accent);
+	color: var(--text-on-primary);
 }
 
 .metaContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 0.125rem;
-    min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.125rem;
+	min-width: 0;
 }
 
 .versionHeader {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
 }
 
 .versionNumber {
-    font-size: 0.875rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+	font-size: 0.875rem;
+	font-weight: 700;
+	color: var(--text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .versionSub {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 0.6875rem;
-    font-weight: 600;
-    color: var(--text-tertiary);
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	font-size: 0.6875rem;
+	font-weight: 600;
+	color: var(--text-tertiary);
 }
 
 /* Action Button Styles */
 .actionArea {
-    margin-left: 0.75rem;
-    flex-shrink: 0;
-    width: 100px;
-    display: flex;
-    justify-content: flex-end;
+	margin-left: 0.75rem;
+	flex-shrink: 0;
+	width: 100px;
+	display: flex;
+	justify-content: flex-end;
 }
 
 .switchButton {
-    opacity: 0;
-    transform: translateX(10px);
-    pointer-events: none;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	opacity: 0;
+	transform: translateX(10px);
+	pointer-events: none;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .versionRow:hover .switchButton {
-    opacity: 1;
-    transform: translateX(0);
-    pointer-events: auto;
+	opacity: 1;
+	transform: translateX(0);
+	pointer-events: auto;
 }
 
 .installedLabel {
-    font-size: 0.625rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.5rem;
-    border: 1px solid var(--primary-accent);
-    color: var(--primary-accent);
-    background: var(--primary-low);
-    opacity: 0.8;
+	font-size: 0.625rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+	padding: 0.25rem 0.5rem;
+	border-radius: 0.5rem;
+	border: 1px solid var(--primary-accent);
+	color: var(--primary-accent);
+	background: var(--primary-low);
+	opacity: 0.8;
 }
 
 .confirmSlide {
-    position: relative;
-    overflow: hidden;
-    height: 1.25rem;
-    width: 100%;
+	position: relative;
+	overflow: hidden;
+	height: 1.25rem;
+	width: 100%;
 }
 
 .slideInner {
-    display: flex;
-    flex-direction: column;
-    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+	display: flex;
+	flex-direction: column;
+	transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .isConfirming .slideInner {
-    transform: translateY(-1.25rem);
+	transform: translateY(-1.25rem);
 }
 
 .slideText {
-    height: 1.25rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
+	height: 1.25rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
 }
 
 /* Trigger Card */
 .triggerCard {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem;
-    background: var(--surface-base);
-    border: 1px solid var(--border-subtle);
-    border-radius: 1.25rem;
-    transition: all 0.2s ease;
-    cursor: pointer;
-    width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 1rem;
+	background: var(--surface-base);
+	border: 1px solid var(--border-subtle);
+	border-radius: 1.25rem;
+	transition: all 0.2s ease;
+	cursor: pointer;
+	width: 100%;
 }
 
 .triggerCard:hover {
-    background: var(--surface-raised);
-    border-color: var(--border-strong);
+	background: var(--surface-raised);
+	border-color: var(--border-strong);
 }
 
 .triggerIcon {
-    width: 3rem;
-    height: 3rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 0.75rem;
-    background: var(--surface-low);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-subtle);
+	width: 3rem;
+	height: 3rem;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 0.75rem;
+	background: var(--surface-low);
+	color: var(--text-secondary);
+	border: 1px solid var(--border-subtle);
 }
 
 .triggerContent {
-    flex: 1;
-    margin-left: 1rem;
-    text-align: left;
+	flex: 1;
+	margin-left: 1rem;
+	text-align: left;
 }
 
 .triggerTitle {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    margin-bottom: 0.25rem;
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--text-primary);
+	margin-bottom: 0.25rem;
 }
 
 .triggerMeta {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 500;
-    color: var(--text-secondary);
+	display: flex;
+	align-items: center;
+	gap: 0.75rem;
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--text-secondary);
 }
 
 .chevron {
-    color: var(--text-tertiary);
-    transition: transform 0.2s ease;
+	color: var(--text-tertiary);
+	transition: transform 0.2s ease;
 }
 
 .triggerCard[data-expanded="true"] .chevron {
-    transform: rotate(180deg);
+	transform: rotate(180deg);
 }
 
 .triggerCard[data-expanded="true"] {
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    background: var(--surface-raised);
-    border-color: var(--primary-low);
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+	background: var(--surface-raised);
+	border-color: var(--primary-low);
 }

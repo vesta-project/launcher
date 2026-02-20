@@ -1,28 +1,34 @@
-import { Badge } from "@ui/badge";
+import HeartIcon from "@assets/heart.svg";
+import PanelCloseIcon from "@assets/left_panel_close.svg";
+import PanelOpenIcon from "@assets/left_panel_open.svg";
+import { MiniRouter } from "@components/page-viewer/mini-router";
+import { router } from "@components/page-viewer/page-viewer";
+import { type Instance, instancesState } from "@stores/instances";
+import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import {
-	Component,
-	createEffect,
-	For,
-	Show,
-	createSignal,
-	createResource,
-	createMemo,
-	untrack,
-	onMount,
-	onCleanup,
-	JSX,
-	batch,
-} from "solid-js";
-import {
-	resources,
+	findBestVersion,
 	ResourceProject,
 	ResourceVersion,
-	findBestVersion,
+	resources,
 } from "@stores/resources";
-import { parseResourceUrl } from "@utils/resource-url";
-import { instancesState, type Instance } from "@stores/instances";
-import { TextField } from "@ui/text-field/text-field";
+import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxControl,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxTrigger,
+} from "@ui/combobox/combobox";
+import {
+	Pagination,
+	PaginationEllipsis,
+	PaginationItem,
+	PaginationItems,
+	PaginationNext,
+	PaginationPrevious,
+} from "@ui/pagination/pagination";
 import {
 	Select,
 	SelectContent,
@@ -30,37 +36,35 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
+import { TextField } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import {
-	Combobox,
-	ComboboxContent,
-	ComboboxItem,
-	ComboboxTrigger,
-	ComboboxInput,
-	ComboboxControl,
-} from "@ui/combobox/combobox";
-import {
-	Pagination,
-	PaginationItems,
-	PaginationItem,
-	PaginationEllipsis,
-	PaginationNext,
-	PaginationPrevious,
-} from "@ui/pagination/pagination";
-import { getMinecraftVersions, DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
+	DEFAULT_ICONS,
+	getMinecraftVersions,
+	isDefaultIcon,
+} from "@utils/instances";
+import { parseResourceUrl } from "@utils/resource-url";
 import {
 	getShaderEnginesInOrder,
 	type ShaderEngineInfo,
 } from "@utils/resources";
 import { sanitizeSvg } from "@utils/security";
-import { router } from "@components/page-viewer/page-viewer";
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import {
+	batch,
+	Component,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	For,
+	JSX,
+	onCleanup,
+	onMount,
+	Show,
+	untrack,
+} from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
-import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import styles from "./resource-browser.module.css";
-import HeartIcon from "@assets/heart.svg";
-import PanelOpenIcon from "@assets/left_panel_open.svg";
-import PanelCloseIcon from "@assets/left_panel_close.svg";
 
 const SearchIcon = (props: { class?: string }) => (
 	<svg
@@ -182,7 +186,9 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 				<Show
 					when={!isDefaultIcon(iconPath())}
 					fallback={
-						<div class={styles["instance-item-icon-placeholder"]}>{displayChar()}</div>
+						<div class={styles["instance-item-icon-placeholder"]}>
+							{displayChar()}
+						</div>
 					}
 				>
 					<div
@@ -244,7 +250,10 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 
 						// Sync with router
 						activeRouter()?.updateQuery("selectedInstanceId", id);
-						activeRouter()?.updateQuery("gameVersion", resources.state.gameVersion);
+						activeRouter()?.updateQuery(
+							"gameVersion",
+							resources.state.gameVersion,
+						);
 						activeRouter()?.updateQuery("loader", resources.state.loader);
 					});
 				}}
@@ -716,7 +725,9 @@ const ResourceCard: Component<{
 							{(() => {
 								const name = props.project.name || "?";
 								const match = name.match(/[a-zA-Z]/);
-								return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+								return match
+									? match[0].toUpperCase()
+									: name.charAt(0).toUpperCase();
 							})()}
 						</div>
 					}
@@ -1045,7 +1056,9 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 				</Button>
 			</div>
 
-			<div class={`${styles["filter-section"]} ${styles["mobile-only-instance"]}`}>
+			<div
+				class={`${styles["filter-section"]} ${styles["mobile-only-instance"]}`}
+			>
 				<label class={styles["filter-label"]}>Target Instance</label>
 				<InstanceSelector router={activeRouter()} />
 			</div>
@@ -1266,9 +1279,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 														variant="theme"
 														class={styles["category-tag"]}
 														clickable
-														active={resources.state.categories.includes(
-															cat.id,
-														)}
+														active={resources.state.categories.includes(cat.id)}
 														title={cat.id}
 														onClick={() => {
 															resources.toggleCategory(cat.id);
@@ -1294,7 +1305,9 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 																</Show>
 															</div>
 														</Show>
-														<span class={styles["category-tag-text"]}>{cat.name}</span>
+														<span class={styles["category-tag-text"]}>
+															{cat.name}
+														</span>
 													</Badge>
 												)}
 											</For>
@@ -1776,7 +1789,8 @@ const ResourceBrowser: Component<{
 							<button
 								class={styles["source-btn"]}
 								classList={{
-									[styles.active]: resources.state.activeSource === "curseforge",
+									[styles.active]:
+										resources.state.activeSource === "curseforge",
 								}}
 								onClick={() => {
 									batch(() => {
@@ -1792,7 +1806,9 @@ const ResourceBrowser: Component<{
 						<div class={styles["view-toggle"]}>
 							<button
 								class={styles["view-btn"]}
-								classList={{ [styles.active]: resources.state.viewMode === "list" }}
+								classList={{
+									[styles.active]: resources.state.viewMode === "list",
+								}}
 								onClick={() => resources.setViewMode("list")}
 								title="List View"
 							>
@@ -1800,7 +1816,9 @@ const ResourceBrowser: Component<{
 							</button>
 							<button
 								class={styles["view-btn"]}
-								classList={{ [styles.active]: resources.state.viewMode === "grid" }}
+								classList={{
+									[styles.active]: resources.state.viewMode === "grid",
+								}}
 								onClick={() => resources.setViewMode("grid")}
 								title="Grid View"
 							>
@@ -1988,4 +2006,3 @@ const ResourceBrowser: Component<{
 };
 
 export default ResourceBrowser;
-

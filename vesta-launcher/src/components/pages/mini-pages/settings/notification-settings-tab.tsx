@@ -1,9 +1,9 @@
-import { createResource, For, Show } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
 import { SettingsCard } from "@components/settings";
-import styles from "./settings-page.module.css";
-import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { createResource, For, Show } from "solid-js";
+import styles from "./settings-page.module.css";
 
 export const NotificationSettingsTab = () => {
 	const [subscriptions, { refetch }] = createResource<any[]>(() =>
@@ -70,14 +70,17 @@ export const NotificationSettingsTab = () => {
 					}}
 				/>
 				<span style={{ "font-size": "13px", "font-weight": "500" }}>
-					Notification subscriptions are currently in preview. Additional sources
-					and filtering options are being added.
+					Notification subscriptions are currently in preview. Additional
+					sources and filtering options are being added.
 				</span>
 			</div>
 
 			<SettingsCard header="Subscription Sources">
 				<div class={styles["subscriptions-list"]}>
-					<For each={subscriptions()} fallback={<div>No subscriptions found.</div>}>
+					<For
+						each={subscriptions()}
+						fallback={<div>No subscriptions found.</div>}
+					>
 						{(sub) => (
 							<div class={styles["subscription-item"]}>
 								<div class={styles["sub-info"]}>
@@ -85,7 +88,13 @@ export const NotificationSettingsTab = () => {
 									<div class={styles["sub-type"]}>
 										{sub.provider_type}
 										{sub.metadata && (
-											<span style={{ "font-size": "11px", opacity: 0.6, "margin-left": "8px" }}>
+											<span
+												style={{
+													"font-size": "11px",
+													opacity: 0.6,
+													"margin-left": "8px",
+												}}
+											>
 												(Filtered)
 											</span>
 										)}
@@ -108,7 +117,11 @@ export const NotificationSettingsTab = () => {
 											sub.provider_type === "patch_notes"
 										}
 									>
-										<Button variant="ghost" size="sm" onClick={() => deleteSub(sub.id)}>
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={() => deleteSub(sub.id)}
+										>
 											Remove
 										</Button>
 									</Show>
@@ -124,7 +137,8 @@ export const NotificationSettingsTab = () => {
 					class={styles["settings-field-description"]}
 					style={{ "margin-bottom": "1rem" }}
 				>
-					Quickly subscribe to official news, patch notes, and modloader releases.
+					Quickly subscribe to official news, patch notes, and modloader
+					releases.
 				</p>
 				<div style={{ display: "flex", gap: "8px", "flex-wrap": "wrap" }}>
 					<For
@@ -146,7 +160,9 @@ export const NotificationSettingsTab = () => {
 									disabled={isSubscribed}
 									onClick={() => subscribeToSource(source)}
 								>
-									{isSubscribed ? `Subscribed to ${source.title}` : source.title}
+									{isSubscribed
+										? `Subscribed to ${source.title}`
+										: source.title}
 								</Button>
 							);
 						}}
@@ -155,7 +171,10 @@ export const NotificationSettingsTab = () => {
 			</SettingsCard>
 
 			<SettingsCard header="Manual Action">
-				<p class={styles["settings-field-description"]} style={{ "margin-bottom": "1rem" }}>
+				<p
+					class={styles["settings-field-description"]}
+					style={{ "margin-bottom": "1rem" }}
+				>
 					Manually trigger a check for all subscribed update sources.
 				</p>
 				<Button onClick={checkNow}>Check for Updates Now</Button>

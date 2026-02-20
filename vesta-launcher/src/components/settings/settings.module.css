@@ -113,7 +113,6 @@
 	pointer-events: none;
 }
 
-
 .settings-field--stack .settings-field-control {
 	width: 100%;
 	justify-content: flex-start;
@@ -122,7 +121,6 @@
 .settings-field--stack .settings-field-control > * {
 	width: 100%; /* Ensure children like sliders and toggle groups fill the width */
 }
-
 
 .settings-field-info {
 	display: flex;

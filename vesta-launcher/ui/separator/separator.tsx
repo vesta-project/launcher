@@ -1,10 +1,8 @@
-import type { ValidComponent } from "solid-js";
-import { splitProps } from "solid-js";
-
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as SeparatorPrimitive from "@kobalte/core/separator";
-
 import { cn } from "@utils/ui";
+import type { ValidComponent } from "solid-js";
+import { splitProps } from "solid-js";
 import styles from "./separator.module.css";
 
 type SeparatorRootProps<T extends ValidComponent = "hr"> =

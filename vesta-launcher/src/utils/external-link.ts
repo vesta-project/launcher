@@ -1,5 +1,5 @@
-import { open } from "@tauri-apps/plugin-shell";
 import { dialogStore } from "@stores/dialog-store";
+import { open } from "@tauri-apps/plugin-shell";
 
 /**
  * Whitelist for URLs that don't need a warning.

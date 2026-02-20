@@ -1,18 +1,18 @@
+import DesktopAddIcon from "@assets/desktop-add.svg";
 import EllipsisVIcon from "@assets/ellipsis-v.svg";
+import LinkIcon from "@assets/link.svg";
 import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
-import DesktopAddIcon from "@assets/desktop-add.svg";
-import LinkIcon from "@assets/link.svg";
+import { type MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { pinning, isPinned, pinPage, unpinPage } from "@stores/pinning";
 import { instancesState } from "@stores/instances";
-import { getInstanceSlug } from "@utils/instances";
+import { isPinned, pinning, pinPage, unpinPage } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { showToast } from "@ui/toast/toast";
-import { type MiniRouter } from "@components/page-viewer/mini-router";
-import styles from "./page-options-menu.module.css";
+import { getInstanceSlug } from "@utils/instances";
 import { createMemo, createSignal, Show } from "solid-js";
+import styles from "./page-options-menu.module.css";
 
 export function PageOptionsMenu(props: { router?: MiniRouter }) {
 	const [isOpen, setIsOpen] = createSignal(false);
@@ -27,7 +27,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		if (path === "/instance" && params?.slug) {
 			const slug = String(params.slug);
 			const instance = instancesState.instances.find(
-				(i) => getInstanceSlug(i) === slug
+				(i) => getInstanceSlug(i) === slug,
 			);
 			return {
 				type: "instance" as const,
@@ -76,7 +76,8 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 
 		if (pinned()) {
 			const pin = pinning.pins.find(
-				(p) => p.page_type === info.type && p.target_id === info.id,);
+				(p) => p.page_type === info.type && p.target_id === info.id,
+			);
 			if (pin) await unpinPage(pin.id);
 		} else {
 			await pinPage({
@@ -100,10 +101,10 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
 			const name = info.label + suffix;
 			let args = "";
-			
+
 			if (info.type === "instance") {
-				args = quickLaunch 
-					? `--launch-instance ${info.id}` 
+				args = quickLaunch
+					? `--launch-instance ${info.id}`
 					: `--open-instance ${info.id}`;
 			} else {
 				args = `--open-resource ${info.platform} ${info.id}`;
@@ -167,19 +168,25 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 							</Show>
 							<span>{pinned() ? "Unpin Page" : "Pin Page"}</span>
 						</button>
-						
+
 						<Show when={pageInfo()?.type === "instance"}>
-							<button class={styles["menu-item"]} onClick={() => handleCreateShortcut(true)}>
+							<button
+								class={styles["menu-item"]}
+								onClick={() => handleCreateShortcut(true)}
+							>
 								<DesktopAddIcon />
 								<span>Add Quick Launch to Desktop</span>
 							</button>
 						</Show>
-						
-						<button class={styles["menu-item"]} onClick={() => handleCreateShortcut(false)}>
+
+						<button
+							class={styles["menu-item"]}
+							onClick={() => handleCreateShortcut(false)}
+						>
 							<DesktopAddIcon />
 							<span>Add Page to Desktop</span>
 						</button>
-						
+
 						<button class={styles["menu-item"]} onClick={copyUrl}>
 							<LinkIcon />
 							<span>Copy URL</span>

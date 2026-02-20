@@ -1,46 +1,46 @@
-import {
-	createSignal,
-	createResource,
-	For,
-	Show,
-	onMount,
-	createEffect,
-	createMemo,
-} from "solid-js";
-import {
-	Dialog,
-	DialogContent,
-	DialogHeader,
-	DialogTitle,
-	DialogDescription,
-} from "@ui/dialog/dialog";
+import BackIcon from "@assets/back-arrow.svg";
+import RightArrowIcon from "@assets/right-arrow.svg";
+import { invoke } from "@tauri-apps/api/core";
+import { downloadDir, join } from "@tauri-apps/api/path";
+import { open } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import { Checkbox } from "@ui/checkbox/checkbox";
 import {
-	listExportCandidates,
-	exportInstanceToModpack,
-	ExportCandidate,
-} from "@utils/modpacks";
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "@ui/dialog/dialog";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
+import {
+	TextFieldInput,
+	TextFieldLabel,
+	TextFieldRoot,
+	TextFieldTextArea,
+} from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
 import {
-	TextFieldRoot,
-	TextFieldLabel,
-	TextFieldInput,
-	TextFieldTextArea,
-} from "@ui/text-field/text-field";
+	ExportCandidate,
+	exportInstanceToModpack,
+	listExportCandidates,
+} from "@utils/modpacks";
 import {
-	Select,
-	SelectTrigger,
-	SelectValue,
-	SelectContent,
-	SelectItem,
-} from "@ui/select/select";
-import { downloadDir, join } from "@tauri-apps/api/path";
-import { open } from "@tauri-apps/plugin-dialog";
-import { invoke } from "@tauri-apps/api/core";
-import BackIcon from "@assets/back-arrow.svg";
-import RightArrowIcon from "@assets/right-arrow.svg";
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	For,
+	onMount,
+	Show,
+} from "solid-js";
 import styles from "./export-dialog.module.css";
 
 export interface ExportDialogProps {

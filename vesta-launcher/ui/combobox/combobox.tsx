@@ -7,19 +7,25 @@ import styles from "./combobox.module.css";
 
 const Combobox = ComboboxPrimitive.Combobox;
 
-type ComboboxItemProps<T extends ValidComponent = "li"> = ComboboxPrimitive.ComboboxItemProps<T> & ClassProp & ChildrenProp;
+type ComboboxItemProps<T extends ValidComponent = "li"> =
+	ComboboxPrimitive.ComboboxItemProps<T> & ClassProp & ChildrenProp;
 
 function ComboboxItem<T extends ValidComponent = "li">(
 	props: PolymorphicProps<T, ComboboxItemProps<T>>,
 ) {
-	const [local, rest] = splitProps(props as ComboboxItemProps, ["class", "children"]);
+	const [local, rest] = splitProps(props as ComboboxItemProps, [
+		"class",
+		"children",
+	]);
 
 	return (
 		<ComboboxPrimitive.Item
 			class={clsx(styles["combobox__item"], local.class)}
 			{...rest}
 		>
-			<ComboboxPrimitive.ItemLabel>{local.children}</ComboboxPrimitive.ItemLabel>
+			<ComboboxPrimitive.ItemLabel>
+				{local.children}
+			</ComboboxPrimitive.ItemLabel>
 			<ComboboxItemIndicator />
 		</ComboboxPrimitive.Item>
 	);
@@ -138,16 +144,25 @@ function ComboboxTrigger<T extends ValidComponent = "button">(
 	);
 }
 
-type ComboboxContentProps<T extends ValidComponent = "div"> = ComboboxPrimitive.ComboboxContentProps<T> & ClassProp & ChildrenProp;
+type ComboboxContentProps<T extends ValidComponent = "div"> =
+	ComboboxPrimitive.ComboboxContentProps<T> & ClassProp & ChildrenProp;
 
 function ComboboxContent<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ComboboxContentProps<T>>,
 ) {
-	const [local, rest] = splitProps(props as ComboboxContentProps, ["class", "children"]);
+	const [local, rest] = splitProps(props as ComboboxContentProps, [
+		"class",
+		"children",
+	]);
 	return (
 		<ComboboxPrimitive.Portal>
 			<ComboboxPrimitive.Content
-				class={clsx(styles["combobox__content"], styles["relative"], styles["z-50"], local.class)}
+				class={clsx(
+					styles["combobox__content"],
+					styles["relative"],
+					styles["z-50"],
+					local.class,
+				)}
 				{...rest}
 			>
 				<ComboboxPrimitive.Listbox class={styles["combobox__listbox"]}>

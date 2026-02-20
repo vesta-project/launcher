@@ -1,3 +1,4 @@
+import PlusIcon from "@assets/plus.svg";
 import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {
@@ -9,11 +10,10 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { JSX, Show } from "solid-js";
-import PlusIcon from "@assets/plus.svg";
 import styles from "./settings-page.module.css";
 
 export interface JavaOption {
-	type: 'managed' | 'system' | 'custom' | 'browse';
+	type: "managed" | "system" | "custom" | "browse";
 	version: number;
 	title: string;
 	path?: string;
@@ -40,7 +40,7 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 
 	const cardContent = (): JSX.Element => {
 		switch (props.option.type) {
-			case 'managed':
+			case "managed":
 				return (
 					<div
 						class={styles["java-option-card"]}
@@ -84,8 +84,8 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 					</div>
 				);
 
-			case 'system':
-			case 'custom':
+			case "system":
+			case "custom":
 				return (
 					<div
 						class={styles["java-option-card"]}
@@ -98,24 +98,29 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 								<Badge>Active</Badge>
 							</Show>
 						</div>
-						<div
-							class={styles["option-path"]}
-							style={{ "margin-top": "auto" }}
-						>
+						<div class={styles["option-path"]} style={{ "margin-top": "auto" }}>
 							{props.option.path}
 						</div>
 					</div>
 				);
 
-			case 'browse':
+			case "browse":
 				return (
 					<div
 						class={`${styles["java-option-card"]} ${styles.browse}`}
 						onClick={props.option.onClick}
 					>
 						<div class={styles["option-title"]}>
-							<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-								<PlusIcon style={{ width: "16px", height: "16px", color: "var(--accent-primary)" }} />
+							<div
+								style={{ display: "flex", "align-items": "center", gap: "8px" }}
+							>
+								<PlusIcon
+									style={{
+										width: "16px",
+										height: "16px",
+										color: "var(--accent-primary)",
+									}}
+								/>
 								<span>Browse...</span>
 							</div>
 						</div>
@@ -136,14 +141,9 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger>
-				<Show
-					when={props.option.path}
-					fallback={cardContent()}
-				>
+				<Show when={props.option.path} fallback={cardContent()}>
 					<Tooltip placement="top" gutter={8}>
-						<TooltipTrigger as="div">
-							{cardContent()}
-						</TooltipTrigger>
+						<TooltipTrigger as="div">{cardContent()}</TooltipTrigger>
 						<TooltipContent>
 							<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
 								{props.option.path}

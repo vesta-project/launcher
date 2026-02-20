@@ -131,7 +131,8 @@
 	flex-direction: column;
 }
 
-.loading, .selectTrigger {
+.loading,
+.selectTrigger {
 	min-width: 140px;
 	height: 32px;
 }

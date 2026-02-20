@@ -158,12 +158,12 @@
 }
 
 .combobox__item[data-selected] {
-    color: var(--interactive-base);
-    font-weight: 600;
+	color: var(--interactive-base);
+	font-weight: 600;
 }
 
 .combobox__item[data-highlighted][data-selected] {
-    color: var(--text-on-accent) !important;
+	color: var(--text-on-accent) !important;
 }
 
 .combobox__section {

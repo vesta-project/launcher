@@ -1,9 +1,9 @@
-import { Show, createMemo } from "solid-js";
-import { formatDate } from "@utils/date";
-import styles from "../instance-details.module.css";
-import TimerIcon from "@assets/timer.svg";
-import CubeIcon from "@assets/cube.svg";
 import ChipIcon from "@assets/chip.svg";
+import CubeIcon from "@assets/cube.svg";
+import TimerIcon from "@assets/timer.svg";
+import { formatDate } from "@utils/date";
+import { createMemo, Show } from "solid-js";
+import styles from "../instance-details.module.css";
 
 interface HomeTabProps {
 	instance: any;
@@ -16,17 +16,37 @@ export const HomeTab = (props: HomeTabProps) => {
 	const getOperationInfo = (op: string) => {
 		switch (op) {
 			case "install":
-				return { title: "Installed", desc: "Initial instance setup", icon: "✦" };
+				return {
+					title: "Installed",
+					desc: "Initial instance setup",
+					icon: "✦",
+				};
 			case "update":
-				return { title: "Updated", desc: "Updated to a newer version", icon: "↺" };
+				return {
+					title: "Updated",
+					desc: "Updated to a newer version",
+					icon: "↺",
+				};
 			case "repair":
-				return { title: "Repaired", desc: "Checked and fixed files", icon: "⚙" };
+				return {
+					title: "Repaired",
+					desc: "Checked and fixed files",
+					icon: "⚙",
+				};
 			case "hard-reset":
 				return { title: "Reset", desc: "Wiped and reinstalled", icon: "⚠" };
 			case "import":
-				return { title: "Imported", desc: "Imported from external source", icon: "📥" };
+				return {
+					title: "Imported",
+					desc: "Imported from external source",
+					icon: "📥",
+				};
 			case "duplicate":
-				return { title: "Duplicated", desc: "Created from another instance", icon: "⎘" };
+				return {
+					title: "Duplicated",
+					desc: "Created from another instance",
+					icon: "⎘",
+				};
 			default:
 				return {
 					title: op.charAt(0).toUpperCase() + op.slice(1).replaceAll("-", " "),
@@ -86,9 +106,17 @@ export const HomeTab = (props: HomeTabProps) => {
 							<span style="color: var(--error)">▲</span>
 						</Show>
 						<Show when={inst().installationStatus === "installing"}>
-							<span style="color: var(--accent)" class={styles["pulse"]}>◇</span>
+							<span style="color: var(--accent)" class={styles["pulse"]}>
+								◇
+							</span>
 						</Show>
-						<Show when={!["installed", "interrupted", "installing"].includes(inst().installationStatus)}>
+						<Show
+							when={
+								!["installed", "interrupted", "installing"].includes(
+									inst().installationStatus,
+								)
+							}
+						>
 							<span>◈</span>
 						</Show>
 					</div>

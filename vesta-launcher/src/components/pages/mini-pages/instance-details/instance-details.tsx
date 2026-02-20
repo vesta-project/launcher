@@ -1,19 +1,60 @@
-import { resolveResourceUrl } from "@utils/assets";
-import { router } from "@components/page-viewer/page-viewer";
+import FolderIcon from "@assets/folder.svg";
+import SettingsIcon from "@assets/gear.svg";
+import InfoIcon from "@assets/help.svg";
+import LinkIcon from "@assets/link.svg";
+import PinIcon from "@assets/pin.svg";
+import PinOffIcon from "@assets/pin-off.svg";
+import PlayIcon from "@assets/play.svg";
+import TrashIcon from "@assets/trash.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
+import { router } from "@components/page-viewer/page-viewer";
+import { SettingsCard, SettingsField } from "@components/settings";
+import { consoleStore } from "@stores/console";
+import { dialogStore } from "@stores/dialog-store";
+import { instancesState } from "@stores/instances";
+import {
+	isPinned as isPinnedInStore,
+	pinning,
+	pinPage,
+	unpinPage,
+} from "@stores/pinning";
+import {
+	findBestVersion,
+	type InstalledResource,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
+import {
+	createColumnHelper,
+	createSolidTable,
+	flexRender,
+	getCoreRowModel,
+	getFilteredRowModel,
+	getSortedRowModel,
+} from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import { dialogStore } from "@stores/dialog-store";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
-import { Separator } from "@ui/separator/separator";
-import { SettingsCard, SettingsField } from "@components/settings";
 import Button from "@ui/button/button";
+import { Checkbox } from "@ui/checkbox/checkbox";
+import {
+	Combobox,
+	ComboboxContent,
+	ComboboxControl,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxTrigger,
+} from "@ui/combobox/combobox";
+import {
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@ui/context-menu/context-menu";
+import { ExportDialog } from "@ui/export-dialog";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
-import { ModpackVersionSelector } from "./modpack-version-selector";
-import type { ModpackVersion } from "./modpack-version-selector";
 import {
 	Popover,
 	PopoverCloseButton,
@@ -21,23 +62,15 @@ import {
 	PopoverTrigger,
 } from "@ui/popover/popover";
 import {
-	Combobox,
-	ComboboxContent,
-	ComboboxItem,
-	ComboboxInput,
-	ComboboxControl,
-	ComboboxTrigger,
-} from "@ui/combobox/combobox";
-import {
 	Select,
 	SelectContent,
 	SelectItem,
+	SelectLabel,
 	SelectTrigger,
 	SelectValue,
-	SelectLabel,
 } from "@ui/select/select";
+import { Separator } from "@ui/separator/separator";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import { showToast } from "@ui/toast/toast";
 import {
 	Slider,
 	SliderFill,
@@ -46,99 +79,76 @@ import {
 	SliderTrack,
 	SliderValueLabel,
 } from "@ui/slider/slider";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import {
 	TextFieldInput,
 	TextFieldLabel,
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
-import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
-import { Checkbox } from "@ui/checkbox/checkbox";
+import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from "@ui/context-menu/context-menu";
-import {
-	handleDuplicate,
-	handleRepair,
-	handleHardReset,
-	handleUninstall,
-	handleLaunch,
-} from "~/handlers/instance-handler";
-import {
-	resources,
-	findBestVersion,
-	type ResourceVersion,
-	type InstalledResource,
-} from "@stores/resources";
-import { pinning, isPinned as isPinnedInStore, pinPage, unpinPage } from "@stores/pinning";
-import { instancesState } from "@stores/instances";
-import { consoleStore } from "@stores/console";
+import { resolveResourceUrl } from "@utils/assets";
+import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
+import { formatDate } from "@utils/date";
 import {
 	DEFAULT_ICONS,
 	deleteInstance,
 	duplicateInstance,
+	type GameVersionMetadata,
 	getInstanceBySlug,
 	getMinecraftVersions,
 	getStableIconId,
+	installInstance,
 	isDefaultIcon,
 	isInstanceRunning,
-	installInstance,
 	killInstance,
+	type LoaderVersionInfo,
 	launchInstance,
+	type PistonMetadata,
 	repairInstance,
 	resetInstance,
 	resumeInstanceOperation,
+	unlinkInstance,
 	updateInstance,
 	updateInstanceModpackVersion,
-	unlinkInstance,
-	type PistonMetadata,
-	type GameVersionMetadata,
-	type LoaderVersionInfo,
 } from "@utils/instances";
 import {
 	batch,
 	createEffect,
+	createMemo,
 	createResource,
 	createSignal,
 	For,
+	on,
 	onCleanup,
 	onMount,
 	Show,
-	createMemo,
-	on,
 } from "solid-js";
 import {
-	createColumnHelper,
-	createSolidTable,
-	flexRender,
-	getCoreRowModel,
-	getSortedRowModel,
-	getFilteredRowModel,
-} from "@tanstack/solid-table";
+	handleDuplicate,
+	handleHardReset,
+	handleLaunch,
+	handleRepair,
+	handleUninstall,
+} from "~/handlers/instance-handler";
 import styles from "./instance-details.module.css";
-import { formatDate } from "@utils/date";
-import { ExportDialog } from "@ui/export-dialog";
-
+import type { ModpackVersion } from "./modpack-version-selector";
+import { ModpackVersionSelector } from "./modpack-version-selector";
+import { ConsoleTab } from "./tabs/ConsoleTab";
 // Tabs
 import { HomeTab } from "./tabs/HomeTab";
-import { ConsoleTab } from "./tabs/ConsoleTab";
 import { ResourcesTab } from "./tabs/ResourcesTab";
 import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
-import { VersioningTab } from "./tabs/VersioningTab";
 import { SettingsTab } from "./tabs/SettingsTab";
-import FolderIcon from "@assets/folder.svg";
-import TrashIcon from "@assets/trash.svg";
-import InfoIcon from "@assets/help.svg";
-import SettingsIcon from "@assets/gear.svg";
-import PlayIcon from "@assets/play.svg";
-import LinkIcon from "@assets/link.svg";
-import PinIcon from "@assets/pin.svg";
-import PinOffIcon from "@assets/pin-off.svg";
+import { VersioningTab } from "./tabs/VersioningTab";
 
-type TabType = "home" | "console" | "resources" | "settings" | "versioning" | "screenshots";
+type TabType =
+	| "home"
+	| "console"
+	| "resources"
+	| "settings"
+	| "versioning"
+	| "screenshots";
 
 interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
@@ -357,7 +367,8 @@ export default function InstanceDetails(
 
 	const inst = () => instance();
 	const isLaunchingGlobal = createMemo(
-		() => (props.slug ? instancesState.launchingIds[props.slug] : false) || false,
+		() =>
+			(props.slug ? instancesState.launchingIds[props.slug] : false) || false,
 	);
 	const isRunningGlobal = createMemo(
 		() => (props.slug ? instancesState.runningIds[props.slug] : false) || false,
@@ -477,7 +488,7 @@ export default function InstanceDetails(
 				current.startsWith("data:image/") &&
 				!isDefaultIcon(current)
 			) {
-				// This branch is rarely hit now due to areIconsEqual being used above, 
+				// This branch is rarely hit now due to areIconsEqual being used above,
 				// but we keep it for extra safety in case of partial matches.
 				const beforeFilter = filtered.length;
 				filtered = filtered.filter((icon) => !areIconsEqual(icon, current));
@@ -613,7 +624,14 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
 		return tab &&
-			["home", "console", "resources", "screenshots", "settings", "versioning"].includes(tab)
+			[
+				"home",
+				"console",
+				"resources",
+				"screenshots",
+				"settings",
+				"versioning",
+			].includes(tab)
 			? tab
 			: "home";
 	});
@@ -800,7 +818,7 @@ export default function InstanceDetails(
 		const confirmed = await dialogStore.confirm(
 			"Delete Resources",
 			`Are you sure you want to delete ${selectedCount} selected resources?`,
-			{ severity: "warning", isDestructive: true }
+			{ severity: "warning", isDestructive: true },
 		);
 		if (!confirmed) return;
 
@@ -980,7 +998,10 @@ export default function InstanceDetails(
 		}
 	});
 
-	const handleModpackVersionSelect = (versionId: string, version?: ModpackVersion) => {
+	const handleModpackVersionSelect = (
+		versionId: string,
+		version?: ModpackVersion,
+	) => {
 		setSelectedModpackVersionId(versionId);
 	};
 
@@ -1028,7 +1049,7 @@ export default function InstanceDetails(
 		const confirmed = await dialogStore.confirm(
 			"Unlink Modpack",
 			"Are you sure you want to unlink this instance from the modpack? You will no longer receive updates from the platform, but your files will remain intact.",
-			{ severity: "warning" }
+			{ severity: "warning" },
 		);
 		if (!confirmed) return;
 
@@ -1234,12 +1255,11 @@ export default function InstanceDetails(
 				</div>
 			),
 			cell: (info) => (
-				<div
-					class={`${styles["col-selection-wrapper"]} v-col-selection`}
-				>
-					<div class={styles["select-icon-container"]}
+				<div class={`${styles["col-selection-wrapper"]} v-col-selection`}>
+					<div
+						class={styles["select-icon-container"]}
 						onClick={(e: MouseEvent) => e.stopPropagation()}
-						>
+					>
 						<ResourceIcon
 							record={projectRecords()?.[info.row.original.remote_id]}
 							name={info.row.original.display_name}
@@ -1307,8 +1327,18 @@ export default function InstanceDetails(
 										if (u) handleUpdate(info.row.original, u);
 									}}
 								>
-									<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3"/>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="14"
+										height="14"
+										viewBox="0 0 24 24"
+										fill="none"
+										stroke="currentColor"
+										stroke-width="2"
+										stroke-linecap="round"
+										stroke-linejoin="round"
+									>
+										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3" />
 									</svg>
 								</TooltipTrigger>
 								<TooltipContent>
@@ -1330,7 +1360,6 @@ export default function InstanceDetails(
 				>
 					<Switch
 						checked={info.getValue()}
-						
 						onCheckedChange={async (enabled: boolean) => {
 							const previous = installedResources.latest;
 							// Optimistic update
@@ -1368,9 +1397,7 @@ export default function InstanceDetails(
 			header: "",
 			size: 50,
 			cell: (info) => (
-				<div
-					style="display: flex; justify-content: flex-end;"
-				>
+				<div style="display: flex; justify-content: flex-end;">
 					<Button
 						variant="ghost"
 						size="icon"
@@ -1379,7 +1406,7 @@ export default function InstanceDetails(
 								await dialogStore.confirm(
 									"Delete Resource",
 									`Are you sure you want to delete ${info.row.original.display_name}? This will remove the file from your instance.`,
-									{ severity: "warning", isDestructive: true }
+									{ severity: "warning", isDestructive: true },
 								)
 							) {
 								const previous = installedResources.latest;
@@ -1464,7 +1491,7 @@ export default function InstanceDetails(
 	const cleanups: (() => void)[] = [];
 	onMount(async () => {
 		// Unified cleaning - actual log handling moved to ConsoleTab/ConsoleStore
-		
+
 		cleanups.push(
 			await listen("core://instance-launched", (ev) => {
 				const payload = (ev as { payload: { instance_id?: string } }).payload;
@@ -1804,10 +1831,15 @@ export default function InstanceDetails(
 												variant="ghost"
 												size="md"
 												onClick={handlePin}
-												title={isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}
+												title={
+													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
+												}
 												class={styles["header-square-button"]}
 											>
-												<Show when={isPinned()} fallback={<PinIcon width="18" height="18" />}>
+												<Show
+													when={isPinned()}
+													fallback={<PinIcon width="18" height="18" />}
+												>
 													<PinOffIcon width="18" height="18" />
 												</Show>
 											</Button>
@@ -1922,7 +1954,9 @@ export default function InstanceDetails(
 												}}
 												handleHardReset={() => handleHardReset(inst())}
 												handleUninstall={() =>
-													handleUninstall(inst(), () => activeRouter()?.navigate("/"))
+													handleUninstall(inst(), () =>
+														activeRouter()?.navigate("/"),
+													)
 												}
 												repairInstance={repairInstance}
 												mcVersions={mcVersions}
@@ -1948,7 +1982,9 @@ export default function InstanceDetails(
 												setIsIconDirty={setIsIconDirty}
 												uploadedIcons={uploadedIcons}
 												modpackIcon={() => modpackIconBase64() || null}
-												isSuggestedSelected={() => areIconsEqual(modpackIconBase64(), iconPath())}
+												isSuggestedSelected={() =>
+													areIconsEqual(modpackIconBase64(), iconPath())
+												}
 												isInstalling={isInstalling()}
 												jreOptions={jreOptions}
 												javaPath={javaPath()}
@@ -1991,7 +2027,11 @@ export default function InstanceDetails(
 									const i = inst();
 									if (!i) return;
 									setName(i.name);
-									setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
+									setIconPath(
+										i.iconPath ||
+											getStableIconId(DEFAULT_ICONS[0]) ||
+											DEFAULT_ICONS[0],
+									);
 									setMinMemory([i.minMemory]);
 									setMaxMemory([i.maxMemory]);
 									setJavaArgs(i.javaArgs || "");

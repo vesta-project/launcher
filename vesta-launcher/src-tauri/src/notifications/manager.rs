@@ -183,7 +183,11 @@ impl ActionHandler for LogoutGuestHandler {
         if let Some(nm) =
             app_handle.try_state::<crate::notifications::manager::NotificationManager>()
         {
-            let _ = nm.delete("guest_mode_warning".to_string());
+            if let Some(key) = _client_key {
+                let _ = nm.delete(key);
+            } else {
+                let _ = nm.delete("guest_mode_warning".to_string());
+            }
         }
 
         // 4. Reset config state
@@ -681,15 +685,9 @@ impl NotificationManager {
         };
 
         if let Some(mut notification) = notification_opt {
-            // println!("NotificationManager: Found notification with {} actions", notification.actions.len());
             notification.progress = Some(progress);
 
-            /*
-            TODO:
-
-            The conditional assignment of current_step and total_steps (lines 444-449) may prevent resetting these values to None when needed. The previous implementation unconditionally assigned these values, which allowed clearing them. If the intent is to preserve existing values when None is passed, this change is correct, but it may break existing behavior that relies on being able to clear these fields.
-            */
-
+            // Update steps if provided
             if current_step.is_some() {
                 notification.current_step = current_step;
             }
@@ -709,7 +707,6 @@ impl NotificationManager {
             let show_flag = notification.show_on_completion.unwrap_or(false);
 
             if progress >= 100 && notification.notification_type == NotificationType::Progress {
-                // println!("NotificationManager: Converting Progress → Patient (completed), dismissible was: {}, setting to true", notification.dismissible);
                 if show_flag {
                     notification.notification_type = NotificationType::Patient;
                     notification.dismissible = true;
@@ -726,21 +723,12 @@ impl NotificationManager {
                     // early return — notification removed
                     return Ok(());
                 }
-                // println!("NotificationManager: Converted notification - type: {:?}, dismissible: {}, actions: {}", notification.notification_type, notification.dismissible, notification.actions.len());
             }
 
             if let Some(id) = notification.id {
-                // println!("NotificationManager: Saving notification with {} actions", notification.actions.len());
                 NotificationStore::update(id, &notification)?;
-            } else {
-                // println!("NotificationManager: Warning - Notification has no ID, skipping DB update");
             }
 
-            // println!("NotificationManager: Emitting progress event for {} - type: {:?}, dismissible: {}, progress: {:?}",
-            //     notification.client_key.as_deref().unwrap_or("unknown"),
-            //     notification.notification_type,
-            //     notification.dismissible,
-            //     notification.progress);
             self.app_handle
                 .emit("core://notification-progress", &notification)?;
         } else {

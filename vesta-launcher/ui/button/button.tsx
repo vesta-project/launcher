@@ -72,12 +72,16 @@ function Button(p: ButtonProps) {
 					[styles["launcher-button--icon-only"]]: local.icon_only,
 					[local.class ?? ""]: true,
 				}}
-				style={typeof local.style === "string" 
-					? `--button-color: ${local.color != "none" ? "var(--" + local.color + ")" : "hsla(var(--accent-base) / 1)"}; ${local.style}`
-					: {
-						"--button-color": local.color != "none" ? "var(--" + local.color + ")" : "hsla(var(--accent-base) / 1)",
-						...(local.style as any)
-					}
+				style={
+					typeof local.style === "string"
+						? `--button-color: ${local.color != "none" ? "var(--" + local.color + ")" : "hsla(var(--accent-base) / 1)"}; ${local.style}`
+						: {
+								"--button-color":
+									local.color != "none"
+										? "var(--" + local.color + ")"
+										: "hsla(var(--accent-base) / 1)",
+								...(local.style as any),
+							}
 				}
 				onClick={handleClick}
 				disabled={props.disabled}

@@ -9,7 +9,13 @@
 }
 
 /* Fix windows icon styling */
-.unified-page-viewer-root[data-os="windows"] header div .page-viewer-window-controls-wrapper div button svg path {
+.unified-page-viewer-root[data-os="windows"] header
+	div
+	.page-viewer-window-controls-wrapper
+	div
+	button
+	svg
+	path {
 	fill: var(--text-color);
 }
 
@@ -48,7 +54,6 @@
 .page-viewer-controls-controls-wrapper--mac {
 	padding-right: 8px;
 }
-
 
 .page-viewer-window-controls-wrapper button {
 	pointer-events: auto !important;

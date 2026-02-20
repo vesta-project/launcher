@@ -1,10 +1,10 @@
-import { Show, For } from "solid-js";
+import SearchIcon from "@assets/search.svg";
+import TrashIcon from "@assets/trash.svg";
 import { flexRender } from "@tanstack/solid-table";
-import styles from "../instance-details.module.css";
 import Button from "@ui/button/button";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import TrashIcon from "@assets/trash.svg";
-import SearchIcon from "@assets/search.svg";
+import { For, Show } from "solid-js";
+import styles from "../instance-details.module.css";
 
 interface ResourcesTabProps {
 	instance: any;
@@ -27,7 +27,8 @@ interface ResourcesTabProps {
 }
 
 export const ResourcesTab = (props: ResourcesTabProps) => {
-	const selectionCount = () => Object.values(props.resourcesStore.state.selection).filter((v) => v).length;
+	const selectionCount = () =>
+		Object.values(props.resourcesStore.state.selection).filter((v) => v).length;
 
 	return (
 		<section class={styles["tab-resources"]}>
@@ -213,13 +214,19 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			</div>
 
 			<div class={styles["installed-resources-list"]}>
-				<Show when={props.installedResources.loading && !props.installedResources.latest}>
+				<Show
+					when={
+						props.installedResources.loading && !props.installedResources.latest
+					}
+				>
 					<Skeleton class={styles["skeleton-resources"]} />
 				</Show>
 				<Show when={props.installedResources.latest}>
 					<div
 						class={`${styles["vesta-table-container"]} v-instance-resources-table`}
-						classList={{ [styles.refetching]: props.installedResources.loading }}
+						classList={{
+							[styles.refetching]: props.installedResources.loading,
+						}}
 					>
 						<table class={styles["vesta-table"]}>
 							<thead>
@@ -230,17 +237,24 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 												{(header) => (
 													<th
 														style={{
-															width: header.getSize() !== 150 ? `${header.getSize()}px` : undefined,
+															width:
+																header.getSize() !== 150
+																	? `${header.getSize()}px`
+																	: undefined,
 														}}
 													>
 														<Show when={!header.isPlaceholder}>
 															<div
 																classList={{
-																	[styles["can-sort"]]: header.column.getCanSort(),
+																	[styles["can-sort"]]:
+																		header.column.getCanSort(),
 																}}
 																onClick={header.column.getToggleSortingHandler()}
 															>
-																{flexRender(header.column.columnDef.header, header.getContext())}
+																{flexRender(
+																	header.column.columnDef.header,
+																	header.getContext(),
+																)}
 															</div>
 														</Show>
 													</th>
@@ -256,11 +270,18 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										<tr
 											onClick={(e) => props.onRowClick(row, e)}
 											style={{ cursor: "pointer" }}
-											classList={{ [styles["row-selected"]]: row.getIsSelected() }}
+											classList={{
+												[styles["row-selected"]]: row.getIsSelected(),
+											}}
 										>
 											<For each={row.getVisibleCells()}>
 												{(cell) => (
-													<td>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>
+													<td>
+														{flexRender(
+															cell.column.columnDef.cell,
+															cell.getContext(),
+														)}
+													</td>
 												)}
 											</For>
 										</tr>

@@ -7,16 +7,24 @@ import ConnectionStatus from "@components/page-root/connection-status";
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import {
 	PageViewer,
-	router,
 	pageViewerOpen,
+	router,
 	setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
+import {
+	instancesError,
+	instancesLoading,
+	instances as instancesStore,
+} from "@stores/instances";
+import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { attachConsole, info } from "@tauri-apps/plugin-log";
 import { WindowControls, WindowTitlebar } from "@tauri-controls/solid";
-import { showToast, Toaster, clearToasts } from "@ui/toast/toast";
+import { Skeleton } from "@ui/skeleton/skeleton";
+import { clearToasts, showToast, Toaster } from "@ui/toast/toast";
 import { getOsType } from "@utils/os";
+import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
 	createMemo,
@@ -27,15 +35,7 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./home.module.css";
-import { Skeleton } from "@ui/skeleton/skeleton";
 import Sidebar from "./sidebar/sidebar";
-import { startAppTutorial } from "@utils/tutorial";
-import { initializePinning } from "@stores/pinning";
-import {
-	instances as instancesStore,
-	instancesLoading,
-	instancesError,
-} from "@stores/instances";
 
 // Module-level signals for sidebar state
 const [sidebarOpen, setSidebarOpen] = createSignal(false);

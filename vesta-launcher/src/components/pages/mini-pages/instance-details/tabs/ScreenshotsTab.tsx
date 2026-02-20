@@ -1,16 +1,16 @@
-import { createSignal, createResource, For, Show, Suspense } from "solid-js";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { formatDate } from "@utils/date";
-import styles from "./ScreenshotsTab.module.css";
+import FolderIcon from "@assets/folder.svg";
+import CopyIcon from "@assets/link.svg";
+import RefreshIcon from "@assets/refresh.svg";
+import TrashIcon from "@assets/trash.svg";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
-import { ImageViewer } from "@ui/image-viewer/image-viewer";
-import { showToast } from "@ui/toast/toast";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
+import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import {
 	Select,
 	SelectContent,
@@ -18,10 +18,10 @@ import {
 	SelectTrigger,
 	SelectValue,
 } from "@ui/select/select";
-import TrashIcon from "@assets/trash.svg";
-import CopyIcon from "@assets/link.svg";
-import FolderIcon from "@assets/folder.svg";
-import RefreshIcon from "@assets/refresh.svg";
+import { showToast } from "@ui/toast/toast";
+import { formatDate } from "@utils/date";
+import { createResource, createSignal, For, Show, Suspense } from "solid-js";
+import styles from "./ScreenshotsTab.module.css";
 
 interface Screenshot {
 	name: string;
@@ -36,15 +36,20 @@ interface ScreenshotsTabProps {
 
 export function ScreenshotsTab(props: ScreenshotsTabProps) {
 	const [viewMode, setViewMode] = createSignal<"grid" | "list">("grid");
-	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">("newest");
-	const [selectedScreenshot, setSelectedScreenshot] = createSignal<Screenshot | null>(null);
+	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">(
+		"newest",
+	);
+	const [selectedScreenshot, setSelectedScreenshot] =
+		createSignal<Screenshot | null>(null);
 
 	const [screenshots, { mutate, refetch }] = createResource(
 		() => props.instanceIdSlug,
 		async (slug) => {
-			const data = await invoke<Screenshot[]>("get_screenshots", { instanceIdSlug: slug });
+			const data = await invoke<Screenshot[]>("get_screenshots", {
+				instanceIdSlug: slug,
+			});
 			return data;
-		}
+		},
 	);
 
 	const sortedScreenshots = () => {
@@ -81,7 +86,9 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 
 		try {
 			await invoke("delete_screenshot", { path: screenshot.path });
-			mutate((prev) => (prev ? prev.filter((s) => s.path !== screenshot.path) : []));
+			mutate((prev) =>
+				prev ? prev.filter((s) => s.path !== screenshot.path) : [],
+			);
 			showToast({
 				title: "Deleted",
 				description: "Screenshot removed.",
@@ -163,27 +170,44 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 				</div>
 			</div>
 
-			<Suspense fallback={<div class={styles.loading}>Loading screenshots...</div>}>
-				<Show when={(screenshots()?.length ?? 0) > 0} fallback={
-					<div class={styles.empty}>
-						<p>No screenshots found for this instance.</p>
-					</div>
-				}>
+			<Suspense
+				fallback={<div class={styles.loading}>Loading screenshots...</div>}
+			>
+				<Show
+					when={(screenshots()?.length ?? 0) > 0}
+					fallback={
+						<div class={styles.empty}>
+							<p>No screenshots found for this instance.</p>
+						</div>
+					}
+				>
 					<div class={viewMode() === "grid" ? styles.grid : styles.list}>
 						<For each={sortedScreenshots()}>
 							{(screenshot) => (
 								<ContextMenu>
 									<ContextMenuTrigger>
 										<div
-											class={viewMode() === "grid" ? styles.gridItem : styles.listItem}
+											class={
+												viewMode() === "grid"
+													? styles.gridItem
+													: styles.listItem
+											}
 											onClick={() => setSelectedScreenshot(screenshot)}
 										>
 											<div class={styles.preview}>
-												<img src={convertFileSrc(screenshot.path)} alt={screenshot.name} loading="lazy" />
+												<img
+													src={convertFileSrc(screenshot.path)}
+													alt={screenshot.name}
+													loading="lazy"
+												/>
 											</div>
 											<div class={styles.details}>
 												<span class={styles.name}>{screenshot.name}</span>
-												<span class={styles.date}>{formatDate(new Date(screenshot.createdAt * 1000).toISOString())}</span>
+												<span class={styles.date}>
+													{formatDate(
+														new Date(screenshot.createdAt * 1000).toISOString(),
+													)}
+												</span>
 											</div>
 										</div>
 									</ContextMenuTrigger>
@@ -198,7 +222,7 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 												<FolderIcon /> Open in Folder
 											</div>
 										</ContextMenuItem>
-										<ContextMenuItem 
+										<ContextMenuItem
 											class={styles.deleteAction}
 											onClick={() => handleDelete(screenshot)}
 										>
@@ -215,36 +239,40 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 			</Suspense>
 
 			<ImageViewer
-				src={
-					(() => {
-						const s = selectedScreenshot();
-						return s ? convertFileSrc(s.path) : null;
-					})()
-				}
-				images={screenshots()?.map(s => ({
+				src={(() => {
+					const s = selectedScreenshot();
+					return s ? convertFileSrc(s.path) : null;
+				})()}
+				images={screenshots()?.map((s) => ({
 					src: convertFileSrc(s.path),
 					title: s.name,
-					date: formatDate(new Date(s.createdAt * 1000).toISOString())
+					date: formatDate(new Date(s.createdAt * 1000).toISOString()),
 				}))}
 				title={selectedScreenshot()?.name}
-				date={
-					(() => {
-						const s = selectedScreenshot();
-						return s ? formatDate(new Date(s.createdAt * 1000).toISOString()) : undefined;
-					})()
-				}
+				date={(() => {
+					const s = selectedScreenshot();
+					return s
+						? formatDate(new Date(s.createdAt * 1000).toISOString())
+						: undefined;
+				})()}
 				onClose={() => setSelectedScreenshot(null)}
 				onCopy={(src) => {
 					// Map back to original screenshot object if needed
-					const s = screenshots()?.find(ss => convertFileSrc(ss.path) === src);
+					const s = screenshots()?.find(
+						(ss) => convertFileSrc(ss.path) === src,
+					);
 					if (s) handleCopy(s);
 				}}
 				onOpenFolder={(src) => {
-					const s = screenshots()?.find(ss => convertFileSrc(ss.path) === src);
+					const s = screenshots()?.find(
+						(ss) => convertFileSrc(ss.path) === src,
+					);
 					if (s) openInFolder(s);
 				}}
 				onDelete={(src) => {
-					const s = screenshots()?.find(ss => convertFileSrc(ss.path) === src);
+					const s = screenshots()?.find(
+						(ss) => convertFileSrc(ss.path) === src,
+					);
 					if (s) {
 						handleDelete(s).then(() => {
 							// If it was the only one, close

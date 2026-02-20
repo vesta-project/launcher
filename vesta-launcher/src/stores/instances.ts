@@ -1,4 +1,3 @@
-import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
@@ -7,6 +6,7 @@ import {
 	DEMO_INSTANCE_ID,
 	type Instance,
 } from "@utils/instances";
+import { createStore, reconcile } from "solid-js/store";
 
 export type { Instance };
 
@@ -110,29 +110,38 @@ export function setupInstanceListeners() {
 		});
 
 		// Listen for launch initiated (this is for UI responsiveness)
-		await listen<{ instance_id: string }>("core://instance-launch-request", (event) => {
-			setLaunching(event.payload.instance_id, true);
-		});
+		await listen<{ instance_id: string }>(
+			"core://instance-launch-request",
+			(event) => {
+				setLaunching(event.payload.instance_id, true);
+			},
+		);
 
 		// Listen for launch events (updates when process successfully started)
-		await listen<{ instance_id: string; pid: number; start_time?: number }>("core://instance-launched", (event) => {
-			const slug = event.payload.instance_id;
-			setLaunching(slug, false);
-			setInstancesState("runningIds", slug, {
-				pid: event.payload.pid,
-				startTime: event.payload.start_time || Math.floor(Date.now() / 1000),
-			});
-		});
+		await listen<{ instance_id: string; pid: number; start_time?: number }>(
+			"core://instance-launched",
+			(event) => {
+				const slug = event.payload.instance_id;
+				setLaunching(slug, false);
+				setInstancesState("runningIds", slug, {
+					pid: event.payload.pid,
+					startTime: event.payload.start_time || Math.floor(Date.now() / 1000),
+				});
+			},
+		);
 
 		// Listen for instance exit/crash
-		await listen<{ instance_id: string; crashed: boolean }>("core://instance-exited", (event) => {
-			const slug = event.payload.instance_id;
-			setLaunching(slug, false);
-			setInstancesState("runningIds", slug, undefined);
-			
-			// Refresh instance metadata if crashed/playtime updated
-			initializeInstances();
-		});
+		await listen<{ instance_id: string; crashed: boolean }>(
+			"core://instance-exited",
+			(event) => {
+				const slug = event.payload.instance_id;
+				setLaunching(slug, false);
+				setInstancesState("runningIds", slug, undefined);
+
+				// Refresh instance metadata if crashed/playtime updated
+				initializeInstances();
+			},
+		);
 
 		// Listen for account changes to re-initialize instances (important for Guest -> Real transition)
 		await listen<any>("config-updated", (event) => {

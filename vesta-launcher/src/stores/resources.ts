@@ -1,6 +1,6 @@
-import { createStore, reconcile } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { createStore, reconcile } from "solid-js/store";
 import { Instance } from "./instances";
 
 export type ResourceType =

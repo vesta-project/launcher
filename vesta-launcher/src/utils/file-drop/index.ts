@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { createSignal } from "solid-js";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { createSignal } from "solid-js";
 
 export interface DropZoneOptions {
 	accept?: "files" | "folders" | "all";

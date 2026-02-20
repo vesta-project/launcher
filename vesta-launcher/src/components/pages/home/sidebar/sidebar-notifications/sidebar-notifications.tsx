@@ -1,8 +1,9 @@
 import CloseIcon from "@assets/close.svg";
 import { SidebarActionButton } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
+import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
-import { Progress } from "@ui/progress/progress";
+import { NotificationItem } from "@ui/notification/notification-item";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	type BackendNotification,
@@ -27,7 +28,6 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
-import { dialogStore } from "@stores/dialog-store";
 import styles from "./sidebar-notifications.module.css";
 
 interface SidebarNotificationProps {
@@ -119,30 +119,36 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 				<div class={styles.sidebar__notifications__wrapper}>
 					{/* All notifications from backend (includes Immediate which won't persist after restart) */}
 					<For
-						each={(persistentNotifs() || []).sort((a, b) =>
-							a.dismissible === b.dismissible ? 0 : a.dismissible ? 1 : -1,
-						)}
+						each={(persistentNotifs() || []).sort((a, b) => {
+							// Sort by creation time (newest first) but keep dismissible ones at bottom?
+							// Actually user wants phone-like feel, so newest first is good.
+							const dateA = new Date(a.created_at).getTime();
+							const dateB = new Date(b.created_at).getTime();
+							return dateB - dateA;
+						})}
 					>
 						{(notification) => {
-							console.log(
-								`Rendering notification: ${notification.title} - type: ${notification.notification_type}, dismissible: ${notification.dismissible}`,
-							);
 							return (
-								<NotificationCard
+								<NotificationItem
 									id={notification.id}
 									title={notification.title}
 									description={notification.description || undefined}
 									progress={notification.progress || undefined}
 									current_step={notification.current_step || undefined}
 									total_steps={notification.total_steps || undefined}
-									persistent={true}
-									read={notification.read}
 									severity={notification.severity}
 									notification_type={notification.notification_type}
 									dismissible={notification.dismissible}
 									actions={notification.actions}
-									client_key={notification.client_key}
-									metadata={notification.metadata}
+									created_at={notification.created_at}
+									onAction={(actionId, payload) =>
+										invokeNotificationAction(
+											actionId,
+											notification.client_key || undefined,
+											payload,
+										)
+									}
+									onDismiss={() => deleteNotification(notification.id)}
 								/>
 							);
 						}}
@@ -167,220 +173,6 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 					</Button>
 				</div>
 			</Show>
-		</div>
-	);
-}
-
-function NotificationCard(props: {
-	id: number;
-	title?: string;
-	description?: string;
-	progress?: number | null;
-	current_step?: number | null;
-	total_steps?: number | null;
-	persistent: boolean;
-	read?: boolean;
-	severity?: NotificationSeverity;
-	notification_type?: NotificationType;
-	dismissible?: boolean;
-	actions?: NotificationAction[];
-	metadata?: string | null;
-	client_key?: string | null;
-}) {
-	// Debug logging
-	console.log(
-		`NotificationCard: ${props.title} - type: ${props.notification_type}, dismissible: ${props.dismissible}, progress: ${props.progress}`,
-	);
-
-	const handleAction = async (action: NotificationAction) => {
-		try {
-			if (action.id === "open_url" && action.payload?.url) {
-				try {
-					const confirmed = await dialogStore.confirm(
-						"Open External Link",
-						`This link will open in your default web browser:\n\n${action.payload.url}\n\nDo you want to continue?`,
-						{
-							okLabel: "Open Link",
-							cancelLabel: "Stay in App",
-							severity: "question",
-						},
-					);
-
-					if (confirmed) {
-						await invokeNotificationAction(
-							"open_url",
-							props.client_key || undefined,
-							{ url: action.payload.url },
-						);
-						if (props.dismissible) await handleDelete();
-					}
-				} catch (e) {
-					console.error("Failed to handle open_url action:", e);
-				}
-				return;
-			}
-
-			await invokeNotificationAction(
-				action.id,
-				props.client_key || undefined,
-				action.payload,
-			);
-			// Most actions (like Resume or Cancel) should dismiss the notification once triggered
-			// but we skip this for pause/resume task as those keep the notification active
-			if (action.id !== "pause_task" && action.id !== "resume_task") {
-				await handleDelete();
-			}
-		} catch (error) {
-			console.error(`Failed to invoke action ${action.id}:`, error);
-		}
-	};
-
-	const handleDelete = async () => {
-		if (props.persistent) {
-			try {
-				await deleteNotification(props.id);
-			} catch (error) {
-				console.error("Failed to delete notification:", error);
-			}
-		} else {
-			closeAlert(props.id);
-		}
-	};
-
-	const severityColor = () => {
-		if (!props.severity) return "hsl(210 70% 50%)"; // Info blue
-		switch (props.severity.toLowerCase()) {
-			case "error":
-				return "hsl(0 70% 50%)";
-			case "warning":
-				return "hsl(45 90% 50%)";
-			case "success":
-				return "hsl(140 70% 50%)";
-			default:
-				return "hsl(210 70% 50%)";
-		}
-	};
-
-	return (
-		<div
-			class={styles.sidebar__notification}
-			style={{
-				"border-left": `4px solid ${severityColor()}`,
-			}}
-		>
-			{/* Delete/Close button - absolute top right via CSS */}
-			<Show when={props.dismissible}>
-				<Tooltip placement="top">
-					<TooltipTrigger>
-						<button
-							class={styles["sidebar__notification__close-btn"]}
-							onClick={handleDelete}
-						>
-							<CloseIcon />
-						</button>
-					</TooltipTrigger>
-					<TooltipContent>Delete</TooltipContent>
-				</Tooltip>
-			</Show>
-
-			<div
-				style={{
-					width: "100%",
-					"min-width": "0",
-					overflow: "hidden",
-					display: "flex",
-					"flex-direction": "column",
-				}}
-			>
-				<div
-					style={{
-						display: "flex",
-						gap: "8px",
-						"align-items": "center",
-						"margin-bottom": "4px",
-					}}
-				>
-					{props.persistent && props.severity && (
-						<span
-							style={{
-								"font-size": "10px",
-								"font-weight": "bold",
-								color: severityColor(),
-								"text-transform": "uppercase",
-								"letter-spacing": "0.5px",
-							}}
-						>
-							{props.severity}
-						</span>
-					)}
-				</div>
-				<h1
-					style={{
-						"font-size": "14px",
-						"font-weight": "600",
-						margin: "0 0 4px 0",
-						"padding-right": props.dismissible ? "24px" : "0",
-					}}
-				>
-					{props.title || "Notification"}
-				</h1>
-				<p class={styles["sidebar__notification__description"]}>
-					{props.description}
-				</p>
-				{props.progress !== null && props.progress !== undefined && (
-					<div style={{ "margin-top": "8px", "max-width": "100%" }}>
-						<Progress
-							progress={props.progress}
-							current_step={props.current_step}
-							total_steps={props.total_steps}
-							severity={
-								props.severity
-									? (props.severity.toLowerCase() as any)
-									: undefined
-							}
-							class={styles["sidebar__notification__progress"]}
-							size="sm"
-						/>
-					</div>
-				)}
-
-				{/* Action buttons at the bottom-left of the content area */}
-				<Show when={props.actions && props.actions.length > 0}>
-					<div
-						style={{
-							display: "flex",
-							gap: "8px",
-							"margin-top": "12px",
-							"flex-wrap": "wrap",
-						}}
-					>
-						<For each={props.actions}>
-							{(action) => (
-								<button
-									class={styles["sidebar__notification__action-btn"]}
-									onClick={() => handleAction(action)}
-									style={{
-										background:
-											action.type === "destructive"
-												? "hsl(0deg 70% 40% / 25%)"
-												: action.type === "primary"
-													? "hsl(210deg 80% 50% / 25%)"
-													: "hsl(var(--color__primary-hue) 15% 60% / 30%)",
-										"border-color":
-											action.type === "destructive"
-												? "hsl(0deg 70% 40% / 40%)"
-												: action.type === "primary"
-													? "hsl(210deg 80% 50% / 40%)"
-													: "hsl(var(--color__primary-hue) 5% 50% / 30%)",
-									}}
-								>
-									{action.label}
-								</button>
-							)}
-						</For>
-					</div>
-				</Show>
-			</div>
 		</div>
 	);
 }

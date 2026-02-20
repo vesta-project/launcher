@@ -1,21 +1,28 @@
-import { createSignal, Show, onMount, onCleanup, createEffect, For } from "solid-js";
-import { Dialog, DialogContent, DialogOverlay } from "@ui/dialog/dialog";
-import Button from "@ui/button/button";
-import { 
-	Carousel, 
-	CarouselContent, 
-	CarouselItem, 
-	CarouselNext, 
-	CarouselPrevious,
-	type CarouselApi
-} from "@ui/carousel/carousel";
-import styles from "./image-viewer.module.css";
-import CloseIcon from "@assets/close.svg";
 import CopyIcon from "@assets/clipboard.svg";
+import CloseIcon from "@assets/close.svg";
 import FolderIcon from "@assets/folder.svg";
-import ZoomInIcon from "@assets/search.svg";
 import DownloadIcon from "@assets/open.svg";
+import ZoomInIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
+import Button from "@ui/button/button";
+import {
+	Carousel,
+	type CarouselApi,
+	CarouselContent,
+	CarouselItem,
+	CarouselNext,
+	CarouselPrevious,
+} from "@ui/carousel/carousel";
+import { Dialog, DialogContent, DialogOverlay } from "@ui/dialog/dialog";
+import {
+	createEffect,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
+import styles from "./image-viewer.module.css";
 
 interface ImageViewerProps {
 	src: string | null;
@@ -81,7 +88,7 @@ export function ImageViewer(props: ImageViewerProps) {
 	// Jump to clicked image if images list is provided
 	createEffect(() => {
 		if (props.src && props.images && api()) {
-			const index = props.images.findIndex(img => img.src === props.src);
+			const index = props.images.findIndex((img) => img.src === props.src);
 			if (index !== -1) {
 				const embla = api()?.();
 				if (embla) embla.scrollTo(index, true);
@@ -121,23 +128,29 @@ export function ImageViewer(props: ImageViewerProps) {
 	};
 
 	return (
-		<Dialog open={!!props.src || (props.images && props.images.length > 0 && !!props.src)} onOpenChange={(open) => !open && props.onClose()}>
-			<DialogContent 
-				class={styles.content} 
+		<Dialog
+			open={
+				!!props.src || (props.images && props.images.length > 0 && !!props.src)
+			}
+			onOpenChange={(open) => !open && props.onClose()}
+		>
+			<DialogContent
+				class={styles.content}
 				hideCloseButton
 				onMouseMove={handleMouseMove}
 				onMouseLeave={() => !isZoomed() && setShowUI(false)}
 			>
-				<div 
-					class={styles.header}
-					classList={{ [styles.hidden]: !showUI() }}
-				>
+				<div class={styles.header} classList={{ [styles.hidden]: !showUI() }}>
 					<div class={styles.info}>
 						<span class={styles.title}>
-							{imageList()[currentIndex()]?.title || props.title || "Image Viewer"}
+							{imageList()[currentIndex()]?.title ||
+								props.title ||
+								"Image Viewer"}
 						</span>
 						<Show when={imageList()[currentIndex()]?.date}>
-							<span class={styles.date}>{imageList()[currentIndex()]?.date}</span>
+							<span class={styles.date}>
+								{imageList()[currentIndex()]?.date}
+							</span>
 						</Show>
 					</div>
 					<div class={styles.actions}>
@@ -199,42 +212,62 @@ export function ImageViewer(props: ImageViewerProps) {
 				</div>
 
 				<div class={styles.viewport}>
-					<Carousel 
-						setApi={setApi} 
-						class={styles.carousel} 
-						opts={{ 
+					<Carousel
+						setApi={setApi}
+						class={styles.carousel}
+						opts={{
 							loop: true,
-							watchDrag: !isZoomed()
+							watchDrag: !isZoomed(),
 						}}
 					>
 						<CarouselContent class={styles.carouselContent}>
 							<For each={imageList()}>
 								{(image, index) => (
 									<CarouselItem class={styles.carouselItem}>
-										<div 
-											class={styles.slideContent}
-											onClick={props.onClose}
-										>
-											<Show when={!hasError() || currentIndex() !== index()} fallback={
-												<div class={styles.errorContainer}>
-													<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-														<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-													</svg>
-													<p>Failed to load image</p>
-													<span class={styles.errorPath}>{image.src}</span>
-												</div>
-											}>
+										<div class={styles.slideContent} onClick={props.onClose}>
+											<Show
+												when={!hasError() || currentIndex() !== index()}
+												fallback={
+													<div class={styles.errorContainer}>
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															width="48"
+															height="48"
+															viewBox="0 0 24 24"
+															fill="none"
+															stroke="currentColor"
+															stroke-width="2"
+															stroke-linecap="round"
+															stroke-linejoin="round"
+														>
+															<circle cx="12" cy="12" r="10" />
+															<line x1="12" y1="8" x2="12" y2="12" />
+															<line x1="12" y1="16" x2="12.01" y2="16" />
+														</svg>
+														<p>Failed to load image</p>
+														<span class={styles.errorPath}>{image.src}</span>
+													</div>
+												}
+											>
 												<div
 													class={styles.imageContainer}
-													classList={{ [styles.zoomed]: isZoomed() && currentIndex() === index() }}
+													classList={{
+														[styles.zoomed]:
+															isZoomed() && currentIndex() === index(),
+													}}
 													onClick={(e) => toggleZoom(e)}
 												>
 													<img
 														src={image.src}
 														alt={image.title}
-														classList={{ [styles.zoomedImg]: isZoomed() && currentIndex() === index() }}
+														classList={{
+															[styles.zoomedImg]:
+																isZoomed() && currentIndex() === index(),
+														}}
 														draggable={false}
-														onError={() => currentIndex() === index() && setHasError(true)}
+														onError={() =>
+															currentIndex() === index() && setHasError(true)
+														}
 													/>
 												</div>
 											</Show>
@@ -244,22 +277,21 @@ export function ImageViewer(props: ImageViewerProps) {
 							</For>
 						</CarouselContent>
 						<Show when={imageList().length > 1}>
-							<CarouselPrevious 
+							<CarouselPrevious
 								class={`${styles.navBtn} ${styles.navBtnPrev} ${!showUI() ? styles.hidden : ""}`}
 							/>
-							<CarouselNext 
+							<CarouselNext
 								class={`${styles.navBtn} ${styles.navBtnNext} ${!showUI() ? styles.hidden : ""}`}
 							/>
 						</Show>
 					</Carousel>
 				</div>
 
-				<div 
-					class={styles.footer}
-					classList={{ [styles.hidden]: !showUI() }}
-				>
+				<div class={styles.footer} classList={{ [styles.hidden]: !showUI() }}>
 					<Show when={imageList().length > 1}>
-						<span class={styles.counter}>{currentIndex() + 1} / {imageList().length}</span>
+						<span class={styles.counter}>
+							{currentIndex() + 1} / {imageList().length}
+						</span>
 					</Show>
 					<span>Click to {isZoomed() ? "Reset" : "Zoom"}</span>
 				</div>

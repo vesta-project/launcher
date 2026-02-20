@@ -1,20 +1,26 @@
-import { Component, Show, createSignal, createResource, For } from "solid-js";
-import { Dialog, DialogContent } from "@ui/dialog/dialog";
-import Button from "@ui/button/button";
-import { authStore } from "@stores/auth";
-import styles from "./session-expired-dialog.module.css";
-import { removeAccount, getAccounts, setActiveAccount, type Account } from "@utils/auth";
 import { useNavigate } from "@solidjs/router";
+import { authStore } from "@stores/auth";
 import { invoke } from "@tauri-apps/api/core";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { ResourceAvatar } from "@ui/avatar";
+import Button from "@ui/button/button";
+import { Dialog, DialogContent } from "@ui/dialog/dialog";
+import {
+	type Account,
+	getAccounts,
+	removeAccount,
+	setActiveAccount,
+} from "@utils/auth";
+import { Component, createResource, createSignal, For, Show } from "solid-js";
+import styles from "./session-expired-dialog.module.css";
 
 const SessionExpiredDialog: Component = () => {
 	const { expiredAccount, setExpiredAccount } = authStore;
 	const navigate = useNavigate();
 	const [view, setView] = createSignal<"expired" | "switch">("expired");
-	
-	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
+
+	const [accounts, { refetch: refetchAccounts }] =
+		createResource<Account[]>(getAccounts);
 
 	const isNonClosable = () => {
 		const acc = expiredAccount();
@@ -55,7 +61,7 @@ const SessionExpiredDialog: Component = () => {
 		try {
 			const uuid = account.uuid;
 			const isActive = account.is_active;
-			
+
 			await removeAccount(uuid);
 			setExpiredAccount(null);
 			setView("expired");
@@ -132,8 +138,8 @@ const SessionExpiredDialog: Component = () => {
 						<h2>Session Expired</h2>
 						<p>
 							Your security token for{" "}
-							<span class={styles.username}>{expiredAccount()?.username}</span> has
-							expired or been revoked by Microsoft.
+							<span class={styles.username}>{expiredAccount()?.username}</span>{" "}
+							has expired or been revoked by Microsoft.
 						</p>
 					</div>
 
@@ -164,9 +170,9 @@ const SessionExpiredDialog: Component = () => {
 
 				<Show when={view() === "switch"}>
 					<div class={styles.header}>
-						<Button 
-							variant="ghost" 
-							size="sm" 
+						<Button
+							variant="ghost"
+							size="sm"
 							onClick={() => setView("expired")}
 							style={{ position: "absolute", left: "16px", top: "16px" }}
 						>
@@ -188,9 +194,13 @@ const SessionExpiredDialog: Component = () => {
 										size={32}
 									/>
 									<div class={styles["account-info"]}>
-										<span class={styles["account-name"]}>{account.username}</span>
+										<span class={styles["account-name"]}>
+											{account.username}
+										</span>
 										<Show when={account.is_expired}>
-											<span class={styles["account-status-expired"]}>Expired</span>
+											<span class={styles["account-status-expired"]}>
+												Expired
+											</span>
 										</Show>
 									</div>
 									<Show when={account.uuid === expiredAccount()?.uuid}>

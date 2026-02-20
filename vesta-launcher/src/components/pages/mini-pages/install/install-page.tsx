@@ -1,20 +1,19 @@
-import {
-	createSignal,
-	Show,
-	createMemo,
-	onMount,
-	createEffect,
-	batch,
-	createResource,
-} from "solid-js";
-import { showToast } from "@ui/toast/toast";
+import CubeIcon from "@assets/cube.svg";
+import GlobeIcon from "@assets/earth-globe.svg";
+import SearchIcon from "@assets/search.svg";
+import { MiniRouter } from "@components/page-viewer/mini-router";
+import { router } from "@components/page-viewer/page-viewer";
+import { ResourceVersion, resources, SourcePlatform } from "@stores/resources";
+import { open } from "@tauri-apps/plugin-dialog";
 import { Badge } from "@ui/badge";
 import { Separator } from "@ui/separator/separator";
-import { createInstance, installInstance, getInstance } from "@utils/instances";
-import { type Instance } from "@utils/instances";
-import { router } from "@components/page-viewer/page-viewer";
-import { MiniRouter } from "@components/page-viewer/mini-router";
-import { open } from "@tauri-apps/plugin-dialog";
+import { showToast } from "@ui/toast/toast";
+import {
+	createInstance,
+	getInstance,
+	type Instance,
+	installInstance,
+} from "@utils/instances";
 import {
 	getModpackInfo,
 	getModpackInfoFromUrl,
@@ -22,11 +21,16 @@ import {
 	installModpackFromZip,
 	ModpackInfo,
 } from "@utils/modpacks";
-import { resources, SourcePlatform, ResourceVersion } from "@stores/resources";
+import {
+	batch,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	onMount,
+	Show,
+} from "solid-js";
 import { InstallForm } from "./components/InstallForm";
-import SearchIcon from "@assets/search.svg";
-import GlobeIcon from "@assets/earth-globe.svg";
-import CubeIcon from "@assets/cube.svg";
 import styles from "./install-page.module.css";
 
 interface InstallPageProps {
@@ -511,7 +515,8 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 									<span
 										class={styles["resource-name"]}
 										classList={{
-											[styles["is-analyzing"]]: !modpackInfo() && !props.projectName,
+											[styles["is-analyzing"]]:
+												!modpackInfo() && !props.projectName,
 										}}
 									>
 										{props.projectName ||
@@ -529,7 +534,9 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 												{modpackInfo()?.minecraftVersion ||
 													props.initialVersion}
 											</span>
-											<span class={`${styles["meta-tag"]} ${styles.capitalize}`}>
+											<span
+												class={`${styles["meta-tag"]} ${styles.capitalize}`}
+											>
 												{modpackInfo()?.modloader || props.initialModloader}
 											</span>
 										</div>
@@ -558,7 +565,10 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 							</div>
 
 							<div class={styles["modpack-import-container"]}>
-								<div class={styles["modpack-import-card"]} onClick={handleLocalImport}>
+								<div
+									class={styles["modpack-import-card"]}
+									onClick={handleLocalImport}
+								>
 									<div class={styles["card-icon"]}>
 										<CubeIcon />
 									</div>
@@ -584,7 +594,9 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 								</div>
 								<div
 									class={styles["modpack-import-card"]}
-									onClick={() => activeRouter()?.updateQuery("source", "url", true)}
+									onClick={() =>
+										activeRouter()?.updateQuery("source", "url", true)
+									}
 								>
 									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
 										<GlobeIcon />
@@ -734,7 +746,9 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 								});
 							} else if (props.close) props.close();
 							else
-								activeRouter()?.navigate(props.projectName ? "/resources" : "/home");
+								activeRouter()?.navigate(
+									props.projectName ? "/resources" : "/home",
+								);
 						}}
 						isInstalling={isInstalling()}
 						isFetchingMetadata={isFetchingMetadata() || projectVersions.loading}
@@ -746,4 +760,3 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 }
 
 export default InstallPage;
-

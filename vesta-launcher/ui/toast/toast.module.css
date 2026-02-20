@@ -19,26 +19,11 @@
 
 .toast {
 	pointer-events: auto;
-	display: flex;
-	flex-direction: row;
-	justify-content: space-between;
-	align-items: start;
-	gap: 8px;
-	border: 1px solid hsl(var(--color__primary-hue) 20% 60% / 8%);
-	border-radius: 6px;
-	padding: 12px;
-	background-color: hsl(var(--color__primary-hue) 25% 20%);
-	box-shadow:
-		0 10px 15px -3px rgb(0 0 0 / 10%),
-		0 4px 6px -4px rgb(0 0 0 / 10%);
-
-	& svg {
-		visibility: hidden;
-	}
-
-	&:hover svg {
-		visibility: visible;
-	}
+	outline: none;
+	background: transparent;
+	border: none;
+	padding: 0;
+	box-shadow: none;
 }
 
 .toast[data-opened] {

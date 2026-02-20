@@ -1,5 +1,5 @@
-import { createStore } from "solid-js/store";
 import { invoke } from "@tauri-apps/api/core";
+import { createStore } from "solid-js/store";
 
 export interface PinnedPage {
 	id: number;

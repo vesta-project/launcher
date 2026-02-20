@@ -1,10 +1,10 @@
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import type { ProgressRootProps } from "@kobalte/core/progress";
 import * as ProgressPrimitive from "@kobalte/core/progress";
+import { PROGRESS_INDETERMINATE } from "@utils/notifications";
 import clsx from "clsx";
 import type { ParentProps, ValidComponent } from "solid-js";
 import { splitProps } from "solid-js";
-import { PROGRESS_INDETERMINATE } from "@utils/notifications";
 import styles from "./progress.module.css";
 
 export const ProgressLabel = ProgressPrimitive.Label;
@@ -72,7 +72,10 @@ export const Progress = <T extends ValidComponent = "div">(
 		>
 			{local.children}
 			<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-				<ProgressPrimitive.Track class={styles["progress__track"]} style={{ flex: 1 }}>
+				<ProgressPrimitive.Track
+					class={styles["progress__track"]}
+					style={{ flex: 1 }}
+				>
 					<ProgressPrimitive.Fill
 						class={clsx(
 							styles["progress__fill"],

@@ -503,13 +503,21 @@ body {
 		box-shadow: hsl(0deg 0% 0% / 0.12) 4px 4px 8px;
 	}
 }
-#app > div > header > div._page-viewer-navbar-right_12sex_28 > div > div > button:nth-child(1) > svg > path
-/* Dark mode hover for standalone controls */
-:root:not([data-theme="light"]) .standalone-page-viewer__controls button:hover {
+#app
+	> div
+	> header
+	> div._page-viewer-navbar-right_12sex_28
+	> div
+	> div
+	> button:nth-child(1)
+	> svg
+	> path
+	/* Dark mode hover for standalone controls */
+	:root:not([data-theme="light"])
+	.standalone-page-viewer__controls
+	button:hover {
 	background: hsla(0, 0%, 50%, 0.15);
 }
-
-
 
 /* Light mode + Flat/Bordered style: fully opaque surfaces with hue tint */
 :root[data-theme="light"]:is([data-style="flat"], [data-bordered="true"]) {
@@ -814,40 +822,40 @@ button {
 
 /* Instance Details Resources Table Checkbox Overrides */
 .v-instance-resources-table .v-checkbox__control {
-width: 22px;
-height: 22px;
-border-radius: 4px;
-background: rgba(255, 255, 255, 0.1);
-backdrop-filter: blur(4px);
-border: 1px solid rgba(255, 255, 255, 0.2);
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	background: rgba(255, 255, 255, 0.1);
+	backdrop-filter: blur(4px);
+	border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .v-instance-resources-table tr[data-selected] .v-checkbox__control,
 .v-instance-resources-table tr.row-selected .v-checkbox__control {
-background: var(--accent-primary) !important;
-border-color: var(--accent-primary) !important;
+	background: var(--accent-primary) !important;
+	border-color: var(--accent-primary) !important;
 }
 
 /* Specific overrides for the small checkboxes in the table rows/headers */
 .v-table-checkbox .v-checkbox__control {
-width: 32px !important;
-height: 32px !important;
-background: var(--surface-base) !important;
-border: 2px solid var(--border-subtle) !important;
+	width: 32px !important;
+	height: 32px !important;
+	background: var(--surface-base) !important;
+	border: 2px solid var(--border-subtle) !important;
 }
 
 .v-table-checkbox[data-checked] .v-checkbox__control,
 .v-table-checkbox[data-indeterminate] .v-checkbox__control {
-background: var(--accent-primary) !important;
-border-color: var(--accent-primary) !important;
-color: white !important;
+	background: var(--accent-primary) !important;
+	border-color: var(--accent-primary) !important;
+	color: white !important;
 }
 
 /* Settings Page Toggle Group Full Width */
 .settings-field--stack .v-toggle-group {
-width: 100% !important;
+	width: 100% !important;
 }
 
 .settings-field--stack .v-toggle-group__item {
-flex: 1 !important;
+	flex: 1 !important;
 }

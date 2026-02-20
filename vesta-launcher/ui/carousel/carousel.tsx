@@ -1,3 +1,5 @@
+import Button, { type ButtonProps } from "@ui/button/button";
+import { cn } from "@utils/ui";
 import type { CreateEmblaCarouselType } from "embla-carousel-solid";
 import createEmblaCarousel from "embla-carousel-solid";
 import type { Accessor, Component, ComponentProps, VoidProps } from "solid-js";
@@ -10,9 +12,6 @@ import {
 	splitProps,
 	useContext,
 } from "solid-js";
-
-import Button, { type ButtonProps } from "@ui/button/button";
-import { cn } from "@utils/ui";
 import styles from "./carousel.module.css";
 
 export type CarouselApi = CreateEmblaCarouselType[1];
@@ -37,8 +36,9 @@ type CarouselContextProps = {
 	canScrollNext: Accessor<boolean>;
 } & CarouselProps;
 
-const CarouselContext =
-	createContext<Accessor<CarouselContextProps> | null>(null);
+const CarouselContext = createContext<Accessor<CarouselContextProps> | null>(
+	null,
+);
 
 const useCarousel = () => {
 	const context = useContext(CarouselContext);

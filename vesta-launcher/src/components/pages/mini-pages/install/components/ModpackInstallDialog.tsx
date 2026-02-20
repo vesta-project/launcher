@@ -1,21 +1,21 @@
-import { createSignal, createResource, Show } from "solid-js";
 import {
 	Dialog,
 	DialogContent,
+	DialogDescription,
 	DialogHeader,
 	DialogTitle,
-	DialogDescription,
 } from "@ui/dialog/dialog";
-import { InstallForm } from "./InstallForm";
+import { showToast } from "@ui/toast/toast";
+import { Instance } from "@utils/instances";
 import {
 	getModpackInfo,
 	getModpackInfoFromUrl,
-	installModpackFromZip,
 	installModpackFromUrl,
+	installModpackFromZip,
 	ModpackInfo,
 } from "@utils/modpacks";
-import { showToast } from "@ui/toast/toast";
-import { Instance } from "@utils/instances";
+import { createResource, createSignal, Show } from "solid-js";
+import { InstallForm } from "./InstallForm";
 
 interface ModpackInstallDialogProps {
 	isOpen: boolean;

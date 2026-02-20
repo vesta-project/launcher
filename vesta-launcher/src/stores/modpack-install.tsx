@@ -1,5 +1,5 @@
-import { createSignal } from "solid-js";
 import { ModpackInstallDialog } from "@components/pages/mini-pages/install/components/ModpackInstallDialog";
+import { createSignal } from "solid-js";
 
 const [source, setSource] = createSignal<{
 	type: "zip" | "url";

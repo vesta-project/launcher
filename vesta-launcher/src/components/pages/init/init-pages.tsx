@@ -1,17 +1,8 @@
-import { useNavigate, NavigateOptions } from "@solidjs/router";
+import { NavigateOptions, useNavigate } from "@solidjs/router";
 import networkStore from "@stores/network";
 import { invoke } from "@tauri-apps/api/core";
-import { openExternal as openUrl } from "@utils/external-link";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import Button from "@ui/button/button";
-import {
-	Slider,
-	SliderFill,
-	SliderLabel,
-	SliderThumb,
-	SliderTrack,
-	SliderValueLabel,
-} from "@ui/slider/slider";
 import {
 	Combobox,
 	ComboboxContent,
@@ -22,13 +13,35 @@ import {
 	ComboboxItemLabel,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
+import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
+import { Separator } from "@ui/separator/separator";
+import {
+	Slider,
+	SliderFill,
+	SliderLabel,
+	SliderThumb,
+	SliderTrack,
+	SliderValueLabel,
+} from "@ui/slider/slider";
 import {
 	TextFieldInput,
 	TextFieldLabel,
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import { openExternal as openUrl } from "@utils/external-link";
+import {
+	type CreateInstanceData,
+	createInstance,
+	DEFAULT_ICONS,
+	getMinecraftVersions,
+	getStableIconId,
+	type Instance,
+	installInstance,
+	isDefaultIcon,
+	type PistonMetadata,
+} from "@utils/instances";
 import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
@@ -46,26 +59,13 @@ import {
 	PRESET_THEMES,
 	ThemeConfig,
 } from "../../../themes/presets";
-import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
-import styles from "./init.module.css";
 import {
-	updateThemeConfigLocal,
 	currentThemeConfig,
+	updateThemeConfigLocal,
 } from "../../../utils/config-sync";
+import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
 import { ModdingGuideContent } from "../mini-pages/modding-guide/guide";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import { Separator } from "@ui/separator/separator";
-import {
-	createInstance,
-	DEFAULT_ICONS,
-	getMinecraftVersions,
-	getStableIconId,
-	installInstance,
-	isDefaultIcon,
-	type CreateInstanceData,
-	type Instance,
-	type PistonMetadata,
-} from "@utils/instances";
+import styles from "./init.module.css";
 
 interface JavaRequirement {
 	major_version: number;
@@ -199,9 +199,10 @@ function InitFirstPage(props: InitPagesProps) {
 				</Button>
 				<Show when={networkStore.isOffline()}>
 					<p style="color: #ff5555; font-size: 13px; font-weight: 600; margin-top: 8px; text-align: center; max-width: 300px; line-height: 1.4;">
-						No internet connection detected. <br/>
+						No internet connection detected. <br />
 						<span style="font-weight: 400; opacity: 0.8; font-size: 11px;">
-							You'll need a connection to sign in with Microsoft and download the initial game components.
+							You'll need a connection to sign in with Microsoft and download
+							the initial game components.
 						</span>
 					</p>
 				</Show>
@@ -519,11 +520,7 @@ function InitInstallationPage(props: InitPagesProps) {
 	const uploadedIcons = createMemo(() => {
 		const result = [...customIconsThisSession()];
 		const current = iconPath();
-		if (
-			current &&
-			!isDefaultIcon(current) &&
-			!result.includes(current)
-		) {
+		if (current && !isDefaultIcon(current) && !result.includes(current)) {
 			return [current, ...result];
 		}
 		return result;
@@ -700,7 +697,11 @@ function InitInstallationPage(props: InitPagesProps) {
 				>
 					<div style={{ flex: "0 0 auto" }}>
 						<IconPicker
-							value={iconPath() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]}
+							value={
+								iconPath() ||
+								getStableIconId(DEFAULT_ICONS[0]) ||
+								DEFAULT_ICONS[0]
+							}
 							onSelect={setIconPath}
 							uploadedIcons={uploadedIcons()}
 							showHint={true}
@@ -738,7 +739,10 @@ function InitInstallationPage(props: InitPagesProps) {
 							>
 								<For each={availableModloaders()}>
 									{(loader) => (
-										<ToggleGroupItem value={loader} class="badge badge--pill badge--clickable badge--variant-surface">
+										<ToggleGroupItem
+											value={loader}
+											class="badge badge--pill badge--clickable badge--variant-surface"
+										>
 											{loader.charAt(0).toUpperCase() + loader.slice(1)}
 										</ToggleGroupItem>
 									)}
@@ -748,7 +752,9 @@ function InitInstallationPage(props: InitPagesProps) {
 
 						<div style={{ display: "flex", gap: "15px" }}>
 							<div class={styles["init-form-field"]} style={{ flex: 1 }}>
-								<label class={styles["init-form-label"]}>Minecraft Version</label>
+								<label class={styles["init-form-label"]}>
+									Minecraft Version
+								</label>
 								<Combobox
 									options={
 										metadata()
@@ -1181,7 +1187,8 @@ function InitLoginPage(props: InitPagesProps) {
 									No internet connection detected.
 								</p>
 								<p style="color: rgba(255,255,255,0.4); text-align: center; font-size: 11px; max-width: 280px; margin: 0 auto 16px; line-height: 1.4;">
-									A connection is required to safely authenticate your account with Microsoft's secure login services.
+									A connection is required to safely authenticate your account
+									with Microsoft's secure login services.
 								</p>
 							</Show>
 
@@ -1224,7 +1231,10 @@ function InitLoginPage(props: InitPagesProps) {
 					</Show>
 
 					<Show when={isAuthenticating()}>
-						<div class={styles["login-page__auth-box"]} style={{ padding: "24px 32px" }}>
+						<div
+							class={styles["login-page__auth-box"]}
+							style={{ padding: "24px 32px" }}
+						>
 							<div
 								style={{
 									display: "flex",
@@ -2127,4 +2137,3 @@ export {
 	InitDataStoragePage,
 	InitInstallationPage,
 };
-

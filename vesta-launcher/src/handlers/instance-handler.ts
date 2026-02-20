@@ -1,12 +1,12 @@
-import { showToast } from "@ui/toast/toast";
 import { dialogStore } from "@stores/dialog-store";
+import { showToast } from "@ui/toast/toast";
 import {
-	Instance,
+	deleteInstance,
 	duplicateInstance,
+	Instance,
+	launchInstance,
 	repairInstance,
 	resetInstance,
-	deleteInstance,
-	launchInstance,
 } from "@utils/instances";
 
 /**
@@ -16,7 +16,7 @@ export const handleDuplicate = async (instance: Instance) => {
 	const newName = await dialogStore.prompt(
 		"Duplicate Instance",
 		"Enter name for the copy:",
-		{ defaultValue: `${instance.name} (Copy)` }
+		{ defaultValue: `${instance.name} (Copy)` },
 	);
 	if (newName) {
 		try {
@@ -43,7 +43,7 @@ export const handleRepair = async (instance: Instance) => {
 	const confirmed = await dialogStore.confirm(
 		"Repair Instance",
 		`Are you sure you want to repair "${instance.name}"? This will re-verify all game files and modloader versions.`,
-		{ severity: "info" }
+		{ severity: "info" },
 	);
 
 	if (confirmed) {
@@ -71,7 +71,7 @@ export const handleHardReset = async (instance: Instance) => {
 	const confirmed = await dialogStore.confirm(
 		"Hard Reset",
 		`This will wipe the ENTIRE instance folder for "${instance.name}".\n\nAll worlds, screenshots, and custom mods will be DELETED! This action cannot be undone.\n\nAre you absolutely sure?`,
-		{ severity: "error", okLabel: "Hard Reset", isDestructive: true }
+		{ severity: "error", okLabel: "Hard Reset", isDestructive: true },
 	);
 
 	if (confirmed) {
@@ -102,7 +102,7 @@ export const handleUninstall = async (
 	const confirmed = await dialogStore.confirm(
 		"Uninstall Instance",
 		`Are you sure you want to uninstall "${instance.name}"?\n\nThis will permanently delete the instance and its files.`,
-		{ severity: "warning", okLabel: "Uninstall", isDestructive: true }
+		{ severity: "warning", okLabel: "Uninstall", isDestructive: true },
 	);
 
 	if (confirmed) {

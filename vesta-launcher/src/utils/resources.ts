@@ -1,9 +1,9 @@
+import type { Instance } from "@stores/instances";
 import {
+	isGameVersionCompatible,
 	ResourceProject,
 	ResourceVersion,
-	isGameVersionCompatible,
 } from "@stores/resources";
-import type { Instance } from "@stores/instances";
 
 export interface CompatibilityResult {
 	type: "compatible" | "warning" | "incompatible";

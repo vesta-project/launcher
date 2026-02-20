@@ -1,3 +1,5 @@
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { resolveResourceUrl } from "@utils/assets";
 import {
 	Component,
 	createEffect,
@@ -8,8 +10,6 @@ import {
 	onCleanup,
 	Show,
 } from "solid-js";
-import { invoke, convertFileSrc } from "@tauri-apps/api/core";
-import { resolveResourceUrl } from "@utils/assets";
 import styles from "./avatar.module.css";
 
 export interface ResourceAvatarProps {
@@ -61,14 +61,20 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 	const resolvedUrl = createMemo(() => {
 		if (blobUrl()) return blobUrl();
 		if (playerHeadPath()) return playerHeadPath();
-		if (typeof props.icon === "string" && !props.icon.startsWith("linear-gradient")) {
+		if (
+			typeof props.icon === "string" &&
+			!props.icon.startsWith("linear-gradient")
+		) {
 			return resolveResourceUrl(props.icon);
 		}
 		return null;
 	});
 
 	const backgroundStyle = createMemo(() => {
-		if (typeof props.icon === "string" && props.icon.startsWith("linear-gradient")) {
+		if (
+			typeof props.icon === "string" &&
+			props.icon.startsWith("linear-gradient")
+		) {
 			return { background: props.icon };
 		}
 		return {};
@@ -101,12 +107,18 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 				when={resolvedUrl()}
 				fallback={
 					<Show when={!backgroundStyle().background}>
-						<span class={styles["resource-avatar-fallback"]}>{displayChar()}</span>
+						<span class={styles["resource-avatar-fallback"]}>
+							{displayChar()}
+						</span>
 					</Show>
 				}
 			>
 				{(url) => (
-					<img src={url()} alt={props.name} class={styles["resource-avatar-image"]} />
+					<img
+						src={url()}
+						alt={props.name}
+						class={styles["resource-avatar-image"]}
+					/>
 				)}
 			</Show>
 		</div>

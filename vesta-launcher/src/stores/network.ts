@@ -1,6 +1,6 @@
-import { createSignal, createRoot, onMount } from "solid-js";
-import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { createRoot, createSignal, onMount } from "solid-js";
 
 export type NetworkStatus = "online" | "weak" | "offline";
 

@@ -14,7 +14,10 @@ function Skeleton<T extends ValidComponent = "div">(
 	const [local, others] = splitProps(props as SkeletonRootProps, ["class"]);
 
 	return (
-		<SkeletonPrimitive.Root class={clsx(styles["skeleton"], local.class)} {...others} />
+		<SkeletonPrimitive.Root
+			class={clsx(styles["skeleton"], local.class)}
+			{...others}
+		/>
 	);
 }
 

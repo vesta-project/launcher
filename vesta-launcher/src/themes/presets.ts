@@ -193,7 +193,8 @@ export const PRESET_THEMES: ThemeConfig[] = [
 	{
 		id: "midnight",
 		name: "Midnight",
-		description: "Ultra-dark Midnight mode — pure black surfaces for true blacks",
+		description:
+			"Ultra-dark Midnight mode — pure black surfaces for true blacks",
 		primaryHue: 240, // Dark blue for midnight theme preview
 		style: "solid",
 		colorScheme: "dark",

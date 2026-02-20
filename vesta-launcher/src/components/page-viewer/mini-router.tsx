@@ -99,7 +99,7 @@ class MiniRouter {
 		const [getCanExit, setCanExitSignal] = createSignal<
 			(() => Promise<boolean>) | null
 		>(null);
-		
+
 		this.getCanExit = getCanExit;
 		this.setCanExit = (fn) => setCanExitSignal(() => fn);
 

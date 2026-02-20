@@ -33,7 +33,10 @@
 	border-radius: 6px;
 	background: var(--surface-base);
 	color: var(--text-primary);
-	transition: border-color 0.2s, background-color 0.2s, color 0.2s;
+	transition:
+		border-color 0.2s,
+		background-color 0.2s,
+		color 0.2s;
 	cursor: pointer;
 }
 

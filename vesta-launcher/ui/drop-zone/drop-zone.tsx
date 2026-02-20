@@ -42,27 +42,27 @@ export function DropZone(props: DropZoneProps) {
 		const handleDragEnter = (e: DragEvent) => {
 			e.preventDefault();
 			dragCounter++;
-			
+
 			if (dragCounter === 1) {
 				// Only highlight if we ALREADY have sniffed paths
 				const paths = manager.getSniffedPaths();
 				const filtered = manager.filterPaths(paths, props);
-				
+
 				if (paths.length > 0 && filtered.length > 0) {
 					element.classList.add(styles["drop-zone--active"]);
 				}
-				
+
 				manager.setIsDragActive(true);
 			}
 		};
 
 		const handleDragOver = (e: DragEvent) => {
 			e.preventDefault();
-			
+
 			if (e.dataTransfer) {
 				const paths = manager.getSniffedPaths();
 				const filtered = manager.filterPaths(paths, props);
-				
+
 				// Only show "copy" cursor and highlight if we have matching paths
 				if (paths.length > 0 && filtered.length > 0) {
 					e.dataTransfer.dropEffect = "copy";
@@ -93,10 +93,15 @@ export function DropZone(props: DropZoneProps) {
 			const paths = manager.getSniffedPaths();
 			const filtered = manager.filterPaths(paths, props);
 
-			console.log("[DropZone] Files dropped, paths:", paths, "filtered:", filtered);
+			console.log(
+				"[DropZone] Files dropped, paths:",
+				paths,
+				"filtered:",
+				filtered,
+			);
 
 			if (filtered.length > 0) {
-				props.onFileDrop(filtered.map(p => p.path));
+				props.onFileDrop(filtered.map((p) => p.path));
 			}
 			manager.clearSniffedPaths();
 		};

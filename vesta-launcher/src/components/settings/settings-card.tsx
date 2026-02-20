@@ -1,5 +1,5 @@
-import { Component, JSX, Show } from "solid-js";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import { Component, JSX, Show } from "solid-js";
 import styles from "./settings.module.css";
 
 export interface SettingsCardProps {
@@ -15,17 +15,19 @@ export const SettingsCard: Component<SettingsCardProps> = (props) => {
 	const variant = () => props.variant || "default";
 
 	return (
-		<section 
-			class={styles["settings-card"]} 
-			classList={{ 
+		<section
+			class={styles["settings-card"]}
+			classList={{
 				[styles["settings-card--destructive"]]: props.destructive,
-				[styles[`settings-card--${variant()}`]]: true
+				[styles[`settings-card--${variant()}`]]: true,
 			}}
 		>
 			<Show when={props.header}>
-				<div 
+				<div
 					class={styles["settings-card-header"]}
-					classList={{ [styles["settings-card-header--compact"]]: variant() === "compact" }}
+					classList={{
+						[styles["settings-card-header--compact"]]: variant() === "compact",
+					}}
 				>
 					<div class={styles["settings-card-header--top"]}>
 						<h2 class={styles["settings-card-title"]}>{props.header}</h2>
@@ -38,9 +40,7 @@ export const SettingsCard: Component<SettingsCardProps> = (props) => {
 					</Show>
 				</div>
 			</Show>
-			<div class={styles["settings-card-content"]}>
-				{props.children}
-			</div>
+			<div class={styles["settings-card-content"]}>{props.children}</div>
 		</section>
 	);
 };

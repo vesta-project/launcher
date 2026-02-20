@@ -16,7 +16,7 @@
 		box-shadow 150ms ease,
 		border-color 150ms ease,
 		background-color 150ms ease;
-    cursor: pointer;
+	cursor: pointer;
 }
 
 .select__trigger:focus {
@@ -26,7 +26,7 @@
 }
 
 .select__trigger:hover {
-    background-color: var(--surface-overlay);
+	background-color: var(--surface-overlay);
 }
 
 .select__trigger[data-invalid] {
@@ -42,20 +42,20 @@
 	height: 16px;
 	width: 16px;
 	flex: 0 0 16px;
-    opacity: 0.5;
-    margin-left: 8px;
+	opacity: 0.5;
+	margin-left: 8px;
 }
 
 .select__content {
 	background-color: var(--surface-overlay);
-    backdrop-filter: var(--liquid-backdrop-filter);
-    -webkit-backdrop-filter: var(--liquid-backdrop-filter);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	border-radius: 6px;
 	border: 1px solid var(--border-subtle);
 	box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
 	transform-origin: var(--kb-select-content-transform-origin);
 	animation: select__content-hide 200ms ease-in forwards;
-    z-index: 1000;
+	z-index: 1000;
 }
 
 .select__content[data-expanded] {
@@ -66,9 +66,9 @@
 	overflow-y: auto;
 	max-height: 300px;
 	padding: 4px;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
 }
 
 .select__item {
@@ -82,7 +82,7 @@
 	color: var(--text-secondary);
 	user-select: none;
 	outline: none;
-    cursor: default;
+	cursor: default;
 }
 
 .select__item[data-disabled] {
@@ -98,12 +98,12 @@
 }
 
 .select__item[data-selected] {
-    color: var(--interactive-base);
-    font-weight: 600;
+	color: var(--interactive-base);
+	font-weight: 600;
 }
 
 .select__item[data-highlighted][data-selected] {
-    color: var(--text-on-accent) !important;
+	color: var(--text-on-accent) !important;
 }
 
 .select__item-indicator {
@@ -115,7 +115,7 @@
 }
 
 .select__label {
-    padding: 0 12px;
+	padding: 0 12px;
 	margin-bottom: 4px;
 	color: var(--text-tertiary);
 	font-size: 12px;

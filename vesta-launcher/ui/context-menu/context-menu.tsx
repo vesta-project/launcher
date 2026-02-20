@@ -54,7 +54,9 @@ function ContextMenuItem<T extends ValidComponent = "div">(
 ) {
 	const [_, rest] = splitProps(props as ContextMenuItemProps, ["class"]);
 
-	return <ContextMenuPrimitive.Item class={styles["context-menu__item"]} {...rest} />;
+	return (
+		<ContextMenuPrimitive.Item class={styles["context-menu__item"]} {...rest} />
+	);
 }
 
 const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
@@ -62,7 +64,12 @@ const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
 function ContextMenuShortcut(props: ComponentProps<"span">) {
 	const [_, rest] = splitProps(props, ["class"]);
 
-	return <span class={clsx(styles["context-menu__shortcut"], props.class)} {...rest} />;
+	return (
+		<span
+			class={clsx(styles["context-menu__shortcut"], props.class)}
+			{...rest}
+		/>
+	);
 }
 
 type ContextMenuSeparatorProps =
@@ -124,7 +131,11 @@ function ContextMenuSubContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.SubContent
-				class={clsx(styles["context-menu__sub-content"], "liquid-glass", props.class)}
+				class={clsx(
+					styles["context-menu__sub-content"],
+					"liquid-glass",
+					props.class,
+				)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
@@ -143,7 +154,10 @@ function ContextMenuCheckboxItem<T extends ValidComponent = "div">(
 	]);
 
 	return (
-		<ContextMenuPrimitive.CheckboxItem class={clsx(styles["context-menu__select"], props.class)} {...rest}>
+		<ContextMenuPrimitive.CheckboxItem
+			class={clsx(styles["context-menu__select"], props.class)}
+			{...rest}
+		>
 			<span class={styles["context-menu__select__span"]}>
 				<ContextMenuPrimitive.ItemIndicator>
 					<svg
@@ -197,7 +211,10 @@ function ContextMenuRadioItem<T extends ValidComponent = "div">(
 	]);
 
 	return (
-		<ContextMenuPrimitive.RadioItem class={clsx(styles["context-menu__select"], props.class)} {...rest}>
+		<ContextMenuPrimitive.RadioItem
+			class={clsx(styles["context-menu__select"], props.class)}
+			{...rest}
+		>
 			<span class={styles["context-menu__select__span"]}>
 				<ContextMenuPrimitive.ItemIndicator>
 					<svg

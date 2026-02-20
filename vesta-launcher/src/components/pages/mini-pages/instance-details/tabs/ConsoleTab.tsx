@@ -1,30 +1,26 @@
-import {
-	For,
-	Show,
-	createEffect,
-	createMemo,
-	onCleanup,
-	onMount,
-	createSignal,
-} from "solid-js";
-import { consoleStore, type LogLevel } from "@stores/console";
-import { instancesState } from "@stores/instances";
-import styles from "../instance-details.module.css";
-import Button from "@ui/button/button";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	Popover,
-	PopoverContent,
-	PopoverTrigger,
-} from "@ui/popover/popover";
-import { TextField } from "@ui/text-field/text-field";
+import BackArrowIcon from "@assets/back-arrow.svg";
 import FolderIcon from "@assets/folder.svg";
-import TrashIcon from "@assets/trash.svg";
-import SearchIcon from "@assets/search.svg";
 import HistoryIcon from "@assets/history.svg";
 import RefreshIcon from "@assets/refresh.svg";
-import BackArrowIcon from "@assets/back-arrow.svg";
+import SearchIcon from "@assets/search.svg";
+import TrashIcon from "@assets/trash.svg";
+import { consoleStore, type LogLevel } from "@stores/console";
+import { instancesState } from "@stores/instances";
+import Button from "@ui/button/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
+import { TextField } from "@ui/text-field/text-field";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import clsx from "clsx";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
+import styles from "../instance-details.module.css";
 
 const ArrowUpIcon = (props: { class?: string }) => (
 	<svg
@@ -156,11 +152,13 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							? "Viewing Session Logs"
 							: consoleStore.state.currentLogPath
 								? `Viewing Historical Log: ${consoleStore.state.currentLogPath.split(/[/\\]/).pop()}`
-								: "Viewing Historical Logs"
-						}
+								: "Viewing Historical Logs"}
 					</span>
 					<Show
-						when={!consoleStore.state.isLive && instancesState.runningIds[props.instanceSlug]}
+						when={
+							!consoleStore.state.isLive &&
+							instancesState.runningIds[props.instanceSlug]
+						}
 					>
 						<Tooltip placement="top">
 							<TooltipTrigger>
@@ -180,7 +178,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 				<div class={styles["console-toolbar-buttons"]}>
 					<div class={styles["console-search-container"]}>
-						<div 
+						<div
 							class={styles["console-search-wrapper"]}
 							classList={{ [styles.expanded]: isSearchExpanded() }}
 						>
@@ -220,9 +218,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						<TooltipTrigger
 							as={Button}
 							variant="ghost"
-								size="md"
-								onClick={props.openLogsFolder}
-								class={styles["console-tool-btn"]}
+							size="md"
+							onClick={props.openLogsFolder}
+							class={styles["console-tool-btn"]}
 						>
 							<FolderIcon />
 						</TooltipTrigger>
@@ -236,7 +234,10 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									as={Button}
 									variant="ghost"
 									size="md"
-									class={clsx(styles["console-tool-btn"], historyOpen() && styles["active"])}
+									class={clsx(
+										styles["console-tool-btn"],
+										historyOpen() && styles["active"],
+									)}
 								>
 									<HistoryIcon />
 								</PopoverTrigger>
@@ -244,7 +245,9 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							<TooltipContent>Log History</TooltipContent>
 						</Tooltip>
 						<PopoverContent class={styles["console-history-popover"]}>
-							<div class={styles["history-popover-header"]}>Select Log File</div>
+							<div class={styles["history-popover-header"]}>
+								Select Log File
+							</div>
 							<div class={styles["history-popover-list"]}>
 								<For each={consoleStore.state.history}>
 									{(file) => (
@@ -255,7 +258,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 											}}
 											class={clsx(
 												styles["history-item"],
-												consoleStore.state.currentLogPath === file.path && styles["active"],
+												consoleStore.state.currentLogPath === file.path &&
+													styles["active"],
 											)}
 										>
 											<span class={styles["history-name"]}>{file.name}</span>
@@ -291,7 +295,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							onClick={() => consoleStore.toggleFilterLevel(level)}
 							class={clsx(
 								styles["filter-tag"],
-								consoleStore.state.filterLevels.includes(level) && styles["active"],
+								consoleStore.state.filterLevels.includes(level) &&
+									styles["active"],
 							)}
 							style={{ "--level-color": getLevelColor(level) }}
 						>
@@ -332,10 +337,15 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 										<div class={styles["console-gutter"]}>{line.id}</div>
 										<div class={styles["console-line-content"]}>
 											<Show when={line.timestamp}>
-												<span class={styles["log-time"]}>[{line.timestamp}]</span>
+												<span class={styles["log-time"]}>
+													[{line.timestamp}]
+												</span>
 											</Show>
 											<Show when={line.level !== "UNKNOWN"}>
-												<span class={styles["log-level"]} style={{ color: getLevelColor(line.level) }}>
+												<span
+													class={styles["log-level"]}
+													style={{ color: getLevelColor(line.level) }}
+												>
 													[{line.thread}/{line.level}]:
 												</span>
 											</Show>

@@ -1,6 +1,6 @@
 import { router } from "@components/page-viewer/page-viewer";
-import { openExternal } from "@utils/external-link";
 import LauncherButton from "@ui/button/button";
+import { openExternal } from "@utils/external-link";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./login-page.module.css";
 
@@ -92,7 +92,10 @@ function LoginPage(_props: LoginPageProps) {
 					<Show when={errorMessage()}>
 						<p class={styles["login-page__error"]}>{errorMessage()}</p>
 					</Show>
-					<LauncherButton onClick={handleLogin} class={styles["login-page__button"]}>
+					<LauncherButton
+						onClick={handleLogin}
+						class={styles["login-page__button"]}
+					>
 						Sign in with Microsoft
 					</LauncherButton>
 				</Show>
@@ -112,7 +115,10 @@ function LoginPage(_props: LoginPageProps) {
 							</LauncherButton>
 						</div>
 						<div class={styles["login-page__button-group"]}>
-							<LauncherButton onClick={openUrl} class={styles["login-page__button"]}>
+							<LauncherButton
+								onClick={openUrl}
+								class={styles["login-page__button"]}
+							>
 								Open Sign-in Page
 							</LauncherButton>
 							<LauncherButton

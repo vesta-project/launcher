@@ -1,12 +1,12 @@
-import { Show, createMemo } from "solid-js";
-import styles from "../instance-details.module.css";
 import { SettingsCard, SettingsField } from "@components/settings";
 import Button from "@ui/button/button";
-import { IconPicker, areIconsEqual } from "@ui/icon-picker/icon-picker";
 import {
-	TextFieldInput,
-	TextFieldRoot,
-} from "@ui/text-field/text-field";
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
+} from "@ui/context-menu/context-menu";
+import { areIconsEqual, IconPicker } from "@ui/icon-picker/icon-picker";
 import {
 	Select,
 	SelectContent,
@@ -20,13 +20,10 @@ import {
 	SliderThumb,
 	SliderTrack,
 } from "@ui/slider/slider";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from "@ui/context-menu/context-menu";
+import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { createMemo, Show } from "solid-js";
+import styles from "../instance-details.module.css";
 
 interface SettingsTabProps {
 	instance: any;
@@ -117,7 +114,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							/>
 						</TextFieldRoot>
 						<p class={styles["metadata-description"]}>
-							Choose an icon and a name for this instance. These will be visible in your library.
+							Choose an icon and a name for this instance. These will be visible
+							in your library.
 						</p>
 					</div>
 				</div>
@@ -174,7 +172,9 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							itemComponent={(p) => (
 								<SelectItem item={p.item}>
 									<div style="display: flex; flex-direction: column; line-height: 1.2;">
-										<span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">{p.item.rawValue.label}</span>
+										<span style="font-weight: 600; font-size: 13px; color: var(--text-primary);">
+											{p.item.rawValue.label}
+										</span>
 										<span style="font-size: 10px; opacity: 0.5; color: var(--text-secondary); font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 300px;">
 											{p.item.rawValue.description}
 										</span>
@@ -190,7 +190,9 @@ export const SettingsTab = (p: SettingsTabProps) => {
 												<SelectValue<any>>
 													{(state) => (
 														<div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
-															<span style="font-size: 13px;">{state.selectedOption().label}</span>
+															<span style="font-size: 13px;">
+																{state.selectedOption().label}
+															</span>
 															<span style="font-size: 10px; opacity: 0.5; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px;">
 																{state.selectedOption().description}
 															</span>
@@ -202,12 +204,19 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									</TooltipTrigger>
 									<TooltipContent>
 										<Show
-											when={p.jreOptions().find((o) => o.value === currentSelection())?.description}
+											when={
+												p
+													.jreOptions()
+													.find((o) => o.value === currentSelection())
+													?.description
+											}
 											fallback="No path set"
 										>
 											{(desc) => (
 												<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
-													{desc().startsWith("→ ") ? desc().substring(2) : desc()}
+													{desc().startsWith("→ ")
+														? desc().substring(2)
+														: desc()}
 												</div>
 											)}
 										</Show>
@@ -216,8 +225,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								<ContextMenuContent>
 									<ContextMenuItem
 										onClick={() => {
-											const current = p.jreOptions().find((o) => o.value === currentSelection());
-											if (current && current.description && current.description !== "(not set)") {
+											const current = p
+												.jreOptions()
+												.find((o) => o.value === currentSelection());
+											if (
+												current &&
+												current.description &&
+												current.description !== "(not set)"
+											) {
 												let path = current.description;
 												if (path.startsWith("→ ")) path = path.substring(2);
 												navigator.clipboard.writeText(path);
@@ -269,7 +284,11 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					</div>
 				</SettingsField>
 
-				<SettingsField label="Java Arguments" description="Custom JVM arguments for this instance." layout="stack">
+				<SettingsField
+					label="Java Arguments"
+					description="Custom JVM arguments for this instance."
+					layout="stack"
+				>
 					<TextFieldRoot>
 						<TextFieldInput
 							value={p.javaArgs}
@@ -286,8 +305,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 			</SettingsCard>
 
 			<SettingsCard header="Memory Management">
-				<SettingsField 
-					label="Allocation Range" 
+				<SettingsField
+					label="Allocation Range"
 					description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(p.totalRam / 1024)}GB)`}
 					layout="stack"
 				>
@@ -301,9 +320,13 @@ export const SettingsTab = (p: SettingsTabProps) => {
 						>
 							<div class={styles["slider__header"]}>
 								<div class={styles["slider__value-label"]}>
-									{p.minMemory[0] >= 1024 ? `${(p.minMemory[0] / 1024).toFixed(1)}GB` : `${p.minMemory[0]}MB`}
+									{p.minMemory[0] >= 1024
+										? `${(p.minMemory[0] / 1024).toFixed(1)}GB`
+										: `${p.minMemory[0]}MB`}
 									{" — "}
-									{p.maxMemory[0] >= 1024 ? `${(p.maxMemory[0] / 1024).toFixed(1)}GB` : `${p.maxMemory[0]}MB`}
+									{p.maxMemory[0] >= 1024
+										? `${(p.maxMemory[0] / 1024).toFixed(1)}GB`
+										: `${p.maxMemory[0]}MB`}
 								</div>
 							</div>
 							<SliderTrack>
@@ -324,9 +347,16 @@ export const SettingsTab = (p: SettingsTabProps) => {
 				</SettingsField>
 			</SettingsCard>
 
-			<div class={styles["settings-actions"]} style="display: flex; gap: 12px; margin-top: 24px;">
+			<div
+				class={styles["settings-actions"]}
+				style="display: flex; gap: 12px; margin-top: 24px;"
+			>
 				<Button onClick={p.handleSave} disabled={p.saving() || p.isInstalling}>
-					{p.saving() ? "Saving…" : p.isInstalling ? "Installing..." : "Save Settings"}
+					{p.saving()
+						? "Saving…"
+						: p.isInstalling
+							? "Installing..."
+							: "Save Settings"}
 				</Button>
 			</div>
 		</div>
