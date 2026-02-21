@@ -719,14 +719,18 @@ pub async fn get_modpack_info_from_url(
             {
                 let slug_lower = slug_str.to_lowercase();
                 if let Some(hit) = res.hits.iter().find(|h| {
-                    let web = h.web_url.to_lowercase();
+                    let web_lower = h.web_url.to_lowercase();
                     // Normalize: strip trailing slash and query string, then compare final path segment
-                    let web = web.split('?').next().unwrap_or(&web).trim_end_matches('/');
-                    if let Some(pos) = web.rfind('/') {
-                        let last = &web[pos + 1..];
+                    let normalized_web = web_lower
+                        .split('?')
+                        .next()
+                        .unwrap_or(&web_lower)
+                        .trim_end_matches('/');
+                    if let Some(pos) = normalized_web.rfind('/') {
+                        let last = &normalized_web[pos + 1..];
                         return last == slug_lower;
                     }
-                    web == slug_lower
+                    normalized_web == slug_lower
                 })
                 {
                     project_id = Some(hit.id.clone());

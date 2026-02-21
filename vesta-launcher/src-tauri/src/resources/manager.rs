@@ -45,6 +45,30 @@ impl ResourceManager {
         }
     }
 
+    pub async fn clear_cache(&self) -> Result<()> {
+        log::info!("[ResourceManager] Clearing all caches (in-memory and database)");
+
+        // 1. Clear in-memory caches
+        self.project_cache.lock().await.clear();
+        self.version_cache.lock().await.clear();
+        self.hash_cache.lock().await.clear();
+        self.search_cache.lock().await.clear();
+        self.category_cache.lock().await.clear();
+
+        // 2. Clear database tables
+        let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
+
+        diesel::delete(rmc_dsl::resource_metadata_cache)
+            .execute(&mut conn)
+            .map_err(|e| anyhow!("Failed to clear resource_metadata_cache: {}", e))?;
+
+        diesel::delete(rp_dsl::resource_project)
+            .execute(&mut conn)
+            .map_err(|e| anyhow!("Failed to clear resource_project table: {}", e))?;
+
+        Ok(())
+    }
+
     pub async fn get_categories(&self, platform: SourcePlatform) -> Result<Vec<ResourceCategory>> {
         // 1. Check cache (cache for 1 hour)
         {

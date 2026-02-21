@@ -82,6 +82,8 @@ fn main() {
             update_config_field,
             update_config_fields,
             commands::app::open_app_config_dir,
+            commands::app::clear_cache,
+            commands::app::get_cache_size,
             commands::app::open_logs_folder,
             commands::app::open_instance_folder,
             commands::screenshots::get_screenshots,

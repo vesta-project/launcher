@@ -194,6 +194,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
 	);
 
+	const [cacheSize, { refetch: refetchCacheSize }] = createResource<string>(
+		() =>
+			hasTauriRuntime() ? invoke("get_cache_size") : Promise.resolve("0 bytes"),
+	);
+
 	const [isScanning, setIsScanning] = createSignal(false);
 
 	// Permissions helpers based on current theme
@@ -692,6 +697,28 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
+	const handleClearCache = async () => {
+		if (hasTauriRuntime()) {
+			try {
+				await invoke("clear_cache");
+				refetchCacheSize();
+				showToast({
+					title: "Cache Cleared",
+					description:
+						"All stored metadata and temporary files have been cleared.",
+					severity: "success",
+				});
+			} catch (e) {
+				console.error("Failed to clear cache:", e);
+				showToast({
+					title: "Clear Cache Failed",
+					description: "Something went wrong while clearing the cache.",
+					severity: "error",
+				});
+			}
+		}
+	};
+
 	createEffect(() => {
 		if (loading()) return;
 
@@ -819,6 +846,12 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 									description="Open the folder where Vesta Launcher stores its data."
 									actionLabel="Open Folder"
 									onAction={handleOpenAppData}
+								/>
+								<SettingsField
+									label="Clear Cache"
+									description={`Stored data: ${cacheSize() || "..."}. Clear metadata and temporary files to fix sync issues.`}
+									actionLabel="Clear Now"
+									onAction={handleClearCache}
 								/>
 							</SettingsCard>
 

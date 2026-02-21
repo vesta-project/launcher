@@ -198,6 +198,104 @@ pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> 
 }
 
 #[tauri::command]
+pub async fn clear_cache(
+    resource_manager: tauri::State<'_, crate::resources::ResourceManager>,
+    metadata_cache: tauri::State<'_, crate::metadata_cache::MetadataCache>,
+) -> Result<(), String> {
+    log::info!("[clear_cache] Starting cache cleanup...");
+
+    // 1. Clear resource manager (mod metadata, etc.)
+    if let Err(e) = resource_manager.clear_cache().await {
+        log::error!("Failed to clear resource cache: {}", e);
+        // We'll proceed with other clear steps anyway
+    }
+
+    // 2. Clear in-memory Piston metadata
+    metadata_cache.clear();
+
+    // 3. Clear Piston manifest file
+    if let Ok(config_dir) = get_app_config_dir() {
+        let cache_path = config_dir.join("piston_manifest.json");
+        if cache_path.exists() {
+            if let Err(e) = std::fs::remove_file(&cache_path) {
+                log::warn!("Failed to delete Piston manifest file: {}", e);
+            }
+        }
+
+        // 4. Clear generic cache and temp folders if they exist
+        for folder in ["cache", "temp"] {
+            let path = config_dir.join(folder);
+            if path.exists() && path.is_dir() {
+                if let Err(e) = std::fs::remove_dir_all(&path) {
+                    log::warn!("Failed to clear {} folder: {}", folder, e);
+                } else {
+                    log::info!("Cleared {} folder", folder);
+                    // Re-create it so it's ready for use
+                    let _ = std::fs::create_dir_all(&path);
+                }
+            }
+        }
+    }
+
+    log::info!("[clear_cache] Cache cleanup complete!");
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn get_cache_size() -> Result<String, String> {
+    let config_dir = get_app_config_dir().map_err(|e| e.to_string())?;
+    let mut total_bytes = 0;
+
+    // 1. Piston manifest
+    let manifest_path = config_dir.join("piston_manifest.json");
+    if let Ok(meta) = std::fs::metadata(&manifest_path) {
+        total_bytes += meta.len();
+    }
+
+    // 2. Cache & Temp folders
+    for folder in ["cache", "temp"] {
+        let path = config_dir.join(folder);
+        if path.exists() && path.is_dir() {
+            total_bytes += get_dir_size(&path);
+        }
+    }
+
+    Ok(format_size(total_bytes))
+}
+
+fn get_dir_size(path: &std::path::Path) -> u64 {
+    let mut size = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(metadata) = entry.metadata() {
+                if metadata.is_dir() {
+                    size += get_dir_size(&entry.path());
+                } else {
+                    size += metadata.len();
+                }
+            }
+        }
+    }
+    size
+}
+
+fn format_size(bytes: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if bytes >= GB {
+        format!("{:.2} GB", bytes as f64 / GB as f64)
+    } else if bytes >= MB {
+        format!("{:.2} MB", bytes as f64 / MB as f64)
+    } else if bytes >= KB {
+        format!("{:.2} KB", bytes as f64 / KB as f64)
+    } else {
+        format!("{} bytes", bytes)
+    }
+}
+
+#[tauri::command]
 pub fn restart_app(app_handle: tauri::AppHandle) {
     app_handle.restart();
 }

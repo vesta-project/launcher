@@ -18,4 +18,10 @@ impl MetadataCache {
             *guard = Some(meta.clone());
         }
     }
+
+    pub fn clear(&self) {
+        if let Ok(mut guard) = self.0.write() {
+            *guard = None;
+        }
+    }
 }
