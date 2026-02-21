@@ -642,6 +642,60 @@
 	line-height: 1.6;
 	font-size: 15px;
 	color: var(--text-secondary);
+	overflow-wrap: break-word;
+	word-break: break-word;
+}
+
+.description span {
+	line-height: inherit;
+	max-width: 100%;
+}
+
+.description :global(.spoiler) {
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	margin: 16px 0;
+	overflow: hidden;
+	transition: border-color 0.2s;
+}
+
+.description :global(.spoiler.is-visible) {
+	border-color: var(--primary-low);
+	background: var(--surface-sunken);
+}
+
+.description :global(.spoiler)::before {
+	content: "View Spoiler";
+	display: block;
+	padding: 10px 16px;
+	background: var(--surface-raised);
+	color: var(--text-primary);
+	font-weight: 700;
+	font-size: 14px;
+	cursor: pointer;
+	border-bottom: 1px solid transparent;
+	transition: background 0.2s, color 0.2s;
+	user-select: none;
+}
+
+.description :global(.spoiler.is-visible)::before {
+	content: "Hide Spoiler";
+	border-bottom: 1px solid var(--border-subtle);
+}
+
+.description :global(.spoiler):hover::before {
+	background: var(--surface-overlay);
+	color: var(--primary-accent);
+}
+
+.description :global(.spoiler > *) {
+	display: none;
+}
+
+.description :global(.spoiler.is-visible > *) {
+	display: block;
+	padding: 16px;
 }
 
 .description h1,
@@ -649,12 +703,25 @@
 .description h3 {
 	margin-top: 24px;
 	margin-bottom: 12px;
+	color: var(--text-primary);
+	font-weight: 700;
+	line-height: 1.25;
 }
+
+.description h1 { font-size: 1.75rem; }
+.description h2 { font-size: 1.5rem; }
+.description h3 { font-size: 1.25rem; }
 
 .description p {
 	margin-bottom: 1.25rem;
 	margin-top: 1.25rem;
 }
+
+/* Legacy CurseForge font support */
+.description font[size="4"] { font-size: 1.25rem; }
+.description font[size="5"] { font-size: 1.5rem; }
+.description font[size="6"] { font-size: 1.75rem; }
+.description font[size="7"] { font-size: 2rem; }
 
 .description hr {
 	margin: 24px 0;

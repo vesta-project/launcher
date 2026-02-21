@@ -1595,6 +1595,19 @@ const ResourceDetailsPage: Component<{
 													e.preventDefault();
 													e.stopPropagation();
 													handleDescriptionLink(anchor.href);
+													return;
+												}
+
+												const spoiler = target.closest(".spoiler");
+												if (spoiler instanceof HTMLElement) {
+													// Only toggle if we clicked the spoiler container itself
+													// (which acts as the header button) or if it's currently closed.
+													if (
+														target === spoiler ||
+														!spoiler.classList.contains("is-visible")
+													) {
+														spoiler.classList.toggle("is-visible");
+													}
 												}
 											}}
 											onAuxClick={(e) => {
