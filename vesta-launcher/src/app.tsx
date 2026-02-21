@@ -75,7 +75,7 @@ export async function handleDeepLink(
 				title: "Setup Required",
 				description:
 					"Please complete the onboarding process before using 'Open in Vesta'.",
-				severity: "Error",
+				severity: "error",
 				duration: 5000,
 			});
 			return;
@@ -92,7 +92,7 @@ export async function handleDeepLink(
 				title: "Authentication Required",
 				description:
 					"Please sign in to a valid account to use 'Open in Vesta'.",
-				severity: "Error",
+				severity: "error",
 				duration: 5000,
 			});
 			return;
@@ -135,7 +135,7 @@ export async function handleDeepLink(
 				title: "App Not Ready",
 				description:
 					"Please wait for the app to fully load before using 'Open in Vesta'.",
-				severity: "Error",
+				severity: "error",
 				duration: 5000,
 			});
 		}
@@ -144,7 +144,7 @@ export async function handleDeepLink(
 		showToast({
 			title: "Invalid Link",
 			description: "The Vesta link you clicked is invalid or unsupported.",
-			severity: "Error",
+			severity: "error",
 			duration: 5000,
 		});
 	}
@@ -185,6 +185,23 @@ function Root(props: ChildrenProp) {
 	// Global window-level drag events to manage the sniffer
 	const manager = getDropZoneManager();
 	let leaveTimeout: any;
+
+	// Hover clock: track last hovered element and log it every 5s
+	let _hoverClockInterval: any = undefined;
+	let _lastHovered: Element | null = null;
+
+	function describeElement(el: Element | null) {
+		if (!el) return "<none>";
+		const id = el.id ? `#${el.id}` : "";
+		const cls = el.classList && el.classList.length ? `.${[...el.classList].join('.')}` : "";
+		const tag = el.tagName.toLowerCase();
+		let text = "";
+		if (el.textContent) {
+			text = el.textContent.trim().replace(/\s+/g, " ");
+			if (text.length > 40) text = text.slice(0, 37) + "...";
+		}
+		return `${tag}${id}${cls}${text ? ` — "${text}"` : ""}`;
+	}
 
 	const handleWindowDragEnter = (e: DragEvent) => {
 		e.preventDefault();
@@ -540,6 +557,22 @@ function Root(props: ChildrenProp) {
 		window.addEventListener("dragover", handleWindowDragOver);
 		window.addEventListener("dragleave", handleWindowDragLeave);
 		window.addEventListener("drop", handleWindowDrop);
+
+		// Track hovered element via mousemove and log it every 5 seconds
+		const handleMouseMove = (e: MouseEvent) => {
+			_lastHovered = document.elementFromPoint(e.clientX, e.clientY);
+		};
+
+		window.addEventListener("mousemove", handleMouseMove);
+		// Expose the handler so cleanup (outside this closure) can remove it
+		(window as any).__vesta_handleMouseMove = handleMouseMove;
+		_hoverClockInterval = setInterval(() => {
+			try {
+				console.log("[HoverClock]", describeElement(_lastHovered));
+			} catch (e) {
+				console.error("[HoverClock] failed to describe element:", e);
+			}
+		}, 10000);
 	});
 
 	onCleanup(() => {
@@ -558,6 +591,19 @@ function Root(props: ChildrenProp) {
 		window.removeEventListener("dragover", handleWindowDragOver);
 		window.removeEventListener("dragleave", handleWindowDragLeave);
 		window.removeEventListener("drop", handleWindowDrop);
+
+		// Remove hover clock listener and clear interval
+		const __h = (window as any).__vesta_handleMouseMove;
+		if (__h) {
+			window.removeEventListener("mousemove", __h);
+			try {
+				delete (window as any).__vesta_handleMouseMove;
+			} catch {}
+		}
+		if (_hoverClockInterval) {
+			clearInterval(_hoverClockInterval);
+			_hoverClockInterval = undefined;
+		}
 	});
 
 	// Hide loader on first paint rather than a fixed timeout

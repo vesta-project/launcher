@@ -17,11 +17,11 @@ function Tooltip(props: TooltipPrimitive.TooltipRootProps) {
 function TooltipContent(
 	props: TooltipPrimitive.TooltipContentProps & ClassProp & ChildrenProp,
 ) {
-	const [local, others] = splitProps(props, ["class", "children"]);
+	const [_, others] = splitProps(props, ["class", "children"]);
 	const c = children(() => props.children);
 	return (
 		<TooltipPrimitive.Portal>
-			<TooltipPrimitive.Content class={styles["tooltip__content"]} {...others}>
+			<TooltipPrimitive.Content class={styles["tooltip__content"] } {...others}>
 				{c()}
 			</TooltipPrimitive.Content>
 		</TooltipPrimitive.Portal>

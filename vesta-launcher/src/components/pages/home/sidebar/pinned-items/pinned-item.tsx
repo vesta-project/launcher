@@ -171,7 +171,8 @@ export function PinnedItem(props: PinnedItemProps) {
 				<div class={styles["pinned-item-container"]}>
 					<SidebarButton
 						tooltip_text={displayName()}
-						tooltip_placement="top"
+						tooltip_placement="right"
+						tooltip_gutter={props.pin.page_type === "instance" ? 32 : undefined}
 						onClick={handleClick}
 						class={styles["pinned-button"]}
 					>

@@ -485,14 +485,14 @@ const ResourceDetailsPage: Component<{
 				showToast({
 					title: "Resource removed",
 					description: `${project()?.name} has been uninstalled.`,
-					severity: "Success",
+					severity: "success",
 				});
 			} catch (e) {
 				console.error("Failed to uninstall:", e);
 				showToast({
 					title: "Uninstall failed",
 					description: String(e),
-					severity: "Error",
+					severity: "error",
 				});
 			}
 		}
@@ -700,7 +700,7 @@ const ResourceDetailsPage: Component<{
 				title: "Choose version",
 				description:
 					"No automatically compatible version found. Please select one manually.",
-				severity: "Info",
+				severity: "info",
 			});
 		}
 	};
@@ -832,7 +832,7 @@ const ResourceDetailsPage: Component<{
 						title: "Offline Mode",
 						description:
 							"Showing cached details. Some functionality may be limited.",
-						severity: "Warning",
+						severity: "warning",
 					});
 				} else {
 					setError(errorMsg);
@@ -882,7 +882,7 @@ const ResourceDetailsPage: Component<{
 				title: "Third-party download required",
 				description:
 					"CurseForge requires this mod to be downloaded through their website. Opening link...",
-				severity: "Info",
+				severity: "info",
 			});
 			await openExternal(p?.web_url || "");
 			return;
@@ -935,7 +935,7 @@ const ResourceDetailsPage: Component<{
 							showToast({
 								title: "Shader Engine Required",
 								description: `Installing ${engineProject.name} to support shaders...`,
-								severity: "Info",
+								severity: "info",
 							});
 							await resources.install(
 								engineProject,
@@ -961,7 +961,7 @@ const ResourceDetailsPage: Component<{
 						showToast({
 							title: "Potential Incompatibility",
 							description: `Installing Fabric version of ${p.name} on a Quilt instance. Most mods work, but some may have issues.`,
-							severity: "Warning",
+							severity: "warning",
 						});
 					}
 				}
@@ -970,13 +970,13 @@ const ResourceDetailsPage: Component<{
 				showToast({
 					title: "Success",
 					description: `Installed ${p.name} to ${inst?.name}`,
-					severity: "Success",
+					severity: "success",
 				});
 			} catch (err) {
 				showToast({
 					title: "Failed to install",
 					description: err instanceof Error ? err.message : String(err),
-					severity: "Error",
+					severity: "error",
 				});
 			} finally {
 				// Refresh counts/states
@@ -1026,10 +1026,14 @@ const ResourceDetailsPage: Component<{
 		if (!desc) return "No description provided.";
 
 		// Explicitly set marked options for each parse to ensure consistency
-		return marked.parse(desc, {
+		const rawHtml = marked.parse(desc, {
 			gfm: true,
 			breaks: false, // Treat single newlines as spaces (Modrinth behavior)
-		});
+		}) as string;
+
+		// Ensure no links have target="_blank" which can cause them to open
+		// in the system browser before our intercepted click handler runs.
+		return rawHtml.replace(/target=["']_blank["']/gi, 'target="_self"');
 	});
 
 	return (
@@ -1583,6 +1587,17 @@ const ResourceDetailsPage: Component<{
 												const anchor = target.closest("a");
 												if (anchor) {
 													e.preventDefault();
+													e.stopPropagation();
+													handleDescriptionLink(anchor.href);
+												}
+											}}
+											onAuxClick={(e) => {
+												const target = e.target as HTMLElement;
+												const anchor = target.closest("a");
+												if (anchor && e.button === 1) {
+													// Middle click
+													e.preventDefault();
+													e.stopPropagation();
 													handleDescriptionLink(anchor.href);
 												}
 											}}

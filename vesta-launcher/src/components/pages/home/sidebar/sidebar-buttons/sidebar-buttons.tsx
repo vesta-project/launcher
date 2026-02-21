@@ -27,19 +27,29 @@ import styles from "./sidebar-buttons.module.css";
 interface SidebarButtonProps extends ComponentProps<"button"> {
 	tooltip_text?: string;
 	tooltip_placement?: TooltipPlacement;
+	tooltip_gutter?: number;
 	onClick?: () => void;
 }
 
 export function SidebarButton(props: SidebarButtonProps) {
 	const c = children(() => props.children);
 	const [local, others] = splitProps(
-		mergeProps({ tooltip_placement: "right", tooltip_text: "" }, props),
-		["tooltip_placement", "tooltip_text", "class", "onClick"],
+		mergeProps(
+			{ tooltip_placement: "right", tooltip_text: "", tooltip_gutter: 8 },
+			props,
+		),
+		[
+			"tooltip_placement",
+			"tooltip_text",
+			"tooltip_gutter",
+			"class",
+			"onClick",
+		],
 	);
 	return (
 		/* The placement property gives an error because it doesn't allow a string but, this is a valid property
 		 *  @ts-ignore */
-		<Tooltip placement={local.tooltip_placement} gutter={8}>
+		<Tooltip placement={local.tooltip_placement} gutter={local.tooltip_gutter}>
 			{/* @ts-ignore error with the props. But the props are valid.*/}
 			<TooltipTrigger
 				as={Button}
