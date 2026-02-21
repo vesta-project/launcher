@@ -718,10 +718,16 @@ pub async fn get_modpack_info_from_url(
                 .await
             {
                 let slug_lower = slug_str.to_lowercase();
-                if let Some(hit) = res
-                    .hits
-                    .iter()
-                    .find(|h| h.web_url.to_lowercase().contains(&slug_lower))
+                if let Some(hit) = res.hits.iter().find(|h| {
+                    let web = h.web_url.to_lowercase();
+                    // Normalize: strip trailing slash and query string, then compare final path segment
+                    let web = web.split('?').next().unwrap_or(&web).trim_end_matches('/');
+                    if let Some(pos) = web.rfind('/') {
+                        let last = &web[pos + 1..];
+                        return last == slug_lower;
+                    }
+                    web == slug_lower
+                })
                 {
                     project_id = Some(hit.id.clone());
                     log::info!(

@@ -279,9 +279,15 @@ impl CurseForgeSource {
                     let web_url = item.links.website_url.to_lowercase();
                     let slug_lower = slug.to_lowercase();
 
-                    if web_url.ends_with(&format!("/{}", slug_lower))
-                        || web_url.ends_with(&slug_lower)
-                    {
+                    // Normalize URL: strip query and trailing slash, then compare final path segment
+                    let web = web_url.split('?').next().unwrap_or(&web_url).trim_end_matches('/');
+                    if let Some(pos) = web.rfind('/') {
+                        let last = &web[pos + 1..];
+                        if last == slug_lower {
+                            log::info!("[CurseForge] Resolved slug '{}' to ID {}", slug, item.id);
+                            return Ok(item.id.to_string());
+                        }
+                    } else if web == slug_lower {
                         log::info!("[CurseForge] Resolved slug '{}' to ID {}", slug, item.id);
                         return Ok(item.id.to_string());
                     }
