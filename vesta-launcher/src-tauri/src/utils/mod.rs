@@ -12,5 +12,6 @@ pub mod file_drop;
 pub mod instance_helpers;
 pub mod process_state;
 pub mod sanitize;
+pub mod url;
 pub mod version_tracking;
 pub mod windows;

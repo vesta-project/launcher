@@ -347,9 +347,15 @@ impl ResourceManager {
         {
             let mut cache = self.project_cache.lock().await;
             cache.insert((platform, id.to_string()), project.clone());
+            if id != project.id {
+                cache.insert((platform, project.id.clone()), project.clone());
+            }
         }
 
         let _ = self.save_project_to_cache(platform, id, &project).await;
+        if id != project.id {
+            let _ = self.save_project_to_cache(platform, &project.id, &project).await;
+        }
         let _ = self.cache_project_metadata(platform, &project).await;
 
         Ok(project)

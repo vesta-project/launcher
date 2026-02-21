@@ -3,6 +3,7 @@ use crate::models::resource::{
     ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::ResourceSource;
+use crate::utils::url::normalize_url;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use reqwest::{header, Client};
@@ -38,6 +39,7 @@ struct CFModResponse {
 #[allow(dead_code)]
 struct CFMod {
     id: i64,
+    slug: String,
     name: String,
     summary: String,
     description: Option<String>,
@@ -260,37 +262,64 @@ impl CurseForgeSource {
     }
 
     async fn resolve_slug_to_id(&self, slug: &str) -> Result<String> {
-        log::info!("[CurseForge] Resolving slug '{}' to numeric ID", slug);
+        let slug_lower = slug.to_lowercase();
+        log::info!("[CurseForge] Resolving slug '{}' to numeric ID", slug_lower);
         // Common types to search in
         let types = [6, 4471, 12, 6552, 6945];
 
         for class_id in types {
             let search_url = format!(
-                "https://api.curseforge.com/v1/mods/search?gameId=432&classId={}&searchFilter={}",
-                class_id, slug
+                "https://api.curseforge.com/v1/mods/search?gameId=432&classId={}&searchFilter={}&sortField=2&sortOrder=desc",
+                class_id,
+                urlencoding::encode(&slug_lower)
             );
+
+            log::debug!("[CurseForge] Resolving search URL: {}", search_url);
 
             let response = self.client.get(&search_url).send().await?;
             if response.status().is_success() {
                 let search_res: CFSearchResult = response.json().await?;
-                for item in search_res.data {
-                    // Check if website_url ends with the slug or contains it in a way that matches
-                    // website_url is usually ".../mc-mods/slug" or ".../modpacks/slug"
-                    let web_url = item.links.website_url.to_lowercase();
-                    let slug_lower = slug.to_lowercase();
+                
+                // First pass: Exact matches (highest priority)
+                for item in &search_res.data {
+                    log::debug!(
+                        "  Checking match (P1): name='{}', id={}, slug='{}'",
+                        item.name,
+                        item.id,
+                        item.slug
+                    );
 
-                    // Normalize URL: strip query and trailing slash, then compare final path segment
-                    let normalized_web_url =
-                        web_url.split('?').next().unwrap_or(&web_url).trim_end_matches('/');
-                    if let Some(pos) = normalized_web_url.rfind('/') {
-                        let last = &normalized_web_url[pos + 1..];
-                        if last == slug_lower {
-                            log::info!("[CurseForge] Resolved slug '{}' to ID {}", slug, item.id);
+                    // 1. Check direct slug match (most accurate)
+                    if item.slug.to_lowercase() == slug_lower {
+                        log::info!("[CurseForge] Resolved slug '{}' to ID {} via exact slug", slug_lower, item.id);
+                        return Ok(item.id.to_string());
+                    }
+
+                    // 2. Check if website_url matches exactly
+                    let web_url = item.links.website_url.to_lowercase();
+                    let normalized_web_url = normalize_url(&web_url);
+                    let url_slug = normalized_web_url.split('/').last().unwrap_or("");
+
+                    if url_slug == slug_lower {
+                        log::info!("[CurseForge] Resolved slug '{}' to ID {} via exact URL slug", slug_lower, item.id);
+                        return Ok(item.id.to_string());
+                    }
+                }
+
+                // Second pass: ID-prefixed matches (e.g. "12345-slug")
+                for item in &search_res.data {
+                    let web_url = item.links.website_url.to_lowercase();
+                    let normalized_web_url = normalize_url(&web_url);
+                    let url_slug = normalized_web_url.split('/').last().unwrap_or("");
+
+                    if let Some(pos) = url_slug.find('-') {
+                        let potential_id = &url_slug[..pos];
+                        let potential_slug = &url_slug[pos + 1..];
+                        
+                        if potential_slug == slug_lower && potential_id.chars().all(|c| c.is_ascii_digit()) {
+                            log::info!("[CurseForge] Resolved slug '{}' to ID {} via ID-prefixed URL slug: {}", slug_lower, item.id, url_slug);
                             return Ok(item.id.to_string());
                         }
-                    } else if normalized_web_url == slug_lower {
-                        log::info!("[CurseForge] Resolved slug '{}' to ID {}", slug, item.id);
-                        return Ok(item.id.to_string());
                     }
                 }
             }
@@ -507,19 +536,19 @@ impl ResourceSource for CurseForgeSource {
         let mod_response: CFModResponse = response
             .json()
             .await
-            .map_err(|e| anyhow!("CurseForge project JSON decode error: {}. ID: {}", e, id))?;
+            .map_err(|e| anyhow!("CurseForge project JSON decode error: {}. ID: {}", e, numeric_id))?;
 
         let item = mod_response.data;
 
         // Fetch description separately as it's not included in the main mod object
-        let desc_url = format!("https://api.curseforge.com/v1/mods/{}/description", id);
+        let desc_url = format!("https://api.curseforge.com/v1/mods/{}/description", numeric_id);
         let desc_response = self.client.get(&desc_url).send().await?;
         let description = if desc_response.status().is_success() {
             let desc_data: CFDescriptionResponse = desc_response.json().await.map_err(|e| {
                 anyhow!(
                     "CurseForge description JSON decode error: {}. ID: {}",
                     e,
-                    id
+                    numeric_id
                 )
             })?;
             Some(desc_data.data)
@@ -640,6 +669,12 @@ impl ResourceSource for CurseForgeSource {
         game_version: Option<&str>,
         loader: Option<&str>,
     ) -> Result<Vec<ResourceVersion>> {
+        let numeric_id = if project_id.chars().all(|c| c.is_ascii_digit()) {
+            project_id.to_string()
+        } else {
+            self.resolve_slug_to_id(project_id).await?
+        };
+
         let mut all_files = Vec::new();
         let mut index = 0;
         let page_size = 50;
@@ -659,7 +694,7 @@ impl ResourceSource for CurseForgeSource {
         for page_idx in 0..20 {
             let mut url = format!(
                 "https://api.curseforge.com/v1/mods/{}/files?index={}&pageSize={}",
-                project_id, index, page_size
+                numeric_id, index, page_size
             );
 
             if let Some(gv) = game_version {
@@ -778,12 +813,20 @@ impl ResourceSource for CurseForgeSource {
     }
 
     async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion> {
-        let url = if project_id.is_empty() {
+        let numeric_id = if project_id.is_empty() {
+            String::new()
+        } else if project_id.chars().all(|c| c.is_ascii_digit()) {
+            project_id.to_string()
+        } else {
+            self.resolve_slug_to_id(project_id).await.unwrap_or_else(|_| project_id.to_string())
+        };
+
+        let url = if numeric_id.is_empty() {
             format!("https://api.curseforge.com/v1/mods/files/{}", version_id)
         } else {
             format!(
                 "https://api.curseforge.com/v1/mods/{}/files/{}",
-                project_id, version_id
+                numeric_id, version_id
             )
         };
         let response = self.client.get(&url).send().await?;

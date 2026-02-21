@@ -708,6 +708,7 @@ const ResourceDetailsPage: Component<{
 	};
 
 	const handleDescriptionLink = async (url: string) => {
+		setHoveredLink(null);
 		try {
 			const parsed = parseResourceUrl(url);
 
@@ -749,6 +750,10 @@ const ResourceDetailsPage: Component<{
 			}
 		}
 	};
+
+	onCleanup(() => {
+		setHoveredLink(null);
+	});
 
 	const handleProjectRouting = (
 		id?: string,
@@ -798,8 +803,18 @@ const ResourceDetailsPage: Component<{
 		try {
 			const p = await resources.getProject(platform, id);
 			console.log("[ResourceDetails] Fetched project:", p?.name);
+
 			setProject(p);
 			resources.selectProject(p);
+
+			// Unify to ID if we resolved a slug
+			if (p && p.id !== id) {
+				console.log(
+					`[ResourceDetails] Unifying project ID from ${id} to ${p.id}`,
+				);
+				// Use replace (push=false) to avoid breaking the back button
+				activeRouter()?.updateQuery("projectId", p.id, false);
+			}
 		} catch (e: any) {
 			console.error("Failed to load project details:", e);
 			const errorMsg = e instanceof Error ? e.message : String(e);

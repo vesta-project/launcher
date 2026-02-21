@@ -11,6 +11,7 @@ use crate::utils::db::{get_config_conn, get_vesta_conn};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_murmur2_raw, calculate_sha1};
 use crate::utils::instance_helpers::{compute_unique_name, compute_unique_slug};
+use crate::utils::url::normalize_url;
 use anyhow::Result;
 use diesel::prelude::*;
 use piston_lib::game::modpack::exporter::{ExportEntry, ExportSpec};
@@ -687,6 +688,18 @@ pub async fn get_modpack_info_from_url(
         let mut project_id = None;
         let mut version_id = None;
 
+        // Determine resource type from URL
+        let mut res_type = crate::models::resource::ResourceType::Modpack;
+        if url.contains("/mc-mods/") {
+            res_type = crate::models::resource::ResourceType::Mod;
+        } else if url.contains("/texture-packs/") || url.contains("/resource-packs/") {
+            res_type = crate::models::resource::ResourceType::ResourcePack;
+        } else if url.contains("/shaders/") {
+            res_type = crate::models::resource::ResourceType::Shader;
+        } else if url.contains("/worlds/") {
+            res_type = crate::models::resource::ResourceType::World;
+        }
+
         // Extract IDs from URL if possible
         if let Some(vid_str) = url
             .split("/files/")
@@ -696,19 +709,28 @@ pub async fn get_modpack_info_from_url(
             version_id = vid_str.parse::<i64>().ok();
         }
 
-        let slug = url
-            .split("curseforge.com/minecraft/modpacks/")
-            .nth(1)
-            .and_then(|s| s.split('?').next())
-            .and_then(|s| s.split('/').next())
-            .map(|s| s.to_string());
+        // Extract slug more robustly from /minecraft/<class>/<slug>
+        let slug = if let Some(parts) = url.split("curseforge.com/minecraft/").nth(1) {
+            parts
+                .split('/')
+                .nth(1) // Skip class segment (e.g. "mc-mods")
+                .and_then(|s| s.split('?').next())
+                .and_then(|s| s.split('/').next())
+                .map(|s| s.to_string())
+        } else {
+            None
+        };
 
         if let Some(ref slug_str) = slug {
-            log::info!("[get_modpack_info_from_url] Search for slug: {}", slug_str);
-            // Search for project by slug (search is the only way for slugs currently)
+            log::info!(
+                "[get_modpack_info_from_url] Search for slug: {} (type: {:?})",
+                slug_str,
+                res_type
+            );
+            // Search for project by slug
             let query = crate::models::resource::SearchQuery {
                 text: Some(slug_str.clone()),
-                resource_type: crate::models::resource::ResourceType::Modpack,
+                resource_type: res_type,
                 limit: 10,
                 ..Default::default()
             };
@@ -720,17 +742,13 @@ pub async fn get_modpack_info_from_url(
                 let slug_lower = slug_str.to_lowercase();
                 if let Some(hit) = res.hits.iter().find(|h| {
                     let web_lower = h.web_url.to_lowercase();
-                    // Normalize: strip trailing slash and query string, then compare final path segment
-                    let normalized_web = web_lower
-                        .split('?')
-                        .next()
-                        .unwrap_or(&web_lower)
-                        .trim_end_matches('/');
+                    // Normalize and compare final path segment
+                    let normalized_web = normalize_url(&web_lower);
                     if let Some(pos) = normalized_web.rfind('/') {
                         let last = &normalized_web[pos + 1..];
-                        return last == slug_lower;
+                        return last == slug_lower || last.ends_with(&format!("-{}", slug_lower));
                     }
-                    normalized_web == slug_lower
+                    normalized_web == slug_lower || normalized_web.ends_with(&format!("-{}", slug_lower))
                 })
                 {
                     project_id = Some(hit.id.clone());
