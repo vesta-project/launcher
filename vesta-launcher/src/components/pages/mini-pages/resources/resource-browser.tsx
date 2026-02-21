@@ -546,13 +546,13 @@ const ResourceCard: Component<{
 					showToast({
 						title: "Updated",
 						description: `${props.project.name} has been updated.`,
-						severity: "Success",
+						severity: "success",
 					});
 				} catch (err) {
 					showToast({
 						title: "Failed to update",
 						description: err instanceof Error ? err.message : String(err),
-						severity: "Error",
+						severity: "error",
 					});
 				} finally {
 					setLocalInstalling(false);
@@ -575,7 +575,7 @@ const ResourceCard: Component<{
 					showToast({
 						title: "Resource removed",
 						description: `${props.project.name} has been uninstalled.`,
-						severity: "Success",
+						severity: "success",
 					});
 				} catch (e) {
 					console.error("Failed to uninstall:", e);
@@ -632,7 +632,7 @@ const ResourceCard: Component<{
 					showToast({
 						title: "Potential Incompatibility",
 						description: `Installing Fabric version of ${props.project.name} on a Quilt instance.`,
-						severity: "Warning",
+						severity: "warning",
 					});
 				}
 
@@ -682,7 +682,7 @@ const ResourceCard: Component<{
 							showToast({
 								title: "Shader Engine Required",
 								description: `Installing ${engineProject.name} to support shaders...`,
-								severity: "Info",
+								severity: "info",
 							});
 							await resources.install(engineProject, bestEngine, instance.id);
 						}
@@ -693,20 +693,20 @@ const ResourceCard: Component<{
 				showToast({
 					title: "Success",
 					description: `Installed ${props.project.name} to ${instance.name}`,
-					severity: "Success",
+					severity: "success",
 				});
 			} else {
 				showToast({
 					title: "No compatible version",
 					description: `Could not find a version for ${instance.minecraftVersion} with ${instance.modloader || "no loader"}.`,
-					severity: "Error",
+					severity: "error",
 				});
 			}
 		} catch (err) {
 			showToast({
 				title: "Failed to install",
 				description: err instanceof Error ? err.message : String(err),
-				severity: "Error",
+				severity: "error",
 			});
 		} finally {
 			setLocalInstalling(false);
@@ -1431,7 +1431,7 @@ const ResourceBrowser: Component<{
 							showToast({
 								title: "Shader Engine Required",
 								description: `Installing ${engineProject.name} to support shaders...`,
-								severity: "Info",
+								severity: "info",
 							});
 							await resources.install(engineProject, bestEngine, instance.id);
 						}
@@ -1442,20 +1442,20 @@ const ResourceBrowser: Component<{
 				showToast({
 					title: "Success",
 					description: `Installed ${project.name} to ${instance.name}`,
-					severity: "Success",
+					severity: "success",
 				});
 			} else {
 				showToast({
 					title: "No compatible version",
 					description: `Could not find a version for ${instance.minecraftVersion} with ${instance.modloader || "no loader"}.`,
-					severity: "Error",
+					severity: "error",
 				});
 			}
 		} catch (err) {
 			showToast({
 				title: "Installation failed",
 				description: err instanceof Error ? err.message : String(err),
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	};

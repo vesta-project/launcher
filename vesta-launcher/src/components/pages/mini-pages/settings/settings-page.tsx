@@ -321,14 +321,14 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			showToast({
 				title: "Download Started",
 				description: `Java ${version} is being downloaded in the background.`,
-				severity: "Info",
+				severity: "info",
 			});
 		} catch (e) {
 			console.error("Failed to download managed java:", e);
 			showToast({
 				title: "Download Failed",
 				description: "Failed to initiate Java download.",
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	};
@@ -1291,7 +1291,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 													title: "Notifications Reset",
 													description:
 														"Notification history and seen items cleared.",
-													severity: "Success",
+													severity: "success",
 												});
 											}}
 										>

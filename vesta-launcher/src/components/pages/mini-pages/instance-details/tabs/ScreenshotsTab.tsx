@@ -69,14 +69,14 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 			showToast({
 				title: "Copied!",
 				description: "Screenshot copied to clipboard.",
-				severity: "Success",
+				severity: "success",
 			});
 		} catch (e) {
 			console.error(e);
 			showToast({
 				title: "Error",
 				description: "Failed to copy screenshot.",
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	};
@@ -92,14 +92,14 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 			showToast({
 				title: "Deleted",
 				description: "Screenshot removed.",
-				severity: "Success",
+				severity: "success",
 			});
 		} catch (e) {
 			console.error(e);
 			showToast({
 				title: "Error",
 				description: "Failed to delete screenshot.",
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	};

@@ -134,14 +134,14 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			showToast({
 				title: "Shortcut Created",
 				description: `Added ${name} to your desktop`,
-				severity: "Success",
+				severity: "success",
 			});
 		} catch (e) {
 			console.error("Failed to create shortcut:", e);
 			showToast({
 				title: "Shortcut Failed",
 				description: String(e),
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	};
@@ -157,14 +157,14 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			showToast({
 				title: "URL Copied",
 				description: "Page URL copied to clipboard",
-				severity: "Success",
+				severity: "success",
 			});
 		} catch (e) {
 			console.error("Failed to copy URL:", e);
 			showToast({
 				title: "Copy Failed",
 				description: "Failed to copy URL",
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	};

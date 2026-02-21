@@ -308,7 +308,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				showToast({
 					title: "Killed",
 					description: `Killed instance \"${props.instance.name}\"`,
-					severity: "Info",
+					severity: "info",
 					duration: 3000,
 				});
 			} catch (err) {
@@ -316,7 +316,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				showToast({
 					title: "Kill Failed",
 					description: String(err),
-					severity: "Error",
+					severity: "error",
 					duration: 5000,
 				});
 			}
@@ -332,7 +332,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				showToast({
 					title: "Launching",
 					description: `Launching instance \"${props.instance.name}\"`,
-					severity: "Info",
+					severity: "info",
 					duration: 3000,
 				});
 			} catch (err) {
@@ -340,7 +340,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				showToast({
 					title: "Launch Failed",
 					description: String(err),
-					severity: "Error",
+					severity: "error",
 					duration: 5000,
 				});
 				setLaunching(false);

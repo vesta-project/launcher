@@ -294,7 +294,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 						title: "Metadata Sync Failed",
 						description:
 							"Could not read modpack metadata from the provided source. Check your selection.",
-						severity: "Warning",
+						severity: "warning",
 					});
 					// Reset the source so we go back to the selection page
 					batch(() => {
@@ -345,7 +345,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 				showToast({
 					title: "Install Started",
 					description: `Installing modpack: ${data.name}`,
-					severity: "Success",
+					severity: "success",
 				});
 			} else {
 				const id = await createInstance(data as any);
@@ -355,7 +355,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 					showToast({
 						title: "Created",
 						description: `Created instance: ${data.name}`,
-						severity: "Success",
+						severity: "success",
 					});
 				}
 			}
@@ -367,7 +367,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 			}, 500);
 		} catch (e) {
 			console.error("[Install] ERROR:", e);
-			showToast({ title: "Failed", description: String(e), severity: "Error" });
+			showToast({ title: "Failed", description: String(e), severity: "error" });
 			setIsInstalling(false);
 		}
 	};

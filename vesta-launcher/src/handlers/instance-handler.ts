@@ -30,7 +30,7 @@ export const handleDuplicate = async (instance: Instance) => {
 			showToast({
 				title: "Duplicate failed",
 				description: String(e),
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	}
@@ -58,7 +58,7 @@ export const handleRepair = async (instance: Instance) => {
 			showToast({
 				title: "Repair failed",
 				description: String(e),
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	}
@@ -86,7 +86,7 @@ export const handleHardReset = async (instance: Instance) => {
 			showToast({
 				title: "Reset failed",
 				description: String(e),
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	}
@@ -118,7 +118,7 @@ export const handleUninstall = async (
 			showToast({
 				title: "Uninstall failed",
 				description: String(e),
-				severity: "Error",
+				severity: "error",
 			});
 		}
 	}
@@ -136,7 +136,7 @@ export const handleLaunch = async (instance: Instance) => {
 		showToast({
 			title: "Launch failed",
 			description: String(e),
-			severity: "Error",
+			severity: "error",
 		});
 	}
 };

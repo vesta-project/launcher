@@ -265,14 +265,14 @@ export function ExportDialog(props: ExportDialogProps) {
 			showToast({
 				title: "Export Started",
 				description: `Exporting modpack to ${fileName} in the background.`,
-				severity: "Success",
+				severity: "success",
 			});
 		} catch (e: any) {
 			console.error("Export failed:", e);
 			showToast({
 				title: "Export Failed",
 				description: e.toString() || "Unknown error occurred",
-				severity: "Error",
+				severity: "error",
 			});
 		} finally {
 			setIsExporting(false);

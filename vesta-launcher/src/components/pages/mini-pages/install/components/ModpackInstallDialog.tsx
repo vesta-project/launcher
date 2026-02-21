@@ -85,7 +85,7 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 			showToast({
 				title: "Installation Started",
 				description: `Installing ${data.name}... Check notifications for progress.`,
-				severity: "Success",
+				severity: "success",
 			});
 			setTimeout(props.onClose, 800);
 		} catch (e) {
@@ -93,7 +93,7 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 			showToast({
 				title: "Installation Failed",
 				description: String(e),
-				severity: "Error",
+				severity: "error",
 			});
 			setIsInstalling(false);
 		}

@@ -150,14 +150,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 											p.showToast({
 												title: "Download Started",
 												description: `Java ${version} is being downloaded.`,
-												severity: "Info",
+												severity: "info",
 											});
 										})
 										.catch(() => {
 											p.showToast({
 												title: "Error",
 												description: "Failed to start Java download.",
-												severity: "Error",
+												severity: "error",
 											});
 										});
 									p.setJavaPath("");
@@ -239,7 +239,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 												p.showToast({
 													title: "Copied",
 													description: "Java path copied to clipboard",
-													severity: "Success",
+													severity: "success",
 												});
 											}
 										}}

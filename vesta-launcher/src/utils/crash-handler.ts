@@ -102,7 +102,7 @@ async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
 		showToast({
 			title,
 			description,
-			severity: "Error",
+			severity: "error",
 			duration: 7000,
 		});
 	}

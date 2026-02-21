@@ -33,7 +33,7 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 			showToast({
 				title: "Copied",
 				description: "Path copied to clipboard",
-				severity: "Success",
+				severity: "success",
 			});
 		}
 	};

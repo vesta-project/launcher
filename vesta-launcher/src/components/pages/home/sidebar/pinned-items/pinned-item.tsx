@@ -53,25 +53,25 @@ export function PinnedItem(props: PinnedItemProps) {
 			scrollParent.addEventListener("scroll", handleScroll, { passive: true });
 		}
 
-		const observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					// We use a high threshold to hide the button as soon as it starts entering the mask/overflow area
-					const visible = entry.intersectionRatio > 0.9;
-					setIsFullyVisible(visible);
-					if (!visible) setIsHovered(false);
-				}
-			},
-			{
-				threshold: [0, 0.1, 0.9, 1.0],
-			},
-		);
+		// const observer = new IntersectionObserver(
+		// 	(entries) => {
+		// 		for (const entry of entries) {
+		// 			// We use a high threshold to hide the button as soon as it starts entering the mask/overflow area
+		// 			const visible = entry.intersectionRatio > 0.9;
+		// 			setIsFullyVisible(visible);
+		// 			if (!visible) setIsHovered(false);
+		// 		}
+		// 	},
+		// 	{
+		// 		threshold: [0, 0.1, 0.9, 1.0],
+		// 	},
+		// );
 
-		observer.observe(containerRef);
-		onCleanup(() => {
-			observer.disconnect();
-			if (scrollParent) scrollParent.removeEventListener("scroll", handleScroll);
-		});
+		// observer.observe(containerRef);
+		// onCleanup(() => {
+		// 	observer.disconnect();
+		// 	if (scrollParent) scrollParent.removeEventListener("scroll", handleScroll);
+		// });
 	});
 
 	const isLaunching = createMemo(

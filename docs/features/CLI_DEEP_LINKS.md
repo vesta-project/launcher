@@ -283,7 +283,7 @@ if (!account || account.account_type === ACCOUNT_TYPE_GUEST || account.is_expire
     showToast({
         title: "Authentication Required",
         description: "Please sign in to a valid account to use 'Open in Vesta'.",
-        severity: "Error",
+        severity: "error",
     });
     return;
 }
