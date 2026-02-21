@@ -250,20 +250,15 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize NotificationManager
     let notification_manager = NotificationManager::new(app.handle().clone());
     let _ = notification_manager.clear_task_notifications();
-    app.manage(notification_manager);
-
-    // Create notifications for interrupted instances if any
+    
+    // Create notifications for interrupted instances if any (using a clone before we manage it)
     if !interrupted_instances.is_empty() {
-        let app_handle = app.handle();
+        let manager = notification_manager.clone();
         tauri::async_runtime::spawn(async move {
             use crate::notifications::models::{
                 CreateNotificationInput, NotificationAction, NotificationType,
             };
 
-            let manager = app_handle
-                .state::<NotificationManager>()
-                .inner()
-                .clone();
             for inst in interrupted_instances {
                 let raw_op = inst.last_operation.as_deref().unwrap_or("installation");
                 let display_op = match raw_op {
@@ -306,6 +301,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         });
     }
+
+    app.manage(notification_manager);
 
     // Initialize DiscordManager
     let discord_manager = DiscordManager::new(app.handle().clone());

@@ -225,6 +225,19 @@
 	background: transparent;
 }
 
+/* Make install/log column scrollbars show pointer on the thumb for clarity */
+.install-form__sections::-webkit-scrollbar-thumb,
+.install-form__main::-webkit-scrollbar-thumb,
+.install-form__side::-webkit-scrollbar-thumb {
+	cursor: default;
+}
+
+/* If a logs container exists within the install flow, ensure its scrollbar uses pointer */
+.logs-container::-webkit-scrollbar-thumb,
+.log-line::-webkit-scrollbar-thumb {
+	cursor: default;
+}
+
 .install-form__actions-container {
 	padding: 16px 0 20px 0;
 	background: transparent;
@@ -503,12 +516,15 @@
 	background: #00000022;
 	border-radius: 4px;
 	max-height: 250px;
+	user-select: text;
+	cursor: text;
 }
 
 .log-line {
 	line-height: 1.4;
 	word-break: break-all;
 	opacity: 0.9;
+	user-select: text;
 }
 
 .log-line.italic {

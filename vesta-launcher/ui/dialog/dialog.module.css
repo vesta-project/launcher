@@ -120,12 +120,16 @@
 	line-height: 1;
 	letter-spacing: -0.025em;
 	margin: 0;
+	user-select: text;
+	cursor: text;
 }
 
 .dialog__description {
 	font-size: 0.875rem;
 	color: var(--text-secondary);
 	margin: 0;
+	user-select: text;
+	cursor: text;
 }
 
 @keyframes dialog-fade-in {

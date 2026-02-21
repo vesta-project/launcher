@@ -214,6 +214,17 @@
 	min-height: 400px; /* Console needs its own height in the flow */
 }
 
+/* Make console scrollbar thumb show pointer to indicate draggable thumb */
+.tab-console ::-webkit-scrollbar-thumb {
+    cursor: default;
+}
+.tab-console ::-webkit-scrollbar {
+    width: 10px;
+}
+.tab-console ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
 .content-wrapper {
 	padding: 24px; /* Unified padding for all content */
 	display: flex;
@@ -897,6 +908,8 @@
 	color: #e0e0e0;
 	position: relative;
 	padding: 12px 0;
+	user-select: text;
+	cursor: text;
 }
 
 .console-line-wrapper {
@@ -942,6 +955,7 @@
 
 .log-message {
 	color: #eee;
+	user-select: text;
 }
 
 .console-placeholder {

@@ -38,6 +38,15 @@ function disableMenu() {
 	document.addEventListener(
 		"selectstart",
 		(e) => {
+			const target = e.target as HTMLElement;
+			// Allow selection for inputs, textareas, and anything explicitly marked as selectable
+			if (
+				target.tagName === "INPUT" ||
+				target.tagName === "TEXTAREA" ||
+				window.getComputedStyle(target).userSelect === "text"
+			) {
+				return true;
+			}
 			e.preventDefault();
 			return false;
 		},

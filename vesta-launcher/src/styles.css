@@ -866,3 +866,10 @@ button {
 .settings-field--stack .v-toggle-group__item {
 	flex: 1 !important;
 }
+
+/* Utility to allow text selection in specific areas (e.g., logs, copyable keys) */
+.selectable {
+	user-select: text !important;
+	-webkit-user-select: text !important;
+	cursor: text;
+}

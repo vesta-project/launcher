@@ -78,6 +78,8 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	flex: 1;
+	user-select: text;
+	cursor: text;
 }
 
 .headerActions {
@@ -93,6 +95,7 @@
 	color: var(--text-tertiary);
 	flex-shrink: 0;
 	transition: opacity 0.15s ease;
+	user-select: text;
 }
 
 .isDismissible:hover .timestamp {
@@ -128,6 +131,8 @@
 	color: var(--text-secondary);
 	line-height: 1.4;
 	margin: 0;
+	user-select: text;
+	cursor: text;
 }
 
 .progressWrapper {

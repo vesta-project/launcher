@@ -118,7 +118,7 @@ const DialogTitle = <T extends ValidComponent = "h2">(
 	const [local, rest] = splitProps(props as DialogTitleProps, ["class"]);
 	return (
 		<DialogPrimitive.Title
-			class={clsx(styles["dialog__title"], local.class)}
+			class={clsx(styles["dialog__title"], "selectable", local.class)}
 			{...rest}
 		/>
 	);
@@ -133,7 +133,7 @@ const DialogDescription = <T extends ValidComponent = "p">(
 	const [local, rest] = splitProps(props as DialogDescriptionProps, ["class"]);
 	return (
 		<DialogPrimitive.Description
-			class={clsx(styles["dialog__description"], local.class)}
+			class={clsx(styles["dialog__description"], "selectable", local.class)}
 			{...rest}
 		/>
 	);

@@ -99,10 +99,12 @@ export function NotificationItem(props: NotificationItemProps) {
 
 				<div class={styles.content}>
 					<div class={styles.header}>
-						<span class={styles.title}>{local.title || "Notification"}</span>
+						<span class={clsx(styles.title, "selectable")}>
+							{local.title || "Notification"}
+						</span>
 						<div class={styles.headerActions}>
 							<Show when={local.created_at}>
-								<span class={styles.timestamp}>
+								<span class={clsx(styles.timestamp, "selectable")}>
 									{formatTimestamp(local.created_at)}
 								</span>
 							</Show>
@@ -123,7 +125,9 @@ export function NotificationItem(props: NotificationItemProps) {
 					</div>
 
 					<Show when={local.description}>
-						<p class={styles.description}>{local.description}</p>
+						<p class={clsx(styles.description, "selectable")}>
+							{local.description}
+						</p>
 					</Show>
 
 					<Show
