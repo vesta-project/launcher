@@ -2,6 +2,13 @@
     position: relative;
     display: flex;
     align-items: center;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.item-hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.95);
 }
 
 .pinned-button {
@@ -92,51 +99,67 @@
     to { transform: scale(1.1); opacity: 1; }
 }
 
-.slide-out-play, .slide-out-stop {
-    position: absolute;
-    left: 100%;
-    margin-left: -12px;
-    background: var(--primary);
-    color: white;
-    border: none;
-    border-radius: 0 12px 12px 0;
-    width: 34px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    opacity: 0;
-    transform: translateX(-15px);
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    z-index: 1;
-    padding-left: 10px;
+.pinned-button-trigger {
+	display: block;
+	width: 40px;
+	height: 40px;
+	cursor: pointer;
 }
 
-.slide-out-stop {
-    background: #ef4444;
+.slide-out-portal {
+	z-index: var(--z-floating-action);
 }
 
-.slide-out-play svg, .slide-out-stop svg {
-    width: 14px;
-    height: 14px;
-    fill: currentColor;
+.action-button-play,
+.action-button-stop {
+	background: var(--primary);
+	color: white;
+	border: none;
+	border-radius: 0 12px 12px 0;
+	width: 32px;
+	height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	cursor: pointer;
+	box-shadow: 3px 0 10px hsl(0deg 0% 0% / 40%);
+	transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	/* Animation: slide out from behind the icon */
+	animation: slideOutBeneath 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-.pinned-item-container:hover .slide-out-play,
-.pinned-item-container:hover .slide-out-stop {
-    opacity: 1;
-    transform: translateX(0);
+.action-button-stop {
+	background: #ef4444;
 }
 
-.slide-out-play:hover {
-    background: var(--primary-hover);
-    width: 38px;
+.action-button-play svg,
+.action-button-stop svg {
+	width: 14px;
+	height: 14px;
+	fill: currentColor;
 }
 
-.slide-out-stop:hover {
-    background: #dc2626;
-    width: 38px;
+.action-button-play:hover {
+	background: var(--primary-hover);
+    width: 42px;
+    transform: translateX(4px);
+}
+
+.action-button-stop:hover {
+	background: #dc2626;
+    width: 42px;
+    transform: translateX(4px);
+}
+
+@keyframes slideOutBeneath {
+	from {
+		transform: translateX(-24px);
+		opacity: 0;
+	}
+	to {
+		transform: translateX(0);
+		opacity: 1;
+	}
 }
 
 .menu-item--danger {
@@ -162,11 +185,6 @@
 
 .pinned-item-container :global(.context-menu__item:hover) svg {
     opacity: 1;
-}
-
-.slide-out-play svg {
-    width: 14px;
-    height: 14px;
 }
 
 .menu-item--danger {

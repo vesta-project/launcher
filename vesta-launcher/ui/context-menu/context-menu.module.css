@@ -144,7 +144,7 @@
 
 .context-menu__content,
 .context-menu__sub-content {
-	z-index: 10000;
+	z-index: var(--z-popover);
 	min-width: 220px;
 	padding: 6px;
 	border-radius: 8px;

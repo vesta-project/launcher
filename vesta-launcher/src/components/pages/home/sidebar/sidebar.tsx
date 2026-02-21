@@ -128,7 +128,7 @@ function Sidebar(props: SidebarProps) {
 			}}
 		>
 			<div class={styles["sidebar__root"]}>
-				<div class={styles["sidebar__section"]}>
+				<div class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}>
 					<SidebarProfileButton
 						id={"profile-selector"}
 						tooltip_text={"Profile"}

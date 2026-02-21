@@ -186,22 +186,7 @@ function Root(props: ChildrenProp) {
 	const manager = getDropZoneManager();
 	let leaveTimeout: any;
 
-	// Hover clock: track last hovered element and log it every 5s
-	let _hoverClockInterval: any = undefined;
-	let _lastHovered: Element | null = null;
-
-	function describeElement(el: Element | null) {
-		if (!el) return "<none>";
-		const id = el.id ? `#${el.id}` : "";
-		const cls = el.classList && el.classList.length ? `.${[...el.classList].join('.')}` : "";
-		const tag = el.tagName.toLowerCase();
-		let text = "";
-		if (el.textContent) {
-			text = el.textContent.trim().replace(/\s+/g, " ");
-			if (text.length > 40) text = text.slice(0, 37) + "...";
-		}
-		return `${tag}${id}${cls}${text ? ` — "${text}"` : ""}`;
-	}
+	// Hover clock removed: stopped tracking hovered elements and periodic logging
 
 	const handleWindowDragEnter = (e: DragEvent) => {
 		e.preventDefault();
@@ -558,21 +543,7 @@ function Root(props: ChildrenProp) {
 		window.addEventListener("dragleave", handleWindowDragLeave);
 		window.addEventListener("drop", handleWindowDrop);
 
-		// Track hovered element via mousemove and log it every 5 seconds
-		const handleMouseMove = (e: MouseEvent) => {
-			_lastHovered = document.elementFromPoint(e.clientX, e.clientY);
-		};
-
-		window.addEventListener("mousemove", handleMouseMove);
-		// Expose the handler so cleanup (outside this closure) can remove it
-		(window as any).__vesta_handleMouseMove = handleMouseMove;
-		_hoverClockInterval = setInterval(() => {
-			try {
-				console.log("[HoverClock]", describeElement(_lastHovered));
-			} catch (e) {
-				console.error("[HoverClock] failed to describe element:", e);
-			}
-		}, 10000);
+		// (Hover clock logic intentionally removed)
 	});
 
 	onCleanup(() => {
@@ -592,18 +563,7 @@ function Root(props: ChildrenProp) {
 		window.removeEventListener("dragleave", handleWindowDragLeave);
 		window.removeEventListener("drop", handleWindowDrop);
 
-		// Remove hover clock listener and clear interval
-		const __h = (window as any).__vesta_handleMouseMove;
-		if (__h) {
-			window.removeEventListener("mousemove", __h);
-			try {
-				delete (window as any).__vesta_handleMouseMove;
-			} catch {}
-		}
-		if (_hoverClockInterval) {
-			clearInterval(_hoverClockInterval);
-			_hoverClockInterval = undefined;
-		}
+		// (Hover clock cleanup removed)
 	});
 
 	// Hide loader on first paint rather than a fixed timeout

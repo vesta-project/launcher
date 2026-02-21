@@ -55,7 +55,7 @@
 	box-shadow: 0 4px 12px 0 rgba(0, 0, 0, 0.4);
 	transform-origin: var(--kb-select-content-transform-origin);
 	animation: select__content-hide 200ms ease-in forwards;
-	z-index: 1000;
+	z-index: var(--z-select-dropdown);
 }
 
 .select__content[data-expanded] {

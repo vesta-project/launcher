@@ -20,7 +20,7 @@
 	);
 	color: contrast-color(var(--bg));
 
-	z-index: 1;
+	z-index: var(--z-sidebar);
 	padding: 13px 0 13px 13px;
 	grid-column: 1;
 	grid-row: 1 / 3;
@@ -45,7 +45,7 @@
 	}
 
 	&:is(.sidebar--open) {
-		z-index: 3;
+		z-index: var(--z-sidebar-open);
 		transition:
 			background 250ms,
 			grid-gap 200ms;
@@ -69,8 +69,32 @@
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
-	margin-top: 16px;
-	/* Removed border and padding as handled by pins-separator */
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	padding: 16px 0 32px 0;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+
+	/* Mask gradient for top/bottom scrolling indication */
+	mask-image: linear-gradient(
+		to bottom,
+		transparent,
+		black 16px,
+		black calc(100% - 32px),
+		transparent
+	);
+	-webkit-mask-image: linear-gradient(
+		to bottom,
+		transparent,
+		black 16px,
+		black calc(100% - 32px),
+		transparent
+	);
+}
+
+.sidebar__pins::-webkit-scrollbar {
+	display: none;
 }
 
 .pins-separator {
@@ -80,6 +104,10 @@
 
 .sidebar__pins-container {
 	animation: slideIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 @keyframes slideIn {
@@ -99,10 +127,19 @@
 	display: flex;
 	flex-direction: column;
 	gap: 24px;
+}
 
-	& .actions {
-		gap: 16px;
-	}
+.sidebar__section--top {
+	flex: 1;
+	min-height: 0;
+}
+
+.actions {
+	gap: 16px;
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 }
 
 /* Notification badge (unread count) */

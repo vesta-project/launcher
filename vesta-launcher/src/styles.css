@@ -102,7 +102,14 @@
 	--interactive-disabled: hsl(var(--color__primary-hue) 10% 40% / 0.5);
 
 	/* Z-Index Hierarchy */
+	--z-sidebar: 200;
+	--z-sidebar-open: 200;
+	--z-floating-action: 190; /* Slide-out buttons - behind sidebar for 'emerge' look */
+	--z-select-dropdown: 1000;
+	--z-modal: 2000;
+	--z-toast: 9999;
 	--z-loader: 9999;
+	--z-popover: 10000; /* Context menus, Tooltips */
 
 	/* Icon Colors (for SVG fills) */
 	--icon-primary: hsl(var(--color__primary-hue) 5% 90%);
