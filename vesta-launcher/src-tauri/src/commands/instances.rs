@@ -9,6 +9,7 @@ use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
+use rayon::prelude::*;
 use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use tauri::{Manager, State};
@@ -312,7 +313,17 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
 
     log::info!("Retrieved {} instances", instances.len());
 
-    let processed = instances.into_iter().map(process_instance_icon).collect();
+    let processed: Vec<Instance> = if instances.len() > 50 {
+        instances
+            .into_par_iter()
+            .map(process_instance_icon)
+            .collect()
+    } else {
+        instances
+            .into_iter()
+            .map(process_instance_icon)
+            .collect()
+    };
     Ok(processed)
 }
 

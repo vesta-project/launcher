@@ -40,9 +40,12 @@ export function setLaunching(slug: string, launching: boolean) {
 export async function initializeInstances() {
 	setInstancesState({ loading: true, error: null });
 	try {
-		let instances = await invoke<Instance[]>("list_instances");
+		const [fetchedInstances, account] = await Promise.all([
+			invoke<Instance[]>("list_instances"),
+			invoke<any>("get_active_account"),
+		]);
 
-		const account = await invoke<any>("get_active_account");
+		let instances = fetchedInstances;
 		if (account && account.account_type === ACCOUNT_TYPE_GUEST) {
 			const virtualInstance = createDemoInstance();
 			instances = [virtualInstance, ...instances];

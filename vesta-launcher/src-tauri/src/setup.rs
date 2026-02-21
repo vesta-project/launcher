@@ -212,6 +212,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // ---------------------------
 
     // Recovery for interrupted installs - move any stuck 'installing' instances to 'interrupted'
+    let mut interrupted_instances = Vec::new();
     {
         use crate::schema::instance::dsl::*;
         use crate::utils::db::get_vesta_conn;
@@ -224,75 +225,22 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 .execute(&mut conn);
 
             match result {
-                Ok(count) if count > 0 => log::info!(
-                    "Recovered {} interrupted installations (set to 'interrupted')",
-                    count
-                ),
+                Ok(count) if count > 0 => {
+                    log::info!(
+                        "Recovered {} interrupted installations (set to 'interrupted')",
+                        count
+                    );
+                    // Fetch them so we can notify later
+                    if let Ok(list) = instance
+                        .filter(installation_status.eq("interrupted"))
+                        .load::<crate::models::instance::Instance>(&mut conn)
+                    {
+                        interrupted_instances = list;
+                    }
+                }
                 Ok(_) => log::debug!("No interrupted installations found"),
                 Err(e) => log::error!("Failed to recover interrupted installations: {}", e),
             }
-
-            // Create notifications for ALL interrupted instances on startup
-            let handle = app.handle().clone();
-            tauri::async_runtime::spawn(async move {
-                use crate::models::instance::Instance;
-                use crate::notifications::models::{
-                    CreateNotificationInput, NotificationAction, NotificationType,
-                };
-                use crate::schema::instance::dsl::*;
-
-                // Wait for NotificationManager to be definitely ready in state
-                tokio::time::sleep(std::time::Duration::from_millis(800)).await;
-
-                if let Ok(mut conn) = get_vesta_conn() {
-                    if let Ok(interrupted_list) = instance
-                        .filter(installation_status.eq("interrupted"))
-                        .load::<Instance>(&mut conn)
-                    {
-                        let manager = handle.state::<NotificationManager>();
-                        for inst in interrupted_list {
-                            let raw_op = inst.last_operation.as_deref().unwrap_or("installation");
-                            let display_op = match raw_op {
-                                "hard-reset" => "hard reset",
-                                "repair" => "repair",
-                                _ => "installation",
-                            };
-                            let description = format!(
-                                "The {} for '{}' was interrupted. Would you like to resume?",
-                                display_op, inst.name
-                            );
-
-                            let actions = vec![NotificationAction {
-                                action_id: "resume_instance_operation".to_string(),
-                                label: "Resume Now".to_string(),
-                                action_type: "primary".to_string(),
-                                payload: None,
-                            }];
-
-                            if let Err(e) = manager.create(CreateNotificationInput {
-                                client_key: Some(format!("interrupted_instance_{}", inst.id)),
-                                title: Some("Interrupted Operation Detected".to_string()),
-                                description: Some(description),
-                                severity: Some("warning".to_string()),
-                                notification_type: Some(NotificationType::Patient),
-                                dismissible: Some(true),
-                                actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
-                                progress: None,
-                                current_step: None,
-                                total_steps: None,
-                                metadata: None,
-                                show_on_completion: None,
-                            }) {
-                                log::error!(
-                                    "Failed to create interrupted-instance notification for {}: {}",
-                                    inst.name,
-                                    e
-                                );
-                            }
-                        }
-                    }
-                }
-            });
         }
     }
 
@@ -301,12 +249,63 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize NotificationManager
     let notification_manager = NotificationManager::new(app.handle().clone());
-
-    // Clear old task-related notifications from previous sessions
-    // This includes Progress (unfinished tasks) and Patient (completed tasks)
     let _ = notification_manager.clear_task_notifications();
-
     app.manage(notification_manager);
+
+    // Create notifications for interrupted instances if any
+    if !interrupted_instances.is_empty() {
+        let app_handle = app.handle();
+        tauri::async_runtime::spawn(async move {
+            use crate::notifications::models::{
+                CreateNotificationInput, NotificationAction, NotificationType,
+            };
+
+            let manager = app_handle
+                .state::<NotificationManager>()
+                .inner()
+                .clone();
+            for inst in interrupted_instances {
+                let raw_op = inst.last_operation.as_deref().unwrap_or("installation");
+                let display_op = match raw_op {
+                    "hard-reset" => "hard reset",
+                    "repair" => "repair",
+                    _ => "installation",
+                };
+                let description = format!(
+                    "The {} for '{}' was interrupted. Would you like to resume?",
+                    display_op, inst.name
+                );
+
+                let actions = vec![NotificationAction {
+                    action_id: "resume_instance_operation".to_string(),
+                    label: "Resume Now".to_string(),
+                    action_type: "primary".to_string(),
+                    payload: None,
+                }];
+
+                if let Err(e) = manager.create(CreateNotificationInput {
+                    client_key: Some(format!("interrupted_instance_{}", inst.id)),
+                    title: Some("Interrupted Operation Detected".to_string()),
+                    description: Some(description),
+                    severity: Some("warning".to_string()),
+                    notification_type: Some(NotificationType::Patient),
+                    dismissible: Some(true),
+                    actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
+                    progress: None,
+                    current_step: None,
+                    total_steps: None,
+                    metadata: None,
+                    show_on_completion: None,
+                }) {
+                    log::error!(
+                        "Failed to create interrupted-instance notification for {}: {}",
+                        inst.name,
+                        e
+                    );
+                }
+            }
+        });
+    }
 
     // Initialize DiscordManager
     let discord_manager = DiscordManager::new(app.handle().clone());

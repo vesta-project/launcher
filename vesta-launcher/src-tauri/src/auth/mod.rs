@@ -916,13 +916,16 @@ pub async fn get_player_head_path(
 pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
     let accounts = get_accounts()?;
 
-    for acct in accounts {
-        // Set force_download to true so skins update on every launch
-        let _ = get_player_head_path(app.clone(), acct.uuid, true).await;
-    }
+    let futures = accounts.into_iter().map(|acct| {
+        let app = app.clone();
+        async move {
+            let _ = get_player_head_path(app, acct.uuid, true).await;
+        }
+    });
+
+    futures::future::join_all(futures).await;
 
     // Emit event so frontend knows heads might have changed
-    use tauri::Emitter;
     let _ = app.emit("core://account-heads-updated", ());
 
     Ok(())

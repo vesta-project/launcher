@@ -6,9 +6,14 @@ function createAuthStore() {
 	const [expiredAccount, setExpiredAccount] = createSignal<Account | null>(
 		null,
 	);
+	const [activeAccount, setActiveAccount] = createSignal<Account | null>(
+		null,
+	);
 
 	const refreshState = async () => {
 		const active = await getActiveAccount();
+		setActiveAccount(active);
+		
 		if (active?.is_expired) {
 			setExpiredAccount(active);
 		} else {
@@ -18,6 +23,7 @@ function createAuthStore() {
 
 	// Listen for account changes to keep state fresh
 	listen("core://accounts-changed", refreshState);
+	listen("core://account-heads-updated", refreshState);
 
 	// Check initial state
 	refreshState();
@@ -25,6 +31,8 @@ function createAuthStore() {
 	return {
 		expiredAccount,
 		setExpiredAccount,
+		activeAccount,
+		refreshState,
 	};
 }
 
