@@ -7,6 +7,7 @@ import { type MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import { isPinned, pinning, pinPage, unpinPage } from "@stores/pinning";
+import { resources } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { showToast } from "@ui/toast/toast";
@@ -40,11 +41,25 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 
 		if (path === "/resource-details" && params?.projectId) {
 			const projectId = String(params.projectId);
+			const selected = resources.state.selectedProject;
+
+			// If we're on the page for this project, prefer the store's "live" name/icon
+			const isMatchesSelected =
+				selected && selected.id === projectId;
+
 			return {
 				type: "resource" as const,
 				id: projectId,
-				label: (params as any).name ? String((params as any).name) : "Resource",
-				icon: (params as any).iconUrl ? String((params as any).iconUrl) : null,
+				label: isMatchesSelected
+					? selected.name
+					: (params as any).name
+						? String((params as any).name)
+						: "Resource",
+				icon: isMatchesSelected
+					? selected.icon_url
+					: (params as any).iconUrl
+						? String((params as any).iconUrl)
+						: null,
 				platform: params.platform ? String(params.platform) : "modrinth",
 			};
 		}

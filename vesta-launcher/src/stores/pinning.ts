@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { createStore } from "solid-js/store";
+import { resources } from "./resources";
 
 export interface PinnedPage {
 	id: number;
@@ -37,6 +38,9 @@ export async function initializePinning() {
 	try {
 		const pins = await invoke<PinnedPage[]>("get_pinned_pages");
 		setPinningState({ pins, loading: false });
+
+		// Background refresh
+		refreshPinnedMetadata();
 	} catch (e) {
 		console.error("Failed to initialize pinning:", e);
 		setPinningState({ loading: false });
@@ -81,4 +85,60 @@ export function isPinned(type: string, targetId: string) {
 	return pinningState.pins.some(
 		(p) => p.page_type === type && p.target_id === targetId,
 	);
+}
+
+export async function updatePinnedMetadata(
+	pinId: number,
+	newLabel?: string,
+	newIconUrl?: string,
+) {
+	try {
+		await invoke("update_pinned_metadata", {
+			pinId,
+			newLabel,
+			newIconUrl,
+		});
+
+		// Update local state
+		setPinningState("pins", (p) => p.id === pinId, {
+			label: newLabel ?? undefined,
+			icon_url: newIconUrl ?? undefined,
+		});
+	} catch (e) {
+		console.error("Failed to update pinned metadata:", e);
+	}
+}
+
+/**
+ * Background sync for pinned resources to ensure they have the latest names and icons.
+ */
+export async function refreshPinnedMetadata() {
+	const resourcePins = pinningState.pins.filter(
+		(p) => p.page_type === "resource" && p.platform,
+	);
+
+	for (const pin of resourcePins) {
+		try {
+			// This will check cache first
+			const project = await resources.getProject(
+				pin.platform as any,
+				pin.target_id,
+			);
+			if (!project) continue;
+
+			const needsLabelUpdate = project.name !== pin.label;
+			const needsIconUpdate = project.icon_url !== pin.icon_url;
+
+			if (needsLabelUpdate || needsIconUpdate) {
+				console.log(`[Pinning] Updating metadata for ${pin.target_id}`);
+				await updatePinnedMetadata(
+					pin.id,
+					needsLabelUpdate ? project.name : undefined,
+					needsIconUpdate ? project.icon_url || undefined : undefined,
+				);
+			}
+		} catch (e) {
+			console.warn(`[Pinning] Failed to refresh metadata for ${pin.target_id}:`, e);
+		}
+	}
 }

@@ -803,6 +803,7 @@ export default function InstanceDetails(
 				activeRouter()?.navigate("/resource-details", {
 					projectId: row.original.remote_id,
 					platform: row.original.platform,
+					name: row.original.display_name,
 				});
 			}
 		}

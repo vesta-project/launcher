@@ -149,6 +149,8 @@ const DependencyItem = (props: {
 							{
 								projectId: p.id,
 								platform: p.source,
+								name: p.name,
+								iconUrl: p.icon_url,
 							},
 							{
 								project: p,
@@ -1113,6 +1115,8 @@ const ResourceDetailsPage: Component<{
 																activeRouter()?.navigate("/resource-details", {
 																	projectId: peer.id,
 																	platform: "modrinth",
+																	name: peer.name,
+																	iconUrl: peer.icon_url,
 																});
 															}
 														}}
@@ -1132,6 +1136,8 @@ const ResourceDetailsPage: Component<{
 																activeRouter()?.navigate("/resource-details", {
 																	projectId: peer.id,
 																	platform: "curseforge",
+																	name: peer.name,
+																	iconUrl: peer.icon_url,
 																});
 															}
 														}}

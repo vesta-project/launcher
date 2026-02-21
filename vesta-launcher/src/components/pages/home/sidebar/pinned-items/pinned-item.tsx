@@ -3,6 +3,7 @@ import StopIcon from "@assets/rounded-square.svg";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { instancesState, setLaunching } from "@stores/instances";
 import { type PinnedPage, pinning, unpinPage } from "@stores/pinning";
+import { resources } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
 import {
 	ContextMenu,
@@ -81,11 +82,36 @@ export function PinnedItem(props: PinnedItemProps) {
 	);
 	const isCrashed = createMemo(() => instance()?.crashed);
 
-	// Derived live metadata (falls back to pin snapshot if instance not found)
-	const displayName = createMemo(() => instance()?.name ?? props.pin.label);
-	const displayIcon = createMemo(
-		() => instance()?.iconPath ?? props.pin.icon_url,
-	);
+	const resource = createMemo(() => {
+		if (props.pin.page_type !== "resource") return null;
+		// Check both if it's the currently selected project AND if it's in the results list
+		if (resources.state.selectedProject?.id === props.pin.target_id) {
+			return resources.state.selectedProject;
+		}
+		return resources.state.results.find((r) => r.id === props.pin.target_id);
+	});
+
+	// Derived live metadata (falls back to pin snapshot if instance/resource not found)
+	// Priority: Live Instance > Live Resource > Stored Pin Label
+	const displayName = createMemo(() => {
+		const inst = instance();
+		if (inst) return inst.name;
+
+		const res = resource();
+		if (res) return res.name;
+
+		return props.pin.label;
+	});
+
+	const displayIcon = createMemo(() => {
+		const inst = instance();
+		if (inst) return inst.iconPath;
+
+		const res = resource();
+		if (res) return res.icon_url;
+
+		return props.pin.icon_url;
+	});
 
 	const handleClick = () => {
 		if (props.pin.page_type === "instance") {
@@ -96,8 +122,8 @@ export function PinnedItem(props: PinnedItemProps) {
 			router()?.navigate("/resource-details", {
 				projectId: props.pin.target_id,
 				platform: props.pin.platform,
-				name: props.pin.label,
-				iconUrl: props.pin.icon_url,
+				name: displayName(),
+				iconUrl: displayIcon() || undefined,
 			});
 		}
 		setPageViewerOpen(true);

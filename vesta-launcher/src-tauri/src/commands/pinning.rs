@@ -53,3 +53,40 @@ pub async fn reorder_pinned_pages(pin_ids: Vec<i32>) -> Result<(), String> {
 
     Ok(())
 }
+
+#[command]
+pub async fn update_pinned_metadata(
+    pin_id: i32,
+    new_label: Option<String>,
+    new_icon_url: Option<String>,
+) -> Result<(), String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    if new_label.is_none() && new_icon_url.is_none() {
+        return Ok(());
+    }
+
+    match (new_label, new_icon_url) {
+        (Some(l), Some(i)) => {
+            diesel::update(pinned_page.filter(id.eq(pin_id)))
+                .set((label.eq(l), icon_url.eq(i)))
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
+        (Some(l), None) => {
+            diesel::update(pinned_page.filter(id.eq(pin_id)))
+                .set(label.eq(l))
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
+        (None, Some(i)) => {
+            diesel::update(pinned_page.filter(id.eq(pin_id)))
+                .set(icon_url.eq(i))
+                .execute(&mut conn)
+                .map_err(|e| e.to_string())?;
+        }
+        _ => {}
+    }
+
+    Ok(())
+}

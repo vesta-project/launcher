@@ -508,6 +508,8 @@ const ResourceCard: Component<{
 			{
 				projectId: props.project.id,
 				platform: props.project.source,
+				name: props.project.name,
+				iconUrl: props.project.icon_url,
 			},
 			{
 				project: props.project,
