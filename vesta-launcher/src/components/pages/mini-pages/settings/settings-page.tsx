@@ -111,6 +111,7 @@ interface AppConfig {
 	tutorial_completed: boolean;
 	use_dedicated_gpu: boolean;
 	discord_presence_enabled: boolean;
+	auto_install_dependencies: boolean;
 	[key: string]: any;
 }
 
@@ -133,6 +134,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 	const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
 	const [discordPresenceEnabled, setDiscordPresenceEnabled] =
+		createSignal(true);
+	const [autoInstallDependencies, setAutoInstallDependencies] =
 		createSignal(true);
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
@@ -384,6 +387,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setStartupCheckUpdates(config.startup_check_updates ?? true);
 				setUseDedicatedGpu(config.use_dedicated_gpu ?? true);
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
+				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
@@ -691,6 +695,16 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
+	const handleAutoInstallDepsToggle = async (checked: boolean) => {
+		setAutoInstallDependencies(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "auto_install_dependencies",
+				value: checked,
+			});
+		}
+	};
+
 	const handleOpenAppData = async () => {
 		if (hasTauriRuntime()) {
 			await invoke("open_app_config_dir");
@@ -831,6 +845,24 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 										<Switch
 											checked={discordPresenceEnabled()}
 											onCheckedChange={handleDiscordToggle}
+										>
+											<SwitchControl>
+												<SwitchThumb />
+											</SwitchControl>
+										</Switch>
+									}
+								/>
+							</SettingsCard>
+
+							<SettingsCard header="Resources">
+								<SettingsField
+									label="Automatically Install Dependencies"
+									description="Automatically download and install required mods and engines when adding a new resource."
+									layout="inline"
+									control={
+										<Switch
+											checked={autoInstallDependencies()}
+											onCheckedChange={handleAutoInstallDepsToggle}
 										>
 											<SwitchControl>
 												<SwitchThumb />

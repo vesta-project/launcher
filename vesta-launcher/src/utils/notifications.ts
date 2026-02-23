@@ -379,11 +379,8 @@ async function subscribeToBackendNotifications() {
 
 						// Update the toast UI
 						const clientKey = notif.client_key;
-						// Use actions from payload if available, otherwise keep existing
-						const currentActions =
-							notif.actions && notif.actions.length > 0
-								? notif.actions
-								: existing.actions;
+						// Use actions from payload if provided (even if empty)
+						const currentActions = notif.actions !== undefined ? notif.actions : existing.actions;
 
 						updateToast(existing.id, {
 							title: notif.title || existing.title,

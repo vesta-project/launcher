@@ -44,10 +44,6 @@ import {
 	isDefaultIcon,
 } from "@utils/instances";
 import { parseResourceUrl } from "@utils/resource-url";
-import {
-	getShaderEnginesInOrder,
-	type ShaderEngineInfo,
-} from "@utils/resources";
 import { sanitizeSvg } from "@utils/security";
 import {
 	batch,
@@ -544,8 +540,8 @@ const ResourceCard: Component<{
 				try {
 					await resources.install(props.project, latest);
 					showToast({
-						title: "Updated",
-						description: `${props.project.name} has been updated.`,
+						title: "Update Started",
+						description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
 						severity: "success",
 					});
 				} catch (err) {
@@ -636,63 +632,10 @@ const ResourceCard: Component<{
 					});
 				}
 
-				// If it's a shader, check for required engine
-				if (props.project.resource_type === "shader") {
-					const engines = getShaderEnginesInOrder(instance.modloader);
-					const installedInTarget = await resources.getInstalled(instance.id);
-
-					const engineInstalled = installedInTarget.some(
-						(ir) =>
-							ir.display_name.toLowerCase().includes("iris") ||
-							ir.display_name.toLowerCase().includes("oculus"),
-					);
-
-					if (!engineInstalled && engines.length > 0) {
-						// Find the first engine that is compatible with the instance MC version
-						let bestEngine = null;
-						let engineProject = null;
-
-						for (const engineInfo of engines) {
-							try {
-								const versions = await resources.getVersions(
-									engineInfo.source,
-									engineInfo.id,
-								);
-								const best = findBestVersion(
-									versions,
-									instance.minecraftVersion,
-									instance.modloader,
-									"release",
-									"mod",
-								);
-								if (best) {
-									bestEngine = best;
-									engineProject = await resources.getProject(
-										engineInfo.source,
-										engineInfo.id,
-									);
-									break;
-								}
-							} catch (e) {
-								console.error(`Failed to check engine ${engineInfo.name}:`, e);
-							}
-						}
-
-						if (bestEngine && engineProject) {
-							showToast({
-								title: "Shader Engine Required",
-								description: `Installing ${engineProject.name} to support shaders...`,
-								severity: "info",
-							});
-							await resources.install(engineProject, bestEngine, instance.id);
-						}
-					}
-				}
-
 				await resources.install(props.project, best);
 				showToast({
-					title: "Success",
-					description: `Installed ${props.project.name} to ${instance.name}`,
+					title: "Installation Started",
+					description: `Check the notifications in the sidebar for progress on ${props.project.name}.`,
 					severity: "success",
 				});
 			} else {
@@ -1386,58 +1329,6 @@ const ResourceBrowser: Component<{
 			);
 
 			if (best) {
-				// If it's a shader, check for required engine
-				if (project.resource_type === "shader") {
-					const engines = getShaderEnginesInOrder(instance.modloader);
-					const installedInTarget = await resources.getInstalled(instance.id);
-					// Check if *either* major shader engine is installed
-					const engineInstalled = installedInTarget.some(
-						(ir) =>
-							ir.display_name.toLowerCase().includes("iris") ||
-							ir.display_name.toLowerCase().includes("oculus"),
-					);
-
-					if (!engineInstalled && engines.length > 0) {
-						let bestEngine = null;
-						let engineProject = null;
-
-						for (const engineInfo of engines) {
-							try {
-								const versions = await resources.getVersions(
-									engineInfo.source,
-									engineInfo.id,
-								);
-								const vBest = findBestVersion(
-									versions,
-									instance.minecraftVersion,
-									instance.modloader,
-									"release",
-									"mod",
-								);
-								if (vBest) {
-									bestEngine = vBest;
-									engineProject = await resources.getProject(
-										engineInfo.source,
-										engineInfo.id,
-									);
-									break;
-								}
-							} catch (e) {
-								console.error(`Failed to check engine ${engineInfo.name}:`, e);
-							}
-						}
-
-						if (bestEngine && engineProject) {
-							showToast({
-								title: "Shader Engine Required",
-								description: `Installing ${engineProject.name} to support shaders...`,
-								severity: "info",
-							});
-							await resources.install(engineProject, bestEngine, instance.id);
-						}
-					}
-				}
-
 				await resources.install(project, best, instance.id);
 				showToast({
 					title: "Success",

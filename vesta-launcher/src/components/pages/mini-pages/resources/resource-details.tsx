@@ -41,8 +41,6 @@ import { DEFAULT_ICONS, type Instance, isDefaultIcon } from "@utils/instances";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import {
 	getCompatibilityForInstance,
-	getShaderEnginesInOrder,
-	type ShaderEngineInfo,
 } from "@utils/resources";
 import { marked } from "marked";
 import {
@@ -909,62 +907,6 @@ const ResourceDetailsPage: Component<{
 
 		if (p) {
 			try {
-				// Check for shader engine dependencies
-				if (p.resource_type === "shader" && inst) {
-					const engines = getShaderEnginesInOrder(inst.modloader);
-					const installedInTarget = await resources.getInstalled(inst.id);
-					// Check if *either* major shader engine is installed
-					const isAnyEngineInstalled = installedInTarget.some(
-						(ir) =>
-							ir.display_name.toLowerCase().includes("iris") ||
-							ir.display_name.toLowerCase().includes("oculus"),
-					);
-
-					if (!isAnyEngineInstalled && engines.length > 0) {
-						let bestEngineVersion = null;
-						let engineProject = null;
-
-						for (const engineInfo of engines) {
-							try {
-								const versions = await resources.getVersions(
-									engineInfo.source,
-									engineInfo.id,
-								);
-								const vBest = findBestVersion(
-									versions,
-									inst.minecraftVersion,
-									inst.modloader,
-									"release",
-									"mod",
-								);
-								if (vBest) {
-									bestEngineVersion = vBest;
-									engineProject = await resources.getProject(
-										engineInfo.source,
-										engineInfo.id,
-									);
-									break;
-								}
-							} catch (e) {
-								console.error(`Failed to check engine ${engineInfo.name}:`, e);
-							}
-						}
-
-						if (bestEngineVersion && engineProject) {
-							showToast({
-								title: "Shader Engine Required",
-								description: `Installing ${engineProject.name} to support shaders...`,
-								severity: "info",
-							});
-							await resources.install(
-								engineProject,
-								bestEngineVersion,
-								inst.id,
-							);
-						}
-					}
-				}
-
 				// Check for cross-loader compatibility warning
 				if (inst) {
 					const instLoader = inst.modloader?.toLowerCase() || "";
@@ -987,8 +929,8 @@ const ResourceDetailsPage: Component<{
 
 				await resources.install(p, version, inst?.id);
 				showToast({
-					title: "Success",
-					description: `Installed ${p.name} to ${inst?.name}`,
+					title: "Installation Started",
+					description: `Check the notifications in the sidebar for progress on ${p.name}.`,
 					severity: "success",
 				});
 			} catch (err) {

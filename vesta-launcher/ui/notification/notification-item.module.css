@@ -74,9 +74,8 @@
 	font-size: var(--font-xsmall);
 	font-weight: 700;
 	color: var(--text-primary);
-	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
+	white-space: normal;
+	word-break: break-word;
 	flex: 1;
 	user-select: text;
 	cursor: text;

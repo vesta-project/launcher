@@ -7,8 +7,9 @@ use tokio::sync::Mutex;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceMetadataCacheRecord, ResourceProject,
-    ResourceProjectRecord, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceMetadataCacheRecord,
+    ResourceProject, ResourceProjectRecord, ResourceType, ResourceVersion, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
@@ -105,6 +106,7 @@ impl ResourceManager {
     pub async fn resolve_dependencies(
         &self,
         platform: SourcePlatform,
+        resource_type: ResourceType,
         version: &ResourceVersion,
         mc_version: &str,
         loader: &str,
@@ -112,6 +114,44 @@ impl ResourceManager {
         let mut resolved = Vec::new();
         let mut visited = HashSet::new();
         let mut current_level_deps = version.dependencies.clone();
+
+        // Synthetic Dependency Injection for Shaders
+        if resource_type == ResourceType::Shader {
+            let loader_lower = loader.to_lowercase();
+            let is_cf = platform == SourcePlatform::CurseForge;
+
+            let engine_id = if loader_lower == "forge" {
+                if is_cf {
+                    Some("581495") // Oculus (CurseForge)
+                } else {
+                    Some("oculus") // Oculus (Modrinth)
+                }
+            } else if loader_lower == "fabric" || loader_lower == "quilt" {
+                if is_cf {
+                    Some("445996") // Iris (CurseForge)
+                } else {
+                    Some("iris") // Iris (Modrinth)
+                }
+            } else if loader_lower == "neoforge" {
+                // For NeoForge, default to Iris (similar to frontend)
+                if is_cf {
+                    Some("445996")
+                } else {
+                    Some("iris")
+                }
+            } else {
+                None
+            };
+
+            if let Some(id) = engine_id {
+                current_level_deps.push(ResourceDependency {
+                    project_id: id.to_string(),
+                    version_id: None,
+                    file_name: None,
+                    dependency_type: DependencyType::Required,
+                });
+            }
+        }
 
         // Add current project to visited to avoid circularities
         visited.insert(version.project_id.clone());
@@ -151,8 +191,23 @@ impl ResourceManager {
 
             for dep in unique_deps_to_process {
                 let project = match projects_map.get(&dep.project_id) {
-                    Some(p) => p.clone(),
-                    None => continue,
+                    Some(p) => Some(p.clone()),
+                    None => {
+                        // If not found by primary ID, try matching against slugs in web_url
+                        // (Modrinth often returns numerical IDs even if requested by slug)
+                        projects_map.values().find(|p| {
+                            p.id == dep.project_id || 
+                            p.web_url.ends_with(&format!("/{}", dep.project_id))
+                        }).cloned()
+                    }
+                };
+
+                let project = match project {
+                    Some(p) => p,
+                    None => {
+                        log::warn!("[DependencyResolution] Could not find project metadata for {} in fetched results", dep.project_id);
+                        continue;
+                    }
                 };
 
                 // 2. Find best version for environment

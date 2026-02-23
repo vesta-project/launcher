@@ -144,6 +144,8 @@ pub struct AppConfig {
 
     // Discord integration
     pub discord_presence_enabled: bool,
+
+    pub auto_install_dependencies: bool,
 }
 
 impl Default for AppConfig {
@@ -189,6 +191,7 @@ impl Default for AppConfig {
 
             use_dedicated_gpu: true,
             discord_presence_enabled: true,
+            auto_install_dependencies: true,
         }
     }
 }

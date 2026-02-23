@@ -38,6 +38,7 @@ diesel::table! {
         tutorial_completed -> Bool,
         use_dedicated_gpu -> Bool,
         discord_presence_enabled -> Bool,
+        auto_install_dependencies -> Bool,
     }
 }
 

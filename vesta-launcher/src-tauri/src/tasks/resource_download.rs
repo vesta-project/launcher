@@ -21,13 +21,14 @@ pub struct ResourceDownloadTask {
     pub project_name: String,
     pub version: ResourceVersion,
     pub resource_type: ResourceType,
+    pub dependency_for: Option<String>,
 }
 
 impl Task for ResourceDownloadTask {
     fn name(&self) -> String {
         format!(
-            "Installing {} ({})",
-            self.project_name, self.version.version_number
+            "Installing {}",
+            self.project_name
         )
     }
 
@@ -40,6 +41,26 @@ impl Task for ResourceDownloadTask {
 
     fn cancellable(&self) -> bool {
         true
+    }
+
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
+    fn completion_description(&self) -> String {
+        if let Some(ref parent) = self.dependency_for {
+            format!("{} installed successfully (Required by {})", self.project_name, parent)
+        } else {
+            format!("{} installed successfully", self.project_name)
+        }
+    }
+
+    fn starting_description(&self) -> String {
+        if let Some(ref parent) = self.dependency_for {
+            format!("Required by {}", parent)
+        } else {
+            "Starting...".to_string()
+        }
     }
 
     fn run(
@@ -142,7 +163,7 @@ impl Task for ResourceDownloadTask {
                 downloaded += chunk.len() as u64;
 
                 let now = std::time::Instant::now();
-                if now.duration_since(last_update).as_millis() > 500 {
+                if now.duration_since(last_update).as_millis() > 250 {
                     let elapsed = now.duration_since(last_update).as_secs_f64();
                     let speed = (downloaded - last_downloaded) as f64 / elapsed; // bytes/sec
 

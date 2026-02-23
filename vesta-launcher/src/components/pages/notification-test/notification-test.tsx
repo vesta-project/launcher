@@ -41,7 +41,15 @@ function NotificationTestPage() {
 	const testPersistentWarning = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_warning");
+			await invoke("create_notification", {
+				payload: {
+					title: "Test Warning",
+					message: "This is a persistent warning notification.",
+					severity: "warning",
+					notification_type: "Patient",
+					dismissible: true,
+				}
+			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {
@@ -52,7 +60,15 @@ function NotificationTestPage() {
 	const testPersistentError = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_error");
+			await invoke("create_notification", {
+				payload: {
+					title: "Test Error",
+					message: "This is a persistent error notification.",
+					severity: "error",
+					notification_type: "Patient",
+					dismissible: true,
+				}
+			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {
@@ -63,7 +79,15 @@ function NotificationTestPage() {
 	const testProgressPulsing = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_pulsing");
+			await invoke("create_notification", {
+				payload: {
+					title: "Pulsing Task",
+					message: "This task is doing something...",
+					severity: "info",
+					notification_type: "Progress",
+					progress: -1,
+				}
+			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {
@@ -74,7 +98,15 @@ function NotificationTestPage() {
 	const testProgressBar = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_progress");
+			await invoke("create_notification", {
+				payload: {
+					title: "Progress Task",
+					message: "Downloading data...",
+					severity: "info",
+					notification_type: "Progress",
+					progress: 45,
+				}
+			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {
@@ -85,7 +117,11 @@ function NotificationTestPage() {
 	const testMultipleNotifications = async () => {
 		setLoading(true);
 		try {
-			await invoke("test_notification_multiple");
+			await Promise.all([
+				testPersistentWarning(),
+				testPersistentError(),
+				testProgressBar(),
+			]);
 		} catch (error) {
 			console.error("Failed to create notifications:", error);
 		} finally {
@@ -96,12 +132,10 @@ function NotificationTestPage() {
 	const checkTables = async () => {
 		setLoading(true);
 		try {
-			const tables = await invoke<string[]>("debug_check_tables");
-			console.log("Database tables:", tables);
-			await dialogStore.alert("Database Tables", tables.join(", "));
+			console.log("checkTables command is currently disabled in backend");
+			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
 		} catch (error) {
 			console.error("Failed to check tables:", error);
-			await dialogStore.alert("Database Error", String(error), "error");
 		} finally {
 			setLoading(false);
 		}
@@ -110,12 +144,10 @@ function NotificationTestPage() {
 	const rerunMigrations = async () => {
 		setLoading(true);
 		try {
-			const result = await invoke<string>("debug_rerun_migrations");
-			console.log(result);
-			await dialogStore.alert("Migrations Result", result);
+			console.log("rerunMigrations command is currently disabled in backend");
+			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
 		} catch (error) {
 			console.error("Failed to rerun migrations:", error);
-			await dialogStore.alert("Migration Error", String(error), "error");
 		} finally {
 			setLoading(false);
 		}
@@ -124,10 +156,8 @@ function NotificationTestPage() {
 	const submitCancellableTask = async () => {
 		setLoading(true);
 		try {
-			await invoke("submit_test_task", {
-				title: "Long Running Task",
-				durationSecs: 15,
-			});
+			console.log("submit_test_task command is currently disabled in backend");
+			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
 		} catch (error) {
 			console.error("Failed to submit task:", error);
 		} finally {

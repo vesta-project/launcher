@@ -314,6 +314,9 @@ pub async fn install_resource(
 
     let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
+    // 0. Get config for dependency preferences
+    let app_config = crate::utils::config::get_app_config().unwrap_or_default();
+
     // 1. Get instance info for context
     let instance = inst_dsl::instance
         .filter(inst_dsl::id.eq(instance_id))
@@ -322,21 +325,45 @@ pub async fn install_resource(
 
     // 2. Resolve dependencies
     let loader = instance.modloader.as_deref().unwrap_or("vanilla");
-    let dependencies = if resource_type == ResourceType::Mod {
-        resource_manager
-            .resolve_dependencies(platform, &version, &instance.minecraft_version, loader)
-            .await?
-    } else {
-        Vec::new()
-    };
+    let mut dependencies = resource_manager
+        .resolve_dependencies(
+            platform,
+            resource_type,
+            &version,
+            &instance.minecraft_version,
+            loader,
+        )
+        .await?;
 
-    // 3. Get currently installed resources to skip duplicates
+    // 3. Filter dependencies based on user settings
+    if !app_config.auto_install_dependencies {
+        // If auto-install is off, we only keep "synthetic" dependencies (like Iris/Oculus)
+        // that are injected for Shaders to ensure they work.
+        // For other mods, we clear the list.
+        if resource_type != ResourceType::Shader {
+            dependencies.clear();
+        } else {
+            // Keep only the shader engines (Iris/Oculus)
+            dependencies.retain(|(p, _)| {
+                let id_lower = p.id.to_lowercase();
+                let name_lower = p.name.to_lowercase();
+                
+                // Match by known slugs, IDs, or common names
+                id_lower == "iris" || id_lower == "oculus" || 
+                id_lower == "445996" || id_lower == "581495" ||
+                name_lower == "iris" || name_lower == "oculus" ||
+                name_lower.contains("iris shaders") || name_lower.contains("oculus shaders")
+            });
+        }
+    }
+
+    // 4. Get currently installed resources to skip duplicates
     let installed = ir_dsl::installed_resource
         .filter(ir_dsl::instance_id.eq(instance_id))
         .load::<crate::models::installed_resource::InstalledResource>(&mut conn)
         .unwrap_or_default();
 
-    // 4. Submit tasks
+    // 5. Submit tasks
     // Main resource
 
     // Fetch and cache main project metadata (including icon)
@@ -350,9 +377,10 @@ pub async fn install_resource(
         instance_id,
         platform,
         project_id,
-        project_name,
+        project_name: project_name.clone(),
         version,
         resource_type,
+        dependency_for: None,
     };
     task_manager
         .submit(Box::new(main_task))
@@ -409,6 +437,7 @@ pub async fn install_resource(
             project_name: dep_project.name,
             version: dep_version,
             resource_type: ResourceType::Mod,
+            dependency_for: Some(project_name.clone()),
         };
 
         task_manager
