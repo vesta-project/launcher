@@ -38,7 +38,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { formatDate } from "@utils/date";
 import { openExternal } from "@utils/external-link";
 import { DEFAULT_ICONS, type Instance, isDefaultIcon } from "@utils/instances";
-import { parseResourceUrl } from "@utils/resource-url";
+import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import {
 	getCompatibilityForInstance,
 	getShaderEnginesInOrder,
@@ -710,6 +710,7 @@ const ResourceDetailsPage: Component<{
 	const handleDescriptionLink = async (url: string) => {
 		setHoveredLink(null);
 		try {
+			// `parseResourceUrl` internally handles decoding of `/linkout?remoteUrl=` patterns.
 			const parsed = parseResourceUrl(url);
 
 			if (parsed) {
@@ -739,8 +740,9 @@ const ResourceDetailsPage: Component<{
 				return;
 			}
 
-			// Fallback: Open in browser
-			await openExternal(url);
+			// Fallback: Open in browser. Decode linkout wrappers for a cleaner destination.
+			const decoded = decodeCurseForgeLinkout(url);
+			await openExternal(decoded);
 		} catch (e) {
 			console.error("[ResourceDetails] Link handling error:", e);
 			try {
@@ -1050,7 +1052,43 @@ const ResourceDetailsPage: Component<{
 
 		// Ensure no links have target="_blank" which can cause them to open
 		// in the system browser before our intercepted click handler runs.
-		return rawHtml.replace(/target=["']_blank["']/gi, 'target="_self"');
+		// Additionally, rewrite any /linkout?remoteUrl= anchors (including local proxy
+		// rewrites) so that the displayed href / text and the anchor href point to the
+		// decoded remote URL. This improves UX (users don't see the proxy URL) and
+		// ensures middle-click/context-menu open actions target the real destination.
+		try {
+			const parser = new DOMParser();
+			const doc = parser.parseFromString(rawHtml, "text/html");
+			const anchors = Array.from(doc.querySelectorAll("a[href]"));
+			for (const a of anchors) {
+				try {
+					const href = a.getAttribute("href") || "";
+					// Resolve relative hrefs against the app origin to form a full URL if needed
+					let full = href;
+					try {
+						full = new URL(href, window.location.href).toString();
+					} catch {
+						// leave as-is
+					}
+					// Use the shared decoder to detect and extract remote destinations.
+					const decoded = decodeCurseForgeLinkout(full);
+					if (decoded && decoded !== full) {
+						a.setAttribute("href", decoded);
+						// If the link text is the URL itself, update it to the cleaner decoded URL
+						if (a.textContent && a.textContent.trim() === href.trim()) {
+							a.textContent = decoded;
+						}
+					}
+				} catch {
+					// Ignore per-anchor errors
+				}
+			}
+			// Return adjusted HTML and normalize target attribute
+			const adjusted = doc.body.innerHTML.replace(/target=["']_blank["']/gi, 'target="_self"');
+			return adjusted;
+		} catch {
+			return rawHtml.replace(/target=["']_blank["']/gi, 'target="_self"');
+		}
 	});
 
 	return (

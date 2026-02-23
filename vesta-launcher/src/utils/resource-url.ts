@@ -7,12 +7,45 @@ export interface ParsedResourceUrl {
 }
 
 /**
+ * Detects and decodes CurseForge linkout URLs.
+ */
+export function decodeCurseForgeLinkout(url: string): string {
+	try {
+		const parsed = new URL(url);
+			// Detect linkout redirect patterns. Some environments (dev servers, proxies)
+			// may rewrite external URLs to a local /linkout endpoint (e.g. localhost:1420/linkout?remoteUrl=...).
+			// We treat any path named "/linkout" that carries a `remoteUrl` query param as a redirect wrapper
+			// and extract + decode the real destination.
+			if (parsed.pathname === "/linkout") {
+				const remoteUrl = parsed.searchParams.get("remoteUrl");
+				if (remoteUrl) {
+					// CurseForge (and some proxies) sometimes double-encode the URL (e.g. %253a instead of %3a)
+					// Decode once, then decode again if it still contains percent-escapes.
+					let decoded = decodeURIComponent(remoteUrl);
+					if (decoded.includes("%")) {
+						try {
+							decoded = decodeURIComponent(decoded);
+						} catch {
+							// Ignore double-decode errors and keep the once-decoded value
+						}
+					}
+					return decoded;
+				}
+			}
+	} catch {
+		// Fallback to original URL
+	}
+	return url;
+}
+
+/**
  * Parses a resource URL (Modrinth or CurseForge) into platform and ID/slug.
- * Handles both modern and legacy URL structures.
+ * Handles both modern and legacy URL structures, as well as CurseForge linkout redirects.
  */
 export function parseResourceUrl(url: string): ParsedResourceUrl | null {
 	try {
-		const parsedUrl = new URL(url);
+		const decodedUrl = decodeCurseForgeLinkout(url);
+		const parsedUrl = new URL(decodedUrl);
 		const hostname = parsedUrl.hostname.toLowerCase();
 		const pathParts = parsedUrl.pathname.split("/").filter((p) => p);
 
