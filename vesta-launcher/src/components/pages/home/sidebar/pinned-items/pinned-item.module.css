@@ -46,6 +46,8 @@
     object-fit: cover;
     position: relative;
     z-index: 1;
+    transform-origin: center;
+    transition: transform 0.2s ease;
 }
 
 .icon-placeholder {
@@ -195,4 +197,19 @@
     width: 14px;
     height: 14px;
     margin-right: 8px;
+}
+
+/* Hover / active effects: match sidebar button shadow + inner-icon zoom */
+.pinned-button:hover {
+    box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+}
+
+.pinned-button:hover .pin-icon,
+.pinned-button:hover svg {
+    transform: scale(1.03);
+}
+
+.pinned-button:active {
+    transform: scale(0.95);
+    transition-duration: 50ms;
 }
