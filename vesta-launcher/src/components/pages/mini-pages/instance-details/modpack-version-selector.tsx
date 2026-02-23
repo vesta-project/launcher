@@ -87,11 +87,11 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 	});
 
 	return (
-		<div>
-			<div class={styles.header}>
+		    <div>
+			    <div class={styles["header"]}>
 				<div style="display: flex; flex-direction: column; gap: 2px;">
-					<span class={styles.headerTitle}>Modpack Version</span>
-					<span class={styles.headerSubtitle}>
+					<span class={styles["headerTitle"]}>Modpack Version</span>
+					<span class={styles["headerSubtitle"]}>
 						Manage installed builds and engine settings.
 					</span>
 				</div>
@@ -99,17 +99,17 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 
 			<Show
 				when={!props.loading}
-				fallback={<Skeleton class="h-20 w-full rounded-2xl" />}
+				fallback={<Skeleton class={styles["triggerSkeleton"]} />}
 			>
 				<div
 					onClick={() => {
 						if (!props.disabled) setIsOpen(!isOpen());
 					}}
-					class={clsx(styles.triggerCard, props.disabled && styles.disabled)}
+					class={clsx(styles["triggerCard"], props.disabled && styles["disabled"])}
 					data-expanded={isOpen()}
 				>
-					<div class="flex items-center flex-1 min-w-0">
-						<div class={styles.triggerIcon}>
+					<div class={styles["triggerMain"]}>
+						<div class={styles["triggerIcon"]}>
 							<svg
 								width="24"
 								height="24"
@@ -125,12 +125,12 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 								<line x1="12" y1="22.08" x2="12" y2="12" />
 							</svg>
 						</div>
-						<div class={styles.triggerContent}>
-							<div class={styles.triggerTitle}>
+						<div class={styles["triggerContent"]}>
+							<div class={styles["triggerTitle"]}>
 								{selectedVersion()?.version_number || "Select Version"}
 							</div>
-							<div class={styles.triggerMeta}>
-								<span class="flex items-center gap-1.5">
+							<div class={styles["triggerMeta"]}>
+								<span class={styles["metaItem"]}>
 									<svg
 										width="12"
 										height="12"
@@ -144,7 +144,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 									</svg>
 									{selectedVersion()?.game_versions[0]}
 								</span>
-								<span class="flex items-center gap-1.5">
+								<span class={styles["metaItem"]}>
 									<svg
 										width="12"
 										height="12"
@@ -160,9 +160,9 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 							</div>
 						</div>
 					</div>
-					<div class="flex items-center gap-3">
+					<div class={styles["statusArea"]}>
 						<Show when={needsUpdate()}>
-							<Badge variant="accent" class="animate-pulse">
+							<Badge variant="accent" class={styles["pulse"]}>
 								Update Pending
 							</Badge>
 						</Show>
@@ -173,7 +173,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 							fill="none"
 							stroke="currentColor"
 							stroke-width="2.5"
-							class={styles.chevron}
+							class={styles["chevron"]}
 						>
 							<path d="m6 9 6 6 6-6" />
 						</svg>
@@ -182,11 +182,11 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 
 				<Show when={isOpen()}>
 					<div
-						class={clsx(styles.selectionContainer, "liquid-glass")}
+						class={clsx(styles["selectionContainer"], "liquid-glass")}
 						onClick={(e) => e.stopPropagation()}
 					>
-						<div class={styles.searchBarContainer}>
-							<div class={styles.searchBar}>
+						<div class={styles["searchBarContainer"]}>
+							<div class={styles["searchBar"]}>
 								<svg
 									width="14"
 									height="14"
@@ -209,7 +209,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 						</div>
 
 						<div
-							class={styles.versionListContainer}
+							class={styles["versionListContainer"]}
 							style={{ "max-height": "400px" }}
 						>
 							<For each={filteredVersions()}>
@@ -218,7 +218,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 										String(version.id) === props.currentVersionId;
 									const isConfirming = () => confirmingId() === version.id;
 
-									return (
+										return (
 										<div
 											ref={(el) => {
 												if (isCurrent) activeRowRef = el;
@@ -228,13 +228,13 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 													setConfirmingId(null);
 											}}
 											class={clsx(
-												styles.versionRow,
-												isCurrent && styles.activeRow,
-												isConfirming() && styles.isConfirming,
+												styles["versionRow"],
+												isCurrent && styles["activeRow"],
+												isConfirming() && styles["isConfirming"],
 											)}
 										>
-											<div class={styles.versionInfo}>
-												<div class={styles.versionIcon}>
+											<div class={styles["versionInfo"]}>
+												<div class={styles["versionIcon"]}>
 													<svg
 														width="16"
 														height="16"
@@ -246,9 +246,9 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 														<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
 													</svg>
 												</div>
-												<div class={styles.metaContainer}>
-													<div class={styles.versionHeader}>
-														<span class={styles.versionNumber}>
+												<div class={styles["metaContainer"]}>
+													<div class={styles["versionHeader"]}>
+														<span class={styles["versionNumber"]}>
 															{version.version_number}
 														</span>
 														<Badge
@@ -257,12 +257,12 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 																	? "secondary"
 																	: "outline"
 															}
-															class="h-4 px-1.5 text-[9px] font-bold uppercase"
+															class={styles["releaseTypeBadge"]}
 														>
 															{version.release_type}
 														</Badge>
 													</div>
-													<div class={styles.versionSub}>
+													<div class={styles["versionSub"]}>
 														<span>MC {version.game_versions[0]}</span>
 														<span>•</span>
 														<span>{version.loaders[0]}</span>
@@ -270,7 +270,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 												</div>
 											</div>
 
-											<div class={styles.actionArea}>
+											<div class={styles["actionArea"]}>
 												<Show
 													when={isCurrent}
 													fallback={
@@ -278,23 +278,23 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 															size="sm"
 															color={isConfirming() ? "warning" : "none"}
 															variant={isConfirming() ? "solid" : "outline"}
-															class={styles.switchButton}
+															class={styles["switchButton"]}
 															disabled={props.disabled}
 															onClick={(e) => {
 																e.stopPropagation();
 																handleAction(version);
 															}}
 														>
-															<div class={styles.confirmSlide}>
-																<div class={styles.slideInner}>
-																	<span class={styles.slideText}>Switch</span>
-																	<span class={styles.slideText}>Confirm?</span>
+															<div class={styles["confirmSlide"]}>
+																<div class={styles["slideInner"]}>
+																	<span class={styles["slideText"]}>Switch</span>
+																	<span class={styles["slideText"]}>Confirm?</span>
 																</div>
 															</div>
 														</Button>
 													}
 												>
-													<div class={styles.installedLabel}>Installed</div>
+													<div class={styles["installedLabel"]}>Installed</div>
 												</Show>
 											</div>
 										</div>

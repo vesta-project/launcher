@@ -17,5 +17,8 @@
 		"i": "cd vesta-launcher && bun i",
 		"cmd": "cd vesta-launcher &&"
 	},
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"@tauri-controls-v2/solid": "^0.4.1"
+	}
 }

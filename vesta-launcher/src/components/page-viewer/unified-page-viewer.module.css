@@ -51,8 +51,9 @@
 	pointer-events: auto;
 }
 
-.page-viewer-controls-controls-wrapper--mac {
-	padding-right: 8px;
+.page-viewer-controls-wrapper--mac {
+	padding-right: 12px;
+	margin-left: -8px;
 }
 
 .page-viewer-window-controls-wrapper button {

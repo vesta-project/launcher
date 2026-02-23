@@ -1,7 +1,7 @@
 import HelpIcon from "@assets/help.svg";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
-import { WindowControls } from "@tauri-controls/solid";
+import { WindowControls } from "@tauri-controls-v2/solid";
 import {
 	ACCOUNT_TYPE_GUEST,
 	type Account,

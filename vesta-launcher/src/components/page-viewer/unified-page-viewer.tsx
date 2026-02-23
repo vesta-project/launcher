@@ -149,8 +149,8 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</Show>
 				</div>
 
-				<div class={styles["page-viewer-navbar-center"]} data-tauri-drag-region>
-					<span class={styles["page-viewer-title"]}>
+				<div class={styles["page-viewer-navbar-center"]} data-tauri-drag-region={props.showWindowControls}>
+					<span class={styles["page-viewer-title"]} data-tauri-drag-region={props.showWindowControls}>
 						{props.router.customName.get() ||
 							props.router.currentElement().name}
 						{props.titleSuffix && ` - ${props.titleSuffix}`}

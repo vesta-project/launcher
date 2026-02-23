@@ -1,7 +1,7 @@
 .dialog__portal-container {
 	position: fixed;
 	inset: 0;
-	z-index: 50;
+	z-index: var(--z-modal);
 	display: flex;
 	align-items: flex-start;
 	justify-content: center;
@@ -16,7 +16,7 @@
 .dialog__overlay {
 	position: fixed;
 	inset: 0;
-	z-index: 50;
+	z-index: var(--z-modal);
 	background-color: hsl(0 0% 0% / 0.6);
 	/* Add backdrop blur by default for dialogs that want blurred backgrounds */
 	backdrop-filter: blur(var(--blur-overlay));

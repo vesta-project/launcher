@@ -7,7 +7,7 @@ import { router, setRouter } from "@components/page-viewer/page-viewer";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 import { useSearchParams } from "@solidjs/router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { WindowControls } from "@tauri-controls/solid";
+import { WindowControls } from "@tauri-controls-v2/solid";
 import { getOsType } from "@utils/os";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./standalone-page-viewer.module.css";

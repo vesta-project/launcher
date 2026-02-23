@@ -19,19 +19,18 @@
 		"@solidjs/router": "^0.15.4",
 		"@tanstack/solid-table": "^8.21.3",
 		"@tauri-apps/api": "^2.10.1",
-		"@tauri-apps/plugin-clipboard-manager": "~2",
-		"@tauri-apps/plugin-deep-link": "~2",
+		"@tauri-apps/plugin-clipboard-manager": "^2",
+		"@tauri-apps/plugin-deep-link": "^2",
 		"@tauri-apps/plugin-dialog": "^2.6.0",
 		"@tauri-apps/plugin-log": "^2.8.0",
 		"@tauri-apps/plugin-os": "^2",
 		"@tauri-apps/plugin-shell": "^2.3.4",
 		"@tauri-apps/plugin-updater": "^2.10.0",
-		"@tauri-controls/solid": "^0.4.0",
+		"@tauri-controls-v2/solid": "^0.4.4",
 		"driver.js": "^1.4.0",
 		"embla-carousel-solid": "^8.6.0",
 		"marked": "^17.0.1",
-		"solid-js": "^1.9.11",
-		"tailwind-merge": "^2.5.4"
+		"solid-js": "^1.9.11"
 	},
 	"devDependencies": {
 		"@csstools/postcss-contrast-color-function": "^3.0.1",

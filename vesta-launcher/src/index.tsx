@@ -5,6 +5,7 @@ import { Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
 import "./styles.css";
+import "./reset.css";
 
 const root = document.getElementById("app");
 

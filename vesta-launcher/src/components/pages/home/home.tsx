@@ -20,7 +20,7 @@ import {
 import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { attachConsole, info } from "@tauri-apps/plugin-log";
-import { WindowControls, WindowTitlebar } from "@tauri-controls/solid";
+import { WindowControls, WindowTitlebar } from "@tauri-controls-v2/solid";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, showToast, Toaster } from "@ui/toast/toast";
 import { getOsType } from "@utils/os";
