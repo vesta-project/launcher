@@ -1,4 +1,4 @@
-button.launcher-button {
+.launcher-button {
 	--button-color: hsla(var(--accent-base) / 1); /* To fix intellisese errors */
 
 	border: 2px solid transparent;
@@ -11,27 +11,27 @@ button.launcher-button {
 	white-space: nowrap;
 }
 
-button.launcher-button:hover:not(:disabled) {
+.launcher-button:hover:not(:disabled) {
 	filter: brightness(110%);
 	box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
 }
 
-button.launcher-button:hover:not(:disabled) > * {
+.launcher-button:hover:not(:disabled) > * {
 	transform: scale(108%);
 }
 
-button.launcher-button:active:not(:disabled) {
+.launcher-button:active:not(:disabled) {
 	color: var(--text-primary);
 	transition-duration: 50ms;
 }
 
-button.launcher-button:disabled {
+.launcher-button:disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 	filter: grayscale(50%);
 }
 
-button.launcher-button--icon-only {
+.launcher-button--icon-only {
 	aspect-ratio: 1;
 	height: fit-content;
 	width: fit-content;
@@ -42,17 +42,17 @@ button.launcher-button--icon-only {
 	}
 }
 
-button.launcher-button--solid {
+.launcher-button--solid {
 	background-color: var(--button-color);
 }
 
-button.launcher-button--outline {
+.launcher-button--outline {
 	background-color: transparent;
 	color: var(--button-color);
 	border: 2px solid var(--button-color);
 }
 
-button.launcher-button--ghost {
+.launcher-button--ghost {
 	background-color: transparent;
 	border: none;
 	color: var(--button-color);
@@ -62,7 +62,7 @@ button.launcher-button--ghost {
 	}
 }
 
-button.launcher-button--shadow {
+.launcher-button--shadow {
 	background-color: hsla(0 0% 0% / 0.15);
 	box-shadow:
 		0 4px 6px -1px rgb(0 0 0 / 0.1),
@@ -73,49 +73,49 @@ button.launcher-button--shadow {
 	}
 }
 
-button.launcher-button--primary {
+.launcher-button--primary {
 	--button-color: hsla(var(--color__primary-hue) 60% 50% / 1);
 	color: var(--text-on-accent);
 }
 
-button.launcher-button--secondary {
+.launcher-button--secondary {
 	--button-color: var(--surface-raised);
 	color: var(--text-primary);
 }
 
-button.launcher-button--accent {
+.launcher-button--accent {
 	--button-color: hsla(var(--color__primary-hue) 80% 60% / 1);
 	color: var(--text-on-accent);
 }
 
-button.launcher-button--destructive {
+.launcher-button--destructive {
 	--button-color: hsla(0 100% 50% / 0.8);
 	color: white;
 }
 
 /* Size modifications */
-button.launcher-button--sm {
+.launcher-button--sm {
 	padding: 0.25rem 0.5rem;
 	font-size: 0.8rem;
 }
 
-button.launcher-button--md {
+.launcher-button--md {
 	padding: 0.5rem 1rem;
 	font-size: 0.95rem;
 }
 
-button.launcher-button--lg {
+.launcher-button--lg {
 	padding: 0.75rem 1.5rem;
 	font-size: 1.1rem;
 }
 
-button.launcher-button--xl {
+.launcher-button--xl {
 	padding: 0.75rem 1.5rem;
 	font-size: 1.25rem;
 	font-weight: 700;
 }
 
-button.launcher-button--loading {
+.launcher-button--loading {
 	cursor: wait;
 	opacity: 0.7;
 }
