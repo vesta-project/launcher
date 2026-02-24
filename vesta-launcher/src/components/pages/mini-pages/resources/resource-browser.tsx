@@ -723,31 +723,39 @@ const ResourceCard: Component<{
 							{(tag) => {
 								// Find the category object in availableCategories if possible to get its real ID/Slug
 								const categoryObj = createMemo(() =>
-									resources.state.availableCategories.find(
-										(c) =>
-											c.name.toLowerCase() === tag.toLowerCase() ||
-											c.id.toLowerCase() === tag.toLowerCase(),
-									),
+									resources.state.availableCategories.length > 0
+										? resources.state.availableCategories.find(
+											  (c) =>
+												  c.name.toLowerCase() === tag.toLowerCase() ||
+												  c.id.toLowerCase() === tag.toLowerCase(),
+										  )
+										: null,
 								);
 
 								return (
-									<Badge
+										<Badge
 										variant="theme"
 										round
 										clickable
 										class={styles["resource-tag"]}
-										active={resources.state.categories.includes(
-											(categoryObj()?.id || tag).toLowerCase(),
-										)}
+											active={
+												resources.state.availableCategories.length > 0
+													? resources.state.categories.includes(
+														  (categoryObj()?.id || tag).toLowerCase(),
+													  )
+													: false
+											}
 										onClick={(e) => {
 											e.stopPropagation();
 											// Normalize tag to ID if possible
-											const filterId = categoryObj()?.id || tag;
+												const filterId = categoryObj()?.id || tag;
 											resources.toggleCategory(filterId.toLowerCase());
 											resources.setOffset(0);
 										}}
 									>
-										{categoryObj()?.name || tag}
+											{resources.state.availableCategories.length > 0
+												? categoryObj()?.name || tag
+												: ""}
 									</Badge>
 								);
 							}}
@@ -810,10 +818,6 @@ const ResourceCard: Component<{
 const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
 	const [mcVersions] = createResource(getMinecraftVersions);
-
-	onMount(() => {
-		resources.fetchCategories();
-	});
 
 	// Auto-expand groups that contain active categories
 	createEffect(() => {
@@ -1495,6 +1499,8 @@ const ResourceBrowser: Component<{
 		if (resources.state.selectedInstanceId) {
 			resources.fetchInstalled(resources.state.selectedInstanceId);
 		}
+
+		resources.fetchCategories();
 
 		const content = document.querySelector(".page-viewer-content");
 		if (content instanceof HTMLElement) {

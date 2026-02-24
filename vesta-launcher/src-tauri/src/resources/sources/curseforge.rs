@@ -78,6 +78,7 @@ struct CFAuthor {
 
 #[derive(Deserialize)]
 struct CFCategory {
+    id: i64,
     name: String,
 }
 
@@ -366,10 +367,7 @@ impl ResourceSource for CurseForgeSource {
                     return false;
                 }
 
-                !matches!(
-                    name.as_str(),
-                    "mods" | "worlds" | "resource packs" | "modpacks" | "customization" | "addons"
-                )
+                !matches!(name.as_str(), "mods" | "worlds" | "resource packs" | "modpacks" | "customization")
             })
             .map(|c| ResourceCategory {
                 id: c.id.to_string(),
@@ -494,7 +492,7 @@ impl ResourceSource for CurseForgeSource {
                     .unwrap_or_else(|| "Unknown".to_string()),
                 download_count: item.download_count as u64,
                 follower_count: 0,
-                categories: item.categories.into_iter().map(|c| c.name).collect(),
+                categories: item.categories.into_iter().map(|c| c.id.to_string()).collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
                 gallery: item
@@ -556,9 +554,6 @@ impl ResourceSource for CurseForgeSource {
             None
         };
 
-        // Fetch all categories for this game to find parent names if needed
-        let all_categories = self.fetch_categories_direct().await.unwrap_or_default();
-
         Ok(ResourceProject {
             id: item.id.to_string(),
             source: SourcePlatform::CurseForge,
@@ -577,13 +572,7 @@ impl ResourceSource for CurseForgeSource {
             categories: item
                 .categories
                 .into_iter()
-                .map(|c| {
-                    if let Some(cat_full) = all_categories.iter().find(|cf| cf.name == c.name) {
-                        cat_full.id.to_string()
-                    } else {
-                        c.name
-                    }
-                })
+                .map(|c| c.id.to_string())
                 .collect(),
             web_url: item.links.website_url,
             external_ids: None,
@@ -648,7 +637,7 @@ impl ResourceSource for CurseForgeSource {
                     .unwrap_or_else(|| "Unknown".to_string()),
                 download_count: item.download_count as u64,
                 follower_count: 0,
-                categories: item.categories.into_iter().map(|c| c.name).collect(),
+                categories: item.categories.into_iter().map(|c| c.id.to_string()).collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
                 gallery: item

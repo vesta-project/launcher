@@ -803,6 +803,12 @@ const ResourceDetailsPage: Component<{
 		console.log("[ResourceDetails] Fetching full project details for:", id);
 		setLoading(true);
 		setError(null);
+
+		// Ensure categories for this platform are loaded in the store
+		if (resources.state.activeSource !== platform || resources.state.availableCategories.length === 0) {
+			resources.setSource(platform);
+		}
+
 		try {
 			const p = await resources.getProject(platform, id);
 			console.log("[ResourceDetails] Fetched project:", p?.name);
@@ -1472,11 +1478,13 @@ const ResourceDetailsPage: Component<{
 											{(cat) => {
 												// Find the category object in availableCategories if possible to get its real ID/Slug
 												const categoryObj = createMemo(() =>
-													resources.state.availableCategories.find(
-														(c) =>
-															c.name.toLowerCase() === cat.toLowerCase() ||
-															c.id.toLowerCase() === cat.toLowerCase(),
-													),
+													resources.state.availableCategories.length > 0
+														? resources.state.availableCategories.find(
+															  (c) =>
+																  c.name.toLowerCase() === cat.toLowerCase() ||
+																  c.id.toLowerCase() === cat.toLowerCase(),
+														  )
+														: null,
 												);
 
 												return (
@@ -1498,7 +1506,9 @@ const ResourceDetailsPage: Component<{
 															activeRouter()?.navigate("/resources");
 														}}
 													>
-														{categoryObj()?.name || cat}
+														{resources.state.availableCategories.length > 0
+															? categoryObj()?.name || cat
+															: ""}
 													</Badge>
 												);
 											}}
