@@ -38,6 +38,7 @@ import {
 } from "@ui/select/select";
 import { TextField } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
+import { resolveResourceUrl } from "@utils/assets";
 import {
 	DEFAULT_ICONS,
 	getMinecraftVersions,
@@ -162,25 +163,30 @@ const VERSION_OPTIONS = [
 
 const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 	const activeRouter = createMemo(() => p.router || router());
-	const selectedInstance = createMemo(() =>
-		instancesState.instances.find(
+	const selectedInstance = createMemo(() => {
+		if (resources.state.selectedInstanceId === null) {
+			return { id: "none", name: "No Instance" } as any;
+		}
+		return instancesState.instances.find(
 			(i) => i.id === resources.state.selectedInstanceId,
-		),
-	);
+		);
+	});
 
 	const isModpack = () => resources.state.resourceType === "modpack";
 
 	const InstanceIcon = (props: { instance?: Instance | null }) => {
 		const iconPath = () => props.instance?.iconPath || DEFAULT_ICONS[0];
+		const resolvedUrl = createMemo(() => resolveResourceUrl(iconPath()));
+
 		const displayChar = createMemo(() => {
 			const name = props.instance?.name || "?";
 			const match = name.match(/[a-zA-Z]/);
 			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 		});
 		return (
-			<Show when={props.instance}>
+			<Show when={props.instance && props.instance.id !== null && props.instance.id !== "none"}>
 				<Show
-					when={!isDefaultIcon(iconPath())}
+					when={resolvedUrl()}
 					fallback={
 						<div class={styles["instance-item-icon-placeholder"]}>
 							{displayChar()}
@@ -190,10 +196,10 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 					<div
 						class={styles["instance-item-icon"]}
 						style={
-							iconPath().startsWith("linear-gradient")
-								? { background: iconPath() }
+							resolvedUrl()?.startsWith("linear-gradient")
+								? { background: resolvedUrl() }
 								: {
-										"background-image": `url('${iconPath()}')`,
+										"background-image": `url('${resolvedUrl()}')`,
 										"background-size": "cover",
 										"background-position": "center",
 									}
@@ -215,13 +221,13 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 			<Select<any>
 				disabled={isModpack()}
 				options={[
-					{ id: null, name: "No Instance" } as any,
+					{ id: "none", name: "No Instance" } as any,
 					...instancesState.instances,
 				]}
 				value={selectedInstance()}
 				onChange={(instance: any) => {
 					batch(() => {
-						const id = instance?.id ?? null;
+						const id = instance?.id === "none" ? null : (instance?.id ?? null);
 						resources.setInstance(id);
 						if (id && instance) {
 							resources.setGameVersion(instance.minecraftVersion);
@@ -258,9 +264,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 				itemComponent={(props) => (
 					<SelectItem item={props.item} class={styles["instance-select-item"]}>
 						<div class={styles["instance-item-content"]}>
-							<InstanceIcon
-								instance={props.item.rawValue.id ? props.item.rawValue : null}
-							/>
+							<InstanceIcon instance={props.item.rawValue} />
 							<span class={styles["instance-item-name"]}>
 								{props.item.rawValue.name}
 							</span>

@@ -37,6 +37,7 @@ import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { formatDate } from "@utils/date";
 import { openExternal } from "@utils/external-link";
+import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS, type Instance, isDefaultIcon } from "@utils/instances";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import {
@@ -364,6 +365,8 @@ const ResourceDetailsPage: Component<{
 
 	const InstanceIcon = (iconProps: { instance?: any }) => {
 		const iconPath = () => iconProps.instance?.iconPath || DEFAULT_ICONS[0];
+		const resolvedUrl = createMemo(() => resolveResourceUrl(iconPath()));
+
 		const displayChar = createMemo(() => {
 			const name = iconProps.instance?.name || "?";
 			const match = name.match(/[a-zA-Z]/);
@@ -372,7 +375,7 @@ const ResourceDetailsPage: Component<{
 		return (
 			<Show when={iconProps.instance && iconProps.instance.id !== null}>
 				<Show
-					when={!isDefaultIcon(iconPath())}
+					when={resolvedUrl()}
 					fallback={
 						<div class={styles["instance-item-icon-placeholder"]}>
 							{displayChar()}
@@ -382,10 +385,10 @@ const ResourceDetailsPage: Component<{
 					<div
 						class={styles["instance-item-icon"]}
 						style={
-							iconPath().startsWith("linear-gradient")
-								? { background: iconPath() }
+							resolvedUrl()?.startsWith("linear-gradient")
+								? { background: resolvedUrl() }
 								: {
-										"background-image": `url('${iconPath()}')`,
+										"background-image": `url('${resolvedUrl()}')`,
 										"background-size": "cover",
 										"background-position": "center",
 									}
