@@ -1,6 +1,6 @@
 {
 	"name": "vesta-launcher",
-	"version": "0.1.0-alpha.14",
+	"version": "0.1.0-alpha.13",
 	"description": "",
 	"type": "module",
 	"scripts": {
@@ -27,20 +27,21 @@
 		"@tauri-apps/plugin-shell": "^2.3.4",
 		"@tauri-apps/plugin-updater": "^2.10.0",
 		"@tauri-controls-v2/solid": "^0.4.4",
+		"tailwind-merge": "^3.5.0",
 		"driver.js": "^1.4.0",
 		"embla-carousel-solid": "^8.6.0",
-		"marked": "^17.0.1",
+		"marked": "^17.0.3",
 		"solid-js": "^1.9.11"
 	},
 	"devDependencies": {
-		"@csstools/postcss-contrast-color-function": "^3.0.1",
+		"@csstools/postcss-contrast-color-function": "^3.0.2",
 		"@solidjs/testing-library": "^0.8.10",
 		"@tauri-apps/cli": "^2.10.0",
 		"@testing-library/dom": "^10.4.1",
 		"autoprefixer": "^10.4.24",
 		"clsx": "^2.1.1",
 		"cssnano": "^7.1.2",
-		"jsdom": "^28.0.0",
+		"jsdom": "^28.1.0",
 		"postcss-load-config": "^6.0.1",
 		"stylelint": "^16.26.1",
 		"stylelint-config-standard": "^40.0.0",
