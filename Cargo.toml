@@ -3,7 +3,7 @@ resolver = "2"
 members = ["vesta-launcher/src-tauri", "crates/piston-lib"]
 
 [workspace.package]
-version = "0.1.0-alpha.13"
+version = "0.1.0-alpha.14"
 authors = ["Eatham532"]
 edition = "2021"
 description = "A Minecraft launcher built with Tauri and SolidJS"
