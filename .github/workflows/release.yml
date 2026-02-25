@@ -563,17 +563,14 @@ jobs:
             Automatic release build for Vesta Launcher.
             
             ### Downloads
-            All platform installers are attached to this release as assets.
+            All platform installers are attached to this release as artifacts.
             
             ${{ steps.changelog.outputs.changelog }}
-            
-            ### CDN Distribution
-            This release is also available via CDN for auto-updating launchers.
           files: |
-            artifacts/**/Vesta_Launcher_*.msi
-            artifacts/**/Vesta_Launcher_*.dmg
-            artifacts/**/vesta-launcher_*.deb
-            artifacts/**/Vesta_Launcher_*.AppImage
-            artifacts/**/Vesta_Launcher_*.tar.gz
+            artifacts/**/*.msi
+            artifacts/**/*.dmg
+            artifacts/**/*.deb
+            artifacts/**/*.AppImage
+            artifacts/**/*.tar.gz
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
