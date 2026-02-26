@@ -673,6 +673,22 @@ impl ResourceSource for ModrinthSource {
         let cats: Vec<ModrinthCategory> = response.json().await?;
         Ok(cats
             .into_iter()
+            .filter(|c| {
+                let name = c.name.to_lowercase();
+                // Filter out loader types and categories that are served as loaders
+                if matches!(
+                    name.as_str(),
+                    "fabric" | "forge" | "quilt" | "neoforge" | "liteloader" | "rift" | "categories"
+                ) {
+                    return false;
+                }
+
+                // Only include categories that match our supported project types
+                matches!(
+                    c.project_type.as_str(),
+                    "mod" | "modpack" | "resourcepack" | "shader" | "datapack"
+                )
+            })
             .map(|c| ResourceCategory {
                 id: c.name.to_lowercase(),
                 name: c.name,

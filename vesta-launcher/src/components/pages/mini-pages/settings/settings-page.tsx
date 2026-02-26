@@ -68,9 +68,11 @@ import {
 	validateTheme,
 } from "../../../../themes/presets";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
+import { InstanceDefaultsTab } from "./instance-defaults-tab";
 import { type JavaOption, JavaOptionCard } from "./java-option-card";
 import { NotificationSettingsTab } from "./notification-settings-tab";
 import styles from "./settings-page.module.css";
+import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
 
 interface AppConfig {
 	id: number;
@@ -78,7 +80,6 @@ interface AppConfig {
 	theme: string;
 	language: string;
 	max_download_threads: number;
-	max_memory_mb: number;
 	java_path: string | null;
 	default_game_dir: string | null;
 	auto_update_enabled: boolean;
@@ -112,6 +113,18 @@ interface AppConfig {
 	use_dedicated_gpu: boolean;
 	discord_presence_enabled: boolean;
 	auto_install_dependencies: boolean;
+
+	// Instance defaults
+	default_width: number;
+	default_height: number;
+	default_java_args: string | null;
+	default_environment_variables: string | null;
+	default_pre_launch_hook: string | null;
+	default_wrapper_command: string | null;
+	default_post_exit_hook: string | null;
+	default_min_memory: number;
+	default_max_memory: number;
+
 	[key: string]: any;
 }
 
@@ -137,8 +150,22 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		createSignal(true);
 	const [autoInstallDependencies, setAutoInstallDependencies] =
 		createSignal(true);
+	const [maxDownloadThreads, setMaxDownloadThreads] = createSignal(4);
+	const [instanceDefaults, setInstanceDefaults] = createSignal<
+		Partial<AppConfig>
+	>({});
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
+	const [totalRam, setTotalRam] = createSignal(16384);
+
+	onMount(async () => {
+		try {
+			const ram = await invoke("get_system_memory_mb");
+			if (typeof ram === "number" && ram > 0) setTotalRam(ram);
+		} catch (e) {
+			console.error("Failed to get total RAM:", e);
+		}
+	});
 
 	createEffect(() => {
 		setSelectedTab(activeTab());
@@ -151,7 +178,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}));
 	});
 
-	// Initialize from global theme cache to prevent "Midnight Blue" flash
 	const [backgroundHue, setBackgroundHue] = createSignal(
 		currentThemeConfig.theme_primary_hue ??
 			currentThemeConfig.background_hue ??
@@ -173,7 +199,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		(currentThemeConfig.theme_gradient_harmony as GradientHarmony) ?? "none",
 	);
 	const [themeId, setThemeId] = createSignal<string>(
-		currentThemeConfig.theme_id ?? "midnight",
+		currentThemeConfig.theme_id ?? "vesta",
 	);
 	const [borderThickness, setBorderThickness] = createSignal(
 		currentThemeConfig.theme_border_width ?? 1,
@@ -343,7 +369,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 	const handleManualPickSetGlobal = async (version: number) => {
 		try {
-			const path = await invoke<string | null>("pick_java_path");
+			const path = await invoke<string | null>("select_java_file");
 			if (path) {
 				const info = await invoke<any>("verify_java_path", { pathStr: path });
 				if (info.major_version !== version) {
@@ -388,6 +414,19 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setUseDedicatedGpu(config.use_dedicated_gpu ?? true);
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
+				setMaxDownloadThreads(config.max_download_threads ?? 4);
+
+				setInstanceDefaults({
+					default_width: config.default_width,
+					default_height: config.default_height,
+					default_java_args: config.default_java_args,
+					default_environment_variables: config.default_environment_variables,
+					default_pre_launch_hook: config.default_pre_launch_hook,
+					default_wrapper_command: config.default_wrapper_command,
+					default_post_exit_hook: config.default_post_exit_hook,
+					default_min_memory: config.default_min_memory,
+					default_max_memory: config.default_max_memory,
+				});
 
 				// Load theme configuration
 				if (config.theme_id) setThemeId(config.theme_id);
@@ -448,6 +487,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					setGradientHarmony(value as GradientHarmony);
 				if (field === "theme_border_width" && value !== null)
 					setBorderThickness(value);
+
+				if (field.startsWith("default_")) {
+					setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
+				}
 			});
 		} catch (error) {
 			console.error("Failed to load settings:", error);
@@ -695,6 +738,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
+	const updateDefaultField = async (field: string, value: any) => {
+		setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", { field, value });
+		}
+	};
+
 	const handleAutoInstallDepsToggle = async (checked: boolean) => {
 		setAutoInstallDependencies(checked);
 		if (hasTauriRuntime()) {
@@ -868,6 +918,33 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 												<SwitchThumb />
 											</SwitchControl>
 										</Switch>
+									}
+								/>
+								<SettingsField
+									label="Parallel Download Threads"
+									description="Number of simultaneous downloads when installing resources."
+									layout="inline"
+									control={
+										<NumberField
+											value={maxDownloadThreads()}
+											onRawValueChange={async (val) => {
+												setMaxDownloadThreads(val);
+												if (hasTauriRuntime()) {
+													await invoke("update_config_field", {
+														field: "max_download_threads",
+														value: val,
+													});
+												}
+											}}
+											minValue={1}
+											maxValue={16}
+										>
+											<NumberFieldGroup>
+												<NumberFieldInput />
+												<NumberFieldIncrementTrigger />
+												<NumberFieldDecrementTrigger />
+											</NumberFieldGroup>
+										</NumberField>
 									}
 								/>
 							</SettingsCard>
@@ -1197,6 +1274,14 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<NotificationSettingsTab />
 					</TabsContent>
 
+					<TabsContent class={styles["tabs-content"]} value="defaults">
+						<InstanceDefaultsTab
+							config={instanceDefaults()}
+							updateConfig={updateDefaultField}
+							totalRam={totalRam()}
+						/>
+					</TabsContent>
+
 					<TabsContent class={styles["tabs-content"]} value="help">
 						<div class={styles["settings-tab-content"]}>
 							<SettingsCard header="Minecraft Modding">
@@ -1312,20 +1397,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						</div>
 					</TabsContent>
 
-					<TabsContent class={styles["tabs-content"]} value="defaults">
-						<div class={styles["settings-tab-content"]}>
-							<SettingsCard
-								header="Instance Defaults"
-								subHeader="Default settings for new instances."
-							>
-								<div class={styles["settings-placeholder"]}>
-									<p>
-										Coming soon: Default Java paths, memory settings, and more.
-									</p>
-								</div>
-							</SettingsCard>
-						</div>
-					</TabsContent>
+
 
 					<TabsContent class={styles["tabs-content"]} value="developer">
 						<div class={styles["settings-tab-content"]}>

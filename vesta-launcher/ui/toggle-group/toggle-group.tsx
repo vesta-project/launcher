@@ -8,42 +8,42 @@ import styles from "./toggle-group.module.css";
 type ToggleGroupRootProps<T extends ValidComponent = "div"> =
 	ToggleGroupPrimitive.ToggleGroupRootProps<T> &
 		ClassProp &
-		ChildrenProp & {
-			onChange?: (value: string | string[] | null) => void;
-		};
+		ChildrenProp;
 
 function ToggleGroup<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,
 ) {
-	const [local, rest] = splitProps(props as any, [
-		"class",
-		"children",
-		"onChange",
-	]);
+	const [local, rest] = splitProps(props as any, ["class", "children"]);
 
 	return (
-		<ToggleGroupPrimitive.ToggleGroup
+		<ToggleGroupPrimitive.Root
 			class={clsx(styles["toggle-group"], local.class)}
-			onValueChange={local.onChange}
 			{...rest}
 		>
 			{local.children}
-		</ToggleGroupPrimitive.ToggleGroup>
+		</ToggleGroupPrimitive.Root>
 	);
 }
 
 type ToggleGroupItemProps = ToggleGroupPrimitive.ToggleGroupItemProps &
 	ClassProp &
-	ChildrenProp;
+	ChildrenProp & {
+		value: string;
+	};
 
 function ToggleGroupItem<T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, ToggleGroupItemProps>,
 ) {
-	const [local, rest] = splitProps(props, ["class", "children"]);
+	const [local, rest] = splitProps(props as any, [
+		"class",
+		"children",
+		"value",
+	]);
 	return (
 		<ToggleGroupPrimitive.Item
-			aria-label={props.value}
-			class={clsx(styles["toggle-group__item"], props.class)}
+			value={local.value}
+			aria-label={local.value}
+			class={clsx(styles["toggle-group__item"], local.class)}
 			{...rest}
 		>
 			{local.children}

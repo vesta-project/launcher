@@ -7,7 +7,7 @@ diesel::table! {
         theme -> Text,
         language -> Text,
         max_download_threads -> Integer,
-        max_memory_mb -> Integer,
+        default_max_memory -> Integer,
         java_path -> Nullable<Text>,
         default_game_dir -> Nullable<Text>,
         auto_update_enabled -> Bool,
@@ -39,6 +39,14 @@ diesel::table! {
         use_dedicated_gpu -> Bool,
         discord_presence_enabled -> Bool,
         auto_install_dependencies -> Bool,
+        default_width -> Integer,
+        default_height -> Integer,
+        default_java_args -> Nullable<Text>,
+        default_environment_variables -> Nullable<Text>,
+        default_pre_launch_hook -> Nullable<Text>,
+        default_wrapper_command -> Nullable<Text>,
+        default_post_exit_hook -> Nullable<Text>,
+        default_min_memory -> Integer,
     }
 }
 

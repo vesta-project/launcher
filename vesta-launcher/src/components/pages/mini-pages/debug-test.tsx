@@ -46,7 +46,7 @@ export default function DebugTestPage() {
 				<label>Project Switch Label (Click Me)</label>
 				<Switch
 					checked={switchChecked()}
-					onCheckedChange={(val) => {
+					onCheckedChange={(val: boolean) => {
 						console.log("Switch change event received:", val);
 						setSwitchChecked(val);
 					}}

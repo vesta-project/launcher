@@ -344,7 +344,8 @@ impl ResourceSource for CurseForgeSource {
                 }
 
                 // Filter out Bukkit Plugins (Class ID 5), Shaders (6552), and Data Packs (6945)
-                if c.class_id == Some(5) || c.id == 6552 || c.id == 6945 {
+                // Also filter out ID 4559 (Videos/Tutorials)
+                if c.class_id == Some(5) || c.id == 6552 || c.id == 6945 || c.id == 4559 {
                     return false;
                 }
 

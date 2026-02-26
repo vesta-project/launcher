@@ -184,7 +184,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 		});
 		return (
-			<Show when={props.instance && props.instance.id !== null && props.instance.id !== "none"}>
+			<Show when={props.instance && props.instance.id !== null}>
 				<Show
 					when={resolvedUrl()}
 					fallback={
@@ -753,9 +753,7 @@ const ResourceCard: Component<{
 											resources.setOffset(0);
 										}}
 									>
-											{resources.state.availableCategories.length > 0
-												? categoryObj()?.name || tag
-												: ""}
+											{categoryObj()?.name || tag}
 									</Badge>
 								);
 							}}
@@ -972,23 +970,27 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 			return result;
 		}
 
-		// Flat list for Modrinth (Single group with empty name to avoid double header)
-		return [
-			{
-				id: undefined as string | undefined,
-				name: "",
-				icon: undefined as string | undefined,
-				displayIndex: 0,
-				items: filtered
-					.map((c) => ({
-						id: c.id,
-						name: c.name,
-						icon: c.icon_url,
-						displayIndex: c.display_index ?? 0,
-					}))
-					.sort((a, b) => a.name.localeCompare(b.name)),
-			},
-		];
+			// Flat list for Modrinth (Single group with empty name to avoid double header)
+			const items = filtered
+				.map((c) => ({
+					id: c.id,
+					name: c.name,
+					icon: c.icon_url,
+					displayIndex: c.display_index ?? 0,
+				}))
+				.sort((a, b) => a.name.localeCompare(b.name));
+
+			if (items.length === 0) return [];
+
+			return [
+				{
+					id: undefined as string | undefined,
+					name: "",
+					icon: undefined as string | undefined,
+					displayIndex: 0,
+					items,
+				},
+			];
 	});
 
 	const shouldShowLoader = () =>

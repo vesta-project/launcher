@@ -90,8 +90,6 @@ export interface Instance {
 	javaPath: string | null;
 	javaArgs: string | null;
 	gameDirectory: string | null;
-	width: number;
-	height: number;
 	minMemory: number;
 	maxMemory: number;
 	iconPath: string | null;
@@ -114,6 +112,22 @@ export interface Instance {
 	modpackPlatform: string | null;
 	modpackIconUrl: string | null;
 	iconData: Uint8Array | null;
+
+	// Instance Defaults & Linking
+	useGlobalResolution: boolean;
+	useGlobalMemory: boolean;
+	useGlobalJavaArgs: boolean;
+	useGlobalJavaPath: boolean;
+	useGlobalHooks: boolean;
+	useGlobalEnvironmentVariables: boolean;
+	useGlobalGameDir: boolean;
+	gameWidth: number;
+	gameHeight: number;
+	environmentVariables: string | null;
+	preLaunchHook: string | null;
+	postExitHook: string | null;
+	wrapperCommand: string | null;
+
 	/**
 	 * Identifier of the last lifecycle operation performed on this instance.
 	 *
@@ -139,8 +153,8 @@ export interface CreateInstanceData {
 	minecraftVersion: string;
 	modloader?: string;
 	modloaderVersion?: string;
-	width?: number;
-	height?: number;
+	gameWidth?: number;
+	gameHeight?: number;
 	minMemory?: number;
 	maxMemory?: number;
 	iconPath?: string;
@@ -187,8 +201,8 @@ export function createDemoInstance(): Instance {
 		javaPath: null,
 		javaArgs: null,
 		gameDirectory: null,
-		width: 854,
-		height: 480,
+		gameWidth: 854,
+		gameHeight: 480,
 		minMemory: 1024,
 		maxMemory: 4096,
 		iconPath: null,
@@ -204,6 +218,17 @@ export function createDemoInstance(): Instance {
 		modpackPlatform: null,
 		modpackIconUrl: null,
 		iconData: null,
+		useGlobalResolution: false,
+		useGlobalMemory: false,
+		useGlobalJavaArgs: false,
+		useGlobalJavaPath: false,
+		useGlobalHooks: false,
+		useGlobalEnvironmentVariables: false,
+		useGlobalGameDir: false,
+		environmentVariables: null,
+		preLaunchHook: null,
+		postExitHook: null,
+		wrapperCommand: null,
 	};
 }
 
@@ -227,8 +252,8 @@ export async function createInstance(
 		javaPath: null,
 		javaArgs: null,
 		gameDirectory: null,
-		width: data.width || 854,
-		height: data.height || 480,
+		gameWidth: data.gameWidth || 854,
+		gameHeight: data.gameHeight || 480,
 		minMemory: data.minMemory || 2048,
 		maxMemory: data.maxMemory || 4096,
 		iconPath: data.iconPath || null,
@@ -241,6 +266,17 @@ export async function createInstance(
 		modpackPlatform: data.modpackPlatform || null,
 		modpackIconUrl: data.modpackIconUrl || null,
 		iconData: data.iconData || null,
+		useGlobalResolution: true,
+		useGlobalMemory: true,
+		useGlobalJavaArgs: true,
+		useGlobalJavaPath: true,
+		useGlobalHooks: true,
+		useGlobalEnvironmentVariables: true,
+		useGlobalGameDir: true,
+		environmentVariables: null,
+		preLaunchHook: null,
+		postExitHook: null,
+		wrapperCommand: null,
 	};
 
 	console.log(

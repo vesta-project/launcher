@@ -103,7 +103,7 @@ pub async fn verify_java_path(path_str: String) -> Result<jre_manager::DetectedJ
 }
 
 #[tauri::command]
-pub async fn pick_java_path(app_handle: AppHandle) -> Result<Option<String>, String> {
+pub async fn select_java_file(app_handle: AppHandle) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
 
     let (tx, rx) = tokio::sync::oneshot::channel();

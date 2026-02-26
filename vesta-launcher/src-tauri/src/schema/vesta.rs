@@ -62,8 +62,8 @@ diesel::table! {
         java_path -> Nullable<Text>,
         java_args -> Nullable<Text>,
         game_directory -> Nullable<Text>,
-        width -> Integer,
-        height -> Integer,
+        game_width -> Integer,
+        game_height -> Integer,
         icon_path -> Nullable<Text>,
         last_played -> Nullable<Text>,
         total_playtime_minutes -> Integer,
@@ -80,6 +80,17 @@ diesel::table! {
         modpack_icon_url -> Nullable<Text>,
         icon_data -> Nullable<Binary>,
         last_operation -> Nullable<Text>,
+        use_global_resolution -> Bool,
+        use_global_memory -> Bool,
+        use_global_java_args -> Bool,
+        use_global_java_path -> Bool,
+        use_global_hooks -> Bool,
+        use_global_environment_variables -> Bool,
+        use_global_game_dir -> Bool,
+        environment_variables -> Nullable<Text>,
+        pre_launch_hook -> Nullable<Text>,
+        wrapper_command -> Nullable<Text>,
+        post_exit_hook -> Nullable<Text>,
     }
 }
 

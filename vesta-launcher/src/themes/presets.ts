@@ -76,7 +76,7 @@ export interface AppThemeConfig {
  * Convert backend config to a full ThemeConfig
  */
 export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
-	const themeId = config.theme_id || "midnight";
+	const themeId = config.theme_id || "vesta";
 	const baseTheme = getThemeById(themeId) || getDefaultTheme();
 
 	// Helper to get a numeric value that might be 0 (so we can't just use ??)
@@ -290,7 +290,7 @@ export function getThemeById(id: string): ThemeConfig | undefined {
  * Get the default theme
  */
 export function getDefaultTheme(): ThemeConfig {
-	return PRESET_THEMES[0]; // Midnight
+	return PRESET_THEMES[0]; // Vesta is the default theme
 }
 
 /**

@@ -1047,8 +1047,8 @@ async fn prepare_instance(
         java_path: current_java_path,
         java_args: instance_data.java_args.clone(),
         game_directory: Some(gd_str),
-        width: instance_data.width,
-        height: instance_data.height,
+        game_width: instance_data.game_width,
+        game_height: instance_data.game_height,
         min_memory: instance_data.min_memory,
         max_memory: instance_data.max_memory,
         icon_path: final_icon_path,
@@ -1065,6 +1065,17 @@ async fn prepare_instance(
         modpack_icon_url: instance_data.modpack_icon_url.clone(),
         icon_data: final_icon_data,
         last_operation: Some("install".to_string()),
+        use_global_resolution: instance_data.use_global_resolution,
+        use_global_memory: instance_data.use_global_memory,
+        use_global_java_args: instance_data.use_global_java_args,
+        use_global_java_path: instance_data.use_global_java_path,
+        use_global_hooks: instance_data.use_global_hooks,
+        use_global_environment_variables: instance_data.use_global_environment_variables,
+        use_global_game_dir: instance_data.use_global_game_dir,
+        environment_variables: instance_data.environment_variables.clone(),
+        pre_launch_hook: instance_data.pre_launch_hook.clone(),
+        wrapper_command: instance_data.wrapper_command.clone(),
+        post_exit_hook: instance_data.post_exit_hook.clone(),
     })
 }
 

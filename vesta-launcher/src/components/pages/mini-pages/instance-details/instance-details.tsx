@@ -160,6 +160,18 @@ interface InstanceDetailsProps {
 	initialMaxMemory?: number;
 	initialJavaArgs?: string;
 	initialJavaPath?: string;
+	initialGameWidth?: number;
+	initialGameHeight?: number;
+	initialUseGlobalResolution?: boolean;
+	initialUseGlobalMemory?: boolean;
+	initialUseGlobalJavaArgs?: boolean;
+	initialUseGlobalJavaPath?: boolean;
+	initialUseGlobalHooks?: boolean;
+	initialUseGlobalEnvironmentVariables?: boolean;
+	initialPreLaunchHook?: string;
+	initialPostExitHook?: string;
+	initialWrapperCommand?: string;
+	initialEnvironmentVariables?: string;
 	_dirty?: Record<string, boolean>;
 }
 
@@ -342,6 +354,41 @@ export default function InstanceDetails(
 	const [javaPath, setJavaPath] = createSignal(props.initialJavaPath || "");
 	const [isCustomMode, setIsCustomMode] = createSignal(false);
 
+	// --- Linking & Overrides ---
+	const [useGlobalResolution, setUseGlobalResolution] = createSignal(
+		props.initialUseGlobalResolution ?? true,
+	);
+	const [gameWidth, setGameWidth] = createSignal(props.initialGameWidth || 1280);
+	const [gameHeight, setGameHeight] = createSignal(
+		props.initialGameHeight || 720,
+	);
+	const [useGlobalMemory, setUseGlobalMemory] = createSignal(
+		props.initialUseGlobalMemory ?? true,
+	);
+	const [useGlobalJavaArgs, setUseGlobalJavaArgs] = createSignal(
+		props.initialUseGlobalJavaArgs ?? true,
+	);
+	const [useGlobalJavaPath, setUseGlobalJavaPath] = createSignal(
+		props.initialUseGlobalJavaPath ?? true,
+	);
+	const [useGlobalHooks, setUseGlobalHooks] = createSignal(
+		props.initialUseGlobalHooks ?? true,
+	);
+	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] =
+		createSignal(props.initialUseGlobalEnvironmentVariables ?? true);
+	const [preLaunchHook, setPreLaunchHook] = createSignal(
+		props.initialPreLaunchHook || "",
+	);
+	const [postExitHook, setPostExitHook] = createSignal(
+		props.initialPostExitHook || "",
+	);
+	const [wrapperCommand, setWrapperCommand] = createSignal(
+		props.initialWrapperCommand || "",
+	);
+	const [environmentVariables, setEnvironmentVariables] = createSignal(
+		props.initialEnvironmentVariables || "",
+	);
+
 	// Dirty flags for settings
 	const [isNameDirty, setIsNameDirty] = createSignal(
 		props._dirty?.name || false,
@@ -359,6 +406,13 @@ export default function InstanceDetails(
 	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(
 		props._dirty?.javaPath || false,
 	);
+	const [isResolutionDirty, setIsResolutionDirty] = createSignal(
+		props._dirty?.resolution || false,
+	);
+	const [isHooksDirty, setIsHooksDirty] = createSignal(
+		props._dirty?.hooks || false,
+	);
+	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
 
 	const [saving, setSaving] = createSignal(false);
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<
@@ -381,7 +435,10 @@ export default function InstanceDetails(
 			isMinMemDirty() ||
 			isMaxMemDirty() ||
 			isJvmDirty() ||
-			isJavaPathDirty()
+			isJavaPathDirty() ||
+			isResolutionDirty() ||
+			isHooksDirty() ||
+			isEnvDirty()
 		);
 	});
 
@@ -594,6 +651,18 @@ export default function InstanceDetails(
 				initialMaxMemory: maxMemory()[0],
 				initialJavaArgs: javaArgs(),
 				initialJavaPath: javaPath(),
+				initialGameWidth: gameWidth(),
+				initialGameHeight: gameHeight(),
+				initialUseGlobalResolution: useGlobalResolution(),
+				initialUseGlobalMemory: useGlobalMemory(),
+				initialUseGlobalJavaArgs: useGlobalJavaArgs(),
+				initialUseGlobalJavaPath: useGlobalJavaPath(),
+				initialUseGlobalHooks: useGlobalHooks(),
+				initialUseGlobalEnvironmentVariables: useGlobalEnvironmentVariables(),
+				initialPreLaunchHook: preLaunchHook(),
+				initialPostExitHook: postExitHook(),
+				initialWrapperCommand: wrapperCommand(),
+				initialEnvironmentVariables: environmentVariables(),
 				_dirty: {
 					name: isNameDirty(),
 					icon: isIconDirty(),
@@ -601,6 +670,9 @@ export default function InstanceDetails(
 					maxMem: isMaxMemDirty(),
 					jvm: isJvmDirty(),
 					javaPath: isJavaPathDirty(),
+					resolution: isResolutionDirty(),
+					hooks: isHooksDirty(),
+					env: isEnvDirty(),
 				},
 			};
 		});
@@ -993,8 +1065,32 @@ export default function InstanceDetails(
 				if (!isIconDirty()) setIconPath(inst.iconPath || DEFAULT_ICONS[0]);
 				if (!isMinMemDirty()) setMinMemory([inst.minMemory]);
 				if (!isMaxMemDirty()) setMaxMemory([inst.maxMemory]);
-				if (!isJvmDirty()) setJavaArgs(inst.javaArgs || "");
-				if (!isJavaPathDirty()) setJavaPath(inst.javaPath || "");
+				if (!isJvmDirty()) {
+					setJavaArgs(inst.javaArgs || "");
+					setUseGlobalJavaArgs(inst.useGlobalJavaArgs);
+				}
+				if (!isJavaPathDirty()) {
+					setJavaPath(inst.javaPath || "");
+					setUseGlobalJavaPath(inst.useGlobalJavaPath);
+				}
+				if (!isResolutionDirty()) {
+					setUseGlobalResolution(inst.useGlobalResolution);
+					setGameWidth(inst.gameWidth);
+					setGameHeight(inst.gameHeight);
+				}
+				if (!isMinMemDirty() || !isMaxMemDirty()) {
+					setUseGlobalMemory(inst.useGlobalMemory);
+				}
+				if (!isHooksDirty()) {
+					setUseGlobalHooks(inst.useGlobalHooks);
+					setPreLaunchHook(inst.preLaunchHook || "");
+					setPostExitHook(inst.postExitHook || "");
+					setWrapperCommand(inst.wrapperCommand || "");
+				}
+				if (!isEnvDirty()) {
+					setUseGlobalEnvironmentVariables(inst.useGlobalEnvironmentVariables);
+					setEnvironmentVariables(inst.environmentVariables || "");
+				}
 			});
 		}
 	});
@@ -1625,16 +1721,36 @@ export default function InstanceDetails(
 			fresh.javaPath = javaPath() || null;
 			fresh.minMemory = minMemory()[0];
 			fresh.maxMemory = maxMemory()[0];
+
+			// New fields
+			fresh.useGlobalResolution = useGlobalResolution();
+			fresh.gameWidth = gameWidth();
+			fresh.gameHeight = gameHeight();
+			fresh.useGlobalMemory = useGlobalMemory();
+			fresh.useGlobalJavaArgs = useGlobalJavaArgs();
+			fresh.useGlobalJavaPath = useGlobalJavaPath();
+			fresh.useGlobalHooks = useGlobalHooks();
+			fresh.useGlobalEnvironmentVariables = useGlobalEnvironmentVariables();
+			fresh.preLaunchHook = preLaunchHook() || null;
+			fresh.postExitHook = postExitHook() || null;
+			fresh.wrapperCommand = wrapperCommand() || null;
+			fresh.environmentVariables = environmentVariables() || null;
+
 			await updateInstance(fresh);
-			// Clear temporary session icons once we've successfully saved to the backend
-			setCustomIconsThisSession([]);
-			// Reset dirty flags after successful save
-			setIsNameDirty(false);
-			setIsIconDirty(false);
-			setIsMinMemDirty(false);
-			setIsMaxMemDirty(false);
-			setIsJvmDirty(false);
-			setIsJavaPathDirty(false);
+			batch(() => {
+				// Clear temporary session icons once we've successfully saved to the backend
+				setCustomIconsThisSession([]);
+				// Reset dirty flags after successful save
+				setIsNameDirty(false);
+				setIsIconDirty(false);
+				setIsMinMemDirty(false);
+				setIsMaxMemDirty(false);
+				setIsJvmDirty(false);
+				setIsJavaPathDirty(false);
+				setIsResolutionDirty(false);
+				setIsHooksDirty(false);
+				setIsEnvDirty(false);
+			});
 			await refetch();
 		} catch (e) {
 			console.error("Failed to save instance settings:", e);
@@ -2005,6 +2121,33 @@ export default function InstanceDetails(
 												handleSave={handleSave}
 												saving={saving}
 												totalRam={totalRam()}
+												useGlobalResolution={useGlobalResolution()}
+												setUseGlobalResolution={setUseGlobalResolution}
+												gameWidth={gameWidth()}
+												setGameWidth={setGameWidth}
+												gameHeight={gameHeight()}
+												setGameHeight={setGameHeight}
+												setIsResolutionDirty={setIsResolutionDirty}
+												useGlobalMemory={useGlobalMemory()}
+												setUseGlobalMemory={setUseGlobalMemory}
+												useGlobalJavaArgs={useGlobalJavaArgs()}
+												setUseGlobalJavaArgs={setUseGlobalJavaArgs}
+												useGlobalJavaPath={useGlobalJavaPath()}
+												setUseGlobalJavaPath={setUseGlobalJavaPath}
+												preLaunchHook={preLaunchHook()}
+												setPreLaunchHook={setPreLaunchHook}
+												postExitHook={postExitHook()}
+												setPostExitHook={setPostExitHook}
+												wrapperCommand={wrapperCommand()}
+												setWrapperCommand={setWrapperCommand}
+												useGlobalHooks={useGlobalHooks()}
+												setUseGlobalHooks={setUseGlobalHooks}
+												setIsHooksDirty={setIsHooksDirty}
+												environmentVariables={environmentVariables()}
+												setEnvironmentVariables={setEnvironmentVariables}
+												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
+												setUseGlobalEnvironmentVariables={setUseGlobalEnvironmentVariables}
+												setIsEnvDirty={setIsEnvDirty}
 												invoke={invoke}
 												showToast={showToast}
 											/>
@@ -2027,22 +2170,47 @@ export default function InstanceDetails(
 								onClick={() => {
 									const i = inst();
 									if (!i) return;
-									setName(i.name);
-									setIconPath(
-										i.iconPath ||
-											getStableIconId(DEFAULT_ICONS[0]) ||
-											DEFAULT_ICONS[0],
-									);
-									setMinMemory([i.minMemory]);
-									setMaxMemory([i.maxMemory]);
-									setJavaArgs(i.javaArgs || "");
-									setJavaPath(i.javaPath || "");
-									setIsNameDirty(false);
-									setIsIconDirty(false);
-									setIsMinMemDirty(false);
-									setIsMaxMemDirty(false);
-									setIsJvmDirty(false);
-									setIsJavaPathDirty(false);
+									batch(() => {
+										// Basic info
+										setName(i.name);
+										setIconPath(
+											i.iconPath ||
+												getStableIconId(DEFAULT_ICONS[0]) ||
+												DEFAULT_ICONS[0],
+										);
+										// Memory
+										setMinMemory([i.minMemory]);
+										setMaxMemory([i.maxMemory]);
+										setUseGlobalMemory(i.useGlobalMemory);
+										// Java
+										setJavaArgs(i.javaArgs || "");
+										setUseGlobalJavaArgs(i.useGlobalJavaArgs);
+										setJavaPath(i.javaPath || "");
+										setUseGlobalJavaPath(i.useGlobalJavaPath);
+										// Resolution
+										setGameWidth(i.gameWidth);
+										setGameHeight(i.gameHeight);
+										setUseGlobalResolution(i.useGlobalResolution);
+										// Hooks
+										setPreLaunchHook(i.preLaunchHook || "");
+										setPostExitHook(i.postExitHook || "");
+										setWrapperCommand(i.wrapperCommand || "");
+										setUseGlobalHooks(i.useGlobalHooks);
+										// Env
+										setEnvironmentVariables(i.environmentVariables || "");
+										setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
+
+										// Reset dirty flags
+										setIsNameDirty(false);
+										setIsIconDirty(false);
+										setIsMinMemDirty(false);
+										setIsMaxMemDirty(false);
+										setIsJvmDirty(false);
+										setIsJavaPathDirty(false);
+										setIsResolutionDirty(false);
+										setIsHooksDirty(false);
+										setIsEnvDirty(false);
+									});
 								}}
 							>
 								Reset

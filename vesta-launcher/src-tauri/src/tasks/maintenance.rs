@@ -105,8 +105,8 @@ impl Task for CloneInstanceTask {
                 java_path: source.java_path.clone(),
                 java_args: source.java_args.clone(),
                 game_directory: Some(new_dir.to_string_lossy().to_string()),
-                width: source.width,
-                height: source.height,
+                game_width: source.game_width,
+                game_height: source.game_height,
                 min_memory: source.min_memory,
                 max_memory: source.max_memory,
                 icon_path: source.icon_path.clone(),
@@ -123,6 +123,17 @@ impl Task for CloneInstanceTask {
                 modpack_icon_url: source.modpack_icon_url.clone(),
                 icon_data: source.icon_data.clone(),
                 last_operation: None,
+                use_global_resolution: source.use_global_resolution,
+                use_global_memory: source.use_global_memory,
+                use_global_java_args: source.use_global_java_args,
+                use_global_java_path: source.use_global_java_path,
+                use_global_hooks: source.use_global_hooks,
+                use_global_environment_variables: source.use_global_environment_variables,
+                use_global_game_dir: source.use_global_game_dir,
+                environment_variables: source.environment_variables.clone(),
+                pre_launch_hook: source.pre_launch_hook.clone(),
+                wrapper_command: source.wrapper_command.clone(),
+                post_exit_hook: source.post_exit_hook.clone(),
             };
 
             diesel::insert_into(instance)

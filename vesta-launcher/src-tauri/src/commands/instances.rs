@@ -476,8 +476,8 @@ pub async fn create_instance(
         java_path: inst.java_path,
         java_args: inst.java_args,
         game_directory: inst.game_directory,
-        width: inst.width,
-        height: inst.height,
+        game_width: inst.game_width,
+        game_height: inst.game_height,
         min_memory: inst.min_memory,
         max_memory: inst.max_memory,
         icon_path: inst.icon_path,
@@ -494,6 +494,17 @@ pub async fn create_instance(
         modpack_icon_url: inst.modpack_icon_url,
         icon_data: inst.icon_data,
         last_operation: None,
+        use_global_resolution: inst.use_global_resolution,
+        use_global_memory: inst.use_global_memory,
+        use_global_java_args: inst.use_global_java_args,
+        use_global_java_path: inst.use_global_java_path,
+        use_global_hooks: inst.use_global_hooks,
+        use_global_environment_variables: inst.use_global_environment_variables,
+        use_global_game_dir: inst.use_global_game_dir,
+        environment_variables: inst.environment_variables,
+        pre_launch_hook: inst.pre_launch_hook,
+        wrapper_command: inst.wrapper_command,
+        post_exit_hook: inst.post_exit_hook,
     };
 
     diesel::insert_into(instance)
@@ -788,8 +799,8 @@ pub async fn update_instance(
             java_path.eq(&final_instance.java_path),
             java_args.eq(&final_instance.java_args),
             game_directory.eq(&final_instance.game_directory),
-            width.eq(final_instance.width),
-            height.eq(final_instance.height),
+            game_width.eq(final_instance.game_width),
+            game_height.eq(final_instance.game_height),
             min_memory.eq(final_instance.min_memory),
             max_memory.eq(final_instance.max_memory),
             icon_path.eq(&final_instance.icon_path),
@@ -801,6 +812,17 @@ pub async fn update_instance(
             modpack_platform.eq(&final_instance.modpack_platform),
             modpack_icon_url.eq(&final_instance.modpack_icon_url),
             icon_data.eq(&final_instance.icon_data),
+            use_global_resolution.eq(final_instance.use_global_resolution),
+            use_global_memory.eq(final_instance.use_global_memory),
+            use_global_java_args.eq(final_instance.use_global_java_args),
+            use_global_java_path.eq(final_instance.use_global_java_path),
+            use_global_hooks.eq(final_instance.use_global_hooks),
+            use_global_environment_variables.eq(final_instance.use_global_environment_variables),
+            use_global_game_dir.eq(final_instance.use_global_game_dir),
+            environment_variables.eq(&final_instance.environment_variables),
+            pre_launch_hook.eq(&final_instance.pre_launch_hook),
+            wrapper_command.eq(&final_instance.wrapper_command),
+            post_exit_hook.eq(&final_instance.post_exit_hook),
             updated_at.eq(&now),
         ))
         .execute(&mut conn)
@@ -962,41 +984,27 @@ pub async fn launch_instance(
     // Derive a filesystem-safe runtime instance id (slug) from the instance name
     let instance_id = instance_data.slug();
 
+    // Load app configuration for defaults
+    let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+
     // Get app config directory
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
     // Determine Java path
-    let java_path_str = if let Some(path) = instance_data.java_path.clone() {
-        path
+    let java_path_str = if !instance_data.use_global_java_path && instance_data.java_path.is_some() {
+        instance_data.java_path.clone().unwrap()
     } else {
-        // Try to find global default for the required version
-        let required_major =
-            crate::utils::java::get_required_java_for_version(&instance_data.minecraft_version);
-
-        let global_path = (|| -> Option<String> {
-            use crate::schema::global_java_paths::dsl::*;
-            use crate::utils::db::get_config_conn;
-            let mut conn = get_config_conn().ok()?;
-            global_java_paths
-                .filter(major_version.eq(required_major as i32))
-                .select(path)
-                .first::<String>(&mut conn)
-                .ok()
-        })();
-
-        global_path.unwrap_or_else(|| {
-            // Try to find java in PATH
-            #[cfg(windows)]
-            let default_java = "java.exe";
-            #[cfg(not(windows))]
-            let default_java = "java";
-
-            which::which(default_java)
-                .ok()
-                .and_then(|p| p.to_str().map(|s| s.to_string()))
-                .unwrap_or_else(|| default_java.to_string())
-        })
+        // Use global setting if linked or local is missing
+        if let Some(path) = app_config.java_path.clone() {
+            if !path.is_empty() {
+                path
+            } else {
+                self::resolve_java_path_for_version(&instance_data.minecraft_version)
+            }
+        } else {
+            self::resolve_java_path_for_version(&instance_data.minecraft_version)
+        }
     };
 
     // Determine which data_dir to use
@@ -1006,24 +1014,77 @@ pub async fn launch_instance(
         data_dir.clone()
     };
 
-    // Derive game directory
-    let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
-    let instances_root = if let Some(ref dir) = config.default_game_dir {
-        if !dir.is_empty() && dir != "/" {
-            std::path::PathBuf::from(dir)
+    // Determine game directory
+    let game_dir = if instance_data.use_global_game_dir {
+        let instances_root = if let Some(ref dir) = app_config.default_game_dir {
+            if !dir.is_empty() && dir != "/" {
+                std::path::PathBuf::from(dir)
+            } else {
+                data_dir.join("instances")
+            }
         } else {
             data_dir.join("instances")
-        }
-    } else {
-        data_dir.join("instances")
-    };
-
-    let game_dir = instance_data.game_directory.clone().unwrap_or_else(|| {
+        };
         instances_root
             .join(&instance_id)
             .to_string_lossy()
             .to_string()
-    });
+    } else {
+        instance_data.game_directory.clone().unwrap_or_else(|| {
+            data_dir
+                .join("instances")
+                .join(&instance_id)
+                .to_string_lossy()
+                .to_string()
+        })
+    };
+
+    // Resolve settings (Resolution, Memory, Java Args)
+    let res_width = if instance_data.use_global_resolution {
+        app_config.default_width
+    } else {
+        instance_data.game_width
+    };
+    let res_height = if instance_data.use_global_resolution {
+        app_config.default_height
+    } else {
+        instance_data.game_height
+    };
+    let res_min_memory = if instance_data.use_global_memory {
+        app_config.default_min_memory
+    } else {
+        instance_data.min_memory
+    };
+    let res_max_memory = if instance_data.use_global_memory {
+        app_config.default_max_memory
+    } else {
+        instance_data.max_memory
+    };
+    let java_args_raw = if instance_data.use_global_java_args {
+        app_config.default_java_args.clone()
+    } else {
+        instance_data.java_args.clone()
+    };
+
+    // Resolve Environment Variables
+    let mut env_vars = crate::utils::hooks::resolve_env_vars(&app_config, &instance_data);
+
+    // Resolve Hooks
+    let res_pre_launch_hook = if instance_data.use_global_hooks {
+        app_config.default_pre_launch_hook.clone()
+    } else {
+        instance_data.pre_launch_hook.clone()
+    };
+    let res_wrapper_command = if instance_data.use_global_hooks {
+        app_config.default_wrapper_command.clone()
+    } else {
+        instance_data.wrapper_command.clone()
+    };
+    let res_post_exit_hook = if instance_data.use_global_hooks {
+        app_config.default_post_exit_hook.clone()
+    } else {
+        instance_data.post_exit_hook.clone()
+    };
 
     // Parse modloader type
     let modloader_type = instance_data
@@ -1135,9 +1196,6 @@ pub async fn launch_instance(
     };
 
     // Prepare GPU environment and preferences
-    let app_config = crate::utils::config::get_app_config().unwrap_or_default();
-    let mut env_vars = std::collections::HashMap::new();
-
     if app_config.use_dedicated_gpu {
         #[cfg(target_os = "linux")]
         {
@@ -1170,8 +1228,8 @@ pub async fn launch_instance(
         data_dir: spec_data_dir.clone(),
         game_dir: std::path::PathBuf::from(&game_dir),
         java_path: std::path::PathBuf::from(&java_path_str),
-        min_memory: Some(instance_data.min_memory as u32),
-        max_memory: Some(instance_data.max_memory as u32),
+        min_memory: Some(res_min_memory as u32),
+        max_memory: Some(res_max_memory as u32),
         username,
         uuid,
         access_token: if is_offline {
@@ -1185,16 +1243,18 @@ pub async fn launch_instance(
         xuid: None,
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
-        jvm_args: instance_data
-            .java_args
+        jvm_args: java_args_raw
             .map(|args| args.split_whitespace().map(|s| s.to_string()).collect())
             .unwrap_or_default(),
         game_args: vec![],
-        window_width: Some(instance_data.width as u32),
-        window_height: Some(instance_data.height as u32),
+        window_width: Some(res_width as u32),
+        window_height: Some(res_height as u32),
         exit_handler_jar,
         log_file: Some(log_file),
-        env_vars,
+        env_vars: env_vars.clone(),
+        wrapper_command: res_wrapper_command,
+        pre_launch_hook: res_pre_launch_hook,
+        post_exit_hook: res_post_exit_hook,
     };
 
     log::info!(
@@ -1294,6 +1354,24 @@ pub async fn launch_instance(
 
             if let Err(e) = crate::utils::process_state::add_running_process(run_state.clone()) {
                 log::warn!("Failed to persist process state: {}", e);
+            }
+
+            // Handle post-exit hook and cleanup if process handle is available
+            if let Some(handle) = result.handle {
+                if let Some(mut child) = handle.child {
+                    let iid_for_hook = instance_id.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = child.wait().await {
+                            log::error!("[launch_instance] Failed to wait for game process for {}: {}", iid_for_hook, e);
+                        }
+                        log::info!("[launch_instance] Game process exited for {}, running cleanup and post-exit hook if any", iid_for_hook);
+                        
+                        // Unregister from piston-lib registry immediately
+                        if let Err(e) = piston_lib::game::launcher::registry::unregister_instance(&iid_for_hook).await {
+                            log::error!("[launch_instance] Failed to unregister instance {} from piston-lib registry: {}", iid_for_hook, e);
+                        }
+                    });
+                }
             }
 
             use tauri::Emitter;
@@ -1935,4 +2013,32 @@ pub async fn update_instance_modpack_version(
     let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
 
     Ok(())
+}
+
+fn resolve_java_path_for_version(mc_version: &str) -> String {
+    let required_major = crate::utils::java::get_required_java_for_version(mc_version);
+
+    let global_path = (|| -> Option<String> {
+        use crate::schema::global_java_paths::dsl::*;
+        use crate::utils::db::get_config_conn;
+        let mut conn = get_config_conn().ok()?;
+        global_java_paths
+            .filter(major_version.eq(required_major as i32))
+            .select(path)
+            .first::<String>(&mut conn)
+            .ok()
+    })();
+
+    global_path.unwrap_or_else(|| {
+        // Try to find java in PATH
+        #[cfg(windows)]
+        let default_java = "java.exe";
+        #[cfg(not(windows))]
+        let default_java = "java";
+
+        which::which(default_java)
+            .ok()
+            .and_then(|p| p.to_str().map(|s| s.to_string()))
+            .unwrap_or_else(|| default_java.to_string())
+    })
 }

@@ -48,6 +48,7 @@ import {
 	DEFAULT_ICONS,
 	deleteInstance,
 	duplicateInstance,
+	sanitizeInstanceName,
 	getInstanceId,
 	getInstanceSlug,
 	installInstance,
@@ -108,73 +109,35 @@ export default function InstanceCard(props: InstanceCardProps) {
 			unlisteners.push(
 				await listen("core://instance-launched", (event) => {
 					const payload = (event as any).payload as {
-						name: string;
+						name?: string;
 						instance_id?: string;
 						pid?: number;
 					};
 					const id =
 						payload.instance_id ||
-						getInstanceSlug({
-							id: 0,
-							name: payload.name,
-							minecraftVersion: "",
-							modloader: null,
-							modloaderVersion: null,
-							javaPath: null,
-							javaArgs: null,
-							gameDirectory: null,
-							width: 0,
-							height: 0,
-							minMemory: 2048,
-							maxMemory: 4096,
-							iconPath: null,
-							lastPlayed: null,
-							totalPlaytimeMinutes: 0,
-							createdAt: null,
-							updatedAt: null,
-							installationStatus: null,
-							modpackId: null,
-							modpackVersionId: null,
-							modpackPlatform: null,
-							modpackIconUrl: null,
-							iconData: null,
-						});
+						(payload.name ? sanitizeInstanceName(payload.name) : null);
+					if (!id) return;
+
+					if (id === instanceSlug) {
+						setLaunching(false);
+					}
 					setRunningIds((prev) => new Set(prev).add(id));
 				}),
 			);
 			unlisteners.push(
 				await listen("core://instance-killed", (event) => {
 					const payload = (event as any).payload as {
-						name: string;
+						name?: string;
 						instance_id?: string;
 					};
 					const id =
 						payload.instance_id ||
-						getInstanceSlug({
-							id: 0,
-							name: payload.name,
-							minecraftVersion: "",
-							modloader: null,
-							modloaderVersion: null,
-							javaPath: null,
-							javaArgs: null,
-							gameDirectory: null,
-							width: 0,
-							height: 0,
-							minMemory: 2048,
-							maxMemory: 4096,
-							iconPath: null,
-							lastPlayed: null,
-							totalPlaytimeMinutes: 0,
-							createdAt: null,
-							updatedAt: null,
-							installationStatus: null,
-							modpackId: null,
-							modpackVersionId: null,
-							modpackPlatform: null,
-							modpackIconUrl: null,
-							iconData: null,
-						});
+						(payload.name ? sanitizeInstanceName(payload.name) : null);
+					if (!id) return;
+
+					if (id === instanceSlug) {
+						setLaunching(false);
+					}
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(id);
@@ -182,42 +145,28 @@ export default function InstanceCard(props: InstanceCardProps) {
 					});
 				}),
 			);
-			// Listen for instance launched (notifies that process successfully started)
-			unlisteners.push(
-				await listen("core://instance-launched", (event) => {
-					const payload = (event as any).payload as {
-						instance_id?: string;
-						pid?: number;
-					};
-					if (payload.instance_id === instanceSlug) {
-						setLaunching(false);
-						setRunningIds((prev) => {
-							const newSet = new Set(prev);
-							newSet.add(instanceSlug);
-							return newSet;
-						});
-					}
-				}),
-			);
 			// Also listen for natural process exit (when game closes normally)
 			unlisteners.push(
 				await listen("core://instance-exited", (event) => {
 					const payload = (event as any).payload as {
+						name?: string;
 						instance_id?: string;
 						pid?: number;
 						crashed?: boolean;
 					};
-					if (payload.instance_id) {
-						if (payload.instance_id === instanceSlug) {
-							setLaunching(false);
-						}
-						setRunningIds((prev) => {
-							const newSet = new Set(prev);
-							// biome-ignore lint/style/noNonNullAssertion: instance_id is checked above
-							newSet.delete(payload.instance_id!);
-							return newSet;
-						});
+					const id =
+						payload.instance_id ||
+						(payload.name ? sanitizeInstanceName(payload.name) : null);
+					if (!id) return;
+
+					if (id === instanceSlug) {
+						setLaunching(false);
 					}
+					setRunningIds((prev) => {
+						const newSet = new Set(prev);
+						newSet.delete(id);
+						return newSet;
+					});
 				}),
 			);
 

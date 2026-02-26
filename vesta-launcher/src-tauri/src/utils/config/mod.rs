@@ -105,7 +105,7 @@ pub struct AppConfig {
     pub theme: String,
     pub language: String,
     pub max_download_threads: i32,
-    pub max_memory_mb: i32,
+    pub default_max_memory: i32,
     pub java_path: Option<String>,
     pub default_game_dir: Option<String>,
     pub auto_update_enabled: bool,
@@ -121,7 +121,7 @@ pub struct AppConfig {
     pub active_account_uuid: Option<String>,
 
     // Theme system fields
-    pub theme_id: String, // Current theme preset ID (e.g., "midnight", "solar")
+    pub theme_id: String, // Current theme preset ID (e.g., "vesta", "solar")
     pub theme_mode: String, // "template" or "advanced"
     pub theme_primary_hue: i32, // User-customized primary hue
     pub theme_primary_sat: Option<i32>, // Advanced mode: primary saturation
@@ -146,6 +146,16 @@ pub struct AppConfig {
     pub discord_presence_enabled: bool,
 
     pub auto_install_dependencies: bool,
+
+    // Instance defaults
+    pub default_width: i32,
+    pub default_height: i32,
+    pub default_java_args: Option<String>,
+    pub default_environment_variables: Option<String>,
+    pub default_pre_launch_hook: Option<String>,
+    pub default_wrapper_command: Option<String>,
+    pub default_post_exit_hook: Option<String>,
+    pub default_min_memory: i32,
 }
 
 impl Default for AppConfig {
@@ -156,7 +166,7 @@ impl Default for AppConfig {
             theme: "dark".to_string(),
             language: "en".to_string(),
             max_download_threads: 4,
-            max_memory_mb: 4096,
+            default_max_memory: 4096,
             java_path: None,
             default_game_dir: None,
             auto_update_enabled: true,
@@ -172,7 +182,7 @@ impl Default for AppConfig {
             active_account_uuid: None,
 
             // Theme system defaults
-            theme_id: "midnight".to_string(), // theme_id - default to signature theme
+            theme_id: "vesta".to_string(), // theme_id - default to signature theme
             theme_mode: "template".to_string(), // theme_mode - start with easy mode
             theme_primary_hue: 220,           // theme_primary_hue - default blue
             theme_primary_sat: None,          // theme_primary_sat - advanced mode only
@@ -192,6 +202,14 @@ impl Default for AppConfig {
             use_dedicated_gpu: true,
             discord_presence_enabled: true,
             auto_install_dependencies: true,
+            default_width: 854,
+            default_height: 480,
+            default_java_args: None,
+            default_environment_variables: None,
+            default_pre_launch_hook: None,
+            default_wrapper_command: None,
+            default_post_exit_hook: None,
+            default_min_memory: 2048,
         }
     }
 }
@@ -297,7 +315,7 @@ fn sync_theme_to_account(
     match field {
         "theme_id" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_id.eq(value.as_str().unwrap_or("midnight")))
+                .set(theme_id.eq(value.as_str().unwrap_or("vesta")))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
         }

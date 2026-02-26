@@ -458,16 +458,30 @@ pub async fn launch_game(
     // 9. Construct command - may wrap with exit handler if provided
     let mut command;
     
-    // Build the original game command arguments
-    let mut original_game_args: Vec<String> = Vec::new();
-    original_game_args.push(spec.java_path.to_string_lossy().to_string());
-    original_game_args.extend(jvm_args.clone());
-    original_game_args.push(main_class.clone());
-    original_game_args.extend(game_args.clone());
-    
+    // Build the "core" game command arguments (java path and all args)
+    let mut game_base_command: Vec<String> = Vec::new();
+    game_base_command.push(spec.java_path.to_string_lossy().to_string());
+    game_base_command.extend(jvm_args.clone());
+    game_base_command.push(main_class.clone());
+    game_base_command.extend(game_args.clone());
+
+    // Resolve what the actual executable and its initial args are
+    let (executable, initial_args) = if let Some(ref wrapper) = spec.wrapper_command {
+        let parts = shlex::split(wrapper).unwrap_or_else(|| {
+            wrapper.split_whitespace().map(|s| s.to_string()).collect()
+        });
+        if parts.is_empty() {
+            (spec.java_path.to_string_lossy().to_string(), Vec::new())
+        } else {
+            (parts[0].clone(), parts[1..].to_vec())
+        }
+    } else {
+        (spec.java_path.to_string_lossy().to_string(), Vec::new())
+    };
+
     if let Some(ref exit_handler_jar) = spec.exit_handler_jar {
         // Wrap with exit handler JAR
-        // Command: <java> -jar <exit-handler.jar> --instance-id <id> --exit-file <path> --log-file <path> -- <original game command>
+        // Structure: [Wrapper] <java> -jar <exit-handler.jar> ... -- <original game command>
         log::info!("Using exit handler JAR: {:?}", exit_handler_jar);
         
         let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
@@ -475,7 +489,17 @@ pub async fn launch_game(
         // Ensure .vesta directory exists
         tokio::fs::create_dir_all(spec.game_dir.join(".vesta")).await?;
         
-        command = tokio::process::Command::new(&spec.java_path);
+        // If we have a wrapper, the executable is the wrapper, and its FIRST argument after its own args
+        // should be the java path to run the exit handler.
+        // Wait, if executable is Java (no wrapper), this works too.
+        command = tokio::process::Command::new(executable);
+        command.args(initial_args);
+        
+        // If there WAS a wrapper, we need to push Java path as the next arg
+        if spec.wrapper_command.is_some() {
+             command.arg(&spec.java_path);
+        }
+
         command.arg("-jar");
         command.arg(exit_handler_jar);
         command.arg("--instance-id");
@@ -484,12 +508,31 @@ pub async fn launch_game(
         command.arg(&exit_file);
         command.arg("--log-file");
         command.arg(&log_file);
+        
+        if let Some(ref pre_hook) = spec.pre_launch_hook {
+            command.arg("--pre-launch-hook");
+            command.arg(pre_hook);
+        }
+        
+        if let Some(ref post_hook) = spec.post_exit_hook {
+            command.arg("--post-exit-hook");
+            command.arg(post_hook);
+        }
+
         command.arg("--");
+        
         // Pass the original game command (java path and all args)
-        command.args(&original_game_args);
+        command.args(&game_base_command);
     } else {
-        // No exit handler, use original command structure
-        command = tokio::process::Command::new(&spec.java_path);
+        // No exit handler, just wrapper + game
+        command = tokio::process::Command::new(executable);
+        command.args(initial_args);
+        
+        // If there WAS a wrapper, we need to push Java path as the next arg
+        if spec.wrapper_command.is_some() {
+             command.arg(&spec.java_path);
+        }
+
         command.args(&jvm_args);
         command.arg(&main_class);
         command.args(&game_args);
@@ -545,10 +588,10 @@ pub async fn launch_game(
         wrapper_cmd.push("--log-file".to_string());
         wrapper_cmd.push(log_file.to_string_lossy().to_string());
         wrapper_cmd.push("--".to_string());
-        wrapper_cmd.extend(original_game_args.clone());
+        wrapper_cmd.extend(game_base_command.clone());
         wrapper_cmd.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" ")
     } else {
-        original_game_args.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" ")
+        game_base_command.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" ")
     };
     
     log::info!("Exec command: {}", full_cmd_str);
@@ -651,48 +694,6 @@ pub async fn launch_game(
         });
     }
 
-    // Spawn a background task to monitor the process exit
-    let instance_id_monitor = spec.instance_id.clone();
-    tokio::spawn(async move {
-        match child.wait().await {
-            Ok(status) => {
-                if !status.success() {
-                    log::error!(
-                        "Game process {} (PID {}) exited with error: {}",
-                        instance_id_monitor,
-                        pid,
-                        status
-                    );
-                } else {
-                    log::info!(
-                        "Game process {} (PID {}) exited successfully",
-                        instance_id_monitor,
-                        pid
-                    );
-                }
-            }
-            Err(e) => {
-                log::error!(
-                    "Failed to wait for game process {} (PID {}): {}",
-                    instance_id_monitor,
-                    pid,
-                    e
-                );
-            }
-        }
-
-        // Unregister the instance when it exits
-        if let Err(e) =
-            crate::game::launcher::registry::unregister_instance(&instance_id_monitor).await
-        {
-            log::warn!(
-                "Failed to unregister instance {} after exit: {}",
-                instance_id_monitor,
-                e
-            );
-        }
-    });
-
     // Create game instance
     let instance = GameInstance {
         instance_id: spec.instance_id.clone(),
@@ -715,7 +716,16 @@ pub async fn launch_game(
         pid
     );
 
-    Ok(LaunchResult { instance, log_file })
+    // NOTE: We transfer ownership of the child process handle to the caller.
+    // The caller is responsible for waiting on the child process and calling
+    // `unregister_instance` when it exits. This is to allow the caller to
+    // implement their own exit-hooks or monitoring logic (e.g. in Tauri commands).
+    let handle = Some(crate::game::launcher::types::ProcessHandle {
+        pid,
+        child: Some(child),
+    });
+
+    Ok(LaunchResult { instance, log_file, handle })
 }
 
 /// Internal quoting helper used for logs / shell-copy; kept separate so it can be

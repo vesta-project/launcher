@@ -631,8 +631,8 @@ function InitInstallationPage(props: InitPagesProps) {
 				javaPath: null,
 				javaArgs: null,
 				gameDirectory: null,
-				width: 854,
-				height: 480,
+				gameWidth: 854,
+				gameHeight: 480,
 				minMemory: 2048,
 				maxMemory: 4096,
 				iconPath: iconPath(),
@@ -646,6 +646,17 @@ function InitInstallationPage(props: InitPagesProps) {
 				modpackPlatform: null,
 				modpackIconUrl: null,
 				iconData: null,
+				useGlobalResolution: true,
+				useGlobalMemory: true,
+				useGlobalJavaArgs: true,
+				useGlobalJavaPath: true,
+				useGlobalHooks: true,
+				useGlobalEnvironmentVariables: true,
+				useGlobalGameDir: true,
+				environmentVariables: null,
+				preLaunchHook: null,
+				postExitHook: null,
+				wrapperCommand: null,
 			};
 
 			await installInstance(fullInstance);
@@ -1480,7 +1491,7 @@ function InitJavaPage(props: InitPagesProps) {
 
 	const handleManualPick = async (version: number) => {
 		try {
-			const path = await invoke<string | null>("pick_java_path");
+			const path = await invoke<string | null>("select_java_file");
 			if (path) {
 				await handleSelect(version, path);
 			}
@@ -1921,7 +1932,7 @@ function InitJavaPage(props: InitPagesProps) {
 
 function InitAppearancePage(props: InitPagesProps) {
 	const [themeId, setThemeId] = createSignal<string>(
-		currentThemeConfig.theme_id ?? "midnight",
+		currentThemeConfig.theme_id ?? "vesta",
 	);
 	const [backgroundHue, setBackgroundHue] = createSignal(
 		currentThemeConfig.theme_primary_hue ??

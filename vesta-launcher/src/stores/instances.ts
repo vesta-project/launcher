@@ -139,7 +139,10 @@ export function setupInstanceListeners() {
 			(event) => {
 				const slug = event.payload.instance_id;
 				setLaunching(slug, false);
-				setInstancesState("runningIds", slug, undefined);
+				setInstancesState("runningIds", (prev) => {
+					const { [slug]: _removed, ...next } = prev;
+					return next;
+				});
 
 				// Refresh instance metadata if crashed/playtime updated
 				initializeInstances();

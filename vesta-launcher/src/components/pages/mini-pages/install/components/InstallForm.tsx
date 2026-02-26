@@ -37,6 +37,8 @@ import {
 	TextFieldLabel,
 	TextFieldRoot,
 } from "@ui/text-field/text-field";
+import { showToast } from "@ui/toast/toast";
+import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import {
 	DEFAULT_ICONS,
 	GameVersionMetadata,
@@ -62,6 +64,7 @@ import {
 } from "solid-js";
 import { createStore } from "solid-js/store";
 import styles from "../install-page.module.css";
+import { invoke } from "@tauri-apps/api/core";
 
 export interface InstallFormProps {
 	compact?: boolean;
@@ -186,14 +189,24 @@ export function InstallForm(props: InstallFormProps) {
 
 	// --- Performance State ---
 	const [totalRam, setTotalRam] = createSignal(16384);
+
+	onMount(async () => {
+		try {
+			const ram = await invoke<number>("get_system_memory_mb");
+			if (ram && ram > 0) setTotalRam(ram);
+		} catch (e) {
+			console.error("Failed to get system memory:", e);
+		}
+	});
+
 	const [jvmArgs, setJvmArgs] = createSignal(
 		props.initialData?.javaArgs || props.initialJvmArgs || "",
 	);
 	const [resW, setResW] = createSignal(
-		String(props.initialData?.width || props.initialResW || "854"),
+		String(props.initialData?.gameWidth || props.initialResW || "854"),
 	);
 	const [resH, setResH] = createSignal(
-		String(props.initialData?.height || props.initialResH || "480"),
+		String(props.initialData?.gameHeight || props.initialResH || "480"),
 	);
 
 	// --- Internal UI Toggles ---
@@ -290,8 +303,8 @@ export function InstallForm(props: InstallFormProps) {
 					setMemory([d.minMemory || 2048, d.maxMemory]);
 				if (d.javaArgs !== undefined && !isJvmArgsDirty())
 					setJvmArgs(d.javaArgs ?? "");
-				if (d.width && !isResDirty()) setResW(String(d.width));
-				if (d.height && !isResDirty()) setResH(String(d.height));
+				if (d.gameWidth && !isResDirty()) setResW(String(d.gameWidth));
+				if (d.gameHeight && !isResDirty()) setResH(String(d.gameHeight));
 			}
 
 			if (props.initialName !== undefined && !isNameDirty() && !d?.name)
@@ -319,9 +332,9 @@ export function InstallForm(props: InstallFormProps) {
 				!d?.javaArgs
 			)
 				setJvmArgs(props.initialJvmArgs);
-			if (props.initialResW && !isResDirty() && !d?.width)
+			if (props.initialResW && !isResDirty() && !d?.gameWidth)
 				setResW(props.initialResW);
-			if (props.initialResH && !isResDirty() && !d?.height)
+			if (props.initialResH && !isResDirty() && !d?.gameHeight)
 				setResH(props.initialResH);
 		});
 	});
@@ -387,14 +400,66 @@ export function InstallForm(props: InstallFormProps) {
 		}
 	});
 
+	// --- CROSS-SELECTION LOGIC (Pillar-driven helper) ---
+	// If the user switches modloaders, and the current version is NOT compatible with it,
+	// we auto-switch to the latest version that DOES support it.
+	createEffect(
+		on(loader, (l) => {
+			const meta = pistonMetadata();
+			if (!meta || l === "vanilla" || normalizedIsModpack()) return;
+
+			const currentV = mcVersion();
+			const vData = meta.game_versions.find((v) => v.id === currentV);
+
+			// Skip if somehow version metadata is missing
+			if (!currentV) return;
+
+			// Check if the current version supports this loader
+			const isUnsupported =
+				vData &&
+				!Object.keys(vData.loaders).some(
+					(key) => key.toLowerCase() === l.toLowerCase(),
+				);
+
+			if (isUnsupported) {
+				// Find first version that DOES support this loader (usually latest stable)
+				const compatible = meta.game_versions.find((v) =>
+					Object.keys(v.loaders).some(
+						(key) => key.toLowerCase() === l.toLowerCase(),
+					),
+				);
+
+				if (compatible) {
+					batch(() => {
+						setMcVersion(compatible.id);
+						showToast({
+							title: "Context Switched",
+							description: `${MODLOADER_DISPLAY_NAMES[l] || l} is not available for ${currentV}. Switched to ${compatible.id}.`,
+							severity: "info",
+						});
+					});
+				}
+			}
+		}, { defer: true }),
+	);
+
 	// --- Derived Lists (Filtered for Standard Mode or Limited by Props) ---
 
 	const availableMcVersions = createMemo(() => {
 		const meta = pistonMetadata();
 		const current = mcVersion();
+		const currentL = loader();
 		if (!meta) return current ? [{ id: current, stable: true }] : [];
 
 		let versions = meta.game_versions;
+
+		// Filter by loader support if not vanilla (pillar-driven selection)
+		if (currentL && currentL !== "vanilla") {
+			versions = versions.filter((v) => {
+				const loaderKeys = Object.keys(v.loaders).map((l) => l.toLowerCase());
+				return loaderKeys.includes(currentL.toLowerCase());
+			});
+		}
 
 		// Priority 1: Filter by supportedMcVersions (from resource details)
 		if (props.supportedMcVersions && props.supportedMcVersions.length > 0) {
@@ -423,31 +488,48 @@ export function InstallForm(props: InstallFormProps) {
 
 	const availableLoaders = createMemo(() => {
 		const meta = pistonMetadata();
-		const currentV = mcVersion();
-		const currentL = loader();
-		if (!meta || !currentV) return [currentL || "vanilla"];
+		if (!meta) return [loader() || "vanilla"];
 
-		const vData = meta.game_versions.find((v) => v.id === currentV);
-		if (!vData) return [currentL || "vanilla"];
-
+		// In pillar-driven selection, we show all possible loaders that satisfy the platform/resource requirements,
+		// regardless of the currently selected Minecraft version. The auto-switch logic handles compatibility.
 		const set = new Set(["vanilla"]);
-		Object.keys(vData.loaders).forEach((l) => {
-			const loaderName = l.toLowerCase();
-			// Filter by supportedModloaders if provided
-			if (props.supportedModloaders && props.supportedModloaders.length > 0) {
-				if (props.supportedModloaders.includes(loaderName)) {
+
+		// We collect all loaders available in the metadata
+		meta.game_versions.forEach((v) => {
+			Object.keys(v.loaders).forEach((l) => {
+				const loaderName = l.toLowerCase();
+				// Filter by supportedModloaders if provided by the modpack/resource
+				if (props.supportedModloaders && props.supportedModloaders.length > 0) {
+					if (props.supportedModloaders.includes(loaderName)) {
+						set.add(loaderName);
+					}
+				} else {
 					set.add(loaderName);
 				}
-			} else {
-				set.add(loaderName);
-			}
+			});
 		});
 
-		if (currentL && !set.has(currentL.toLowerCase())) {
+		// Ensure current selection is always included to prevent UI flickers
+		const currentL = loader();
+		if (currentL) {
 			set.add(currentL.toLowerCase());
 		}
 
 		return Array.from(set);
+	});
+
+	const currentVersionSupportedLoaders = createMemo(() => {
+		const meta = pistonMetadata();
+		const currentV = mcVersion();
+		if (!meta || !currentV) return ["vanilla"];
+
+		const vData = meta.game_versions.find((v) => v.id === currentV);
+		if (!vData) return ["vanilla"];
+
+		return [
+			"vanilla",
+			...Object.keys(vData.loaders).map((l) => l.toLowerCase()),
+		];
 	});
 
 	const availableLoaderVers = createMemo(() => {
@@ -492,9 +574,15 @@ export function InstallForm(props: InstallFormProps) {
 			minMemory: memory()[0],
 			maxMemory: memory()[1],
 			javaArgs: jvmArgs() || null,
-			width: parseInt(resW()) || 854,
-			height: parseInt(resH()) || 480,
+			gameWidth: parseInt(resW()) || 854,
+			gameHeight: parseInt(resH()) || 480,
 			// Linking data
+			useGlobalResolution: true,
+			useGlobalMemory: true,
+			useGlobalJavaArgs: true,
+			useGlobalJavaPath: true,
+			useGlobalHooks: true,
+			useGlobalEnvironmentVariables: true,
 			modpackId: props.projectId || props.modpackInfo?.modpackId || null,
 			modpackPlatform:
 				props.platform || props.modpackInfo?.modpackPlatform || null,
@@ -699,6 +787,46 @@ export function InstallForm(props: InstallFormProps) {
 						<div class={styles["form-section"]}>
 							<div class={styles["form-section-title"]}>Game Options</div>
 
+							<div class={styles["form-row"]}>
+								<div class={styles["flex-grow"]}>
+										<div class={styles["field-label-manual"]}>
+											Modloader
+											<HelpTrigger topic="MODLOADER_EXPLAINED" />
+										</div>
+										<ToggleGroup
+											class={styles["modloader-toggle-group"]}
+											value={loader()}
+											onChange={(v: string | null) => {
+												if (v) {
+													batch(() => {
+														setLoader(v);
+														setLoaderVer("");
+														setDirty("loader", true);
+													});
+												}
+											}}
+										>
+											<For each={availableLoaders()}>
+												{(l) => (
+													<ToggleGroupItem
+														value={l}
+														class={styles["modloader-pill"]}
+														classList={{
+															[styles["modloader-pill--unsupported"]]:
+																!currentVersionSupportedLoaders().includes(
+																	l.toLowerCase(),
+																),
+														}}
+													>
+														{MODLOADER_DISPLAY_NAMES[l] || l}
+													</ToggleGroupItem>
+												)}
+											</For>
+										</ToggleGroup>
+									</div>
+
+							</div>
+
 							<div class={styles["standard-settings-grid"]}>
 								<div class={styles["form-row"]}>
 									<div class={styles["flex-grow"]}>
@@ -746,34 +874,6 @@ export function InstallForm(props: InstallFormProps) {
 								</div>
 
 								<div class={styles["form-row"]}>
-									<div class={styles["flex-grow"]}>
-										<div class={styles["field-label-manual"]}>
-											Modloader
-											<HelpTrigger topic="MODLOADER_EXPLAINED" />
-										</div>
-										<Combobox<string>
-											options={availableLoaders()}
-											value={loader()}
-											onChange={(v) => {
-												if (v) {
-													setLoader(v);
-													setDirty("loader", true);
-												}
-											}}
-											itemComponent={(p) => (
-												<ComboboxItem item={p.item}>
-													{MODLOADER_DISPLAY_NAMES[p.item.rawValue] ||
-														p.item.rawValue}
-												</ComboboxItem>
-											)}
-										>
-											<ComboboxControl aria-label="Loader Picker">
-												<ComboboxInput />
-												<ComboboxTrigger />
-											</ComboboxControl>
-											<ComboboxContent />
-										</Combobox>
-									</div>
 
 									<Show when={loader() !== "vanilla"}>
 										<div class={styles["flex-grow"]}>
@@ -869,22 +969,6 @@ export function InstallForm(props: InstallFormProps) {
 								</Show>
 							</div>
 						</div>
-
-						{/* JVM ARGS */}
-						<TextFieldRoot>
-							<TextFieldLabel>
-								JVM Arguments
-								<HelpTrigger topic="JVM_ARGS" />
-							</TextFieldLabel>
-							<TextFieldInput
-								value={jvmArgs()}
-								onInput={(e) => {
-									setJvmArgs((e.currentTarget as HTMLInputElement).value);
-									setDirty("jvmArgs", true);
-								}}
-								placeholder="-Xmx..."
-							/>
-						</TextFieldRoot>
 					</div>
 
 					<div class={styles["form-section"]}>

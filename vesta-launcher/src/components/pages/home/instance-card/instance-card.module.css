@@ -201,7 +201,7 @@
 
 .instance-card-top {
 	display: flex;
-	justify-content: space-between;
+	justify-content: flex-end; /* play button should sit at right edge now that indicators are absolute */
 	align-items: center; /* Center items vertically to prevent jumpy layout when button appears */
 	background: linear-gradient(
 		to bottom,
@@ -461,12 +461,16 @@
 }
 
 .instance-card-indicators {
+	position: absolute;
+	top: 16px;
+	left: 16px;
 	display: flex;
 	flex-direction: column;
 	gap: 3px;
 	align-items: flex-start;
 	border-radius: 6px;
 	backdrop-filter: blur(var(--blur-subtle));
+	z-index: 2; /* sit above background and other elements */
 }
 
 .status-dot {

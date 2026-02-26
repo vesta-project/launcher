@@ -181,7 +181,7 @@ fn main() {
             commands::onboarding::get_required_java_versions,
             commands::onboarding::detect_java,
             commands::onboarding::get_managed_javas,
-            commands::onboarding::pick_java_path,
+            commands::onboarding::select_java_file,
             commands::onboarding::verify_java_path,
             commands::onboarding::set_global_java_path,
             commands::onboarding::get_global_java_paths,

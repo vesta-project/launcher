@@ -72,6 +72,15 @@ pub struct LaunchSpec {
 
     /// Environment variables for the game process
     pub env_vars: HashMap<String, String>,
+
+    /// Wrapper command to run before the java executable (optional)
+    pub wrapper_command: Option<String>,
+
+    /// Pre-launch hook command (optional)
+    pub pre_launch_hook: Option<String>,
+
+    /// Post-exit hook command (optional)
+    pub post_exit_hook: Option<String>,
 }
 
 impl LaunchSpec {
@@ -122,6 +131,9 @@ pub struct LaunchResult {
 
     /// Path to the log file
     pub log_file: PathBuf,
+
+    /// Handle to the child process (if available)
+    pub handle: Option<ProcessHandle>,
 }
 
 /// Handle to a running process
@@ -245,6 +257,9 @@ mod tests {
             exit_handler_jar: None,
             log_file: None,
             env_vars: HashMap::new(),
+            wrapper_command: None,
+            pre_launch_hook: None,
+            post_exit_hook: None,
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -275,6 +290,9 @@ mod tests {
             exit_handler_jar: None,
             log_file: None,
             env_vars: HashMap::new(),
+            wrapper_command: None,
+            pre_launch_hook: None,
+            post_exit_hook: None,
         };
 
         assert_eq!(spec.installed_version_id(), "forge-loader-47.2.0-1.20.1");

@@ -1181,3 +1181,44 @@
 }
 
 /* Customize the UI components specifically for this form if needed */
+
+.modloader-toggle-group {
+display: flex;
+gap: 4px;
+background: var(--surface-low);
+padding: 4px;
+border-radius: 12px;
+border: 1px solid var(--border-subtle);
+width: fit-content;
+}
+
+.modloader-pill {
+padding: 6px 16px;
+border-radius: 8px;
+font-size: 13px;
+font-weight: 600;
+color: var(--text-secondary);
+transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+cursor: pointer;
+border: none;
+background: transparent;
+outline: none;
+}
+
+.modloader-pill:hover {
+color: var(--text-primary);
+background: var(--surface-medium);
+}
+
+.modloader-pill[data-checked] {
+background: var(--primary);
+color: white;
+}
+
+.modloader-pill--unsupported {
+opacity: 0.4;
+}
+
+.modloader-pill--unsupported:hover {
+opacity: 0.7;
+}

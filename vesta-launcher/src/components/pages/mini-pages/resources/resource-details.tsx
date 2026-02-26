@@ -1506,9 +1506,7 @@ const ResourceDetailsPage: Component<{
 															activeRouter()?.navigate("/resources");
 														}}
 													>
-														{resources.state.availableCategories.length > 0
-															? categoryObj()?.name || cat
-															: ""}
+														{categoryObj()?.name || cat}
 													</Badge>
 												);
 											}}
