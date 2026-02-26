@@ -16,6 +16,7 @@ import {
 import { Dialog, DialogContent, DialogOverlay } from "@ui/dialog/dialog";
 import {
 	createEffect,
+	createMemo,
 	createSignal,
 	For,
 	onCleanup,
@@ -62,7 +63,7 @@ export function ImageViewer(props: ImageViewerProps) {
 	};
 
 	// Determine effective images list
-	const imageList = () => {
+	const imageList = createMemo(() => {
 		if (props.images && props.images.length > 0) {
 			return props.images;
 		}
@@ -70,7 +71,7 @@ export function ImageViewer(props: ImageViewerProps) {
 			return [{ src: props.src, title: props.title || "", date: props.date }];
 		}
 		return [];
-	};
+	});
 
 	// Sync currentIndex with carousel
 	createEffect(() => {
@@ -79,6 +80,8 @@ export function ImageViewer(props: ImageViewerProps) {
 
 		const onSelect = () => {
 			setCurrentIndex(embla.selectedScrollSnap());
+			setIsZoomed(false);
+			setHasError(false);
 		};
 
 		embla.on("select", onSelect);
@@ -99,6 +102,7 @@ export function ImageViewer(props: ImageViewerProps) {
 	createEffect(() => {
 		if (props.src || imageList().length > 0) {
 			setHasError(false);
+			setIsZoomed(false);
 		}
 	});
 
@@ -110,9 +114,10 @@ export function ImageViewer(props: ImageViewerProps) {
 		window.removeEventListener("keydown", handleKeyDown);
 	});
 
-	const toggleZoom = (e: MouseEvent) => {
+	const toggleZoom = (e: MouseEvent, index: number) => {
 		e.stopPropagation();
 		if (!isZoomed()) {
+			setCurrentIndex(index);
 			const target = e.currentTarget as HTMLElement;
 			const img = target.querySelector("img");
 			if (img) {
@@ -255,7 +260,7 @@ export function ImageViewer(props: ImageViewerProps) {
 														[styles.zoomed]:
 															isZoomed() && currentIndex() === index(),
 													}}
-													onClick={(e) => toggleZoom(e)}
+													onClick={(e) => toggleZoom(e, index())}
 												>
 													<img
 														src={image.src}
