@@ -48,7 +48,7 @@ export function ImageViewer(props: ImageViewerProps) {
 
 	let idleTimer: number;
 
-	const handleMouseMove = () => {
+	const resetIdleTimer = () => {
 		setShowUI(true);
 		window.clearTimeout(idleTimer);
 		idleTimer = window.setTimeout(() => {
@@ -57,6 +57,7 @@ export function ImageViewer(props: ImageViewerProps) {
 	};
 
 	const handleKeyDown = (e: KeyboardEvent) => {
+		resetIdleTimer();
 		if (e.key === "Escape") {
 			props.onClose();
 		}
@@ -108,10 +109,12 @@ export function ImageViewer(props: ImageViewerProps) {
 
 	onMount(() => {
 		window.addEventListener("keydown", handleKeyDown);
+		window.addEventListener("mousedown", resetIdleTimer, { capture: true });
 	});
 
 	onCleanup(() => {
 		window.removeEventListener("keydown", handleKeyDown);
+		window.removeEventListener("mousedown", resetIdleTimer, { capture: true });
 	});
 
 	const toggleZoom = (e: MouseEvent, index: number) => {
@@ -142,7 +145,7 @@ export function ImageViewer(props: ImageViewerProps) {
 			<DialogContent
 				class={styles.content}
 				hideCloseButton
-				onMouseMove={handleMouseMove}
+				onMouseMove={resetIdleTimer}
 				onMouseLeave={() => !isZoomed() && setShowUI(false)}
 			>
 				<div class={styles.header} classList={{ [styles.hidden]: !showUI() }}>
