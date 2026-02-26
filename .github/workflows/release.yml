@@ -475,12 +475,14 @@ jobs:
       
       - name: List downloaded artifacts
         shell: bash
-        run: find artifacts/ -type f -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" | sort
+        run: |
+          # Only list artifacts matching the canonical product filenames
+          find artifacts/ -type f \( -iname "*Vesta_Launcher*.*msi" -o -iname "*Vesta_Launcher*.*dmg" -o -iname "*Vesta_Launcher*.*AppImage" -o -iname "*vesta-launcher*.*deb" \) | sort
       
       - name: Validate artifacts
         shell: bash
         run: |
-          ARTIFACT_COUNT=$(find artifacts/ -type f \( -name "*.msi" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" \) | wc -l)
+          ARTIFACT_COUNT=$(find artifacts/ -type f \( -iname "*Vesta_Launcher*.*msi" -o -iname "*Vesta_Launcher*.*dmg" -o -iname "*Vesta_Launcher*.*AppImage" -o -iname "*vesta-launcher*.*deb" \) | wc -l)
           if [ "$ARTIFACT_COUNT" -lt 3 ]; then
             echo "Error: Expected at least 3 build artifacts, found $ARTIFACT_COUNT"
             echo "This likely means some builds failed. Check the build job logs."
@@ -562,15 +564,12 @@ jobs:
             
             Automatic release build for Vesta Launcher.
             
-            ### Downloads
-            All platform installers are attached to this release as artifacts.
-            
             ${{ steps.changelog.outputs.changelog }}
           files: |
-            artifacts/**/*.msi
-            artifacts/**/*.dmg
-            artifacts/**/*.deb
-            artifacts/**/*.AppImage
-            artifacts/**/*.tar.gz
+            artifacts/**/*Vesta_Launcher*.msi
+            artifacts/**/*Vesta_Launcher*.dmg
+            artifacts/**/*vesta-launcher*.deb
+            artifacts/**/*Vesta_Launcher*.AppImage
+            artifacts/**/*Vesta_Launcher*.tar.gz
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}

@@ -1,5 +1,5 @@
 {
-	"productName": "Vesta Launcher",
+	"productName": "vesta-launcher",
 	"version": "0.1.0-alpha.15",
 	"identifier": "net.vesta.launcher",
 	"build": {
