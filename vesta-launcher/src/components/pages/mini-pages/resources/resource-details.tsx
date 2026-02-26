@@ -2,6 +2,8 @@ import BellIcon from "@assets/bell.svg";
 import CloseIcon from "@assets/close.svg";
 import HeartIcon from "@assets/heart.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
+import ModrinthIcon from "@assets/modrinth.svg";
+import CurseForgeIcon from "@assets/curseforge.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -90,14 +92,14 @@ const VersionTags = (props: { versions: string[] }) => {
 	return (
 		<div class={styles["version-meta"]}>
 			<For each={displayVersions()}>
-				{(v) => <span class={styles["meta-tag"]}>{v}</span>}
+				{(v) => <Badge variant="surface" round>{v}</Badge>}
 			</For>
 			<Show when={hasMore() && displayVersions().length === limit}>
 				<Tooltip>
 					<TooltipTrigger>
-						<span class={`${styles["meta-tag"]} ${styles.more}`}>
+						<Badge variant="surface" round class={styles.more}>
 							+{remainingCount()} more
-						</span>
+						</Badge>
 					</TooltipTrigger>
 					<TooltipContent>
 						<div class={styles["version-tooltip-list"]}>
@@ -770,15 +772,15 @@ const ResourceDetailsPage: Component<{
 			if (currentProject?.id !== initialProject.id) {
 				setProject(initialProject);
 				resources.selectProject(initialProject);
-			}
-
-			// Hit data usually lacks description; fetch it if missing
-			const needsHydration =
-				!initialProject.description ||
-				(currentProject?.id === initialProject.id &&
-					!currentProject?.description);
-			if (needsHydration && id && platform) {
-				fetchFullProject(platform, id);
+				
+				if (!initialProject.description && id && platform) {
+					fetchFullProject(platform, id);
+				}
+			} else {
+				// Project ID is the same. Do we need hydration?
+				if (!currentProject?.description && id && platform) {
+					fetchFullProject(platform, id);
+				}
 			}
 			return;
 		}
@@ -844,6 +846,7 @@ const ResourceDetailsPage: Component<{
 							cached.description || "No description available (Disconnected).",
 						icon_url: cached.icon_url,
 						author: cached.author || "Unknown",
+						authors: cached.authors || ["Unknown"],
 						download_count: 0,
 						follower_count: 0,
 						categories: [],
@@ -1042,6 +1045,578 @@ const ResourceDetailsPage: Component<{
 		}
 	});
 
+	const [isHeaderCompact, setIsHeaderCompact] = createSignal(false);
+
+	const handleScroll = (e: Event) => {
+		const target = e.target as HTMLElement;
+		if (target.scrollTop > 0) {
+			setIsHeaderCompact(true);
+		} else {
+			setIsHeaderCompact(false);
+		}
+	};
+
+	const sidebarContent = () => (
+		<div class={styles["sidebar-scrollable-area"]}>
+			<div class={styles["sidebar-section"]}>
+				<div class={styles["sidebar-instance-picker"]}>
+					<Show when={peerProject()}>
+						<div class={styles["source-toggle"]}>
+							<button
+								class={styles["source-btn"]}
+								classList={{
+									[styles.active]: project()?.source === "modrinth",
+								}}
+								onClick={() => {
+									if (project()?.source === "modrinth") return;
+									const peer = peerProject();
+									if (peer && peer.source === "modrinth") {
+										activeRouter()?.navigate("/resource-details", {
+											projectId: peer.id,
+											platform: "modrinth",
+											name: peer.name,
+											iconUrl: peer.icon_url,
+										});
+									}
+								}}
+								title="Modrinth"
+							>
+								<ModrinthIcon width="14" height="14" />
+								<span>Modrinth</span>
+							</button>
+							<button
+								class={styles["source-btn"]}
+								classList={{
+									[styles.active]:
+										project()?.source === "curseforge",
+								}}
+								onClick={() => {
+									if (project()?.source === "curseforge") return;
+									const peer = peerProject();
+									if (peer && peer.source === "curseforge") {
+										activeRouter()?.navigate("/resource-details", {
+											projectId: peer.id,
+											platform: "curseforge",
+											name: peer.name,
+											iconUrl: peer.icon_url,
+										});
+									}
+								}}
+								title="CurseForge"
+							>
+								<CurseForgeIcon width="14" height="14" />
+								<span>CurseForge</span>
+							</button>
+						</div>
+					</Show>
+					<Show
+						when={!isModpack()}
+						fallback={
+							<div class={styles["modpack-instance-notice"]}>
+								<span>
+									Modpacks will create a new instance when installed
+								</span>
+							</div>
+						}
+					>
+						<span class={styles["picker-label"]}>
+							Target Instance:
+						</span>
+						<Select<any>
+							options={[
+								{ id: null, name: "No Instance" },
+								...instancesState.instances,
+							]}
+							value={
+								instancesState.instances.find(
+									(i) =>
+										i.id === resources.state.selectedInstanceId,
+								) || { id: null, name: "No Instance" }
+							}
+							onChange={(v) => {
+								const id = (v as any)?.id ?? null;
+								resources.setInstance(id);
+								if (id) {
+									const inst = instancesState.instances.find(
+										(i) => i.id === id,
+									);
+									if (inst) {
+										resources.setGameVersion(inst.minecraftVersion);
+										resources.setLoader(inst.modloader);
+									}
+								}
+							}}
+							optionValue="id"
+							optionTextValue="name"
+							placeholder="Select instance..."
+							itemComponent={(props) => (
+								<SelectItem item={props.item}>
+									<div
+										style={{
+											display: "flex",
+											"align-items": "center",
+											gap: "10px",
+										}}
+									>
+										<InstanceIcon instance={props.item.rawValue} />
+										<div
+											style={{
+												display: "flex",
+												"flex-direction": "column",
+												gap: "2px",
+											}}
+										>
+											<span>{props.item.rawValue.name}</span>
+											<Show when={props.item.rawValue.id !== null}>
+												<span
+													style={{
+														"font-size": "11px",
+														opacity: 0.6,
+													}}
+												>
+													{props.item.rawValue.minecraftVersion}{" "}
+													{props.item.rawValue.modloader
+														? `- ${props.item.rawValue.modloader}`
+														: ""}
+												</span>
+											</Show>
+										</div>
+									</div>
+								</SelectItem>
+							)}
+						>
+							<SelectTrigger
+								class={styles["instance-select-sidebar"]}
+							>
+								<SelectValue<any>>
+									{(s) => {
+										const inst = s.selectedOption();
+										return (
+											<div
+												style={{
+													display: "flex",
+													"align-items": "center",
+													gap: "10px",
+												}}
+											>
+												<InstanceIcon instance={inst} />
+												<span>
+													{inst
+														? `${inst.name}`
+														: "Select instance..."}
+												</span>
+											</div>
+										);
+									}}
+								</SelectValue>
+							</SelectTrigger>
+							<SelectContent />
+						</Select>
+					</Show>
+					<div class={styles["sidebar-action-row"]}>
+						<Button
+							size="sm"
+							style={{ width: "100%" }}
+							color={
+								isUpdateAvailable()
+									? "secondary"
+									: isProjectInstalled()
+										? "destructive"
+										: isProjectIncompatible() &&
+												!isProjectInstalled()
+											? "none"
+											: "primary"
+							}
+							variant={
+								isProjectInstalled() && !isUpdateAvailable()
+									? "outline"
+									: "solid"
+							}
+							onClick={handleQuickAction}
+							disabled={
+								isProjectInstalling() ||
+								(isProjectIncompatible() &&
+									!isProjectInstalled() &&
+									resources.state.selectedInstanceId !== null &&
+									!hasAnyCompatibleVersion())
+							}
+						>
+							<Show when={isProjectInstalling()}>
+								<span>Installing...</span>
+							</Show>
+							<Show when={!isProjectInstalling()}>
+								<Show when={isProjectInstalled()}>
+									<Show
+										when={isUpdateAvailable()}
+										fallback={
+											<>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													style={{ "margin-right": "8px" }}
+												>
+													<path d="M3 6h18"></path>
+													<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+													<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+												</svg>
+												<Show
+													when={confirmUninstall()}
+													fallback="Uninstall"
+												>
+													Confirm?
+												</Show>
+											</>
+										}
+									>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											width="16"
+											height="16"
+											viewBox="0 0 24 24"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="2"
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											style={{ "margin-right": "8px" }}
+										>
+											<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+											<polyline points="7 10 12 15 17 10"></polyline>
+											<line x1="12" y1="15" x2="12" y2="3"></line>
+										</svg>
+										Update
+									</Show>
+								</Show>
+								<Show when={!isProjectInstalled()}>
+									<Show
+										when={isProjectIncompatible()}
+										fallback={
+											<>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="16"
+													height="16"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													stroke-width="2"
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													style={{ "margin-right": "8px" }}
+												>
+													<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+													<polyline points="7 10 12 15 17 10"></polyline>
+													<line
+														x1="12"
+														y1="15"
+														x2="12"
+														y2="3"
+													></line>
+												</svg>
+												Install
+											</>
+										}
+									>
+										<Show
+											when={hasAnyCompatibleVersion()}
+											fallback="Unsupported"
+										>
+											Check Versions
+										</Show>
+									</Show>
+								</Show>
+							</Show>
+						</Button>
+					</div>
+				</div>
+			</div>
+
+			<div class={styles["sidebar-section"]}>
+				<h3 class={styles["sidebar-title"]}>Information</h3>
+				<div class={styles["sidebar-metadata"]}>
+					<Show when={!peerProject()}>
+						<div class={styles["meta-item"]}>
+							<span class={styles["label"]}>Platform</span>
+							<span
+								class={`${styles["value"]} ${styles["capitalize"]}`}
+							>
+								{project()?.source}
+							</span>
+						</div>
+					</Show>
+					<Show when={project()?.published_at}>
+						<div class={styles["meta-item"]}>
+							<span class={styles["label"]}>Released</span>
+							<span class={styles["value"]}>
+								{formatDate(project()?.published_at || "")}
+							</span>
+						</div>
+					</Show>
+					<Show when={project()?.authors && project()!.authors.length > 1}>
+						<div class={styles["meta-item"]}>
+							<span class={styles["label"]}>Authors</span>
+							<span class={styles["value"]}>
+								{project()?.authors.join(", ")}
+							</span>
+						</div>
+					</Show>
+					<div class={styles["meta-item"]}>
+						<span class={styles["label"]}>Downloads</span>
+						<span class={styles["value"]}>
+							{project()?.download_count.toLocaleString()}
+						</span>
+					</div>
+					<div class={styles["meta-item"]}>
+						<span class={styles["label"]}>Type</span>
+						<div class={styles["value-group"]}>
+							<span
+								class={`${styles["value"]} ${styles["capitalize"]}`}
+							>
+								{project()?.resource_type}
+							</span>
+							<Show
+								when={
+									project()?.categories?.some(
+										(c) => c.toLowerCase() === "datapack",
+									) && project()?.resource_type !== "datapack"
+								}
+							>
+								<span
+									class={`${styles["value"]} ${styles["capitalize"]}`}
+								>
+									, Datapack
+								</span>
+							</Show>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class={`${styles["sidebar-section"]} ${styles["recent-versions-section"]} ${styles["hide-mobile"]}`}>
+				<div class={styles["sidebar-section-header"]}>
+					<h3 class={styles["sidebar-title"]}>Recent Versions</h3>
+					<button
+						class={styles["view-all-link"]}
+						onClick={() =>
+							activeRouter()?.updateQuery(
+								"activeTab",
+								"versions",
+								true,
+							)
+						}
+					>
+						View All
+					</button>
+				</div>
+				<div class={styles["sidebar-version-list"]}>
+					<Show
+						when={!resources.state.loading}
+						fallback={<div>Loading...</div>}
+					>
+						<For each={resources.state.versions.slice(0, 5)}>
+							{(version) => (
+								<div class={styles["sidebar-version-item"]}>
+									<div class={styles["sidebar-version-top"]}>
+										<span
+											class={styles["version-name"]}
+											title={version.version_number}
+										>
+											{version.version_number}
+										</span>
+										<div class={styles["version-tags-mini"]}>
+											<Badge
+												variant={
+													version.release_type === "release"
+														? "success"
+														: version.release_type === "beta"
+															? "warning"
+															: "error"
+												}
+												round
+											>
+												{version.release_type
+													.charAt(0)
+													.toUpperCase()}
+											</Badge>
+											<For each={version.loaders.slice(0, 1)}>
+												{(l) => (
+													<Badge variant="info" round>
+														{l}
+													</Badge>
+												)}
+											</For>
+										</div>
+									</div>
+									<div class={styles["sidebar-version-meta"]}>
+										<VersionTags versions={version.game_versions} />
+									</div>
+									<Button
+										size="sm"
+										disabled={
+											isVersionInstalling(version.id) ||
+											(!!resources.state.selectedInstanceId &&
+												!isVersionInstalled(
+													version.id,
+													version.hash,
+												) &&
+												getCompatibility(version).type ===
+													"incompatible")
+										}
+										color={(() => {
+											if (
+												isVersionInstalled(version.id, version.hash)
+											)
+												return "destructive";
+											const comp = getCompatibility(version);
+											if (comp.type === "warning") return "warning";
+											if (comp.type === "incompatible")
+												return "none";
+											return undefined;
+										})()}
+										tooltip_text={(() => {
+											const instId =
+												resources.state.selectedInstanceId;
+											const comp = getCompatibility(version);
+											if (
+												instId &&
+												!isVersionInstalled(
+													version.id,
+													version.hash,
+												) &&
+												comp.type !== "compatible"
+											) {
+												return comp.reason;
+											}
+											if (isVersionInstalling(version.id))
+												return "Installation in progress";
+											if (
+												isVersionInstalled(version.id, version.hash)
+											)
+												return "Already installed - Click to remove";
+											if (!isModpack() && !instId)
+												return "Select an instance to install";
+											return version.download_url
+												? "Click to install"
+												: "External download required";
+										})()}
+										onClick={() => {
+											if (
+												isVersionInstalled(version.id, version.hash)
+											) {
+												if (confirmVersionId() !== version.id) {
+													setConfirmVersionId(version.id);
+													setTimeout(
+														() => setConfirmVersionId(null),
+														3000,
+													);
+													return;
+												}
+												handleUninstall();
+												setConfirmVersionId(null);
+											} else {
+												handleInstall(version);
+											}
+										}}
+										style={{ width: "100%", "margin-top": "8px" }}
+										variant={
+											isVersionInstalled(version.id, version.hash)
+												? "outline"
+												: version.download_url
+													? "solid"
+													: "outline"
+										}
+									>
+										<Show when={isVersionInstalling(version.id)}>
+											Installing...
+										</Show>
+										<Show when={!isVersionInstalling(version.id)}>
+											<Show
+												when={isVersionInstalled(
+													version.id,
+													version.hash,
+												)}
+											>
+												<Show
+													when={confirmVersionId() === version.id}
+													fallback="Uninstall"
+												>
+													Confirm?
+												</Show>
+											</Show>
+											<Show
+												when={
+													!isVersionInstalled(
+														version.id,
+														version.hash,
+													)
+												}
+											>
+												<Show
+													when={
+														!isModpack() &&
+														!resources.state.selectedInstanceId
+													}
+												>
+													Select Instance
+												</Show>
+												<Show
+													when={
+														isModpack() ||
+														resources.state.selectedInstanceId
+													}
+												>
+													<Show
+														when={
+															getCompatibility(version).type ===
+															"incompatible"
+														}
+														fallback={
+															version.download_url
+																? "Install"
+																: "External"
+														}
+													>
+														{(() => {
+															const instId =
+																resources.state.selectedInstanceId;
+															const inst =
+																instancesState.instances.find(
+																	(i) => i.id === instId,
+																);
+															if (
+																(inst?.modloader?.toLowerCase() ===
+																	"vanilla" ||
+																	!inst?.modloader) &&
+																(project()?.resource_type ===
+																	"mod" ||
+																	project()?.resource_type ===
+																		"shader")
+															) {
+																return "Unsupported";
+															}
+															return "Incompatible";
+														})()}
+													</Show>
+												</Show>
+											</Show>
+										</Show>
+									</Button>
+								</div>
+							)}
+						</For>
+					</Show>
+				</div>
+			</div>
+		</div>
+	);
+
 	return (
 		<Show
 			when={!loading() || project()}
@@ -1081,122 +1656,101 @@ const ResourceDetailsPage: Component<{
 						class={styles["resource-details"]}
 						classList={{ [styles["is-reloading"]]: loading() }}
 					>
-						<div class={styles["resource-details-header"]}>
-							<div class={styles["project-header-info"]}>
-								<Show when={project()?.icon_url}>
-									<img
-										src={project()?.icon_url ?? ""}
-										alt={project()?.name}
-										class={styles["project-icon"]}
-									/>
-								</Show>
-								<div class={styles["project-header-text"]}>
-									<div class={styles["project-title-row"]}>
-										<div class={styles["project-title-group"]}>
-											<h1 class={styles["project-title"]}>{project()?.name}</h1>
-											<Show
-												when={isProjectInstalled() || isProjectInstalling()}
-											>
-												<Badge variant="success">
-													{isProjectInstalling()
-														? "Installing..."
-														: "Installed"}
-												</Badge>
-											</Show>
-										</div>
-										<div class={styles["header-link-group"]}>
-											<Show when={peerProject()}>
-												<div class={styles["source-toggle"]}>
-													<button
-														class={styles["source-btn"]}
-														classList={{
-															[styles.active]: project()?.source === "modrinth",
-														}}
-														onClick={() => {
-															if (project()?.source === "modrinth") return;
-															const peer = peerProject();
-															if (peer && peer.source === "modrinth") {
-																activeRouter()?.navigate("/resource-details", {
-																	projectId: peer.id,
-																	platform: "modrinth",
-																	name: peer.name,
-																	iconUrl: peer.icon_url,
-																});
-															}
-														}}
-													>
-														Modrinth
-													</button>
-													<button
-														class={styles["source-btn"]}
-														classList={{
-															[styles.active]:
-																project()?.source === "curseforge",
-														}}
-														onClick={() => {
-															if (project()?.source === "curseforge") return;
-															const peer = peerProject();
-															if (peer && peer.source === "curseforge") {
-																activeRouter()?.navigate("/resource-details", {
-																	projectId: peer.id,
-																	platform: "curseforge",
-																	name: peer.name,
-																	iconUrl: peer.icon_url,
-																});
-															}
-														}}
-													>
-														CurseForge
-													</button>
-												</div>
-											</Show>
-											<Button
-												variant={isFollowing() ? "solid" : "outline"}
-												size="sm"
-												onClick={handleFollowToggle}
-												class={styles["header-web-link"]}
-												tooltip_text={
-													isFollowing()
-														? "Disable update notifications"
-														: "Receive notifications for updates"
-												}
-											>
-												<div
-													style={{
-														display: "flex",
-														"align-items": "center",
-														gap: "6px",
-													}}
+						<div class={styles["resource-details-left"]} onScroll={handleScroll}>
+							<div class={`${styles["resource-details-header"]} ${styles["theme-card"]}`} classList={{ [styles.compact]: isHeaderCompact() }}>
+								<div class={styles["project-header-info"]}>
+									<Show when={project()?.icon_url}>
+										<img
+											src={project()?.icon_url ?? ""}
+											alt={project()?.name}
+											class={styles["project-icon"]}
+										/>
+									</Show>
+									<div class={styles["project-header-text"]}>
+										<div class={styles["project-title-row"]}>
+											<div class={styles["project-title-group"]}>
+												<h1 class={styles["project-title"]}>{project()?.name}</h1>
+												<span class={styles["compact-author"]}>
+													By {project()?.authors && project()!.authors.length > 0 ? project()!.authors[0] : project()?.author}
+												</span>
+												<Show
+													when={isProjectInstalled() || isProjectInstalling()}
 												>
-													<BellIcon
-														width="14"
-														height="14"
-														style={{
-															fill: isFollowing() ? "currentColor" : "none",
-															stroke: "currentColor",
-														}}
-													/>
-													<span>{isFollowing() ? "Following" : "Follow"}</span>
-												</div>
-											</Button>
-											<Button
-												variant="outline"
-												size="sm"
-												onClick={() => openExternal(project()?.web_url ?? "")}
-												class={styles["header-web-link"]}
-												tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
-											>
-												<div
-													style={{
-														display: "flex",
-														"align-items": "center",
-														gap: "6px",
-													}}
+													<Badge variant="success">
+														{isProjectInstalling()
+															? "Installing..."
+															: "Installed"}
+													</Badge>
+												</Show>
+											</div>
+											<div class={styles["header-link-group"]}>
+												<Button
+														variant={isFollowing() ? "solid" : "outline"}
+														size="icon"
+														onClick={handleFollowToggle}
+														class={styles["header-web-link"]}
+														tooltip_text={
+															isFollowing()
+																? "Disable update notifications"
+																: "Receive notifications for updates"
+														}
+														tooltip_placement="left"
+													>
+														<BellIcon
+															width="16"
+															height="16"
+															style={{
+																fill: isFollowing() ? "currentColor" : "none",
+																stroke: "currentColor",
+															}}
+														/>
+													</Button>
+											</div>
+										</div>
+										<div class={styles["project-subtitle-row"]}>
+											<div class={styles["subtitle-left"]}>
+												<p class={styles.author}>
+													By {project()?.authors && project()!.authors.length > 0 ? project()!.authors[0] : project()?.author}
+												</p>
+												<Show when={project()?.follower_count !== undefined && project()?.source !== "curseforge"}>
+													<span class={styles["stat-item"]}>
+														<HeartIcon />
+														{project()?.follower_count.toLocaleString()}
+													</span>
+												</Show>
+												<Show when={project()?.updated_at}>
+													<span class={styles["stat-item"]}>
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															width="14"
+															height="14"
+															viewBox="0 0 24 24"
+															fill="none"
+															stroke="currentColor"
+															stroke-width="2"
+															stroke-linecap="round"
+															stroke-linejoin="round"
+														>
+															<circle cx="12" cy="12" r="10"></circle>
+															<polyline points="12 6 12 12 16 14"></polyline>
+														</svg>
+														Updated {formatDate(project()?.updated_at || "")}
+													</span>
+												</Show>
+											</div>
+											<div class={styles["subtitle-right"]}>
+												<Button
+													variant="outline"
+													size="icon"
+													onClick={() => openExternal(project()?.web_url ?? "")}
+													class={styles["header-web-link"]}
+													tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
+													tooltip_placement="left"
 												>
 													<svg
 														xmlns="http://www.w3.org/2000/svg"
-														width="14"
-														height="14"
+														width="16"
+														height="16"
 														viewBox="0 0 24 24"
 														fill="none"
 														stroke="currentColor"
@@ -1208,317 +1762,61 @@ const ResourceDetailsPage: Component<{
 														<polyline points="15 3 21 3 21 9"></polyline>
 														<line x1="10" y1="14" x2="21" y2="3"></line>
 													</svg>
-													<span>Browser</span>
-												</div>
-											</Button>
-										</div>
-									</div>
-									<div class={styles["project-subtitle-row"]}>
-										<div class={styles["subtitle-left"]}>
-											<p class={styles.author}>By {project()?.author}</p>
-											<Show when={project()?.follower_count !== undefined}>
-												<span class={styles["stat-item"]}>
-													<HeartIcon />
-													{project()?.follower_count.toLocaleString()}
-												</span>
-											</Show>
-											<Show when={project()?.updated_at}>
-												<span class={styles["stat-item"]}>
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														width="14"
-														height="14"
-														viewBox="0 0 24 24"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="2"
-														stroke-linecap="round"
-														stroke-linejoin="round"
-													>
-														<circle cx="12" cy="12" r="10"></circle>
-														<polyline points="12 6 12 12 16 14"></polyline>
-													</svg>
-													Updated {formatDate(project()?.updated_at || "")}
-												</span>
-											</Show>
-										</div>
-										<div class={styles["header-instance-picker"]}>
-											<Show
-												when={!isModpack()}
-												fallback={
-													<div class={styles["modpack-instance-notice"]}>
-														<span>
-															Modpacks will create a new instance when installed
-														</span>
-													</div>
-												}
-											>
-												<span class={styles["picker-label"]}>
-													Target Instance:
-												</span>
-												<Select<any>
-													options={[
-														{ id: null, name: "No Instance" },
-														...instancesState.instances,
-													]}
-													value={
-														instancesState.instances.find(
-															(i) =>
-																i.id === resources.state.selectedInstanceId,
-														) || { id: null, name: "No Instance" }
-													}
-													onChange={(v) => {
-														const id = (v as any)?.id ?? null;
-														resources.setInstance(id);
-														if (id) {
-															const inst = instancesState.instances.find(
-																(i) => i.id === id,
-															);
-															if (inst) {
-																resources.setGameVersion(inst.minecraftVersion);
-																resources.setLoader(inst.modloader);
-															}
-														}
-													}}
-													optionValue="id"
-													optionTextValue="name"
-													placeholder="Select instance..."
-													itemComponent={(props) => (
-														<SelectItem item={props.item}>
-															<div
-																style={{
-																	display: "flex",
-																	"align-items": "center",
-																	gap: "10px",
-																}}
-															>
-																<InstanceIcon instance={props.item.rawValue} />
-																<div
-																	style={{
-																		display: "flex",
-																		"flex-direction": "column",
-																		gap: "2px",
-																	}}
-																>
-																	<span>{props.item.rawValue.name}</span>
-																	<Show when={props.item.rawValue.id !== null}>
-																		<span
-																			style={{
-																				"font-size": "11px",
-																				opacity: 0.6,
-																			}}
-																		>
-																			{props.item.rawValue.minecraftVersion}{" "}
-																			{props.item.rawValue.modloader
-																				? `- ${props.item.rawValue.modloader}`
-																				: ""}
-																		</span>
-																	</Show>
-																</div>
-															</div>
-														</SelectItem>
-													)}
-												>
-													<SelectTrigger
-														class={styles["instance-select-header"]}
-													>
-														<SelectValue<any>>
-															{(s) => {
-																const inst = s.selectedOption();
-																return (
-																	<div
-																		style={{
-																			display: "flex",
-																			"align-items": "center",
-																			gap: "10px",
-																		}}
-																	>
-																		<InstanceIcon instance={inst} />
-																		<span>
-																			{inst
-																				? `${inst.name}`
-																				: "Select instance..."}
-																		</span>
-																	</div>
-																);
-															}}
-														</SelectValue>
-													</SelectTrigger>
-													<SelectContent />
-												</Select>
-											</Show>
-											<div
-												class={styles["header-action-row"]}
-												style={{ "margin-top": "8px" }}
-											>
-												<Button
-													size="sm"
-													style={{ width: "100%" }}
-													color={
-														isUpdateAvailable()
-															? "secondary"
-															: isProjectInstalled()
-																? "destructive"
-																: isProjectIncompatible() &&
-																		!isProjectInstalled()
-																	? "none"
-																	: "primary"
-													}
-													variant={
-														isProjectInstalled() && !isUpdateAvailable()
-															? "outline"
-															: "solid"
-													}
-													onClick={handleQuickAction}
-													disabled={
-														isProjectInstalling() ||
-														(isProjectIncompatible() &&
-															!isProjectInstalled() &&
-															resources.state.selectedInstanceId !== null)
-													}
-												>
-													<Show when={isProjectInstalling()}>
-														<span>Installing...</span>
-													</Show>
-													<Show when={!isProjectInstalling()}>
-														<Show when={isProjectInstalled()}>
-															<Show
-																when={isUpdateAvailable()}
-																fallback={
-																	<>
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="16"
-																			height="16"
-																			viewBox="0 0 24 24"
-																			fill="none"
-																			stroke="currentColor"
-																			stroke-width="2"
-																			stroke-linecap="round"
-																			stroke-linejoin="round"
-																			style={{ "margin-right": "8px" }}
-																		>
-																			<path d="M3 6h18"></path>
-																			<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-																			<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-																		</svg>
-																		<Show
-																			when={confirmUninstall()}
-																			fallback="Uninstall"
-																		>
-																			Confirm?
-																		</Show>
-																	</>
-																}
-															>
-																<svg
-																	xmlns="http://www.w3.org/2000/svg"
-																	width="16"
-																	height="16"
-																	viewBox="0 0 24 24"
-																	fill="none"
-																	stroke="currentColor"
-																	stroke-width="2"
-																	stroke-linecap="round"
-																	stroke-linejoin="round"
-																	style={{ "margin-right": "8px" }}
-																>
-																	<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-																	<polyline points="7 10 12 15 17 10"></polyline>
-																	<line x1="12" y1="15" x2="12" y2="3"></line>
-																</svg>
-																Update
-															</Show>
-														</Show>
-														<Show when={!isProjectInstalled()}>
-															<Show
-																when={isProjectIncompatible()}
-																fallback={
-																	<>
-																		<svg
-																			xmlns="http://www.w3.org/2000/svg"
-																			width="16"
-																			height="16"
-																			viewBox="0 0 24 24"
-																			fill="none"
-																			stroke="currentColor"
-																			stroke-width="2"
-																			stroke-linecap="round"
-																			stroke-linejoin="round"
-																			style={{ "margin-right": "8px" }}
-																		>
-																			<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-																			<polyline points="7 10 12 15 17 10"></polyline>
-																			<line
-																				x1="12"
-																				y1="15"
-																				x2="12"
-																				y2="3"
-																			></line>
-																		</svg>
-																		Install
-																	</>
-																}
-															>
-																<Show
-																	when={hasAnyCompatibleVersion()}
-																	fallback="Unsupported"
-																>
-																	Check Versions
-																</Show>
-															</Show>
-														</Show>
-													</Show>
 												</Button>
 											</div>
 										</div>
-									</div>
-									<div class={styles["project-categories"]}>
-										<For each={project()?.categories}>
-											{(cat) => {
-												// Find the category object in availableCategories if possible to get its real ID/Slug
-												const categoryObj = createMemo(() =>
-													resources.state.availableCategories.length > 0
-														? resources.state.availableCategories.find(
-															  (c) =>
-																  c.name.toLowerCase() === cat.toLowerCase() ||
-																  c.id.toLowerCase() === cat.toLowerCase(),
-														  )
-														: null,
-												);
+										<div class={styles["project-categories"]}>
+											<For each={project()?.categories}>
+												{(cat) => {
+													// Find the category object in availableCategories if possible to get its real ID/Slug
+													const categoryObj = createMemo(() =>
+														resources.state.availableCategories.length > 0
+															? resources.state.availableCategories.find(
+																  (c) =>
+																	  c.name.toLowerCase() === cat.toLowerCase() ||
+																	  c.id.toLowerCase() === cat.toLowerCase(),
+															  )
+															: null,
+													);
 
-												return (
-													<Badge
-														pill={true}
-														clickable={true}
-														variant="surface"
-														onClick={() => {
-															const p = project();
-															if (p) {
-																resources.setType(p.resource_type);
-																resources.setSource(p.source);
-															}
-															resources.setQuery("");
-															// Use the ID from the category object if found, otherwise fallback to the string
-															const filterId = categoryObj()?.id || cat;
-															resources.setCategories([filterId]);
-															resources.setOffset(0);
-															activeRouter()?.navigate("/resources");
-														}}
-													>
-														{categoryObj()?.name || cat}
-													</Badge>
-												);
-											}}
-										</For>
+													return (
+														<Badge
+															variant="theme"
+															round
+															clickable
+															onClick={() => {
+																const p = project();
+																if (p) {
+																	resources.setType(p.resource_type);
+																	resources.setSource(p.source);
+																}
+																resources.setQuery("");
+																// Use the ID from the category object if found, otherwise fallback to the string
+																const filterId = categoryObj()?.id || cat;
+																resources.setCategories([filterId]);
+																resources.setOffset(0);
+																activeRouter()?.navigate("/resources");
+															}}
+														>
+															{categoryObj()?.name || cat}
+														</Badge>
+													);
+												}}
+											</For>
+										</div>
 									</div>
 								</div>
 							</div>
-						</div>
 
-						<div class={styles["resource-details-layout"]}>
-							<div class={styles["resource-details-main"]}>
-								<div class={styles["details-tabs"]}>
+							<div class={styles["mobile-sidebar-only"]}>
+								<div class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]}`} style={{ "margin-bottom": "20px" }}>
+									{sidebarContent()}
+								</div>
+							</div>
+
+							<div class={styles["resource-details-layout"]}>
+								<div class={`${styles["resource-details-main"]} ${styles["theme-card"]}`}>
+									<div class={styles["details-tabs"]}>
 									<button
 										class={styles["tab-btn"]}
 										classList={{
@@ -1543,21 +1841,23 @@ const ResourceDetailsPage: Component<{
 									>
 										Versions ({resources.state.versions.length})
 									</button>
-									<button
-										class={styles["tab-btn"]}
-										classList={{
-											[styles.active]: activeTab() === "dependencies",
-										}}
-										onClick={() =>
-											activeRouter()?.updateQuery(
-												"activeTab",
-												"dependencies",
-												true,
-											)
-										}
-									>
-										Dependencies ({primaryVersion()?.dependencies?.length || 0})
-									</button>
+									<Show when={!isModpack()}>
+										<button
+											class={styles["tab-btn"]}
+											classList={{
+												[styles.active]: activeTab() === "dependencies",
+											}}
+											onClick={() =>
+												activeRouter()?.updateQuery(
+													"activeTab",
+													"dependencies",
+													true,
+												)
+											}
+										>
+											Dependencies ({primaryVersion()?.dependencies?.length || 0})
+										</button>
+									</Show>
 									<Show when={(project()?.gallery?.length ?? 0) > 0}>
 										<button
 											class={styles["tab-btn"]}
@@ -1574,9 +1874,9 @@ const ResourceDetailsPage: Component<{
 										</button>
 									</Show>
 								</div>
-
-								<div class={styles["tab-content"]}>
-									<Show when={activeTab() === "description"}>
+								<div class={styles["main-scrollable-area"]}>
+									<div class={styles["tab-content"]}>
+										<Show when={activeTab() === "description"}>
 										<div
 											class={styles.description}
 											innerHTML={renderedDescription() as string}
@@ -1860,11 +2160,9 @@ const ResourceDetailsPage: Component<{
 																		<div class={styles["version-meta"]}>
 																			<For each={version.loaders}>
 																				{(l) => (
-																					<span
-																						class={`${styles["meta-tag"]} ${styles["loader-tag"]}`}
-																					>
+																					<Badge variant="info" round>
 																						{l}
-																					</span>
+																					</Badge>
 																				)}
 																			</For>
 																		</div>
@@ -1872,11 +2170,18 @@ const ResourceDetailsPage: Component<{
 																</div>
 
 																<div class={styles["version-actions"]}>
-																	<span
-																		class={`${styles["version-tag"]} ${styles[version.release_type]}`}
+																	<Badge
+																		variant={
+																			version.release_type === "release"
+																				? "success"
+																				: version.release_type === "beta"
+																					? "warning"
+																					: "error"
+																		}
+																		round
 																	>
 																		{version.release_type}
-																	</span>
+																	</Badge>
 																	<Button
 																		size="sm"
 																		disabled={
@@ -2081,266 +2386,14 @@ const ResourceDetailsPage: Component<{
 										</div>
 									</Show>
 								</div>
-							</div>
-
-							<div class={styles["resource-details-sidebar"]}>
-								<div class={styles["sidebar-scrollable-area"]}>
-									<div class={styles["sidebar-section"]}>
-										<h3 class={styles["sidebar-title"]}>Information</h3>
-										<div class={styles["sidebar-metadata"]}>
-											<div class={styles["meta-item"]}>
-												<span class={styles["label"]}>Platform</span>
-												<span
-													class={`${styles["value"]} ${styles["capitalize"]}`}
-												>
-													{project()?.source}
-												</span>
-											</div>
-											<div class={styles["meta-item"]}>
-												<span class={styles["label"]}>Downloads</span>
-												<span class={styles["value"]}>
-													{project()?.download_count.toLocaleString()}
-												</span>
-											</div>
-											<div class={styles["meta-item"]}>
-												<span class={styles["label"]}>Type</span>
-												<div class={styles["value-group"]}>
-													<span
-														class={`${styles["value"]} ${styles["capitalize"]}`}
-													>
-														{project()?.resource_type}
-													</span>
-													<Show
-														when={
-															project()?.categories?.some(
-																(c) => c.toLowerCase() === "datapack",
-															) && project()?.resource_type !== "datapack"
-														}
-													>
-														<span
-															class={`${styles["value"]} ${styles["capitalize"]}`}
-														>
-															, Datapack
-														</span>
-													</Show>
-												</div>
-											</div>
-										</div>
-									</div>
-
-									<div class={styles["sidebar-section"]}>
-										<div class={styles["sidebar-section-header"]}>
-											<h3 class={styles["sidebar-title"]}>Recent Versions</h3>
-											<button
-												class={styles["view-all-link"]}
-												onClick={() =>
-													activeRouter()?.updateQuery(
-														"activeTab",
-														"versions",
-														true,
-													)
-												}
-											>
-												View All
-											</button>
-										</div>
-										<div class={styles["sidebar-version-list"]}>
-											<Show
-												when={!resources.state.loading}
-												fallback={<div>Loading...</div>}
-											>
-												<For each={resources.state.versions.slice(0, 5)}>
-													{(version) => (
-														<div class={styles["sidebar-version-item"]}>
-															<div class={styles["sidebar-version-top"]}>
-																<span
-																	class={styles["version-name"]}
-																	title={version.version_number}
-																>
-																	{version.version_number}
-																</span>
-																<div class={styles["version-tags-mini"]}>
-																	<span
-																		class={`${styles["mini-tag"]} ${styles[version.release_type]}`}
-																	>
-																		{version.release_type
-																			.charAt(0)
-																			.toUpperCase()}
-																	</span>
-																	<For each={version.loaders.slice(0, 1)}>
-																		{(l) => (
-																			<span
-																				class={`${styles["mini-tag"]} ${styles["loader"]}`}
-																			>
-																				{l}
-																			</span>
-																		)}
-																	</For>
-																</div>
-															</div>
-															<div class={styles["sidebar-version-meta"]}>
-																<VersionTags versions={version.game_versions} />
-															</div>
-															<Button
-																size="sm"
-																disabled={
-																	isVersionInstalling(version.id) ||
-																	(!!resources.state.selectedInstanceId &&
-																		!isVersionInstalled(
-																			version.id,
-																			version.hash,
-																		) &&
-																		getCompatibility(version).type ===
-																			"incompatible")
-																}
-																color={(() => {
-																	if (
-																		isVersionInstalled(version.id, version.hash)
-																	)
-																		return "destructive";
-																	const comp = getCompatibility(version);
-																	if (comp.type === "warning") return "warning";
-																	if (comp.type === "incompatible")
-																		return "none";
-																	return undefined;
-																})()}
-																tooltip_text={(() => {
-																	const instId =
-																		resources.state.selectedInstanceId;
-																	const comp = getCompatibility(version);
-																	if (
-																		instId &&
-																		!isVersionInstalled(
-																			version.id,
-																			version.hash,
-																		) &&
-																		comp.type !== "compatible"
-																	) {
-																		return comp.reason;
-																	}
-																	if (isVersionInstalling(version.id))
-																		return "Installation in progress";
-																	if (
-																		isVersionInstalled(version.id, version.hash)
-																	)
-																		return "Already installed - Click to remove";
-																	if (!isModpack() && !instId)
-																		return "Select an instance to install";
-																	return version.download_url
-																		? "Click to install"
-																		: "External download required";
-																})()}
-																onClick={() => {
-																	if (
-																		isVersionInstalled(version.id, version.hash)
-																	) {
-																		if (confirmVersionId() !== version.id) {
-																			setConfirmVersionId(version.id);
-																			setTimeout(
-																				() => setConfirmVersionId(null),
-																				3000,
-																			);
-																			return;
-																		}
-																		handleUninstall();
-																		setConfirmVersionId(null);
-																	} else {
-																		handleInstall(version);
-																	}
-																}}
-																style={{ width: "100%", "margin-top": "8px" }}
-																variant={
-																	isVersionInstalled(version.id, version.hash)
-																		? "outline"
-																		: version.download_url
-																			? "solid"
-																			: "outline"
-																}
-															>
-																<Show when={isVersionInstalling(version.id)}>
-																	Installing...
-																</Show>
-																<Show when={!isVersionInstalling(version.id)}>
-																	<Show
-																		when={isVersionInstalled(
-																			version.id,
-																			version.hash,
-																		)}
-																	>
-																		<Show
-																			when={confirmVersionId() === version.id}
-																			fallback="Uninstall"
-																		>
-																			Confirm?
-																		</Show>
-																	</Show>
-																	<Show
-																		when={
-																			!isVersionInstalled(
-																				version.id,
-																				version.hash,
-																			)
-																		}
-																	>
-																		<Show
-																			when={
-																				!isModpack() &&
-																				!resources.state.selectedInstanceId
-																			}
-																		>
-																			Select Instance
-																		</Show>
-																		<Show
-																			when={
-																				isModpack() ||
-																				resources.state.selectedInstanceId
-																			}
-																		>
-																			<Show
-																				when={
-																					getCompatibility(version).type ===
-																					"incompatible"
-																				}
-																				fallback={
-																					version.download_url
-																						? "Install"
-																						: "External"
-																				}
-																			>
-																				{(() => {
-																					const instId =
-																						resources.state.selectedInstanceId;
-																					const inst =
-																						instancesState.instances.find(
-																							(i) => i.id === instId,
-																						);
-																					if (
-																						(inst?.modloader?.toLowerCase() ===
-																							"vanilla" ||
-																							!inst?.modloader) &&
-																						(project()?.resource_type ===
-																							"mod" ||
-																							project()?.resource_type ===
-																								"shader")
-																					) {
-																						return "Unsupported";
-																					}
-																					return "Incompatible";
-																				})()}
-																			</Show>
-																		</Show>
-																	</Show>
-																</Show>
-															</Button>
-														</div>
-													)}
-												</For>
-											</Show>
-										</div>
-									</div>
 								</div>
 							</div>
 						</div>
+					</div>
+
+							<div class={`${styles["resource-details-sidebar"]} ${styles["theme-card"]} ${styles["desktop-sidebar-only"]}`}>
+								{sidebarContent()}
+							</div>
 
 						<ImageViewer
 							src={selectedGalleryItem()}
@@ -2359,19 +2412,20 @@ const ResourceDetailsPage: Component<{
 								{hoveredLink()}
 							</div>
 						</Show>
+
+						<InstanceSelectionDialog
+							isOpen={isInstanceDialogOpen()}
+							onClose={() => {
+								setIsInstanceDialogOpen(false);
+								resources.setRequestInstall(null);
+							}}
+							onSelect={handleSelectInstance}
+							onCreateNew={handleCreateNew}
+							project={project()}
+							version={installContext()?.version}
+							versions={resources.state.versions}
+						/>
 					</div>
-					<InstanceSelectionDialog
-						isOpen={isInstanceDialogOpen()}
-						onClose={() => {
-							setIsInstanceDialogOpen(false);
-							resources.setRequestInstall(null);
-						}}
-						onSelect={handleSelectInstance}
-						onCreateNew={handleCreateNew}
-						project={project()}
-						version={installContext()?.version}
-						versions={resources.state.versions}
-					/>
 				</Show>
 			</Show>
 		</Show>

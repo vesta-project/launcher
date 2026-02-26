@@ -22,6 +22,7 @@ export type ResourceProject = {
 	description: string | null;
 	icon_url: string | null;
 	author: string;
+	authors: string[];
 	download_count: number;
 	follower_count: number;
 	categories: string[];

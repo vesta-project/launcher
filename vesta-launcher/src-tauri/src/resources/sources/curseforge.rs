@@ -491,6 +491,7 @@ impl ResourceSource for CurseForgeSource {
                     .first()
                     .map(|a| a.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()),
+                authors: item.authors.iter().map(|a| a.name.clone()).collect(),
                 download_count: item.download_count as u64,
                 follower_count: 0,
                 categories: item.categories.into_iter().map(|c| c.id.to_string()).collect(),
@@ -568,6 +569,7 @@ impl ResourceSource for CurseForgeSource {
                 .first()
                 .map(|a| a.name.clone())
                 .unwrap_or_else(|| "Unknown".to_string()),
+            authors: item.authors.iter().map(|a| a.name.clone()).collect(),
             download_count: item.download_count as u64,
             follower_count: 0,
             categories: item
@@ -636,6 +638,7 @@ impl ResourceSource for CurseForgeSource {
                     .first()
                     .map(|a| a.name.clone())
                     .unwrap_or_else(|| "Unknown".to_string()),
+                authors: item.authors.iter().map(|a| a.name.clone()).collect(),
                 download_count: item.download_count as u64,
                 follower_count: 0,
                 categories: item.categories.into_iter().map(|c| c.id.to_string()).collect(),

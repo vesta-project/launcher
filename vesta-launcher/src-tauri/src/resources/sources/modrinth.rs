@@ -220,7 +220,8 @@ impl ResourceSource for ModrinthSource {
                 summary: hit.description,
                 description: None,
                 icon_url: hit.icon_url,
-                author: hit.author,
+                author: hit.author.clone(),
+                authors: vec![hit.author],
                 download_count: hit.downloads,
                 follower_count: hit.follows,
                 categories: hit.categories.unwrap_or_default(),
@@ -283,6 +284,12 @@ impl ResourceSource for ModrinthSource {
                 })
         };
 
+        let authors_list = if members.is_empty() {
+            vec!["Unknown".to_string()]
+        } else {
+            members.iter().map(|m| m.user.username.clone()).collect()
+        };
+
         let res_type = match project.project_type.as_str() {
             "mod" => ResourceType::Mod,
             "resourcepack" => ResourceType::ResourcePack,
@@ -306,6 +313,7 @@ impl ResourceSource for ModrinthSource {
             description: Some(project.body),
             icon_url: project.icon_url,
             author: author_name,
+            authors: authors_list,
             download_count: project.downloads,
             follower_count: project.followers,
             categories: project.categories,
@@ -383,6 +391,7 @@ impl ResourceSource for ModrinthSource {
                     description: Some(p.body),
                     icon_url: p.icon_url,
                     author: "Unknown".to_string(), // Batch doesn't provide authors in a simple way
+                    authors: vec!["Unknown".to_string()],
                     download_count: p.downloads,
                     follower_count: p.followers,
                     categories: p.categories,

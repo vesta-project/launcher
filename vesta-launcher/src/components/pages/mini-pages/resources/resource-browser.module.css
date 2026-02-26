@@ -364,14 +364,20 @@
 	gap: 8px;
 }
 
+.sort-selector-wrapper {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
 .sort-label {
 	font-size: 12px;
 	font-weight: 500;
 }
 
 .sort-select-trigger {
-	height: 32px !important;
-	font-size: 13px !important;
+	height: 32px;
+	font-size: 13px;
 	min-width: 140px;
 }
 
@@ -385,8 +391,8 @@
 }
 
 .limit-select-trigger {
-	height: 32px !important;
-	font-size: 13px !important;
+	height: 32px;
+	font-size: 13px;
 	width: 60px;
 }
 

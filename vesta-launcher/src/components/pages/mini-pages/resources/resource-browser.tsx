@@ -184,7 +184,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 		});
 		return (
-			<Show when={props.instance && props.instance.id !== null}>
+			<Show when={props.instance && props.instance.id !== null && props.instance.id !== "none"}>
 				<Show
 					when={resolvedUrl()}
 					fallback={
@@ -1771,35 +1771,40 @@ const ResourceBrowser: Component<{
 							</Select>
 						</div>
 
-						<span class={styles["sort-label"]}>Sort By:</span>
-						<Select<{ label: string; value: string }>
-							options={currentSortOptions()}
-							value={
-								currentSortOptions().find(
-									(o) => o.value === resources.state.sortBy,
-								) || currentSortOptions()[0]
-							}
-							onChange={(val) => {
-								batch(() => {
-									const sval = val?.value || "relevance";
-									resources.setSortBy(sval);
-									resources.setOffset(0);
-									activeRouter()?.updateQuery("sortBy", sval);
-								});
-							}}
-							itemComponent={(props) => (
-								<SelectItem item={props.item}>
-									{props.item.rawValue.label}
-								</SelectItem>
-							)}
-						>
-							<SelectTrigger class={styles["sort-select-trigger"]}>
-								<SelectValue<any>>
-									{(s) => s.selectedOption()?.label || "Sort By..."}
-								</SelectValue>
-							</SelectTrigger>
-							<SelectContent />
-						</Select>
+						<div class={styles["sort-selector-wrapper"]}>
+							<span class={styles["sort-label"]}>Sort By:</span>
+							<Select<{ label: string; value: string }>
+								options={currentSortOptions()}
+								optionValue="value"
+								optionTextValue="label"
+								value={
+									currentSortOptions().find(
+										(o) => o.value === resources.state.sortBy,
+									) || currentSortOptions()[0]
+								}
+								onChange={(val) => {
+									if (!val) return;
+									batch(() => {
+										const sval = val.value || "relevance";
+										resources.setSortBy(sval);
+										resources.setOffset(0);
+										activeRouter()?.updateQuery("sortBy", sval);
+									});
+								}}
+								itemComponent={(props) => (
+									<SelectItem item={props.item}>
+										{props.item.rawValue.label}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger class={styles["sort-select-trigger"]}>
+									<SelectValue<any>>
+										{(s) => s.selectedOption()?.label || "Sort By..."}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
+						</div>
 						<Show when={resources.state.activeSource === "curseforge"}>
 							<button
 								class={styles["sort-direction-btn"]}

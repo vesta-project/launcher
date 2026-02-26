@@ -42,6 +42,7 @@ pub struct ResourceProject {
     pub description: Option<String>,
     pub icon_url: Option<String>,
     pub author: String,
+    pub authors: Vec<String>,
     pub download_count: u64,
     pub follower_count: u64,
     pub categories: Vec<String>,
