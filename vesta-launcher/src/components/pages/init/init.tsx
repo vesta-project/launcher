@@ -16,12 +16,10 @@ import {
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
-import { getOsType } from "@utils/os";
+import { useOs } from "@utils/os";
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import { applyTheme, configToTheme } from "../../../themes/presets";
 import styles from "./init.module.css";
-
-const os = getOsType() ?? "windows";
 
 function InitPage() {
 	const navigate = useNavigate();
@@ -29,6 +27,7 @@ function InitPage() {
 	const [hasInstalledInstance, setHasInstalledInstance] = createSignal(false);
 	const [isLoading, setIsLoading] = createSignal(true);
 	const [isLoginOnly, setIsLoginOnly] = createSignal(false);
+	const os = useOs();
 
 	onMount(() => {
 		const searchParams = new URLSearchParams(window.location.search);
@@ -108,7 +107,7 @@ function InitPage() {
 			class={`${styles["animate--hue"]} ${styles["init-page__root"]}`}
 			data-tauri-drag-region
 		>
-			<TitleBar os={os} />
+			<TitleBar os={os()} />
 			<div class={styles["init-page__wrapper"]}>
 				<Switch>
 					<Match when={isLoading()}>

@@ -4,11 +4,9 @@ import TitleBar from "@components/page-root/titlebar/titlebar";
 import { useNavigate } from "@solidjs/router";
 import { listen } from "@tauri-apps/api/event";
 import Button from "@ui/button/button";
-import { getOsType } from "@utils/os";
+import { useOs } from "@utils/os";
 import { createSignal } from "solid-js";
 import styles from "./fatal-page.module.css";
-
-const os = getOsType() ?? "windows";
 
 const [fatalInfo, setFatalInfo] = createSignal<{
 	title: string;
@@ -20,10 +18,11 @@ const [fatalInfo, setFatalInfo] = createSignal<{
 
 function FatalPage() {
 	const navigate = useNavigate();
+	const os = useOs();
 
 	return (
 		<div class={styles["fatal-page__root"]}>
-			<TitleBar os={os} />
+			<TitleBar os={os()} />
 
 			<div class={styles["fatal-page__wrapper"]}>
 				<h1>{fatalInfo().title}</h1>

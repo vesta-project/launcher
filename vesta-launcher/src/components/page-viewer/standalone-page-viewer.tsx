@@ -8,13 +8,13 @@ import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 import { useSearchParams } from "@solidjs/router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowControls } from "@tauri-controls-v2/solid";
-import { getOsType } from "@utils/os";
-import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { useOs } from "@utils/os";
+import { createMemo, onCleanup, onMount, Show } from "solid-js";
 import styles from "./standalone-page-viewer.module.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
-	const osType = getOsType() ?? "windows";
+	const osType = useOs();
 
 	const tryParse = (val: string) => {
 		if (typeof val !== "string") return val;
@@ -187,20 +187,20 @@ function StandalonePageViewer() {
 					router={r()}
 					showWindowControls={true}
 					titleSuffix="Standalone"
-					os={osType}
+					os={osType()}
 					onClose={() => getCurrentWindow().close()}
 					windowControls={
 						<WindowControls
 							class={
 								styles["standalone-page-viewer__controls"] +
-								(osType === "macos"
+								(osType() === "macos"
 									? ` ${styles["standalone-page-viewer__controls--macos"]}`
 									: "")
 							}
 							platform={
-								osType === "linux"
+								osType() === "linux"
 									? "gnome"
-									: osType === "macos"
+									: osType() === "macos"
 										? "macos"
 										: "windows"
 							}

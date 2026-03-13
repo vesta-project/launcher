@@ -4,16 +4,16 @@ import {
 	pageViewerOpen,
 	setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
-import { getOsType } from "@utils/os";
-
-const os = getOsType() ?? "windows";
+import { useOs } from "@utils/os";
 
 function InvalidPage() {
+	const os = useOs();
+
 	const page_path = window.location.pathname;
 
 	return (
 		<div>
-			<TitleBar os={os} />
+			<TitleBar os={os()} />
 			The location {page_path} is not valid
 			<PageViewer
 				open={pageViewerOpen()}

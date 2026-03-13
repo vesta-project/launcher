@@ -23,7 +23,7 @@ import { attachConsole, info } from "@tauri-apps/plugin-log";
 import { WindowControls, WindowTitlebar } from "@tauri-controls-v2/solid";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, showToast, Toaster } from "@ui/toast/toast";
-import { getOsType } from "@utils/os";
+import { useOs } from "@utils/os";
 import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
@@ -40,9 +40,9 @@ import Sidebar from "./sidebar/sidebar";
 // Module-level signals for sidebar state
 const [sidebarOpen, setSidebarOpen] = createSignal(false);
 
-const os = getOsType() ?? "windows";
-
 function HomePage() {
+	const os = useOs();
+
 	onMount(async () => {
 		void initializePinning();
 		const config = await invoke<any>("get_config");
@@ -61,9 +61,9 @@ function HomePage() {
 
 	return (
 		<div class={styles["home__root"]} draggable={false}>
-			<TitleBar os={os} />
+			<TitleBar os={os()} />
 			<Sidebar
-				os={os}
+				os={os()}
 				setPageViewerOpen={setPageViewerOpen}
 				openChanged={setSidebarOpen}
 				open={sidebarOpen()}
