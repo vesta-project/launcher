@@ -1,5 +1,5 @@
 {
-	"productName": "vesta-launcher",
+	"productName": "Vesta Launcher",
 	"version": "0.1.0-alpha.15",
 	"identifier": "net.vesta.launcher",
 	"build": {
@@ -17,7 +17,7 @@
 				"scope": [
 					"$APPLOCALDATA/**",
 					"$APPCACHE/**",
-					"$APPDATA/.VestaLauncher/**"
+					"$APPDATA/.VestaLauncher/**" 
 				]
 			}
 		}
