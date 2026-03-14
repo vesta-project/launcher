@@ -28,6 +28,67 @@ diesel::table! {
         theme_border_width -> Nullable<Integer>,
         account_type -> Text,
         is_expired -> Bool,
+        skin_variant -> Text,
+    }
+}
+
+diesel::table! {
+    account_skin_history (id) {
+        id -> Integer,
+        account_uuid -> Text,
+        texture_key -> Text,
+        name -> Text,
+        variant -> Text,
+        image_data -> Text,
+        source -> Text,
+        added_at -> Text,
+    }
+}
+
+diesel::table! {
+    app_config (id) {
+        id -> Integer,
+        background_hue -> Integer,
+        theme -> Text,
+        language -> Text,
+        max_download_threads -> Integer,
+        max_memory_mb -> Integer,
+        java_path -> Nullable<Text>,
+        default_game_dir -> Nullable<Text>,
+        auto_update_enabled -> Bool,
+        notification_enabled -> Bool,
+        startup_check_updates -> Bool,
+        show_tray_icon -> Bool,
+        minimize_to_tray -> Bool,
+        reduced_motion -> Bool,
+        last_window_width -> Integer,
+        last_window_height -> Integer,
+        debug_logging -> Bool,
+        notification_retention_days -> Integer,
+        active_account_uuid -> Nullable<Text>,
+        theme_id -> Text,
+        theme_mode -> Text,
+        theme_primary_hue -> Integer,
+        theme_primary_sat -> Nullable<Integer>,
+        theme_primary_light -> Nullable<Integer>,
+        theme_style -> Text,
+        theme_gradient_enabled -> Bool,
+        theme_gradient_angle -> Nullable<Integer>,
+        theme_gradient_harmony -> Nullable<Text>,
+        theme_advanced_overrides -> Nullable<Text>,
+        theme_gradient_type -> Nullable<Text>,
+        setup_completed -> Bool,
+        setup_step -> Integer,
+        tutorial_completed -> Bool,
+        use_dedicated_gpu -> Bool,
+    }
+}
+
+diesel::table! {
+    global_java_paths (major_version) {
+        major_version -> Integer,
+        path -> Text,
+        is_managed -> Bool,
     }
 }
 
@@ -44,7 +105,7 @@ diesel::table! {
         current_version -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
-        last_updated -> Text,
+        last_updated -> Timestamp,
         release_type -> Text,
         hash -> Nullable<Text>,
         file_size -> BigInt,
@@ -149,19 +210,19 @@ diesel::table! {
         label -> Text,
         icon_url -> Nullable<Text>,
         order_index -> Integer,
-        created_at -> Nullable<Text>,
+        created_at -> Nullable<Timestamp>,
     }
 }
 
 diesel::table! {
     resource_metadata_cache (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         source -> Text,
         remote_id -> Text,
         project_data -> Text,
         versions_data -> Nullable<Text>,
-        last_updated -> Text,
-        expires_at -> Text,
+        last_updated -> Timestamp,
+        expires_at -> Timestamp,
     }
 }
 
@@ -174,7 +235,7 @@ diesel::table! {
         icon_url -> Nullable<Text>,
         icon_data -> Nullable<Binary>,
         project_type -> Text,
-        last_updated -> Text,
+        last_updated -> Timestamp,
     }
 }
 
@@ -206,6 +267,9 @@ diesel::joinable!(notification_seen_items -> notification_subscriptions (subscri
 
 diesel::allow_tables_to_appear_in_same_query!(
     account,
+    account_skin_history,
+    app_config,
+    global_java_paths,
     installed_resource,
     instance,
     notification,

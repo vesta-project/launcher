@@ -26,5 +26,6 @@ pub use user_version_tracking::UserVersionTracking;
 // Re-export AppConfig from utils::config for convenience
 pub use crate::utils::config::AppConfig;
 
+pub mod skin_history;
 #[cfg(test)]
 mod tests;

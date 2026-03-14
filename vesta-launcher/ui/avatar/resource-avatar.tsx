@@ -1,4 +1,5 @@
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { resolveResourceUrl } from "@utils/assets";
 import {
 	Component,
@@ -28,21 +29,53 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 		return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 	});
 
+	const [avatarTimestamp, setAvatarTimestamp] = createSignal(Date.now());
+
 	const [playerHeadPath] = createResource(
-		() => props.playerUuid,
-		async (uuid) => {
+		() => ({ uuid: props.playerUuid, t: avatarTimestamp() }),
+		async ({ uuid, t }) => {
 			try {
 				const path = await invoke<string>("get_player_head_path", {
 					playerUuid: uuid,
 					forceDownload: false,
 				});
-				return convertFileSrc(path);
+				return `${convertFileSrc(path)}?t=${t}`;
 			} catch (e) {
 				console.error("Failed to fetch player head:", e);
 				return null;
 			}
 		},
 	);
+
+	createEffect(() => {
+		let unlisten: (() => void) | undefined;
+		listen<{ uuid?: string; force?: boolean }>("core://account-heads-updated", async (event) => {
+			const targetUuid = event.payload?.uuid;
+			// Normalize UUIDs before comparison so dashed/non-dashed variants match
+			const shouldRefresh = !targetUuid || !props.playerUuid ||
+				targetUuid.replace(/-/g, "") === props.playerUuid.replace(/-/g, "");
+
+			if (!shouldRefresh) return;
+
+			// Pre-download the fresh head so the file cache is up-to-date before re-render
+			if (event.payload?.force && props.playerUuid) {
+				try {
+					await invoke("get_player_head_path", {
+						playerUuid: props.playerUuid,
+						forceDownload: true,
+					});
+				} catch {
+					// fall through to cached head
+				}
+			}
+
+			setAvatarTimestamp(Date.now());
+		}).then((fn) => {
+			unlisten = fn;
+		});
+
+		onCleanup(() => unlisten?.());
+	});
 
 	const [blobUrl, setBlobUrl] = createSignal<string | null>(null);
 

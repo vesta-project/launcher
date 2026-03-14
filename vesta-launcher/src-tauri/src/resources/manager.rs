@@ -195,10 +195,13 @@ impl ResourceManager {
                     None => {
                         // If not found by primary ID, try matching against slugs in web_url
                         // (Modrinth often returns numerical IDs even if requested by slug)
-                        projects_map.values().find(|p| {
-                            p.id == dep.project_id || 
-                            p.web_url.ends_with(&format!("/{}", dep.project_id))
-                        }).cloned()
+                        projects_map
+                            .values()
+                            .find(|p| {
+                                p.id == dep.project_id
+                                    || p.web_url.ends_with(&format!("/{}", dep.project_id))
+                            })
+                            .cloned()
                     }
                 };
 
@@ -409,7 +412,9 @@ impl ResourceManager {
 
         let _ = self.save_project_to_cache(platform, id, &project).await;
         if id != project.id {
-            let _ = self.save_project_to_cache(platform, &project.id, &project).await;
+            let _ = self
+                .save_project_to_cache(platform, &project.id, &project)
+                .await;
         }
         let _ = self.cache_project_metadata(platform, &project).await;
 

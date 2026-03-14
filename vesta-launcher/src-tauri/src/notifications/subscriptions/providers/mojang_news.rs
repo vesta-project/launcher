@@ -1,7 +1,9 @@
+use crate::models::NotificationSubscription;
+use crate::notifications::subscriptions::{
+    AvailableNotificationSource, NotificationUpdateItem, SubscriptionProvider,
+};
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::models::NotificationSubscription;
-use crate::notifications::subscriptions::{NotificationUpdateItem, SubscriptionProvider, AvailableNotificationSource};
 use serde::Deserialize;
 
 const MOJANG_NEWS_URL: &str = "https://launchercontent.mojang.com/v2/news.json";
@@ -41,23 +43,35 @@ impl SubscriptionProvider for MojangNewsProvider {
         }]
     }
 
-    async fn check(&self, _app_handle: &tauri::AppHandle, sub: &NotificationSubscription) -> Result<Vec<NotificationUpdateItem>> {
+    async fn check(
+        &self,
+        _app_handle: &tauri::AppHandle,
+        sub: &NotificationSubscription,
+    ) -> Result<Vec<NotificationUpdateItem>> {
         let url = sub.target_url.as_deref().unwrap_or(MOJANG_NEWS_URL);
         let response = reqwest::get(url).await?;
-        
+
         if !response.status().is_success() {
-            return Err(anyhow::anyhow!("Failed to fetch Mojang news from {}: {}", url, response.status()));
+            return Err(anyhow::anyhow!(
+                "Failed to fetch Mojang news from {}: {}",
+                url,
+                response.status()
+            ));
         }
 
         let news: MojangNewsResponse = response.json().await?;
 
         // Filter by tags if present in metadata
-        let allowed_tags: Vec<String> = sub.metadata.as_ref()
+        let allowed_tags: Vec<String> = sub
+            .metadata
+            .as_ref()
             .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
             .and_then(|v| {
-                v.get("tags")
-                    .and_then(|t| t.as_array())
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<String>>())
+                v.get("tags").and_then(|t| t.as_array()).map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<String>>()
+                })
             })
             .unwrap_or_default();
 
@@ -66,7 +80,11 @@ impl SubscriptionProvider for MojangNewsProvider {
             let entry_tag = entry.tag.as_deref().unwrap_or("News");
 
             // Keep filter logic: if tags are specified, check them. If none specified, allow all.
-            if !allowed_tags.is_empty() && !allowed_tags.iter().any(|t| t.eq_ignore_ascii_case(entry_tag)) {
+            if !allowed_tags.is_empty()
+                && !allowed_tags
+                    .iter()
+                    .any(|t| t.eq_ignore_ascii_case(entry_tag))
+            {
                 continue;
             }
 

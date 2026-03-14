@@ -1,0 +1,137 @@
+.account-popover {
+	width: 280px;
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	background: var(--surface-1);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-lg);
+}
+
+.active-account-section {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.active-avatar {
+	flex-shrink: 0;
+}
+
+.active-info {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	overflow: hidden;
+}
+
+.active-username {
+	font-weight: 600;
+	font-size: 1.1rem;
+	color: var(--text-1);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.active-uuid-container {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	cursor: pointer;
+	color: var(--text-3);
+	transition: color 0.2s;
+}
+
+.active-uuid-container:hover {
+	color: var(--text-1);
+}
+
+.clipboard-icon {
+	width: 12px;
+	height: 12px;
+	flex-shrink: 0;
+}
+
+.active-uuid {
+	font-size: 0.75rem;
+	font-family: monospace;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.actions-section {
+	display: flex;
+	gap: 8px;
+}
+
+.action-btn {
+	flex: 1;
+}
+
+.divider {
+	height: 1px;
+	background: var(--border);
+	margin: 0 -16px;
+}
+
+.other-accounts-section {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.section-title {
+	font-size: 0.8rem;
+	font-weight: 600;
+	color: var(--text-2);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.account-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 150px;
+	overflow-y: auto;
+}
+
+.account-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 6px 8px;
+	border-radius: var(--radius-sm);
+	cursor: pointer;
+	transition: background 0.2s;
+}
+
+.account-item:hover {
+	background: var(--surface-2);
+}
+
+.account-item-name {
+	font-size: 0.9rem;
+	color: var(--text-1);
+	flex: 1;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.expired-badge {
+	font-size: 0.7rem;
+	padding: 2px 6px;
+	background: var(--error);
+	color: white;
+	border-radius: 10px;
+}
+
+.add-account-btn {
+	margin-top: 4px;
+	width: 100%;
+}

@@ -10,6 +10,7 @@ use oauth2::TokenResponse;
 use piston_lib::api::mojang::get_minecraft_profile;
 use piston_lib::auth::{device_code_to_details, get_auth_client, get_device_code, poll_for_token};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
@@ -21,10 +22,38 @@ use crate::utils::db::get_vesta_conn;
 
 pub const ACCOUNT_TYPE_GUEST: &str = "Guest";
 pub const GUEST_UUID: &str = "00000000000000000000000000000000";
+const PROFILE_CACHE_TTL_SECONDS: i64 = 120;
+
+#[derive(Clone)]
+struct CachedProfileEntry {
+    profile: piston_lib::api::mojang::MinecraftProfile,
+    cached_at: chrono::DateTime<Utc>,
+}
 
 lazy_static! {
     /// Global cancel channel for aborting authentication
     static ref CANCEL_SENDER: Arc<Mutex<Option<oneshot::Sender<()>>>> = Arc::new(Mutex::new(None));
+    static ref PROFILE_CACHE: Arc<tokio::sync::Mutex<HashMap<String, CachedProfileEntry>>> = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    static ref PROFILE_FETCH_LOCKS: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = Arc::new(Mutex::new(HashMap::new()));
+}
+
+fn get_profile_fetch_lock(account_uuid: &str) -> Result<Arc<tokio::sync::Mutex<()>>, String> {
+    let mut locks = PROFILE_FETCH_LOCKS.lock().map_err(|e| e.to_string())?;
+    Ok(locks
+        .entry(account_uuid.to_string())
+        .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))
+        .clone())
+}
+
+fn is_profile_cache_fresh(cached_at: chrono::DateTime<Utc>) -> bool {
+    let age = Utc::now() - cached_at;
+    age < Duration::seconds(PROFILE_CACHE_TTL_SECONDS)
+}
+
+pub async fn invalidate_account_profile_cache(account_uuid: &str) {
+    let normalized_uuid = account_uuid.replace("-", "");
+    let mut cache = PROFILE_CACHE.lock().await;
+    cache.remove(&normalized_uuid);
 }
 
 /// Authentication stage events emitted to UI
@@ -386,6 +415,7 @@ async fn process_login_completion(
         new_account.is_active = true;
         new_account.skin_url = skin_url_val;
         new_account.cape_url = cape_url_val;
+        new_account.skin_variant = "classic".into();
         new_account.created_at = Some(now_str.clone());
         new_account.updated_at = Some(now_str.clone());
         new_account.theme_id = Some(current_config.theme_id);
@@ -474,7 +504,7 @@ pub fn get_active_account() -> Result<Option<Account>, String> {
 
         let acct = account
             .filter(uuid.eq(target_uuid))
-            .first::<Account>(&mut conn)
+            .first::<crate::models::account::Account>(&mut conn)
             .optional()
             .map_err(|e| e.to_string())?;
 
@@ -501,7 +531,7 @@ pub async fn ensure_account_tokens_valid(
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let acct = account
         .filter(uuid.eq(&target_uuid))
-        .first::<Account>(&mut conn)
+        .first::<crate::models::account::Account>(&mut conn)
         .optional()
         .map_err(|e| e.to_string())?;
 
@@ -595,7 +625,7 @@ pub async fn refresh_account_tokens(
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let acct = account
         .filter(uuid.eq(&target_uuid))
-        .first::<Account>(&mut conn)
+        .first::<crate::models::account::Account>(&mut conn)
         .optional()
         .map_err(|e| e.to_string())?;
 
@@ -682,13 +712,26 @@ pub async fn refresh_account_tokens(
         match piston_lib::auth::exchange_for_minecraft_token(&ms_access_token).await {
             Ok(resp) => resp,
             Err(e) => {
-                log::error!(
-                    "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
-                    target_uuid,
-                    e
-                );
-                return Err(format!("Failed to exchange for Minecraft token: {}", e));
-            }
+                    log::error!(
+                        "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
+                        target_uuid,
+                        e
+                    );
+
+                    // Provide a more actionable error for the UI/logs. Common causes:
+                    // - The Microsoft account does not have an Xbox Live profile.
+                    // - The account does not own Minecraft (no entitlement).
+                    // - The Microsoft token lacks required scopes or is invalid.
+                    log::warn!(
+                        "[auth] Exchange failure may indicate missing Xbox Live profile or missing Minecraft ownership for account {}",
+                        target_uuid
+                    );
+
+                    return Err(format!(
+                        "Failed to exchange for Minecraft token: {}. This often means the Microsoft account lacks an Xbox Live profile or Minecraft ownership — try re-authenticating with an account that owns Minecraft.",
+                        e
+                    ));
+                }
         };
 
     let mc_access_token = minecraft_response.access_token().clone().into_inner();
@@ -744,7 +787,7 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     // Fetch the target account to get its theme settings
     let target_account = account
         .filter(uuid.eq(&target_uuid))
-        .first::<Account>(&mut conn)
+        .first::<crate::models::account::Account>(&mut conn)
         .map_err(|e| format!("Failed to find account: {}", e))?;
 
     // Deactivate all accounts
@@ -882,6 +925,86 @@ pub fn remove_account(target_uuid: String) -> Result<(), String> {
 
 /// Get path to cached player head image, downloading if necessary
 #[tauri::command]
+pub async fn get_account_profile(
+    account_uuid: String,
+) -> Result<piston_lib::api::mojang::MinecraftProfile, String> {
+    let normalized_uuid = account_uuid.replace("-", "");
+
+    {
+        let cache = PROFILE_CACHE.lock().await;
+        if let Some(entry) = cache.get(&normalized_uuid) {
+            if is_profile_cache_fresh(entry.cached_at) {
+                return Ok(entry.profile.clone());
+            }
+        }
+    }
+
+    let fetch_lock = get_profile_fetch_lock(&normalized_uuid)?;
+    let _fetch_guard = fetch_lock.lock().await;
+
+    {
+        let cache = PROFILE_CACHE.lock().await;
+        if let Some(entry) = cache.get(&normalized_uuid) {
+            if is_profile_cache_fresh(entry.cached_at) {
+                return Ok(entry.profile.clone());
+            }
+        }
+    }
+
+    let account_model = {
+        use crate::schema::account::dsl::*;
+        let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+        account
+            .filter(uuid.eq(&normalized_uuid))
+            .first::<crate::models::account::Account>(&mut conn)
+            .map_err(|e| e.to_string())?
+    };
+
+    if account_model.account_type == "guest" {
+        return Err("Guest accounts do not have a profile".to_string());
+    }
+
+    let token = account_model
+        .access_token
+        .ok_or_else(|| "Account has no access token".to_string())?;
+
+    let profile = match piston_lib::api::mojang::get_minecraft_profile(&token).await {
+        Ok(p) => p,
+        Err(e) => {
+            // Log full error (includes HTTP status and body from Mojang client)
+            log::warn!(
+                "Failed to get Minecraft profile for account {}: {}",
+                account_model.uuid,
+                e
+            );
+
+            // Helpful debug info without leaking tokens
+            if account_model.refresh_token.is_some() {
+                log::debug!("Account {} has a refresh token available", account_model.uuid);
+            } else {
+                log::debug!("Account {} has no refresh token", account_model.uuid);
+            }
+
+            return Err(e.to_string());
+        }
+    };
+
+    {
+        let mut cache = PROFILE_CACHE.lock().await;
+        cache.insert(
+            normalized_uuid,
+            CachedProfileEntry {
+                profile: profile.clone(),
+                cached_at: Utc::now(),
+            },
+        );
+    }
+
+    Ok(profile)
+}
+
+/// Get path to cached player head image, downloading if necessary
+#[tauri::command]
 pub async fn get_player_head_path(
     app: AppHandle,
     player_uuid: String,
@@ -898,8 +1021,20 @@ pub async fn get_player_head_path(
 
     let image_path = cache_dir.join(format!("{}.png", normalized_uuid));
 
+    // Look for account texture URL from local DB first to avoid a profile API call.
+    let known_url = {
+        use crate::schema::account::dsl::*;
+        let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+        account
+            .filter(uuid.eq(&normalized_uuid))
+            .first::<crate::models::account::Account>(&mut conn)
+            .ok()
+            .and_then(|acct| acct.skin_url)
+    };
+
     let path = piston_lib::api::player::download_player_head(
         &normalized_uuid,
+        known_url,
         image_path.clone(),
         128,
         true,
@@ -919,7 +1054,7 @@ pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
     let futures = accounts.into_iter().map(|acct| {
         let app = app.clone();
         async move {
-            let _ = get_player_head_path(app, acct.uuid, true).await;
+            let _ = get_player_head_path(app, acct.uuid, false).await;
         }
     });
 
@@ -954,7 +1089,7 @@ pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, S
         if let Some(new_uuid) = config.active_account_uuid {
             let acct = account
                 .filter(uuid.eq(new_uuid.replace("-", "")))
-                .first::<Account>(&mut conn)
+                .first::<crate::models::account::Account>(&mut conn)
                 .optional()
                 .map_err(|e| e.to_string())?;
             return Ok(acct);

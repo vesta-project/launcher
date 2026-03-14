@@ -70,6 +70,7 @@ import {
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
 import { InstanceDefaultsTab } from "./instance-defaults-tab";
 import { type JavaOption, JavaOptionCard } from "./java-option-card";
+import AccountSettingsTab from "./account-settings-tab";
 import { NotificationSettingsTab } from "./notification-settings-tab";
 import styles from "./settings-page.module.css";
 import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
@@ -846,6 +847,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<TabsTrigger class={styles["tabs-trigger"]} value="general">
 							General
 						</TabsTrigger>
+						<TabsTrigger class={styles["tabs-trigger"]} value="account">
+							Account
+						</TabsTrigger>
 						<TabsTrigger class={styles["tabs-trigger"]} value="appearance">
 							Appearance
 						</TabsTrigger>
@@ -982,6 +986,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								/>
 							</SettingsCard>
 						</div>
+					</TabsContent>
+
+					<TabsContent class={styles["tabs-content"]} value="account">
+						<AccountSettingsTab />
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="appearance">

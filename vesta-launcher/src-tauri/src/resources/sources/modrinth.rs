@@ -687,7 +687,13 @@ impl ResourceSource for ModrinthSource {
                 // Filter out loader types and categories that are served as loaders
                 if matches!(
                     name.as_str(),
-                    "fabric" | "forge" | "quilt" | "neoforge" | "liteloader" | "rift" | "categories"
+                    "fabric"
+                        | "forge"
+                        | "quilt"
+                        | "neoforge"
+                        | "liteloader"
+                        | "rift"
+                        | "categories"
                 ) {
                     return false;
                 }

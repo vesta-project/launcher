@@ -121,7 +121,7 @@ pub struct AppConfig {
     pub active_account_uuid: Option<String>,
 
     // Theme system fields
-    pub theme_id: String, // Current theme preset ID (e.g., "vesta", "solar")
+    pub theme_id: String,   // Current theme preset ID (e.g., "vesta", "solar")
     pub theme_mode: String, // "template" or "advanced"
     pub theme_primary_hue: i32, // User-customized primary hue
     pub theme_primary_sat: Option<i32>, // Advanced mode: primary saturation
@@ -184,12 +184,12 @@ impl Default for AppConfig {
             // Theme system defaults
             theme_id: "vesta".to_string(), // theme_id - default to signature theme
             theme_mode: "template".to_string(), // theme_mode - start with easy mode
-            theme_primary_hue: 220,           // theme_primary_hue - default blue
-            theme_primary_sat: None,          // theme_primary_sat - advanced mode only
-            theme_primary_light: None,        // theme_primary_light - advanced mode only
+            theme_primary_hue: 220,        // theme_primary_hue - default blue
+            theme_primary_sat: None,       // theme_primary_sat - advanced mode only
+            theme_primary_light: None,     // theme_primary_light - advanced mode only
             theme_style: "glass".to_string(), // theme_style - default glass effect
-            theme_gradient_enabled: true,     // theme_gradient_enabled - enable gradients
-            theme_gradient_angle: Some(135),  // theme_gradient_angle - diagonal gradient
+            theme_gradient_enabled: true,  // theme_gradient_enabled - enable gradients
+            theme_gradient_angle: Some(135), // theme_gradient_angle - diagonal gradient
             theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
             theme_advanced_overrides: None, // theme_advanced_overrides - no custom overrides by default
             theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient

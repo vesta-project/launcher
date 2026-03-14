@@ -2,7 +2,17 @@ use crate::schema::notification_subscriptions;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, Queryable, Selectable, Insertable, AsChangeset, Identifiable, Clone)]
+#[derive(
+    Debug,
+    Serialize,
+    Deserialize,
+    Queryable,
+    Selectable,
+    Insertable,
+    AsChangeset,
+    Identifiable,
+    Clone,
+)]
 #[diesel(table_name = notification_subscriptions)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct NotificationSubscription {

@@ -570,13 +570,12 @@ impl NotificationManager {
             let action_payload = if payload.is_some() {
                 payload
             } else if let Some(ref key) = client_key {
-                NotificationStore::get_by_client_key(key)?
-                    .and_then(|n| {
-                        n.actions
-                            .into_iter()
-                            .find(|a| a.action_id == action_id)
-                            .and_then(|a| a.payload)
-                    })
+                NotificationStore::get_by_client_key(key)?.and_then(|n| {
+                    n.actions
+                        .into_iter()
+                        .find(|a| a.action_id == action_id)
+                        .and_then(|a| a.payload)
+                })
             } else {
                 None
             };

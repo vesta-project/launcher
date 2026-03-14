@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use crate::utils::config::AppConfig;
 use crate::models::instance::Instance;
+use crate::utils::config::AppConfig;
+use std::collections::HashMap;
 
 /// Parses Environment Variables from a string (one per line, format KEY=VALUE)
 fn parse_env_vars(raw: &str) -> HashMap<String, String> {
@@ -20,10 +20,7 @@ fn parse_env_vars(raw: &str) -> HashMap<String, String> {
 }
 
 /// Resolves environment variables for an instance, merging global defaults and instance overrides.
-pub fn resolve_env_vars(
-    config: &AppConfig,
-    instance: &Instance,
-) -> HashMap<String, String> {
+pub fn resolve_env_vars(config: &AppConfig, instance: &Instance) -> HashMap<String, String> {
     let mut vars = HashMap::new();
 
     // 1. Start with global defaults if linked
@@ -43,7 +40,10 @@ pub fn resolve_env_vars(
 
     // 3. Add system/standard vars
     vars.insert("VESTA_INSTANCE_NAME".to_string(), instance.name.clone());
-    vars.insert("VESTA_MC_VERSION".to_string(), instance.minecraft_version.clone());
+    vars.insert(
+        "VESTA_MC_VERSION".to_string(),
+        instance.minecraft_version.clone(),
+    );
 
     vars
 }
