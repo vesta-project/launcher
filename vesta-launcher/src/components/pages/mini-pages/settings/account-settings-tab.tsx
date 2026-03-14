@@ -23,6 +23,7 @@ import { router } from "@components/page-viewer/page-viewer";
 import { setActiveAccount as persistActiveAccount } from "@utils/auth";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { createNotification } from "@utils/notifications";
+import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import styles from "./account-settings-tab.module.css";
 
 // UI Components
@@ -42,6 +43,7 @@ import SkinIcon from "@assets/skin-icon.svg";
 import ArrowRightIcon from "@assets/right-arrow.svg";
 import ClipboardIcon from "@assets/clipboard.svg";
 import PlusIcon from "@assets/plus.svg";
+import ViewIcon from "@assets/search.svg";
 
 interface Account {
   id: string;
@@ -144,6 +146,60 @@ const formatTooltipName = (name: string | undefined, source: string | undefined)
   return name;
 };
 
+
+const SkinPortrait = (props: { src: string; variant?: string }) => {
+  let canvasRef: HTMLCanvasElement | undefined;
+
+  createEffect(() => {
+    const src = props.src;
+    const variant = props.variant?.toLowerCase() || "classic";
+    if (!src || !canvasRef) return;
+
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.src = src;
+
+    img.onload = () => {
+      if (!canvasRef) return;
+      const ctx = canvasRef.getContext("2d");
+      if (!ctx) return;
+
+      const armW = variant === "slim" ? 3 : 4;
+      const totalW = armW + 8 + armW;
+      const totalH = 20; // 8 (head) + 12 (body/arms)
+
+      canvasRef.width = totalW;
+      canvasRef.height = totalH;
+      ctx.clearRect(0, 0, totalW, totalH);
+      ctx.imageSmoothingEnabled = false;
+
+      // 1. Head (8,8) -> (armW, 0)
+      ctx.drawImage(img, 8, 8, 8, 8, armW, 0, 8, 8);
+      ctx.drawImage(img, 40, 8, 8, 8, armW, 0, 8, 8); // Hat layer
+
+      // 2. Torso (20,20) -> (armW, 8)
+      ctx.drawImage(img, 20, 20, 8, 12, armW, 8, 8, 12);
+      ctx.drawImage(img, 20, 36, 8, 12, armW, 8, 8, 12); // Jacket layer
+
+      // 3. Right Arm (Player's Right / Viewer's Left)
+      // Source X: 44 (skips the side of the arm), Source Y: 20
+      ctx.drawImage(img, 44, 20, armW, 12, 0, 8, armW, 12);
+      ctx.drawImage(img, 44, 36, armW, 12, 0, 8, armW, 12); // Sleeve
+
+      // 4. Left Arm (Player's Left / Viewer's Right)
+      // Source X: 36, Source Y: 52 (skips top of arm)
+      ctx.drawImage(img, 36, 52, armW, 12, armW + 8, 8, armW, 12);
+      ctx.drawImage(img, 52, 52, armW, 12, armW + 8, 8, armW, 12); // Sleeve
+    };
+  }, [props.src, props.variant]);
+
+  return (
+    <div class={styles.skinPortrait}>
+      <canvas ref={canvasRef} class={styles.skinPortraitCanvas} />
+    </div>
+  );
+};
+
 export default function AccountSettingsTab() {
   const [, setAccounts] = createSignal<Account[]>([]);
   const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
@@ -152,6 +208,7 @@ export default function AccountSettingsTab() {
   const [capes, setCapes] = createSignal<Cape[]>([]);
   const [saving, setSaving] = createSignal(false);
   const [browseTab, setBrowseTab] = createSignal("recent");
+  const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
   const [compactActionMode, setCompactActionMode] = createSignal(false);
   const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
   const [narrowView, setNarrowView] = createSignal<"browse" | "preview">("browse");
@@ -949,7 +1006,7 @@ export default function AccountSettingsTab() {
                 });
 
                 return (
-                  <button
+                  <div
                     class={styles.skinItem}
                     classList={{
                       [styles.selected]: isSelected()
@@ -960,14 +1017,24 @@ export default function AccountSettingsTab() {
                       (skin.source as any)?.type,
                     )}
                   >
-                    <img
-                      src={preferredTexture}
-                      alt={skin.name || "Skin"}
+                    <SkinPortrait 
+                      src={preferredTexture} 
+                      variant={(skin.source as any)?.variant || previewVariant()} 
                     />
+                    <button
+                      class={styles.viewRawButton}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewerSrc(preferredTexture);
+                      }}
+                      title="View raw texture"
+                    >
+                      <ViewIcon width="16" />
+                    </button>
                     <Show when={isSelected()}>
                       <span class={styles.selectedBadge}>✓</span>
                     </Show>
-                  </button>
+                  </div>
                 );
               }}
             </For>
@@ -1040,7 +1107,7 @@ export default function AccountSettingsTab() {
                             isSkinSelected(item.image_data, item.texture_key),
                           );
                           return (
-                            <button
+                            <div
                               class={styles.skinItem}
                               classList={{
                                 [styles.selected]: selected(),
@@ -1048,14 +1115,21 @@ export default function AccountSettingsTab() {
                               onClick={() => handlePreviewHistory(item)}
                               title={`${formatTooltipName(item.name, item.source)} (${item.variant})`}
                             >
-                              <img
-                                src={item.image_data}
-                                alt={item.name}
-                              />
+                              <SkinPortrait src={item.image_data} variant={item.variant} />
+                              <button
+                                class={styles.viewRawButton}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setViewerSrc(item.image_data);
+                                }}
+                                title="View raw texture"
+                              >
+                                <ViewIcon width="16" />
+                              </button>
                               <Show when={selected()}>
                                 <span class={styles.selectedBadge}>✓</span>
                               </Show>
-                            </button>
+                            </div>
                           );
                         }}
                       </For>
@@ -1234,6 +1308,13 @@ export default function AccountSettingsTab() {
           </>
         )}
       </Show>
+      <ImageViewer 
+        src={viewerSrc()} 
+        onClose={() => setViewerSrc(null)} 
+        title="Skin Texture Preview"
+        scale={4}
+        pixelated={true}
+      />
     </div>
   );
 }

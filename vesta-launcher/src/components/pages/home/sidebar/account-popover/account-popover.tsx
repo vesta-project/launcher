@@ -141,7 +141,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 					onClick={openSettings}
 					class={styles["action-btn"]}
 				>
-					Manage Account
+					Edit Skin
 				</Button>
 				<Show when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}>
 					<Button

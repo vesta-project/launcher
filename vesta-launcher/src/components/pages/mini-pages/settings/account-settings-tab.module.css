@@ -542,11 +542,80 @@
 }
 
 .skinItem img {
+  display: none;
+}
+
+.skinPortrait {
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  image-rendering: pixelated;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 4px;
 }
+
+.skinPortraitCanvas {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.2));
+}
+
+/* Fallback for legacy 64x32 skins (where armRight doesn't exist at 36,52) */
+.legacyArmRight {
+  background-position: calc(44 / (64 - var(--arm-w, 4px)) * 100%) calc(20 / (64 - 12) * 100%);
+  transform: scaleX(-1);
+}
+
+.skinItem.selected .selectedBadge {
+  opacity: 1;
+  background: var(--primary);
+  color: white;
+}
+
+.viewRawButton {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  opacity: 0;
+  transition: all 0.2s;
+  z-index: 10;
+  cursor: pointer;
+}
+
+.viewRawButton svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.viewRawButton:hover {
+  color: var(--primary);
+  background: var(--surface-overlay);
+  transform: scale(1.1);
+}
+
+.skinItem:hover .viewRawButton {
+  opacity: 1;
+}
+
+.skinItem:hover .selectedBadge {
+  opacity: 0;
+}
+
 .uploadIcon {
   color: var(--primary);
   opacity: 0.8;
