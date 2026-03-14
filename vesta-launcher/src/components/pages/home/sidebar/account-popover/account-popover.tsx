@@ -17,7 +17,6 @@ import { createNotification } from "@utils/notifications";
 import {
 	createEffect,
 	createResource,
-	createSignal,
 	For,
 	onCleanup,
 	Show,

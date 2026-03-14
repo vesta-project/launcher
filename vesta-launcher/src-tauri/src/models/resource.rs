@@ -23,7 +23,7 @@ pub enum SourcePlatform {
 #[derive(Debug, Serialize, Deserialize, Clone, Queryable, Insertable)]
 #[diesel(table_name = crate::schema::vesta::resource_metadata_cache)]
 pub struct ResourceMetadataCacheRecord {
-    pub id: Option<i32>,
+    pub id: i32,
     pub source: String,
     pub remote_id: String,
     pub project_data: String,

@@ -142,8 +142,6 @@ pub async fn detect_base64_skin_variant(
         &base64_data
     };
 
-    info!("detect_base64_skin_variant: input_base64_len={}", base64_data.len());
-    debug!("detect_base64_skin_variant: payload={}", base64_data);
     let bytes = general_purpose::STANDARD
         .decode(clean_base64)
         .map_err(|e| format!("Failed to decode base64: {}", e))?;
@@ -193,9 +191,6 @@ pub async fn upload_account_skin(
 
     let texture_key = compute_texture_key(&file_bytes);
 
-    info!("upload_account_skin: account={} name='{}' variant='{}' texture_key={}", normalized_uuid, name, variant, texture_key);
-    debug!("upload_account_skin: base64_len={} bytes_len={} base64_payload={}", clean_base64.len(), file_bytes.len(), clean_base64);
-
     let account_model = account::table
         .filter(account::uuid.eq(&normalized_uuid))
         .first::<Account>(&mut conn)
@@ -206,8 +201,7 @@ pub async fn upload_account_skin(
         .ok_or_else(|| "Account has no access token".to_string())?;
 
     let redacted_token = if token.len() > 6 { format!("{}...", &token[..6]) } else { "<redacted>".to_string() };
-    debug!("upload_account_skin: using token={} for account={}", redacted_token, normalized_uuid);
-match account_skin_history::table
+    match account_skin_history::table
         .filter(account_skin_history::account_uuid.eq(&normalized_uuid))
         .filter(account_skin_history::texture_key.eq(&texture_key))
         .first::<AccountSkinHistory>(&mut conn)

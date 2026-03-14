@@ -1,4 +1,3 @@
-use std::sync::Arc;
 use crate::models::common::{Skin, MinecraftSkinVariant};
 pub use crate::api::embedded_skins::EMBEDDED_SKINS;
 

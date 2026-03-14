@@ -49,6 +49,8 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 
 	createEffect(() => {
 		let unlisten: (() => void) | undefined;
+		let cancelled = false;
+
 		listen<{ uuid?: string; force?: boolean }>("core://account-heads-updated", async (event) => {
 			const targetUuid = event.payload?.uuid;
 			// Normalize UUIDs before comparison so dashed/non-dashed variants match
@@ -71,10 +73,17 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 
 			setAvatarTimestamp(Date.now());
 		}).then((fn) => {
-			unlisten = fn;
+			if (cancelled) {
+				fn();
+			} else {
+				unlisten = fn;
+			}
 		});
 
-		onCleanup(() => unlisten?.());
+		onCleanup(() => {
+			cancelled = true;
+			unlisten?.();
+		});
 	});
 
 	const [blobUrl, setBlobUrl] = createSignal<string | null>(null);

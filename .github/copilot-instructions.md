@@ -71,7 +71,7 @@ Vesta Launcher is a Minecraft launcher built with **Tauri (Rust)** for the backe
 - **SolidJS:** Use `Show` and `For` components for control flow. Avoid direct DOM manipulation.
 - **Styling:** CSS Modules (`.module.css`) or global styles in `src/styles.css`.
 - **Icons:** Import SVG icons directly as components (e.g., `import CloseIcon from "@assets/close.svg"`). Prefer component SVGs instead of inline paths for better maintainability.
-- **File Structure:** Group related components and logic together (e.g., `components/pages/home
+- **File Structure:** Group related components and logic together (e.g., `components/pages/home)
 
 ## Common Pitfalls
 - **Notification Flashing:** Ensure `dismissible` state is consistent between backend updates and frontend rendering. Completed tasks should be `dismissible: true`.

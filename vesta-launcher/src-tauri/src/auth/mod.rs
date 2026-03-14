@@ -960,7 +960,7 @@ pub async fn get_account_profile(
             .map_err(|e| e.to_string())?
     };
 
-    if account_model.account_type == "guest" {
+    if account_model.account_type == ACCOUNT_TYPE_GUEST {
         return Err("Guest accounts do not have a profile".to_string());
     }
 

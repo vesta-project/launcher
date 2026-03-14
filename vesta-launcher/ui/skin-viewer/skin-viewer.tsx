@@ -4,13 +4,11 @@ import {
   createEffect, 
   splitProps, 
   JSX, 
-  createSignal,
   on
 } from "solid-js";
 import { 
   SkinViewer, 
   WalkingAnimation,
-  PlayerAnimation,
   FunctionAnimation
 } from "skinview3d";
 

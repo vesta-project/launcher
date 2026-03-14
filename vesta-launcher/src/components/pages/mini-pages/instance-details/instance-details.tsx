@@ -230,10 +230,6 @@ export const areIconsEqual = (a?: string | null, b?: string | null) => {
 		const partB = b.split(",")[1];
 		if (partA && partB) {
 			const equal = partA === partB;
-			// Log comparison details and full payloads (developer-facing console)
-			console.log("areIconsEqual: comparing data URLs, payload_len_a=", partA.length, "payload_len_b=", partB.length, "equal=", equal);
-			console.log("areIconsEqual: payloadA=", partA);
-			console.log("areIconsEqual: payloadB=", partB);
 			return equal;
 		}
 	}

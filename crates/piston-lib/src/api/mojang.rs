@@ -4,7 +4,7 @@
 
 use anyhow::{Context, Result};
 use reqwest::{Client, multipart};
-use log::{debug, error, info};
+use log::{debug, error};
 use serde::{Deserialize, Serialize};
 
 const MOJANG_API_BASE: &str = "https://api.minecraftservices.com";
@@ -84,6 +84,7 @@ pub async fn verify_game_ownership(bearer_token: &str) -> Result<bool> {
 pub async fn upload_skin(bearer_token: &str, variant: &str, file_bytes: Vec<u8>) -> Result<()> {
     let client = Client::new();
     let file_len = file_bytes.len();
+    debug!("upload_skin: preparing skin upload ({} bytes)", file_len);
     let part = multipart::Part::bytes(file_bytes)
         .file_name("skin.png")
         .mime_str("image/png")?;

@@ -105,7 +105,7 @@ diesel::table! {
         current_version -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
-        last_updated -> Timestamp,
+        last_updated -> Text,
         release_type -> Text,
         hash -> Nullable<Text>,
         file_size -> BigInt,
@@ -210,19 +210,19 @@ diesel::table! {
         label -> Text,
         icon_url -> Nullable<Text>,
         order_index -> Integer,
-        created_at -> Nullable<Timestamp>,
+        created_at -> Nullable<Text>,
     }
 }
 
 diesel::table! {
     resource_metadata_cache (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         source -> Text,
         remote_id -> Text,
         project_data -> Text,
         versions_data -> Nullable<Text>,
-        last_updated -> Timestamp,
-        expires_at -> Timestamp,
+        last_updated -> Text,
+        expires_at -> Text,
     }
 }
 
