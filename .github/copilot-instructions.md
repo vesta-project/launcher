@@ -3,6 +3,13 @@
 ## Project Overview
 Vesta Launcher is a Minecraft launcher built with **Tauri (Rust)** for the backend and **SolidJS (TypeScript)** for the frontend. It uses a custom SQLite database layer and a robust notification system.
 
+### Important details
+
+1. **Codebase details:** You can find more information in the docs `./docs` folder, and the code itself is organized into `src-tauri` for Rust backend and `src` for SolidJS frontend.
+2. **Best practices:** Always review code changes to ensure they align with the project's architecture and coding standards. When in doubt, refer to existing code patterns or ask for clarification. Also run checks for typescript bugs and/or rust bugs when you have completed the changes. Only do it at the end of the PR, not during the process, to avoid interrupting the flow of thought.
+3. **Testing:** Ensure that any new features or changes are covered by appropriate tests when neccessary. For frontend, use testing libraries compatible with SolidJS. For backend, use Rust's built-in testing framework.
+4. **Documentation:** Update this file with any changes to the architecture, workflows, or conventions or ./docs when relevant. Clear documentation helps maintain consistency and onboard new contributors effectively.
+
 ## Architecture & Core Components
 
 ### Backend (Rust/Tauri)
@@ -63,7 +70,8 @@ Vesta Launcher is a Minecraft launcher built with **Tauri (Rust)** for the backe
 - **Rust:** Prefer `anyhow::Result` for error handling. Use `Box<dyn Task>` for task polymorphism.
 - **SolidJS:** Use `Show` and `For` components for control flow. Avoid direct DOM manipulation.
 - **Styling:** CSS Modules (`.module.css`) or global styles in `src/styles.css`.
-- **Icons:** Import SVG icons directly as components (e.g., `import CloseIcon from "@assets/close.svg"`).
+- **Icons:** Import SVG icons directly as components (e.g., `import CloseIcon from "@assets/close.svg"`). Prefer component SVGs instead of inline paths for better maintainability.
+- **File Structure:** Group related components and logic together (e.g., `components/pages/home
 
 ## Common Pitfalls
 - **Notification Flashing:** Ensure `dismissible` state is consistent between backend updates and frontend rendering. Completed tasks should be `dismissible: true`.
