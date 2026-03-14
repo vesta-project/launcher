@@ -19,6 +19,14 @@ import {
   TabsList,
   TabsTrigger,
 } from "@ui/tabs/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@ui/select/select";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { router } from "@components/page-viewer/page-viewer";
 import { setActiveAccount as persistActiveAccount } from "@utils/auth";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
@@ -48,6 +56,8 @@ import ViewIcon from "@assets/search.svg";
 interface Account {
   id: string;
   name: string;
+  username?: string;
+  display_name?: string | null;
   uuid: string;
   account_type: string;
   skin_url?: string;
@@ -201,7 +211,7 @@ const SkinPortrait = (props: { src: string; variant?: string }) => {
 };
 
 export default function AccountSettingsTab() {
-  const [, setAccounts] = createSignal<Account[]>([]);
+  const [accounts, setAccounts] = createSignal<Account[]>([]);
   const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
   const [skins, setSkins] = createSignal<Skin[]>([]);
   const [skinHistory, setSkinHistory] = createSignal<SkinHistory[]>([]);
@@ -211,6 +221,7 @@ export default function AccountSettingsTab() {
   const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
   const [compactActionMode, setCompactActionMode] = createSignal(false);
   const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
+  const [isSingleNarrowToggle, setIsSingleNarrowToggle] = createSignal(false);
   const [narrowView, setNarrowView] = createSignal<"browse" | "preview">("browse");
 
   const [savedSnapshot, setSavedSnapshot] = createSignal<{
@@ -465,8 +476,9 @@ export default function AccountSettingsTab() {
   onMount(() => {
     const evaluateLayoutModes = () => {
       setCompactActionMode(window.innerHeight < 860);
-      const narrow = window.innerWidth < 1000;
+      const narrow = window.innerWidth <= 1000;
       setIsNarrowLayout(narrow);
+      setIsSingleNarrowToggle(window.innerWidth < 640);
       if (!narrow) {
         setNarrowView("browse");
       }
@@ -843,9 +855,10 @@ export default function AccountSettingsTab() {
     try {
       if (previewSkinUrl() !== (active.skin_url || "")) {
         if (previewSkinUrl().startsWith("data:")) {
+          const accountName = getAccountDisplayName(active);
           await invoke("upload_account_skin", {
             accountUuid: active.uuid,
-            name: `${active.name}_Custom`,
+            name: `${accountName}_Custom`,
             variant: previewVariant(),
             base64Data: previewSkinUrl(),
           });
@@ -932,7 +945,67 @@ export default function AccountSettingsTab() {
 
   // Prevent lint errors for unused variables that are planned for future use
   void handleAddAccount;
-  void selectAccount;
+
+  const toggleNarrowView = () => {
+    setNarrowView((current) => (current === "browse" ? "preview" : "browse"));
+  };
+
+  const getAccountDisplayName = (account?: Account | null) => {
+    if (!account) return "Select account";
+    return account.display_name || account.username || account.name || "Account";
+  };
+
+  const renderAccountSwitcher = (triggerClass?: string) => (
+    <Select<Account>
+      options={accounts()}
+      value={activeAccount()}
+      onChange={(account) => {
+        if (account && account.uuid !== activeAccount()?.uuid) {
+          selectAccount(account);
+        }
+      }}
+      optionValue="uuid"
+      optionTextValue="uuid"
+      itemComponent={(props) => (
+        <SelectItem item={props.item} class={styles.accountSelectItem}>
+          <div class={styles.accountSelectOption}>
+            <ResourceAvatar
+              name={getAccountDisplayName(props.item.rawValue)}
+              playerUuid={props.item.rawValue.uuid}
+              size={20}
+              shape="square"
+            />
+            <div class={styles.accountSelectText}>
+              <span class={styles.accountSelectName}>{getAccountDisplayName(props.item.rawValue)}</span>
+            </div>
+          </div>
+        </SelectItem>
+      )}
+    >
+      <SelectTrigger class={triggerClass}>
+        <SelectValue<Account>>
+          {(state) => {
+            const selected = state.selectedOption();
+            const selectedName = getAccountDisplayName(selected || activeAccount());
+            return (
+              <div class={styles.accountSelectValue}>
+                <ResourceAvatar
+                  name={selectedName}
+                  playerUuid={selected?.uuid || activeAccount()?.uuid}
+                  size={20}
+                  shape="square"
+                />
+                <div class={styles.accountSelectText}>
+                  <span class={styles.accountSelectName}>{selectedName}</span>
+                </div>
+              </div>
+            );
+          }}
+        </SelectValue>
+      </SelectTrigger>
+      <SelectContent />
+    </Select>
+  );
 
   const revertChanges = () => {
     const snapshot = savedSnapshot();
@@ -1006,35 +1079,45 @@ export default function AccountSettingsTab() {
                 });
 
                 return (
-                  <div
-                    class={styles.skinItem}
-                    classList={{
-                      [styles.selected]: isSelected()
-                    }}
-                    onClick={() => handlePreviewSkin(skin)}
-                    title={formatTooltipName(
-                      skin.name || "Default Skin",
-                      (skin.source as any)?.type,
-                    )}
-                  >
-                    <SkinPortrait 
-                      src={preferredTexture} 
-                      variant={(skin.source as any)?.variant || previewVariant()} 
-                    />
-                    <button
-                      class={styles.viewRawButton}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setViewerSrc(preferredTexture);
-                      }}
-                      title="View raw texture"
-                    >
-                      <ViewIcon width="16" />
-                    </button>
-                    <Show when={isSelected()}>
-                      <span class={styles.selectedBadge}>✓</span>
-                    </Show>
-                  </div>
+                  <Tooltip placement="top">
+                    <TooltipTrigger as="div">
+                      <div
+                        class={styles.skinItem}
+                        classList={{
+                          [styles.selected]: isSelected()
+                        }}
+                        onClick={() => handlePreviewSkin(skin)}
+                      >
+                        <SkinPortrait 
+                          src={preferredTexture} 
+                          variant={(skin.source as any)?.variant || previewVariant()} 
+                        />
+                        <Tooltip>
+                          <TooltipTrigger
+                            as="button"
+                            class={styles.viewRawButton}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setViewerSrc(preferredTexture);
+                            }}
+                            aria-label="View raw texture"
+                          >
+                            <ViewIcon width="16" />
+                          </TooltipTrigger>
+                          <TooltipContent>View raw texture</TooltipContent>
+                        </Tooltip>
+                        <Show when={isSelected()}>
+                          <span class={styles.selectedBadge}>✓</span>
+                        </Show>
+                      </div>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {formatTooltipName(
+                        skin.name || "Default Skin",
+                        (skin.source as any)?.type,
+                      )}
+                    </TooltipContent>
+                  </Tooltip>
                 );
               }}
             </For>
@@ -1053,23 +1136,105 @@ export default function AccountSettingsTab() {
         {(active) => (
           <>
             <Show when={isNarrowLayout()}>
-              <div class={styles.viewToggle}>
-                <button
-                  type="button"
-                  class={styles.viewToggleButton}
-                  classList={{ [styles.active]: narrowView() === "browse" }}
-                  onClick={() => setNarrowView("browse")}
+              <div class={styles.viewToolbar}>
+                <Show
+                  when={!isDirty()}
+                  fallback={
+                    <div class={styles.toolbarActions}>
+                      <button
+                        type="button"
+                        class={styles.toolbarRevertButton}
+                        disabled={saving()}
+                        onClick={revertChanges}
+                      >
+                        Revert
+                      </button>
+                      <button
+                        type="button"
+                        class={styles.toolbarSaveButton}
+                        disabled={saving()}
+                        onClick={handleSave}
+                      >
+                        <Show when={saving()}>
+                          <RefreshIcon width="14" class="spin" />
+                        </Show>
+                        {saving() ? "Syncing..." : "Apply"}
+                      </button>
+                    </div>
+                  }
                 >
-                  Browse
-                </button>
-                <button
-                  type="button"
-                  class={styles.viewToggleButton}
-                  classList={{ [styles.active]: narrowView() === "preview" }}
-                  onClick={() => setNarrowView("preview")}
-                >
-                  Preview
-                </button>
+                  <div class={styles.toolbarAccountSwitcher}>
+                    {renderAccountSwitcher(styles.toolbarAccountSelect)}
+                  </div>
+                </Show>
+
+                <div class={styles.narrowViewToggle}>
+                  <Show
+                    when={!isSingleNarrowToggle()}
+                    fallback={
+                      <Tooltip>
+                        <TooltipTrigger
+                          as="button"
+                          type="button"
+                          class={styles.narrowViewIcon}
+                          onClick={toggleNarrowView}
+                          aria-label={`Switch to ${narrowView() === "browse" ? "preview" : "browse"} view`}
+                        >
+                          <Show
+                            when={narrowView() === "browse"}
+                            fallback={<SkinIcon width="16" height="16" />}
+                          >
+                            <ViewIcon width="16" height="16" />
+                          </Show>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {narrowView() === "browse" ? "Switch to preview" : "Switch to browse"}
+                        </TooltipContent>
+                      </Tooltip>
+                    }
+                  >
+                    <Tooltip>
+                      <TooltipTrigger
+                        as="button"
+                        type="button"
+                        class={styles.narrowViewIcon}
+                        classList={{ [styles.active]: narrowView() === "browse" }}
+                        onClick={() => setNarrowView("browse")}
+                        aria-label="Browse skins"
+                      >
+                        <ViewIcon width="16" height="16" />
+                      </TooltipTrigger>
+                      <TooltipContent>Browse skins</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger
+                        as="button"
+                        type="button"
+                        class={styles.narrowViewIcon}
+                        classList={{ [styles.active]: narrowView() === "preview" }}
+                        onClick={() => setNarrowView("preview")}
+                        aria-label="Preview"
+                      >
+                        <SkinIcon width="16" height="16" />
+                      </TooltipTrigger>
+                      <TooltipContent>Preview</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger
+                        as="button"
+                        type="button"
+                        class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
+                        onClick={handleUploadSkin}
+                        aria-label="Upload custom skin"
+                      >
+                        <PlusIcon width="16" height="16" />
+                      </TooltipTrigger>
+                      <TooltipContent>Upload custom skin</TooltipContent>
+                    </Tooltip>
+                  </Show>
+                </div>
               </div>
             </Show>
 
@@ -1080,13 +1245,15 @@ export default function AccountSettingsTab() {
               }}
             >
               <Tabs value={browseTab()} onChange={setBrowseTab} class={styles.browseTabs}>
-                <TabsList class={styles.browseTabsList}>
-                  <TabsIndicator />
-                  <TabsTrigger class={styles.browseTabsTrigger} value="recent">Recent</TabsTrigger>
-                  <TabsTrigger class={styles.browseTabsTrigger} value="defaults">Default</TabsTrigger>
-                  <TabsTrigger class={styles.browseTabsTrigger} value="events">Events</TabsTrigger>
-                  <TabsTrigger class={styles.browseTabsTrigger} value="capes">Capes</TabsTrigger>
-                </TabsList>
+                <div class={styles.browseTabsHeader}>
+                  <TabsList class={styles.browseTabsList}>
+                    <TabsIndicator />
+                    <TabsTrigger class={styles.browseTabsTrigger} value="recent">Recent</TabsTrigger>
+                    <TabsTrigger class={styles.browseTabsTrigger} value="defaults">Default</TabsTrigger>
+                    <TabsTrigger class={styles.browseTabsTrigger} value="events">Events</TabsTrigger>
+                    <TabsTrigger class={styles.browseTabsTrigger} value="capes">Capes</TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="recent">
                   <section class={styles.contentCard}>
@@ -1094,42 +1261,45 @@ export default function AccountSettingsTab() {
                       <h2 class={styles.cardTitle}>Recent Skins</h2>
                     </div>
                     <div class={styles.presetsGrid}>
-                      <button
-                        class={styles.skinItem}
-                        onClick={handleUploadSkin}
-                      >
-                        <PlusIcon width="24" class={styles.uploadIcon} />
-                        <span class={styles.uploadLabel}>Upload</span>
-                      </button>
                       <For each={filteredRecentHistory()}>
                         {(item) => {
                           const selected = createMemo(() =>
                             isSkinSelected(item.image_data, item.texture_key),
                           );
                           return (
-                            <div
-                              class={styles.skinItem}
-                              classList={{
-                                [styles.selected]: selected(),
-                              }}
-                              onClick={() => handlePreviewHistory(item)}
-                              title={`${formatTooltipName(item.name, item.source)} (${item.variant})`}
-                            >
-                              <SkinPortrait src={item.image_data} variant={item.variant} />
-                              <button
-                                class={styles.viewRawButton}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setViewerSrc(item.image_data);
-                                }}
-                                title="View raw texture"
-                              >
-                                <ViewIcon width="16" />
-                              </button>
-                              <Show when={selected()}>
-                                <span class={styles.selectedBadge}>✓</span>
-                              </Show>
-                            </div>
+                            <Tooltip>
+                              <TooltipTrigger as="div">
+                                <div
+                                  class={styles.skinItem}
+                                  classList={{
+                                    [styles.selected]: selected(),
+                                  }}
+                                  onClick={() => handlePreviewHistory(item)}
+                                >
+                                  <SkinPortrait src={item.image_data} variant={item.variant} />
+                                  <Tooltip placement="top">
+                                    <TooltipTrigger
+                                      as="button"
+                                      class={styles.viewRawButton}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setViewerSrc(item.image_data);
+                                      }}
+                                      aria-label="View raw texture"
+                                    >
+                                      <ViewIcon width="16" />
+                                    </TooltipTrigger>
+                                    <TooltipContent>View raw texture</TooltipContent>
+                                  </Tooltip>
+                                  <Show when={selected()}>
+                                    <span class={styles.selectedBadge}>✓</span>
+                                  </Show>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {`${formatTooltipName(item.name, item.source)} (${item.variant})`}
+                              </TooltipContent>
+                            </Tooltip>
                           );
                         }}
                       </For>
@@ -1166,21 +1336,25 @@ export default function AccountSettingsTab() {
                         {(cape) => {
                           const isSelected = createMemo(() => previewCapeUrl() === cape.url);
                           return (
-                            <button
-                              class={styles.capeItem}
-                              style={{
-                                "background-image": `url(${cape.url})`
-                              }}
-                              classList={{
-                                [styles.selected]: isSelected(),
-                              }}
-                              onClick={() => handlePreviewCape(cape)}
-                              title={cape.name}
-                            >
-                              <Show when={isSelected()}>
-                                <span class={styles.selectedBadge}>✓</span>
-                              </Show>
-                            </button>
+                            <Tooltip>
+                              <TooltipTrigger
+                                as="button"
+                                class={styles.capeItem}
+                                style={{
+                                  "background-image": `url(${cape.url})`
+                                }}
+                                classList={{
+                                  [styles.selected]: isSelected(),
+                                }}
+                                onClick={() => handlePreviewCape(cape)}
+                                aria-label={cape.name}
+                              >
+                                <Show when={isSelected()}>
+                                  <span class={styles.selectedBadge}>✓</span>
+                                </Show>
+                              </TooltipTrigger>
+                              <TooltipContent>{cape.name}</TooltipContent>
+                            </Tooltip>
                           );
                         }}
                       </For>
@@ -1196,7 +1370,54 @@ export default function AccountSettingsTab() {
                 [styles.hiddenOnNarrow]: isNarrowLayout() && narrowView() !== "preview",
               }}
             >
+              <Show when={isDirty() && !isNarrowLayout()}>
+                <section class={styles.actionCard} classList={{ [styles.compactActionCard]: compactActionMode() }}>
+                  <div class={styles.actionButtonsRow}>
+                    <button
+                      type="button"
+                      class={styles.revertButton}
+                      disabled={saving()}
+                      onClick={revertChanges}
+                    >
+                      Revert
+                    </button>
+                    <button
+                      type="button"
+                      class={styles.saveButton}
+                      disabled={saving()}
+                      onClick={handleSave}
+                    >
+                      <Show when={saving()}>
+                        <RefreshIcon width="18" class="spin" />
+                      </Show>
+                      {saving() ? "Syncing..." : "Apply Changes"}
+                    </button>
+                  </div>
+                </section>
+              </Show>
+
+              <Show when={!isDirty() && !isNarrowLayout()}>
+                <section>
+                  {renderAccountSwitcher(styles.accountSwitcherSelect)}
+                </section>
+              </Show>
+
               <section class={styles.visualizerCard}>
+                <Show when={!isNarrowLayout()}>
+                  <Tooltip>
+                    <TooltipTrigger
+                      as="button"
+                      type="button"
+                      class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
+                      onClick={handleUploadSkin}
+                      aria-label="Upload custom skin"
+                    >
+                      <PlusIcon width="18" />
+                    </TooltipTrigger>
+                    <TooltipContent>Upload custom skin</TooltipContent>
+                  </Tooltip>
+                </Show>
+
                 <div class={styles.visualizerWrapper}>
                     <SkinView3d
                       skinUrl={previewSkinUrl() || undefined}
@@ -1241,70 +1462,7 @@ export default function AccountSettingsTab() {
                   </button>
                 </div>
               </section>
-
-              <Show when={isDirty() && !isNarrowLayout()}>
-                <section class={styles.actionCard} classList={{ [styles.compactActionCard]: compactActionMode() }}>
-                  <div class={styles.actionButtonsRow}>
-                    <button
-                      type="button"
-                      class={styles.revertButton}
-                      disabled={saving()}
-                      onClick={revertChanges}
-                    >
-                      Revert
-                    </button>
-                    <button
-                      type="button"
-                      class={styles.saveButton}
-                      disabled={saving()}
-                      onClick={handleSave}
-                    >
-                      <Show when={saving()}>
-                        <RefreshIcon width="18" class="spin" />
-                      </Show>
-                      {saving() ? "Syncing..." : "Apply Changes"}
-                    </button>
-                  </div>
-                </section>
-              </Show>
-
-              <Show when={!isDirty()}>
-                <section class={styles.statusCard}>
-                  <div class={styles.statusInfo}>
-                    <div class={styles.statusIndicator} />
-                    <span>Everything is up to date</span>
-                  </div>
-                </section>
-              </Show>
             </aside>
-
-            <Show when={isNarrowLayout() && isDirty()}>
-              <div class={styles.narrowActionOverlay}>
-                <section class={styles.actionCard} classList={{ [styles.compactActionCard]: compactActionMode() }}>
-                  <div class={styles.actionButtonsRow}>
-                    <button
-                      type="button"
-                      class={styles.revertButton}
-                      disabled={saving()}
-                      onClick={revertChanges}
-                    >
-                      Revert
-                    </button>
-                    <button
-                      type="button"
-                      class={styles.saveButton}
-                      disabled={saving()}
-                      onClick={handleSave}
-                    >
-                      <Show when={saving()}>
-                        <RefreshIcon width="18" class="spin" />
-                      </Show>
-                      {saving() ? "Syncing..." : "Apply Changes"}
-                    </button>
-                  </div>
-                </section>
-              </div>
-            </Show>
           </>
         )}
       </Show>

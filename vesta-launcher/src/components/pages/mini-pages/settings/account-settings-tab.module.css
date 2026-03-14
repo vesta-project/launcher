@@ -4,7 +4,7 @@
   height: 100%;
   overflow: hidden;
   padding: 20px;
-  gap: 20px;
+  gap: 12px;
   position: relative;
   animation: fadeIn 0.4s ease-out;
 }
@@ -17,37 +17,138 @@
 .leftSection {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 12px;
   overflow-y: auto;
   min-height: 0;
-  padding-right: 12px;
-  margin-right: -12px;
 }
 
 .browseTabs {
   display: flex;
   flex-direction: column;
-  gap: 16px;
 }
 
-.viewToggle {
-  display: none;
-}
-
-.viewToggleButton {
-  border: 1px solid var(--border-subtle);
-  background: transparent;
-  color: var(--text-muted);
-  border-radius: 10px;
-  padding: 8px 12px;
-  height: 36px;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: all 0.2s ease;
+.browseTabsHeader {
   display: flex;
   align-items: center;
+  gap: 10px;
+}
+
+.uploadSkinButton {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-raised);
+  color: var(--text-base);
+  border-radius: 10px;
+  min-height: 36px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
   justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex-shrink: 0;
+}
+
+.uploadSkinButton:hover {
+  background: var(--surface-overlay);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+}
+
+.uploadSkinButton svg {
+  color: var(--primary);
+}
+
+.floatingUploadButton {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 20;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.floatingUploadButton:hover {
+  background: var(--surface-raised);
+  transform: scale(1.05);
+}
+
+.viewToolbar {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  background: var(--surface-raised);
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+}
+
+.toolbarAccountSwitcher {
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbarAccountSelect {
+  min-height: 34px;
+}
+
+.narrowViewToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 10px;
+  background: var(--surface-raised);
+}
+
+.narrowViewIcon {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.narrowViewIcon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.narrowViewIcon:hover {
+  background: var(--surface-overlay);
+  color: var(--text-base);
+}
+
+.narrowViewIcon.active {
+  background: var(--primary);
+  color: white;
+}
+
+.narrowUploadIcon {
+  margin-left: 4px;
+}
+
+.narrowUploadIcon svg {
+  color: var(--primary);
+}
+
+.narrowUploadIcon:hover svg {
+  color: var(--primary-light, var(--text-base));
 }
 
 .browseTabsList {
@@ -58,6 +159,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: 12px;
   padding: 4px;
+  width: 100%;
 }
 
 .browseTabsTrigger {
@@ -77,29 +179,6 @@
   display: none;
 }
 
-.profileBanner {
-  position: relative;
-  background: var(--surface-raised);
-  border: var(--border-width-subtle) solid var(--border-subtle);
-  border-radius: 12px;
-  overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  min-height: 140px;
-  display: flex;
-  flex-direction: column;
-}
-
-.bannerBackground {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 80px;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--surface-overlay) 100%);
-  opacity: 0.15;
-  mask-image: linear-gradient(to bottom, black 0%, transparent 100%);
-}
-
 .bannerContent {
   position: relative;
   display: flex;
@@ -108,6 +187,10 @@
   gap: 20px;
   z-index: 1;
   flex: 1;
+}
+
+.bannerActions {
+  width: 100%;
 }
 
 @media (max-width: 1100px) {
@@ -120,7 +203,6 @@
   .bannerActions {
     width: 100%;
     justify-content: flex-start;
-    margin-top: 10px;
   }
 }
 
@@ -438,6 +520,49 @@
   padding-right: 4px;
 }
 
+.accountSwitcherSelect {
+  min-height: 38px;
+}
+
+.accountSelectValue {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.accountSelectText {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.accountSelectName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.accountSelectOption {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.accountSelectItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.accountSelectItem > :first-child {
+  min-width: 0;
+}
+
 .visualizerCard {
   background: var(--surface-raised);
   backdrop-filter: var(--liquid-backdrop-filter);
@@ -449,6 +574,7 @@
   align-items: center;
   flex: 1; /* Allow to grow and fill available space */
   min-height: 0; /* Critical for shrink */
+  position: relative;
 }
 
 .visualizerWrapper {
@@ -599,7 +725,8 @@
 .viewRawButton svg {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: none;
+  stroke: currentColor;
 }
 
 .viewRawButton:hover {
@@ -616,23 +743,6 @@
   opacity: 0;
 }
 
-.uploadIcon {
-  color: var(--primary);
-  opacity: 0.8;
-  margin-bottom: 4px;
-}
-
-.uploadLabel {
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-}
-
-.skinItem:hover .uploadIcon {
-  opacity: 1;
-  transform: scale(1.1);
-}
 .capesGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
@@ -899,39 +1009,105 @@
   display: none;
 }
 
+.toolbarActions {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbarRevertButton,
+.toolbarSaveButton {
+  border-radius: 10px;
+  min-height: 34px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border: 1px solid var(--border-subtle);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.toolbarRevertButton {
+  background: var(--surface-overlay);
+  color: var(--text-base);
+}
+
+.toolbarSaveButton {
+  background: var(--primary);
+  border-color: transparent;
+  color: white;
+}
+
+.toolbarRevertButton:hover:not(:disabled) {
+  background: var(--border-subtle);
+}
+
+.toolbarSaveButton:hover:not(:disabled) {
+  background: var(--primary-hover);
+}
+
+.toolbarRevertButton:disabled,
+.toolbarSaveButton:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1000px) {
   .container {
     grid-template-columns: 1fr;
-    grid-template-rows: auto 1fr auto;
+    grid-template-rows: auto 1fr;
     overflow-y: hidden;
   }
 
-  .narrowActionOverlay {
-    display: block;
-    padding: 12px;
-    border-top: 1px solid var(--border-subtle);
-  }
-
-  .viewToggle {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+  .browseTabsHeader {
     gap: 8px;
-    padding: 4px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    background: var(--surface-raised);
-    height: fit-content;
-    margin-bottom: 8px;
   }
 
-  .viewToggleButton.active {
-    background: var(--primary);
-    color: white;
-    border-color: transparent;
+  .uploadSkinButton {
+    min-height: 34px;
+    padding: 6px 8px;
+  }
+
+  .viewToolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
   }
 
   .visualizerSidebar {
     height: auto;
+  }
+}
+
+@media (max-width: 640px) {
+  .narrowViewToggle {
+    margin-left: auto;
+  }
+
+  .toolbarAccountSwitcher {
+    min-width: 0;
+  }
+
+  .toolbarActions {
+    gap: 6px;
+  }
+
+  .toolbarRevertButton,
+  .toolbarSaveButton {
+    padding: 6px 8px;
+    font-size: 11px;
+  }
+
+  .uploadSkinButton {
+    font-size: 11px;
+    padding: 6px 8px;
   }
 }
 
