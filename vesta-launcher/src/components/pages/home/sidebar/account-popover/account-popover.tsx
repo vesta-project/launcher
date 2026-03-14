@@ -1,10 +1,11 @@
-import ClipboardIcon from "@assets/clipboard.svg";
-import { router } from "@components/page-viewer/page-viewer";
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { PopoverContent } from "@ui/popover/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	ACCOUNT_TYPE_GUEST,
 	type Account,
@@ -29,8 +30,7 @@ interface AccountPopoverProps {
 }
 
 export function AccountPopover(props: AccountPopoverProps) {
-	const [accounts, { refetch: refetchAccounts }] =
-		createResource<Account[]>(getAccounts);
+	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
 	const [activeAccount, { refetch: refetchActive }] = createResource(
 		async () => {
 			try {
@@ -104,85 +104,89 @@ export function AccountPopover(props: AccountPopoverProps) {
 	const openSettings = () => {
 		props.onClose();
 		router().navigate("/config", { activeTab: "account" });
+		setPageViewerOpen(true);
 	};
 
 	return (
 		<PopoverContent class={styles["account-popover"]}>
 			<Show when={activeAccount()}>
 				{(account) => (
-					<div class={styles["active-account-section"]}>
-						<ResourceAvatar
-							name={account().username}
-							playerUuid={account().uuid}
-							size={48}
-							shape="square"
-							class={styles["active-avatar"]}
-						/>
-						<div class={styles["active-info"]}>
-							<div class={styles["active-username"]}>{account().username}</div>
-							<div
-								class={styles["active-uuid-container"]}
-								onClick={copyUuid}
-								title="Click to copy UUID"
-							>
-								<ClipboardIcon class={styles["clipboard-icon"]} />
-								<span class={styles["active-uuid"]}>{account().uuid}</span>
+					<>
+						<div class={styles["active-account-section"]}>
+							<div class={styles["active-info"]}>
+								<div class={styles["active-username"]}>{account().username}</div>
+								<Tooltip placement="right">
+									<TooltipTrigger
+										class={styles["active-uuid-container"]}
+										onClick={copyUuid}
+									>
+										<span class={styles["active-uuid"]}>{account().uuid}</span>
+									</TooltipTrigger>
+									<TooltipContent>Click to copy UUID</TooltipContent>
+								</Tooltip>
 							</div>
 						</div>
-					</div>
+
+						<div class={styles["actions-section"]}>
+							<div class={styles["actions-row"]}>
+								<Button
+									variant="ghost"
+									size="sm"
+									onClick={openSettings}
+									class={styles["action-btn"]}
+								>
+									Edit Skin
+								</Button>
+								<Show when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => {
+											const account = activeAccount();
+											if (account) handleRemoveAccount(account.uuid);
+										}}
+										class={styles["action-btn"]}
+									>
+										Logout
+									</Button>
+								</Show>
+							</div>
+						</div>
+					</>
 				)}
 			</Show>
-
-			<div class={styles["actions-section"]}>
-				<Button
-					variant="outline"
-					size="sm"
-					onClick={openSettings}
-					class={styles["action-btn"]}
-				>
-					Edit Skin
-				</Button>
-				<Show when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}>
-					<Button
-						variant="outline"
-						size="sm"
-						onClick={() => {
-							const account = activeAccount();
-							if (account) handleRemoveAccount(account.uuid);
-						}}
-						class={styles["action-btn"]}
-					>
-						Logout
-					</Button>
-				</Show>
-			</div>
 
 			<div class={styles["divider"]} />
 
 			<div class={styles["other-accounts-section"]}>
-				<div class={styles["section-title"]}>Other Accounts</div>
+				<div class={styles["section-header"]}>
+					<div class={styles["section-title"]}>Other Accounts</div>
+				</div>
 				<div class={styles["account-list"]}>
 					<For
 						each={accounts()?.filter((a) => a.uuid !== activeAccount()?.uuid)}
 					>
 						{(account) => (
-							<div
-								class={styles["account-item"]}
-								onClick={() => handleSwitchAccount(account)}
-							>
-								<ResourceAvatar
-									name={account.username}
-									playerUuid={account.uuid}
-									size={24}
-									shape="square"
-								/>
-								<div class={styles["account-item-name"]}>
-									{account.username}
-								</div>
-								<Show when={account.is_expired}>
-									<div class={styles["expired-badge"]}>Expired</div>
-								</Show>
-							</div>
+							<Tooltip placement="right" gutter={4}>
+								<TooltipTrigger
+									class={styles["account-item"]}
+									onClick={() => handleSwitchAccount(account)}
+								>
+									<ResourceAvatar
+										name={account.username}
+										playerUuid={account.uuid}
+										size={24}
+										shape="square"
+									/>
+									<div class={styles["account-item-name"]}>
+										{account.username}
+									</div>
+									<Show when={account.is_expired}>
+										<div class={styles["expired-badge"]}>Expired</div>
+									</Show>
+								</TooltipTrigger>
+								<TooltipContent>Switch to {account.username}</TooltipContent>
+							</Tooltip>
 						)}
 					</For>
 				</div>

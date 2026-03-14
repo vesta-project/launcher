@@ -1,36 +1,37 @@
 .account-popover {
-	width: 280px;
-	padding: 16px;
+	width: 260px;
+	padding: 4px;
 	display: flex;
 	flex-direction: column;
-	gap: 16px;
-	background: var(--surface-1);
-	border: 1px solid var(--border);
-	border-radius: var(--radius-md);
-	box-shadow: var(--shadow-lg);
+	background: var(--surface-overlay);
+	backdrop-filter: blur(24px);
+	-webkit-backdrop-filter: blur(24px);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-lg);
+	box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+	overflow: hidden;
 }
 
 .active-account-section {
+	padding: 12px 12px 8px;
 	display: flex;
-	align-items: center;
-	gap: 12px;
-}
-
-.active-avatar {
-	flex-shrink: 0;
+	flex-direction: column;
+	align-items: flex-start;
+	text-align: left;
+	gap: 2px;
 }
 
 .active-info {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	overflow: hidden;
+	gap: 2px;
+	width: 100%;
 }
 
 .active-username {
-	font-weight: 600;
-	font-size: 1.1rem;
-	color: var(--text-1);
+	font-weight: 700;
+	font-size: 1rem;
+	color: var(--text-primary);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -41,53 +42,83 @@
 	align-items: center;
 	gap: 4px;
 	cursor: pointer;
-	color: var(--text-3);
-	transition: color 0.2s;
+	color: var(--text-tertiary);
+	transition: all 0.15s ease;
+	padding: 2px 0;
+	margin: 0;
+	max-width: 100%;
+	background: transparent;
+	border: none;
 }
 
 .active-uuid-container:hover {
-	color: var(--text-1);
-}
-
-.clipboard-icon {
-	width: 12px;
-	height: 12px;
-	flex-shrink: 0;
+	color: var(--primary-accent);
 }
 
 .active-uuid {
-	font-size: 0.75rem;
-	font-family: monospace;
+	font-size: 0.7rem;
+	font-family: var(--font-mono);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
+	opacity: 0.6;
 }
 
 .actions-section {
 	display: flex;
-	gap: 8px;
+	flex-direction: column;
+	gap: 2px;
+	padding: 4px;
+}
+
+.actions-row {
+	display: flex;
+	gap: 4px;
+	width: 100%;
 }
 
 .action-btn {
 	flex: 1;
+	justify-content: center;
+	height: 32px;
+	font-size: var(--font-xsmall);
+	border: none;
+	background: transparent;
+	padding: 0 8px;
+	border-radius: var(--radius-sm);
+	color: var(--text-secondary);
+}
+
+.action-btn:hover {
+	background: var(--surface-raised);
+	color: var(--text-primary);
 }
 
 .divider {
 	height: 1px;
-	background: var(--border);
-	margin: 0 -16px;
+	background: var(--border-subtle);
+	margin: 4px 8px;
+	width: calc(100% - 16px);
 }
 
 .other-accounts-section {
 	display: flex;
 	flex-direction: column;
-	gap: 8px;
+	padding: 4px;
+}
+
+.section-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 4px 8px;
+	margin-bottom: 2px;
 }
 
 .section-title {
-	font-size: 0.8rem;
-	font-weight: 600;
-	color: var(--text-2);
+	font-size: 0.65rem;
+	font-weight: 700;
+	color: var(--text-tertiary);
 	text-transform: uppercase;
 	letter-spacing: 0.05em;
 }
@@ -95,8 +126,8 @@
 .account-list {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
-	max-height: 150px;
+	gap: 1px;
+	max-height: 160px;
 	overflow-y: auto;
 }
 
@@ -107,16 +138,22 @@
 	padding: 6px 8px;
 	border-radius: var(--radius-sm);
 	cursor: pointer;
-	transition: background 0.2s;
+	transition: all 0.1s ease;
+	border: none;
+	width: 100%;
+	justify-content: flex-start;
+	text-align: left;
 }
 
 .account-item:hover {
-	background: var(--surface-2);
+	background: var(--surface-raised);
+	transform: none;
 }
 
 .account-item-name {
-	font-size: 0.9rem;
-	color: var(--text-1);
+	font-size: var(--font-xsmall);
+	font-weight: 500;
+	color: var(--text-secondary);
 	flex: 1;
 	white-space: nowrap;
 	overflow: hidden;
@@ -124,14 +161,27 @@
 }
 
 .expired-badge {
-	font-size: 0.7rem;
-	padding: 2px 6px;
-	background: var(--error);
-	color: white;
-	border-radius: 10px;
+	font-size: 0.6rem;
+	font-weight: 700;
+	padding: 1px 4px;
+	background: var(--semantic-error-bg);
+	color: var(--semantic-error);
+	border-radius: 3px;
+	text-transform: uppercase;
 }
 
 .add-account-btn {
-	margin-top: 4px;
+	margin-top: 2px;
 	width: 100%;
+	justify-content: flex-start;
+	height: 32px;
+	padding: 0 8px;
+	font-size: var(--font-xsmall);
+	color: var(--primary-accent);
 }
+
+.add-account-btn:hover {
+	background: var(--surface-raised);
+}
+
+
