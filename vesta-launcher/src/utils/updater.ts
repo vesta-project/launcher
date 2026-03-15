@@ -6,6 +6,7 @@ import {
 	PROGRESS_INDETERMINATE,
 	showAlert,
 	updateNotificationProgress,
+	type NotificationAction,
 } from "./notifications";
 
 let pendingUpdate: Update | null = null;
@@ -18,9 +19,14 @@ export function initUpdateListener() {
 	if (isListenerInitialized) return;
 
 	listen("core://install-app-update", async () => {
+		console.log("[Updater] Received core://install-app-update event");
 		if (pendingUpdate) {
+			console.log(`[Updater] Found pending update: ${pendingUpdate.version} (isDownloaded: ${isDownloaded}, isDownloading: ${isDownloading})`);
+			
+			// Check if already downloaded - Tauri plugin might lose state on hot-reload,
+			// but if the UI is showing the "Install" button, we likely have the 'Finished' event cached.
 			if (!isDownloaded) {
-				console.warn("Update.install called before download complete. Starting download...");
+				console.warn("[Updater] Update.install called but isDownloaded is false. Starting download...");
 				if (!isDownloading) {
 					await downloadUpdate();
 				}
@@ -28,24 +34,35 @@ export function initUpdateListener() {
 			}
 
 			try {
-				await showAlert(
-					"info",
-					"Installing Update",
-					"Applying changes and restarting...",
-					PROGRESS_INDETERMINATE,
-					null,
-					null,
-					"app_update_install",
-					"progress",
-					false,
-				);
+				console.log("[Updater] Calling pendingUpdate.install()...");
+				
+				// Re-use the existing notification to show installation progress
+				await createNotification({
+					title: "Installing Update",
+					description: "Applying changes and restarting...",
+					notification_type: "progress",
+					severity: "info",
+					progress: PROGRESS_INDETERMINATE,
+					client_key: "app_update",
+					dismissible: false,
+				});
+
+				// We call it without parameters as the artifacts are already downloaded.
 				await pendingUpdate.install();
+				console.log("[Updater] pendingUpdate.install() call returned. Triggering backend restart...");
+				
+				// TRIGGER BACKEND RESTART explicitly as fallback for some platforms/dev modes
+				await invoke("invoke_notification_action", { 
+					actionId: "restart_app" 
+				});
+				
+				console.log("[Updater] Restart command invoked.");
 			} catch (error) {
-				console.error("Failed to install update:", error);
+				console.error("[Updater] Failed to install update:", error);
 				await showAlert(
 					"error",
 					"Update Error",
-					"Failed to install the update. Please try again.",
+					`Failed to install the update: ${error}. Please try again manually.`,
 					null,
 					null,
 					null,
@@ -53,6 +70,10 @@ export function initUpdateListener() {
 					"immediate",
 				);
 			}
+		} else {
+			console.error("[Updater] Received install event but pendingUpdate is null");
+			// If we don't have a pending update, check again
+			checkForAppUpdates(false);
 		}
 	});
 
@@ -120,7 +141,7 @@ export async function downloadUpdate() {
 					isDownloading = false;
 					isDownloaded = true;
 					// Convert to Patient with Install action
-					const actions = [
+					const actions: NotificationAction[] = [
 						{
 							id: "install_app_update",
 							label: "Install & Restart",
@@ -134,7 +155,7 @@ export async function downloadUpdate() {
 						notification_type: "patient",
 						severity: "success",
 						dismissible: false,
-						actions: actions as any,
+						actions: actions,
 						client_key: "app_update",
 					});
 					break;
@@ -198,7 +219,7 @@ export async function checkForAppUpdates(silent = false) {
 				}
 				downloadUpdate();
 			} else {
-				const actions = [
+				const actions: NotificationAction[] = [
 					{
 						id: "download_app_update",
 						label: "Download",
@@ -212,7 +233,7 @@ export async function checkForAppUpdates(silent = false) {
 					notification_type: "patient",
 					severity: "info",
 					dismissible: false,
-					actions: actions as any,
+					actions: actions,
 					client_key: "app_update",
 				});
 

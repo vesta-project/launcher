@@ -127,7 +127,11 @@ impl ActionHandler for RestartAppHandler {
         _client_key: Option<String>,
         _payload: Option<serde_json::Value>,
     ) -> Result<()> {
+        log::info!("[RestartAppHandler] Restart requested - calling app_handle.restart()");
+        // Attempt a normal restart. In dev mode this may be a no-op because the
+        // runner keeps the process; production builds should relaunch correctly.
         app_handle.restart();
+        log::info!("[RestartAppHandler] app_handle.restart() returned");
         #[allow(unreachable_code)]
         Ok(())
     }
@@ -143,9 +147,14 @@ impl ActionHandler for InstallUpdateHandler {
         _client_key: Option<String>,
         _payload: Option<serde_json::Value>,
     ) -> Result<()> {
+        log::info!("[InstallUpdateHandler] Action invoked! Emitting core://install-app-update event...");
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            let _ = handle.emit("core://install-app-update", ());
+            if let Err(e) = handle.emit("core://install-app-update", ()) {
+                log::error!("[InstallUpdateHandler] Failed to emit event: {}", e);
+            } else {
+                log::info!("[InstallUpdateHandler] Event emitted successfully.");
+            }
         });
         Ok(())
     }

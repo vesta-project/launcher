@@ -205,7 +205,13 @@ async function invokeNotificationAction(
 	clientKey?: string,
 	payload?: any,
 ): Promise<void> {
-	await invoke("invoke_notification_action", { actionId, clientKey, payload });
+	console.log(`[NotificationAction] Invoking: ${actionId} (key: ${clientKey})`);
+	try {
+		await invoke("invoke_notification_action", { actionId, clientKey, payload });
+		console.log(`[NotificationAction] Successfully invoked ${actionId}`);
+	} catch (error) {
+		console.error(`[NotificationAction] Failed to invoke ${actionId}:`, error);
+	}
 }
 
 async function updateNotificationProgress(params: {
