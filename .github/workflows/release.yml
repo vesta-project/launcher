@@ -187,6 +187,8 @@ jobs:
           cd vesta-launcher
           if [ "${{ matrix.platform }}" == "macos-latest" ]; then
             bun run tauri build --target ${{ matrix.target }}
+            echo "Listing files to check for signatures..."
+            ls -R target/${{ matrix.target }}/release/bundle/
           elif [[ "${{ matrix.platform }}" == "ubuntu"* ]]; then
             if [ "${{ matrix.platform }}" == "ubuntu-24.04-arm" ]; then
               bun run tauri build --target ${{ matrix.target }}
@@ -211,7 +213,7 @@ jobs:
           VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           
           # Upload and rename to canonical format
-          find target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi*" -o -name "*.dmg*" -o -name "*.deb*" -o -name "*.AppImage*" -o -name "*.tar.gz*" \) -print0 | while IFS= read -r -d '' file; do
+          find target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi*" -o -name "*.dmg*" -o -name "*.deb*" -o -name "*.AppImage*" -o -name "*.tar.gz*" -o -name "*.sig" \) -print0 | while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             
             # Helper to check if it's a signature
@@ -253,6 +255,12 @@ jobs:
                 ;;
               gz)
                 if [[ "$base_file" == *.tar.gz ]]; then
+                  if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+                    target_name="Vesta_Launcher_${VERSION}_aarch64.app.tar.gz"
+                  else
+                    target_name="Vesta_Launcher_${VERSION}_x64.app.tar.gz"
+                  fi
+                elif [[ "$base_file" == *.app.tar.gz ]]; then
                   if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
                     target_name="Vesta_Launcher_${VERSION}_aarch64.app.tar.gz"
                   else
@@ -383,6 +391,12 @@ jobs:
                     PLATFORM="linux-x86_64"
                     IS_INSTALLER=true
                 fi
+                ;;
+              Vesta_Launcher_${VERSION}_x64.app.tar.gz)
+                PLATFORM="darwin-x86_64"
+                ;;
+              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz)
+                PLATFORM="darwin-aarch64"
                 ;;
             esac
 
