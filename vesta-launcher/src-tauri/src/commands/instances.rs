@@ -431,6 +431,15 @@ pub async fn create_instance(
         }
     }
 
+    // Default icon if none provided or set
+    if inst.icon_path.is_none() && inst.icon_data.is_none() {
+        log::info!(
+            "[create_instance] No icon provided for {}, resetting to default placeholder",
+            inst.name
+        );
+        inst.icon_path = Some("builtin:placeholder-1".to_string());
+    }
+
     // Fetch existing instance names and compute their slugs
     let slug = crate::utils::instance_helpers::compute_unique_slug(
         &inst.name,

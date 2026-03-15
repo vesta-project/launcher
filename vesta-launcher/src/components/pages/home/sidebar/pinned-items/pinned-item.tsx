@@ -16,7 +16,7 @@ import {
 import { showToast } from "@ui/toast/toast";
 import * as HoverCard from "@kobalte/core/hover-card";
 import { resolveResourceUrl } from "@utils/assets";
-import { getInstanceSlug, killInstance } from "@utils/instances";
+import { DEFAULT_ICONS, getInstanceSlug, killInstance } from "@utils/instances";
 import { clsx } from "clsx";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { SidebarButton } from "../sidebar-buttons/sidebar-buttons";
@@ -30,7 +30,7 @@ export interface PinnedItemProps {
 
 export function PinnedItem(props: PinnedItemProps) {
 	let containerRef: HTMLDivElement | undefined;
-	const [isFullyVisible, setIsFullyVisible] = createSignal(true);
+	const isFullyVisible = () => true;
 	const [isHovered, setIsHovered] = createSignal(false);
 
 	const instance = createMemo(() => {
@@ -267,7 +267,17 @@ export function PinnedItem(props: PinnedItemProps) {
 										when={displayIcon()}
 										fallback={
 											<div class={styles["icon-placeholder"]}>
-												{displayName()[0]}
+												<Show
+													when={props.pin.page_type === "instance"}
+													fallback={displayName()[0]}
+												>
+													<div class={styles["icon-bg-blur"]} />
+													<img
+														src={resolveResourceUrl(DEFAULT_ICONS[0])}
+														alt=""
+														class={styles["pin-icon"]}
+													/>
+												</Show>
 											</div>
 										}
 									>

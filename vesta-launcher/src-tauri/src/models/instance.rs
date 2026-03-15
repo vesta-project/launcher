@@ -110,7 +110,7 @@ impl Default for Instance {
             game_directory: None,
             game_width: 854,
             game_height: 480,
-            icon_path: None,
+            icon_path: Some("builtin:placeholder-1".to_string()),
             last_played: None,
             total_playtime_minutes: 0,
             created_at: None,
