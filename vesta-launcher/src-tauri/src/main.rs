@@ -56,6 +56,7 @@ fn main() {
         .build();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .setup(setup::init)
         .manage(utils::dialog_manager::DialogManager::new())
@@ -125,8 +126,19 @@ fn main() {
             auth::set_active_account,
             auth::start_guest_session,
             auth::remove_account,
+            auth::get_account_profile,
             auth::get_player_head_path,
             auth::preload_account_heads,
+            commands::skins::upload_account_skin,
+            commands::skins::apply_history_skin,
+            commands::skins::get_skin_history,
+            commands::skins::sync_current_skin_history,
+            commands::skins::delete_history_skin,
+            commands::skins::reset_account_skin,
+            commands::skins::apply_preset_skin,
+            commands::skins::change_skin_variant,
+            commands::skins::change_account_cape,
+            commands::skins::hide_account_cape,
             commands::notifications::create_notification,
             commands::notifications::update_notification_progress,
             commands::notifications::list_notifications,
@@ -140,6 +152,11 @@ fn main() {
             commands::notifications::get_available_notification_sources,
             commands::notifications::subscribe_to_preset_source,
             commands::notifications::reset_notification_system,
+            commands::skins::get_default_skins,
+            commands::skins::compute_texture_key_from_url,
+            commands::skins::compute_texture_key_from_base64,
+            commands::skins::detect_local_skin_variant,
+            commands::skins::detect_base64_skin_variant,
             commands::notifications::toggle_notification_subscription,
             commands::notifications::update_notification_subscription_metadata,
             commands::notifications::delete_notification_subscription,

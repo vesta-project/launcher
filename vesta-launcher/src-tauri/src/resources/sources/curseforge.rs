@@ -280,7 +280,7 @@ impl CurseForgeSource {
             let response = self.client.get(&search_url).send().await?;
             if response.status().is_success() {
                 let search_res: CFSearchResult = response.json().await?;
-                
+
                 // First pass: Exact matches (highest priority)
                 for item in &search_res.data {
                     log::debug!(
@@ -292,7 +292,11 @@ impl CurseForgeSource {
 
                     // 1. Check direct slug match (most accurate)
                     if item.slug.to_lowercase() == slug_lower {
-                        log::info!("[CurseForge] Resolved slug '{}' to ID {} via exact slug", slug_lower, item.id);
+                        log::info!(
+                            "[CurseForge] Resolved slug '{}' to ID {} via exact slug",
+                            slug_lower,
+                            item.id
+                        );
                         return Ok(item.id.to_string());
                     }
 
@@ -302,7 +306,11 @@ impl CurseForgeSource {
                     let url_slug = normalized_web_url.split('/').last().unwrap_or("");
 
                     if url_slug == slug_lower {
-                        log::info!("[CurseForge] Resolved slug '{}' to ID {} via exact URL slug", slug_lower, item.id);
+                        log::info!(
+                            "[CurseForge] Resolved slug '{}' to ID {} via exact URL slug",
+                            slug_lower,
+                            item.id
+                        );
                         return Ok(item.id.to_string());
                     }
                 }
@@ -316,8 +324,10 @@ impl CurseForgeSource {
                     if let Some(pos) = url_slug.find('-') {
                         let potential_id = &url_slug[..pos];
                         let potential_slug = &url_slug[pos + 1..];
-                        
-                        if potential_slug == slug_lower && potential_id.chars().all(|c| c.is_ascii_digit()) {
+
+                        if potential_slug == slug_lower
+                            && potential_id.chars().all(|c| c.is_ascii_digit())
+                        {
                             log::info!("[CurseForge] Resolved slug '{}' to ID {} via ID-prefixed URL slug: {}", slug_lower, item.id, url_slug);
                             return Ok(item.id.to_string());
                         }
@@ -368,7 +378,10 @@ impl ResourceSource for CurseForgeSource {
                     return false;
                 }
 
-                !matches!(name.as_str(), "mods" | "worlds" | "resource packs" | "modpacks" | "customization")
+                !matches!(
+                    name.as_str(),
+                    "mods" | "worlds" | "resource packs" | "modpacks" | "customization"
+                )
             })
             .map(|c| ResourceCategory {
                 id: c.id.to_string(),
@@ -494,7 +507,11 @@ impl ResourceSource for CurseForgeSource {
                 authors: item.authors.iter().map(|a| a.name.clone()).collect(),
                 download_count: item.download_count as u64,
                 follower_count: 0,
-                categories: item.categories.into_iter().map(|c| c.id.to_string()).collect(),
+                categories: item
+                    .categories
+                    .into_iter()
+                    .map(|c| c.id.to_string())
+                    .collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
                 gallery: item
@@ -533,15 +550,21 @@ impl ResourceSource for CurseForgeSource {
             ));
         }
 
-        let mod_response: CFModResponse = response
-            .json()
-            .await
-            .map_err(|e| anyhow!("CurseForge project JSON decode error: {}. ID: {}", e, numeric_id))?;
+        let mod_response: CFModResponse = response.json().await.map_err(|e| {
+            anyhow!(
+                "CurseForge project JSON decode error: {}. ID: {}",
+                e,
+                numeric_id
+            )
+        })?;
 
         let item = mod_response.data;
 
         // Fetch description separately as it's not included in the main mod object
-        let desc_url = format!("https://api.curseforge.com/v1/mods/{}/description", numeric_id);
+        let desc_url = format!(
+            "https://api.curseforge.com/v1/mods/{}/description",
+            numeric_id
+        );
         let desc_response = self.client.get(&desc_url).send().await?;
         let description = if desc_response.status().is_success() {
             let desc_data: CFDescriptionResponse = desc_response.json().await.map_err(|e| {
@@ -641,7 +664,11 @@ impl ResourceSource for CurseForgeSource {
                 authors: item.authors.iter().map(|a| a.name.clone()).collect(),
                 download_count: item.download_count as u64,
                 follower_count: 0,
-                categories: item.categories.into_iter().map(|c| c.id.to_string()).collect(),
+                categories: item
+                    .categories
+                    .into_iter()
+                    .map(|c| c.id.to_string())
+                    .collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
                 gallery: item
@@ -811,7 +838,9 @@ impl ResourceSource for CurseForgeSource {
         } else if project_id.chars().all(|c| c.is_ascii_digit()) {
             project_id.to_string()
         } else {
-            self.resolve_slug_to_id(project_id).await.unwrap_or_else(|_| project_id.to_string())
+            self.resolve_slug_to_id(project_id)
+                .await
+                .unwrap_or_else(|_| project_id.to_string())
         };
 
         let url = if numeric_id.is_empty() {

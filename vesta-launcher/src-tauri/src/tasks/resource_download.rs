@@ -26,10 +26,7 @@ pub struct ResourceDownloadTask {
 
 impl Task for ResourceDownloadTask {
     fn name(&self) -> String {
-        format!(
-            "Installing {}",
-            self.project_name
-        )
+        format!("Installing {}", self.project_name)
     }
 
     fn id(&self) -> Option<String> {
@@ -49,7 +46,10 @@ impl Task for ResourceDownloadTask {
 
     fn completion_description(&self) -> String {
         if let Some(ref parent) = self.dependency_for {
-            format!("{} installed successfully (Required by {})", self.project_name, parent)
+            format!(
+                "{} installed successfully (Required by {})",
+                self.project_name, parent
+            )
         } else {
             format!("{} installed successfully", self.project_name)
         }

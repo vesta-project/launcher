@@ -405,7 +405,7 @@ pub fn set_minimize_to_tray(app: tauri::AppHandle, enabled: bool) -> Result<(), 
 pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
     crate::utils::windows::ensure_main_window_visible(&app)?;
     Ok(())
-} 
+}
 
 #[derive(serde::Serialize)]
 pub struct TraySettings {

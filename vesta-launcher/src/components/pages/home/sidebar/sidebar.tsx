@@ -3,7 +3,7 @@ import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
 import { router } from "@components/page-viewer/page-viewer";
-import { AccountList } from "@components/pages/home/sidebar/account-list/account-list";
+import { AccountPopover } from "@components/pages/home/sidebar/account-popover/account-popover";
 import {
 	SidebarActionButton,
 	SidebarPageButton,
@@ -14,6 +14,7 @@ import { instancesState } from "@stores/instances";
 import { type PinnedPage, pinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Separator } from "@ui/separator/separator";
+import { Popover, PopoverAnchor } from "@ui/popover/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
@@ -129,12 +130,36 @@ function Sidebar(props: SidebarProps) {
 		>
 			<div class={styles["sidebar__root"]}>
 				<div class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}>
-					<SidebarProfileButton
-						id={"profile-selector"}
-						tooltip_text={"Profile"}
-						open={accountMenuOpen()}
-						onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
-					/>
+					<Popover open={accountMenuOpen()} onOpenChange={setAccountMenuOpen} placement="right-start">
+						<PopoverAnchor>
+							<SidebarProfileButton
+								id={"profile-selector"}
+								tooltip_text={"Profile"}
+								open={accountMenuOpen()}
+								onAccountMenuToggle={(open) => setAccountMenuOpen(open)}
+							/>
+						</PopoverAnchor>
+						<AccountPopover
+							onClose={() => setAccountMenuOpen(false)}
+							onAddAccount={async () => {
+								setAccountMenuOpen(false);
+
+								// Guest mode check for redirect to onboarding
+								try {
+									const { getActiveAccount } = await import("@utils/auth");
+									const account = await getActiveAccount();
+									if (account?.account_type === ACCOUNT_TYPE_GUEST) {
+										window.location.href = "/?login=true"; // Send back to onboarding for real login
+										return;
+									}
+								} catch (e) {
+									console.error("Failed to check guest status for Add Account:", e);
+								}
+
+								openPage("/login");
+							}}
+						/>
+					</Popover>
 					<div class={`${styles["sidebar__section"]} ${styles["actions"]}`}>
 						<SidebarActionButton
 							id={"sidebar-new"}
@@ -203,29 +228,6 @@ function Sidebar(props: SidebarProps) {
 				</div>
 			</div>
 			<SidebarNotifications open={props.open} openChanged={props.openChanged} />
-
-			{/* Account List Menu */}
-			<AccountList
-				open={accountMenuOpen()}
-				onClose={() => setAccountMenuOpen(false)}
-				onAddAccount={async () => {
-					setAccountMenuOpen(false);
-
-					// Guest mode check for redirect to onboarding
-					try {
-						const { getActiveAccount } = await import("@utils/auth");
-						const account = await getActiveAccount();
-						if (account?.account_type === ACCOUNT_TYPE_GUEST) {
-							window.location.href = "/?login=true"; // Send back to onboarding for real login
-							return;
-						}
-					} catch (e) {
-						console.error("Failed to check guest status for Add Account:", e);
-					}
-
-					openPage("/login");
-				}}
-			/>
 		</div>
 	);
 }

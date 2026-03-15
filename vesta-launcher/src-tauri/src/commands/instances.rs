@@ -319,10 +319,7 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
             .map(process_instance_icon)
             .collect()
     } else {
-        instances
-            .into_iter()
-            .map(process_instance_icon)
-            .collect()
+        instances.into_iter().map(process_instance_icon).collect()
     };
     Ok(processed)
 }
@@ -992,7 +989,8 @@ pub async fn launch_instance(
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
     // Determine Java path
-    let java_path_str = if !instance_data.use_global_java_path && instance_data.java_path.is_some() {
+    let java_path_str = if !instance_data.use_global_java_path && instance_data.java_path.is_some()
+    {
         instance_data.java_path.clone().unwrap()
     } else {
         // Use global setting if linked or local is missing
@@ -1362,12 +1360,19 @@ pub async fn launch_instance(
                     let iid_for_hook = instance_id.clone();
                     tokio::spawn(async move {
                         if let Err(e) = child.wait().await {
-                            log::error!("[launch_instance] Failed to wait for game process for {}: {}", iid_for_hook, e);
+                            log::error!(
+                                "[launch_instance] Failed to wait for game process for {}: {}",
+                                iid_for_hook,
+                                e
+                            );
                         }
                         log::info!("[launch_instance] Game process exited for {}, running cleanup and post-exit hook if any", iid_for_hook);
-                        
+
                         // Unregister from piston-lib registry immediately
-                        if let Err(e) = piston_lib::game::launcher::registry::unregister_instance(&iid_for_hook).await {
+                        if let Err(e) =
+                            piston_lib::game::launcher::registry::unregister_instance(&iid_for_hook)
+                                .await
+                        {
                             log::error!("[launch_instance] Failed to unregister instance {} from piston-lib registry: {}", iid_for_hook, e);
                         }
                     });

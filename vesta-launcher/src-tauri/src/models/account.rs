@@ -35,6 +35,7 @@ pub struct Account {
     pub theme_border_width: Option<i32>,
     pub account_type: String,
     pub is_expired: bool,
+    pub skin_variant: String,
 }
 
 /// New account (without id for insertion)
@@ -52,11 +53,11 @@ pub struct NewAccount {
     pub cape_url: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    pub theme_id: Option<String>,
     pub theme_mode: Option<String>,
-    pub theme_primary_hue: Option<i32>,
     pub theme_primary_sat: Option<i32>,
     pub theme_primary_light: Option<i32>,
+    pub theme_id: Option<String>,
+    pub theme_primary_hue: Option<i32>,
     pub theme_style: Option<String>,
     pub theme_gradient_enabled: Option<bool>,
     pub theme_gradient_angle: Option<i32>,
@@ -66,6 +67,7 @@ pub struct NewAccount {
     pub theme_border_width: Option<i32>,
     pub account_type: String,
     pub is_expired: bool,
+    pub skin_variant: String,
 }
 
 impl Default for Account {
@@ -83,11 +85,11 @@ impl Default for Account {
             cape_url: None,
             created_at: None,
             updated_at: None,
-            theme_id: None,
             theme_mode: None,
-            theme_primary_hue: None,
             theme_primary_sat: None,
             theme_primary_light: None,
+            theme_id: None,
+            theme_primary_hue: None,
             theme_style: None,
             theme_gradient_enabled: None,
             theme_gradient_angle: None,
@@ -97,6 +99,7 @@ impl Default for Account {
             theme_border_width: None,
             account_type: "Microsoft".to_string(),
             is_expired: false,
+            skin_variant: "classic".into(),
         }
     }
 }
@@ -115,11 +118,11 @@ impl Default for NewAccount {
             cape_url: None,
             created_at: None,
             updated_at: None,
-            theme_id: None,
             theme_mode: None,
-            theme_primary_hue: None,
             theme_primary_sat: None,
             theme_primary_light: None,
+            theme_id: None,
+            theme_primary_hue: None,
             theme_style: None,
             theme_gradient_enabled: None,
             theme_gradient_angle: None,
@@ -129,6 +132,7 @@ impl Default for NewAccount {
             theme_border_width: None,
             account_type: "Microsoft".to_string(),
             is_expired: false,
+            skin_variant: "classic".into(),
         }
     }
 }

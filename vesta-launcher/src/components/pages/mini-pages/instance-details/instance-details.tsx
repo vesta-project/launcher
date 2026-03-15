@@ -89,6 +89,7 @@ import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
+import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { formatDate } from "@utils/date";
 import {
 	DEFAULT_ICONS,
@@ -227,7 +228,10 @@ export const areIconsEqual = (a?: string | null, b?: string | null) => {
 	if (a.startsWith("data:image/") && b.startsWith("data:image/")) {
 		const partA = a.split(",")[1];
 		const partB = b.split(",")[1];
-		if (partA && partB) return partA === partB;
+		if (partA && partB) {
+			const equal = partA === partB;
+			return equal;
+		}
 	}
 
 	return false;
@@ -2160,76 +2164,46 @@ export default function InstanceDetails(
 				</div>
 			</main>
 
-			<Show when={isDirty()}>
-				<div class={styles["floating-save-footer"]}>
-					<div class={styles["save-footer-content"]}>
-						<p>You have unsaved changes</p>
-						<div class={styles["save-footer-actions"]}>
-							<Button
-								variant="ghost"
-								onClick={() => {
-									const i = inst();
-									if (!i) return;
-									batch(() => {
-										// Basic info
-										setName(i.name);
-										setIconPath(
-											i.iconPath ||
-												getStableIconId(DEFAULT_ICONS[0]) ||
-												DEFAULT_ICONS[0],
-										);
-										// Memory
-										setMinMemory([i.minMemory]);
-										setMaxMemory([i.maxMemory]);
-										setUseGlobalMemory(i.useGlobalMemory);
-										// Java
-										setJavaArgs(i.javaArgs || "");
-										setUseGlobalJavaArgs(i.useGlobalJavaArgs);
-										setJavaPath(i.javaPath || "");
-										setUseGlobalJavaPath(i.useGlobalJavaPath);
-										// Resolution
-										setGameWidth(i.gameWidth);
-										setGameHeight(i.gameHeight);
-										setUseGlobalResolution(i.useGlobalResolution);
-										// Hooks
-										setPreLaunchHook(i.preLaunchHook || "");
-										setPostExitHook(i.postExitHook || "");
-										setWrapperCommand(i.wrapperCommand || "");
-										setUseGlobalHooks(i.useGlobalHooks);
-										// Env
-										setEnvironmentVariables(i.environmentVariables || "");
-										setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
-
-										// Reset dirty flags
-										setIsNameDirty(false);
-										setIsIconDirty(false);
-										setIsMinMemDirty(false);
-										setIsMaxMemDirty(false);
-										setIsJvmDirty(false);
-										setIsJavaPathDirty(false);
-										setIsResolutionDirty(false);
-										setIsHooksDirty(false);
-										setIsEnvDirty(false);
-									});
-								}}
-							>
-								Reset
-							</Button>
-							<Button
-								color="primary"
-								variant="solid"
-								onClick={handleSave}
-								disabled={saving()}
-							>
-								<Show when={saving()} fallback={"Save Changes"}>
-									<span class={styles["btn-spinner"]} />
-									Saving...
-								</Show>
-							</Button>
-						</div>
-					</div>
-				</div>
-			</Show>
+			<FloatingSaveFooter
+				show={isDirty()}
+				onSave={handleSave}
+				isSaving={saving()}
+				onCancel={() => {
+					const i = inst();
+					if (!i) return;
+					batch(() => {
+						setName(i.name);
+						setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
+						setMinMemory([i.minMemory]);
+						setMaxMemory([i.maxMemory]);
+						setUseGlobalMemory(i.useGlobalMemory);
+						setJavaArgs(i.javaArgs || "");
+						setUseGlobalJavaArgs(i.useGlobalJavaArgs);
+						setJavaPath(i.javaPath || "");
+						setUseGlobalJavaPath(i.useGlobalJavaPath);
+						setGameWidth(i.gameWidth);
+						setGameHeight(i.gameHeight);
+						setUseGlobalResolution(i.useGlobalResolution);
+						setPreLaunchHook(i.preLaunchHook || "");
+						setPostExitHook(i.postExitHook || "");
+						setWrapperCommand(i.wrapperCommand || "");
+						setUseGlobalHooks(i.useGlobalHooks);
+						setEnvironmentVariables(i.environmentVariables || "");
+						setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
+						setIsNameDirty(false);
+						setIsIconDirty(false);
+						setIsMinMemDirty(false);
+						setIsMaxMemDirty(false);
+						setIsJvmDirty(false);
+						setIsJavaPathDirty(false);
+						setIsResolutionDirty(false);
+						setIsHooksDirty(false);
+						setIsEnvDirty(false);
+					});
+				}}
+				cancelText="Reset"
+				saveText={saving() ? "Saving..." : "Save Changes"}
+			/>
 
 			<Show when={instance()}>
 				<ExportDialog

@@ -347,12 +347,16 @@ pub async fn install_resource(
             dependencies.retain(|(p, _)| {
                 let id_lower = p.id.to_lowercase();
                 let name_lower = p.name.to_lowercase();
-                
+
                 // Match by known slugs, IDs, or common names
-                id_lower == "iris" || id_lower == "oculus" || 
-                id_lower == "445996" || id_lower == "581495" ||
-                name_lower == "iris" || name_lower == "oculus" ||
-                name_lower.contains("iris shaders") || name_lower.contains("oculus shaders")
+                id_lower == "iris"
+                    || id_lower == "oculus"
+                    || id_lower == "445996"
+                    || id_lower == "581495"
+                    || name_lower == "iris"
+                    || name_lower == "oculus"
+                    || name_lower.contains("iris shaders")
+                    || name_lower.contains("oculus shaders")
             });
         }
     }

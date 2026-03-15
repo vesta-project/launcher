@@ -249,14 +249,11 @@
 	border-radius: 4px;
 	cursor: zoom-in;
 	transform-origin: var(--zoom-x, center) var(--zoom-y, center);
-}
-
-.imageContainer.zoomed {
-	cursor: zoom-out !important;
+	transform: scale(var(--image-scale, 1));
 }
 
 .imageContainer.zoomed img {
-	transform: scale(2.2);
+	transform: scale(calc(2.2 * var(--image-scale, 1)));
 	box-shadow: none;
 	border-radius: 0;
 	cursor: zoom-out;

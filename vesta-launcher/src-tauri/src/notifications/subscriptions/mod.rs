@@ -1,6 +1,6 @@
+use crate::models::NotificationSubscription;
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::models::NotificationSubscription;
 use serde::{Deserialize, Serialize};
 
 pub mod manager;
@@ -9,7 +9,11 @@ pub mod providers;
 #[async_trait]
 pub trait SubscriptionProvider: Send + Sync {
     fn provider_type(&self) -> &str;
-    async fn check(&self, app_handle: &tauri::AppHandle, sub: &NotificationSubscription) -> Result<Vec<NotificationUpdateItem>>;
+    async fn check(
+        &self,
+        app_handle: &tauri::AppHandle,
+        sub: &NotificationSubscription,
+    ) -> Result<Vec<NotificationUpdateItem>>;
     fn get_available_sources(&self) -> Vec<AvailableNotificationSource> {
         vec![]
     }

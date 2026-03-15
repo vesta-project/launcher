@@ -7,7 +7,6 @@ import TrashIcon from "@assets/trash.svg";
 import Button from "@ui/button/button";
 import {
 	Carousel,
-	type CarouselApi,
 	CarouselContent,
 	CarouselItem,
 	CarouselNext,
@@ -24,6 +23,7 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./image-viewer.module.css";
+import useEmblaCarousel from "embla-carousel-solid";
 
 interface ImageViewerProps {
 	src: string | null;
@@ -37,12 +37,17 @@ interface ImageViewerProps {
 	// New props for carousel mode
 	images?: { src: string; title: string; date?: string }[];
 	showDelete?: boolean;
+	scale?: number;
+	pixelated?: boolean;
 }
 
 export function ImageViewer(props: ImageViewerProps) {
 	const [isZoomed, setIsZoomed] = createSignal(false);
 	const [hasError, setHasError] = createSignal(false);
-	const [api, setApi] = createSignal<CarouselApi>();
+	const [carouselRef, api] = useEmblaCarousel(() => ({
+		loop: true,
+		watchDrag: !isZoomed(),
+	}));
 	const [currentIndex, setCurrentIndex] = createSignal(0);
 	const [showUI, setShowUI] = createSignal(true);
 
@@ -76,26 +81,26 @@ export function ImageViewer(props: ImageViewerProps) {
 
 	// Sync currentIndex with carousel
 	createEffect(() => {
-		const embla = api()?.();
-		if (!embla) return;
+		const emblaApi = api();
+		if (!emblaApi) return;
 
 		const onSelect = () => {
-			setCurrentIndex(embla.selectedScrollSnap());
+			setCurrentIndex(emblaApi.selectedScrollSnap());
 			setIsZoomed(false);
 			setHasError(false);
 		};
 
-		embla.on("select", onSelect);
-		onCleanup(() => embla.off("select", onSelect));
+		emblaApi.on("select", onSelect);
+		onCleanup(() => emblaApi.off("select", onSelect));
 	});
 
 	// Jump to clicked image if images list is provided
 	createEffect(() => {
-		if (props.src && props.images && api()) {
+		const emblaApi = api();
+		if (emblaApi && props.src && props.images) {
 			const index = props.images.findIndex((img) => img.src === props.src);
 			if (index !== -1) {
-				const embla = api()?.();
-				if (embla) embla.scrollTo(index, true);
+				emblaApi.scrollTo(index);
 			}
 		}
 	});
@@ -131,8 +136,17 @@ export function ImageViewer(props: ImageViewerProps) {
 				img.style.setProperty("--zoom-x", `${x}%`);
 				img.style.setProperty("--zoom-y", `${y}%`);
 			}
+			setIsZoomed(true);
+		} else {
+			// When zooming out, reset the transform-origin to center
+			const target = e.currentTarget as HTMLElement;
+			const img = target.querySelector("img");
+			if (img) {
+				img.style.setProperty("--zoom-x", "50%");
+				img.style.setProperty("--zoom-y", "50%");
+			}
+			setIsZoomed(false);
 		}
-		setIsZoomed(!isZoomed());
 	};
 
 	return (
@@ -220,18 +234,11 @@ export function ImageViewer(props: ImageViewerProps) {
 				</div>
 
 				<div class={styles.viewport}>
-					<Carousel
-						setApi={setApi}
-						class={styles.carousel}
-						opts={{
-							loop: true,
-							watchDrag: !isZoomed(),
-						}}
-					>
-						<CarouselContent class={styles.carouselContent}>
+					<div ref={carouselRef} class={styles.carousel}>
+						<div class={styles.carouselContent}>
 							<For each={imageList()}>
 								{(image, index) => (
-									<CarouselItem class={styles.carouselItem}>
+									<div class={styles.carouselItem}>
 										<div class={styles.slideContent} onClick={props.onClose}>
 											<Show
 												when={!hasError() || currentIndex() !== index()}
@@ -272,6 +279,10 @@ export function ImageViewer(props: ImageViewerProps) {
 															[styles.zoomedImg]:
 																isZoomed() && currentIndex() === index(),
 														}}
+														style={{
+															"--image-scale": props.scale || 1,
+															"image-rendering": props.pixelated ? "pixelated" : "auto"
+														}}
 														draggable={false}
 														onError={() =>
 															currentIndex() === index() && setHasError(true)
@@ -280,19 +291,51 @@ export function ImageViewer(props: ImageViewerProps) {
 												</div>
 											</Show>
 										</div>
-									</CarouselItem>
+									</div>
 								)}
 							</For>
-						</CarouselContent>
+						</div>
 						<Show when={imageList().length > 1}>
-							<CarouselPrevious
+							<button
 								class={`${styles.navBtn} ${styles.navBtnPrev} ${!showUI() ? styles.hidden : ""}`}
-							/>
-							<CarouselNext
+								onClick={(e) => {
+									e.stopPropagation();
+									api()?.scrollPrev();
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M15 18l-6-6 6-6" />
+								</svg>
+							</button>
+							<button
 								class={`${styles.navBtn} ${styles.navBtnNext} ${!showUI() ? styles.hidden : ""}`}
-							/>
+								onClick={(e) => {
+									e.stopPropagation();
+									api()?.scrollNext();
+								}}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<path d="M9 18l6-6-6-6" />
+								</svg>
+							</button>
 						</Show>
-					</Carousel>
+					</div>
 				</div>
 
 				<div class={styles.footer} classList={{ [styles.hidden]: !showUI() }}>

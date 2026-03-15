@@ -1,7 +1,9 @@
+use crate::models::NotificationSubscription;
+use crate::notifications::subscriptions::{
+    AvailableNotificationSource, NotificationUpdateItem, SubscriptionProvider,
+};
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::models::NotificationSubscription;
-use crate::notifications::subscriptions::{NotificationUpdateItem, SubscriptionProvider, AvailableNotificationSource};
 
 pub struct RSSProvider;
 
@@ -53,39 +55,56 @@ impl SubscriptionProvider for RSSProvider {
                 provider_type: "rss".to_string(),
                 target_url: Some("https://neoforged.net/news/index.xml".to_string()),
                 target_id: None,
-                metadata: Some(serde_json::json!({ "categories": ["Release", "News"] }).to_string()),
+                metadata: Some(
+                    serde_json::json!({ "categories": ["Release", "News"] }).to_string(),
+                ),
             },
         ]
     }
 
-    async fn check(&self, _app_handle: &tauri::AppHandle, sub: &NotificationSubscription) -> Result<Vec<NotificationUpdateItem>> {
-        let url = sub.target_url.as_deref()
+    async fn check(
+        &self,
+        _app_handle: &tauri::AppHandle,
+        sub: &NotificationSubscription,
+    ) -> Result<Vec<NotificationUpdateItem>> {
+        let url = sub
+            .target_url
+            .as_deref()
             .ok_or_else(|| anyhow::anyhow!("RSS provider requires a target_url"))?;
-            
+
         let response = reqwest::get(url).await?.bytes().await?;
         let feed = feed_rs::parser::parse(&response[..])?;
 
         // Filter by categories if present in metadata
-        let allowed_categories: Vec<String> = sub.metadata.as_ref()
+        let allowed_categories: Vec<String> = sub
+            .metadata
+            .as_ref()
             .and_then(|m| serde_json::from_str::<serde_json::Value>(m).ok())
             .and_then(|v| {
-                v.get("categories")
-                    .and_then(|t| t.as_array())
-                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect::<Vec<String>>())
+                v.get("categories").and_then(|t| t.as_array()).map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect::<Vec<String>>()
+                })
             })
             .unwrap_or_default();
 
         let mut items = Vec::new();
         for entry in feed.entries {
-            let item_categories: Vec<String> = entry.categories.iter().map(|c| c.term.clone()).collect();
+            let item_categories: Vec<String> =
+                entry.categories.iter().map(|c| c.term.clone()).collect();
 
             // Filter if categories are specified
-            if !allowed_categories.is_empty() && !allowed_categories.iter().any(|ac| item_categories.iter().any(|ic| ic.eq_ignore_ascii_case(ac))) {
+            if !allowed_categories.is_empty()
+                && !allowed_categories
+                    .iter()
+                    .any(|ac| item_categories.iter().any(|ic| ic.eq_ignore_ascii_case(ac)))
+            {
                 continue;
             }
 
             let guid = entry.id.clone();
-            
+
             // Try to find a link
             let primary_link = entry.links.first().map(|l| l.href.clone());
 

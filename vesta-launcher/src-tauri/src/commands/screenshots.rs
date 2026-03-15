@@ -1,5 +1,5 @@
-use crate::utils::db::get_vesta_conn;
 use crate::schema::instance::dsl::*;
+use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -48,15 +48,22 @@ pub fn get_screenshots(instance_id_slug: String) -> Result<Vec<Screenshot>, Stri
                 let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("");
                 if extension == "png" || extension == "jpg" || extension == "jpeg" {
                     let metadata = entry.metadata().map_err(|e| e.to_string())?;
-                    let created = metadata.created().or_else(|_| metadata.modified())
+                    let created = metadata
+                        .created()
+                        .or_else(|_| metadata.modified())
                         .unwrap_or_else(|_| std::time::SystemTime::now());
-                    
-                    let created_ts = created.duration_since(std::time::UNIX_EPOCH)
+
+                    let created_ts = created
+                        .duration_since(std::time::UNIX_EPOCH)
                         .unwrap_or_default()
                         .as_secs();
 
                     screenshots.push(Screenshot {
-                        name: path.file_name().and_then(|s| s.to_str()).unwrap_or("unknown").to_string(),
+                        name: path
+                            .file_name()
+                            .and_then(|s| s.to_str())
+                            .unwrap_or("unknown")
+                            .to_string(),
                         path: path.to_string_lossy().replace("\\", "/"),
                         created_at: created_ts,
                         size: metadata.len(),
@@ -117,7 +124,10 @@ pub fn open_screenshot_in_folder(path: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub async fn copy_screenshot_to_clipboard(app: tauri::AppHandle, path: String) -> Result<(), String> {
+pub async fn copy_screenshot_to_clipboard(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(), String> {
     let p = PathBuf::from(&path);
     if !p.exists() {
         return Err("File not found".to_string());
@@ -127,13 +137,15 @@ pub async fn copy_screenshot_to_clipboard(app: tauri::AppHandle, path: String) -
     let img = image::open(&p).map_err(|e| format!("Failed to open image: {}", e))?;
     let rgba = img.to_rgba8();
     let (w, h) = rgba.dimensions();
-    
+
     // Create tauri::image::Image from raw bytes
     let raw_bytes = rgba.as_raw();
     let tauri_image = tauri::image::Image::new(raw_bytes, w, h);
 
     // Use clipboard plugin to write image
-    app.clipboard().write_image(&tauri_image).map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
+    app.clipboard()
+        .write_image(&tauri_image)
+        .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
 
     Ok(())
 }

@@ -19,8 +19,21 @@ export interface Account {
 	is_active: boolean;
 	skin_url: string | null;
 	cape_url: string | null;
+	skin_variant: string;
 	created_at: string | null;
 	updated_at: string | null;
+	theme_mode: string | null;
+	theme_primary_sat: number | null;
+	theme_primary_light: number | null;
+	theme_id: string | null;
+	theme_primary_hue: number | null;
+	theme_style: string | null;
+	theme_gradient_enabled: boolean | null;
+	theme_gradient_angle: number | null;
+	theme_gradient_type: string | null;
+	theme_gradient_harmony: string | null;
+	theme_advanced_overrides: string | null;
+	theme_border_width: number | null;
 	account_type: string;
 	is_expired: boolean;
 }

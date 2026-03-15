@@ -230,22 +230,26 @@ export const PRESET_THEMES: ThemeConfig[] = [
 			--glass-blur: none;
 			/* Midnight-optimized shadows (minimal to avoid grey halos) */
 			--liquid-box-shadow: 0 4px 12px hsl(0 0% 0% / 0.8);
+			--effect-shadow: 0 12px 40px rgba(0, 0, 0, 0.9);
 			--effect-shadow-depth: 2px;
 		}
 
-		/* Mini-window border for Midnight */
-		[class*="page-viewer-root"] {
-			border: 1px solid hsl(var(--color__primary-hue) 50% 25% / 0.6);
-		}
+			/* Mini-window border for Midnight */
+			[class*="page-viewer-root"],
+			[data-popper-positioner] > div {
+				border: 1px solid hsl(var(--color__primary-hue) 50% 25% / 0.6);
+				position: relative; /* ensure ::before is positioned correctly */
+			}
 
-		[class*="page-viewer-root"]::before {
-			content: "";
-			position: absolute;
-			inset: 0;
-			border-radius: inherit;
-			border: 1px solid hsl(var(--color__primary-hue) 50% 40% / 0.1);
-			pointer-events: none;
-		}
+			[class*="page-viewer-root"]::before,
+			[data-popper-positioner] > div::before {
+				content: "";
+				position: absolute;
+				inset: 0;
+				border-radius: inherit;
+				border: 1px solid hsl(var(--color__primary-hue) 50% 40% / 0.1);
+				pointer-events: none;
+			}
 		`,
 	},
 	{

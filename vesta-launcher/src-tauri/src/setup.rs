@@ -160,7 +160,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Allow the asset protocol to access the app data directory
     // This fixes 403 Forbidden errors when loading local images/screenshots
-    app.asset_protocol_scope().allow_directory(&app_data_dir, true)?;
+    app.asset_protocol_scope()
+        .allow_directory(&app_data_dir, true)?;
 
     // CRITICAL: Initialize Diesel connection pools FIRST before any other code runs
     // This ensures migrations are applied before any queries are executed
@@ -250,7 +251,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize NotificationManager
     let notification_manager = NotificationManager::new(app.handle().clone());
     let _ = notification_manager.clear_task_notifications();
-    
+
     // Create notifications for interrupted instances if any (using a clone before we manage it)
     if !interrupted_instances.is_empty() {
         let manager = notification_manager.clone();
@@ -319,7 +320,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize SubscriptionManager
     let subscription_manager = Arc::new(SubscriptionManager::new(app.handle().clone()));
     if let Err(e) = subscription_manager.initialize_defaults() {
-        log::error!("Failed to initialize default notification subscriptions: {}", e);
+        log::error!(
+            "Failed to initialize default notification subscriptions: {}",
+            e
+        );
     }
     subscription_manager.clone().start_polling();
     app.manage(subscription_manager);

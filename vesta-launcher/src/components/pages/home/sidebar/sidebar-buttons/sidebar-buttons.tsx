@@ -108,7 +108,28 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	// Listen for head updates from backend
 	createEffect(() => {
 		let unlisten: (() => void) | undefined;
-		listen("core://account-heads-updated", () => {
+		listen<{ uuid?: string; force?: boolean }>("core://account-heads-updated", async (event) => {
+			const active = activeAccount();
+			const eventUuid = event.payload?.uuid;
+			// Normalize UUIDs before comparison so dashed/non-dashed variants match
+			const shouldRefresh = !active || !eventUuid ||
+				eventUuid.replace(/-/g, "") === (active.uuid ?? "").replace(/-/g, "");
+
+			if (!shouldRefresh) return;
+
+			// When the event carries force=true, trigger a backend head re-download
+			// using the freshly-saved skin URL so the cache file is up-to-date.
+			if (event.payload?.force && active?.uuid) {
+				try {
+					await invoke("get_player_head_path", {
+						playerUuid: active.uuid,
+						forceDownload: true,
+					});
+				} catch (e) {
+					console.error("[Sidebar] Failed to force-refresh player head:", e);
+				}
+			}
+
 			setAvatarTimestamp(Date.now());
 		}).then((fn) => {
 			unlisten = fn;
@@ -120,14 +141,14 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	// Fetch player head image
 	const [avatarUrl] = createResource(
 		() => ({ uuid: activeAccount()?.uuid, t: avatarTimestamp() }),
-		async ({ uuid }) => {
+		async ({ uuid, t }) => {
 			if (!uuid) return null;
 			try {
 				const path = await invoke<string>("get_player_head_path", {
 					playerUuid: uuid,
 					forceDownload: false,
 				});
-				return `${convertFileSrc(path)}?t=${avatarTimestamp()}`;
+				return `${convertFileSrc(path)}?t=${t}`;
 			} catch (e) {
 				console.error("Failed to get player head:", e);
 				return null;

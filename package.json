@@ -19,6 +19,7 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@niobrix/solidjs-skinview3d": "^1.0.0",
 		"@tauri-controls-v2/solid": "^0.4.4"
 	}
 }

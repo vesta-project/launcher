@@ -1,11 +1,11 @@
-use anyhow::Result;
-use std::sync::Arc;
-use crate::models::{NotificationSubscription, NewNotificationSeenItem};
-use crate::notifications::subscriptions::{SubscriptionProvider, providers::*};
+use crate::models::{NewNotificationSeenItem, NotificationSubscription};
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
-use tauri::{AppHandle, Manager};
+use crate::notifications::subscriptions::{providers::*, SubscriptionProvider};
+use anyhow::Result;
 use diesel::prelude::*;
+use std::sync::Arc;
+use tauri::{AppHandle, Manager};
 
 pub struct SubscriptionManager {
     providers: Vec<Arc<dyn SubscriptionProvider>>,
@@ -29,22 +29,29 @@ impl SubscriptionManager {
 
     pub async fn check_all(&self) -> Result<()> {
         let subs = self.get_enabled_subscriptions()?;
-        
+
         for sub in subs {
-            let provider = self.providers.iter().find(|p| p.provider_type() == sub.provider_type);
-            
+            let provider = self
+                .providers
+                .iter()
+                .find(|p| p.provider_type() == sub.provider_type);
+
             if let Some(provider) = provider {
                 match provider.check(&self.app_handle, &sub).await {
                     Ok(items) => {
                         let is_first_run = sub.last_checked.is_none();
-                        
+
                         for item in items {
                             if !self.is_seen(&sub.id, &item.id)? {
                                 // If this is a new subscription, don't spam notifications for old items
                                 if !is_first_run {
                                     if let Ok(_) = self.create_notification(&sub, &item) {
                                         if let Err(e) = self.mark_seen(&sub.id, &item.id) {
-                                            log::error!("Failed to mark item seen {}: {}", item.id, e);
+                                            log::error!(
+                                                "Failed to mark item seen {}: {}",
+                                                item.id,
+                                                e
+                                            );
                                         }
                                     }
                                 } else {
@@ -53,7 +60,7 @@ impl SubscriptionManager {
                                 }
                             }
                         }
-                        
+
                         // Update last_checked
                         let _ = self.update_last_checked(&sub.id);
                     }
@@ -65,7 +72,7 @@ impl SubscriptionManager {
                 log::warn!("No provider found for type: {}", sub.provider_type);
             }
         }
-        
+
         Ok(())
     }
 
@@ -82,7 +89,7 @@ impl SubscriptionManager {
         let sm = self.clone();
         tauri::async_runtime::spawn(async move {
             log::info!("Starting notification subscription polling loop...");
-            
+
             // Delay initial polling by 15 seconds to avoid competing with other startup work
             // (e.g. database migrations, initial config/account loading, and network setup).
             // This helps prevent a burst of subscription network requests and DB writes
@@ -95,7 +102,7 @@ impl SubscriptionManager {
                 if let Err(e) = sm.check_all().await {
                     log::error!("Error in subscription polling: {}", e);
                 }
-                
+
                 // Poll every hour
                 tokio::time::sleep(tokio::time::Duration::from_secs(3600)).await;
             }
@@ -136,9 +143,13 @@ impl SubscriptionManager {
         Ok(())
     }
 
-    fn create_notification(&self, _sub: &NotificationSubscription, item: &crate::notifications::subscriptions::NotificationUpdateItem) -> Result<()> {
+    fn create_notification(
+        &self,
+        _sub: &NotificationSubscription,
+        item: &crate::notifications::subscriptions::NotificationUpdateItem,
+    ) -> Result<()> {
         let nm = self.app_handle.state::<NotificationManager>();
-        
+
         let actions = if let Some(link) = &item.link {
             let action = serde_json::json!([{
                 "label": "Read More",
@@ -169,11 +180,13 @@ impl SubscriptionManager {
             metadata: Some(item.metadata.to_string()),
             show_on_completion: None,
         })?;
-        
+
         Ok(())
     }
 
-    pub fn get_available_sources(&self) -> Vec<crate::notifications::subscriptions::AvailableNotificationSource> {
+    pub fn get_available_sources(
+        &self,
+    ) -> Vec<crate::notifications::subscriptions::AvailableNotificationSource> {
         let mut all_sources = Vec::new();
         for provider in &self.providers {
             all_sources.extend(provider.get_available_sources());
@@ -221,22 +234,26 @@ impl SubscriptionManager {
     pub fn delete_subscription(&self, sub_id_str: String) -> Result<()> {
         use crate::schema::notification_subscriptions::dsl::*;
         let mut conn = crate::utils::db::get_vesta_conn()?;
-        diesel::delete(notification_subscriptions.filter(id.eq(sub_id_str)))
-            .execute(&mut conn)?;
+        diesel::delete(notification_subscriptions.filter(id.eq(sub_id_str))).execute(&mut conn)?;
         Ok(())
     }
 
-    pub fn subscribe_resource(&self, project_id: String, platform: String, resource_title: String) -> Result<String> {
+    pub fn subscribe_resource(
+        &self,
+        project_id: String,
+        platform: String,
+        resource_title: String,
+    ) -> Result<String> {
         use crate::schema::notification_subscriptions::dsl::*;
         let mut conn = crate::utils::db::get_vesta_conn()?;
-        
+
         // Check if already subscribed
         let existing = notification_subscriptions
             .filter(provider_type.eq("resource"))
             .filter(target_id.eq(&project_id))
             .first::<NotificationSubscription>(&mut conn)
             .optional()?;
-            
+
         if let Some(s) = existing {
             if !s.enabled {
                 self.toggle_subscription(s.id.clone(), true)?;
@@ -260,7 +277,7 @@ impl SubscriptionManager {
         diesel::insert_into(notification_subscriptions)
             .values(&new_sub)
             .execute(&mut conn)?;
-            
+
         Ok(new_sub.id)
     }
 
@@ -287,7 +304,9 @@ impl SubscriptionManager {
             query = query.filter(target_id.eq(target_id_val));
         }
 
-        let existing = query.first::<NotificationSubscription>(&mut conn).optional()?;
+        let existing = query
+            .first::<NotificationSubscription>(&mut conn)
+            .optional()?;
 
         if let Some(s) = existing {
             if !s.enabled {
@@ -324,30 +343,33 @@ impl SubscriptionManager {
     pub fn initialize_defaults(&self) -> Result<()> {
         use crate::schema::notification_subscriptions::dsl::*;
         let mut conn = crate::utils::db::get_vesta_conn()?;
-        
-        let count = notification_subscriptions.count().get_result::<i64>(&mut conn)?;
+
+        let count = notification_subscriptions
+            .count()
+            .get_result::<i64>(&mut conn)?;
         if count == 0 {
             let available = self.get_available_sources();
             for source in available {
-                let new_sub = crate::models::notification_subscription::NewNotificationSubscription {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    provider_type: source.provider_type,
-                    target_url: source.target_url,
-                    target_id: source.target_id,
-                    title: source.title,
-                    enabled: true,
-                    metadata: source.metadata,
-                    last_checked: None,
-                    created_at: chrono::Utc::now().to_rfc3339(),
-                    updated_at: chrono::Utc::now().to_rfc3339(),
-                };
-                
+                let new_sub =
+                    crate::models::notification_subscription::NewNotificationSubscription {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        provider_type: source.provider_type,
+                        target_url: source.target_url,
+                        target_id: source.target_id,
+                        title: source.title,
+                        enabled: true,
+                        metadata: source.metadata,
+                        last_checked: None,
+                        created_at: chrono::Utc::now().to_rfc3339(),
+                        updated_at: chrono::Utc::now().to_rfc3339(),
+                    };
+
                 diesel::insert_into(notification_subscriptions)
                     .values(&new_sub)
                     .execute(&mut conn)?;
             }
         }
-        
+
         Ok(())
     }
 }

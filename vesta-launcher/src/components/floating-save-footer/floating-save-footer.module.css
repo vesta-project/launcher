@@ -1,0 +1,43 @@
+.floating-save-footer {
+	position: fixed;
+	bottom: 32px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: var(--surface-overlay);
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-lg);
+	padding: 12px 24px;
+	display: flex;
+	align-items: center;
+	gap: 24px;
+	box-shadow: var(--effect-shadow);
+	z-index: 1000;
+	animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
+}
+
+ .save-footer-actions {
+   display: flex;
+   justify-content: flex-end;
+   align-items: center;
+   gap: 0.5rem;
+ }
+
+.save-footer-content p {
+	margin: 0;
+	color: var(--text-primary);
+	font-weight: 600;
+	font-size: 0.95rem;
+}
+
+@keyframes slide-up {
+	from {
+		transform: translate(-50%, 20px);
+		opacity: 0;
+	}
+	to {
+		transform: translate(-50%, 0);
+		opacity: 1;
+	}
+}

@@ -205,8 +205,7 @@ pub async fn update_notification_subscription_metadata(
     id: String,
     metadata: String,
 ) -> Result<(), String> {
-    sm.update_metadata(id, metadata)
-        .map_err(|e| e.to_string())
+    sm.update_metadata(id, metadata).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
