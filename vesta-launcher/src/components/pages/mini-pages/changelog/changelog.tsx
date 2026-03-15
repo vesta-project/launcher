@@ -1,5 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
-import { createResource, createSignal, For, onMount, Show } from "solid-js";
+import { createEffect, createResource, createSignal, For, onMount, Show } from "solid-js";
 import { marked } from "marked";
 import { sanitizeHtml } from "@utils/security";
 import { changelog, type GithubRelease } from "@stores/changelog";
@@ -10,9 +9,71 @@ import { openExternal } from "@utils/external-link";
 export default function ChangelogPage() {
 	const [releases] = [changelog]; // Use the pre-fetched global resource
 	const [selectedTag, setSelectedTag] = createSignal<string | null>(null);
+	const [isManualScroll, setIsManualScroll] = createSignal(false);
+	let listRef: HTMLDivElement | undefined;
+	let observer: IntersectionObserver | undefined;
 
 	onMount(() => {
-		// If there's a jump target in the URL or props later, we can handle it here
+		// Intersection Observer to update the sidebar selection based on scroll position
+		observer = new IntersectionObserver(
+			(entries) => {
+				// If we're currently doing a smooth scroll from clicking the sidebar, ignore observer updates
+				if (isManualScroll()) return;
+
+				// Find the version at the top of the viewing area
+				const visibleElements = Array.from(document.querySelectorAll(`[id^="release-"]`));
+				const containerRect = listRef?.getBoundingClientRect();
+				if (!containerRect) return;
+
+				// We want to find the version whose top is closest to the container's top
+				// plus a small offset (the "active reading zone")
+				const triggerOffset = 60; // Offset from container top in pixels
+				let bestMatch: Element | null = null;
+				let minDistance = Number.POSITIVE_INFINITY;
+
+				for (const el of visibleElements) {
+					const rect = el.getBoundingClientRect();
+					// We prioritize elements that have passed the trigger point but are still mostly visible
+					const distance = Math.abs(rect.top - (containerRect.top + triggerOffset));
+					
+					if (distance < minDistance) {
+						minDistance = distance;
+						bestMatch = el;
+					}
+				}
+
+				if (bestMatch) {
+					const tag = bestMatch.id.replace("release-", "");
+					if (tag !== selectedTag()) {
+						setSelectedTag(tag);
+					}
+				}
+			},
+			{
+				root: listRef ?? null,
+				threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+			},
+		);
+
+		// Observe all release cards when they become available
+		createEffect(() => {
+			const data = releases();
+			const obs = observer;
+			if (data && obs) {
+				data.forEach((release) => {
+					const el = document.getElementById(`release-${release.tag_name}`);
+					if (el) obs.observe(el);
+				});
+				
+				// Set initial selection if not set
+				if (!selectedTag() && data.length > 0) {
+					setSelectedTag(data[0].tag_name);
+				}
+			}
+		});
+
+		// Cleanup
+		return () => observer?.disconnect();
 	});
 
 	const formatDate = (dateStr: string) => {
@@ -34,10 +95,18 @@ export default function ChangelogPage() {
 	};
 
 	const scrollToRelease = (tag: string) => {
+		setIsManualScroll(true);
 		setSelectedTag(tag);
 		const element = document.getElementById(`release-${tag}`);
 		if (element) {
 			element.scrollIntoView({ behavior: "smooth", block: "start" });
+			
+			// Re-enable observer after smooth scroll finishes (roughly)
+			setTimeout(() => {
+				setIsManualScroll(false);
+			}, 800);
+		} else {
+			setIsManualScroll(false);
 		}
 	};
 
@@ -63,7 +132,7 @@ export default function ChangelogPage() {
 				</div>
 			</div>
 
-			<div class={styles.content}>
+			<div class={styles.content} ref={listRef}>
 				<div class={styles.header}>
 					<h1 class={styles.title}>What's New</h1>
 				</div>
@@ -76,7 +145,6 @@ export default function ChangelogPage() {
 									<div 
 										id={`release-${release.tag_name}`} 
 										class={styles.releaseCard}
-										classList={{ [styles.releaseCardSelected]: selectedTag() === release.tag_name }}
 									>
 										<div class={styles.releaseHeader}>
 											<div>

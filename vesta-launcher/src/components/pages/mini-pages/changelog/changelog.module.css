@@ -95,11 +95,6 @@
     transition: all 0.2s;
 }
 
-.releaseCardSelected {
-    border-color: var(--primary-accent);
-    box-shadow: 0 0 0 1px var(--primary-accent);
-}
-
 .releaseHeader {
     display: flex;
     justify-content: space-between;
