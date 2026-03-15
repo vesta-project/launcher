@@ -204,6 +204,8 @@ pub async fn install_instance(
                         crate::notifications::models::NotificationType::Immediate,
                     ),
                     dismissible: Some(true),
+                    persist: Some(false),
+                    silent: Some(false),
                     actions: None,
                     progress: None,
                     current_step: None,
@@ -1125,6 +1127,8 @@ pub async fn launch_instance(
                         crate::notifications::models::NotificationType::Immediate,
                     ),
                     dismissible: Some(true),
+                    persist: Some(false),
+                    silent: Some(false),
                     actions: None,
                     progress: None,
                     current_step: None,
@@ -1314,6 +1318,8 @@ pub async fn launch_instance(
                 severity: Some("info".to_string()),
                 notification_type: Some(crate::notifications::models::NotificationType::Immediate),
                 dismissible: Some(true),
+                persist: Some(false),
+                silent: Some(false),
                 actions: None,
                 progress: None,
                 current_step: None,
@@ -1553,9 +1559,6 @@ pub async fn get_minecraft_versions(
 ) -> Result<piston_lib::game::metadata::PistonMetadata, String> {
     if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
         if let Some(meta) = cache.get() {
-            if let Err(e) = check_and_notify_new_versions(&meta, &app_handle).await {
-                log::warn!("Failed to check for new versions: {}", e);
-            }
             return Ok(meta);
         }
     }
@@ -1571,10 +1574,6 @@ pub async fn get_minecraft_versions(
     }
 
     let metadata = metadata_res.map_err(|e| e.to_string())?;
-
-    if let Err(e) = check_and_notify_new_versions(&metadata, &app_handle).await {
-        log::warn!("Failed to check for new versions: {}", e);
-    }
 
     if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
         cache.set(&metadata);
@@ -1802,112 +1801,6 @@ pub fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
         let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
         Ok(lines)
     }
-}
-
-/// Check for new Minecraft versions and create notifications if found
-async fn check_and_notify_new_versions(
-    metadata: &piston_lib::game::metadata::PistonMetadata,
-    app_handle: &tauri::AppHandle,
-) -> Result<(), String> {
-    use crate::utils::version_tracking::VersionTrackingRepository;
-
-    // Initialize version tracking if this is the first run
-    if let Err(e) = VersionTrackingRepository::initialize_defaults() {
-        log::warn!("Failed to initialize version tracking defaults: {}", e);
-    }
-
-    // Check release version
-    let current_release = &metadata.latest.release;
-    if VersionTrackingRepository::is_version_newer("minecraft_release", current_release)
-        .map_err(|e| format!("Failed to check release version: {}", e))?
-    {
-        log::info!("New Minecraft release detected: {}", current_release);
-        create_version_notification(
-            app_handle,
-            "New Minecraft Release Available",
-            &format!(
-                "Minecraft {} is now available for download!",
-                current_release
-            ),
-            "minecraft_release",
-            current_release,
-        )
-        .await?;
-    }
-
-    // Check snapshot version
-    let current_snapshot = &metadata.latest.snapshot;
-    if VersionTrackingRepository::is_version_newer("minecraft_snapshot", current_snapshot)
-        .map_err(|e| format!("Failed to check snapshot version: {}", e))?
-    {
-        log::info!("New Minecraft snapshot detected: {}", current_snapshot);
-        create_version_notification(
-            app_handle,
-            "New Minecraft Snapshot Available",
-            &format!(
-                "Minecraft snapshot {} is now available for testing!",
-                current_snapshot
-            ),
-            "minecraft_snapshot",
-            current_snapshot,
-        )
-        .await?;
-    }
-
-    Ok(())
-}
-
-/// Create a notification for a new version
-async fn create_version_notification(
-    app_handle: &tauri::AppHandle,
-    title: &str,
-    description: &str,
-    version_type: &str,
-    version: &str,
-) -> Result<(), String> {
-    use crate::notifications::models::{CreateNotificationInput, NotificationType};
-    use crate::utils::version_tracking::VersionTrackingRepository;
-
-    let notification_manager =
-        app_handle.state::<crate::notifications::manager::NotificationManager>();
-
-    let input = CreateNotificationInput {
-        client_key: Some(format!("version_update_{}", version_type)),
-        title: Some(title.to_string()),
-        description: Some(description.to_string()),
-        severity: Some("info".to_string()),
-        notification_type: Some(NotificationType::Patient),
-        dismissible: Some(true),
-        progress: None,
-        current_step: None,
-        total_steps: None,
-        actions: None,
-        metadata: Some(
-            serde_json::json!({
-                "version_type": version_type,
-                "version": version,
-                "notification_type": "version_update"
-            })
-            .to_string(),
-        ),
-        show_on_completion: None,
-    };
-
-    // Create notification through the manager
-    notification_manager
-        .create(input)
-        .map_err(|e| format!("Failed to create notification: {}", e))?;
-
-    // Update version tracking to mark as notified
-    VersionTrackingRepository::mark_notified(version_type, version)
-        .map_err(|e| format!("Failed to update version tracking: {}", e))?;
-
-    log::info!(
-        "Created version update notification for {}: {}",
-        version_type,
-        version
-    );
-    Ok(())
 }
 
 #[tauri::command]

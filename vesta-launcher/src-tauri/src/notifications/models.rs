@@ -6,7 +6,6 @@ pub enum NotificationType {
     Immediate,
     Progress,
     Patient,
-    Task,
 }
 
 impl ToString for NotificationType {
@@ -15,7 +14,6 @@ impl ToString for NotificationType {
             NotificationType::Immediate => "immediate".to_string(),
             NotificationType::Progress => "progress".to_string(),
             NotificationType::Patient => "patient".to_string(),
-            NotificationType::Task => "task".to_string(),
         }
     }
 }
@@ -52,6 +50,7 @@ impl ToString for NotificationSeverity {
 }
 
 pub const PROGRESS_INDETERMINATE: i32 = -1;
+pub const NOT_PERSISTED_ID: i32 = -1;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CreateNotificationInput {
@@ -67,6 +66,29 @@ pub struct CreateNotificationInput {
     pub actions: Option<String>,  // JSON string
     pub metadata: Option<String>, // JSON string
     pub show_on_completion: Option<bool>,
+    pub persist: Option<bool>,
+    pub silent: Option<bool>,
+}
+
+impl Default for CreateNotificationInput {
+    fn default() -> Self {
+        Self {
+            client_key: None,
+            title: None,
+            description: None,
+            severity: Some("info".to_string()),
+            notification_type: Some(NotificationType::Immediate),
+            dismissible: Some(true),
+            progress: None,
+            current_step: None,
+            total_steps: None,
+            actions: None,
+            metadata: None,
+            show_on_completion: None,
+            persist: Some(true),
+            silent: Some(false),
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -78,6 +100,8 @@ pub struct Notification {
     pub severity: NotificationSeverity,
     pub notification_type: NotificationType,
     pub dismissible: bool,
+    pub persist: bool,
+    pub silent: bool,
     pub progress: Option<i32>,
     pub current_step: Option<i32>,
     pub total_steps: Option<i32>,

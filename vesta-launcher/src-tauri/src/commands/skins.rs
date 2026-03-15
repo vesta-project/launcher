@@ -92,6 +92,8 @@ fn notify_mojang_rate_limit(app: &tauri::AppHandle, account_uuid: &str, operatio
         severity: Some("warning".to_string()),
         notification_type: Some(NotificationType::Immediate),
         dismissible: Some(true),
+        persist: Some(false),
+        silent: Some(false),
         progress: None,
         current_step: None,
         total_steps: None,

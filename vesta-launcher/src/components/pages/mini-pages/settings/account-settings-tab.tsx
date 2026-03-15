@@ -233,7 +233,6 @@ export default function AccountSettingsTab() {
   // Preview Signals
   const [previewSkinUrl, setPreviewSkinUrl] = createSignal<string>("");
   const [previewComputedKey, setPreviewComputedKey] = createSignal<string | null>(null);
-  const [previewComputedDataUri, setPreviewComputedDataUri] = createSignal<string | null>(null);
   // Cache for computed keys of preset textures to avoid repeated downloads
   const presetKeyCache = new Map<string, string>();
   const [presetKeyVersion, setPresetKeyVersion] = createSignal(0);
@@ -336,7 +335,6 @@ export default function AccountSettingsTab() {
   createEffect(() => {
     const url = previewSkinUrl();
     setPreviewComputedKey(null);
-    setPreviewComputedDataUri(null);
     if (!url) return;
     console.log("previewTexture: computing texture key for preview URL", url);
     if (url.startsWith("data:")) {
@@ -344,12 +342,10 @@ export default function AccountSettingsTab() {
       invoke<string>("compute_texture_key_from_base64", { base64Data: url })
         .then((key) => {
           setPreviewComputedKey(key);
-          setPreviewComputedDataUri(url);
         })
         .catch((err) => {
           console.error("previewTexture: failed to compute texture key from base64", url, err);
           setPreviewComputedKey(null);
-          setPreviewComputedDataUri(null);
         });
       return;
     }
@@ -358,14 +354,11 @@ export default function AccountSettingsTab() {
     invoke<{ 0: string; 1: string }>("compute_texture_key_from_url", { textureUrl: url })
       .then((res) => {
         const key = res[0];
-        const dataUri = res[1];
         setPreviewComputedKey(key);
-        setPreviewComputedDataUri(dataUri);
       })
       .catch((err) => {
         console.error("previewTexture: failed to compute texture key for preview URL", url, err);
         setPreviewComputedKey(null);
-        setPreviewComputedDataUri(null);
       });
   });
 

@@ -162,6 +162,8 @@ impl ProgressReporter for TaskProgressReporter {
                 severity: Some("error".to_string()),
                 notification_type: Some(NotificationType::Patient),
                 dismissible: Some(true),
+                persist: Some(true),
+                silent: Some(false),
                 actions: None,
                 progress: Some(-1),
                 current_step: None,

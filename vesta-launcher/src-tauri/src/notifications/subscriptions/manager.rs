@@ -19,6 +19,7 @@ impl SubscriptionManager {
             Arc::new(PatchNotesProvider),
             Arc::new(RSSProvider),
             Arc::new(ResourceProvider),
+            Arc::new(GameVersionProvider),
         ];
 
         Self {
@@ -173,6 +174,8 @@ impl SubscriptionManager {
             severity: Some(item.severity.clone().unwrap_or_else(|| "info".to_string())),
             notification_type: Some(NotificationType::Patient),
             dismissible: Some(true),
+            persist: Some(true),
+            silent: Some(item.silent.unwrap_or(false)),
             progress: None,
             current_step: None,
             total_steps: None,
@@ -350,6 +353,7 @@ impl SubscriptionManager {
         if count == 0 {
             let available = self.get_available_sources();
             for source in available {
+                let is_mojang = source.id == "mojang_news";
                 let new_sub =
                     crate::models::notification_subscription::NewNotificationSubscription {
                         id: uuid::Uuid::new_v4().to_string(),
@@ -357,7 +361,7 @@ impl SubscriptionManager {
                         target_url: source.target_url,
                         target_id: source.target_id,
                         title: source.title,
-                        enabled: true,
+                        enabled: is_mojang, // Only Mojang News enabled by default
                         metadata: source.metadata,
                         last_checked: None,
                         created_at: chrono::Utc::now().to_rfc3339(),

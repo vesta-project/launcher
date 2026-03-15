@@ -248,7 +248,9 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
         description: Some("You are in guest mode. Changes will not be saved, and certain features are restricted.".to_string()),
         severity: Some("info".to_string()),
         notification_type: Some(NotificationType::Patient),
-        dismissible: Some(false), // Persistent
+        dismissible: Some(false),
+        persist: Some(false), // Re-created on app launch via setup.rs logic if needed
+        silent: Some(false),  // Always show toast
         actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
         progress: None,
         current_step: None,

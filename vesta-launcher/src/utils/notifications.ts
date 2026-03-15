@@ -42,6 +42,8 @@ interface Notification {
 	client_key?: string | null;
 	notification_type?: NotificationType;
 	dismissible?: boolean;
+	persist?: boolean;
+	silent?: boolean;
 	actions?: NotificationAction[];
 	metadata?: string | null;
 	show_on_completion?: boolean | null;
@@ -56,6 +58,8 @@ interface BackendNotification {
 	severity: NotificationSeverity;
 	notification_type: NotificationType;
 	dismissible: boolean;
+	persist: boolean;
+	silent: boolean;
 	progress: number | null;
 	current_step: number | null;
 	total_steps: number | null;
@@ -92,6 +96,11 @@ function showAlert(
 		let displayProgress = progress;
 		if (progress == null && notification_type === "progress") {
 			displayProgress = PROGRESS_INDETERMINATE;
+		}
+
+		// Ensure progress is only shown for progress-type notifications
+		if (notification_type !== "progress") {
+			displayProgress = null;
 		}
 
 		const id = showToast({
@@ -263,73 +272,79 @@ async function subscribeToBackendNotifications() {
 			async (event) => {
 				const notif = event.payload;
 
-				// Check if we already have this notification in our ephemeral list
+				// Check if we already have this notification in our list (by backend_id or client_key)
 				let updated = false;
-				if (notif.client_key) {
+
+				// 1. Try to find by backend_id first (for database-stored ones)
+				let existing = _notificationCache.find(
+					(n) => n.backend_id === notif.id && n.backend_id !== -1,
+				);
+
+				// 2. Fallback to client_key if provided
+				if (!existing && notif.client_key) {
 					if (_pendingShowKeys.has(notif.client_key)) {
 						return;
 					}
-
-					const existing = _notificationCache.find(
+					existing = _notificationCache.find(
 						(n) => n.client_key === notif.client_key,
 					);
-					if (existing) {
-						updated = true;
-						// Update existing toast and notification state
-						const clientKey = notif.client_key;
+				}
 
-						updateToast(existing.id, {
-							title: notif.title,
-							description: notif.description || undefined,
-							progress: notif.progress,
-							current_step: notif.current_step,
-							total_steps: notif.total_steps,
-							severity: notif.severity,
-							notification_type: notif.notification_type,
-							duration:
-								notif.notification_type === "progress" &&
-								(notif.progress ?? 0) < 100
-									? 0
-									: 5000,
-							dismissible: notif.dismissible,
-							actions: notif.actions,
-							onAction: (actionId, payload) => {
-								invokeNotificationAction(
-									actionId,
-									clientKey || undefined,
-									payload,
-								);
-							},
-							onToastDismiss: (id) => closeAlert(id, true),
-							onToastForceClose: (id) => closeAlert(id, false),
-						});
+				if (existing) {
+					updated = true;
+					// Update existing toast and notification state
+					const clientKey = notif.client_key;
 
-						_notificationCache = _notificationCache.map((n) =>
-							n.client_key === notif.client_key
-								? {
-										...n,
-										title: notif.title,
-										description: notif.description || undefined,
-										progress: notif.progress,
-										current_step: notif.current_step,
-										total_steps: notif.total_steps,
-										type: notif.severity,
-										notification_type: notif.notification_type,
-										dismissible: notif.dismissible,
-										actions: notif.actions,
-									}
-								: n,
-						);
-						setNotifications([..._notificationCache]);
-					}
+					updateToast(existing.id, {
+						title: notif.title,
+						description: notif.description || undefined,
+						progress:
+							notif.notification_type === "progress" ? notif.progress : null,
+						current_step: notif.current_step,
+						total_steps: notif.total_steps,
+						severity: notif.severity,
+						notification_type: notif.notification_type,
+						duration:
+							notif.notification_type === "progress" && (notif.progress ?? 0) < 100
+								? 0
+								: 5000,
+						dismissible: notif.dismissible,
+						actions: notif.actions,
+						onAction: (actionId, payload) => {
+							invokeNotificationAction(actionId, clientKey || undefined, payload);
+						},
+						onToastDismiss: (id) => closeAlert(id, true),
+						onToastForceClose: (id) => closeAlert(id, false),
+					});
+
+					_notificationCache = _notificationCache.map((n) =>
+						(n.backend_id === notif.id && n.backend_id !== -1) ||
+						(notif.client_key && n.client_key === notif.client_key)
+							? {
+									...n,
+									title: notif.title,
+									description: notif.description || undefined,
+									progress: notif.progress,
+									current_step: notif.current_step,
+									total_steps: notif.total_steps,
+									type: notif.severity,
+									notification_type: notif.notification_type,
+									dismissible: notif.dismissible,
+									actions: notif.actions,
+								}
+							: n,
+					);
+					setNotifications([..._notificationCache]);
 				}
 
 				if (!updated) {
-					// Show toast for Progress and Immediate notifications
-					if (
+					// Show toast for Progress, Immediate, and non-silent Patient notifications
+					const shouldShowToast =
 						notif.notification_type === "immediate" ||
-						notif.notification_type === "progress"
-					) {
+						notif.notification_type === "progress" ||
+						(notif.notification_type === "patient" && !notif.silent);
+
+					if (shouldShowToast) {
 						if (notif.client_key) _pendingShowKeys.add(notif.client_key);
 						try {
 							await showAlert(
@@ -376,6 +391,10 @@ async function subscribeToBackendNotifications() {
 							existing.progress !== undefined &&
 							existing.progress < 100;
 						const isNowComplete = notif.progress === 100;
+
+						if (wasIncomplete && isNowComplete) {
+							// Task just completed
+						}
 
 						// Update the toast UI
 						const clientKey = notif.client_key;

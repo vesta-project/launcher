@@ -280,6 +280,8 @@ mod tests {
             severity: NotificationSeverity::Info,
             notification_type: NotificationType::Progress,
             dismissible: false,
+            persist: true,
+            silent: false,
             read: false,
             progress: Some(50),
             current_step: None,
@@ -310,6 +312,8 @@ mod tests {
             severity: NotificationSeverity::Info,
             notification_type: NotificationType::Progress,
             dismissible: false,
+            persist: true,
+            silent: false,
             read: false,
             progress: Some(99),
             current_step: None,
@@ -341,6 +345,8 @@ mod tests {
             severity: NotificationSeverity::Info,
             notification_type: NotificationType::Progress,
             dismissible: false,
+            persist: true,
+            silent: false,
             read: false,
             progress: Some(100),
             current_step: None,
@@ -372,6 +378,8 @@ mod tests {
             severity: NotificationSeverity::Info,
             notification_type: NotificationType::Progress,
             dismissible: false,
+            persist: true,
+            silent: false,
             read: false,
             progress: Some(100),
             current_step: None,
@@ -605,6 +613,8 @@ impl NotificationManager {
                 .notification_type
                 .unwrap_or(NotificationType::Immediate),
             dismissible: input.dismissible.unwrap_or(true),
+            persist: input.persist.unwrap_or(true),
+            silent: input.silent.unwrap_or(false),
             actions: input
                 .actions
                 .and_then(|json| serde_json::from_str(&json).ok())
@@ -620,6 +630,11 @@ impl NotificationManager {
             expires_at: None,
         };
 
+        // For immediate notifications, never persist
+        if notification.notification_type == NotificationType::Immediate {
+            notification.persist = false;
+        }
+
         // Check if we should update an existing notification by client_key
         if let Some(ref key) = notification.client_key {
             if let Ok(Some(existing)) = NotificationStore::get_by_client_key(key) {
@@ -627,6 +642,9 @@ impl NotificationManager {
                     notification.id = Some(id);
                     // Preserve creation time
                     notification.created_at = existing.created_at;
+                    
+                    // If the existing one was persistent and the new one is not, we might want to delete it or just skip the update.
+                    // For now, we update it and keep the ID.
                     NotificationStore::update(id, &notification)?;
 
                     self.app_handle.emit("core://notification", &notification)?;
@@ -635,9 +653,8 @@ impl NotificationManager {
             }
         }
 
-        // Only persist non-immediate notifications to the database.
-        // Immediate notifications are treated as ephemeral toasts.
-        let id = if notification.notification_type != NotificationType::Immediate {
+        // Only persist if the persist flag is true.
+        let id = if notification.persist {
             let nid = NotificationStore::create(&notification)?;
             notification.id = Some(nid);
             nid
@@ -796,6 +813,8 @@ impl NotificationManager {
             severity: Some("info".to_string()),
             notification_type: Some(NotificationType::Progress),
             dismissible: Some(false),
+            persist: Some(false),
+            silent: Some(false),
             progress: Some(-1),
             current_step: None,
             total_steps: None,

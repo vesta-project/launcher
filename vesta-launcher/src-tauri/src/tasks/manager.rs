@@ -165,12 +165,14 @@ impl TaskManager {
                         severity: Some("info".to_string()),
                         notification_type: Some(NotificationType::Progress),
                         dismissible: Some(false),
-                        show_on_completion: Some(task.show_completion_notification()),
+                        persist: Some(true),
+                        silent: Some(false),
                         actions: actions_json,
                         progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
                         current_step: Some(0),
                         total_steps: Some(task.total_steps()),
                         metadata: None,
+                        show_on_completion: Some(task.show_completion_notification()),
                     })
                     .map_err(|e| e.to_string())
                 {
@@ -230,6 +232,8 @@ impl TaskManager {
                             severity: Some("warning".to_string()),
                             notification_type: Some(NotificationType::Patient),
                             dismissible: Some(true),
+                            persist: Some(true),
+                            silent: Some(false),
                             actions: None,
                             progress: None,
                             current_step: None,
@@ -324,6 +328,8 @@ impl TaskManager {
                                 severity: Some("error".to_string()),
                                 notification_type: Some(NotificationType::Patient),
                                 dismissible: Some(true),
+                                persist: Some(true),
+                                silent: Some(false),
                                 actions: None,
                                 progress: None,
                                 current_step: None,
@@ -557,8 +563,8 @@ impl Task for TestTask {
                     description: Some("Task is running...".to_string()),
                     severity: Some("info".to_string()),
                     notification_type: Some(NotificationType::Progress),
-                    dismissible: Some(false),
-                    actions: Some(
+                    dismissible: Some(false),                    persist: Some(true),
+                    silent: Some(false),                    actions: Some(
                         serde_json::to_string(&vec![
                             NotificationAction {
                                 action_id: "cancel_task".to_string(),

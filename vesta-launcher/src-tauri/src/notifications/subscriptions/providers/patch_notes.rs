@@ -100,6 +100,7 @@ impl SubscriptionProvider for PatchNotesProvider {
                     "type": entry.version_type,
                 }),
                 severity: Some("info".to_string()),
+                silent: Some(true),
             });
         }
 

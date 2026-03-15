@@ -80,6 +80,7 @@ impl SubscriptionProvider for ResourceProvider {
                     "version_number": latest.version_number,
                 }),
                 severity: Some("info".to_string()),
+                silent: Some(true),
             });
         }
 

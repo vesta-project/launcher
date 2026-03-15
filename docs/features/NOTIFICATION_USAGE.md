@@ -184,6 +184,10 @@ UPDATE AppConfig SET notification_retention_days = 60 WHERE id = 1;  -- 60-day r
   - Auto-dismiss after duration (default 5s)
   - Ideal for: success messages, progress updates, info
 
+- **Silent notifications** (`silent=true`):
+  - Do not show a toast popup (entry-only)
+  - Ideal for: background updates, low-priority news, or subscription items that are seen later in the sidebar.
+
 ### Progress Values
 - `progress = null` - No progress indicator
 - `progress = -1` - Indeterminate/pulsing animation
@@ -202,7 +206,6 @@ UPDATE AppConfig SET notification_retention_days = 60 WHERE id = 1;  -- 60-day r
 - **Immediate**: Toast-only notifications that appear instantly and auto-dismiss. Used for quick feedback like "Saved successfully".
 - **Progress**: Active tasks with progress bars. Show pulsing animation (-1) or percentage (0-100). Convert to Patient when complete.
 - **Patient**: Completed or passive notifications. Dismissible by user. Former Progress notifications become Patient at 100%.
-- **Task**: Similar to Progress but for background operations. May have different UI treatment.
 
 ### Lifecycle
 1. **Creation**: Notification created with initial state
@@ -215,7 +218,6 @@ UPDATE AppConfig SET notification_retention_days = 60 WHERE id = 1;  -- 60-day r
 - Progress → Patient (when progress >= 100)
 - Immediate notifications never persist
 - Task notifications may have special handling for background work
-
 ## UI Components
 
 ### Toast Notifications

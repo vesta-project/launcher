@@ -37,6 +37,7 @@ pub struct NotificationUpdateItem {
     pub link: Option<String>,
     pub metadata: serde_json::Value,
     pub severity: Option<String>,
+    pub silent: Option<bool>,
 }
 
 pub fn clean_and_truncate(text: &str, max_len: usize) -> String {

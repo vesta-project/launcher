@@ -75,6 +75,7 @@ export async function downloadUpdate() {
 			progress: 0,
 			client_key: "app_update",
 			dismissible: false,
+			persist: false, // Ephemeral
 		});
 
 		let downloaded = 0;
@@ -128,6 +129,7 @@ export async function downloadUpdate() {
 						dismissible: false,
 						actions: actions as any,
 						client_key: "app_update",
+						persist: false, // Ephemeral
 					});
 					break;
 				}
@@ -194,6 +196,7 @@ export async function checkForAppUpdates(silent = false) {
 					dismissible: false,
 					actions: actions as any,
 					client_key: "app_update",
+					persist: false, // Ephemeral
 				});
 
 				if (!silent) {

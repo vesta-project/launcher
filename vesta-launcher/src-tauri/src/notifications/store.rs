@@ -1,6 +1,6 @@
 use crate::models::notification::{NewNotification, Notification as DbNotification};
 use crate::notifications::models::{
-    Notification as DomainNotification, NotificationSeverity, NotificationType,
+    Notification as DomainNotification, NotificationSeverity, NotificationType, NOT_PERSISTED_ID,
 };
 use crate::schema::notification::dsl::*;
 use crate::utils::db::get_vesta_conn;
@@ -20,12 +20,15 @@ impl NotificationStore {
             description: db_model.description,
             severity: NotificationSeverity::from(db_model.severity),
             notification_type: match db_model.notification_type.as_str() {
-                "progress" => NotificationType::Progress,
+                // "task" is legacy and mapped to Progress for backward compatibility with 
+                // in-flight or older persisted notifications from previous versions.
+                "progress" | "task" => NotificationType::Progress,
                 "patient" => NotificationType::Patient,
-                "task" => NotificationType::Task,
                 _ => NotificationType::Immediate, // Default
             },
             dismissible: db_model.dismissible,
+            persist: true, // If it's in the DB, it's persistent
+            silent: false, // Default for restored ones
             progress: db_model.progress,
             current_step: db_model.current_step,
             total_steps: db_model.total_steps,
@@ -43,6 +46,11 @@ impl NotificationStore {
     }
 
     pub fn create(new_notification: &DomainNotification) -> Result<i32> {
+        // If not persistent, return a sentinel ID and skip DB insert
+        if !new_notification.persist {
+            return Ok(NOT_PERSISTED_ID);
+        }
+
         let mut conn =
             get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
@@ -132,8 +140,7 @@ impl NotificationStore {
         if only_persisted {
             query = query.filter(
                 notification_type
-                    .eq("alert")
-                    .or(notification_type.eq("patient"))
+                    .eq("patient")
                     .or(notification_type.eq("progress")),
             );
         }

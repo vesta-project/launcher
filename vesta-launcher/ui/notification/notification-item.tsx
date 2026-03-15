@@ -131,8 +131,7 @@ export function NotificationItem(props: NotificationItemProps) {
 					<Show
 						when={
 							local.progress !== undefined &&
-							local.progress !== null &&
-							local.notification_type === "progress"
+							local.progress !== null
 						}
 					>
 						<div class={styles.progressWrapper}>

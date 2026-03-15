@@ -120,6 +120,7 @@ impl SubscriptionProvider for RSSProvider {
                     "categories": item_categories,
                 }),
                 severity: Some("info".to_string()),
+                silent: Some(true),
             });
         }
 

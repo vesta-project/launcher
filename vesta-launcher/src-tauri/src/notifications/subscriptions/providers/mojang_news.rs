@@ -98,6 +98,7 @@ impl SubscriptionProvider for MojangNewsProvider {
                     "category": entry.category,
                 }),
                 severity: Some("info".to_string()),
+                silent: Some(true),
             });
         }
 

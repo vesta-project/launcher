@@ -286,6 +286,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     severity: Some("warning".to_string()),
                     notification_type: Some(NotificationType::Patient),
                     dismissible: Some(true),
+                    persist: Some(true),
+                    silent: Some(false),
                     actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
                     progress: None,
                     current_step: None,
