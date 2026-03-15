@@ -1,4 +1,4 @@
-.standalone-page-viewer__controls {
+.standalone-page-viewer__controls--windows {
 	display: flex;
 	height: 100%;
 	align-items: stretch;
@@ -6,12 +6,12 @@
 	position: relative;
 }
 
-.standalone-page-viewer__controls > div {
+.standalone-page-viewer__controls--windows > div {
 	display: flex;
 	align-items: stretch;
 }
 
-.standalone-page-viewer__controls button {
+.standalone-page-viewer__controls--windows button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -19,11 +19,12 @@
 	height: 100%;
 }
 
-.standalone-page-viewer__controls button:hover:not(.standalone-page-viewer__controls--macos) {
+.standalone-page-viewer__controls--windows button:hover {
 	background: hsla(0, 0%, 50%, 0.15);
 }
 
 .standalone-page-viewer__controls--macos {
 	/* MacOS specific tweaks if needed */
+
 }
 
