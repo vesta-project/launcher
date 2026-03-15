@@ -38,6 +38,7 @@
     "macos-permissions:default",
     "updater:default",
     "clipboard-manager:allow-write-text",
+    "clipboard-manager:allow-write-image",
     "fs:default"
   ]
 }

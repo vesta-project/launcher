@@ -63,12 +63,14 @@ pub async fn download_player_head(
             let url = format!("https://sessionserver.mojang.com/session/minecraft/profile/{}", normalized_uuid);
             let resp = reqwest::get(&url).await?;
             if resp.status().is_success() {
-                let profile: SessionProfile = resp.json().await?;
-                if let Some(prop) = profile.properties.into_iter().find(|p| p.name == "textures") {
-                    let decoded = general_purpose::STANDARD.decode(prop.value)?;
-                    let textures: TexturesProperty = serde_json::from_slice(&decoded)?;
-                    textures.textures.skin.map(|s| s.url)
-                } else { None }
+                // Parse as much as we can but treat any error as "no skin"
+                resp.json::<SessionProfile>()
+                    .await
+                    .ok()
+                    .and_then(|profile| profile.properties.into_iter().find(|p| p.name == "textures").map(|p| p.value))
+                    .and_then(|value| general_purpose::STANDARD.decode(&value).ok())
+                    .and_then(|decoded| serde_json::from_slice::<TexturesProperty>(&decoded).ok())
+                    .and_then(|textures| textures.textures.skin.map(|s| s.url))
             } else { None }
         }
     };
@@ -128,8 +130,8 @@ mod tests {
         let test_uuid = "069a79f444e94726a5befca90e38aaf5"; // Notch
         let storage_path = temp_dir.join(format!("test_head_{}.png", test_uuid));
 
-        let result = download_player_head(test_uuid, storage_path.clone(), 128, true, true).await;
-
+        let result = download_player_head(test_uuid, None, storage_path.clone(), 128, true, true).await;
+        
         assert!(result.is_ok());
         assert!(storage_path.exists());
 

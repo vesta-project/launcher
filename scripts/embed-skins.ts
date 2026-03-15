@@ -1,7 +1,19 @@
 import fs from "fs";
 import path from "path";
 
-const skinDir = "skin folder";
+ const skinDirArg = process.argv[2];
+ const skinDirEnv = process.env.SKIN_DIR;
+ const skinDir = skinDirArg && skinDirArg.trim().length > 0
+     ? path.resolve(skinDirArg)
+     : skinDirEnv && skinDirEnv.trim().length > 0
+         ? path.resolve(skinDirEnv)
+         : "";
+ if (!skinDir || !fs.existsSync(skinDir) || !fs.statSync(skinDir).isDirectory()) {
+     throw new Error(
+         "A valid skin directory must be provided as the first CLI argument or via the SKIN_DIR environment variable.",
+     );
+ }
+
 const outputDir = "crates/piston-lib/src/api";
 const outputFile = path.join(outputDir, "embedded_skins.rs");
 
