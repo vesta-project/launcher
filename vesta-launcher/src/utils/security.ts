@@ -50,3 +50,57 @@ export function sanitizeSvg(svg: string): string {
 		return "";
 	}
 }
+
+/**
+ * Basic HTML sanitizer to prevent XSS when rendering markdown content.
+ * Removes <script>, <style>, <iframe> and on* event handlers.
+ */
+export function sanitizeHtml(html: string): string {
+	if (!html) return "";
+
+	try {
+		const parser = new DOMParser();
+		const doc = parser.parseFromString(html, "text/html");
+
+		const blacklist = ["script", "style", "iframe", "object", "embed", "base"];
+		for (const tag of blacklist) {
+			const elements = doc.querySelectorAll(tag);
+			for (const el of elements) {
+				el.remove();
+			}
+		}
+
+		const allElements = doc.querySelectorAll("*");
+		for (const el of allElements) {
+			const attrs = el.attributes;
+			for (let i = attrs.length - 1; i >= 0; i--) {
+				const attrName = attrs[i].name.toLowerCase();
+				if (attrName.startsWith("on")) {
+					el.removeAttribute(attrs[i].name);
+				}
+				// Sanitize href/src to prevent executable URIs
+				if (
+					attrName === "href" ||
+					attrName === "src" ||
+					attrName === "xlink:href"
+				) {
+					const value = el.getAttribute(attrs[i].name);
+					const normalized = value?.trim().toLowerCase();
+					if (
+						normalized?.startsWith("javascript:") ||
+						normalized?.startsWith("data:") ||
+						normalized?.startsWith("vbscript:")
+					) {
+						el.removeAttribute(attrs[i].name);
+					}
+				}
+			}
+		}
+
+		return doc.body.innerHTML;
+	} catch (e) {
+		console.error("Failed to sanitize HTML:", e);
+		// If parsing fails for some reason, return empty string for safety
+		return "";
+	}
+}

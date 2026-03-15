@@ -261,6 +261,28 @@ impl ActionHandler for OpenUrlHandler {
     }
 }
 
+/// Handler that navigates to a specific route in the frontend mini-router
+struct NavigateHandler {}
+
+impl ActionHandler for NavigateHandler {
+    fn handle(
+        &self,
+        app_handle: &AppHandle,
+        _client_key: Option<String>,
+        payload: Option<serde_json::Value>,
+    ) -> Result<()> {
+        let path = payload
+            .and_then(|p| p.get("path").and_then(|u| u.as_str()).map(|s| s.to_string()))
+            .ok_or_else(|| anyhow::anyhow!("Missing path in navigate action payload"))?;
+
+        let handle = app_handle.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = handle.emit("core://navigate", serde_json::json!({ "path": path }));
+        });
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -545,6 +567,7 @@ impl NotificationManager {
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
         manager.register_action("open_url", Arc::new(OpenUrlHandler {}));
+        manager.register_action("navigate", Arc::new(NavigateHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
 
         manager
@@ -575,20 +598,32 @@ impl NotificationManager {
             .map_err(|e| anyhow::anyhow!("Failed to lock action registry: {}", e))?;
         if let Some(handler) = registry.get(action_id) {
             // If payload is not provided, try to find it from the notification in the store
-            let action_payload = if payload.is_some() {
-                payload
+            let (target_client_key, action_payload) = if payload.is_some() {
+                (client_key.clone(), payload)
             } else if let Some(ref key) = client_key {
-                NotificationStore::get_by_client_key(key)?.and_then(|n| {
+                let p = NotificationStore::get_by_client_key(key)?.and_then(|n| {
                     n.actions
                         .into_iter()
                         .find(|a| a.action_id == action_id)
                         .and_then(|a| a.payload)
-                })
+                });
+                (client_key.clone(), p)
             } else {
-                None
+                (None, None)
             };
 
-            handler.handle(&self.app_handle, client_key, action_payload)?;
+            handler.handle(&self.app_handle, target_client_key.clone(), action_payload)?;
+
+            // Auto-dismiss the notification after action (unless it's a progress notification)
+            if let Some(key) = target_client_key {
+                if let Ok(Some(notif)) = NotificationStore::get_by_client_key(&key) {
+                    if notif.notification_type != NotificationType::Progress && notif.dismissible {
+                        if let Err(e) = self.delete(key.clone()) {
+                            log::error!("Failed to auto-dismiss notification after action invocation (key: {}): {}", key, e);
+                        }
+                    }
+                }
+            }
         } else {
             anyhow::bail!("Action handler not found: {}", action_id);
         }

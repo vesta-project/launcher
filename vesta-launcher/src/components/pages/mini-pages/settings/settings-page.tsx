@@ -1,5 +1,5 @@
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import { router } from "@components/page-viewer/page-viewer";
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import { dialogStore } from "@stores/dialog-store";
 import { getVersion } from "@tauri-apps/api/app";
@@ -1390,16 +1390,35 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								<div class={styles["about-info"]}>
 									<div class={styles["about-field"]}>
 										<span>App Version</span>
-										<span>{version() || "..."}</span>
+										<div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
+											<span>{version() || "..."}</span>
+											<LauncherButton 
+												variant="ghost" 
+												size="sm" 
+												onClick={() => {
+													router().navigate("/changelog");
+													setPageViewerOpen(true);
+												}}
+											>
+												View Changelog
+											</LauncherButton>
+										</div>
 									</div>
 									<div class={styles["about-field"]}>
 										<span>Platform</span>
 										<span>Tauri + SolidJS</span>
 									</div>
-									<div class={styles["about-field"]}>
-										<span>License</span>
-										<span>MIT License</span>
-									</div>
+									
+									<a
+										href="https://www.gnu.org/licenses/gpl-3.0.html"
+										target="_blank"
+										rel="noopener noreferrer"
+									>
+										<div class={styles["about-field"]} >
+											<span>License</span>
+											<span>GNU General Public License v3.0</span>
+										</div>
+									</a>
 								</div>
 							</SettingsCard>
 						</div>

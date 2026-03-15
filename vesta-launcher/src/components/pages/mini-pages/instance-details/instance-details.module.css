@@ -807,7 +807,7 @@
 	opacity: 0.9;
 	z-index: 10;
 	pointer-events: none;
-	fill: currentColor;
+	color: currentColor;
 }
 
 .console-search-field {

@@ -73,8 +73,11 @@ impl VersionTrackingRepository {
     /// Check if a version is newer than the last seen version
     pub fn is_version_newer(v_type: &str, current_version: &str) -> Result<bool> {
         if let Some(last_seen) = Self::get_last_seen_version(v_type)? {
-            // Simple string comparison for now - could be enhanced with semver parsing
-            Ok(current_version != last_seen)
+            // Use semver comparison via version-compare crate
+            match version_compare::compare(current_version, &last_seen) {
+                Ok(version_compare::Cmp::Gt) => Ok(true),
+                _ => Ok(false),
+            }
         } else {
             // No previous version seen, so this is "new"
             Ok(true)
@@ -92,6 +95,7 @@ impl VersionTrackingRepository {
         let defaults = vec![
             ("minecraft_release", "1.21.1"),
             ("minecraft_snapshot", "25w51a"),
+            ("launcher", "0.1.0-alpha.0"),
         ];
 
         for (v_type, version) in defaults {

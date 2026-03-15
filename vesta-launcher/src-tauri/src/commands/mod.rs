@@ -1,4 +1,5 @@
 pub mod app;
+pub mod github;
 pub mod instances;
 pub mod modpacks;
 pub mod notifications;

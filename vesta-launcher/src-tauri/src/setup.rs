@@ -7,6 +7,7 @@ use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::config::{get_app_config, init_config_db};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
+use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::Manager;
 #[cfg(target_os = "windows")]
 use winver::WindowsVersion;
@@ -183,6 +184,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         log::error!("Failed to initialize config table: {}", e);
     }
 
+    // Initialize version tracking defaults (including launcher version)
+    if let Err(e) = VersionTrackingRepository::initialize_defaults() {
+        log::error!("Failed to initialize version tracking defaults: {}", e);
+    }
+
     log::info!("✓ Database initialization complete");
 
     // --- Guest Mode Cleanup ---
@@ -339,6 +345,65 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
+
+    // Check for launcher updates/changelog on startup
+    {
+        let handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            let current_version = handle.package_info().version.to_string();
+            match VersionTrackingRepository::is_version_newer("launcher", &current_version) {
+                Ok(true) => {
+                    log::info!(
+                        "New launcher version detected: {}. Triggering notification.",
+                        current_version
+                    );
+
+                    let manager = handle.state::<NotificationManager>();
+                    use crate::notifications::models::{
+                        CreateNotificationInput, NotificationAction, NotificationType,
+                    };
+
+                    let actions = vec![NotificationAction {
+                        action_id: "navigate".to_string(),
+                        label: "View Changelog".to_string(),
+                        action_type: "primary".to_string(),
+                        payload: Some(serde_json::json!({ "path": "/changelog" })),
+                    }];
+
+                    if let Err(e) = manager.create(CreateNotificationInput {
+                        client_key: Some("launcher_update".to_string()),
+                        title: Some("Vesta has been updated!".to_string()),
+                        description: Some(format!(
+                            "Welcome to version {}. Check out what's new in this release!",
+                            current_version
+                        )),
+                        severity: Some("info".to_string()),
+                        notification_type: Some(NotificationType::Patient),
+                        dismissible: Some(true),
+                        persist: Some(true),
+                        silent: Some(false),
+                        actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
+                        progress: None,
+                        current_step: None,
+                        total_steps: None,
+                        metadata: None,
+                        show_on_completion: None,
+                    }) {
+                        log::error!("Failed to create update notification: {}", e);
+                    }
+
+                    // Update the last seen version so we don't notify again
+                    if let Err(e) =
+                        VersionTrackingRepository::update_last_seen_version("launcher", &current_version, true)
+                    {
+                        log::error!("Failed to update last seen launcher version: {}", e);
+                    }
+                }
+                Ok(false) => log::debug!("Launcher version is up to date in tracking."),
+                Err(e) => log::error!("Failed to check launcher version: {}", e),
+            }
+        });
+    }
 
     // Initialize ResourceWatcher
     let resource_watcher = crate::resources::ResourceWatcher::new(app.handle().clone());

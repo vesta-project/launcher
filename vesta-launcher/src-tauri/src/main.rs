@@ -98,6 +98,7 @@ fn main() {
             commands::app::close_all_windows_and_reset,
             commands::app::get_default_instance_dir,
             commands::app::path_exists,
+            commands::github::get_changelog,
             commands::app::get_network_status,
             commands::app::set_network_status,
             commands::app::refresh_network_status,

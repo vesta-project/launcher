@@ -11,10 +11,12 @@ import SettingsPage from "@components/pages/mini-pages/settings/settings-page";
 import TaskTestPage from "@components/pages/mini-pages/task-test/task-test-page";
 import NotificationTestPage from "@components/pages/notification-test/notification-test";
 import { ModdingGuidePage } from "../pages/mini-pages/modding-guide/guide";
+import ChangelogPage from "@components/pages/mini-pages/changelog/changelog";
 
 // Centralized router path configuration
 export const miniRouterPaths = {
 	...CreateMiniRouterPath("/config", SettingsPage, "Settings"),
+	...CreateMiniRouterPath("/changelog", ChangelogPage, "Changelog"),
 	...CreateMiniRouterPath("/install", InstallPage, "Install"),
 	...CreateMiniRouterPath("/modding-guide", ModdingGuidePage, "Modding Guide"),
 	...CreateMiniRouterPath("/instance", InstanceDetailsPage, "Instance Details"),

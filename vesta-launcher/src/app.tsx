@@ -179,6 +179,7 @@ function Root(props: ChildrenProp) {
 	let unlistenLogout: UnlistenFn | null = null;
 	let unlistenUpdate: UnlistenFn | null = null;
 	let unlistenCheckUpdates: UnlistenFn | null = null;
+	let unlistenNavigate: UnlistenFn | null = null;
 
 	let hasCheckedForUpdatesOnStartup = false;
 
@@ -316,6 +317,14 @@ function Root(props: ChildrenProp) {
 			checkForAppUpdates();
 		}).then((u) => {
 			unlistenUpdate = u;
+		});
+
+		listen<{ path: string }>("core://navigate", (event) => {
+			console.log("[App] Received navigation event:", event.payload);
+			router().navigate(event.payload.path);
+			setPageViewerOpen(true);
+		}).then((unlisten) => {
+			unlistenNavigate = unlisten;
 		});
 
 		listen("core://exit-requested", async () => {
@@ -552,6 +561,7 @@ function Root(props: ChildrenProp) {
 		unlistenExit?.();
 		unlistenLogout?.();
 		unlistenUpdate?.();
+		unlistenNavigate?.();
 		unlistenCheckUpdates?.();
 		cleanupDialogSystem();
 		unsubscribeFromBackendNotifications();
