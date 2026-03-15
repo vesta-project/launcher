@@ -30,7 +30,7 @@ We have not signed our app packages yet.
 
 ### Community
 
-Need help or want to chat with other users? Join our [Discord]( https://discord.com/invite/zuDNHNHk8E)
+Need help or want to chat with other users? Join our [Discord](https://discord.com/invite/mgP9H568U5)
 
 ### For Developers
 
