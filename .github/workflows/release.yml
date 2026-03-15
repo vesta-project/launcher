@@ -448,8 +448,8 @@ jobs:
             
             PLATFORMS="$PLATFORMS
             \"$PLATFORM\": {
-              \"url\": \"https://r2.vestalauncher.com.r2.dev/launcher/releases/$VERSION/$FILE\",
-              \"installer_url\": \"https://r2.vestalauncher.com.r2.dev/launcher/releases/$VERSION/$INSTALLER_FILE\",
+              \"url\": \"https://r2.vestalauncher.com/launcher/releases/$VERSION/$FILE\",
+              \"installer_url\": \"https://r2.vestalauncher.com/launcher/releases/$VERSION/$INSTALLER_FILE\",
               \"signature\": \"$SIGNATURE\"
             }"
           done
@@ -636,3 +636,4 @@ jobs:
             artifacts/**/*.tar.gz
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
+          fail_on_unmatched_files: false # Prevent failure if some platforms miss a specific artifact type
