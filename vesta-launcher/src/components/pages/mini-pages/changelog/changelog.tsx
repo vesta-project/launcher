@@ -2,29 +2,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { createResource, createSignal, For, onMount, Show } from "solid-js";
 import { marked } from "marked";
 import { sanitizeHtml } from "@utils/security";
+import { changelog, type GithubRelease } from "@stores/changelog";
 import styles from "./changelog.module.css";
 import ExternalLinkIcon from "@assets/open.svg";
 import { openExternal } from "@utils/external-link";
 
-interface GithubRelease {
-	tag_name: string;
-	name: string;
-	body: string;
-	published_at: string;
-	html_url: string;
-}
-
-const fetchChangelog = async (): Promise<GithubRelease[]> => {
-	try {
-		return await invoke("get_changelog");
-	} catch (e) {
-		console.error("Failed to fetch changelog:", e);
-		throw e;
-	}
-};
-
 export default function ChangelogPage() {
-	const [releases] = createResource<GithubRelease[]>(fetchChangelog);
+	const [releases] = [changelog]; // Use the pre-fetched global resource
 	const [selectedTag, setSelectedTag] = createSignal<string | null>(null);
 
 	onMount(() => {

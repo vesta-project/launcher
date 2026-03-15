@@ -41,6 +41,8 @@ import { ensureOsType, getOsType } from "@utils/os";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
+import { prefetchChangelog } from "@stores/changelog";
+import { prefetchSettingsData } from "@stores/settings-cache";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -288,6 +290,10 @@ function Root(props: ChildrenProp) {
 	onMount(() => {
 		// Initialize update listener and set OS attribute on root for global CSS
 		initUpdateListener();
+
+		// Trigger pre-fetching
+		prefetchChangelog();
+		prefetchSettingsData();
 
 		// Set initial OS on document root so global CSS can target it
 		const initialOs = getOsType();

@@ -74,8 +74,16 @@ import AccountSettingsTab from "./account-settings-tab";
 import { NotificationSettingsTab } from "./notification-settings-tab";
 import styles from "./settings-page.module.css";
 import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
+import {
+	cacheSize,
+	detectedJava,
+	globalJavaPaths,
+	javaRequirements,
+	managedJava,
+	systemMemory,
+} from "@stores/settings-cache";
 
-interface AppConfig {
+export interface AppConfig {
 	id: number;
 	background_hue: number;
 	theme: string;
@@ -157,16 +165,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	>({});
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
-	const [totalRam, setTotalRam] = createSignal(16384);
-
-	onMount(async () => {
-		try {
-			const ram = await invoke("get_system_memory_mb");
-			if (typeof ram === "number" && ram > 0) setTotalRam(ram);
-		} catch (e) {
-			console.error("Failed to get total RAM:", e);
-		}
-	});
+	const totalRam = systemMemory;
 
 	createEffect(() => {
 		setSelectedTab(activeTab());
@@ -208,26 +207,14 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
-	const [requirements] = createResource<any[]>(() =>
-		hasTauriRuntime()
-			? invoke("get_required_java_versions")
-			: Promise.resolve([]),
-	);
-	const [detected, { refetch: refetchDetected }] = createResource<any[]>(() =>
-		hasTauriRuntime() ? invoke("detect_java") : Promise.resolve([]),
-	);
-	const [managed, { refetch: refetchManaged }] = createResource<any[]>(() =>
-		hasTauriRuntime() ? invoke("get_managed_javas") : Promise.resolve([]),
-	);
-	const [globalPaths, { refetch: refetchGlobalPaths }] = createResource<any[]>(
-		() =>
-			hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
-	);
+	
+	// Create local proxies of the global resources to maintain the [data, { refetch }] pattern
+	const [requirements] = javaRequirements;
+	const [detected, { refetch: refetchDetected }] = detectedJava;
+	const [managed, { refetch: refetchManaged }] = managedJava;
+	const [globalPaths, { refetch: refetchGlobalPaths }] = globalJavaPaths;
 
-	const [cacheSize, { refetch: refetchCacheSize }] = createResource<string>(
-		() =>
-			hasTauriRuntime() ? invoke("get_cache_size") : Promise.resolve("0 bytes"),
-	);
+	const [cacheSizeValue, { refetch: refetchSize }] = cacheSize;
 
 	const [isScanning, setIsScanning] = createSignal(false);
 
@@ -766,7 +753,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		if (hasTauriRuntime()) {
 			try {
 				await invoke("clear_cache");
-				refetchCacheSize();
+				refetchSize();
 				showToast({
 					title: "Cache Cleared",
 					description:
@@ -962,7 +949,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								/>
 								<SettingsField
 									label="Clear Cache"
-									description={`Stored data: ${cacheSize() || "..."}. Clear metadata and temporary files to fix sync issues.`}
+									description={`Stored data: ${cacheSizeValue() || "..."}. Clear metadata and temporary files to fix sync issues.`}
 									actionLabel="Clear Now"
 									onAction={handleClearCache}
 								/>
