@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/vesta.png" alt="Vesta Launcher" width="400" />
+  <img src="vesta-launcher/public/vesta.png" alt="Vesta Launcher" width="400" />
 </p>
 
 <h3 align="center">Vesta Launcher</h3>
@@ -10,24 +10,27 @@
 
 ---
 
-### Features
-
-- Multi-loader support (Vanilla, Fabric, Forge, NeoForge, Quilt)
-- Instance management
-- Automatic updates
-- Cross-platform (Windows, macOS, Linux)
 
 ### Installation
 
 Download the latest version from [GitHub Releases](https://github.com/vesta-project/launcher/releases).
 
-### Usage
+#### You may experience issues when trying to install for the first time.
 
-1. Run the installer.
-2. Create a new instance.
-3. Select your Minecraft version and mod loader.
-4. Add mods if desired.
-5. Launch!
+We have not signed our app packages yet.
+
+**Windows users:** You may see `Windows protected your PC`. Click `More info` and then `Run anyway` to continue.
+
+**macOS users:** The app is installed as `Vesta Launcher.app`.
+- First try: right-click the app in Finder and choose **Open**, then **Open** again.
+- If Gatekeeper still blocks it, and the app is in `/Applications`, you can remove the quarantine flag:
+  ```bash
+  sudo xattr -dr com.apple.quarantine "/Applications/Vesta Launcher.app"
+  ```
+
+### Community
+
+Need help or want to chat with other users? Join our [Discord]( https://discord.com/invite/zuDNHNHk8E)
 
 ### For Developers
 

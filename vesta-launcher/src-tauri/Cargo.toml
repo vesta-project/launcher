@@ -8,10 +8,10 @@ description.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [build-dependencies]
-tauri-build = { version = "2.5.3", features = [] }
+tauri-build = { version = "2.5.6", features = [] }
 diesel = { version = "2.3.6", features = ["sqlite", "r2d2"] }
 diesel_migrations = "2.3.1"
-libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
+libsqlite3-sys = { version = "0.36", features = ["bundled"] }
 dotenvy = "0.15"
 
 [dependencies]
@@ -21,9 +21,9 @@ slug = "0.1"
 # Database - Diesel ORM
 diesel = { version = "2.3.6", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
 diesel_migrations = { version = "2.3.1", features = ["sqlite"] }
-libsqlite3-sys = { version = "0.35.0", features = ["bundled"] }
+libsqlite3-sys = { version = "0.36", features = ["bundled"] }
 
-tauri = { version = "2.10.1", features = [
+tauri = { version = "2.10.3", features = [
     "protocol-asset",
     "macos-private-api",
     "tray-icon",
@@ -36,10 +36,10 @@ futures = "0.3"
 
 tauri-plugin-os = "2"
 tauri-plugin-log = "2.8.0"
-tauri-plugin-shell = "2.3.4"
+tauri-plugin-shell = "2.3.5"
 tauri-plugin-dialog = "2.6.0"
-tauri-plugin-deep-link = "2"
-tauri-plugin-macos-permissions = "2"
+tauri-plugin-deep-link = "2.4.7"
+tauri-plugin-macos-permissions = "2.3.0"
 tauri-plugin-updater = "2.10.0"
 
 
@@ -72,15 +72,15 @@ rayon = "1.10"
 # OAuth2 and Microsoft authentication
 oauth2 = "4.4.2"
 minecraft-msa-auth = "0.4.0"
-discord-rich-presence = "0.2"
+discord-rich-presence = "1.1.0"
 lazy_static = "1.5"
 walkdir = "2.5.0"
 murmur2 = "0.1.0"
 tempfile = "3"
 uuid = { version = "1.20.0", features = ["v3", "v4", "v1", "serde"] }
-tauri-plugin-clipboard-manager = "2"
+tauri-plugin-clipboard-manager = "2.3.2"
 flate2 = "1.1.9"
-tauri-plugin-fs = "2"
+tauri-plugin-fs = "2.4.5"
 hex = "0.4.3"
 
 [target."cfg(target_os = \"macos\")".dependencies]
@@ -90,7 +90,7 @@ cocoa = "0.26.1"
 winver = "1.0.0"
 
 [target."cfg(any(target_os = \"macos\", target_os = \"windows\", target_os = \"linux\"))".dependencies]
-tauri-plugin-single-instance = { version = "2.3.7", features = ["deep-link"] }
+tauri-plugin-single-instance = { version = "2.4.0", features = ["deep-link"] }
 
 [dev-dependencies]
 tempfile = "3.24.0" 

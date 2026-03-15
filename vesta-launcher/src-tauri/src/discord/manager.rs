@@ -77,13 +77,7 @@ impl DiscordManager {
 
         log::info!("[DiscordManager] Connecting to Discord...");
 
-        let mut client = match DiscordIpcClient::new(DISCORD_APP_ID) {
-            Ok(c) => c,
-            Err(e) => {
-                log::error!("[DiscordManager] Failed to create Discord client: {}", e);
-                return;
-            }
-        };
+        let mut client = DiscordIpcClient::new(DISCORD_APP_ID);
 
         drop(state); // Drop the lock before blocking operation
 

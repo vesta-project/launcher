@@ -16,7 +16,7 @@ thiserror = "2.0.18"
 futures = "0.3"
 sha1 = "0.10"
 sha2 = "0.10"
-zip = "7.2.0"
+zip = "8.2.0"
 log = "0.4"
 flate2 = "1.1"
 tar = "0.4"
@@ -42,12 +42,12 @@ which = "8.0"
 base64 = "0.22.1"
 
 [dev-dependencies]
-env_logger = "0.10"
+env_logger = "0.11"
 wiremock = "0.6"
 tokio-test = "0.4"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.30.1", features = ["signal"] }
+nix = { version = "0.31", features = ["signal"] }
 libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
