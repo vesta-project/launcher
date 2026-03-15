@@ -69,6 +69,7 @@ render(
 			when={isThemeReady()}
 			fallback={
 				<div
+					id="app-loader"
 					style={{
 						display: "flex",
 						height: "100vh",
@@ -78,6 +79,8 @@ render(
 						background: "#0a0a0a",
 						color: "white",
 						"font-family": "system-ui, sans-serif",
+						"border-radius": "inherit",
+						overflow: "hidden",
 					}}
 				>
 					<div style={{ "text-align": "center" }}>

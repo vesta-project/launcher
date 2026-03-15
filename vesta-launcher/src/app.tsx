@@ -295,15 +295,6 @@ function Root(props: ChildrenProp) {
 		prefetchChangelog();
 		prefetchSettingsData();
 
-		// Set initial OS on document root so global CSS can target it
-		const initialOs = getOsType();
-		if (initialOs) {
-			document.documentElement.setAttribute("data-os", initialOs);
-		} else {
-			ensureOsType().then((os) => {
-				if (os) document.documentElement.setAttribute("data-os", os);
-			});
-		}
 		listen("core://check-for-updates", () => {
 			if (!hasCheckedForUpdatesOnStartup) {
 				hasCheckedForUpdatesOnStartup = true;

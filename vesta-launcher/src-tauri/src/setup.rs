@@ -695,9 +695,24 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    let win_builder =
-        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-            .title("Vesta Launcher")
+    let os_str = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    };
+
+    let win_builder = tauri::WebviewWindowBuilder::new(
+        app,
+        "main",
+        tauri::WebviewUrl::App("index.html".into()),
+    )
+    .initialization_script(&format!(
+        "window.__VESTA_OS__ = '{}';",
+        os_str
+    ))
+    .title("Vesta Launcher")
             .inner_size(1200_f64, 700_f64)
             .min_inner_size(520_f64, 465_f64)
             .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
