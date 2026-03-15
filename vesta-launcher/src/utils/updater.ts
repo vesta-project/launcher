@@ -19,6 +19,14 @@ export function initUpdateListener() {
 
 	listen("core://install-app-update", async () => {
 		if (pendingUpdate) {
+			if (!isDownloaded) {
+				console.warn("Update.install called before download complete. Starting download...");
+				if (!isDownloading) {
+					await downloadUpdate();
+				}
+				return;
+			}
+
 			try {
 				await showAlert(
 					"info",
@@ -75,7 +83,6 @@ export async function downloadUpdate() {
 			progress: 0,
 			client_key: "app_update",
 			dismissible: false,
-			persist: false, // Ephemeral
 		});
 
 		let downloaded = 0;
@@ -129,7 +136,6 @@ export async function downloadUpdate() {
 						dismissible: false,
 						actions: actions as any,
 						client_key: "app_update",
-						persist: false, // Ephemeral
 					});
 					break;
 				}
@@ -138,10 +144,22 @@ export async function downloadUpdate() {
 	} catch (error) {
 		isDownloading = false;
 		console.error("Failed to download update:", error);
+		
+		let errorMessage = "Failed to download the update. Please try again.";
+		let errorTitle = "Download Error";
+
+		if (error && typeof error === "string" && error.includes("Invalid encoding in minisign data")) {
+			errorTitle = "Update Verification Failed";
+			errorMessage = "The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
+		} else if (error instanceof Error && error.message.includes("Invalid encoding in minisign data")) {
+			errorTitle = "Update Verification Failed";
+			errorMessage = "The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
+		}
+
 		await showAlert(
 			"error",
-			"Download Error",
-			"Failed to download the update. Please try again.",
+			errorTitle,
+			errorMessage,
 			null,
 			null,
 			null,
@@ -196,7 +214,6 @@ export async function checkForAppUpdates(silent = false) {
 					dismissible: false,
 					actions: actions as any,
 					client_key: "app_update",
-					persist: false, // Ephemeral
 				});
 
 				if (!silent) {

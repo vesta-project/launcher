@@ -11,10 +11,21 @@ export interface GithubRelease {
 
 const fetchChangelog = async (): Promise<GithubRelease[]> => {
 	try {
-		return await invoke("get_changelog");
+		const releases = await invoke<GithubRelease[]>("get_changelog");
+		
+		// If the response is not an array (which shouldn't happen with Vec return type,
+		// but defensive programming is better), handle it.
+		if (!Array.isArray(releases)) {
+			console.error("Changelog fetch returned non-array response:", releases);
+			return [];
+		}
+
+		return releases;
 	} catch (e) {
 		console.error("Failed to fetch changelog:", e);
-		throw e;
+		// Return empty array instead of throwing to avoid UI crash, 
+		// but UI can check changelog.error if needed
+		return [];
 	}
 };
 

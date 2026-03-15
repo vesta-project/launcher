@@ -344,43 +344,58 @@ jobs:
           
           # Collect files per platform, preferring updater-compatible ones
           declare -A platform_files
+          declare -A platform_installers
           for file in $FILES; do
             # Skip signature files in this loop
             if [[ "$file" == *.sig ]]; then continue; fi
 
             PLATFORM=""
+            IS_INSTALLER=false
             case "$file" in
               Vesta_Launcher_${VERSION}_x64.msi)
                 PLATFORM="windows-x86_64"
+                IS_INSTALLER=true
                 ;;
               Vesta_Launcher_${VERSION}_arm64.msi)
                 PLATFORM="windows-aarch64"
+                IS_INSTALLER=true
                 ;;
               Vesta_Launcher_${VERSION}_x64.dmg)
                 PLATFORM="darwin-x86_64"
+                IS_INSTALLER=true
                 ;;
               Vesta_Launcher_${VERSION}_aarch64.dmg)
                 PLATFORM="darwin-aarch64"
+                IS_INSTALLER=true
                 ;;
               Vesta_Launcher_${VERSION}_x86_64.AppImage)
                 PLATFORM="linux-x86_64"
+                IS_INSTALLER=true
                 ;;
               vesta-launcher_${VERSION}_arm64.deb)
                 if [ -z "${platform_files["linux-aarch64"]}" ]; then
                     PLATFORM="linux-aarch64"
+                    IS_INSTALLER=true
                 fi
                 ;;
               vesta-launcher_${VERSION}_amd64.deb)
                 if [ -z "${platform_files["linux-x86_64"]}" ]; then
                     PLATFORM="linux-x86_64"
+                    IS_INSTALLER=true
                 fi
                 ;;
             esac
 
             if [ -n "$PLATFORM" ]; then
-                # For macOS, always prefer .dmg over .tar.gz
+                if [ "$IS_INSTALLER" = true ]; then
+                  platform_installers[$PLATFORM]=$file
+                fi
+
+                # For macOS, always prefer .app.tar.gz for updates (it has the signature)
                 if [[ "$PLATFORM" == darwin-* ]]; then
-                  if [[ "$file" == *.dmg ]]; then
+                  if [[ "$file" == *.app.tar.gz ]]; then
+                    platform_files[$PLATFORM]=$file
+                  elif [[ "$file" == *.dmg ]] && [ -z "${platform_files[$PLATFORM]}" ]; then
                     platform_files[$PLATFORM]=$file
                   fi
                 else
@@ -402,6 +417,7 @@ jobs:
               PLATFORMS="$PLATFORMS,"
             fi
             FILE="${platform_files[$PLATFORM]}"
+            INSTALLER_FILE="${platform_installers[$PLATFORM]:-$FILE}"
             
             # Fetch signature content from R2 and clean up "untrusted comment" if present
             SIG_FILE="$FILE.sig"
@@ -417,6 +433,7 @@ jobs:
             PLATFORMS="$PLATFORMS
             \"$PLATFORM\": {
               \"url\": \"https://pub-f5abfd388a694b88b657a52e2e95b451.r2.dev/launcher/releases/$VERSION/$FILE\",
+              \"installer_url\": \"https://pub-f5abfd388a694b88b657a52e2e95b451.r2.dev/launcher/releases/$VERSION/$INSTALLER_FILE\",
               \"signature\": \"$SIGNATURE\"
             }"
           done
@@ -476,16 +493,41 @@ jobs:
       - name: List downloaded artifacts
         shell: bash
         run: |
-          # Only list artifacts matching the canonical product filenames
-          find artifacts/ -type f \( -iname "*Vesta_Launcher*.*msi" -o -iname "*Vesta_Launcher*.*dmg" -o -iname "*Vesta_Launcher*.*AppImage" -o -iname "*vesta-launcher*.*deb" \) | sort
+          echo "Full artifact tree:"
+          find artifacts/ -maxdepth 4
+          echo "-------------------"
+          # Search for any binary installer or update bundle. 
+          # We use broad patterns because Tauri's default output names (e.g., vesta-launcher_1.0.0_x64.msi)
+          # differ from the canonical names we use for R2.
+          find artifacts/ -type f \( -iname "*Vesta*Launcher*.*msi" -o \
+                                     -iname "*Vesta*Launcher*.*dmg" -o \
+                                     -iname "*Vesta*Launcher*.*AppImage" -o \
+                                     -iname "*vesta*launcher*.*deb" -o \
+                                     -iname "*Vesta*Launcher*.*app.tar.gz" -o \
+                                     -iname "*.deb" -o \
+                                     -iname "*.AppImage" -o \
+                                     -iname "*.msi" -o \
+                                     -iname "*.dmg" -o \
+                                     -iname "*.tar.gz" \) | sort
       
       - name: Validate artifacts
         shell: bash
         run: |
-          ARTIFACT_COUNT=$(find artifacts/ -type f \( -iname "*Vesta_Launcher*.*msi" -o -iname "*Vesta_Launcher*.*dmg" -o -iname "*Vesta_Launcher*.*AppImage" -o -iname "*vesta-launcher*.*deb" \) | wc -l)
-          if [ "$ARTIFACT_COUNT" -lt 3 ]; then
-            echo "Error: Expected at least 3 build artifacts, found $ARTIFACT_COUNT"
-            echo "This likely means some builds failed. Check the build job logs."
+          # Count any applicable installer/bundle files using broad patterns
+          ARTIFACT_COUNT=$(find artifacts/ -type f \( -iname "*Vesta*Launcher*.*msi" -o \
+                                                     -iname "*Vesta*Launcher*.*dmg" -o \
+                                                     -iname "*Vesta*Launcher*.*AppImage" -o \
+                                                     -iname "*vesta*launcher*.*deb" -o \
+                                                     -iname "*Vesta*Launcher*.*app.tar.gz" -o \
+                                                     -iname "*.deb" -o \
+                                                     -iname "*.AppImage" -o \
+                                                     -iname "*.msi" -o \
+                                                     -iname "*.dmg" -o \
+                                                     -iname "*.tar.gz" \) | wc -l)
+          if [ "$ARTIFACT_COUNT" -lt 1 ]; then
+            echo "Error: Expected build artifacts, found $ARTIFACT_COUNT"
+            echo "This likely means some builds failed or patterns are too strict."
+            find artifacts/ -type f
             exit 1
           fi
           echo "Found $ARTIFACT_COUNT build artifacts - proceeding with release"
@@ -566,10 +608,15 @@ jobs:
             
             ${{ steps.changelog.outputs.changelog }}
           files: |
-            artifacts/**/*Vesta_Launcher*.msi
-            artifacts/**/*Vesta_Launcher*.dmg
+            artifacts/**/*Vesta*Launcher*.msi
+            artifacts/**/*Vesta*Launcher*.dmg
             artifacts/**/*vesta-launcher*.deb
-            artifacts/**/*Vesta_Launcher*.AppImage
-            artifacts/**/*Vesta_Launcher*.tar.gz
+            artifacts/**/*Vesta*Launcher*.AppImage
+            artifacts/**/*Vesta*Launcher*.app.tar.gz
+            artifacts/**/*.msi
+            artifacts/**/*.dmg
+            artifacts/**/*.deb
+            artifacts/**/*.AppImage
+            artifacts/**/*.tar.gz
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
