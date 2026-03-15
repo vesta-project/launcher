@@ -35,11 +35,20 @@ pub async fn launch_window(
         url.push_str(&format!("&history={}", urlencoding::encode(&history_data)));
     }
 
+    let os_str = if cfg!(target_os = "macos") {
+        "macos"
+    } else if cfg!(target_os = "windows") {
+        "windows"
+    } else {
+        "linux"
+    };
+
     let win_builder = tauri::WebviewWindowBuilder::new(
         &app_handle,
         format!("page-viewer-{}", &window_id),
         tauri::WebviewUrl::App(url.into()),
     )
+    .initialization_script(&format!("window.__VESTA_OS__ = '{}';", os_str))
     .title("Vesta Launcher - Page Viewer")
     .inner_size(900_f64, 600_f64)
     .min_inner_size(400_f64, 300_f64)

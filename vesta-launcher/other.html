@@ -6,6 +6,29 @@
     <meta name="theme-color" content="#000000" />
     <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
     <title>Vesta Launcher</title>
+    <script>
+      (function() {
+        const os = window.__VESTA_OS__ || new URLSearchParams(window.location.search).get('os');
+        if (os) {
+          document.documentElement.setAttribute('data-os', os);
+        }
+      })();
+    </script>
+    <style>
+      :root[data-os="macos"] #app-loader {
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      #app-loader {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 999999;
+        background: #000;
+      }
+    </style>
   </head>
 
   <body>

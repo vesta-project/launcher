@@ -46,7 +46,9 @@ export function ensureOsType(): Promise<OsType | undefined> {
 // Solid helper to get a reactive OS signal with async resolution.
 // Usage: const os = useOs(); then read os() inside components.
 export function useOs(defaultOs: string = "windows") {
-	const [os, setOs] = createSignal<string>(defaultOs);
+	// Try to get OS from data-os attribute (set by init script in index.html)
+	const initialOsAttr = document.documentElement.getAttribute("data-os") || defaultOs;
+	const [os, setOs] = createSignal<string>(initialOsAttr);
 
 	onMount(() => {
 		const initial = getOsType();
