@@ -256,18 +256,10 @@ jobs:
                 target_name="Vesta_Launcher_${VERSION}_x86_64.AppImage"
                 ;;
               gz)
-                if [[ "$base_file" == *.tar.gz ]]; then
-                  if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
-                    target_name="Vesta_Launcher_${VERSION}_aarch64.app.tar.gz"
-                  else
-                    target_name="Vesta_Launcher_${VERSION}_x64.app.tar.gz"
-                  fi
-                elif [[ "$base_file" == *.app.tar.gz ]]; then
-                  if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
-                    target_name="Vesta_Launcher_${VERSION}_aarch64.app.tar.gz"
-                  else
-                    target_name="Vesta_Launcher_${VERSION}_x64.app.tar.gz"
-                  fi
+                # Preserve original signed filename for .app.tar.gz and .tar.gz
+                # so the signature 'file:' metadata matches the uploaded artifact.
+                if [[ "$base_file" == *.app.tar.gz ]] || [[ "$base_file" == *.tar.gz ]]; then
+                  target_name="$base_file"
                 fi
                 ;;
             esac
@@ -277,11 +269,11 @@ jobs:
                 target_name="$target_name.sig"
               fi
               echo "Uploading $filename as $target_name"
-              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
+              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://r2.vestalauncher.cloudflarestorage.com
             else
               # Fallback for unrecognized files, but upload them anyway
               echo "Uploading $filename (unknown format)"
-              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$filename" --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
+              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$filename" --endpoint-url https://r2.vestalauncher.cloudflarestorage.com
             fi
           done
 
@@ -350,7 +342,7 @@ jobs:
           NOTES="Automatic release"
           
           # List files in the version folder
-          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com | awk '{print $4}')
+          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://r2.vestalauncher.cloudflarestorage.com | awk '{print $4}')
           
           # Collect files per platform, preferring updater-compatible ones
           declare -A platform_files
@@ -400,6 +392,14 @@ jobs:
               Vesta_Launcher_${VERSION}_aarch64.app.tar.gz)
                 PLATFORM="darwin-aarch64"
                 ;;
+              *.app.tar.gz)
+                # Handle generic signed macOS update bundles (may be unsigned/version-agnostic)
+                if [[ "$file" == *aarch64* || "$file" == *arm64* ]]; then
+                  PLATFORM="darwin-aarch64"
+                else
+                  PLATFORM="darwin-x86_64"
+                fi
+                ;;
             esac
 
             if [ -n "$PLATFORM" ]; then
@@ -435,16 +435,10 @@ jobs:
             FILE="${platform_files[$PLATFORM]}"
             INSTALLER_FILE="${platform_installers[$PLATFORM]:-$FILE}"
             
-            # Fetch signature content from R2 and clean up "untrusted comment" if present
+            # Fetch signature content from R2
             SIG_FILE="$FILE.sig"
             echo "Fetching signature for $FILE from $SIG_FILE"
-            SIGNATURE_RAW=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com 2>/dev/null || echo "")
-            # Only take the second line (the actual signature) if it's a multisign/tauri-style signature file
-            if echo "$SIGNATURE_RAW" | grep -q "untrusted comment"; then
-              SIGNATURE=$(echo "$SIGNATURE_RAW" | sed -n '2p')
-            else
-              SIGNATURE="$SIGNATURE_RAW"
-            fi
+            SIGNATURE=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://r2.vestalauncher.cloudflarestorage.com 2>/dev/null || echo "")
             
             PLATFORMS="$PLATFORMS
             \"$PLATFORM\": {
@@ -465,7 +459,7 @@ jobs:
           }
           EOF
           
-          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
+          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://r2.vestalauncher.cloudflarestorage.com
 
   create-github-release:
     needs: [build, generate-manifest, bump-version]
