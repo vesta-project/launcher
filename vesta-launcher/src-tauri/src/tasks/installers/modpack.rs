@@ -13,7 +13,6 @@ use anyhow::Result;
 use piston_lib::game::installer::core::modpack_installer::{
     ModpackInstaller, ModpackResolvedCF, ModpackResolver,
 };
-use piston_lib::game::installer::types::CancelToken;
 use tokio::fs;
 
 #[derive(Clone)]
@@ -144,18 +143,12 @@ impl Task for InstallModpackTask {
         let source = self.source.clone();
         let metadata = self.metadata.clone();
         let app_handle = ctx.app_handle.clone();
-        let notification_id = ctx.notification_id.clone();
-        let cancel_rx = ctx.cancel_rx.clone();
-        let pause_rx = ctx.pause_rx.clone();
 
         Box::pin(async move {
             // Initialize reporter
             let reporter: std::sync::Arc<dyn ProgressReporter> =
                 std::sync::Arc::new(TauriProgressReporter {
-                    app_handle: app_handle.clone(),
-                    notification_id: notification_id.clone(),
-                    cancel_token: CancelToken::new(cancel_rx),
-                    pause_rx: pause_rx.clone(),
+                    ctx: ctx.clone(),
                     current_step: Arc::new(RwLock::new(String::new())),
                     dry_run: false,
                     last_emit: Arc::new(std::sync::Mutex::new(

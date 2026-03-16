@@ -1,6 +1,5 @@
 use crate::models::GlobalJavaPath;
-use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::{CreateNotificationInput, NotificationType};
+use crate::notifications::models::ProgressUpdate;
 use crate::schema::global_java_paths::dsl::*;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::get_config_conn;
@@ -9,8 +8,7 @@ use anyhow::Result;
 use diesel::prelude::*;
 use piston_lib::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
 use piston_lib::game::installer::types::{NotificationActionSpec, ProgressReporter};
-use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::watch;
+use tauri::Emitter;
 
 pub struct DownloadJavaTask {
     pub major_version: u32,
@@ -50,10 +48,7 @@ impl Task for DownloadJavaTask {
                 .join("jre");
 
             let reporter = TaskProgressReporter {
-                app_handle: ctx.app_handle.clone(),
-                notification_id: ctx.notification_id.clone(),
-                cancel_rx: ctx.cancel_rx.clone(),
-                pause_rx: ctx.pause_rx.clone(),
+                ctx: ctx.clone(),
             };
 
             let version = JavaVersion::new(major);
@@ -85,101 +80,68 @@ impl Task for DownloadJavaTask {
 }
 
 struct TaskProgressReporter {
-    app_handle: AppHandle,
-    notification_id: String,
-    cancel_rx: watch::Receiver<bool>,
-    pause_rx: watch::Receiver<bool>,
+    ctx: TaskContext,
 }
 
 impl ProgressReporter for TaskProgressReporter {
-    fn start_step(&self, name: &str, _total_steps: Option<u32>) {
-        let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress_with_description(
-            self.notification_id.clone(),
-            -1,
-            None,
-            None,
-            name.to_string(),
-        );
+    fn start_step(&self, name: &str, total_steps: Option<u32>) {
+        self.ctx.update_description(name.to_string());
+        if let Some(ref channel) = self.ctx.progress_channel {
+            let _ = channel.send(ProgressUpdate::Step {
+                name: name.to_string(),
+                total: total_steps,
+            });
+        }
     }
 
     fn update_bytes(&self, transferred: u64, total: Option<u64>) {
         if let Some(total) = total {
             let percent = (transferred as f64 / total as f64 * 100.0) as i32;
-            let manager = self.app_handle.state::<NotificationManager>();
-            let _ = manager.update_progress(self.notification_id.clone(), percent, None, None);
+            self.ctx.update_progress(percent, None, None);
         }
     }
 
     fn set_percent(&self, percent: i32) {
-        let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress(self.notification_id.clone(), percent, None, None);
+        self.ctx.update_progress(percent, None, None);
     }
 
     fn set_message(&self, message: &str) {
-        let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress_with_description(
-            self.notification_id.clone(),
-            -1,
-            None,
-            None,
-            message.to_string(),
-        );
+        self.ctx.update_description(message.to_string());
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
-        let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress(
-            self.notification_id.clone(),
-            -1,
-            Some(current as i32),
-            total.map(|t| t as i32),
-        );
+        self.ctx.update_progress(-1, Some(current as i32), total.map(|t| t as i32));
+
+        if let Some(ref channel) = self.ctx.progress_channel {
+            let _ = channel.send(ProgressUpdate::StepCount {
+                current,
+                total,
+            });
+        }
     }
 
     fn set_substep(&self, name: Option<&str>, _current: Option<u32>, _total: Option<u32>) {
         if let Some(n) = name {
-            let manager = self.app_handle.state::<NotificationManager>();
-            let _ = manager.update_progress_with_description(
-                self.notification_id.clone(),
-                -1,
-                None,
-                None,
-                n.to_string(),
-            );
+            self.ctx.update_description(n.to_string());
         }
     }
 
     fn set_actions(&self, _actions: Option<Vec<NotificationActionSpec>>) {}
 
     fn done(&self, success: bool, message: Option<&str>) {
-        let manager = self.app_handle.state::<NotificationManager>();
-        if !success {
-            let input = CreateNotificationInput {
-                client_key: Some(self.notification_id.clone()),
-                title: Some("Java Download Failed".to_string()),
-                description: Some(message.unwrap_or("Unknown error").to_string()),
-                severity: Some("error".to_string()),
-                notification_type: Some(NotificationType::Patient),
-                dismissible: Some(true),
-                persist: Some(true),
-                silent: Some(false),
-                actions: None,
-                progress: Some(-1),
-                current_step: None,
-                total_steps: None,
-                metadata: None,
-                show_on_completion: Some(true),
-            };
-            let _ = manager.create(input);
+        if success {
+            log::info!("Java installation finished successfully (internal done called)");
+            // self.ctx.update_full(100, "Java setup complete".to_string(), None, None);
+        } else {
+            self.ctx.update_description(message.unwrap_or("Java download failed").to_string());
         }
     }
 
     fn is_cancelled(&self) -> bool {
-        *self.cancel_rx.borrow()
+        *self.ctx.cancel_rx.borrow()
     }
 
     fn is_paused(&self) -> bool {
-        *self.pause_rx.borrow()
+        *self.ctx.pause_rx.borrow()
     }
 }

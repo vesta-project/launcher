@@ -22,6 +22,16 @@ type NotificationType = "alert" | "progress" | "immediate" | "patient";
 type NotificationSeverity = "info" | "success" | "warning" | "error";
 type NotificationActionType = "primary" | "secondary" | "destructive";
 
+// Unified progress update protocol (matches Rust ProgressUpdate enum)
+export type ProgressUpdate =
+	| {
+			type: "progress";
+			data: { percent: number; description?: string | null; severity?: NotificationSeverity };
+	  }
+	| { type: "step"; data: { name: string; total?: number | null } }
+	| { type: "stepCount"; data: { current: number; total?: number | null } }
+	| { type: "finished"; data: { success: boolean; message?: string | null } };
+
 interface NotificationAction {
 	id: string;
 	label: string;
@@ -242,6 +252,65 @@ async function deleteNotification(id: number): Promise<void> {
 	await invoke("delete_notification", { id });
 }
 
+/**
+ * Shared logic to handle a progress update from either a Tauri Event OR a Tauri Channel
+ */
+function handleProgressUpdate(
+	clientKey: string | undefined | null,
+	update: ProgressUpdate,
+) {
+	if (!clientKey) return;
+
+	// Always try to update existing toast if we have it in our ephemeral list
+	const existing = _notificationCache.find(
+		(n) => n.client_key && n.client_key === clientKey,
+	);
+
+	if (existing) {
+		const updateData: Partial<Notification> = {};
+
+		switch (update.type) {
+			case "progress":
+				updateData.progress = update.data.percent;
+				if (update.data.description !== undefined) {
+					updateData.description = update.data.description ?? undefined;
+				}
+				if (update.data.severity) {
+					updateData.type = update.data.severity;
+				}
+				break;
+			case "step":
+				updateData.description = update.data.name;
+				updateData.total_steps = update.data.total ?? null;
+				break;
+			case "stepCount":
+				updateData.current_step = update.data.current;
+				if (update.data.total !== undefined) {
+					updateData.total_steps = update.data.total ?? null;
+				}
+				break;
+			case "finished":
+				updateData.progress = 100;
+				if (update.data.message) {
+					updateData.description = update.data.message;
+				}
+				updateData.type = update.data.success ? "success" : "error";
+				updateData.notification_type = "patient";
+				break;
+		}
+
+		updateToast(existing.id, {
+			...updateData,
+			duration: update.type === "finished" ? 5000 : 0,
+		});
+
+		_notificationCache = _notificationCache.map((n) =>
+			n.client_key === clientKey ? { ...n, ...updateData } : n,
+		);
+		setNotifications([..._notificationCache]);
+	}
+}
+
 async function clearAllDismissibleNotifications(): Promise<number> {
 	return await invoke<number>("clear_all_dismissible_notifications");
 }
@@ -384,74 +453,23 @@ async function subscribeToBackendNotifications() {
 			async (event) => {
 				const notif = event.payload;
 
-				// Always try to update existing toast if we have it in our ephemeral list
-				// regardless of whether it's persistent or not
+				// Use unified bridge to update UI if key is present
 				if (notif.client_key) {
+					handleProgressUpdate(notif.client_key, {
+						type: "progress",
+						data: {
+							percent: notif.progress ?? 0,
+							description: notif.description,
+							severity: notif.severity as NotificationSeverity,
+						},
+					});
+
+					// If we still didn't find an existing notification in handleProgressUpdate,
+					// keep the original logic for creating one from scratch if missing.
 					const existing = _notificationCache.find(
 						(n) => n.client_key && n.client_key === notif.client_key,
 					);
-					if (existing) {
-						// Check if task just completed (progress went from <100 to 100)
-						const wasIncomplete =
-							existing.progress !== null &&
-							existing.progress !== undefined &&
-							existing.progress < 100;
-						const isNowComplete = notif.progress === 100;
-
-						if (wasIncomplete && isNowComplete) {
-							// Task just completed
-						}
-
-						// Update the toast UI
-						const clientKey = notif.client_key;
-						// Use actions from payload if provided (even if empty)
-						const currentActions = notif.actions !== undefined ? notif.actions : existing.actions;
-
-						updateToast(existing.id, {
-							title: notif.title || existing.title,
-							description: notif.description || existing.description,
-							progress: notif.progress,
-							current_step: notif.current_step,
-							total_steps: notif.total_steps,
-							severity: notif.severity || existing.type,
-							notification_type:
-								notif.notification_type || existing.notification_type,
-							duration: isNowComplete ? 5000 : 0, // Auto-dismiss after 5s on completion
-							dismissible: notif.dismissible ?? existing.dismissible,
-							actions: currentActions,
-							onAction: (actionId, payload) => {
-								invokeNotificationAction(
-									actionId,
-									clientKey || undefined,
-									payload,
-								);
-							},
-							onToastDismiss: (id) => closeAlert(id, true),
-							onToastForceClose: (id) => closeAlert(id, false),
-						});
-
-						_notificationCache = _notificationCache.map((n) =>
-							n.client_key === notif.client_key
-								? {
-										...n,
-										title: notif.title || n.title,
-										description: notif.description || n.description,
-										progress: notif.progress,
-										current_step: notif.current_step,
-										total_steps: notif.total_steps,
-										type: notif.severity || n.type,
-										notification_type:
-											notif.notification_type || n.notification_type,
-										actions: currentActions,
-										dismissible:
-											notif.dismissible !== undefined
-												? notif.dismissible
-												: n.dismissible,
-									}
-								: n,
-						);
-						setNotifications([..._notificationCache]);
-					} else {
+					if (!existing) {
 						// If we don't have a matching ephemeral toast for this client_key (race / missed event),
 						// create one now so progress updates are visible in the UI.
 
@@ -551,5 +569,6 @@ export {
 	clearAllDismissibleNotifications,
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
+	handleProgressUpdate,
 	persistentNotificationTrigger,
 };

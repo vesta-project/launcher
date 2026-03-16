@@ -1,12 +1,14 @@
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{
-    CreateNotificationInput, NotificationAction, NotificationType, PROGRESS_INDETERMINATE,
+    CreateNotificationInput, NotificationAction, NotificationSeverity, NotificationType,
+    ProgressUpdate, PROGRESS_INDETERMINATE,
 };
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
+use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::{mpsc, watch, Semaphore};
 
@@ -16,16 +18,80 @@ pub struct TaskContext {
     pub notification_id: String,
     pub cancel_rx: watch::Receiver<bool>,
     pub pause_rx: watch::Receiver<bool>,
+    pub progress_channel: Option<Channel<ProgressUpdate>>,
 }
 
 impl TaskContext {
     pub fn update_description(&self, description: String) {
+        // 1. Update the channel if available
+        if let Some(ref channel) = self.progress_channel {
+            let _ = channel.send(ProgressUpdate::Progress {
+                percent: PROGRESS_INDETERMINATE,
+                description: Some(description.clone()),
+                severity: None,
+            });
+        }
+
+        // 2. Fallback to classic NotificationManager
         let manager = self.app_handle.state::<NotificationManager>();
         let _ = manager.update_progress_with_description(
             self.notification_id.clone(),
-            0, // We keep it at indeterminate if we don't know the exact progress
+            PROGRESS_INDETERMINATE, // We keep it at indeterminate if we don't know the exact progress
             None,
             None,
+            description,
+        );
+    }
+
+    pub fn update_progress(&self, progress: i32, current_step: Option<i32>, total_steps: Option<i32>) {
+        // 1. Update the channel if available
+        if let Some(ref channel) = self.progress_channel {
+            let _ = channel.send(ProgressUpdate::Progress {
+                percent: progress,
+                description: None,
+                severity: None,
+            });
+            if let Some(current) = current_step {
+                let _ = channel.send(ProgressUpdate::StepCount {
+                    current: current as u32,
+                    total: total_steps.map(|t| t as u32),
+                });
+            }
+        }
+
+        // 2. Fallback to classic NotificationManager
+        let manager = self.app_handle.state::<NotificationManager>();
+        let _ = manager.update_progress(
+            self.notification_id.clone(),
+            progress,
+            current_step,
+            total_steps,
+        );
+    }
+
+    pub fn update_full(&self, progress: i32, description: String, current_step: Option<i32>, total_steps: Option<i32>) {
+        // 1. Update the channel if available
+        if let Some(ref channel) = self.progress_channel {
+            let _ = channel.send(ProgressUpdate::Progress {
+                percent: progress,
+                description: Some(description.clone()),
+                severity: None,
+            });
+            if let Some(current) = current_step {
+                let _ = channel.send(ProgressUpdate::StepCount {
+                    current: current as u32,
+                    total: total_steps.map(|t| t as u32),
+                });
+            }
+        }
+
+        // 2. Fallback to classic NotificationManager
+        let manager = self.app_handle.state::<NotificationManager>();
+        let _ = manager.update_progress_with_description(
+            self.notification_id.clone(),
+            progress,
+            current_step,
+            total_steps,
             description,
         );
     }
@@ -69,9 +135,14 @@ pub trait Task: Send + Sync {
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>>;
 }
 
+pub struct QueuedTask {
+    pub task: Box<dyn Task>,
+    pub progress_channel: Option<Channel<ProgressUpdate>>,
+}
+
 pub struct TaskManager {
     app_handle: AppHandle,
-    sender: mpsc::Sender<Box<dyn Task>>,
+    sender: mpsc::Sender<QueuedTask>,
     semaphore: Arc<Semaphore>,
     current_limit: Mutex<usize>,
     cancellation_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
@@ -81,7 +152,7 @@ pub struct TaskManager {
 
 impl TaskManager {
     pub fn new(app_handle: AppHandle) -> Self {
-        let (sender, mut receiver) = mpsc::channel::<Box<dyn Task>>(100);
+        let (sender, mut receiver) = mpsc::channel::<QueuedTask>(100);
         let initial_limit = 2;
         let semaphore = Arc::new(Semaphore::new(initial_limit));
         let current_limit = Mutex::new(initial_limit);
@@ -99,7 +170,9 @@ impl TaskManager {
             static TASK_COUNTER: AtomicU64 = AtomicU64::new(0);
             log::info!("TaskManager: Worker loop started, ready to receive tasks");
 
-            while let Some(task) = receiver.recv().await {
+            while let Some(queued_task) = receiver.recv().await {
+                let task = queued_task.task;
+                let progress_channel = queued_task.progress_channel;
                 log::info!("TaskManager: Received task: {}", task.name());
 
                 let task_name = task.name();
@@ -272,6 +345,7 @@ impl TaskManager {
                         notification_id: key_clone.clone(),
                         cancel_rx: rx,
                         pause_rx,
+                        progress_channel,
                     };
 
                     log::info!("TaskManager: Executing task: {}", task_name);
@@ -287,7 +361,7 @@ impl TaskManager {
                         );
                     }
 
-                    let run_result = task.run(ctx).await;
+                    let run_result = task.run(ctx.clone()).await;
 
                     // Cleanup tokens after run
                     if is_cancellable {
@@ -301,17 +375,34 @@ impl TaskManager {
                     let manager = app.state::<NotificationManager>();
                     match run_result {
                         Ok(_) => {
-                            // Auto completion update to 100%
-                            let _ = manager.update_progress_with_description(
+                            // 1. Update the channel if available
+                            if let Some(ref channel) = ctx.progress_channel {
+                                let _ = channel.send(ProgressUpdate::Finished {
+                                    success: true,
+                                    message: Some(task.completion_description()),
+                                });
+                            }
+
+                            // 2. Auto completion update back to classic NotificationManager
+                            let _ = manager.update_progress_with_description_and_severity(
                                 key_clone.clone(),
                                 100,
                                 Some(task.total_steps()),
                                 Some(task.total_steps()),
                                 task.completion_description(),
+                                Some(NotificationSeverity::Success),
                             );
                         }
                         Err(e) => {
                             eprintln!("Task execution failed: {}", e);
+
+                            // 1. Update the channel if available
+                            if let Some(ref channel) = ctx.progress_channel {
+                                let _ = channel.send(ProgressUpdate::Finished {
+                                    success: false,
+                                    message: Some(e.to_string()),
+                                });
+                            }
 
                             // Notify frontend about failure if it follows the resource download pattern
                             if let Some(task_id) = task.id() {
@@ -382,12 +473,23 @@ impl TaskManager {
     }
 
     pub async fn submit(&self, task: Box<dyn Task>) -> Result<(), String> {
+        self.submit_with_channel(task, None).await
+    }
+
+    pub async fn submit_with_channel(
+        &self,
+        task: Box<dyn Task>,
+        progress_channel: Option<Channel<ProgressUpdate>>,
+    ) -> Result<(), String> {
         let task_name = task.name();
         log::info!(
             "[TaskManager::submit] Submitting task '{}' to channel",
             task_name
         );
-        match self.sender.send(task).await {
+        match self.sender.send(QueuedTask {
+            task,
+            progress_channel,
+        }).await {
             Ok(_) => {
                 log::info!(
                     "[TaskManager::submit] Task '{}' successfully sent to worker queue",

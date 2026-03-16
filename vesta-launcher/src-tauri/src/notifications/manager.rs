@@ -132,7 +132,6 @@ impl ActionHandler for RestartAppHandler {
         // runner keeps the process; production builds should relaunch correctly.
         app_handle.restart();
         log::info!("[RestartAppHandler] app_handle.restart() returned");
-        #[allow(unreachable_code)]
         Ok(())
     }
 }
@@ -737,6 +736,25 @@ impl NotificationManager {
         total_steps: Option<i32>,
         description: String,
     ) -> Result<()> {
+        self.update_progress_with_description_and_severity(
+            id_or_key,
+            progress,
+            current_step,
+            total_steps,
+            description,
+            None,
+        )
+    }
+
+    pub fn update_progress_with_description_and_severity(
+        &self,
+        id_or_key: String,
+        progress: i32,
+        current_step: Option<i32>,
+        total_steps: Option<i32>,
+        description: String,
+        severity: Option<NotificationSeverity>,
+    ) -> Result<()> {
         // println!("NotificationManager: Updating progress for {} to {}%", id_or_key, progress);
         let notification_opt = if let Ok(id) = id_or_key.parse::<i32>() {
             NotificationStore::get_by_id(id)?
@@ -757,7 +775,12 @@ impl NotificationManager {
 
             // Update description if provided
             if !description.is_empty() {
-                notification.description = Some(description);
+                notification.description = Some(description.clone());
+            }
+
+            // Update severity if provided
+            if let Some(sev) = severity {
+                notification.severity = sev;
             }
 
             notification.updated_at = chrono::Utc::now().to_rfc3339();
@@ -766,13 +789,15 @@ impl NotificationManager {
             // Use database field as single source of truth
             let show_flag = notification.show_on_completion.unwrap_or(false);
 
-            if progress >= 100 && notification.notification_type == NotificationType::Progress {
-                if show_flag {
+            if progress >= 100
+                && notification.notification_type == NotificationType::Progress
+            {
+                if show_flag && (!description.is_empty() || progress > 100) {
                     notification.notification_type = NotificationType::Patient;
                     notification.dismissible = true;
                     // Clear actions when converting to Patient (task is done, can't cancel)
                     notification.actions.clear();
-                } else {
+                } else if !show_flag {
                     // Default behavior: auto-delete completed progress notifications
                     if let Some(id) = notification.id {
                         // delegate to existing delete path which emits events and cleans up the store

@@ -138,55 +138,60 @@ export async function downloadUpdate() {
 					break;
 				}
 				case "Finished": {
-					isDownloading = false;
-					isDownloaded = true;
-					// Convert to Patient with Install action
-					const actions: NotificationAction[] = [
-						{
-							id: "install_app_update",
-							label: "Install & Restart",
-							type: "primary",
-						},
-					];
-
-					createNotification({
-						title: "Update Downloaded",
-						description: `Vesta v${update.version} is ready to install. Restart to apply changes.`,
-						notification_type: "patient",
-						severity: "success",
-						dismissible: false,
-						actions: actions,
-						client_key: "app_update",
-					});
+					// The download is complete, but we wait for the outer promise to resolve
+					// to ensure that post-download checks (e.g. signature verification)
+					// have also completed successfully.
+					console.log("[Updater] Download callback: Finished event received.");
 					break;
 				}
 			}
 		});
+
+		isDownloading = false;
+		isDownloaded = true;
+
+		// Convert to Patient with Install action
+		const actions: NotificationAction[] = [
+			{
+				id: "install_app_update",
+				label: "Install & Restart",
+				type: "primary",
+			},
+		];
+
+		await createNotification({
+			title: "Update Downloaded",
+			description: `Vesta v${update.version} is ready to install. Restart to apply changes.`,
+			notification_type: "patient",
+			severity: "success",
+			dismissible: false,
+			actions: actions,
+			client_key: "app_update",
+		});
 	} catch (error) {
 		isDownloading = false;
+		isDownloaded = false;
 		console.error("Failed to download update:", error);
 		
 		let errorMessage = "Failed to download the update. Please try again.";
 		let errorTitle = "Download Error";
 
-		if (error && typeof error === "string" && error.includes("Invalid encoding in minisign data")) {
+		if (error && typeof error === "string" && (error.includes("Invalid encoding in minisign data") || error.includes("signature"))) {
 			errorTitle = "Update Verification Failed";
 			errorMessage = "The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
-		} else if (error instanceof Error && error.message.includes("Invalid encoding in minisign data")) {
+		} else if (error instanceof Error && (error.message.includes("Invalid encoding in minisign data") || error.message.includes("signature"))) {
 			errorTitle = "Update Verification Failed";
 			errorMessage = "The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
 		}
 
-		await showAlert(
-			"error",
-			errorTitle,
-			errorMessage,
-			null,
-			null,
-			null,
-			"app_update_error",
-			"immediate",
-		);
+		await createNotification({
+			title: errorTitle,
+			description: errorMessage,
+			notification_type: "patient",
+			severity: "error",
+			dismissible: true,
+			client_key: "app_update",
+		});
 	}
 }
 

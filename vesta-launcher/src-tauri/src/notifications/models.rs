@@ -53,6 +53,33 @@ pub const PROGRESS_INDETERMINATE: i32 = -1;
 pub const NOT_PERSISTED_ID: i32 = -1;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(tag = "type", content = "data")]
+#[serde(rename_all = "camelCase")]
+pub enum ProgressUpdate {
+    /// Update the overall progress percentage and/or description
+    Progress {
+        percent: i32,
+        description: Option<String>,
+        severity: Option<NotificationSeverity>,
+    },
+    /// Start a new step with an optional count of sub-steps
+    Step {
+        name: String,
+        total: Option<u32>,
+    },
+    /// Update the current step count against a total
+    StepCount {
+        current: u32,
+        total: Option<u32>,
+    },
+    /// Mark the task as finished
+    Finished {
+        success: bool,
+        message: Option<String>,
+    },
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct CreateNotificationInput {
     pub client_key: Option<String>,
     pub title: Option<String>,

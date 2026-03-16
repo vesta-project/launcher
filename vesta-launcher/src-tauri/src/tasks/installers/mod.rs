@@ -4,16 +4,16 @@ pub mod modpack;
 use anyhow::Result;
 use piston_lib::game::installer::install_instance;
 use piston_lib::game::installer::types::{
-    CancelToken, InstallSpec, ModloaderType, NotificationActionSpec, ProgressReporter,
+    InstallSpec, ModloaderType, NotificationActionSpec, ProgressReporter,
 };
 use std::path::PathBuf;
 use std::sync::Arc;
-use tauri::{AppHandle, Manager};
+use tauri::Manager;
 use tokio::sync::RwLock;
 
 use crate::models::instance::Instance;
 use crate::notifications::manager::NotificationManager;
-use crate::notifications::models::{CreateNotificationInput, NotificationType};
+use crate::notifications::models::ProgressUpdate;
 use crate::tasks::manager::{Task, TaskContext};
 
 /// Task adapter for game installation
@@ -89,9 +89,8 @@ impl Task for InstallInstanceTask {
         let instance = self.instance.clone();
         let dry_run = self.dry_run;
         let app_handle = ctx.app_handle.clone();
-        let cancel_rx = ctx.cancel_rx.clone();
-        let pause_rx = ctx.pause_rx.clone();
         let notification_id = ctx.notification_id.clone();
+        let pause_rx = ctx.pause_rx.clone();
 
         Box::pin(async move {
             log::info!(
@@ -144,10 +143,7 @@ impl Task for InstallInstanceTask {
 
             let reporter: std::sync::Arc<dyn ProgressReporter> =
                 std::sync::Arc::new(TauriProgressReporter {
-                    app_handle: app_handle.clone(),
-                    notification_id: notification_id.clone(),
-                    cancel_token: CancelToken::new(cancel_rx),
-                    pause_rx: pause_rx.clone(),
+                    ctx: ctx.clone(),
                     current_step: reporter_current_step,
                     dry_run,
                     last_emit: Arc::new(std::sync::Mutex::new(
@@ -282,10 +278,7 @@ impl Task for InstallInstanceTask {
 
 /// Progress reporter implementation that forwards to NotificationManager
 pub struct TauriProgressReporter {
-    pub app_handle: AppHandle,
-    pub notification_id: String,
-    pub cancel_token: CancelToken,
-    pub pause_rx: tokio::sync::watch::Receiver<bool>,
+    pub ctx: TaskContext,
     pub current_step: Arc<RwLock<String>>,
     pub dry_run: bool,
     // Throttling state for progress events
@@ -297,22 +290,23 @@ impl ProgressReporter for TauriProgressReporter {
     fn start_step(&self, name: &str, total_steps: Option<u32>) {
         let name_str = name.to_string();
         let name_log = name_str.clone();
-        let app_handle = self.app_handle.clone();
-        let notification_id = self.notification_id.clone();
+        let ctx = self.ctx.clone();
         let current_step = self.current_step.clone();
-        // Synchronously upsert the description to avoid races where the
-        // async task is delayed behind a blocking install thread.
-        {
-            let manager = app_handle.state::<NotificationManager>();
-            let _ = manager.upsert_description(&notification_id, &name_str);
+
+        // 1. Update overall status via unified context
+        ctx.update_description(name_str.clone());
+
+        // 2. Start a new step in the channel if present
+        if let Some(ref channel) = ctx.progress_channel {
+            let _ = channel.send(ProgressUpdate::Step {
+                name: name_str.clone(),
+                total: total_steps,
+            });
         }
 
-        // Update progress (indeterminate) asynchronously, but without modifying description.
+        // Update current step state asynchronously
         tauri::async_runtime::spawn(async move {
-            *current_step.write().await = name_str.clone();
-            let manager = app_handle.state::<NotificationManager>();
-            let _ =
-                manager.update_progress(notification_id, -1, None, total_steps.map(|s| s as i32));
+            *current_step.write().await = name_str;
         });
 
         log::info!("Installation step: {}", name_log);
@@ -348,51 +342,33 @@ impl ProgressReporter for TauriProgressReporter {
         if allow {
             self.last_percent
                 .store(percent, std::sync::atomic::Ordering::Relaxed);
-            let app_handle = self.app_handle.clone();
-            let notification_id = self.notification_id.clone();
-            tauri::async_runtime::spawn(async move {
-                let manager = app_handle.state::<NotificationManager>();
-                let _ = manager.update_progress(notification_id, percent, None, None);
-            });
+            self.ctx.update_progress(percent, None, None);
         }
     }
 
     fn set_message(&self, message: &str) {
         let message_str = message.to_string();
         let message_log = message_str.clone();
-        let app_handle = self.app_handle.clone();
-        let notification_id = self.notification_id.clone();
 
-        // Use upsert_description to update the notification description
-        // This matches the behavior of start_step and avoids creating duplicate notifications
-        {
-            let manager = app_handle.state::<NotificationManager>();
-            let _ = manager.upsert_description(&notification_id, &message_str);
-        }
+        self.ctx.update_description(message_str);
 
         log::debug!("Installation: {}", message_log);
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
-        let app_handle = self.app_handle.clone();
-        let notification_id = self.notification_id.clone();
-        tauri::async_runtime::spawn(async move {
-            let manager = app_handle.state::<NotificationManager>();
-            let _ = manager.update_progress_with_description(
-                notification_id,
-                -1, // use indeterminate progress to avoid showing stale percentages
-                Some(current as i32),
-                total.map(|t| t as i32),
-                String::new(),
-            );
-        });
+        self.ctx.update_progress(-1, Some(current as i32), total.map(|t| t as i32));
+
+        if let Some(ref channel) = self.ctx.progress_channel {
+            let _ = channel.send(ProgressUpdate::StepCount {
+                current,
+                total,
+            });
+        }
+
         log::debug!("Installation step count: {}/{:?}", current, total);
     }
 
     fn set_substep(&self, name: Option<&str>, current: Option<u32>, total: Option<u32>) {
-        let app_handle = self.app_handle.clone();
-        let notification_id = self.notification_id.clone();
-
         // Build substep description
         let substep_desc = match (name, current, total) {
             (Some(n), Some(c), Some(t)) => format!("{} ({}/{})", n, c, t),
@@ -400,16 +376,12 @@ impl ProgressReporter for TauriProgressReporter {
             (Some(n), None, None) => n.to_string(),
             (None, Some(c), Some(t)) => format!("({}/{})", c, t),
             (None, Some(c), None) => format!("({})", c),
-            _ => return, // Nothing to update
+            _ => String::new(),
         };
 
-        // Clone the description for the async task so we can still use the
-        // original `substep_desc` for local logging without moving it.
-        let substep_for_task = substep_desc.clone();
-        tauri::async_runtime::spawn(async move {
-            let manager = app_handle.state::<NotificationManager>();
-            let _ = manager.upsert_description(&notification_id, &substep_for_task);
-        });
+        if !substep_desc.is_empty() {
+            self.ctx.update_description(substep_desc.clone());
+        }
 
         log::debug!("Installation substep: {}", substep_desc);
     }
@@ -420,8 +392,6 @@ impl ProgressReporter for TauriProgressReporter {
     }
 
     fn done(&self, success: bool, message: Option<&str>) {
-        let app_handle = self.app_handle.clone();
-        let notification_id = self.notification_id.clone();
         let message_str = message
             .unwrap_or(if success {
                 "Installation complete"
@@ -431,52 +401,22 @@ impl ProgressReporter for TauriProgressReporter {
             .to_string();
         let message_log = message_str.clone();
 
-        tauri::async_runtime::spawn(async move {
-            let manager = app_handle.state::<NotificationManager>();
-
-            if success {
-                // On success just update to 100% — manager will convert -> Patient or auto-delete depending on task preference
-                let _ = manager.update_progress_with_description(
-                    notification_id,
-                    100,
-                    None,
-                    None,
-                    message_str,
-                );
-            } else {
-                let input = CreateNotificationInput {
-                    client_key: Some(notification_id),
-                    title: Some("Installation Failed".to_string()),
-                    description: Some(message_str),
-                    severity: Some("error".to_string()),
-                    notification_type: Some(NotificationType::Patient),
-                    dismissible: Some(true),
-                    persist: Some(true),
-                    silent: Some(false),
-                    actions: None,
-                    progress: Some(-1),
-                    current_step: None,
-                    total_steps: None,
-                    metadata: None,
-                    show_on_completion: Some(true),
-                };
-                let _ = manager.create(input);
-            }
-        });
-
         if success {
+            self.ctx.update_full(100, message_str, None, None);
             log::info!("Installation completed successfully");
         } else {
+            // Handle error case - usually via a separate notification or status
+            self.ctx.update_description(message_str);
             log::error!("Installation failed: {}", message_log);
         }
     }
 
     fn is_cancelled(&self) -> bool {
-        self.cancel_token.is_cancelled()
+        *self.ctx.cancel_rx.borrow()
     }
 
     fn is_paused(&self) -> bool {
-        *self.pause_rx.borrow()
+        *self.ctx.pause_rx.borrow()
     }
 
     fn is_dry_run(&self) -> bool {

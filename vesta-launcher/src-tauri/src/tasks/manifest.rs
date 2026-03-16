@@ -78,16 +78,15 @@ impl Task for GenerateManifestTask {
             })?;
             log::info!("Config directory resolved: {:?}", config_dir);
 
-            let _ = manager.update_progress_with_description(
-                notif_key.clone(),
+            let _ = ctx.update_full(
                 10,
-                Some(1),
-                Some(5),
                 if force_refresh {
                     "Clearing cache and fetching fresh metadata...".to_string()
                 } else {
                     "Fetching metadata from piston-lib...".to_string()
                 },
+                Some(1),
+                Some(5),
             );
 
             let network_manager = app.state::<crate::utils::network::NetworkManager>();
@@ -136,12 +135,11 @@ impl Task for GenerateManifestTask {
                 metadata.last_updated
             );
 
-            let _ = manager.update_progress_with_description(
-                notif_key.clone(),
+            let _ = ctx.update_full(
                 100,
-                Some(5),
-                Some(5),
                 "Manifest ready".to_string(),
+                Some(5),
+                Some(5),
             );
 
             // Update in-memory cache for fast subsequent access

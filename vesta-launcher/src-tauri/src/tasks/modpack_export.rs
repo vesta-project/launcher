@@ -58,10 +58,7 @@ impl Task for ModpackExportTask {
         let rm = self.resource_manager.clone();
 
         let reporter = Arc::new(TauriProgressReporter {
-            app_handle: ctx.app_handle.clone(),
-            notification_id: ctx.notification_id.clone(),
-            cancel_token: CancelToken::new(ctx.cancel_rx.clone()),
-            pause_rx: ctx.pause_rx.clone(),
+            ctx: ctx.clone(),
             current_step: Arc::new(RwLock::new(String::new())),
             dry_run: false,
             last_emit: Arc::new(std::sync::Mutex::new(std::time::Instant::now())),

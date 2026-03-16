@@ -179,22 +179,15 @@ impl Task for ResourceDownloadTask {
                     if total_size > 0 {
                         let percent = (downloaded as f64 / total_size as f64 * 100.0) as i32;
                         let desc = format!("{} / {} ({})", downloaded_fmt, total_fmt, speed_fmt);
-                        let _ = manager.update_progress_with_description(
-                            notification_id.clone(),
+                        let _ = ctx.update_full(
                             percent,
-                            None,
-                            None,
                             desc,
+                            None,
+                            None,
                         );
                     } else {
                         let desc = format!("{} units downloaded ({})", downloaded, speed_fmt);
-                        let _ = manager.update_progress_with_description(
-                            notification_id.clone(),
-                            -1,
-                            None,
-                            None,
-                            desc,
-                        );
+                        let _ = ctx.update_description(desc);
                     }
 
                     last_update = now;
