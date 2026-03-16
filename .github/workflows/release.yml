@@ -268,7 +268,8 @@ jobs:
               if [ "$is_sig" = true ]; then
                 target_name="$target_name.sig"
               fi
-              echo "Uploading $filename as $target_name"              # USE QUOTES for both source and destination to handle potential spaces in filenames              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://r2.vestalauncher.com
+              echo "Uploading $filename as $target_name"
+              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://r2.vestalauncher.com
             else
               # Fallback for unrecognized files, but upload them anyway
               echo "Uploading $filename (unknown format)"
