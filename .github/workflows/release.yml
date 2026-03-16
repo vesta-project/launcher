@@ -263,12 +263,12 @@ jobs:
             
             if [ -n "$target_name" ]; then
               echo "Uploading $filename as $target_name"
-              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://r2.vestalauncher.com
+              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
               
               # Upload signature companion if it exists
               if [ -f "$file.sig" ]; then
                 echo "Uploading signature $filename.sig as $target_name.sig"
-                aws s3 cp "$file.sig" "s3://vesta-project/launcher/releases/$VERSION/$target_name.sig" --endpoint-url https://r2.vestalauncher.com
+                aws s3 cp "$file.sig" "s3://vesta-project/launcher/releases/$VERSION/$target_name.sig" --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
               else
                 echo "Warning: No .sig file found alongside $filename!"
               fi
@@ -332,7 +332,7 @@ jobs:
           echo "Version: $VERSION"
           echo "Fetching file list from S3..."
           
-          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://r2.vestalauncher.com | awk '{print $4}')
+          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com | awk '{print $4}')
           echo "Files retrieved from bucket:"
           echo "$FILES"
           echo "::endgroup::"
@@ -401,7 +401,7 @@ jobs:
             SIG_FILE="$FILE.sig"
             
             # Fetch signature content and aggressively strip newline artifacts to prevent invalid JSON breakage
-            SIGNATURE=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://r2.vestalauncher.com 2>/dev/null | tr -d '\n\r' || echo "")
+            SIGNATURE=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com 2>/dev/null | tr -d '\n\r' || echo "")
             
             # Only add the platform to the manifest if it has a valid signature!
             if [ -n "$SIGNATURE" ]; then
@@ -433,7 +433,7 @@ jobs:
           echo "Generated latest.json:"
           cat latest.json
           
-          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://r2.vestalauncher.com
+          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
   create-github-release:
     needs: [build, generate-manifest, bump-version]
