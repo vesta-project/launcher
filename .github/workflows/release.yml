@@ -1,4 +1,4 @@
-﻿name: Release
+name: Release
 # This workflow builds and releases Vesta Launcher
 # - Fails fast: if any build fails, the entire release is cancelled
 # - Concurrency: cancels in-progress runs when new ones start
@@ -218,6 +218,7 @@ jobs:
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
+          aws configure set default.s3.multipart_threshold 1024MB
           
           VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           
@@ -227,7 +228,7 @@ jobs:
           
           # Find all output files, excluding sig files from the primary loop
           # We grab sig files alongside their base files to ensure perfect matching
-          find target/${{ matrix.target }}/release/bundle/ -type f | while read -r file; do
+          find target/${{ matrix.target }}/release/bundle/ -type f -print0 | while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             
             # Skip signature files in the main loop
@@ -246,7 +247,7 @@ jobs:
               if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then target_name="Vesta_Launcher_${VERSION}_arm64.msi"
               else target_name="Vesta_Launcher_${VERSION}_x64.msi"; fi
             elif [[ "$filename" == *.dmg ]]; then
-              if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then target_name="Vesta_Launcher_${VERSION}_arm64.dmg"
+              if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then target_name="Vesta_Launcher_${VERSION}_aarch64.dmg"
               else target_name="Vesta_Launcher_${VERSION}_x64.dmg"; fi
             elif [[ "$filename" == *.deb ]]; then
               if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then target_name="vesta-launcher_${VERSION}_arm64.deb"
@@ -351,7 +352,7 @@ jobs:
             if [[ "$file" == Vesta_Launcher_*_x64.msi ]]; then PLATFORM="windows-x86_64"; IS_INSTALLER=true; fi
             if [[ "$file" == Vesta_Launcher_*_arm64.msi ]]; then PLATFORM="windows-aarch64"; IS_INSTALLER=true; fi
             if [[ "$file" == Vesta_Launcher_*_x64.dmg ]]; then PLATFORM="darwin-x86_64"; IS_INSTALLER=true; fi
-            if [[ "$file" == Vesta_Launcher_*_arm64.dmg ]]; then PLATFORM="darwin-aarch64"; IS_INSTALLER=true; fi
+            if [[ "$file" == Vesta_Launcher_*_arm64.dmg ]] || [[ "$file" == Vesta_Launcher_*_aarch64.dmg ]]; then PLATFORM="darwin-aarch64"; IS_INSTALLER=true; fi
             if [[ "$file" == vesta-launcher_*_amd64.deb ]]; then PLATFORM="linux-x86_64"; IS_INSTALLER=true; fi
             if [[ "$file" == vesta-launcher_*_arm64.deb ]]; then PLATFORM="linux-aarch64"; IS_INSTALLER=true; fi
             if [[ "$file" == Vesta_Launcher_*_x86_64.AppImage ]]; then PLATFORM="linux-x86_64"; IS_INSTALLER=true; fi
@@ -521,13 +522,7 @@ jobs:
             
             ${{ steps.changelog.outputs.changelog }}
           files: |
-            artifacts/**/*.msi
-            artifacts/**/*.dmg
-            artifacts/**/*.deb
-            artifacts/**/*.AppImage
-            artifacts/**/*.tar.gz
-            artifacts/**/*.zip
-            artifacts/**/*.sig
+            artifacts/**/*
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
           fail_on_unmatched_files: false
