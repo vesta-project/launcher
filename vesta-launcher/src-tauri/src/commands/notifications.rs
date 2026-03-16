@@ -11,6 +11,7 @@ use tauri::State;
 pub struct UpdateProgressPayload {
     pub id: Option<i32>,
     pub client_key: Option<String>,
+    pub title: Option<String>,
     pub progress: Option<i32>,
     pub current_step: Option<i32>,
     pub total_steps: Option<i32>,
@@ -43,6 +44,7 @@ pub async fn update_notification_progress(
             payload.progress.unwrap_or(0),
             payload.current_step,
             payload.total_steps,
+            payload.title,
         )
         .map_err(|e| e.to_string())
 }

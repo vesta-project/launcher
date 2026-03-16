@@ -61,11 +61,27 @@ impl TaskContext {
 
         // 2. Fallback to classic NotificationManager
         let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress(
+        let _ = manager.update_progress_full(
             self.notification_id.clone(),
             progress,
             current_step,
             total_steps,
+            String::new(),
+            None,
+            None,
+        );
+    }
+
+    pub fn set_title(&self, title: String) {
+        let manager = self.app_handle.state::<NotificationManager>();
+        let _ = manager.update_progress_full(
+            self.notification_id.clone(),
+            0,
+            None,
+            None,
+            String::new(),
+            None,
+            Some(title),
         );
     }
 
@@ -87,12 +103,14 @@ impl TaskContext {
 
         // 2. Fallback to classic NotificationManager
         let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress_with_description(
+        let _ = manager.update_progress_full(
             self.notification_id.clone(),
             progress,
             current_step,
             total_steps,
             description,
+            None,
+            None,
         );
     }
 }
@@ -803,6 +821,7 @@ impl Task for TestTask {
                         progress as i32,
                         Some(i as i32),
                         Some(steps as i32),
+                        None,
                     )
                     .map_err(|e| e.to_string())?;
                 i += 1;
@@ -816,6 +835,7 @@ impl Task for TestTask {
                     100,
                     Some(steps as i32),
                     Some(steps as i32),
+                    None,
                 )
                 .map_err(|e| e.to_string())?;
 

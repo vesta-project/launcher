@@ -184,7 +184,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 			return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 		});
 		return (
-			<Show when={props.instance && props.instance.id !== null && props.instance.id !== "none"}>
+			<Show when={props.instance && props.instance.id !== null}>
 				<Show
 					when={resolvedUrl()}
 					fallback={

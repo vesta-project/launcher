@@ -26,7 +26,12 @@ type NotificationActionType = "primary" | "secondary" | "destructive";
 export type ProgressUpdate =
 	| {
 			type: "progress";
-			data: { percent: number; description?: string | null; severity?: NotificationSeverity };
+			data: {
+				percent: number;
+				description?: string | null;
+				severity?: NotificationSeverity;
+				title?: string | null;
+			};
 	  }
 	| { type: "step"; data: { name: string; total?: number | null } }
 	| { type: "stepCount"; data: { current: number; total?: number | null } }
@@ -266,30 +271,36 @@ function handleProgressUpdate(
 		(n) => n.client_key && n.client_key === clientKey,
 	);
 
-	if (existing) {
-		const updateData: Partial<Notification> = {};
+		if (existing) {
+			const updateData: Partial<Notification> = {};
 
-		switch (update.type) {
-			case "progress":
-				updateData.progress = update.data.percent;
-				if (update.data.description !== undefined) {
-					updateData.description = update.data.description ?? undefined;
-				}
-				if (update.data.severity) {
-					updateData.type = update.data.severity;
-				}
-				break;
-			case "step":
-				updateData.description = update.data.name;
-				updateData.total_steps = update.data.total ?? null;
-				break;
-			case "stepCount":
-				updateData.current_step = update.data.current;
-				if (update.data.total !== undefined) {
-					updateData.total_steps = update.data.total ?? null;
-				}
-				break;
-			case "finished":
+			switch (update.type) {
+				case "progress":
+					updateData.progress = update.data.percent;
+					if (update.data.description !== undefined) {
+						updateData.description = update.data.description ?? undefined;
+					}
+					if (update.data.severity) {
+						updateData.type = update.data.severity;
+					}
+					if (update.data.title !== undefined) {
+						updateData.title = update.data.title ?? undefined;
+					}
+					break;
+				case "step":
+					updateData.title = update.data.name;
+					updateData.description = update.data.name;
+					if (update.data.total != null && update.data.total !== 0) {
+						updateData.total_steps = update.data.total;
+					}
+					break;
+				case "stepCount":
+					updateData.current_step = update.data.current;
+					if (update.data.total != null && update.data.total !== 0) {
+						updateData.total_steps = update.data.total;
+					}
+					break;
+				case "finished":
 				updateData.progress = 100;
 				if (update.data.message) {
 					updateData.description = update.data.message;
@@ -300,6 +311,7 @@ function handleProgressUpdate(
 		}
 
 		updateToast(existing.id, {
+			...existing,
 			...updateData,
 			duration: update.type === "finished" ? 5000 : 0,
 		});

@@ -92,6 +92,8 @@ impl Task for InstallInstanceTask {
         let notification_id = ctx.notification_id.clone();
         let pause_rx = ctx.pause_rx.clone();
 
+        ctx.set_title(format!("Installing {}", instance.name));
+
         Box::pin(async move {
             log::info!(
                 "[InstallTask] Starting installation for instance '{}' (dry_run={})",

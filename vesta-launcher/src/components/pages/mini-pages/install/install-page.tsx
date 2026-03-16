@@ -341,22 +341,11 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 					);
 					await installModpackFromZip(sourcePath, data, fullMetadata);
 				}
-
-				showToast({
-					title: "Install Started",
-					description: `Installing modpack: ${data.name}`,
-					severity: "success",
-				});
 			} else {
 				const id = await createInstance(data as any);
 				if (id) {
 					const instance = await getInstance(id);
 					await installInstance(instance);
-					showToast({
-						title: "Created",
-						description: `Created instance: ${data.name}`,
-						severity: "success",
-					});
 				}
 			}
 

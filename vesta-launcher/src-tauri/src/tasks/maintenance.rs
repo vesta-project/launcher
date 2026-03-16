@@ -41,6 +41,8 @@ impl Task for CloneInstanceTask {
         let source_id = self.source_id;
         let new_name_opt = self.new_name.clone();
 
+        ctx.set_title("Duplicating Instance".to_string());
+
         Box::pin(async move {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 

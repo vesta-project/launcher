@@ -718,13 +718,16 @@ impl NotificationManager {
         progress: i32,
         current_step: Option<i32>,
         total_steps: Option<i32>,
+        title: Option<String>,
     ) -> Result<()> {
-        self.update_progress_with_description(
+        self.update_progress_full(
             id_or_key,
             progress,
             current_step,
             total_steps,
             String::new(),
+            None,
+            title,
         )
     }
 
@@ -736,12 +739,13 @@ impl NotificationManager {
         total_steps: Option<i32>,
         description: String,
     ) -> Result<()> {
-        self.update_progress_with_description_and_severity(
+        self.update_progress_full(
             id_or_key,
             progress,
             current_step,
             total_steps,
             description,
+            None,
             None,
         )
     }
@@ -755,6 +759,27 @@ impl NotificationManager {
         description: String,
         severity: Option<NotificationSeverity>,
     ) -> Result<()> {
+        self.update_progress_full(
+            id_or_key,
+            progress,
+            current_step,
+            total_steps,
+            description,
+            severity,
+            None,
+        )
+    }
+
+    pub fn update_progress_full(
+        &self,
+        id_or_key: String,
+        progress: i32,
+        current_step: Option<i32>,
+        total_steps: Option<i32>,
+        description: String,
+        severity: Option<NotificationSeverity>,
+        title: Option<String>,
+    ) -> Result<()> {
         // println!("NotificationManager: Updating progress for {} to {}%", id_or_key, progress);
         let notification_opt = if let Ok(id) = id_or_key.parse::<i32>() {
             NotificationStore::get_by_id(id)?
@@ -765,11 +790,18 @@ impl NotificationManager {
         if let Some(mut notification) = notification_opt {
             notification.progress = Some(progress);
 
+            // Update title if provided
+            if let Some(t) = title {
+                if !t.is_empty() {
+                    notification.title = t;
+                }
+            }
+
             // Update steps if provided
             if current_step.is_some() {
                 notification.current_step = current_step;
             }
-            if total_steps.is_some() {
+            if total_steps.is_some() && total_steps != Some(0) {
                 notification.total_steps = total_steps;
             }
 

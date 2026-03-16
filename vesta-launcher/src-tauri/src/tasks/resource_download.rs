@@ -79,6 +79,8 @@ impl Task for ResourceDownloadTask {
             let notification_id = ctx.notification_id.clone();
             let manager = app_handle.state::<NotificationManager>();
 
+            ctx.set_title(format!("Installing {}", project_name));
+
             // 1. Get instance path
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
             let instance_path_str: String = instances_dsl::instance
