@@ -1,4 +1,4 @@
-import { createResource, createSignal, type Resource, type ResourceActions } from "solid-js";
+import { createEffect, createResource, createSignal, onCleanup, type Resource, type ResourceActions } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 
@@ -6,6 +6,19 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 export const javaRequirements: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<any[]>(() =>
 	hasTauriRuntime() ? invoke("get_required_java_versions") : Promise.resolve([]),
 );
+
+// Auto-retry Manifest not ready
+createEffect(() => {
+	const [requirements, { refetch }] = javaRequirements;
+	const error = requirements.error;
+
+	if (error === "MANIFEST_NOT_READY") {
+		const timer = setTimeout(() => {
+			refetch();
+		}, 2000);
+		onCleanup(() => clearTimeout(timer));
+	}
+});
 
 // Resource for detected Java versions
 export const detectedJava: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<any[]>(() =>

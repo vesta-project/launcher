@@ -52,9 +52,11 @@ import {
 	createResource,
 	createSignal,
 	For,
+	lazy,
 	onCleanup,
 	onMount,
 	Show,
+	Suspense,
 	untrack,
 } from "solid-js";
 import {
@@ -82,6 +84,14 @@ import {
 	managedJava,
 	systemMemory,
 } from "@stores/settings-cache";
+
+// Lazy-loaded tabs
+const GeneralSettingsTab = lazy(() => import("./general-settings-tab").then(m => ({ default: m.GeneralSettingsTab })));
+const AppearanceSettingsTab = lazy(() => import("./appearance-settings-tab").then(m => ({ default: m.AppearanceSettingsTab })));
+const JavaSettingsTab = lazy(() => import("./java-settings-tab").then(m => ({ default: m.JavaSettingsTab })));
+const HelpSettingsTab = lazy(() => import("./help-settings-tab").then(m => ({ default: m.HelpSettingsTab })));
+const DeveloperSettingsTab = lazy(() => import("./developer-settings-tab").then(m => ({ default: m.DeveloperSettingsTab })));
+
 
 export interface AppConfig {
 	id: number;
@@ -858,121 +868,21 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsList>
 
 					<TabsContent class={styles["tabs-content"]} value="general">
-						<div class={styles["settings-tab-content"]}>
-							<SettingsCard header="Accessibility">
-								<SettingsField
-									label="Reduced Motion"
-									description="Disable UI animations for a faster and cleaner experience."
-									layout="inline"
-									control={
-										<Switch
-											checked={reducedMotion()}
-											onCheckedChange={handleReducedMotionToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="Privacy & Integration">
-								<SettingsField
-									label="Discord Rich Presence"
-									description="Show your current game and status on Discord."
-									layout="inline"
-									control={
-										<Switch
-											checked={discordPresenceEnabled()}
-											onCheckedChange={handleDiscordToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="Resources">
-								<SettingsField
-									label="Automatically Install Dependencies"
-									description="Automatically download and install required mods and engines when adding a new resource."
-									layout="inline"
-									control={
-										<Switch
-											checked={autoInstallDependencies()}
-											onCheckedChange={handleAutoInstallDepsToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-								<SettingsField
-									label="Parallel Download Threads"
-									description="Number of simultaneous downloads when installing resources."
-									layout="inline"
-									control={
-										<NumberField
-											value={maxDownloadThreads()}
-											onRawValueChange={async (val) => {
-												setMaxDownloadThreads(val);
-												if (hasTauriRuntime()) {
-													await invoke("update_config_field", {
-														field: "max_download_threads",
-														value: val,
-													});
-												}
-											}}
-											minValue={1}
-											maxValue={16}
-										>
-											<NumberFieldGroup>
-												<NumberFieldInput />
-												<NumberFieldIncrementTrigger />
-												<NumberFieldDecrementTrigger />
-											</NumberFieldGroup>
-										</NumberField>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="Application Data">
-								<SettingsField
-									label="AppData Directory"
-									description="Open the folder where Vesta Launcher stores its data."
-									actionLabel="Open Folder"
-									onAction={handleOpenAppData}
-								/>
-								<SettingsField
-									label="Clear Cache"
-									description={`Stored data: ${cacheSizeValue() || "..."}. Clear metadata and temporary files to fix sync issues.`}
-									actionLabel="Clear Now"
-									onAction={handleClearCache}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="Troubleshooting">
-								<SettingsField
-									label="Reset Onboarding"
-									description="Redo the first-time setup process. This will not delete your accounts or instances."
-									actionLabel="Redo Setup"
-									destructive
-									confirmationDesc="Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen."
-									onAction={async () => {
-										try {
-											await invoke("reset_onboarding");
-											window.location.href = "/"; // Force reload to root
-										} catch (e) {
-											console.error("Failed to reset onboarding:", e);
-										}
-									}}
-								/>
-							</SettingsCard>
-						</div>
+						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading General Settings...</div>}>
+							<GeneralSettingsTab
+								reducedMotion={reducedMotion()}
+								handleReducedMotionToggle={handleReducedMotionToggle}
+								discordPresenceEnabled={discordPresenceEnabled()}
+								handleDiscordToggle={handleDiscordToggle}
+								autoInstallDependencies={autoInstallDependencies()}
+								handleAutoInstallDepsToggle={handleAutoInstallDepsToggle}
+								maxDownloadThreads={maxDownloadThreads()}
+								setMaxDownloadThreads={setMaxDownloadThreads}
+								handleOpenAppData={handleOpenAppData}
+								cacheSizeValue={cacheSizeValue() || "0 bytes"}
+								handleClearCache={handleClearCache}
+							/>
+						</Suspense>
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="account">
@@ -980,289 +890,41 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="appearance">
-						<div class={styles["settings-tab-content"]}>
-							<section class={styles["settings-section"]}>
-								<h2>Theme Presets</h2>
-								<p class={styles["section-description"]}>
-									Choose a pre-designed theme or create your own custom look.
-								</p>
-								<div class={styles["theme-preset-grid"]}>
-									<For each={PRESET_THEMES}>
-										{(theme) => (
-											<ThemePresetCard
-												theme={theme}
-												isSelected={themeId() === theme.id}
-												onClick={() => handlePresetSelect(theme.id)}
-											/>
-										)}
-									</For>
-								</div>
-							</section>
-
-							<Show when={canChangeHue()}>
-								<SettingsCard
-									header="Customize Colors"
-									subHeader="Adjust the primary color hue to personalize your theme."
-								>
-									<SettingsField
-										label="Primary Hue"
-										description="The base color used for accents and backgrounds"
-										layout="stack"
-										control={
-											<div
-												class={styles["hue-customization"]}
-												style={{ width: "100%" }}
-											>
-												<Slider
-													value={[backgroundHue()]}
-													onChange={handleHueChange}
-													minValue={0}
-													maxValue={360}
-													step={1}
-													class={styles["slider--hue"]}
-												>
-													<div class={styles["slider__header"]}>
-														<div class={styles["slider__value-label"]}>
-															{backgroundHue()}°
-														</div>
-													</div>
-													<SliderTrack class={styles["slider-track-hue"]}>
-														<SliderThumb />
-													</SliderTrack>
-												</Slider>
-											</div>
-										}
-									/>
-								</SettingsCard>
-							</Show>
-
-							<Show when={themeId() === "custom"}>
-								<SettingsCard
-									header="Advanced Style"
-									subHeader="Fine-tune the visual style and effects."
-								>
-									<SettingsField
-										label="Style Mode"
-										description="Choose the visual depth and transparency effects"
-										layout="inline"
-										control={
-											<ToggleGroup
-												value={styleMode() ?? "glass"}
-												onChange={(val) => {
-													if (val)
-														handleStyleModeChange(val as ThemeConfig["style"]);
-												}}
-											>
-												<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
-												<ToggleGroupItem value="satin">Satin</ToggleGroupItem>
-												<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
-												<ToggleGroupItem value="bordered">
-													Bordered
-												</ToggleGroupItem>
-												<ToggleGroupItem value="solid">Solid</ToggleGroupItem>
-											</ToggleGroup>
-										}
-									/>
-
-									<SettingsField
-										label="Background Gradient"
-										description="Enable animated background gradient"
-										control={
-											<Switch
-												checked={gradientEnabled() ?? false}
-												onCheckedChange={handleGradientToggle}
-											>
-												<SwitchControl>
-													<SwitchThumb />
-												</SwitchControl>
-											</Switch>
-										}
-									/>
-									<Show when={gradientEnabled()}>
-										<SettingsField
-											label="Gradient Type"
-											description="Linear or circular background"
-											layout="inline"
-											control={
-												<ToggleGroup
-													value={gradientType() ?? "linear"}
-													onChange={(val) => {
-														if (val)
-															handleGradientTypeChange(
-																val as "linear" | "radial",
-															);
-													}}
-												>
-													<ToggleGroupItem value="linear">
-														Linear
-													</ToggleGroupItem>
-													<ToggleGroupItem value="radial">
-														Circular
-													</ToggleGroupItem>
-												</ToggleGroup>
-											}
-										/>
-
-										<SettingsField
-											label="Rotation"
-											description="Angle of the background gradient"
-											layout="stack"
-											control={
-												<div style={{ width: "100%" }}>
-													<Slider
-														value={[rotation() ?? 135]}
-														onChange={handleRotationChange}
-														minValue={0}
-														maxValue={360}
-														step={1}
-														class={styles["slider--angle"]}
-													>
-														<div class={styles["slider__header"]}>
-															<div class={styles["slider__value-label"]}>
-																{rotation()}°
-															</div>
-														</div>
-														<SliderTrack>
-															<SliderFill />
-															<SliderThumb />
-														</SliderTrack>
-													</Slider>
-												</div>
-											}
-										/>
-
-										<SettingsField
-											label="Color Harmony"
-											description="Choose how secondary colors are generated"
-											helpTopic="GRADIENT_HARMONY"
-											layout="inline"
-											control={
-												<ToggleGroup
-													value={gradientHarmony() ?? "none"}
-													onChange={(val) => {
-														if (val)
-															handleGradientHarmonyChange(
-																val as GradientHarmony,
-															);
-													}}
-												>
-													<ToggleGroupItem value="none">None</ToggleGroupItem>
-													<ToggleGroupItem value="analogous">
-														Analogous
-													</ToggleGroupItem>
-													<ToggleGroupItem value="complementary">
-														Complementary
-													</ToggleGroupItem>
-													<ToggleGroupItem value="triadic">
-														Triadic
-													</ToggleGroupItem>
-												</ToggleGroup>
-											}
-										/>
-									</Show>
-
-									<Show when={styleMode() === "bordered"}>
-										<SettingsField
-											label="Border Thickness"
-											description="Width of the element borders in pixels"
-											layout="stack"
-											control={
-												<div style={{ width: "100%" }}>
-													<Slider
-														value={[borderThickness()]}
-														onChange={handleBorderThicknessChange}
-														minValue={0}
-														maxValue={4}
-														step={1}
-														class={styles["slider--border"]}
-													>
-														<div class={styles["slider__header"]}>
-															<div class={styles["slider__value-label"]}>
-																{borderThickness()}px
-															</div>
-														</div>
-														<SliderTrack>
-															<SliderFill />
-															<SliderThumb />
-														</SliderTrack>
-													</Slider>
-												</div>
-											}
-										/>
-									</Show>
-								</SettingsCard>
-							</Show>
-						</div>
+						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Appearance...</div>}>
+							<AppearanceSettingsTab
+								PRESET_THEMES={PRESET_THEMES}
+								themeId={themeId()}
+								handlePresetSelect={handlePresetSelect}
+								canChangeHue={canChangeHue()}
+								backgroundHue={backgroundHue()}
+								handleHueChange={handleHueChange}
+								styleMode={styleMode()}
+								handleStyleModeChange={handleStyleModeChange}
+								gradientEnabled={gradientEnabled()}
+								handleGradientToggle={handleGradientToggle}
+								gradientType={gradientType()}
+								handleGradientTypeChange={handleGradientTypeChange}
+								rotation={rotation()}
+								handleRotationChange={handleRotationChange}
+								gradientHarmony={gradientHarmony()}
+								handleGradientHarmonyChange={handleGradientHarmonyChange}
+								borderThickness={borderThickness()}
+								handleBorderThicknessChange={handleBorderThicknessChange}
+							/>
+						</Suspense>
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="java">
-						<div class={styles["settings-tab-content"]}>
-							<SettingsCard
-								header="Java Environments"
-								subHeader="Global defaults for each Java version. Instances follow these by default."
-								helpTopic="JAVA_MANAGED"
-							>
-								<div
-									class={styles["section-actions"]}
-									style={{ "margin-bottom": "16px" }}
-								>
-									<LauncherButton
-										onClick={refreshJavas}
-										disabled={isScanning()}
-										variant="ghost"
-										size="sm"
-									>
-										{isScanning() ? "Scanning..." : "Rescan System"}
-									</LauncherButton>
-								</div>
-
-								<div class={styles["java-requirements-list"]}>
-									<For each={requirements()}>
-										{(req: any) => {
-											const versionOptions = () =>
-												javaOptions().filter(
-													(option) => option.version === req.major_version,
-												);
-
-											return (
-												<div class={styles["java-req-item"]}>
-													<div class={styles["java-req-header"]}>
-														<h3>{req.recommended_name}</h3>
-													</div>
-
-													<div class={styles["java-options-grid"]}>
-														<For each={versionOptions()}>
-															{(option) => <JavaOptionCard option={option} />}
-														</For>
-													</div>
-												</div>
-											);
-										}}
-									</For>
-								</div>
-							</SettingsCard>
-
-							<SettingsCard
-								header="Performance & Graphics"
-								subHeader="Optimization settings for game performance."
-							>
-								<SettingsField
-									label="Use Dedicated GPU"
-									description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
-									layout="inline"
-									control={
-										<Switch
-											checked={useDedicatedGpu()}
-											onCheckedChange={handleGpuToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-							</SettingsCard>
-						</div>
+						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Java Settings...</div>}>
+							<JavaSettingsTab
+								requirements={requirements() || []}
+								javaOptions={javaOptions()}
+								isScanning={isScanning()}
+								refreshJavas={refreshJavas}
+								useDedicatedGpu={useDedicatedGpu()}
+								handleGpuToggle={handleGpuToggle}
+							/>
+						</Suspense>
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="notifications">
@@ -1278,223 +940,27 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="help">
-						<div class={styles["settings-tab-content"]}>
-							<SettingsCard header="Minecraft Modding">
-								<SettingsField
-									label="Documentation"
-									description="Technical overview of modding frameworks, runtime environments, and configuration."
-									control={
-										<LauncherButton
-											onClick={() => activeRouter()?.navigate("/modding-guide")}
-										>
-											View Docs
-										</LauncherButton>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="App Tutorial">
-								<SettingsField
-									label="Platform Walkthrough"
-									description="Initiate the interactive walkthrough to familiarize yourself with Vesta's interface."
-									control={
-										<LauncherButton
-											onClick={() => {
-												props.close?.();
-												setTimeout(() => startAppTutorial(), 100);
-											}}
-										>
-											Run Tutorial
-										</LauncherButton>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="Support">
-								<div
-									class={styles["social-links"]}
-									style={{ display: "flex", gap: "8px" }}
-								>
-									<LauncherButton
-										variant="ghost"
-										onClick={() =>
-											openExternal("https://github.com/vesta-project/launcher")
-										}
-									>
-										GitHub
-									</LauncherButton>
-									<LauncherButton
-										variant="ghost"
-										onClick={() =>
-											openExternal("https://discord.gg/zuDNHNHk8E")
-										}
-									>
-										Discord
-									</LauncherButton>
-								</div>
-							</SettingsCard>
-
-							<SettingsCard header="App Updates">
-								<SettingsField
-									label="Automatic Updates"
-									description="Download and install updates automatically in the background"
-									control={
-										<Switch
-											checked={autoUpdateEnabled()}
-											onCheckedChange={handleAutoUpdateToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-								<SettingsField
-									label="Check on Startup"
-									description="Check for new versions when the launcher starts"
-									control={
-										<Switch
-											checked={startupCheckUpdates()}
-											onCheckedChange={handleStartupCheckToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-								<SettingsField
-									label="Update Check"
-									control={
-										<LauncherButton onClick={() => checkForAppUpdates()}>
-											Check Now
-										</LauncherButton>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="About">
-								<div class={styles["about-info"]}>
-									<div class={styles["about-field"]}>
-										<span>App Version</span>
-										<div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
-											<span>{version() || "..."}</span>
-											<LauncherButton 
-												variant="ghost" 
-												size="sm" 
-												onClick={() => {
-													router().navigate("/changelog");
-													setPageViewerOpen(true);
-												}}
-											>
-												View Changelog
-											</LauncherButton>
-										</div>
-									</div>
-									<div class={styles["about-field"]}>
-										<span>Platform</span>
-										<span>Tauri + SolidJS</span>
-									</div>
-									
-									<a
-										href="https://www.gnu.org/licenses/gpl-3.0.html"
-										target="_blank"
-										rel="noopener noreferrer"
-									>
-										<div class={styles["about-field"]} >
-											<span>License</span>
-											<span>GNU General Public License v3.0</span>
-										</div>
-									</a>
-								</div>
-							</SettingsCard>
-						</div>
+						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading...</div>}>
+							<HelpSettingsTab
+								close={props.close}
+								navigate={(path: string) => activeRouter()?.navigate(path)}
+								autoUpdateEnabled={autoUpdateEnabled()}
+								handleAutoUpdateToggle={handleAutoUpdateToggle}
+								startupCheckUpdates={startupCheckUpdates()}
+								handleStartupCheckToggle={handleStartupCheckToggle}
+								version={version() || "..."}
+							/>
+						</Suspense>
 					</TabsContent>
 
-
-
 					<TabsContent class={styles["tabs-content"]} value="developer">
+						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Developer Tools...</div>}>
+							<DeveloperSettingsTab
+								debugLogging={debugLogging()}
+								handleDebugToggle={handleDebugToggle}
+							/>
+						</Suspense>
 						<div class={styles["settings-tab-content"]}>
-							<SettingsCard header="Debug Settings">
-								<SettingsField
-									label="Debug Logging"
-									description="Enable verbose logging for troubleshooting"
-									control={
-										<Switch
-											checked={debugLogging()}
-											onCheckedChange={handleDebugToggle}
-										>
-											<SwitchControl>
-												<SwitchThumb />
-											</SwitchControl>
-										</Switch>
-									}
-								/>
-								<SettingsField
-									label="Reset Notifications"
-									description="Force-reset seen items and clear notification history"
-									control={
-										<LauncherButton
-											type="destructive"
-											onClick={async () => {
-												await invoke("reset_notification_system");
-												showToast({
-													title: "Notifications Reset",
-													description:
-														"Notification history and seen items cleared.",
-													severity: "success",
-												});
-											}}
-										>
-											Reset System
-										</LauncherButton>
-									}
-								/>
-							</SettingsCard>
-
-							<SettingsCard header="Updater Simulation">
-								<SettingsField
-									label="Simulate App Update"
-									description="Trigger a full update flow simulation (Toast -> Progress -> Ready)"
-									control={
-										<LauncherButton onClick={() => simulateUpdateProcess()}>
-											Simulate Full Update
-										</LauncherButton>
-									}
-								/>
-								<SettingsField
-									label="Simulate Discovery"
-									description="Trigger only the 'Update Available' notification (Native Notification)"
-									control={
-										<LauncherButton
-											onClick={async () => {
-												const actions = [
-													{
-														id: "open_update_dialog",
-														label: "Update Now",
-														type: "primary",
-													},
-												];
-												await invoke("create_notification", {
-													payload: {
-														client_key: "app_update_available",
-														title: "Update Available (Simulated)",
-														description:
-															"Vesta Launcher v9.9.9 is now available!",
-														severity: "info",
-														notification_type: "patient",
-														dismissible: true,
-														actions: JSON.stringify(actions),
-													},
-												});
-											}}
-										>
-											Simulate Discovery
-										</LauncherButton>
-									}
-								/>
-							</SettingsCard>
-
 							<SettingsCard header="Navigation Test">
 								<div style="display: flex; gap: 12px; flex-wrap: wrap;">
 									<LauncherButton

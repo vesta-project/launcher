@@ -66,6 +66,25 @@
 	font-size: var(--font-medium);
 }
 
+.settings-tab-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 200px;
+	color: var(--text-muted);
+	font-size: 0.9rem;
+	animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+
 .settings-tab-content {
 	flex: 1;
 	display: flex;
