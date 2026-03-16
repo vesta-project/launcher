@@ -269,11 +269,11 @@ jobs:
                 target_name="$target_name.sig"
               fi
               echo "Uploading $filename as $target_name"
-              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://r2.vestalauncher.cloudflarestorage.com
+              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://r2.vestalauncher.com
             else
               # Fallback for unrecognized files, but upload them anyway
               echo "Uploading $filename (unknown format)"
-              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$filename" --endpoint-url https://r2.vestalauncher.cloudflarestorage.com
+              aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$filename" --endpoint-url https://r2.vestalauncher.com
             fi
           done
 
@@ -342,7 +342,7 @@ jobs:
           NOTES="Automatic release"
           
           # List files in the version folder
-          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://r2.vestalauncher.cloudflarestorage.com | awk '{print $4}')
+          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://r2.vestalauncher.com | awk '{print $4}')
           
           # Collect files per platform, preferring updater-compatible ones
           declare -A platform_files
@@ -438,7 +438,7 @@ jobs:
             # Fetch signature content from R2
             SIG_FILE="$FILE.sig"
             echo "Fetching signature for $FILE from $SIG_FILE"
-            SIGNATURE=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://r2.vestalauncher.cloudflarestorage.com 2>/dev/null || echo "")
+            SIGNATURE=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://r2.vestalauncher.com 2>/dev/null || echo "")
             
             PLATFORMS="$PLATFORMS
             \"$PLATFORM\": {
@@ -459,7 +459,7 @@ jobs:
           }
           EOF
           
-          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://r2.vestalauncher.cloudflarestorage.com
+          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://r2.vestalauncher.com
 
   create-github-release:
     needs: [build, generate-manifest, bump-version]
