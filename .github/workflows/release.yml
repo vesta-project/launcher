@@ -1,17 +1,14 @@
 name: Release
-# This workflow builds and releases Vesta Launcher
-# - Fails fast: if any build fails, the entire release is cancelled
-# - Concurrency: cancels in-progress runs when new ones start
 concurrency:
-  group: release-${{ github.ref }}
+  group: 'release-${{ github.ref }}'
   cancel-in-progress: true
-on:
+'on':
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Version bump type'
+        description: Version bump type
         type: choice
-        default: 'none'
+        default: none
         options:
           - none
           - patch
@@ -20,97 +17,131 @@ on:
           - alpha
           - beta
       build_windows:
-        description: 'Windows (x64 & ARM64)'
+        description: Windows (x64 & ARM64)
         type: boolean
         default: true
       build_macos:
-        description: 'macOS (x64 & ARM64)'
+        description: macOS (x64 & ARM64)
         type: boolean
         default: true
       build_linux:
-        description: 'Linux (x64 & ARM64)'
+        description: Linux (x64 & ARM64)
         type: boolean
         default: true
   push:
     tags:
-      - 'v*'
-
+      - v*
 jobs:
   bump-version:
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.bump != 'none'
+    if: >-
+      github.event_name == 'workflow_dispatch' && github.event.inputs.bump !=
+      'none'
     runs-on: ubuntu-latest
     permissions:
       contents: write
     outputs:
-      new_version: ${{ steps.bump.outputs.version }}
+      new_version: '${{ steps.bump.outputs.version }}'
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v1
       - id: bump
-        run: |
+        run: >
           bun run version:bump ${{ github.event.inputs.bump }}
-          AFTER=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+
+          AFTER=$(node -e
+          "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+
           if [ "$AFTER" = "" ]; then
             echo "Error: Version bump failed - no version found after bump"
             exit 1
           fi
-          echo "version=$AFTER" >> $GITHUB_OUTPUT
-          
-          echo "::group::Debug - Version Bump"
-          echo "New Version: $AFTER"
-          echo "::endgroup::"
-          
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
-          git commit -m "chore: bump version to $AFTER"
-          git push
-          git tag "v$AFTER"
-          git push --tags
 
+          echo "version=$AFTER" >> $GITHUB_OUTPUT
+
+
+          echo "::group::Debug - Version Bump"
+
+          echo "New Version: $AFTER"
+
+          echo "::endgroup::"
+
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add .
+
+          git commit -m "chore: bump version to $AFTER"
+
+          git push
+
+          git tag "v$AFTER"
+
+          git push --tags
   build:
-    needs: [bump-version]
-    if: always() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
+    needs:
+      - bump-version
+    if: >-
+      always() && (needs.bump-version.result == 'success' ||
+      needs.bump-version.result == 'skipped')
     permissions:
       contents: read
     strategy:
       fail-fast: true
       matrix:
         include:
-          - platform: 'windows-latest'
+          - platform: windows-latest
             args: '--target x86_64-pc-windows-msvc'
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
-            name: 'Windows x64'
-            target: 'x86_64-pc-windows-msvc'
-          - platform: 'windows-11-arm'
+            enabled: >-
+              ${{ github.event_name == 'push' || (github.event_name ==
+              'workflow_dispatch' && github.event.inputs.build_windows ==
+              'true') }}
+            name: Windows x64
+            target: x86_64-pc-windows-msvc
+          - platform: windows-11-arm
             args: '--target aarch64-pc-windows-msvc'
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
-            name: 'Windows ARM64'
-            target: 'aarch64-pc-windows-msvc'
-          - platform: 'macos-latest'
+            enabled: >-
+              ${{ github.event_name == 'push' || (github.event_name ==
+              'workflow_dispatch' && github.event.inputs.build_windows ==
+              'true') }}
+            name: Windows ARM64
+            target: aarch64-pc-windows-msvc
+          - platform: macos-latest
             args: '--target x86_64-apple-darwin'
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
-            name: 'macOS x64'
-            target: 'x86_64-apple-darwin'
-          - platform: 'macos-latest'
+            enabled: >-
+              ${{ github.event_name == 'push' || (github.event_name ==
+              'workflow_dispatch' && github.event.inputs.build_macos == 'true')
+              }}
+            name: macOS x64
+            target: x86_64-apple-darwin
+          - platform: macos-latest
             args: '--target aarch64-apple-darwin'
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
-            name: 'macOS ARM64'
-            target: 'aarch64-apple-darwin'
-          - platform: 'ubuntu-latest'
+            enabled: >-
+              ${{ github.event_name == 'push' || (github.event_name ==
+              'workflow_dispatch' && github.event.inputs.build_macos == 'true')
+              }}
+            name: macOS ARM64
+            target: aarch64-apple-darwin
+          - platform: ubuntu-latest
             args: '--target x86_64-unknown-linux-gnu'
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
-            name: 'Linux x64'
-            target: 'x86_64-unknown-linux-gnu'
-          - platform: 'ubuntu-24.04-arm'
+            enabled: >-
+              ${{ github.event_name == 'push' || (github.event_name ==
+              'workflow_dispatch' && github.event.inputs.build_linux == 'true')
+              }}
+            name: Linux x64
+            target: x86_64-unknown-linux-gnu
+          - platform: ubuntu-24.04-arm
             args: '--target aarch64-unknown-linux-gnu'
-            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
-            name: 'Linux ARM64'
-            target: 'aarch64-unknown-linux-gnu'
-    
-    runs-on: ${{ matrix.platform }}
+            enabled: >-
+              ${{ github.event_name == 'push' || (github.event_name ==
+              'workflow_dispatch' && github.event.inputs.build_linux == 'true')
+              }}
+            name: Linux ARM64
+            target: aarch64-unknown-linux-gnu
+    runs-on: '${{ matrix.platform }}'
     steps:
       - name: Determine checkout ref
         id: ref
@@ -122,50 +153,46 @@ jobs:
             REF="${{ github.ref }}"
           fi
           echo "ref=$REF" >> $GITHUB_OUTPUT
-          
+
           echo "::group::Debug - Build Matrix"
           echo "Platform: ${{ matrix.name }}"
           echo "Target: ${{ matrix.target }}"
           echo "Resolved Ref: $REF"
           echo "::endgroup::"
-      
       - uses: actions/checkout@v4
         if: matrix.enabled
         with:
-          ref: ${{ steps.ref.outputs.ref }}
+          ref: '${{ steps.ref.outputs.ref }}'
           fetch-depth: 0
-
       - name: Install dependencies (Linux only)
-        if: matrix.enabled && startsWith(matrix.platform, 'ubuntu')
+        if: 'matrix.enabled && startsWith(matrix.platform, ''ubuntu'')'
         shell: bash
-        run: |
+        run: >
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config xdg-utils
 
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl
+          wget file libxdo-dev libssl-dev libayatana-appindicator3-dev
+          librsvg2-dev pkg-config xdg-utils
       - name: Setup Node.js
         if: matrix.enabled
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-
       - name: Setup Bun
         if: matrix.enabled && matrix.platform != 'windows-11-arm'
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
-
       - name: Setup Bun (Windows ARM64 - Node.js fallback)
         if: matrix.enabled && matrix.platform == 'windows-11-arm'
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
-
       - name: Setup Rust
         if: matrix.enabled
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
-
+          targets: '${{ matrix.target }}'
       - name: Cache Rust dependencies
         if: matrix.enabled
         uses: Swatinem/rust-cache@v2
@@ -175,7 +202,6 @@ jobs:
             vesta-launcher/src-tauri -> target
             crates/piston-lib -> target
           cache-all-crates: true
-
       - name: Install frontend dependencies
         if: matrix.enabled
         shell: bash
@@ -186,16 +212,16 @@ jobs:
           else
             bun install
           fi
-
       - name: Build Tauri App
         if: matrix.enabled
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
-        run: |
+          TAURI_SIGNING_PRIVATE_KEY: '${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}'
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: '${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}'
+          CURSEFORGE_API_KEY: '${{ secrets.CURSEFORGE_API_KEY }}'
+        run: >
           cd vesta-launcher
+
           if [ "${{ matrix.platform }}" == "macos-latest" ]; then
             bun run tauri build --target ${{ matrix.target }}
           elif [[ "${{ matrix.platform }}" == "ubuntu"* ]]; then
@@ -205,30 +231,48 @@ jobs:
           else
             bun run tauri build --target ${{ matrix.target }}
           fi
-          
-          echo "::group::Debug - Build Artifacts Generated"
-          echo "Listing all generated bundle files for signature verification:"
-          ls -Rl target/${{ matrix.target }}/release/bundle/ || echo "Bundle directory not found!"
-          echo "::endgroup::"
 
+
+          echo "::group::Debug - Build Artifacts Generated"
+
+          echo "Listing all generated bundle files for signature verification:"
+
+          ls -Rl target/${{ matrix.target }}/release/bundle/ || echo "Bundle
+          directory not found!"
+
+          echo "::endgroup::"
       - name: Upload to Cloudflare R2
         if: matrix.enabled
         shell: bash
-        run: |
+        run: >
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+          aws configure set aws_secret_access_key ${{
+          secrets.R2_SECRET_ACCESS_KEY }}
+
           aws configure set region auto
+
           aws configure set default.s3.multipart_threshold 1024MB
-          
-          VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
-          
+
+
+          VERSION=$(node -e
+          "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+
+
           echo "::group::Debug - R2 Upload Candidates"
+
           find target/${{ matrix.target }}/release/bundle/ -type f
+
           echo "::endgroup::"
-          
+
+
           # Find all output files, excluding sig files from the primary loop
-          # We grab sig files alongside their base files to ensure perfect matching
-          find target/${{ matrix.target }}/release/bundle/ -type f -print0 | while IFS= read -r -d '' file; do
+
+          # We grab sig files alongside their base files to ensure perfect
+          matching
+
+          find target/${{ matrix.target }}/release/bundle/ -type f -print0 |
+          while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             
             # Skip signature files in the main loop
@@ -274,18 +318,17 @@ jobs:
               fi
             fi
           done
-
       - name: Upload build artifacts
         if: matrix.enabled
         uses: actions/upload-artifact@v4
         with:
-          name: build-artifacts-${{ matrix.name }}
-          path: target/${{ matrix.target }}/release/bundle/**/*
+          name: 'build-artifacts-${{ matrix.name }}'
+          path: 'target/${{ matrix.target }}/release/bundle/**/*'
           if-no-files-found: error
-
-
   generate-manifest:
-    needs: [build, bump-version]
+    needs:
+      - build
+      - bump-version
     if: always() && (needs.build.result == 'success')
     runs-on: ubuntu-latest
     permissions:
@@ -294,15 +337,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Validate R2 secrets
         shell: bash
-        run: |
-          if [ -z "${{ secrets.R2_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.R2_SECRET_ACCESS_KEY }}" ]; then
+        run: >
+          if [ -z "${{ secrets.R2_ACCESS_KEY_ID }}" ] || [ -z "${{
+          secrets.R2_SECRET_ACCESS_KEY }}" ]; then
             echo "R2 secrets not configured, skipping manifest generation"
             exit 0
           fi
       - name: Configure AWS for R2
-        run: |
+        run: >
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
-          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
+
+          aws configure set aws_secret_access_key ${{
+          secrets.R2_SECRET_ACCESS_KEY }}
+
           aws configure set region auto
       - name: Determine version
         id: version
@@ -316,31 +363,47 @@ jobs:
           else
             VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           fi
-          
+
           if [ -z "$VERSION" ]; then
             echo "Error: Version is empty."
             exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
       - name: Generate and upload latest.json
-        run: |
+        run: >
           VERSION=${{ steps.version.outputs.version }}
+
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
           NOTES="Automatic release"
-          
+
+
           echo "::group::Debug - Manifest Generation Start"
+
           echo "Version: $VERSION"
+
           echo "Fetching file list from S3..."
-          
-          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com | awk '{print $4}')
+
+
+          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/
+          --endpoint-url
+          https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com |
+          awk '{print $4}')
+
           echo "Files retrieved from bucket:"
+
           echo "$FILES"
+
           echo "::endgroup::"
-          
+
+
           declare -A platform_files
+
           declare -A platform_installers
-          
+
+
           echo "::group::Debug - File Mapping Processing"
+
           for file in $FILES; do
             if [[ "$file" == *.sig ]]; then continue; fi
 
@@ -388,12 +451,17 @@ jobs:
                 echo "Unmapped: $file (Did not match known signatures)"
             fi
           done
+
           echo "::endgroup::"
-          
+
+
           PLATFORMS="{"
+
           FIRST=true
-          
+
+
           echo "::group::Debug - Signature Verification"
+
           for PLATFORM in "${!platform_files[@]}"; do
             FILE="${platform_files[$PLATFORM]}"
             INSTALLER_FILE="${platform_installers[$PLATFORM]:-$FILE}"
@@ -417,27 +485,43 @@ jobs:
               echo "WARNING: No signature found for $PLATFORM ($FILE), skipping from update manifest."
             fi
           done
+
           echo "::endgroup::"
+
           PLATFORMS="$PLATFORMS
+
           }"
-          
+
+
           cat > latest.json << EOF
+
           {
             "version": "$VERSION",
             "notes": "$NOTES",
             "pub_date": "$PUB_DATE",
             "platforms": $PLATFORMS
           }
-          EOF
-          
-          echo "Generated latest.json:"
-          cat latest.json
-          
-          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
+          EOF
+
+
+          echo "Generated latest.json:"
+
+          cat latest.json
+
+
+          aws s3 cp latest.json s3://vesta-project/launcher/releases/
+          --endpoint-url
+          https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
   create-github-release:
-    needs: [build, generate-manifest, bump-version]
-    if: always() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
+    needs:
+      - build
+      - generate-manifest
+      - bump-version
+    if: >-
+      always() && needs.build.result == 'success' &&
+      needs.generate-manifest.result == 'success' && (github.event_name ==
+      'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -445,7 +529,6 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
       - name: Determine version
         id: version
         shell: bash
@@ -458,36 +541,39 @@ jobs:
           else
             VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           fi
-          
+
           if [ -z "$VERSION" ]; then
             echo "Error: Version is empty."
             exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-      
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-          
       - name: Debug Downloaded Artifacts
         shell: bash
         run: |
           echo "::group::Debug - View Structure of Artifacts/"
           ls -Rl artifacts/
           echo "::endgroup::"
-      
       - name: Generate changelog
         id: changelog
         shell: bash
-        run: |
+        run: >
           CURRENT_TAG="v${{ steps.version.outputs.version }}"
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
-          
+
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 ||
+          echo "")
+
+
           echo "## Changelog" > changelog.md
+
           echo "" >> changelog.md
-          
-          if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
+
+
+          if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null
+          2>&1; then
             COMMIT_COUNT=$(git rev-list --count ${PREVIOUS_TAG}..${CURRENT_TAG} 2>/dev/null || echo "0")
             if [ "$COMMIT_COUNT" -gt 0 ]; then
               git log --pretty=format:"- %s (%h)" --no-merges --grep="chore: bump version" --invert-grep ${PREVIOUS_TAG}..${CURRENT_TAG} >> changelog.md 2>/dev/null || echo "- Release notes" >> changelog.md
@@ -497,32 +583,44 @@ jobs:
           else
             echo "- Initial release" >> changelog.md
           fi
-          
-          if [ ! -s changelog.md ]; then echo "- No changes or initial release" > changelog.md; fi
-          
+
+
+          if [ ! -s changelog.md ]; then echo "- No changes or initial release"
+          > changelog.md; fi
+
+
           echo "::group::Debug - Generated Changelog"
+
           cat changelog.md
+
           echo "::endgroup::"
-          
-          DELIMITER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr -d '\n')
+
+
+          DELIMITER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr
+          -d '\n')
+
           echo "changelog<<$DELIMITER" >> $GITHUB_OUTPUT
+
           cat changelog.md >> $GITHUB_OUTPUT
+
           echo "" >> $GITHUB_OUTPUT
+
           echo "$DELIMITER" >> $GITHUB_OUTPUT
-      
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: Vesta Launcher v${{ steps.version.outputs.version }}
+          tag_name: 'v${{ steps.version.outputs.version }}'
+          name: 'Vesta Launcher v${{ steps.version.outputs.version }}'
           body: |
             ## Vesta Launcher v${{ steps.version.outputs.version }}
-            
+
             Automatic release build for Vesta Launcher.
-            
+
             ${{ steps.changelog.outputs.changelog }}
           files: |
             artifacts/**/*
           draft: false
-          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
+          prerelease: >-
+            ${{ contains(steps.version.outputs.version, 'alpha') ||
+            contains(steps.version.outputs.version, 'beta') }}
           fail_on_unmatched_files: false
