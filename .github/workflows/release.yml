@@ -1,8 +1,10 @@
 name: Release
+
 concurrency:
   group: 'release-${{ github.ref }}'
   cancel-in-progress: true
-'on':
+
+on:
   workflow_dispatch:
     inputs:
       bump:
@@ -31,11 +33,11 @@ concurrency:
   push:
     tags:
       - v*
+
 jobs:
   bump-version:
     if: >-
-      github.event_name == 'workflow_dispatch' && github.event.inputs.bump !=
-      'none'
+      github.event_name == 'workflow_dispatch' && github.event.inputs.bump != 'none'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -45,48 +47,39 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
       - uses: oven-sh/setup-bun@v1
+      
       - id: bump
-        run: >
+        name: Bump Version and Tag
+        run: |
+          echo "::group::Bumping Version"
           bun run version:bump ${{ github.event.inputs.bump }}
+          AFTER=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
 
-          AFTER=$(node -e
-          "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
-
-          if [ "$AFTER" = "" ]; then
+          if [ -z "$AFTER" ]; then
             echo "Error: Version bump failed - no version found after bump"
             exit 1
           fi
 
           echo "version=$AFTER" >> $GITHUB_OUTPUT
-
-
-          echo "::group::Debug - Version Bump"
-
           echo "New Version: $AFTER"
-
           echo "::endgroup::"
 
-
+          echo "::group::Committing and Tagging"
           git config user.name "github-actions[bot]"
-
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
           git add .
-
           git commit -m "chore: bump version to $AFTER"
-
           git push
-
           git tag "v$AFTER"
-
           git push --tags
+          echo "Pushed tag v$AFTER"
+          echo "::endgroup::"
+
   build:
-    needs:
-      - bump-version
-    if: >-
-      always() && (needs.bump-version.result == 'success' ||
-      needs.bump-version.result == 'skipped')
+    needs: [bump-version]
+    if: always() && (needs.bump-version.result == 'success' || needs.bump-version.result == 'skipped')
     permissions:
       contents: read
     strategy:
@@ -95,53 +88,35 @@ jobs:
         include:
           - platform: windows-latest
             args: '--target x86_64-pc-windows-msvc'
-            enabled: >-
-              ${{ github.event_name == 'push' || (github.event_name ==
-              'workflow_dispatch' && github.event.inputs.build_windows ==
-              'true') }}
+            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
             name: Windows x64
             target: x86_64-pc-windows-msvc
           - platform: windows-11-arm
             args: '--target aarch64-pc-windows-msvc'
-            enabled: >-
-              ${{ github.event_name == 'push' || (github.event_name ==
-              'workflow_dispatch' && github.event.inputs.build_windows ==
-              'true') }}
+            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
             name: Windows ARM64
             target: aarch64-pc-windows-msvc
           - platform: macos-latest
             args: '--target x86_64-apple-darwin'
-            enabled: >-
-              ${{ github.event_name == 'push' || (github.event_name ==
-              'workflow_dispatch' && github.event.inputs.build_macos == 'true')
-              }}
+            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
             name: macOS x64
             target: x86_64-apple-darwin
           - platform: macos-latest
             args: '--target aarch64-apple-darwin'
-            enabled: >-
-              ${{ github.event_name == 'push' || (github.event_name ==
-              'workflow_dispatch' && github.event.inputs.build_macos == 'true')
-              }}
+            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
             name: macOS ARM64
             target: aarch64-apple-darwin
           - platform: ubuntu-latest
             args: '--target x86_64-unknown-linux-gnu'
-            enabled: >-
-              ${{ github.event_name == 'push' || (github.event_name ==
-              'workflow_dispatch' && github.event.inputs.build_linux == 'true')
-              }}
+            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
             name: Linux x64
             target: x86_64-unknown-linux-gnu
           - platform: ubuntu-24.04-arm
             args: '--target aarch64-unknown-linux-gnu'
-            enabled: >-
-              ${{ github.event_name == 'push' || (github.event_name ==
-              'workflow_dispatch' && github.event.inputs.build_linux == 'true')
-              }}
+            enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
             name: Linux ARM64
             target: aarch64-unknown-linux-gnu
-    runs-on: '${{ matrix.platform }}'
+    runs-on: ${{ matrix.platform }}
     steps:
       - name: Determine checkout ref
         id: ref
@@ -153,46 +128,52 @@ jobs:
             REF="${{ github.ref }}"
           fi
           echo "ref=$REF" >> $GITHUB_OUTPUT
-
-          echo "::group::Debug - Build Matrix"
-          echo "Platform: ${{ matrix.name }}"
-          echo "Target: ${{ matrix.target }}"
+          
+          echo "::group::Target Resolution"
           echo "Resolved Ref: $REF"
+          echo "Platform: ${{ matrix.name }}"
+          echo "Target Architecture: ${{ matrix.target }}"
           echo "::endgroup::"
+
       - uses: actions/checkout@v4
         if: matrix.enabled
         with:
-          ref: '${{ steps.ref.outputs.ref }}'
+          ref: ${{ steps.ref.outputs.ref }}
           fetch-depth: 0
-      - name: Install dependencies (Linux only)
-        if: 'matrix.enabled && startsWith(matrix.platform, ''ubuntu'')'
-        shell: bash
-        run: >
-          sudo apt-get update
 
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl
-          wget file libxdo-dev libssl-dev libayatana-appindicator3-dev
-          librsvg2-dev pkg-config xdg-utils
+      - name: Install dependencies (Linux only)
+        if: matrix.enabled && startsWith(matrix.platform, 'ubuntu')
+        shell: bash
+        run: |
+          echo "::group::Installing Linux Dependencies"
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config xdg-utils
+          echo "::endgroup::"
+
       - name: Setup Node.js
         if: matrix.enabled
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+
       - name: Setup Bun
         if: matrix.enabled && matrix.platform != 'windows-11-arm'
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
+
       - name: Setup Bun (Windows ARM64 - Node.js fallback)
         if: matrix.enabled && matrix.platform == 'windows-11-arm'
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
+
       - name: Setup Rust
         if: matrix.enabled
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: '${{ matrix.target }}'
+          targets: ${{ matrix.target }}
+
       - name: Cache Rust dependencies
         if: matrix.enabled
         uses: Swatinem/rust-cache@v2
@@ -202,88 +183,60 @@ jobs:
             vesta-launcher/src-tauri -> target
             crates/piston-lib -> target
           cache-all-crates: true
+
       - name: Install frontend dependencies
         if: matrix.enabled
         shell: bash
         run: |
+          echo "::group::Installing Frontend Dependencies"
           cd vesta-launcher
           if [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
             npm install --legacy-peer-deps
           else
             bun install
           fi
+          echo "::endgroup::"
+
       - name: Build Tauri App
         if: matrix.enabled
         shell: bash
         env:
-          TAURI_SIGNING_PRIVATE_KEY: '${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}'
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: '${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}'
-          CURSEFORGE_API_KEY: '${{ secrets.CURSEFORGE_API_KEY }}'
-        run: >
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+        run: |
+          echo "::group::Building Tauri App for ${{ matrix.target }}"
           cd vesta-launcher
-
+          
           if [ "${{ matrix.platform }}" == "macos-latest" ]; then
             bun run tauri build --target ${{ matrix.target }}
-            echo "Listing files to check for signatures..."
-            # Use broad find to confirm paths if ls fails
-            find target/ -name "*.sig" || echo "No .sig files found"
-            ls -R target/release/bundle/ || ls -R src-tauri/target/release/bundle/ || ls -R target/${{ matrix.target }}/release/bundle/ || echo "Bundle dir not found"
           elif [[ "${{ matrix.platform }}" == "ubuntu"* ]]; then
-            if [ "${{ matrix.platform }}" == "ubuntu-24.04-arm" ]; then
-              bun run tauri build --target ${{ matrix.target }}
-            else
-              bun run tauri build --target ${{ matrix.target }}
-            fi
+            bun run tauri build --target ${{ matrix.target }}
           elif [ "${{ matrix.platform }}" == "windows-11-arm" ]; then
             npx tauri build --target ${{ matrix.target }}
           else
             bun run tauri build --target ${{ matrix.target }}
           fi
-
-
-          echo "::group::Debug - Build Artifacts Generated"
-
-          echo "Listing all generated bundle files for signature verification:"
-
-          ls -Rl target/${{ matrix.target }}/release/bundle/ || echo "Bundle
-          directory not found!"
-
           echo "::endgroup::"
+
       - name: Upload to Cloudflare R2
         if: matrix.enabled
         shell: bash
-        run: >
+        run: |
+          echo "::group::Configuring AWS CLI for R2"
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
-
-          aws configure set aws_secret_access_key ${{
-          secrets.R2_SECRET_ACCESS_KEY }}
-
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
-
           aws configure set default.s3.multipart_threshold 1024MB
-
-
-          VERSION=$(node -e
-          "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
-
-
-          echo "::group::Debug - R2 Upload Candidates"
-
-          find target/${{ matrix.target }}/release/bundle/ -type f
-
           echo "::endgroup::"
 
+          VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
 
-          # Find all output files, excluding sig files from the primary loop
-
-          # We grab sig files alongside their base files to ensure perfect
-          matching
-
-          find target/${{ matrix.target }}/release/bundle/ -type f -print0 |
-          while IFS= read -r -d '' file; do
+          echo "::group::Uploading Files to Cloudflare R2"
+          # Only find strictly valid artifact extensions to upload
+          find target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi" -o -name "*.zip" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" -o -name "*.tar.gz" -o -name "*.sig" \) -print0 | while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             
-            # Helper to check if it's a signature
             is_sig=false
             if [[ "$filename" == *.sig ]]; then
               is_sig=true
@@ -293,14 +246,23 @@ jobs:
             fi
             
             ext="${base_file##*.}"
-            
             target_name=""
+            
             case "$ext" in
               msi)
                 if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
                   target_name="Vesta_Launcher_${VERSION}_arm64.msi"
                 else
                   target_name="Vesta_Launcher_${VERSION}_x64.msi"
+                fi
+                ;;
+              zip)
+                if [[ "$base_file" == *.msi.zip ]]; then
+                  if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+                    target_name="Vesta_Launcher_${VERSION}_arm64.msi.zip"
+                  else
+                    target_name="Vesta_Launcher_${VERSION}_x64.msi.zip"
+                  fi
                 fi
                 ;;
               dmg)
@@ -327,266 +289,140 @@ jobs:
                   else
                     target_name="Vesta_Launcher_${VERSION}_x64.app.tar.gz"
                   fi
-                elif [[ "$base_file" == *.app.tar.gz ]]; then
-                  if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
-                    target_name="Vesta_Launcher_${VERSION}_aarch64.app.tar.gz"
-                  else
-                    target_name="Vesta_Launcher_${VERSION}_x64.app.tar.gz"
-                  fi
                 fi
                 ;;
             esac
             
             if [ -n "$target_name" ]; then
-              if [ "$is_sig" = true ]; then
-                target_name="$target_name.sig"
-              fi
+              if [ "$is_sig" = true ]; then target_name="$target_name.sig"; fi
               echo "Uploading $filename as $target_name"
               aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$target_name" --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
             else
-              # Fallback for unrecognized files, but upload them anyway
               echo "Uploading $filename (unknown format)"
               aws s3 cp "$file" "s3://vesta-project/launcher/releases/$VERSION/$filename" --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
             fi
           done
+          echo "::endgroup::"
+
       - name: Upload build artifacts
         if: matrix.enabled
         uses: actions/upload-artifact@v4
         with:
           name: 'build-artifacts-${{ matrix.name }}'
-          path: 'target/${{ matrix.target }}/release/bundle/**/*'
+          # Explicitly filter ONLY the bundled files so we don't grab 200+ raw macOS .app folder contents
+          path: |
+            target/${{ matrix.target }}/release/bundle/**/*.msi
+            target/${{ matrix.target }}/release/bundle/**/*.msi.zip
+            target/${{ matrix.target }}/release/bundle/**/*.dmg
+            target/${{ matrix.target }}/release/bundle/**/*.deb
+            target/${{ matrix.target }}/release/bundle/**/*.AppImage
+            target/${{ matrix.target }}/release/bundle/**/*.AppImage.tar.gz
+            target/${{ matrix.target }}/release/bundle/**/*.app.tar.gz
+            target/${{ matrix.target }}/release/bundle/**/*.sig
           if-no-files-found: error
+
   generate-manifest:
-    needs:
-      - build
-      - bump-version
+    needs: [build, bump-version]
     if: always() && (needs.build.result == 'success')
     runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Debug job execution
-        shell: bash
-        run: |
-          echo "Generate-manifest job is running"
-          echo "Build job result: ${{ needs.build.result }}"
+      
       - name: Validate R2 secrets
         shell: bash
-        run: >
-          if [ -z "${{ secrets.R2_ACCESS_KEY_ID }}" ] || [ -z "${{
-          secrets.R2_SECRET_ACCESS_KEY }}" ]; then
+        run: |
+          if [ -z "${{ secrets.R2_ACCESS_KEY_ID }}" ] || [ -z "${{ secrets.R2_SECRET_ACCESS_KEY }}" ]; then
             echo "R2 secrets not configured, skipping manifest generation"
             exit 0
           fi
-          echo "R2 secrets are configured, proceeding with manifest generation"
+          
       - name: Configure AWS for R2
-        run: >
+        run: |
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
-
-          aws configure set aws_secret_access_key ${{
-          secrets.R2_SECRET_ACCESS_KEY }}
-
+          aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
+          
       - name: Determine version
         id: version
         shell: bash
         run: |
-          # Check if this is a tag push or workflow dispatch
           if [ "${{ github.event_name }}" = "push" ]; then
-            # Tag push - extract version from tag
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"
           elif [ "${{ needs.bump-version.result }}" = "success" ]; then
-            # Workflow dispatch with version bump
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           else
-            # Workflow dispatch without bump - read current version
             VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           fi
-
-          if [ -z "$VERSION" ]; then
-            echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
-            exit 1
-          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
       - name: Generate and upload latest.json
-        run: >
-          VERSION=${{ steps.version.outputs.version }}
-
+        run: |
+          echo "::group::Generating latest.json manifest"
+          VERSION="${{ steps.version.outputs.version }}"
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
           NOTES="Automatic release"
 
-
-          echo "::group::Debug - Manifest Generation Start"
-
-          echo "Version: $VERSION"
-
-          echo "Fetching file list from S3..."
-
-
-          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/
-          --endpoint-url
-          https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com |
-          awk '{print $4}')
-
-          echo "Files retrieved from bucket:"
-
-          echo "$FILES"
-
-          echo "::endgroup::"
-
-
-          declare -A platform_files
-
-          declare -A platform_installers
-
-
-          echo "::group::Debug - File Mapping Processing"
-
+          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com | awk '{print $4}')
+          
+          # Use jq to safely construct the JSON object
+          JSON_DATA="{}"
+          
           for file in $FILES; do
-            # Skip signature files in this loop
             if [[ "$file" == *.sig ]]; then continue; fi
 
             PLATFORM=""
             IS_INSTALLER=false
+            
             case "$file" in
-              Vesta_Launcher_${VERSION}_x64.msi)
-                PLATFORM="windows-x86_64"
-                IS_INSTALLER=true
-                ;;
-              Vesta_Launcher_${VERSION}_arm64.msi)
-                PLATFORM="windows-aarch64"
-                IS_INSTALLER=true
-                ;;
-              Vesta_Launcher_${VERSION}_x64.dmg)
-                PLATFORM="darwin-x86_64"
-                IS_INSTALLER=true
-                ;;
-              Vesta_Launcher_${VERSION}_aarch64.dmg)
-                PLATFORM="darwin-aarch64"
-                IS_INSTALLER=true
-                ;;
-              Vesta_Launcher_${VERSION}_x86_64.AppImage)
-                PLATFORM="linux-x86_64"
-                IS_INSTALLER=true
-                ;;
-              vesta-launcher_${VERSION}_arm64.deb)
-                if [ -z "${platform_files["linux-aarch64"]}" ]; then
-                    PLATFORM="linux-aarch64"
-                    IS_INSTALLER=true
-                fi
-                ;;
-              vesta-launcher_${VERSION}_amd64.deb)
-                if [ -z "${platform_files["linux-x86_64"]}" ]; then
-                    PLATFORM="linux-x86_64"
-                    IS_INSTALLER=true
-                fi
-                ;;
-              Vesta_Launcher_${VERSION}_x64.app.tar.gz)
-                PLATFORM="darwin-x86_64"
-                ;;
-              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz)
-                PLATFORM="darwin-aarch64"
-                ;;
+              Vesta_Launcher_${VERSION}_x64.msi) PLATFORM="windows-x86_64"; IS_INSTALLER=true ;;
+              Vesta_Launcher_${VERSION}_arm64.msi) PLATFORM="windows-aarch64"; IS_INSTALLER=true ;;
+              Vesta_Launcher_${VERSION}_x64.dmg) PLATFORM="darwin-x86_64"; IS_INSTALLER=true ;;
+              Vesta_Launcher_${VERSION}_aarch64.dmg) PLATFORM="darwin-aarch64"; IS_INSTALLER=true ;;
+              Vesta_Launcher_${VERSION}_x86_64.AppImage) PLATFORM="linux-x86_64"; IS_INSTALLER=true ;;
+              vesta-launcher_${VERSION}_arm64.deb) PLATFORM="linux-aarch64"; IS_INSTALLER=true ;;
+              vesta-launcher_${VERSION}_amd64.deb) PLATFORM="linux-x86_64"; IS_INSTALLER=true ;;
+              Vesta_Launcher_${VERSION}_x64.app.tar.gz) PLATFORM="darwin-x86_64" ;;
+              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz) PLATFORM="darwin-aarch64" ;;
+              Vesta_Launcher_${VERSION}_x64.msi.zip) PLATFORM="windows-x86_64" ;;
+              Vesta_Launcher_${VERSION}_arm64.msi.zip) PLATFORM="windows-aarch64" ;;
             esac
 
-            if [ -n "$PLATFORM" ]; then
-                if [ "$IS_INSTALLER" = true ]; then
-                  platform_installers[$PLATFORM]=$file
-                fi
-
-                # For macOS, always prefer .app.tar.gz for updates (it has the signature)
-                if [[ "$PLATFORM" == darwin-* ]]; then
-                  if [[ "$file" == *.app.tar.gz ]]; then
-                    platform_files[$PLATFORM]=$file
-                  elif [[ "$file" == *.dmg ]] && [ -z "${platform_files[$PLATFORM]}" ]; then
-                    platform_files[$PLATFORM]=$file
-                  fi
-                else
-                  # Prefer updater artifacts (tar.gz, AppImage, msi) over others if they exist
-                  if [ -z "${platform_files[$PLATFORM]}" ] || [[ "$file" == *.tar.gz ]] || [[ "$file" == *.AppImage ]] || [[ "$file" == *.msi ]]; then
-                      platform_files[$PLATFORM]=$file
-                  fi
-                fi
+            if [ -n "$PLATFORM" ] && [ "$IS_INSTALLER" = false ]; then
+              SIG_FILE="$file.sig"
+              SIGNATURE_RAW=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com 2>/dev/null || echo "")
+              
+              if echo "$SIGNATURE_RAW" | grep -q "untrusted comment"; then
+                SIGNATURE=$(echo "$SIGNATURE_RAW" | sed -n '2p')
+              else
+                SIGNATURE="$SIGNATURE_RAW"
+              fi
+              
+              JSON_DATA=$(echo "$JSON_DATA" | jq --arg plat "$PLATFORM" \
+                --arg url "https://r2.vestalauncher.com.r2.dev/launcher/releases/$VERSION/$file" \
+                --arg sig "$SIGNATURE" \
+                '.[$plat] = {"url": $url, "signature": $sig}')
             fi
           done
 
-          echo "::endgroup::"
-
-
-          PLATFORMS="{"
-
-          FIRST=true
-
-
-          echo "::group::Debug - Signature Verification"
-
-          for PLATFORM in "${!platform_files[@]}"; do
-            if [ "$FIRST" = true ]; then
-              FIRST=false
-            else
-              PLATFORMS="$PLATFORMS,"
-            fi
-            FILE="${platform_files[$PLATFORM]}"
-            INSTALLER_FILE="${platform_installers[$PLATFORM]:-$FILE}"
-            
-            # Fetch signature content from R2 and clean up "untrusted comment" if present
-            SIG_FILE="$FILE.sig"
-            echo "Fetching signature for $FILE from $SIG_FILE"
-            SIGNATURE_RAW=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com 2>/dev/null || echo "")
-            # Only take the second line (the actual signature) if it's a multisign/tauri-style signature file
-            if echo "$SIGNATURE_RAW" | grep -q "untrusted comment"; then
-              SIGNATURE=$(echo "$SIGNATURE_RAW" | sed -n '2p')
-            else
-              SIGNATURE="$SIGNATURE_RAW"
-            fi
-            
-            PLATFORMS="$PLATFORMS
-            \"$PLATFORM\": {
-              \"url\": \"https://r2.vestalauncher.com.r2.dev/launcher/releases/$VERSION/$FILE\",
-              \"installer_url\": \"https://r2.vestalauncher.com.r2.dev/launcher/releases/$VERSION/$INSTALLER_FILE\",
-              \"signature\": \"$SIGNATURE\"
-            }"
-          done
-
-          echo "::endgroup::"
-
-          PLATFORMS="$PLATFORMS
-
-          }"
-
-
-          cat > latest.json << EOF
-
-          {
-            "version": "$VERSION",
-            "notes": "$NOTES",
-            "pub_date": "$PUB_DATE",
-            "platforms": $PLATFORMS
-          }
-
-          EOF
-
-
-          echo "Generated latest.json:"
+          jq -n \
+            --arg v "$VERSION" \
+            --arg n "$NOTES" \
+            --arg p "$PUB_DATE" \
+            --argjson platforms "$JSON_DATA" \
+            '{version: $v, notes: $n, pub_date: $p, platforms: $platforms}' > latest.json
 
           cat latest.json
+          echo "::endgroup::"
+          
+          echo "Uploading latest.json to R2"
+          aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
-
-          aws s3 cp latest.json s3://vesta-project/launcher/releases/
-          --endpoint-url
-          https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
   create-github-release:
-    needs:
-      - build
-      - generate-manifest
-      - bump-version
-    if: >-
-      always() && needs.build.result == 'success' &&
-      needs.generate-manifest.result == 'success' && (github.event_name ==
-      'workflow_dispatch' || github.event_name == 'push')
+    needs: [build, generate-manifest, bump-version]
+    if: always() && needs.build.result == 'success' && needs.generate-manifest.result == 'success' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -594,92 +430,59 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          
       - name: Determine version
         id: version
         shell: bash
         run: |
-          # Check if this is a tag push or workflow dispatch
           if [ "${{ github.event_name }}" = "push" ]; then
-            # Tag push - extract version from tag
             VERSION="${{ github.ref_name }}"
             VERSION="${VERSION#v}"
           elif [ "${{ needs.bump-version.result }}" = "success" ]; then
-            # Workflow dispatch with version bump
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           else
-            # Workflow dispatch without bump - read current version
             VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
           fi
-
-          if [ -z "$VERSION" ]; then
-            echo "Error: Version is empty. For tag pushes, ensure tag starts with 'v' followed by semver. For dispatch, check bump-version output."
-            exit 1
-          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-      - name: Debug Downloaded Artifacts
-        shell: bash
-        run: |
-          echo "::group::Debug - View Structure of Artifacts/"
-          ls -Rl artifacts/
-          echo "::endgroup::"
+          
       - name: Generate changelog
         id: changelog
         shell: bash
-        run: >
+        run: |
+          echo "::group::Generating Changelog"
           CURRENT_TAG="v${{ steps.version.outputs.version }}"
-
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 ||
-          echo "")
-
+          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
 
           echo "## Changelog" > changelog.md
-
           echo "" >> changelog.md
 
-
-          if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null
-          2>&1; then
+          if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
             COMMIT_COUNT=$(git rev-list --count ${PREVIOUS_TAG}..${CURRENT_TAG} 2>/dev/null || echo "0")
-            echo "Commit count between $PREVIOUS_TAG..$CURRENT_TAG: $COMMIT_COUNT"
             if [ "$COMMIT_COUNT" -gt 0 ]; then
-              echo "Generating changelog from git log..."
               git log --pretty=format:"- %s (%h)" --no-merges --grep="chore: bump version" --invert-grep ${PREVIOUS_TAG}..${CURRENT_TAG} >> changelog.md 2>/dev/null || echo "- Release notes" >> changelog.md
             else
-              echo "No commits found, adding fallback message"
               echo "- No changes since last release" >> changelog.md
             fi
           else
-            echo "Tag validation failed - using initial release message"
             echo "- Initial release" >> changelog.md
           fi
 
-
-          if [ ! -s changelog.md ]; then echo "- No changes or initial release"
-          > changelog.md; fi
-
-
-          echo "::group::Debug - Generated Changelog"
+          if [ ! -s changelog.md ]; then echo "- No changes or initial release" > changelog.md; fi
 
           cat changelog.md
-
           echo "::endgroup::"
 
-
-          DELIMITER=$(dd if=/dev/urandom bs=15 count=1 status=none | base64 | tr
-          -d '\n')
-
-          echo "changelog<<$DELIMITER" >> $GITHUB_OUTPUT
-
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
           cat changelog.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
-          echo "" >> $GITHUB_OUTPUT
-
-          echo "$DELIMITER" >> $GITHUB_OUTPUT
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
+        id: gh_release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: 'v${{ steps.version.outputs.version }}'
@@ -690,19 +493,31 @@ jobs:
             Automatic release build for Vesta Launcher.
 
             ${{ steps.changelog.outputs.changelog }}
-          files: |
-            artifacts/**/*Vesta*Launcher*.msi
-            artifacts/**/*Vesta*Launcher*.dmg
-            artifacts/**/*vesta-launcher*.deb
-            artifacts/**/*Vesta*Launcher*.AppImage
-            artifacts/**/*Vesta*Launcher*.app.tar.gz
-            artifacts/**/*.msi
-            artifacts/**/*.dmg
-            artifacts/**/*.deb
-            artifacts/**/*.AppImage
-            artifacts/**/*.tar.gz
           draft: false
-          prerelease: >-
-            ${{ contains(steps.version.outputs.version, 'alpha') ||
-            contains(steps.version.outputs.version, 'beta') }}
-          fail_on_unmatched_files: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
+
+      - name: Upload Release Artifacts (Clobber existing)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          echo "::group::Uploading Release Assets to GitHub"
+          
+          # Enable extended pattern matching in bash
+          shopt -s globstar extglob nullglob
+          
+          # Collect ONLY our compiled assets (ignores directories and source files)
+          FILES=(artifacts/**/*.@(msi|zip|dmg|deb|AppImage|tar.gz|sig))
+          
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No matching artifacts found to upload!"
+            exit 1
+          fi
+
+          echo "Found ${#FILES[@]} files to upload:"
+          printf '  - %s\n' "${FILES[@]}"
+          
+          # Using the official GitHub CLI to upload handles 404s and overwrites (--clobber) natively and gracefully!
+          gh release upload "v${{ steps.version.outputs.version }}" "${FILES[@]}" --clobber
+          
+          echo "::endgroup::"
