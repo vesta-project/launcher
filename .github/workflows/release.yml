@@ -163,7 +163,7 @@ jobs:
         if: matrix.enabled
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 22
 
       - name: Setup Bun
         if: matrix.enabled && matrix.platform != 'windows-11-arm'
@@ -175,7 +175,7 @@ jobs:
         if: matrix.enabled && matrix.platform == 'windows-11-arm'
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          node-version: 22
 
       - name: Setup Rust
         if: matrix.enabled
