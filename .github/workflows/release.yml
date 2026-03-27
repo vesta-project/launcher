@@ -297,7 +297,11 @@ jobs:
                 fi
                 ;;
               AppImage)
-                target_name="Vesta_Launcher_${VERSION}_x86_64.AppImage"
+                if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+                  target_name="Vesta_Launcher_${VERSION}_aarch64.AppImage"
+                else
+                  target_name="Vesta_Launcher_${VERSION}_x86_64.AppImage"
+                fi
                 ;;
               gz)
                 if [[ "$base_file" == *.tar.gz ]]; then
@@ -408,6 +412,7 @@ jobs:
               Vesta_Launcher_${VERSION}_x64.app.tar.gz) PLATFORM="darwin-x86_64"; IS_INSTALLER=false ;;
               Vesta_Launcher_${VERSION}_aarch64.app.tar.gz) PLATFORM="darwin-aarch64"; IS_INSTALLER=false ;;
               Vesta_Launcher_${VERSION}_x86_64.AppImage) PLATFORM="linux-x86_64"; IS_INSTALLER=false ;;
+              Vesta_Launcher_${VERSION}_aarch64.AppImage) PLATFORM="linux-aarch64"; IS_INSTALLER=false ;;
             esac
 
             if [ -n "$PLATFORM" ] && [ "$IS_INSTALLER" = false ]; then
@@ -421,7 +426,7 @@ jobs:
               fi
               
               JSON_DATA=$(echo "$JSON_DATA" | jq --arg plat "$PLATFORM" \
-                --arg url "https://r2.vestalauncher.com.r2.dev/launcher/releases/$VERSION/$file" \
+                --arg url "https://r2.vestalauncher.com/launcher/releases/$VERSION/$file" \
                 --arg sig "$SIGNATURE" \
                 '.[$plat] = {"url": $url, "signature": $sig}')
             fi
@@ -509,13 +514,36 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          echo "::group::Uploading Release Assets to GitHub"
+          echo "::group::Preparing and Uploading Release Assets to GitHub"
           
           # Enable extended pattern matching in bash
           shopt -s globstar extglob nullglob
           
-          # Collect ONLY our compiled assets (ignores directories and source files)
-          FILES=(artifacts/**/*.@(msi|zip|dmg|deb|AppImage|tar.gz|sig))
+          mkdir -p final_artifacts
+          
+          # Collect and rename files to prevent name collisions
+          for file in artifacts/**/*.@(msi|zip|dmg|deb|AppImage|tar.gz|sig|exe|rpm); do
+            filename=$(basename "$file")
+            
+            # If it's a generic name like "Vesta Launcher.app.tar.gz", we need to make it unique per platform
+            if [[ "$filename" == "Vesta Launcher.app.tar.gz"* ]]; then
+              # Extract platform from parent directory name
+              platform_dir=$(basename "$(dirname "$(dirname "$file")")")
+              case "$platform_dir" in
+                *"macOS ARM64"*) arch="aarch64" ;;
+                *"macOS x64"*) arch="x64" ;;
+                *) arch="unknown" ;;
+              esac
+              new_name="Vesta_Launcher_${{ steps.version.outputs.version }}_${arch}.app.tar.gz${filename#Vesta Launcher.app.tar.gz}"
+              cp "$file" "final_artifacts/$new_name"
+            else
+              # Replace spaces with underscores for better compatibility
+              new_name="${filename// /_}"
+              cp "$file" "final_artifacts/$new_name"
+            fi
+          done
+
+          FILES=(final_artifacts/*)
           
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No matching artifacts found to upload!"
@@ -525,7 +553,11 @@ jobs:
           echo "Found ${#FILES[@]} files to upload:"
           printf '  - %s\n' "${FILES[@]}"
           
-          # Using the official GitHub CLI to upload handles 404s and overwrites (--clobber) natively and gracefully!
-          gh release upload "v${{ steps.version.outputs.version }}" "${FILES[@]}" --clobber
+          # Uploading one by one to ensure reliability
+          for file in "${FILES[@]}"; do
+            echo "Uploading $file..."
+            # Using --clobber to replace existing assets of the same name if they exist
+            gh release upload "v${{ steps.version.outputs.version }}" "$file" --clobber
+          done
           
           echo "::endgroup::"
