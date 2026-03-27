@@ -150,6 +150,15 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev pkg-config xdg-utils
           echo "::endgroup::"
 
+      - name: Cache Linux APT dependencies
+        if: matrix.enabled && startsWith(matrix.platform, 'ubuntu')
+        uses: actions/cache@v4
+        with:
+          path: /var/cache/apt/archives
+          key: ${{ runner.os }}-apt-${{ hashFiles('**/tauri.conf.json') }}
+          restore-keys: |
+            ${{ runner.os }}-apt-
+
       - name: Setup Node.js
         if: matrix.enabled
         uses: actions/setup-node@v4
