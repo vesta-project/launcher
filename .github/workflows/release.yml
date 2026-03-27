@@ -55,10 +55,10 @@ jobs:
         run: |
           echo "::group::Bumping Version"
           bun run version:bump ${{ github.event.inputs.bump }}
-          AFTER=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+          AFTER=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
 
-          if [ -z "$AFTER" ]; then
-            echo "Error: Version bump failed - no version found after bump"
+          if [ -z "$AFTER" ] || [ "$AFTER" == "null" ]; then
+            echo "Error: Version bump failed - no version found in tauri.conf.json"
             exit 1
           fi
 
@@ -239,7 +239,7 @@ jobs:
           aws configure set default.s3.multipart_threshold 1024MB
           echo "::endgroup::"
 
-          VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+          VERSION=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
 
           echo "::group::Uploading Files to Cloudflare R2"
           # Only find strictly valid artifact extensions to upload
@@ -371,7 +371,7 @@ jobs:
           elif [ "${{ needs.bump-version.result }}" = "success" ]; then
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           else
-            VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+            VERSION=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
@@ -461,7 +461,7 @@ jobs:
           elif [ "${{ needs.bump-version.result }}" = "success" ]; then
             VERSION="${{ needs.bump-version.outputs.new_version }}"
           else
-            VERSION=$(node -e "console.log(require('./vesta-launcher/src-tauri/tauri.conf.json').version)")
+            VERSION=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           
@@ -476,18 +476,13 @@ jobs:
         run: |
           echo "::group::Generating Changelog"
           CURRENT_TAG="v${{ steps.version.outputs.version }}"
-          PREVIOUS_TAG=$(git tag --sort=-version:refname | head -2 | tail -1 || echo "")
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | head -2 | tail -1 || echo "")
 
           echo "## Changelog" > changelog.md
           echo "" >> changelog.md
 
-          if [ -n "$PREVIOUS_TAG" ] && git rev-parse "$CURRENT_TAG" >/dev/null 2>&1; then
-            COMMIT_COUNT=$(git rev-list --count ${PREVIOUS_TAG}..${CURRENT_TAG} 2>/dev/null || echo "0")
-            if [ "$COMMIT_COUNT" -gt 0 ]; then
-              git log --pretty=format:"- %s (%h)" --no-merges --grep="chore: bump version" --invert-grep ${PREVIOUS_TAG}..${CURRENT_TAG} >> changelog.md 2>/dev/null || echo "- Release notes" >> changelog.md
-            else
-              echo "- No changes since last release" >> changelog.md
-            fi
+          if [ -n "$PREVIOUS_TAG" ] && [ "$PREVIOUS_TAG" != "$CURRENT_TAG" ]; then
+            git log --pretty=format:"- %s (%h)" --no-merges --invert-grep --grep="chore: bump version" "$PREVIOUS_TAG..$CURRENT_TAG" >> changelog.md || echo "- Release notes" >> changelog.md
           else
             echo "- Initial release" >> changelog.md
           fi
@@ -497,13 +492,7 @@ jobs:
           cat changelog.md
           echo "::endgroup::"
 
-          # Use dynamic EOF to avoid conflicts
-          EOF_ID=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64 | tr -dc 'a-zA-Z0-9')
-          {
-            echo "changelog<<$EOF_ID"
-            cat changelog.md
-            echo "$EOF_ID"
-          } >> "$GITHUB_OUTPUT"
+          echo "CHANGELOG_FILE=changelog.md" >> "$GITHUB_ENV"
 
       - name: Create or Update GitHub Release
         id: gh_release
@@ -511,12 +500,7 @@ jobs:
         with:
           tag_name: 'v${{ steps.version.outputs.version }}'
           name: 'Vesta Launcher v${{ steps.version.outputs.version }}'
-          body: |
-            ## Vesta Launcher v${{ steps.version.outputs.version }}
-
-            Automatic release build for Vesta Launcher.
-
-            ${{ steps.changelog.outputs.changelog }}
+          body_path: changelog.md
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
 
