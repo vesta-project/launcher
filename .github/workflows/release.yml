@@ -477,9 +477,11 @@ jobs:
           cat changelog.md
           echo "::endgroup::"
 
-          echo "changelog<<EOF" >> $GITHUB_OUTPUT
-          cat changelog.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          {
+            echo "changelog<<EOF"
+            cat changelog.md
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Create or Update GitHub Release
         id: gh_release
