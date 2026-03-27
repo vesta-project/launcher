@@ -234,7 +234,15 @@ jobs:
 
           echo "::group::Uploading Files to Cloudflare R2"
           # Only find strictly valid artifact extensions to upload
-          find target/${{ matrix.target }}/release/bundle/ -type f \( -name "*.msi" -o -name "*.zip" -o -name "*.dmg" -o -name "*.deb" -o -name "*.AppImage" -o -name "*.tar.gz" -o -name "*.sig" \) -print0 | while IFS= read -r -d '' file; do
+          find target/${{ matrix.target }}/release/bundle/ -type f \( \
+            -name "*.msi" -o \
+            -name "*.msi.zip" -o \
+            -name "*.dmg" -o \
+            -name "*.deb" -o \
+            -name "*.AppImage" -o \
+            -name "*.app.tar.gz" -o \
+            -name "*.sig" \
+          \) -print0 | while IFS= read -r -d '' file; do
             filename=$(basename "$file")
             
             is_sig=false
@@ -377,17 +385,20 @@ jobs:
             IS_INSTALLER=false
             
             case "$file" in
+              # Web Installers (IS_INSTALLER=true)
               Vesta_Launcher_${VERSION}_x64.msi) PLATFORM="windows-x86_64"; IS_INSTALLER=true ;;
               Vesta_Launcher_${VERSION}_arm64.msi) PLATFORM="windows-aarch64"; IS_INSTALLER=true ;;
               Vesta_Launcher_${VERSION}_x64.dmg) PLATFORM="darwin-x86_64"; IS_INSTALLER=true ;;
               Vesta_Launcher_${VERSION}_aarch64.dmg) PLATFORM="darwin-aarch64"; IS_INSTALLER=true ;;
-              Vesta_Launcher_${VERSION}_x86_64.AppImage) PLATFORM="linux-x86_64"; IS_INSTALLER=true ;;
               vesta-launcher_${VERSION}_arm64.deb) PLATFORM="linux-aarch64"; IS_INSTALLER=true ;;
               vesta-launcher_${VERSION}_amd64.deb) PLATFORM="linux-x86_64"; IS_INSTALLER=true ;;
-              Vesta_Launcher_${VERSION}_x64.app.tar.gz) PLATFORM="darwin-x86_64" ;;
-              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz) PLATFORM="darwin-aarch64" ;;
-              Vesta_Launcher_${VERSION}_x64.msi.zip) PLATFORM="windows-x86_64" ;;
-              Vesta_Launcher_${VERSION}_arm64.msi.zip) PLATFORM="windows-aarch64" ;;
+
+              # Updater Artifacts (IS_INSTALLER=false)
+              Vesta_Launcher_${VERSION}_x64.msi.zip) PLATFORM="windows-x86_64"; IS_INSTALLER=false ;;
+              Vesta_Launcher_${VERSION}_arm64.msi.zip) PLATFORM="windows-aarch64"; IS_INSTALLER=false ;;
+              Vesta_Launcher_${VERSION}_x64.app.tar.gz) PLATFORM="darwin-x86_64"; IS_INSTALLER=false ;;
+              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz) PLATFORM="darwin-aarch64"; IS_INSTALLER=false ;;
+              Vesta_Launcher_${VERSION}_x86_64.AppImage) PLATFORM="linux-x86_64"; IS_INSTALLER=false ;;
             esac
 
             if [ -n "$PLATFORM" ] && [ "$IS_INSTALLER" = false ]; then
@@ -477,10 +488,12 @@ jobs:
           cat changelog.md
           echo "::endgroup::"
 
+          # Use dynamic EOF to avoid conflicts
+          EOF_ID=$(dd if=/dev/urandom bs=15 count=1 2>/dev/null | base64 | tr -dc 'a-zA-Z0-9')
           {
-            echo "changelog<<EOF"
+            echo "changelog<<$EOF_ID"
             cat changelog.md
-            echo "EOF"
+            echo "$EOF_ID"
           } >> "$GITHUB_OUTPUT"
 
       - name: Create or Update GitHub Release
