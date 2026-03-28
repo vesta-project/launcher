@@ -36,9 +36,19 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 					</LauncherButton>
 				</div>
 
-				<div class={styles["java-requirements-list"]}>
-					<For each={props.requirements}>
-						{(req: any) => {
+				<Show
+					when={props.requirements.length > 0}
+					fallback={
+						<div class={styles["settings-loading-state"]}>
+							<div class={styles["spinner"]}></div>
+							<p>Loading Minecraft version metadata...</p>
+							<span>Your Java requirements will appear once the manifest is ready.</span>
+						</div>
+					}
+				>
+					<div class={styles["java-requirements-list"]}>
+						<For each={props.requirements}>
+							{(req: any) => {
 							const versionOptions = () =>
 								props.javaOptions.filter(
 									(option) => option.version === req.major_version,
@@ -60,12 +70,13 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 						}}
 					</For>
 				</div>
-			</SettingsCard>
+			</Show>
+		</SettingsCard>
 
-			<SettingsCard
-				header="Performance & Graphics"
-				subHeader="Optimization settings for game performance."
-			>
+		<SettingsCard
+			header="Performance & Graphics"
+			subHeader="Optimization settings for game performance."
+		>
 				<SettingsField
 					label="Use Dedicated GPU"
 					description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
