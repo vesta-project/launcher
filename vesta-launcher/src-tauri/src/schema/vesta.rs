@@ -50,7 +50,7 @@ diesel::table! {
 
 diesel::table! {
     installed_resource (id) {
-        id -> Nullable<Integer>,
+        id -> Integer,
         instance_id -> Integer,
         platform -> Text,
         remote_id -> Text,
@@ -61,7 +61,7 @@ diesel::table! {
         current_version -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
-        last_updated -> Timestamp,
+        last_updated -> Text,
         release_type -> Text,
         hash -> Nullable<Text>,
         file_size -> BigInt,
