@@ -1,3 +1,4 @@
+import { generatePalette } from "../utils/colorHelpers";
 /**
  * Vesta Launcher Theme System - Preset Definitions
  *
@@ -384,6 +385,34 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 
 	vars["--hue-secondary"] = secondary.toString();
 	vars["--hue-accent"] = accent.toString();
+
+	const s = theme.primarySat ?? 100;
+	const l = theme.primaryLight ?? 50;
+
+	const primaryPalette = generatePalette({ h: primary, s, l });
+	const secondaryPalette = generatePalette({ h: secondary, s, l });
+	const accentPalette = generatePalette({ h: accent, s, l });
+
+	vars["--primary-base"] = primaryPalette.base;
+	vars["--primary-hover"] = primaryPalette.hover;
+	vars["--primary-active"] = primaryPalette.active;
+	vars["--primary-transparent"] = primaryPalette.transparent;
+	vars["--primary-low"] = primaryPalette.low;
+	vars["--text-on-primary"] = primaryPalette.textOnPrimary;
+
+	vars["--secondary-base"] = secondaryPalette.base;
+	vars["--secondary-hover"] = secondaryPalette.hover;
+	vars["--secondary-active"] = secondaryPalette.active;
+	vars["--secondary-transparent"] = secondaryPalette.transparent;
+	vars["--secondary-low"] = secondaryPalette.low;
+	vars["--text-on-secondary"] = secondaryPalette.textOnPrimary;
+
+	vars["--accent-base"] = accentPalette.base;
+	vars["--accent-hover"] = accentPalette.hover;
+	vars["--accent-active"] = accentPalette.active;
+	vars["--accent-transparent"] = accentPalette.transparent;
+	vars["--accent-low"] = accentPalette.low;
+	vars["--text-on-accent"] = accentPalette.textOnPrimary;
 
 	// Border widths: only override when style is bordered (custom thickness)
 	if (theme.style === "bordered") {

@@ -6,7 +6,7 @@
 	/* Base Hues (User Configurable) */
 	--color__primary-hue: 220;
 	--button-lightness: 35%;
-	--accent-base: var(--color__primary-hue) 70% var(--button-lightness);
+	--accent-base: var(--accent-base);
 	--hue-secondary: calc(
 		var(--color__primary-hue) +
 		180
@@ -136,9 +136,7 @@
 
 	/* Accent Colors */
 	--accent-primary: hsl(var(--color__primary-hue) 70% var(--button-lightness));
-	--accent-primary-hover: hsl(
-		var(--color__primary-hue) 80% calc(var(--button-lightness) + 10%)
-	);
+	--accent-primary-hover: var(--primary-hover);
 	--accent-secondary: hsl(var(--hue-secondary) 60% 50%);
 
 	--primary: var(--accent-primary);
