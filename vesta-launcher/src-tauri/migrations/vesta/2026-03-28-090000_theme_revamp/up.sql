@@ -1,0 +1,9 @@
+ALTER TABLE account ADD COLUMN window_transparency_enabled BOOLEAN;
+
+CREATE TABLE IF NOT EXISTS saved_themes (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    theme_data TEXT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

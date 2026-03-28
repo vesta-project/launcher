@@ -11,6 +11,8 @@ use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::Manager;
 #[cfg(target_os = "windows")]
 use winver::WindowsVersion;
+#[cfg(target_os = "macos")]
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -827,6 +829,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let _main_win = win_builder.build()?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = apply_vibrancy(&_main_win, NSVisualEffectMaterial::HudWindow, None, None);
+    }
 
     // Setup sniffer window immediately
     // Temporarily disabled file drop sniffer

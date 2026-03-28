@@ -3,6 +3,8 @@ use std::sync::Mutex;
 use tauri::Manager;
 #[cfg(target_os = "windows")]
 use winver::WindowsVersion;
+#[cfg(target_os = "macos")]
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 static WINDOW_ID: Mutex<i32> = Mutex::new(0);
 
@@ -85,7 +87,12 @@ pub async fn launch_window(
         )
     };
 
-    win_builder.build()?;
+    let win = win_builder.build()?;
+
+    #[cfg(target_os = "macos")]
+    {
+        let _ = apply_vibrancy(&win, NSVisualEffectMaterial::HudWindow, None, None);
+    }
 
     Ok(())
 }

@@ -156,6 +156,7 @@ pub struct AppConfig {
     pub default_wrapper_command: Option<String>,
     pub default_post_exit_hook: Option<String>,
     pub default_min_memory: i32,
+    pub window_transparency_enabled: bool,
 }
 
 impl Default for AppConfig {
@@ -210,6 +211,7 @@ impl Default for AppConfig {
             default_wrapper_command: None,
             default_post_exit_hook: None,
             default_min_memory: 2048,
+            window_transparency_enabled: true,
         }
     }
 }

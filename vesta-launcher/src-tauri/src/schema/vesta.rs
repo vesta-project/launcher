@@ -31,6 +31,7 @@ diesel::table! {
         skin_variant -> Text,
         skin_data -> Nullable<Text>,
         cape_data -> Nullable<Text>,
+        window_transparency_enabled -> Nullable<Bool>,
     }
 }
 
@@ -49,7 +50,7 @@ diesel::table! {
 
 diesel::table! {
     installed_resource (id) {
-        id -> Integer,
+        id -> Nullable<Integer>,
         instance_id -> Integer,
         platform -> Text,
         remote_id -> Text,
@@ -60,7 +61,7 @@ diesel::table! {
         current_version -> Text,
         is_manual -> Bool,
         is_enabled -> Bool,
-        last_updated -> Text,
+        last_updated -> Timestamp,
         release_type -> Text,
         hash -> Nullable<Text>,
         file_size -> BigInt,
@@ -195,6 +196,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    saved_themes (id) {
+        id -> Text,
+        name -> Text,
+        theme_data -> Text,
+        created_at -> Timestamp,
+        updated_at -> Timestamp,
+    }
+}
+
+diesel::table! {
     task_state (id) {
         id -> Text,
         task_type -> Text,
@@ -231,6 +242,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     pinned_page,
     resource_metadata_cache,
     resource_project,
+    saved_themes,
     task_state,
     user_version_tracking,
 );

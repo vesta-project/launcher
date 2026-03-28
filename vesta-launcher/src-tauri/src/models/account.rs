@@ -38,6 +38,7 @@ pub struct Account {
     pub skin_variant: String,
     pub skin_data: Option<String>,
     pub cape_data: Option<String>,
+    pub window_transparency_enabled: Option<bool>,
 }
 
 /// New account (without id for insertion)
@@ -72,6 +73,7 @@ pub struct NewAccount {
     pub skin_variant: String,
     pub skin_data: Option<String>,
     pub cape_data: Option<String>,
+    pub window_transparency_enabled: Option<bool>,
 }
 
 impl Default for Account {
@@ -106,6 +108,7 @@ impl Default for Account {
             skin_variant: "classic".into(),
             skin_data: None,
             cape_data: None,
+            window_transparency_enabled: None,
         }
     }
 }
@@ -141,6 +144,7 @@ impl Default for NewAccount {
             skin_variant: "classic".into(),
             skin_data: None,
             cape_data: None,
+            window_transparency_enabled: None,
         }
     }
 }

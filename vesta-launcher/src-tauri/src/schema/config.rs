@@ -47,12 +47,13 @@ diesel::table! {
         default_wrapper_command -> Nullable<Text>,
         default_post_exit_hook -> Nullable<Text>,
         default_min_memory -> Integer,
+        window_transparency_enabled -> Bool,
     }
 }
 
 diesel::table! {
     global_java_paths (major_version) {
-        major_version -> Integer,
+        major_version -> Nullable<Integer>,
         path -> Text,
         is_managed -> Bool,
     }
