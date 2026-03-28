@@ -25,10 +25,7 @@
 	justify-content: space-between;
 	height: 32px;
 	padding: 0 8px;
-	background: var(--liquid-background, var(--theme-background-secondary));
-	backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
-	-webkit-backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
-	box-shadow: var(--liquid-box-shadow);
+	background: var(--surface-raised);
 	border-bottom: var(--border-width-subtle) solid
 		hsla(var(--color__primary-hue), 30%, 30%, 0.3);
 	flex-shrink: 0;
