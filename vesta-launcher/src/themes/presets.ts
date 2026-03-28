@@ -55,6 +55,8 @@ export interface ThemeConfig {
 	allowStyleChange?: boolean;
 	/** Whether the user can change the border thickness of this theme */
 	allowBorderChange?: boolean;
+        windowEffect?: string;
+        backgroundOpacity?: number;
 }
 
 /**
@@ -73,6 +75,8 @@ export interface AppThemeConfig {
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
 	theme_border_width?: number;
+        theme_window_effect?: string;
+        theme_background_opacity?: number;
 	background_hue?: number; // Legacy/Fallback
 }
 
@@ -92,13 +96,16 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 			getNum(config.theme_primary_hue) ??
 			getNum(config.background_hue) ??
 			baseTheme.primaryHue,
-		opacity: (parseInt(config.theme_style || "0") || baseTheme.opacity) ?? 0,
+		opacity: getNum(config.theme_style) ?? baseTheme.opacity ?? 0,
 		borderWidth: config.theme_border_width ?? baseTheme.borderWidth,
 		style: config.theme_style ?? baseTheme.style,
 		gradientEnabled: config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
 		rotation: getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
 		gradientType: config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony: config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
+		customCss: baseTheme.customCss, // Ensure custom CSS from preset is carried over
+		windowEffect: config.theme_window_effect ?? baseTheme.windowEffect,
+		backgroundOpacity: config.theme_background_opacity ?? baseTheme.backgroundOpacity ?? 12,
 	});
 }
 
@@ -203,42 +210,48 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowStyleChange: false,
 		allowBorderChange: false,
 		customCss: `:root {
-			/* Force truly black surfaces for Midnight panels */
-			--surface-base: hsl(0 0% 0%);
-			--surface-raised: hsl(0 0% 2%);
-			--surface-overlay: hsl(0 0% 3%);
-			--surface-sunken: hsl(0 0% 0%);
+			/* Force truly black surfaces for Midnight panels using the computed variables */
+			--surface-base-computed: hsl(0 0% 0%);
+			--surface-raised-computed: hsl(0 0% 2%);
+			--surface-overlay-computed: hsl(0 0% 3%);
+			--surface-sunken-computed: hsl(0 0% 0%);
+
+			/* Midnight palette overrides */
 			--text-primary: hsl(0 0% 100%);
 			--text-secondary: hsl(0 0% 70%);
 			--text-tertiary: hsl(0 0% 50%);
 			--text-disabled: hsl(0 0% 30%);
-			/* Use the primary hue for accents, but keep them somewhat muted for Midnight */
+
+			/* Accent mapping (Primary hue is maintained from config) */
 			--accent-primary: hsl(var(--color__primary-hue) 50% 50%);
 			--accent-primary-hover: hsl(var(--color__primary-hue) 60% 60%);
 			--interactive-base: hsl(var(--color__primary-hue) 50% 50%);
 			--interactive-hover: hsl(var(--color__primary-hue) 60% 60%);
+
+			/* Refined borders for true black look */
 			--border-subtle: hsl(var(--color__primary-hue) 10% 15% / 0.5);
 			--border-strong: hsl(var(--color__primary-hue) 15% 25% / 0.7);
 			--border-glass: hsl(var(--color__primary-hue) 10% 20% / 0.3);
-			/* Remove all blue/hue tints from liquid glass */
+
+			/* Liquid glass adjustments for Midnight */
 			--liquid-tint-saturation: 0%;
 			--liquid-tint-lightness: 0%;
 			--liquid-background: hsl(0 0% 0% / var(--liquid-tint-opacity));
-			/* Remove all blur effects for performance */
 			--liquid-backdrop-filter: none;
 			--effect-blur: 0px;
 			--glass-blur: none;
-			/* Midnight-optimized shadows (minimal to avoid grey halos) */
+
+			/* Midnight-optimized shadows */
 			--liquid-box-shadow: 0 4px 12px hsl(0 0% 0% / 0.8);
 			--effect-shadow: 0 12px 40px rgba(0, 0, 0, 0.9);
 			--effect-shadow-depth: 2px;
 		}
 
-			/* Mini-window border for Midnight */
+			/* Specific Midnight styling for containers */
 			[class*="page-viewer-root"],
 			[data-popper-positioner] > div {
-				border: 1px solid hsl(var(--color__primary-hue) 50% 25% / 0.6);
-				position: relative; /* ensure ::before is positioned correctly */
+				border: 1px solid hsl(var(--color__primary-hue) 50% 25% / 0.6) !important;
+				position: relative;
 			}
 
 			[class*="page-viewer-root"]::before,
@@ -368,6 +381,8 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		allowHueChange: theme.allowHueChange,
 		allowStyleChange: theme.allowStyleChange,
 		allowBorderChange: theme.allowBorderChange,
+		windowEffect: theme.windowEffect || ((window as any).__VESTA_OS__ === "windows" ? "mica" : "vibrancy"),
+		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 12,
 	};
 }
 
@@ -377,12 +392,14 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
 		"--color__primary-hue": theme.primaryHue.toString(),
+		"--background-opacity":
+			(theme.backgroundOpacity !== undefined
+				? (theme.backgroundOpacity / 100).toFixed(2)
+				: "0.12"),
 		"--rotation": `${theme.rotation ?? 135}deg`,
 		"--gradient-type": theme.gradientType || "linear",
 		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
-		// Note: --background-opacity is NOT set here so CSS media queries can control it
 	};
-
 	// Calculate harmony hues
 	const primary = theme.primaryHue;
 	let secondary = primary;
@@ -439,20 +456,29 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	vars["--accent-low"] = accentPalette.low;
 	vars["--text-on-accent"] = accentPalette.textOnPrimary;
 
-	const opacityValue = theme.opacity ?? 0;
-	// Map opacity 0 -> 100 to blur and alpha
-	// 0 opacity = 20px blur, 0.5 alpha
-	// 100 opacity = 0px blur, 1.0 alpha
-	const effectOpacity = 0.5 + (opacityValue / 100) * 0.5;
-	const blurPx = 20 - (opacityValue / 100) * 20;
+	// Skip default glass calculation for specific styles that handle it via custom CSS or fixed modes (like Midnight/Old School)
+	if (theme.style !== "solid" && theme.style !== "bordered") {
+		const opacityValue = theme.opacity ?? 0;
+		// Map opacity 0 -> 100 to blur and alpha
+		// 0 opacity = 20px blur, 0.5 alpha
+		// 100 opacity = 0px blur, 1.0 alpha
+		const effectOpacity = 0.5 + (opacityValue / 100) * 0.5;
+		const blurPx = 20 - (opacityValue / 100) * 20;
 
-	vars["--effect-opacity"] = effectOpacity.toString();
-	vars["--effect-blur"] = `${blurPx}px`;
-	vars["--liquid-frost-blur"] = `${blurPx * 0.8}px`;
+		vars["--effect-opacity"] = effectOpacity.toString();
+		vars["--effect-blur"] = `${blurPx}px`;
+		vars["--liquid-frost-blur"] = `${blurPx * 0.8}px`;
 
-	if (blurPx > 0) {
-		vars["--liquid-backdrop-filter"] = `blur(${blurPx}px) saturate(${1.5 - (opacityValue/100)*0.5})`;
+		if (blurPx > 0) {
+			vars["--liquid-backdrop-filter"] = `blur(${blurPx}px) saturate(${1.5 - (opacityValue/100)*0.5})`;
+		} else {
+			vars["--liquid-backdrop-filter"] = "none";
+		}
 	} else {
+		// Reset to standard solid/opaque values for Solid and Bordered styles
+		vars["--effect-opacity"] = "1.0";
+		vars["--effect-blur"] = "0px";
+		vars["--liquid-frost-blur"] = "0px";
 		vars["--liquid-backdrop-filter"] = "none";
 	}
 
@@ -491,35 +517,74 @@ export function applyTheme(theme: ThemeConfig): void {
 	const currentHue = style.getPropertyValue("--color__primary-hue").trim();
 	const currentRotation = style.getPropertyValue("--rotation").trim();
 	const currentSecondaryHue = style.getPropertyValue("--hue-secondary").trim();
+        const currentBackgroundOpacity = style.getPropertyValue("--background-opacity").trim();
+        const currentOpacity = style.getPropertyValue("--effect-opacity").trim();
+        const currentWindowEffect = root.getAttribute("data-window-effect") || undefined;
+        const currentBorderWidth = style.getPropertyValue("--border-width-subtle").trim();
 
-	if (
-		currentHue === theme.primaryHue.toString() &&
-		root.getAttribute("data-style") === theme.style &&
-		root.getAttribute("data-gradient") ===
-			(theme.gradientEnabled ? "1" : "0") &&
-		root.getAttribute("data-gradient-type") ===
-			(theme.gradientType || "linear") &&
-		currentRotation === vars["--rotation"] &&
-		currentSecondaryHue === vars["--hue-secondary"]
-	) {
-		return;
-	}
+        const updateCustomCss = (t: ThemeConfig) => {
+                const tagId = "theme-custom-css";
+                let styleTag = document.getElementById(tagId) as HTMLStyleElement | null;
+                const normalizedCss = (t.customCss || "").trim();
 
-	for (const [key, value] of Object.entries(vars)) {
-		style.setProperty(key, value);
-	}
+                if (normalizedCss.length > 0) {
+                        if (!styleTag) {
+                                styleTag = document.createElement("style");
+                                styleTag.id = tagId;
+                                document.head.appendChild(styleTag);
+                        }
+                        if (styleTag.textContent !== normalizedCss) {
+                                styleTag.textContent = normalizedCss;
+                        }
+                } else if (styleTag && styleTag.textContent !== "") {
+                        styleTag.textContent = "";
+                }
+        };
+
+        if (
+                currentHue === theme.primaryHue.toString() &&
+                root.getAttribute("data-style") === theme.style &&
+                root.getAttribute("data-gradient") ===
+                        (theme.gradientEnabled ? "1" : "0") &&
+                root.getAttribute("data-gradient-type") ===
+                        (theme.gradientType || "linear") &&
+                currentRotation === vars["--rotation"] &&
+                currentSecondaryHue === vars["--hue-secondary"] &&
+                currentBackgroundOpacity === vars["--background-opacity"] &&
+                currentOpacity === vars["--effect-opacity"] &&
+                currentWindowEffect === theme.windowEffect &&
+                currentBorderWidth === vars["--border-width-subtle"]
+        ) {
+                updateCustomCss(theme);
+                return;
+        }
+
+        for (const [key, value] of Object.entries(vars)) {
+                style.setProperty(key, value);
+        }
+
+        updateCustomCss(theme);
+
+        if (theme.windowEffect !== undefined) {
+                root.setAttribute("data-window-effect", theme.windowEffect);
+                if ((window as any).__TAURI_INTERNALS__) {
+                        import("@tauri-apps/api/core").then(({ invoke }) => {
+                                invoke("set_window_effect", { effect: theme.windowEffect }).catch(console.error);
+                        });
+                }
+        }
 
 	// Ensure background behaves correctly when toggling gradient
 	if (theme.gradientEnabled) {
 		root.setAttribute("data-gradient", "1");
 		// Let stylesheet-defined gradient and opacity take over (CSS media queries handle light/dark)
 		style.removeProperty("--background-color");
-		style.removeProperty("--background-opacity");
+		
 	} else {
 		root.setAttribute("data-gradient", "0");
 		// Force solid background
 		style.setProperty("--background-color", "var(--surface-base)");
-		style.setProperty("--background-opacity", "0");
+		
 	}
 
 	// Apply style mode attribute
@@ -545,20 +610,6 @@ export function applyTheme(theme: ThemeConfig): void {
 		root.setAttribute("data-solid", "true");
 	} else {
 		root.removeAttribute("data-solid");
-	}
-
-	// Inject or remove custom CSS for this theme
-	const tagId = "theme-custom-css";
-	let styleTag = document.getElementById(tagId) as HTMLStyleElement | null;
-	if (theme.customCss && theme.customCss.trim().length > 0) {
-		if (!styleTag) {
-			styleTag = document.createElement("style");
-			styleTag.id = tagId;
-			document.head.appendChild(styleTag);
-		}
-		styleTag.textContent = theme.customCss;
-	} else if (styleTag) {
-		styleTag.textContent = "";
 	}
 }
 

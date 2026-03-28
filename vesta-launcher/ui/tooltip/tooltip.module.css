@@ -8,7 +8,7 @@
 	background-color: hsl(var(--color__primary-hue) 20% 20%);
 	padding: 2px 8px;
 	border-radius: 3px;
-	border: 2px solid hsl(var(--color__primary-hue) 20% 60% / 5%);
+	border: var(--border-width-strong) solid hsl(var(--color__primary-hue) 20% 60% / 5%);
 	z-index: var(--z-popover);
 }
 
@@ -19,7 +19,7 @@
 @media (prefers-color-scheme: light) {
 	.tooltip__content {
 		background-color: var(--surface-overlay);
-		border: 2px solid var(--border-strong);
+		border: var(--border-width-strong) solid var(--border-strong);
 	}
 }
 @keyframes contentShow {

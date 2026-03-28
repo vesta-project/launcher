@@ -486,3 +486,49 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
         _ => Err(format!("Unknown action: {}", action)),
     }
 }
+
+
+#[tauri::command]
+pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        use window_vibrancy::{apply_blur, apply_acrylic, apply_mica, clear_blur, clear_acrylic, clear_mica};
+        let _ = clear_blur(&window);
+        let _ = clear_acrylic(&window);
+        let _ = clear_mica(&window);
+        match effect.as_str() {
+            "blur" => { let _ = apply_blur(&window, Some((18, 18, 18, 125))); },
+            "acrylic" => { let _ = apply_acrylic(&window, Some((18, 18, 18, 125))); },
+            "mica" => { let _ = apply_mica(&window, Some(true)); },
+            _ => {}
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial, apply_liquid_glass, clear_liquid_glass, NSGlassEffectViewStyle};
+        let _ = clear_vibrancy(&window);
+        let _ = clear_liquid_glass(&window);
+        
+        let mut radius = 10.0;
+        if let Ok(output) = std::process::Command::new("sw_vers").arg("-productVersion").output() {
+            if let Ok(version) = String::from_utf8(output.stdout) {
+                if let Some(major) = version.split('.').next() {
+                    if let Ok(major_num) = major.parse::<i32>() {
+                        if major_num >= 26 || major_num >= 15 {
+                            radius = 16.0;
+                        }
+                    }
+                }
+            }
+        }
+        
+        match effect.as_str() {
+            "vibrancy" => { let _ = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(radius)); },
+            "liquid_glass" => { let _ = apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(radius)); },
+            _ => {}
+        }
+    }
+    
+    Ok(())
+}

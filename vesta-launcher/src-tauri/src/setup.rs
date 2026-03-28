@@ -749,7 +749,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
             .transparent(true)
             .decorations(false);
-
+        
     // // Setup system tray icon and menu (conditional based on config)
     // let config = get_app_config()?;
     // if config.show_tray_icon {
@@ -790,50 +790,17 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // }
 
     #[cfg(target_os = "windows")]
-    let version = match WindowsVersion::detect() {
-        Some(v) => v,
-        None => {
-            log::warn!("Failed to detect Windows version. Using fallback window configuration.");
-            // Return a fallback version that will use basic window configuration
-            // TODO: Review this fallback later
-            WindowsVersion {
-                major: 10,
-                minor: 0,
-                build: 19000, // Pre-Windows 11 build number
-            }
-        }
-    };
-
-    #[cfg(target_os = "windows")]
-    // If on windows 11
-    let win_builder = if version.major == 10 && version.build >= 22000 {
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::MicaDark)
-                .build(),
-        )
-    } else if version.major == 6 && version.minor == 1 {
-        // On windows 7
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::Blur)
-                .build(),
-        )
-    } else {
-        // TODO: Eventually windows 10
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::Acrylic)
-                .build(),
-        )
-    };
+    let win_builder = win_builder;
 
     let _main_win = win_builder.build()?;
 
-    #[cfg(target_os = "macos")]
-    {
-        let _ = apply_vibrancy(&_main_win, NSVisualEffectMaterial::HudWindow, None, None);
-    }
+    crate::commands::app::set_window_effect(_main_win.clone(), crate::utils::config::get_app_config().unwrap_or_default().theme_window_effect.clone().unwrap_or_else(|| {
+        if cfg!(target_os = "windows") {
+            "mica".to_string()
+        } else {
+            "vibrancy".to_string()
+        }
+    })).unwrap_or(());
 
     // Setup sniffer window immediately
     // Temporarily disabled file drop sniffer

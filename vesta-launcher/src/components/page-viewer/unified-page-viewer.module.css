@@ -172,7 +172,7 @@
 .page-viewer-reload-spinner {
 	width: 32px;
 	height: 32px;
-	border: 3px solid hsla(var(--color__primary-hue), 80%, 80%, 0.2);
+	border: calc(var(--border-width-subtle) * 2) solid hsla(var(--color__primary-hue), 80%, 80%, 0.2);
 	border-top-color: hsl(var(--color__primary-hue), 100%, 70%);
 	border-radius: 50%;
 	animation: rotate 0.8s linear infinite;

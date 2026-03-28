@@ -58,7 +58,7 @@
 }
 
 .uploadSkinButton svg {
-  color: var(--primary);
+  color: var(--icon-primary);
 }
 
 .floatingUploadButton {
@@ -144,7 +144,7 @@
 }
 
 .narrowUploadIcon svg {
-  color: var(--primary);
+  color: var(--icon-primary);
 }
 
 .narrowUploadIcon:hover svg {
@@ -613,7 +613,7 @@
 .toggleBtn.active {
   background: var(--primary);
   color: white;
-  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .fixedModelBadge {
@@ -699,8 +699,6 @@
 
 .skinItem.selected .selectedBadge {
   opacity: 1;
-  background: var(--primary);
-  color: white;
 }
 
 .viewRawButton {
@@ -730,7 +728,7 @@
 }
 
 .viewRawButton:hover {
-  color: var(--primary);
+  color: var(--icon-primary);
   background: var(--surface-overlay);
   transform: scale(1.1);
 }
@@ -799,18 +797,31 @@
   position: absolute;
   top: 6px;
   right: 6px;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
+  border-radius: 50%;
   background: var(--primary);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 800;
-  border: 1px solid rgba(255, 255, 255, 0.6);
-  box-shadow: 0 4px 10px rgba(var(--primary-rgb), 0.35);
+  color: white;
+  z-index: 15;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  animation: badgePop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes badgePop {
+  from { transform: scale(0) rotate(-20deg); opacity: 0; }
+  to { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+.selectedBadge svg {
+  width: 12px;
+  height: 12px;
+  stroke: currentColor;
+  stroke-width: 4px;
+  fill: none;
 }
 
 .capeItem img {

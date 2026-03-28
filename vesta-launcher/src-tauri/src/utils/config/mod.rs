@@ -131,6 +131,8 @@ pub struct AppConfig {
     pub theme_gradient_angle: Option<i32>, // Gradient angle in degrees
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
     pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
+    pub theme_window_effect: Option<String>,
+    pub theme_background_opacity: Option<i32>,
     pub theme_gradient_type: Option<String>, // "linear" or "radial"
     pub theme_border_width: Option<i32>, // Border thickness in pixels
 
@@ -193,6 +195,8 @@ impl Default for AppConfig {
             theme_gradient_angle: Some(135), // theme_gradient_angle - diagonal gradient
             theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
             theme_advanced_overrides: None, // theme_advanced_overrides - no custom overrides by default
+            theme_window_effect: Some("vibrancy".to_string()),
+            theme_background_opacity: Some(12),
             theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
             theme_border_width: Some(1),                     // theme_border_width - default 1px
 

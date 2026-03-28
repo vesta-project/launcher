@@ -31,6 +31,8 @@ diesel::table! {
         theme_gradient_angle -> Nullable<Integer>,
         theme_gradient_harmony -> Nullable<Text>,
         theme_advanced_overrides -> Nullable<Text>,
+        theme_window_effect -> Nullable<Text>,
+        theme_background_opacity -> Nullable<Integer>,
         theme_gradient_type -> Nullable<Text>,
         theme_border_width -> Nullable<Integer>,
         setup_completed -> Bool,

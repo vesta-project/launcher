@@ -1020,7 +1020,11 @@ export default function AccountSettingsTab() {
                           <TooltipContent>View raw texture</TooltipContent>
                         </Tooltip>
                         <Show when={isSelected()}>
-                          <span class={styles.selectedBadge}>✓</span>
+                          <span class={styles.selectedBadge}>
+                            <svg viewBox="0 0 24 24">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </span>
                         </Show>
                       </div>
                     </TooltipTrigger>
@@ -1242,7 +1246,11 @@ export default function AccountSettingsTab() {
                       >
                         <span class={styles.noneLabel}>NONE</span>
                         <Show when={!previewCapeUrl()}>
-                          <span class={styles.selectedBadge}>✓</span>
+                          <span class={styles.selectedBadge}>
+                            <svg viewBox="0 0 24 24">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                          </span>
                         </Show>
                       </button>
                       <For each={capes()}>
@@ -1263,7 +1271,11 @@ export default function AccountSettingsTab() {
                                 aria-label={cape.name}
                               >
                                 <Show when={isSelected()}>
-                                  <span class={styles.selectedBadge}>✓</span>
+                                  <span class={styles.selectedBadge}>
+                                    <svg viewBox="0 0 24 24">
+                                      <polyline points="20 6 9 17 4 12" />
+                                    </svg>
+                                  </span>
                                 </Show>
                               </TooltipTrigger>
                               <TooltipContent>{cape.name}</TooltipContent>

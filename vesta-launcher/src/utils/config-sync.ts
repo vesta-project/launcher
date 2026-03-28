@@ -148,6 +148,9 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 		theme_gradient_type: config.theme_gradient_type,
 		theme_gradient_harmony: config.theme_gradient_harmony,
 		theme_advanced_overrides: config.theme_advanced_overrides,
+		theme_border_width: config.theme_border_width,
+		theme_background_opacity: config.theme_background_opacity,
+		theme_window_effect: config.theme_window_effect,
 		background_hue: config.background_hue,
 	};
 

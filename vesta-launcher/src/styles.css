@@ -47,21 +47,26 @@
 	   ============================================================================= */
 
 	/* Surface Hierarchy (with alpha for Windows Mica/Acrylic support) */
-	--surface-base: hsl(
+	--surface-base: var(--surface-base-computed, hsl(
 		var(--color__primary-hue) 10% var(--lightness-surface-base) /
-		0.95
-	);
-	--surface-raised: hsl(
+		var(--effect-opacity)
+	));
+	--surface-raised: var(--surface-raised-computed, hsl(
 		var(--color__primary-hue) 15% var(--lightness-surface-raised) /
 		var(--effect-opacity)
-	);
-	--surface-overlay: hsl(
+	));
+	--surface-overlay: var(--surface-overlay-computed, hsl(
 		var(--color__primary-hue) 20% var(--lightness-surface-overlay) /
 		var(--effect-opacity)
-	);
-	--surface-sunken: hsl(
+	));
+	--surface-sunken: var(--surface-sunken-computed, hsl(
 		var(--color__primary-hue) 5% var(--lightness-surface-sunken) /
 		0.98
+	));
+
+	--app-background-tint: hsl(
+		var(--color__primary-hue) 10% var(--lightness-surface-base) /
+		var(--background-opacity)
 	);
 
 	/* Borders */
@@ -77,6 +82,7 @@
 	--border-glass: hsl(var(--color__primary-hue) 10% 100% / 0.15);
 	--border-width-subtle: 1px;
 	--border-width-strong: 1px;
+	--border-radius-main: 12px;
 
 	/* Text Colors */
 	--text-primary: hsl(
@@ -193,8 +199,8 @@
 
 	/* Background Gradient Stops */
 	--gradient-stop-1: hsl(
-		var(--color__primary-hue) 80% 5% /
-		var(--background-opacity)
+        var(--hue-accent) 80% 5% / 
+        var(--background-opacity)
 	);
 	--gradient-stop-2: hsl(
 		var(--color__primary-hue) 81% 40% /
@@ -206,7 +212,8 @@
 	);
 
 	/* Background Gradient (Default to linear) */
-	--background-color: linear-gradient(
+	--background-color: var(--app-background-tint);
+	--background-image: linear-gradient(
 		var(--rotation, 135deg),
 		var(--gradient-stop-1) 0%,
 		var(--gradient-stop-2) 35%,
@@ -308,7 +315,7 @@
 
 /* Radial Gradient Override */
 :root[data-gradient-type="radial"] {
-	--background-color: radial-gradient(
+	--background-image: radial-gradient(
 		farthest-corner at calc(50% + 40% * cos(var(--rotation, 135deg)))
 			calc(50% + 40% * sin(var(--rotation, 135deg))),
 		var(--gradient-stop-2) 0%,
@@ -321,8 +328,8 @@
 	height: 100%;
 	width: 100%;
 	/* Ensure we have a solid base color under the transparent gradient */
-	background-color: var(--surface-base);
-	background-image: var(--background-color);
+	background-color: var(--background-color);
+	background-image: var(--background-image);
 	background-attachment: fixed;
 	background-size: cover;
 	min-width: 450px;
@@ -332,6 +339,16 @@
 /* macOS-specific: avoid fixed background attachment, which is expensive while dragging */
 :root[data-os="macos"] #app {
 	background-attachment: scroll;
+}
+
+:root[data-os="macos"][data-window-effect="none"] #app,
+:root[data-os="macos"][data-window-effect=""] #app {
+    /* Set a solid background behind the gradient purely for macOS 'none' mode */
+    background-color: hsl(var(--color__primary-hue) 5% var(--lightness-surface-sunken)) !important;
+}
+
+:root[data-os="macos"] body {
+	background: transparent !important;
 }
 
 body {
@@ -356,8 +373,7 @@ body {
 	--lightness-text-tertiary: 55%;
 	--lightness-border: 60%;
 
-	/* Make background gradient more visible in light mode */
-	--background-opacity: 0.6;
+	/* Make background gradient more visible in light mode (relying on global settings) */
 
 	/* Override the main background gradient stops for better light mode visibility */
 	--gradient-stop-1: hsl(
@@ -443,8 +459,7 @@ body {
 		--lightness-text-tertiary: 55%;
 		--lightness-border: 60%;
 
-		/* Make background gradient more visible in light mode */
-		--background-opacity: 0.6;
+		/* Make background gradient more visible in light mode (relying on global settings) */
 
 		/* Override the main background gradient stops for better light mode visibility */
 		--gradient-stop-1: hsl(
@@ -625,7 +640,7 @@ button {
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	box-shadow: var(--liquid-box-shadow);
 	isolation: isolate;
-	border: 1px solid transparent;
+	border: var(--border-width-subtle, 1px) solid transparent;
 	position: relative;
 }
 
@@ -647,7 +662,7 @@ button {
 .driver-popover.driverjs-theme {
 	background-color: var(--surface-overlay) !important;
 	color: var(--text-primary) !important;
-	border: 1px solid var(--border-strong) !important;
+	border: var(--border-width-subtle) solid var(--border-strong) !important;
 	border-radius: 12px !important;
 	backdrop-filter: blur(16px) !important;
 	-webkit-backdrop-filter: blur(16px) !important;
@@ -775,4 +790,17 @@ button {
 	user-select: text !important;
 	-webkit-user-select: text !important;
 	cursor: text;
+}
+
+
+/* Let OS Window Effects show through by making the base app background transparent */
+:root:not([data-window-effect="none"]):not([data-window-effect=""]) #app {
+    background-color: transparent !important;
+}
+
+/* Ensure 'none' effect on macOS results in a solid surface rather than transparency */
+:root[data-window-effect="none"] #app,
+:root[data-window-effect=""] #app {
+    background-color: var(--background-color) !important;
+    background-image: var(--background-image) !important;
 }

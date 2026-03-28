@@ -8,6 +8,7 @@ import Button from "@ui/button/button";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
 import { invoke } from "@tauri-apps/api/core";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { useOs } from "@utils/os";
 import { PRESET_THEMES, type ThemeConfig, type GradientHarmony } from "../../../../themes/presets";
 import styles from "./settings-page.module.css";
 
@@ -26,15 +27,20 @@ interface AppearanceSettingsTabProps {
 	handleGradientTypeChange: (val: "linear" | "radial") => void;
 	rotation: number;
 	handleRotationChange: (val: number[]) => void;
-	gradientHarmony: GradientHarmony;
-	handleGradientHarmonyChange: (val: GradientHarmony) => void;
-	borderThickness: number;
-	handleBorderThicknessChange: (val: number[]) => void;
-	handleImportTheme: () => void;
-	handleExportTheme: () => void;
+	        gradientHarmony: GradientHarmony;
+        handleGradientHarmonyChange: (val: GradientHarmony) => void;
+        borderThickness: number;
+        handleBorderThicknessChange: (val: number[]) => void;
+        backgroundOpacity: number;
+        handleBackgroundOpacityChange: (val: number[]) => void;
+        windowEffect: string;
+        handleWindowEffectChange: (val: string) => void;
+        handleImportTheme: () => void;
+        handleExportTheme: () => void;
 }
 
 export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
+        const os = useOs();
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<section class={styles["settings-section"]}>
@@ -42,10 +48,6 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				<p class={styles["section-description"]}>
 					Choose a pre-designed theme or create your own custom look.
 				</p>
-				<div style={{ display: "flex", gap: "8px", "margin-bottom": "16px" }}>
-					<Button variant="outline" onClick={props.handleImportTheme}>Import Custom Theme</Button>
-					<Button variant="outline" onClick={props.handleExportTheme}>Export Active Theme</Button>
-				</div>
 				<div class={styles["theme-preset-grid"]}>
 					<For each={props.PRESET_THEMES}>
 						{(theme) => (
@@ -59,7 +61,18 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				</div>
 			</section>
 
-			<Show when={props.canChangeHue}>
+			
+                        <SettingsCard
+                                header="Theme Management"
+                                subHeader="Share your custom theme to your layout or load a pre-existing one from file."
+                        >
+                                <div style={{ display: "flex", gap: "12px", width: "100%", "padding-bottom": "8px", "padding-top": "8px" }}>
+                                        <Button variant="outline" onClick={props.handleImportTheme} style={{ flex: "1" }}>Import Theme File</Button>
+                                        <Button variant="outline" onClick={props.handleExportTheme} style={{ flex: "1" }}>Export Active Theme</Button>
+                                </div>
+                        </SettingsCard>
+
+                        <Show when={props.canChangeHue}>
 				<SettingsCard
 					header="Customize Colors"
 					subHeader="Adjust the primary color hue to personalize your theme."
@@ -96,14 +109,71 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				</SettingsCard>
 			</Show>
 
-			<Show when={props.themeId === "custom"}>
+			                        <SettingsCard
+                                header="Window Transparency"
+                                subHeader="Adjust native window compositor effects."
+                        >
+                                <SettingsField
+                                        label="Window Effect Material"
+                                        description="OS-native background blur."
+                                        layout="inline"
+                                        control={
+                                                <ToggleGroup
+                                                        value={props.windowEffect || "none"}
+                                                        onChange={(val) => {
+                                                                if (val) props.handleWindowEffectChange(val as string);
+                                                        }}
+                                                        style={{ "flex-wrap": "wrap" }}
+                                                >
+                                                        <ToggleGroupItem value="none">None</ToggleGroupItem>
+                                                        <Show when={os() === "macos"}>
+                                                                <ToggleGroupItem value="vibrancy">Vibrancy</ToggleGroupItem>
+                                                                <ToggleGroupItem value="liquid_glass">Liquid Glass</ToggleGroupItem>
+                                                        </Show>
+                                                        <Show when={os() === "windows" || os() === "linux" || os() === "" || !os()}>
+                                                                <ToggleGroupItem value="mica">Mica</ToggleGroupItem>
+                                                                <ToggleGroupItem value="acrylic">Acrylic</ToggleGroupItem>
+                                                                <ToggleGroupItem value="blur">Blur</ToggleGroupItem>
+                                                        </Show>
+                                                </ToggleGroup>
+                                        }
+                                />
+                                <SettingsField
+                                        label="Background Opacity"
+                                        description="Lower this value to reveal the native window effect underneath the launcher."
+                                        layout="stack"
+                                        control={
+                                                <div style={{ width: "100%" }}>
+                                                        <Slider
+                                                                value={[props.backgroundOpacity !== undefined ? props.backgroundOpacity : 12]}
+                                                                onChange={props.handleBackgroundOpacityChange}
+                                                                minValue={0}
+                                                                maxValue={100}
+                                                                step={1}
+                                                        >
+                                                                <div class={styles["slider__header"]}>
+                                                                        <div class={styles["slider__value-label"]}>
+                                                                                {props.backgroundOpacity !== undefined ? props.backgroundOpacity : 12}%
+                                                                        </div>
+                                                                </div>
+                                                                <SliderTrack>
+                                                                        <SliderFill />
+                                                                        <SliderThumb />
+                                                                </SliderTrack>
+                                                        </Slider>
+                                                </div>
+                                        }
+                                />
+                        </SettingsCard>
+
+                        <Show when={props.themeId === "custom"}>
 				<SettingsCard
 					header="Advanced Style"
 					subHeader="Fine-tune the visual style and effects."
 				>
 					<SettingsField
-						label="Background Opacity"
-						description="Adjust transparency and blur effects (0 = frosted glass, 100 = solid)"
+						label="Layout Translucency"
+                                                description="Adjust transparency and blur effects of panels such as the sidebar and cards (0 = translucent, 100 = solid)"
 						layout="stack"
 						control={
 							<Slider
