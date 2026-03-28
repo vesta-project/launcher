@@ -131,6 +131,7 @@ fn main() {
             auth::get_account_profile,
             auth::get_player_head_path,
             auth::preload_account_heads,
+            commands::skins::force_sync_account_profile,
             commands::skins::upload_account_skin,
             commands::skins::apply_history_skin,
             commands::skins::get_skin_history,

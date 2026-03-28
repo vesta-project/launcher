@@ -1,16 +1,16 @@
 
-use crate::models::account::Account;
-use crate::schema::vesta::account;
-use crate::tasks::manager::{Task, TaskContext, BoxFuture};
-use crate::utils::db::get_vesta_conn;
 use crate::auth::{get_account_profile, invalidate_account_profile_cache};
-use diesel::prelude::*;
-use log::warn;
-use tauri::{Manager, Emitter};
-use base64::{engine::general_purpose, Engine as _};
+use crate::models::account::Account;
 use crate::models::skin_history::NewAccountSkinHistory;
 use crate::schema::vesta::account_skin_history;
-use sha2::{Sha256, Digest};
+use crate::schema::vesta::account;
+use crate::tasks::manager::{BoxFuture, Task, TaskContext};
+use crate::utils::db::get_vesta_conn;
+use base64::{engine::general_purpose, Engine as _};
+use diesel::prelude::*;
+use log::{debug, info, warn};
+use sha2::{Digest, Sha256};
+use tauri::{Emitter, Manager};
 
 pub struct SyncAccountProfilesTask;
 
@@ -49,20 +49,25 @@ pub async fn sync_account_profile_data(
     app_handle: Option<tauri::AppHandle>,
     notify_remote_change: bool,
 ) -> Result<(), String> {
+    info!("[Sync] Starting profile sync for account={}", normalized_uuid);
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let mut acc = account::table
         .filter(account::uuid.eq(normalized_uuid))
-        .first::<Account>(&mut conn)
+        .first::<crate::models::account::Account>(&mut conn)
         .map_err(|_| "Account not found".to_string())?;
 
-    if acc.account_type == "Guest" {
+    if acc.account_type == "Guest" || acc.account_type == "Demo" {
+        debug!("[Sync] Skipping sync for {} account: {}", acc.account_type, acc.uuid);
         return Ok(());
     }
 
     invalidate_account_profile_cache(normalized_uuid).await;
     let profile = match get_account_profile(normalized_uuid.to_string()).await {
         Ok(p) => p,
-        Err(e) => return Err(e),
+        Err(e) => {
+            warn!("[Sync] Failed to fetch profile from Mojang for {}: {}", normalized_uuid, e);
+            return Err(e);
+        }
     };
 
     let active_skin = profile.skins.iter().find(|s| s.state == "ACTIVE").or_else(|| profile.skins.first()).cloned();
@@ -72,59 +77,96 @@ pub async fn sync_account_profile_data(
     let mut remote_change_detected = false;
 
     if let Some(mojang_skin) = active_skin {
+        info!("[Sync] Active Mojang skin found: {}", mojang_skin.url);
         let server_variant = if mojang_skin.variant.to_lowercase() == "slim" { "slim" } else { "classic" };
         let skin_url_changed = acc.skin_url.as_deref() != Some(mojang_skin.url.as_str());
         
         let skin_url = mojang_skin.url.clone();
+
+        // PERSISTENCE CHECK: We want to ensure the current skin is ALWAYS in the history table.
+        let mut base64_for_history = acc.skin_data.clone();
+
         if skin_url_changed || acc.skin_data.is_none() {
             if skin_url_changed && acc.skin_url.is_some() {
+                info!("[Sync] Remote skin change detected for {}", acc.uuid);
                 remote_change_detected = true;
             }
 
             match download_to_base64_data_uri(&skin_url).await {
                 Ok(base64_data) => {
+                    info!("[Sync] Downloaded skin to base64 for history insertion");
                     acc.skin_url = Some(skin_url);
                     acc.skin_data = Some(base64_data.clone());
+                    base64_for_history = Some(base64_data);
                     acc.skin_variant = server_variant.to_string();
                     needs_db_update = true;
-
-                    let clean_base64 = if let Some(pos) = base64_data.find(',') {
-                        &base64_data[pos + 1..]
-                    } else {
-                        &base64_data
-                    };
-
-                    if let Ok(bytes) = general_purpose::STANDARD.decode(clean_base64) {
-                        let texture_key = compute_texture_key(&bytes);
-                        
-                        let exists: i64 = account_skin_history::table
-                            .filter(account_skin_history::account_uuid.eq(&acc.uuid))
-                            .filter(account_skin_history::texture_key.eq(&texture_key))
-                            .count()
-                            .get_result(&mut conn)
-                            .unwrap_or(0);
-                            
-                        if exists == 0 {
-                            let new_history = NewAccountSkinHistory {
-                                account_uuid: acc.uuid.clone(),
-                                texture_key: texture_key.clone(),
-                                name: format!("{}_Mojang_Auto", acc.username),
-                                variant: server_variant.to_string(),
-                                image_data: base64_data.clone(),
-                                source: "mojang".to_string(),
-                            };
-                            let _ = diesel::insert_into(account_skin_history::table)
-                                .values(&new_history)
-                                .execute(&mut conn);
-                        }
-                    }
                 },
-                Err(e) => warn!("Failed to download skin to base64: {}", e),
+                Err(e) => warn!("[Sync] Failed to download skin to base64: {}", e),
             }
         } else if acc.skin_variant != server_variant {
-             acc.skin_variant = server_variant.to_string();
-             needs_db_update = true;
+            info!("[Sync] Variant mismatch detected for {}: {} vs {}", acc.uuid, acc.skin_variant, server_variant);
+            acc.skin_variant = server_variant.to_string();
+            needs_db_update = true;
         }
+
+        // Now ensure the skin is in history if we have base64 data available
+        if let Some(image_data) = base64_for_history {
+            debug!("[Sync] Checking persistence for skin data...");
+            let clean_base64 = if let Some(pos) = image_data.find(',') {
+                &image_data[pos + 1..]
+            } else {
+                &image_data
+            };
+
+            if let Ok(bytes) = general_purpose::STANDARD.decode(clean_base64) {
+                let texture_key = compute_texture_key(&bytes);
+                
+                let exists: i64 = account_skin_history::table
+                    .filter(account_skin_history::account_uuid.eq(&acc.uuid))
+                    .filter(account_skin_history::texture_key.eq(&texture_key))
+                    .count()
+                    .get_result(&mut conn)
+                    .unwrap_or(0);
+
+                if exists == 0 {
+                    let default_skins = piston_lib::api::minecraft_skins::get_default_skins();
+                    let is_default = default_skins.iter().any(|s| {
+                        let variants = [piston_lib::models::common::MinecraftSkinVariant::Classic, piston_lib::models::common::MinecraftSkinVariant::Slim];
+                        variants.iter().any(|v| {
+                            let tex_url = s.get_texture(*v);
+                            let tex_str: &str = tex_url.as_ref();
+                            let mojang_str: &str = mojang_skin.url.as_ref();
+                            tex_str == mojang_str
+                        })
+                    });
+                        
+                    if !is_default {
+                        info!("[Sync] Persistence: Adding unique skin to history for account={}", acc.uuid);
+                        let new_history = NewAccountSkinHistory {
+                            account_uuid: acc.uuid.clone(),
+                            texture_key: texture_key.clone(),
+                            name: "Mojang Sync".to_string(),
+                            variant: server_variant.to_string(),
+                            image_data,
+                            source: "mojang".to_string(),
+                        };
+                        let _ = diesel::insert_into(account_skin_history::table)
+                            .values(&new_history)
+                            .execute(&mut conn);
+                    } else {
+                        info!("[Sync] Persistence: Current skin matches a default look. Skipping history.");
+                    }
+                } else {
+                    debug!("[Sync] Persistence: Skin already exists in history.");
+                }
+            } else {
+                warn!("[Sync] Persistence: Failed to decode base64 data for hashing");
+            }
+        } else {
+            warn!("[Sync] Persistence: No image data available to check history for {}", acc.uuid);
+        }
+    } else {
+        warn!("[Sync] No active skin found on Mojang profile for {}", acc.uuid);
     }
 
     if let Some(mojang_cape) = active_cape {
@@ -188,8 +230,8 @@ impl Task for SyncAccountProfilesTask {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
             let accounts = account::table
-                .filter(account::is_active.eq(true))
                 .filter(account::account_type.ne("Guest".to_string()))
+                .filter(account::account_type.ne("Demo".to_string()))
                 .load::<Account>(&mut conn)
                 .map_err(|e| e.to_string())?;
 

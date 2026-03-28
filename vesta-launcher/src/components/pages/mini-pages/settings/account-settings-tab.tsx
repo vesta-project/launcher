@@ -272,13 +272,42 @@ export default function AccountSettingsTab() {
       const accs = await invoke<Account[]>("get_accounts");
       setAccounts(accs);
 
-      let active = await getActiveAccount();
-      if (!active && accs.length > 0) active = accs[0];
-
+      const active = await getActiveAccount() as any as Account;
       if (active) {
         setActiveAccount(active);
         
-        if (active.account_type !== "guest") {
+        if (active.account_type !== "guest" && active.account_type !== "demo") {
+          // Trigger a background sync on mount to ensure we have the latest from Mojang
+          invoke("force_sync_account_profile", { accountUuid: active.uuid })
+            .then(async () => {
+               console.log("[AccountSettings] Background sync on mount completed");
+               // Fetch the updated data from DB after the sync finishes
+               const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", { accountUuid: active.uuid });
+               setSkins(res.default_skins);
+               setSkinHistory(res.recent_history);
+               setCapes(res.capes.map(c => ({ id: c.id, name: c.alias || "Cape", url: c.url })));
+               
+               // Only update preview/snapshot if user hasn't touched anything yet (still matches initial snapshot)
+               const snapshot = savedSnapshot();
+               if (!snapshot || (
+                 normalizeSkinComparable(previewSkinUrl() || "") === normalizeSkinComparable(snapshot.skinUrl) &&
+                 normalizeSkinComparable(previewCapeUrl() || "") === normalizeSkinComparable(snapshot.capeUrl || "") &&
+                 previewVariant() === snapshot.variant
+               )) {
+                 setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
+                 setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
+                 setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
+                 setPreviewComputedKey(res.current_skin_id);
+                 
+                 setSavedSnapshot({
+                   skinUrl: res.current_skin_base64 || active.skin_url || "",
+                   capeUrl: res.current_cape_base64 || active.cape_url || null,
+                   variant: res.current_variant as "classic"|"slim" || "classic",
+                 });
+               }
+            })
+            .catch(err => console.error("[AccountSettings] Background sync on mount failed:", err));
+
           const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", { accountUuid: active.uuid });
           setSkins(res.default_skins);
           setSkinHistory(res.recent_history);
@@ -288,7 +317,7 @@ export default function AccountSettingsTab() {
           setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
           setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
           setPreviewComputedKey(res.current_skin_id);
-          
+
           setSavedSnapshot({
             skinUrl: res.current_skin_base64 || active.skin_url || "",
             capeUrl: res.current_cape_base64 || active.cape_url || null,
@@ -319,7 +348,7 @@ export default function AccountSettingsTab() {
     // Listen for external active account changes (e.g. from Sidebar)
     const unsubscribe = onConfigUpdate(async (field) => {
       if (field === "active_account_uuid") {
-        const active = await getActiveAccount();
+        const active = await getActiveAccount() as any as Account;
         if (active && active.uuid !== activeAccount()?.uuid) {
           setActiveAccount(active);
         }
@@ -371,21 +400,24 @@ export default function AccountSettingsTab() {
 
   const isDirty = createMemo(() => {
     const active = activeAccount();
-    if (!active) return false;
-    
-    // Normalize empty strings to null for comparison
-    const currentSkin = active.skin_url || null;
+    const snapshot = savedSnapshot();
+    if (!active || !snapshot) return false;
+
+    // Compare against the canonical "saved" snapshot from the server/loadData, 
+    // NOT the initial active account object which might have stale URLs.
+    const currentSkin = snapshot.skinUrl || null;
     const previewSkin = previewSkinUrl() || null;
-    const currentCape = active.cape_url || null;
+    const currentCape = snapshot.capeUrl || null;
     const previewCape = previewCapeUrl() || null;
-    const currentVariant = active.skin_variant || "classic";
+    const currentVariant = snapshot.variant;
     const previewVar = previewVariant();
 
-    return (
-      previewSkin !== currentSkin ||
-      previewCape !== currentCape ||
-      previewVar !== currentVariant
-    );
+    // Use normalized comparison for base64/URLs to avoid false positives with trailing whitespace or encoding
+    const skinChanged = normalizeSkinComparable(previewSkin || "") !== normalizeSkinComparable(currentSkin || "");
+    const capeChanged = normalizeSkinComparable(previewCape || "") !== normalizeSkinComparable(currentCape || "");
+    const variantChanged = previewVar !== currentVariant;
+
+    return skinChanged || capeChanged || variantChanged;
   });
 
   const getSkinTexture = (skin: Skin | null, variant: "classic" | "slim"): string => {
@@ -515,28 +547,18 @@ export default function AccountSettingsTab() {
   });
 
   const isSkinSelected = (itemUrl: string, itemTextureKey: string) => {
-    const currentUrl = previewSkinUrl();
-    const currentSkinId = activeSkinId();
-
     // 1. Check by ID/Hash (Best)
-    if (currentSkinId) {
-      const match = itemTextureKey === currentSkinId;
-      if (match) return true;
+    const currentSkinId = previewComputedKey();
+    if (currentSkinId && itemTextureKey && currentSkinId === itemTextureKey) {
+      return true;
     }
 
-    // If we have a computed preview key, compare the item's texture_key against it and log concisely
-    const previewKey = previewComputedKey();
-    if (previewKey) {
-      const matchByComputed = itemTextureKey === previewKey;
-      if (matchByComputed) return true;
-    }
-
-    // 2. Check by exact URL/Base64 string (Fallback for unsaved/mojang skins)
+    // 2. Check by exact URL/Base64 string (Fallback)
+    const currentUrl = previewSkinUrl();
     if (currentUrl) {
       const comparableItem = normalizeSkinComparable(itemUrl);
       const comparableCurrent = normalizeSkinComparable(currentUrl);
-      const urlMatch = comparableItem === comparableCurrent;
-      if (urlMatch) {
+      if (comparableItem === comparableCurrent) {
         return true;
       }
     }
@@ -598,14 +620,16 @@ export default function AccountSettingsTab() {
     });
   });
 
-  const handlePreviewSkin = (skin: Skin) => {
+  const handlePreviewSkin = async (skin: Skin) => {
     const texture = getSkinTexture(skin, previewVariant());
     setPreviewSkinUrl(texture);
+    setPreviewComputedKey(skin.texture_key || null);
   };
 
   const handlePreviewHistory = (item: SkinHistory) => {
     setPreviewSkinUrl(item.image_data);
-    setPreviewVariant(item.variant as "classic" | "slim");
+    setPreviewVariant(normalizeVariant(item.variant));
+    setPreviewComputedKey(item.texture_key);
   };
 
   const syncActiveSkinWithPreview = () => {
@@ -655,6 +679,7 @@ export default function AccountSettingsTab() {
           try {
             computedKey = await invoke<string>("compute_texture_key_from_base64", { base64Data: dataUrl });
             console.log("uploadSkin: computed texture_key for uploaded file", { computedKey });
+            setPreviewComputedKey(computedKey);
           } catch (e) {
             console.warn("uploadSkin: failed to compute texture key for upload, falling back to temp key", e);
           }
@@ -785,6 +810,31 @@ export default function AccountSettingsTab() {
     }
   };
 
+  const handleForceSync = async () => {
+    const active = activeAccount();
+    if (!active || active.account_type === "guest" || active.account_type === "demo") return;
+
+    setSaving(true);
+    try {
+      await invoke("force_sync_account_profile", { accountUuid: active.uuid });
+      await loadData();
+      createNotification({
+        title: "Profile Synced",
+        description: "Successfully forced a refresh from Mojang.",
+        notification_type: "immediate"
+      });
+    } catch (err) {
+      console.error("Force sync failed:", err);
+      createNotification({
+        title: "Sync Failed",
+        description: String(err),
+        notification_type: "alert"
+      });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleAddAccount = () => {
     router().navigate("/login");
   };
@@ -865,6 +915,18 @@ export default function AccountSettingsTab() {
     setPreviewSkinUrl(snapshot.skinUrl || "");
     setPreviewCapeUrl(snapshot.capeUrl || null);
     setPreviewVariant(snapshot.variant);
+    
+    // Also reset the selection ID by looking it up from the known state
+    const active = activeAccount();
+    if (active) {
+      invoke<CompleteSkinsResponse>("get_complete_skin_data", { accountUuid: active.uuid })
+        .then(res => {
+          setPreviewComputedKey(res.current_skin_id);
+        })
+        .catch(() => setPreviewComputedKey(null));
+    } else {
+       setPreviewComputedKey(null);
+    }
   };
 
   const renderSkinCategorySection = (category: string) => {

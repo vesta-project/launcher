@@ -366,7 +366,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Sync profiles on startup
     if let Some(task_manager) = app.try_state::<TaskManager>() {
-        task_manager.submit(Box::new(crate::tasks::sync_profiles::SyncAccountProfilesTask::new()));
+        log::info!("[setup] Submitting SyncAccountProfilesTask...");
+        let _ = task_manager.submit(Box::new(crate::tasks::sync_profiles::SyncAccountProfilesTask::new()));
+    } else {
+        log::error!("[setup] Failed to get TaskManager state for startup sync");
     }
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)

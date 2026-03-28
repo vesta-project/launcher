@@ -170,6 +170,30 @@ pub async fn compute_texture_key_from_base64(base64_data: String) -> Result<Stri
 }
 
 #[command]
+pub async fn force_sync_account_profile(
+    app: tauri::AppHandle,
+    account_uuid: String,
+) -> Result<(), String> {
+    let normalized_uuid = account_uuid.replace("-", "");
+    info!("[Sync] MANUAL Force sync triggered for account={}", normalized_uuid);
+    
+    match crate::tasks::sync_profiles::sync_account_profile_data(
+        &normalized_uuid,
+        Some(app),
+        true,
+    ).await {
+        Ok(_) => {
+            info!("[Sync] Manual force sync completed successfully for {}", normalized_uuid);
+            Ok(())
+        },
+        Err(e) => {
+            error!("[Sync] Manual force sync failed for {}: {}", normalized_uuid, e);
+            Err(e)
+        }
+    }
+}
+
+#[command]
 pub async fn upload_account_skin(
     app: tauri::AppHandle,
     account_uuid: String,

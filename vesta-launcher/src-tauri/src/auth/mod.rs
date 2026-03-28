@@ -978,9 +978,14 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
         "config-updated",
         serde_json::json!({
             "field": "active_account_uuid",
-            "value": target_uuid
+            "value": &target_uuid
         }),
     );
+
+    // Sync profile data on account change to ensure skins/capes stay up to date
+    if let Some(task_manager) = app_handle.try_state::<crate::tasks::manager::TaskManager>() {
+        let _ = task_manager.submit(Box::new(crate::tasks::sync_profiles::SyncAccountProfilesTask::new()));
+    }
 
     Ok(())
 }
