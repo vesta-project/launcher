@@ -1,7 +1,7 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::models::java::GlobalJavaPath;
 use crate::models::resource::SourcePlatform;
-use crate::schema::global_java_paths::dsl::{global_java_paths, major_version};
+use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version, path as path_col, is_managed as is_managed_col};
 use crate::schema::vesta::instance::dsl::*;
 use crate::tasks::installers::modpack::InstallModpackTask;
 use crate::tasks::manager::TaskManager;
@@ -986,7 +986,7 @@ async fn prepare_instance(
         if let Ok(mut config_conn) = get_config_conn() {
             let reco_version = get_recommended_java_version(&instance_data.minecraft_version);
             let global_path = global_java_paths
-                .filter(major_version.eq(reco_version))
+                .filter(major_version.eq(reco_version as i32))
                 .first::<GlobalJavaPath>(&mut config_conn)
                 .ok();
 

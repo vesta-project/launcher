@@ -28,8 +28,9 @@ import {
 } from "@ui/select/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { router } from "@components/page-viewer/page-viewer";
-import { setActiveAccount as persistActiveAccount } from "@utils/auth";
+import { setActiveAccount as persistActiveAccount, getActiveAccount } from "@utils/auth";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
+import { onConfigUpdate } from "@utils/config-sync";
 import { createNotification } from "@utils/notifications";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import styles from "./account-settings-tab.module.css";
@@ -63,6 +64,8 @@ interface Account {
   skin_url?: string;
   skin_variant?: string;
   cape_url?: string;
+  skin_data?: string;
+  cape_data?: string;
 }
 
 interface SkinSource {
@@ -102,18 +105,15 @@ interface MinecraftProfile {
   capes: Array<{ id: string; state: string; url: string; alias: string }>;
 }
 
-interface CapeCacheEntry {
-  capes: Cape[];
-  skinVariant: "classic" | "slim";
-  cachedAt: number;
+interface CompleteSkinsResponse {
+  current_skin_id: string | null;
+  current_skin_base64: string | null;
+  current_cape_base64: string | null;
+  current_variant: "classic" | "slim";
+  recent_history: SkinHistory[];
+  default_skins: Skin[];
+  capes: Array<{ id: string; state: string; url: string; alias: string }>;
 }
-
-const CAPE_CACHE_TTL_MS = 2 * 60 * 1000;
-const capeCacheStore = new Map<string, CapeCacheEntry>();
-const capeInflightRequests = new Map<
-  string,
-  Promise<{ capeList: Cape[]; serverVariant: "classic" | "slim" }>
->();
 
 const normalizeVariant = (value?: string | null): "classic" | "slim" => {
   return String(value || "classic").toLowerCase() === "slim" ? "slim" : "classic";
@@ -269,35 +269,43 @@ export default function AccountSettingsTab() {
 
   const loadData = async () => {
     try {
-      const [accs, skinList] = await Promise.all([
-        invoke<Account[]>("get_accounts"),
-        invoke<Skin[]>("get_default_skins"),
-      ]);
-
+      const accs = await invoke<Account[]>("get_accounts");
       setAccounts(accs);
-      setSkins(skinList);
 
-      if (accs.length > 0 && !activeAccount()) {
-        const active = accs[0];
+      let active = await getActiveAccount();
+      if (!active && accs.length > 0) active = accs[0];
+
+      if (active) {
         setActiveAccount(active);
-        setPreviewSkinUrl(active.skin_url || "");
-        setPreviewVariant(normalizeVariant(active.skin_variant));
-        setPreviewCapeUrl(active.cape_url || "");
-        setSavedSnapshot({
-          skinUrl: active.skin_url || "",
-          capeUrl: active.cape_url || null,
-          variant: normalizeVariant(active.skin_variant),
-        });
         
         if (active.account_type !== "guest") {
-          await Promise.all([
-            loadCapes(active.uuid),
-            loadHistory(active.uuid)
-          ]);
-
-          // If current skin is from Mojang and not in history, we should arguably add it,
-          // but for now, we ensure that if it IS in history or presets, it gets highlighted.
-          // The activeSkinId memo handles this by comparing the texture URL to history image_data.
+          const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", { accountUuid: active.uuid });
+          setSkins(res.default_skins);
+          setSkinHistory(res.recent_history);
+          setCapes(res.capes.map(c => ({ id: c.id, name: c.alias || "Cape", url: c.url })));
+          
+          setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
+          setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
+          setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
+          setPreviewComputedKey(res.current_skin_id);
+          
+          setSavedSnapshot({
+            skinUrl: res.current_skin_base64 || active.skin_url || "",
+            capeUrl: res.current_cape_base64 || active.cape_url || null,
+            variant: res.current_variant as "classic"|"slim" || "classic",
+          });
+        } else {
+          setPreviewSkinUrl(active.skin_url || "");
+          setPreviewVariant(normalizeVariant(active.skin_variant));
+          setPreviewCapeUrl(active.cape_url || "");
+          setSavedSnapshot({
+            skinUrl: active.skin_url || "",
+            capeUrl: active.cape_url || null,
+            variant: normalizeVariant(active.skin_variant),
+          });
+          setSkins(await invoke<Skin[]>("get_default_skins"));
+          setCapes([]);
+          setSkinHistory([]);
         }
       }
     } catch (err) {
@@ -305,166 +313,20 @@ export default function AccountSettingsTab() {
     }
   };
 
-  const loadHistory = async (uuid: string) => {
-    try {
-      console.log("loadHistory: invoking sync_current_skin_history for", uuid);
-      await invoke("sync_current_skin_history", {
-        accountUuid: uuid,
-      });
-
-
-      const history = await invoke<SkinHistory[]>("get_skin_history", {
-        accountUuid: uuid,
-      });
-
-      console.log("loadHistory: fetched history count=", history.length);
-      console.log("loadHistory: texture_keys=", history.map(h => h.texture_key));
-
-      // Deduplicate history items by texture_key
-      const uniqueHistory = history.filter((item, index, self) =>
-        index === self.findIndex((t) => t.texture_key === item.texture_key)
-      );
-      setSkinHistory(uniqueHistory);
-    } catch (err) {
-      console.error("Failed to load skin history:", err);
-      setSkinHistory([]);
-    }
-  };
-
-  // Compute texture key for preview URL when it's a remote URL (not data:)
-  createEffect(() => {
-    const url = previewSkinUrl();
-    setPreviewComputedKey(null);
-    if (!url) return;
-    console.log("previewTexture: computing texture key for preview URL", url);
-    if (url.startsWith("data:")) {
-      // For local/data URIs compute the key via backend helper
-      invoke<string>("compute_texture_key_from_base64", { base64Data: url })
-        .then((key) => {
-          setPreviewComputedKey(key);
-        })
-        .catch((err) => {
-          console.error("previewTexture: failed to compute texture key from base64", url, err);
-          setPreviewComputedKey(null);
-        });
-      return;
-    }
-
-    // Remote URL: download and compute on backend
-    invoke<{ 0: string; 1: string }>("compute_texture_key_from_url", { textureUrl: url })
-      .then((res) => {
-        const key = res[0];
-        setPreviewComputedKey(key);
-      })
-      .catch((err) => {
-        console.error("previewTexture: failed to compute texture key for preview URL", url, err);
-        setPreviewComputedKey(null);
-      });
-  });
-
-  // When we have a computed preview key, ensure presets have computed keys cached
-  createEffect(() => {
-    const previewKey = previewComputedKey();
-    // Only compute preset keys when we have a previewComputedKey to compare with
-    if (!previewKey) return;
-
-    // Iterate presets and compute missing keys (classic + slim)
-    skins().forEach((s) => {
-      const classicTex = getSkinTexture(s, "classic");
-      const slimTex = getSkinTexture(s, "slim");
-
-      [classicTex, slimTex].forEach((tex) => {
-        if (!tex) return;
-        if (presetKeyCache.has(tex)) return;
-
-        // Kick off compute and cache result
-        if (tex.startsWith("data:")) {
-          invoke<string>("compute_texture_key_from_base64", { base64Data: tex })
-            .then((key) => {
-              presetKeyCache.set(tex, key);
-              setPresetKeyVersion((v) => v + 1);
-            })
-            .catch((err) => {
-              console.warn("preset key compute failed for base64", { tex_preview: tex.slice(0,64), err });
-            });
-        } else {
-          invoke<{ 0: string; 1: string }>("compute_texture_key_from_url", { textureUrl: tex })
-            .then((res) => {
-              const key = res[0];
-              presetKeyCache.set(tex, key);
-              setPresetKeyVersion((v) => v + 1);
-            })
-            .catch((err) => {
-              console.warn("preset key compute failed for url", { tex, err });
-            });
-        }
-      });
-    });
-  });
-
-  const loadCapes = async (uuid: string) => {
-    const now = Date.now();
-    const cached = capeCacheStore.get(uuid);
-    if (cached && now - cached.cachedAt < CAPE_CACHE_TTL_MS) {
-      setCapes(cached.capes);
-      applyAuthoritativeVariant(uuid, cached.skinVariant);
-      return;
-    }
-
-    const inflight = capeInflightRequests.get(uuid);
-    if (inflight) {
-      try {
-        const { capeList, serverVariant } = await inflight;
-        setCapes(capeList);
-        applyAuthoritativeVariant(uuid, serverVariant);
-      } catch {
-        setCapes([]);
-      }
-      return;
-    }
-
-    try {
-      const request = invoke<MinecraftProfile>("get_account_profile", {
-        accountUuid: uuid,
-      }).then((profile) => {
-        const activeServerSkin = profile.skins.find((skin) =>
-          String(skin.state || "").toLowerCase() === "active",
-        ) || profile.skins[0];
-        const serverVariant = normalizeVariant(activeServerSkin?.variant);
-
-        const capeList: Cape[] = profile.capes.map((c) => ({
-          id: c.id,
-          name: c.alias || "Cape",
-          url: c.url,
-        }));
-
-        capeCacheStore.set(uuid, {
-          capes: capeList,
-          skinVariant: serverVariant,
-          cachedAt: Date.now(),
-        });
-
-        return { capeList, serverVariant };
-      });
-
-      capeInflightRequests.set(uuid, request);
-      const { capeList, serverVariant } = await request;
-      setCapes(capeList);
-      applyAuthoritativeVariant(uuid, serverVariant);
-    } catch (err: any) {
-      const errorMessage = typeof err === "string" ? err : err?.message || String(err);
-      if (errorMessage.includes("429") || errorMessage.includes("403")) {
-        console.warn("Mojang rate limit or access error while fetching profile:", errorMessage);
-      } else {
-        console.error("Failed to load capes:", err);
-      }
-      setCapes([]);
-    } finally {
-      capeInflightRequests.delete(uuid);
-    }
-  };
-
   onMount(loadData);
+
+  onMount(() => {
+    // Listen for external active account changes (e.g. from Sidebar)
+    const unsubscribe = onConfigUpdate(async (field) => {
+      if (field === "active_account_uuid") {
+        const active = await getActiveAccount();
+        if (active && active.uuid !== activeAccount()?.uuid) {
+          setActiveAccount(active);
+        }
+      }
+    });
+    onCleanup(unsubscribe);
+  });
 
   onMount(() => {
     const evaluateLayoutModes = () => {
@@ -494,15 +356,11 @@ export default function AccountSettingsTab() {
           variant: normalizeVariant(active.skin_variant),
         });
 
-        detectVariantFromSkinData(active.skin_url || "").then((detected) => {
-          if (detected) {
-            applyAuthoritativeVariant(active.uuid, detected);
-          }
-        });
+        
 
         if (active.account_type !== "guest") {
-          loadCapes(active.uuid);
-          loadHistory(active.uuid);
+          
+          
         } else {
           setCapes([]);
           setSkinHistory([]);
@@ -881,32 +739,32 @@ export default function AccountSettingsTab() {
         }
       }
 
-      // 1. Force a refresh of all account data from source of truth
-      // Refresh account list (avatar refresh is driven by backend events)
+      const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", { accountUuid: active.uuid });
+      setSkins(res.default_skins);
+      setSkinHistory(res.recent_history);
+      setCapes(res.capes.map(c => ({ id: c.id, name: c.alias || "Cape", url: c.url })));
+      
+      setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
+      setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
+      setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
+      setPreviewComputedKey(res.current_skin_id);
+      
+      setSavedSnapshot({
+        skinUrl: res.current_skin_base64 || active.skin_url || "",
+        capeUrl: res.current_cape_base64 || active.cape_url || null,
+        variant: res.current_variant as "classic"|"slim" || "classic",
+      });
+
       const accs = await invoke<Account[]>("get_accounts");
       setAccounts(accs);
-      capeCacheStore.delete(active.uuid);
-
-      // Sync the local activeAccount signal to just-saved state
       const updatedAccount = accs.find(a => a.uuid === active.uuid);
-      if (updatedAccount) {
-        setActiveAccount(updatedAccount);
-        // Resync preview signals to the newly saved state to clear isDirty exactly
-        setPreviewSkinUrl(updatedAccount.skin_url || "");
-        setPreviewVariant(normalizeVariant(updatedAccount.skin_variant));
-        setPreviewCapeUrl(updatedAccount.cape_url || "");
-        setSavedSnapshot({
-          skinUrl: updatedAccount.skin_url || "",
-          capeUrl: updatedAccount.cape_url || null,
-          variant: normalizeVariant(updatedAccount.skin_variant),
-        });
-      }
-
-      // 4. Refresh sidecar data
+      if (updatedAccount) setActiveAccount(updatedAccount);
+      
+// 4. Refresh sidecar data
       if (active.account_type !== "guest") {
         await Promise.all([
-          loadHistory(active.uuid),
-          loadCapes(active.uuid)
+          
+          
         ]);
       }
 

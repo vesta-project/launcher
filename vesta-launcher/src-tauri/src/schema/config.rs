@@ -1,4 +1,4 @@
-﻿// @generated automatically by Diesel CLI.
+// @generated automatically by Diesel CLI.
 
 diesel::table! {
     app_config (id) {

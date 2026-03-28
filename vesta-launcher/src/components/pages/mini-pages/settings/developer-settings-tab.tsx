@@ -93,6 +93,28 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					}
 				/>
 			</SettingsCard>
+
+			<SettingsCard header="Account Testing">
+				<SettingsField
+					label="Add Demo Account"
+					description="Add a temporary demo account that is removed on restart"
+					control={
+						<LauncherButton
+							onClick={async () => {
+								await invoke("start_demo_session");
+								showToast({
+									title: "Demo Account Added",
+									description:
+										"Temporal account 'DemoUser' is now active.",
+									severity: "success",
+								});
+							}}
+						>
+							Add Demo Account
+						</LauncherButton>
+					}
+				/>
+			</SettingsCard>
 		</div>
 	);
 }

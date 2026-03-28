@@ -9,6 +9,7 @@ use lazy_static::lazy_static;
 use oauth2::TokenResponse;
 use piston_lib::api::mojang::get_minecraft_profile;
 use piston_lib::auth::{device_code_to_details, get_auth_client, get_device_code, poll_for_token};
+use rand::seq::IndexedRandom;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -21,7 +22,9 @@ use crate::utils::config::{get_app_config, update_app_config};
 use crate::utils::db::get_vesta_conn;
 
 pub const ACCOUNT_TYPE_GUEST: &str = "Guest";
+pub const ACCOUNT_TYPE_DEMO: &str = "Demo";
 pub const GUEST_UUID: &str = "00000000000000000000000000000000";
+pub const DEMO_UUID: &str = "ffffffffffffffffffffffffffffffff";
 const PROFILE_CACHE_TTL_SECONDS: i64 = 120;
 
 #[derive(Clone)]
@@ -260,6 +263,78 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     }) {
         log::error!("Failed to create guest-mode notification: {}", e);
     }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn start_demo_session(app_handle: AppHandle) -> Result<(), String> {
+    log::info!("[auth] Starting demo session...");
+
+    let demo_uuid_v = DEMO_UUID.to_string();
+    let username_v = "DemoUser";
+
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+    // Create Demo Account
+    let mut new_acct = NewAccount::default();
+    new_acct.uuid = demo_uuid_v.clone();
+    new_acct.username = username_v.to_string();
+    new_acct.display_name = Some("Temporal Demo Account".to_string());
+    new_acct.is_active = true;
+    new_acct.account_type = ACCOUNT_TYPE_DEMO.to_string();
+
+    // Give the demo account a random default skin
+    let default_skins = piston_lib::api::minecraft_skins::get_default_skins();
+    if !default_skins.is_empty() {
+        let mut rng = rand::rng();
+        if let Some(random_skin) = default_skins.choose(&mut rng) {
+            let preferred_variant = piston_lib::models::common::MinecraftSkinVariant::Classic;
+            new_acct.skin_url = Some(random_skin.get_texture(preferred_variant).to_string());
+            new_acct.skin_variant = match random_skin.get_variant(preferred_variant) {
+                piston_lib::models::common::MinecraftSkinVariant::Slim => "slim".to_string(),
+                _ => "classic".to_string(),
+            };
+            log::info!(
+                "[auth] Assigned random default skin to demo account: {:?}", 
+                random_skin.name
+            );
+        }
+    }
+
+    // Deactivate others
+    diesel::update(account)
+        .set(is_active.eq(false))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    // Upsert demo
+    diesel::insert_into(account)
+        .values(&new_acct)
+        .on_conflict(uuid)
+        .do_update()
+        .set((is_active.eq(true), account_type.eq(ACCOUNT_TYPE_DEMO)))
+        .execute(&mut conn)
+        .map_err(|e| e.to_string())?;
+
+    // Set as active account in config
+    let mut config = get_app_config().map_err(|e| e.to_string())?;
+    config.active_account_uuid = Some(demo_uuid_v.clone());
+    update_app_config(&config).map_err(|e| e.to_string())?;
+
+    // Emit config update event
+    let _ = app_handle.emit(
+        "config-updated",
+        serde_json::json!({
+            "field": "active_account_uuid",
+            "value": demo_uuid_v
+        }),
+    );
+
+    // Notify UI
+    app_handle
+        .emit("core://account-heads-updated", ())
+        .map_err(|e| e.to_string())?;
 
     Ok(())
 }

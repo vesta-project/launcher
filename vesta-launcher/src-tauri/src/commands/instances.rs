@@ -1,4 +1,4 @@
-use crate::auth::ACCOUNT_TYPE_GUEST;
+use crate::auth::{ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST};
 use crate::discord::DiscordManager;
 use crate::models::instance::{Instance, NewInstance};
 use crate::resources::ResourceWatcher;
@@ -185,8 +185,11 @@ pub async fn install_instance(
     };
 
     if let Some(acc) = active_account {
-        if acc.account_type == ACCOUNT_TYPE_GUEST {
-            log::warn!("[install_instance] Blocked install attempt from Guest account");
+        if acc.account_type == ACCOUNT_TYPE_GUEST || acc.account_type == ACCOUNT_TYPE_DEMO {
+            log::warn!(
+                "[install_instance] Blocked install attempt from {} account",
+                acc.account_type
+            );
 
             // Show notification
             if let Some(nm) =
@@ -196,8 +199,7 @@ pub async fn install_instance(
                     client_key: None,
                     title: Some("Login Required".to_string()),
                     description: Some(
-                        "You must be signed in with a Microsoft account to install Minecraft."
-                            .to_string(),
+                        format!("You must be signed in with a Microsoft account to install Minecraft. (Current: {})", acc.account_type)
                     ),
                     severity: Some("warning".to_string()),
                     notification_type: Some(
@@ -297,10 +299,10 @@ pub fn process_instance_icon(mut inst: Instance) -> Instance {
 pub fn list_instances() -> Result<Vec<Instance>, String> {
     log::info!("Fetching all instances from database");
 
-    // Guest Mode check: If active account is Guest, we hide real instances
+    // Guest/Demo Mode check: If active account is Guest or Demo, we hide real instances
     // to provide a clean slate without destroying user data.
     if let Ok(Some(active_acc)) = crate::auth::get_active_account() {
-        if active_acc.account_type == ACCOUNT_TYPE_GUEST {
+        if active_acc.account_type == ACCOUNT_TYPE_GUEST || active_acc.account_type == ACCOUNT_TYPE_DEMO {
             return Ok(vec![]);
         }
     }
@@ -1117,10 +1119,13 @@ pub async fn launch_instance(
 
     // If we have an active account, ensure token validity
     if let Some(acc) = active_account.clone() {
-        if acc.account_type == ACCOUNT_TYPE_GUEST {
-            log::warn!("[launch_instance] Blocked launch attempt from Guest account");
+        if acc.account_type == ACCOUNT_TYPE_GUEST || acc.account_type == ACCOUNT_TYPE_DEMO {
+            log::warn!(
+                "[launch_instance] Blocked launch attempt from {} account",
+                acc.account_type
+            );
 
-            // Show notification to user that Guest mode cannot launch games
+            // Show notification to user that Guest/Demo mode cannot launch games
             if let Some(nm) =
                 app_handle.try_state::<crate::notifications::manager::NotificationManager>()
             {
@@ -1128,8 +1133,7 @@ pub async fn launch_instance(
                     client_key: None,
                     title: Some("Login Required".to_string()),
                     description: Some(
-                        "You must be signed in with a Microsoft account to launch Minecraft."
-                            .to_string(),
+                        format!("You must be signed in with a Microsoft account to launch Minecraft. (Current: {})", acc.account_type)
                     ),
                     severity: Some("warning".to_string()),
                     notification_type: Some(
@@ -1926,7 +1930,7 @@ fn resolve_java_path_for_version(mc_version: &str) -> String {
     let required_major = crate::utils::java::get_required_java_for_version(mc_version);
 
     let global_path = (|| -> Option<String> {
-        use crate::schema::global_java_paths::dsl::*;
+        use crate::schema::config::global_java_paths::dsl::*;
         use crate::utils::db::get_config_conn;
         let mut conn = get_config_conn().ok()?;
         global_java_paths

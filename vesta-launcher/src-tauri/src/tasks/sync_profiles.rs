@@ -1,0 +1,222 @@
+
+use crate::models::account::Account;
+use crate::schema::vesta::account;
+use crate::tasks::manager::{Task, TaskContext, BoxFuture};
+use crate::utils::db::get_vesta_conn;
+use crate::auth::{get_account_profile, invalidate_account_profile_cache};
+use diesel::prelude::*;
+use log::warn;
+use tauri::{Manager, Emitter};
+use base64::{engine::general_purpose, Engine as _};
+use crate::models::skin_history::NewAccountSkinHistory;
+use crate::schema::vesta::account_skin_history;
+use sha2::{Sha256, Digest};
+
+pub struct SyncAccountProfilesTask;
+
+impl SyncAccountProfilesTask {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+pub fn compute_texture_key(bytes: &[u8]) -> String {
+    let mut hasher = Sha256::new();
+    hasher.update(bytes);
+    hex::encode(hasher.finalize())
+}
+
+pub async fn download_to_base64_data_uri(url: &str) -> std::result::Result<String, String> {
+    if url.starts_with("data:") {
+        return Ok(url.to_string());
+    }
+
+    let client = reqwest::Client::new();
+    let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
+    
+    if !resp.status().is_success() {
+        return Err(format!("Bad status: {}", resp.status()));
+    }
+    
+    let bytes = resp.bytes().await.map_err(|e| e.to_string())?;
+    let base64_str = general_purpose::STANDARD.encode(&bytes);
+    
+    Ok(format!("data:image/png;base64,{}", base64_str))
+}
+
+pub async fn sync_account_profile_data(
+    normalized_uuid: &str,
+    app_handle: Option<tauri::AppHandle>,
+    notify_remote_change: bool,
+) -> Result<(), String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let mut acc = account::table
+        .filter(account::uuid.eq(normalized_uuid))
+        .first::<Account>(&mut conn)
+        .map_err(|_| "Account not found".to_string())?;
+
+    if acc.account_type == "Guest" {
+        return Ok(());
+    }
+
+    invalidate_account_profile_cache(normalized_uuid).await;
+    let profile = match get_account_profile(normalized_uuid.to_string()).await {
+        Ok(p) => p,
+        Err(e) => return Err(e),
+    };
+
+    let active_skin = profile.skins.iter().find(|s| s.state == "ACTIVE").or_else(|| profile.skins.first()).cloned();
+    let active_cape = profile.capes.iter().find(|c| c.state == "ACTIVE").or_else(|| profile.capes.first()).cloned();
+    
+    let mut needs_db_update = false;
+    let mut remote_change_detected = false;
+
+    if let Some(mojang_skin) = active_skin {
+        let server_variant = if mojang_skin.variant.to_lowercase() == "slim" { "slim" } else { "classic" };
+        let skin_url_changed = acc.skin_url.as_deref() != Some(mojang_skin.url.as_str());
+        
+        let skin_url = mojang_skin.url.clone();
+        if skin_url_changed || acc.skin_data.is_none() {
+            if skin_url_changed && acc.skin_url.is_some() {
+                remote_change_detected = true;
+            }
+
+            match download_to_base64_data_uri(&skin_url).await {
+                Ok(base64_data) => {
+                    acc.skin_url = Some(skin_url);
+                    acc.skin_data = Some(base64_data.clone());
+                    acc.skin_variant = server_variant.to_string();
+                    needs_db_update = true;
+
+                    let clean_base64 = if let Some(pos) = base64_data.find(',') {
+                        &base64_data[pos + 1..]
+                    } else {
+                        &base64_data
+                    };
+
+                    if let Ok(bytes) = general_purpose::STANDARD.decode(clean_base64) {
+                        let texture_key = compute_texture_key(&bytes);
+                        
+                        let exists: i64 = account_skin_history::table
+                            .filter(account_skin_history::account_uuid.eq(&acc.uuid))
+                            .filter(account_skin_history::texture_key.eq(&texture_key))
+                            .count()
+                            .get_result(&mut conn)
+                            .unwrap_or(0);
+                            
+                        if exists == 0 {
+                            let new_history = NewAccountSkinHistory {
+                                account_uuid: acc.uuid.clone(),
+                                texture_key: texture_key.clone(),
+                                name: format!("{}_Mojang_Auto", acc.username),
+                                variant: server_variant.to_string(),
+                                image_data: base64_data.clone(),
+                                source: "mojang".to_string(),
+                            };
+                            let _ = diesel::insert_into(account_skin_history::table)
+                                .values(&new_history)
+                                .execute(&mut conn);
+                        }
+                    }
+                },
+                Err(e) => warn!("Failed to download skin to base64: {}", e),
+            }
+        } else if acc.skin_variant != server_variant {
+             acc.skin_variant = server_variant.to_string();
+             needs_db_update = true;
+        }
+    }
+
+    if let Some(mojang_cape) = active_cape {
+        let cape_url_changed = acc.cape_url.as_deref() != Some(mojang_cape.url.as_str());
+
+        let cape_url = mojang_cape.url.clone();
+        if cape_url_changed || acc.cape_data.is_none() {
+            match download_to_base64_data_uri(&cape_url).await {
+                Ok(base64_data) => {
+                    acc.cape_url = Some(cape_url);
+                    acc.cape_data = Some(base64_data);
+                    needs_db_update = true;
+                },
+                Err(e) => warn!("Failed to download cape to base64: {}", e),
+            }
+        }
+    } else if acc.cape_url.is_some() || acc.cape_data.is_some() {
+        acc.cape_url = None;
+        acc.cape_data = None;
+        needs_db_update = true;
+    }
+
+    if needs_db_update {
+        let _ = diesel::update(account::table.filter(account::uuid.eq(&acc.uuid)))
+            .set((
+                account::skin_url.eq(acc.skin_url),
+                account::skin_data.eq(acc.skin_data),
+                account::skin_variant.eq(acc.skin_variant),
+                account::cape_url.eq(acc.cape_url),
+                account::cape_data.eq(acc.cape_data)
+            ))
+            .execute(&mut conn);
+        
+        if let Some(app) = app_handle {
+            let _ = app.emit("core://account-heads-updated", ());
+            
+            if notify_remote_change && remote_change_detected {
+                let manager = app.state::<crate::notifications::manager::NotificationManager>();
+                let _ = manager.create(crate::notifications::models::CreateNotificationInput {
+                    client_key: Some("remote_skin_update".into()),
+                    title: Some("Profile Synced".into()),
+                    description: Some("Your Minecraft skin/cape was updated to match your Mojang profile.".into()),
+                    notification_type: Some(crate::notifications::models::NotificationType::Immediate),
+                    severity: Some("info".into()),
+                    dismissible: Some(true),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+
+    Ok(())
+}
+
+impl Task for SyncAccountProfilesTask {
+    fn run(
+        &self,
+        ctx: TaskContext,
+    ) -> BoxFuture<'static, Result<(), String>> {
+        Box::pin(async move {
+            let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+
+            let accounts = account::table
+                .filter(account::is_active.eq(true))
+                .filter(account::account_type.ne("Guest".to_string()))
+                .load::<Account>(&mut conn)
+                .map_err(|e| e.to_string())?;
+
+            if accounts.is_empty() {
+                return Ok(());
+            }
+
+            ctx.update_full(0, "Initializing sync...".into(), Some(1), Some(100));
+            
+            let total = accounts.len();
+            for (idx, acc) in accounts.into_iter().enumerate() {
+                let p = (((idx + 1) as f32 / total as f32) * 100.0) as i32;
+                ctx.update_full(p, format!("Syncing profile for {}", acc.username), Some((idx + 1) as i32), Some(total as i32));
+
+                let _ = sync_account_profile_data(
+                    &acc.uuid, 
+                    Some(ctx.app_handle.clone()), 
+                    true
+                ).await;
+            }
+
+            Ok(())
+        })
+    }
+
+    fn name(&self) -> String {
+        "Sync Profile Data".to_string()
+    }
+}
+

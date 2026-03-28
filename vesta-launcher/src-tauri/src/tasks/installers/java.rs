@@ -1,6 +1,6 @@
-use crate::models::GlobalJavaPath;
+use crate::models::java::GlobalJavaPath;
 use crate::notifications::models::ProgressUpdate;
-use crate::schema::global_java_paths::dsl::*;
+use crate::schema::config::global_java_paths::dsl::*;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::get_config_conn;
 use crate::utils::db_manager::get_app_config_dir;
@@ -69,7 +69,10 @@ impl Task for DownloadJavaTask {
                 .values(&new_entry)
                 .on_conflict(major_version)
                 .do_update()
-                .set(&new_entry)
+                .set((
+                    path.eq(&new_entry.path),
+                    is_managed.eq(new_entry.is_managed)
+                ))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
             // Emit event to notify frontend to refetch Java paths

@@ -1,6 +1,6 @@
 use crate::metadata_cache::MetadataCache;
-use crate::models::GlobalJavaPath;
-use crate::schema::global_java_paths::dsl::{global_java_paths, major_version};
+use crate::models::java::GlobalJavaPath;
+use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version, path as path_col, is_managed as is_managed_col};
 use crate::tasks::installers::java::DownloadJavaTask;
 use crate::tasks::manager::TaskManager;
 use crate::utils::config::{update_config_field, update_config_fields};
@@ -200,7 +200,10 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
                 .values(&new_entry)
                 .on_conflict(major_version)
                 .do_update()
-                .set(&new_entry)
+                .set((
+                    path_col.eq(&new_entry.path),
+                    is_managed_col.eq(new_entry.is_managed)
+                ))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
 

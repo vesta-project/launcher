@@ -4,9 +4,9 @@ use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use crate::schema::vesta::{account, account_skin_history};
 use crate::utils::db::get_vesta_conn;
-use crate::{auth::get_account_profile, auth::invalidate_account_profile_cache};
+use crate::auth::get_account_profile;
 use base64::{engine::general_purpose, Engine as _};
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use diesel::prelude::*;
 use hex;
 use image;
@@ -217,7 +217,7 @@ pub async fn upload_account_skin(
                 .map_err(|e| format!("Failed to refresh existing skin history timestamp: {}", e))?;
             
             // Still upload to Mojang to set it as active if it matched history but isn't current on server
-            piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes.clone())
+            piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes)
                 .await
                 .map_err(|e| {
                     let message = format!("Failed to upload skin to Mojang: {}", e);
@@ -229,7 +229,7 @@ pub async fn upload_account_skin(
         }
         Err(diesel::result::Error::NotFound) => {
             // No existing entry — proceed to upload then save
-            piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes.clone())
+            piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes)
                 .await
                 .map_err(|e| {
                     let message = format!("Failed to upload skin to Mojang: {}", e);
@@ -267,21 +267,7 @@ pub async fn upload_account_skin(
     }
 
     // 5. Update active account skin URL (fetch new profile)
-    invalidate_account_profile_cache(&normalized_uuid).await;
-    if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
-        if let Some(skin) = pick_active_skin(&profile) {
-            let server_variant = normalize_skin_variant(&skin.variant);
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set((
-                    account::skin_url.eq(&skin.url),
-                    account::skin_variant.eq(&server_variant),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update account skin URL: {}", e))?;
-        }
-    }
-
-    emit_heads_updated(&app, &normalized_uuid, true);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -333,21 +319,7 @@ pub async fn apply_history_skin(
         })?;
 
     // 5. Update active account skin URL
-    invalidate_account_profile_cache(&normalized_uuid).await;
-    if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
-        if let Some(skin) = pick_active_skin(&profile) {
-            let server_variant = normalize_skin_variant(&skin.variant);
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set((
-                    account::skin_url.eq(&skin.url),
-                    account::skin_variant.eq(&server_variant),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update account skin URL: {}", e))?;
-        }
-    }
-
-    emit_heads_updated(&app, &normalized_uuid, true);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -400,20 +372,7 @@ pub async fn reset_account_skin(app: tauri::AppHandle, account_uuid: String) -> 
             message
         })?;
 
-    invalidate_account_profile_cache(&normalized_uuid).await;
-    if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
-        if let Some(skin) = pick_active_skin(&profile) {
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set((
-                    account::skin_url.eq(&skin.url),
-                    account::skin_variant.eq(normalize_skin_variant(&skin.variant)),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update account skin URL: {}", e))?;
-        }
-    }
-
-    emit_heads_updated(&app, &normalized_uuid, true);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -445,17 +404,7 @@ pub async fn change_account_cape(
             message
         })?;
 
-    invalidate_account_profile_cache(&normalized_uuid).await;
-    if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
-        if let Some(cape) = profile.capes.iter().find(|c| c.state == "ACTIVE") {
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set(account::cape_url.eq(Some(&cape.url)))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update account cape URL: {}", e))?;
-        }
-    }
-
-    emit_heads_updated(&app, &normalized_uuid, true);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -546,21 +495,7 @@ pub async fn apply_preset_skin(
         .map_err(|e| format!("Failed to save skin history: {}", e))?;
 
     // 5. Update active account skin URL
-    invalidate_account_profile_cache(&normalized_uuid).await;
-    if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
-        if let Some(skin) = pick_active_skin(&profile) {
-            let server_variant = normalize_skin_variant(&skin.variant);
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set((
-                    account::skin_url.eq(&skin.url),
-                    account::skin_variant.eq(&server_variant),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update account skin URL: {}", e))?;
-        }
-    }
-
-    emit_heads_updated(&app, &normalized_uuid, false);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -621,30 +556,7 @@ pub async fn change_skin_variant(
         })?;
 
     // 4. Update local db from server-authoritative profile data
-    invalidate_account_profile_cache(&normalized_uuid).await;
-    if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
-        if let Some(skin) = pick_active_skin(&profile) {
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set((
-                    account::skin_url.eq(&skin.url),
-                    account::skin_variant.eq(normalize_skin_variant(&skin.variant)),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update local skin variant: {}", e))?;
-        } else {
-            diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-                .set(account::skin_variant.eq(&variant))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update local skin variant: {}", e))?;
-        }
-    } else {
-        diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-            .set(account::skin_variant.eq(&variant))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to update local skin variant: {}", e))?;
-    }
-
-    emit_heads_updated(&app, &normalized_uuid, false);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -694,14 +606,7 @@ pub async fn hide_account_cape(app: tauri::AppHandle, account_uuid: String) -> R
             message
         })?;
 
-    invalidate_account_profile_cache(&normalized_uuid).await;
-
-    diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
-        .set(account::cape_url.eq(None::<String>))
-        .execute(&mut conn)
-        .map_err(|e| format!("Failed to update account cape URL: {}", e))?;
-
-    emit_heads_updated(&app, &normalized_uuid, false);
+    let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
     Ok(())
 }
 
@@ -826,3 +731,71 @@ pub async fn sync_current_skin_history(app: tauri::AppHandle, account_uuid: Stri
     info!("sync_current_skin_history: completed for account={}", normalized_uuid);
     Ok(())
 }
+
+#[derive(serde::Serialize)]
+pub struct CompleteSkinsResponse {
+    pub current_skin_id: Option<String>,
+    pub current_skin_base64: Option<String>,
+    pub current_cape_base64: Option<String>,
+    pub current_variant: String,
+    pub recent_history: Vec<AccountSkinHistory>,
+    pub default_skins: Vec<Skin>,
+    pub capes: Vec<piston_lib::api::mojang::ProfileCape>,
+}
+
+#[command]
+pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkinsResponse, String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let normalized_uuid = account_uuid.replace("-", "");
+
+    let account_model = account::table
+        .filter(account::uuid.eq(&normalized_uuid))
+        .first::<Account>(&mut conn)
+        .map_err(|e| format!("Account not found: {}", e))?;
+
+    let history = account_skin_history::table
+        .filter(account_skin_history::account_uuid.eq(&normalized_uuid))
+        .order_by(account_skin_history::added_at.desc())
+        .limit(50)
+        .load::<AccountSkinHistory>(&mut conn)
+        .unwrap_or_default();
+
+    let mut capes = vec![];
+    let mut current_variant = account_model.skin_variant.clone();
+    
+    // Attempt to parse capes from profile if not guest
+    if account_model.account_type != "Guest" {
+        if let Ok(profile) = get_account_profile(normalized_uuid.clone()).await {
+            if let Some(active_skin) = pick_active_skin(&profile) {
+                current_variant = normalize_skin_variant(&active_skin.variant);
+            }
+            capes = profile.capes;
+        }
+    }
+
+    let defaults = get_skins();
+    
+    // figure out current skin id
+    let mut current_skin_id = None;
+    if let Some(ref base64_data) = account_model.skin_data {
+        if let Some(pos) = base64_data.find(',') {
+            let clean = &base64_data[pos + 1..];
+            if let Ok(bytes) = general_purpose::STANDARD.decode(clean) {
+                let computed_key = compute_texture_key(&bytes);
+                current_skin_id = Some(computed_key);
+            }
+        }
+    }
+
+    Ok(CompleteSkinsResponse {
+        current_skin_id,
+        current_skin_base64: account_model.skin_data,
+        current_cape_base64: account_model.cape_data,
+        current_variant,
+        recent_history: history,
+        default_skins: defaults,
+        capes,
+    })
+}
+
+

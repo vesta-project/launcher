@@ -36,6 +36,8 @@ pub struct Account {
     pub account_type: String,
     pub is_expired: bool,
     pub skin_variant: String,
+    pub skin_data: Option<String>,
+    pub cape_data: Option<String>,
 }
 
 /// New account (without id for insertion)
@@ -68,6 +70,8 @@ pub struct NewAccount {
     pub account_type: String,
     pub is_expired: bool,
     pub skin_variant: String,
+    pub skin_data: Option<String>,
+    pub cape_data: Option<String>,
 }
 
 impl Default for Account {
@@ -100,6 +104,8 @@ impl Default for Account {
             account_type: "Microsoft".to_string(),
             is_expired: false,
             skin_variant: "classic".into(),
+            skin_data: None,
+            cape_data: None,
         }
     }
 }
@@ -133,6 +139,8 @@ impl Default for NewAccount {
             account_type: "Microsoft".to_string(),
             is_expired: false,
             skin_variant: "classic".into(),
+            skin_data: None,
+            cape_data: None,
         }
     }
 }

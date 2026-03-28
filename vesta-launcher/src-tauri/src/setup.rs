@@ -216,6 +216,27 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     }
+
+    // --- Demo Account Cleanup ---
+    // Always remove the temporal demo account on startup if it exists
+    if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
+        use crate::schema::account::dsl::*;
+        use diesel::prelude::*;
+        
+        log::info!("[setup] Cleaning up temporal demo account if present...");
+        
+        // Remove from DB
+        let _ = diesel::delete(account.filter(account_type.eq(crate::auth::ACCOUNT_TYPE_DEMO)))
+            .execute(&mut conn);
+
+        // Reset active account if it was the demo account
+        if let Ok(mut config) = crate::utils::config::get_app_config() {
+            if config.active_account_uuid == Some(crate::auth::DEMO_UUID.to_string()) {
+                config.active_account_uuid = None;
+                let _ = crate::utils::config::update_app_config(&config);
+            }
+        }
+    }
     // ---------------------------
 
     // Recovery for interrupted installs - move any stuck 'installing' instances to 'interrupted'
@@ -342,6 +363,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize MetadataCache (in-memory fast path for manifest)
     app.manage(MetadataCache::new());
+
+    // Sync profiles on startup
+    if let Some(task_manager) = app.try_state::<TaskManager>() {
+        task_manager.submit(Box::new(crate::tasks::sync_profiles::SyncAccountProfilesTask::new()));
+    }
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
