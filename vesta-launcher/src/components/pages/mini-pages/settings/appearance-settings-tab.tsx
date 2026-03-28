@@ -4,6 +4,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import Button from "@ui/button/button";
 import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
 import { invoke } from "@tauri-apps/api/core";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
@@ -29,6 +30,8 @@ interface AppearanceSettingsTabProps {
 	handleGradientHarmonyChange: (val: GradientHarmony) => void;
 	borderThickness: number;
 	handleBorderThicknessChange: (val: number[]) => void;
+	handleImportTheme: () => void;
+	handleExportTheme: () => void;
 }
 
 export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
@@ -39,6 +42,10 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				<p class={styles["section-description"]}>
 					Choose a pre-designed theme or create your own custom look.
 				</p>
+				<div style={{ display: "flex", gap: "8px", "margin-bottom": "16px" }}>
+					<Button variant="outline" onClick={props.handleImportTheme}>Import Custom Theme</Button>
+					<Button variant="outline" onClick={props.handleExportTheme}>Export Active Theme</Button>
+				</div>
 				<div class={styles["theme-preset-grid"]}>
 					<For each={props.PRESET_THEMES}>
 						{(theme) => (

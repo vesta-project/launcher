@@ -299,6 +299,33 @@ export function getDefaultTheme(): ThemeConfig {
  * Validate a custom theme configuration
  * Ensures all values are within safe ranges
  */
+
+/**
+ * Strip malicious or structural-breaking css from user themes.
+ */
+export function sanitizeCustomCss(css: string): string {
+	if (!css) return css;
+	
+	const blacklisted = [
+		/@import/i,
+		/url\(/i,
+		/expression\(/i,
+		/eval\(/i,
+		/-moz-binding/i,
+		/\bscript\b/i,
+		/<\/?style/i
+	];
+	
+	for (const pattern of blacklisted) {
+		if (pattern.test(css)) {
+			console.warn("Theme rejected: Potentially unsafe CSS detected.", pattern);
+			return "";
+		}
+	}
+	
+	return css;
+}
+
 export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 	const defaultTheme = getDefaultTheme();
 
@@ -323,8 +350,8 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 			theme.primaryLight !== undefined && theme.primaryLight !== null
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
-		opacity: getVal(theme.opacity, defaultTheme.opacity ?? 0),
-		borderWidth: getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1),
+		opacity: clamp(getVal(theme.opacity, defaultTheme.opacity ?? 0), 0, 100),
+		borderWidth: clamp(getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1), 0, 10),
 		style: theme.style || defaultTheme.style,
 		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
@@ -337,7 +364,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		thumbnail: theme.thumbnail,
 		// Pass-through extras for runtime application
 		
-		customCss: theme.customCss,
+		customCss: theme.customCss ? sanitizeCustomCss(theme.customCss) : undefined,
 		allowHueChange: theme.allowHueChange,
 		allowStyleChange: theme.allowStyleChange,
 		allowBorderChange: theme.allowBorderChange,

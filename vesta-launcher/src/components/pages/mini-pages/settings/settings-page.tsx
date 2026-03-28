@@ -1,3 +1,6 @@
+import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
+
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
@@ -811,6 +814,131 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		const root = document.documentElement;
 	});
 
+	
+	const handleExportTheme = async () => {
+		try {
+			if (!hasTauriRuntime()) {
+				dialogStore.alert("Platform Error", "Tauri runtime not found.", "error"); return;
+			}
+			
+			const themeClass = getThemeById(themeId()) || validateTheme({});
+			// Generate the exported theme metadata
+			const exported = {
+				version: 1,
+				type: "vesta-theme",
+				theme: {
+					id: themeClass.id,
+					name: themeClass.name,
+					primaryHue: themeClass.primaryHue,
+					opacity: themeClass.opacity,
+					style: themeClass.style,
+					gradientEnabled: themeClass.gradientEnabled,
+					rotation: themeClass.rotation,
+					gradientType: themeClass.gradientType,
+					gradientHarmony: themeClass.gradientHarmony,
+					borderWidth: themeClass.borderWidth,
+					customCss: themeClass.customCss
+				}
+			};
+
+			const savePath = await saveDialog({
+				title: "Export Theme",
+				defaultPath: "my-theme.vestatheme",
+				filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }]
+			});
+
+			if (savePath) {
+				await writeTextFile(savePath, JSON.stringify(exported, null, 2));
+				dialogStore.alert("Theme Exported", "Your theme has been exported successfully.", "success");
+			}
+		} catch (e) {
+			console.error("Failed to export theme", e);
+			dialogStore.alert("Export Error", "Failed to export the theme.", "error");
+		}
+	};
+
+	const handleImportTheme = async () => {
+		try {
+			if (!hasTauriRuntime()) {
+				dialogStore.alert("Platform Error", "Tauri runtime not found.", "error"); return;
+			}
+
+			const openPath = await openDialog({
+				title: "Import Theme",
+				filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }],
+				multiple: false
+			});
+			if (!openPath) return;
+
+			// openDialog with multiple: false returns string | null in v2 standard APIs, 
+			// though it might return string[]. we will safely cast.
+			const resolvedPath = Array.isArray(openPath) ? openPath[0] : openPath;
+
+			const content = await readTextFile(resolvedPath);
+			const parsed = JSON.parse(content);
+			
+			let importedConfig = parsed;
+			if (parsed.type === "vesta-theme" && parsed.theme) {
+				importedConfig = parsed.theme;
+			}
+
+			const safeTheme = validateTheme(importedConfig);
+			
+			// We override it as custom so that it doesn't just link to 'vesta' defaults if id overlaps.
+			safeTheme.id = "custom";
+
+			if (safeTheme.customCss?.length === 0 && importedConfig.customCss?.length > 0) {
+				dialogStore.alert("Warning", "The theme imported contained unsafe CSS that was automatically purged.", "warning");
+			}
+
+			// Assign the Theme
+			try {
+				await invoke("update_config_fields", {
+					updates: {
+						theme_id: "custom",
+						theme_primary_hue: safeTheme.primaryHue,
+						theme_style: safeTheme.opacity?.toString() ?? "0",
+						theme_gradient_enabled: safeTheme.gradientEnabled,
+						theme_gradient_angle: safeTheme.rotation ?? 135,
+						theme_gradient_type: safeTheme.gradientType ?? "linear",
+						theme_gradient_harmony: safeTheme.gradientHarmony ?? "none",
+						theme_border_width: safeTheme.borderWidth ?? 1,
+						theme_advanced_overrides: safeTheme.customCss ?? ""
+					}
+				});
+
+				updateThemeConfigLocal("theme_id", "custom");
+				updateThemeConfigLocal("theme_primary_hue", safeTheme.primaryHue);
+				updateThemeConfigLocal("theme_style", safeTheme.opacity?.toString() ?? "0");
+				updateThemeConfigLocal("theme_gradient_enabled", safeTheme.gradientEnabled);
+				updateThemeConfigLocal("theme_gradient_angle", safeTheme.rotation ?? 135);
+				updateThemeConfigLocal("theme_gradient_type", safeTheme.gradientType ?? "linear");
+				updateThemeConfigLocal("theme_gradient_harmony", safeTheme.gradientHarmony ?? "none");
+				updateThemeConfigLocal("theme_border_width", safeTheme.borderWidth ?? 1);
+				updateThemeConfigLocal("theme_advanced_overrides", safeTheme.customCss ?? "");
+
+				// Update Local UI signals
+				setThemeId("custom");
+				setBackgroundHue(safeTheme.primaryHue);
+				setOpacity(safeTheme.opacity ?? 0);
+				setGradientEnabled(safeTheme.gradientEnabled);
+				setRotation(safeTheme.rotation ?? 135);
+				setGradientType(safeTheme.gradientType ?? "linear");
+				setGradientHarmony(safeTheme.gradientHarmony as any);
+				setBorderThickness(safeTheme.borderWidth ?? 1);
+
+				dialogStore.alert("Theme Imported", "Custom theme successfully loaded.", "success");
+			} catch (err: any) {
+				console.error("Theme Import error", err);
+				dialogStore.alert("Import Error", "Failed to update configs: " + String(err), "error");
+			}
+
+		} catch (e) {
+			console.error("Failed to import theme", e);
+			dialogStore.alert("Import Error", "Failed to read or parse the theme file.", "error");
+		}
+	};
+
 	return (
 		<div class={styles["settings-page"]}>
 			<Show
@@ -899,6 +1027,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleGradientHarmonyChange={handleGradientHarmonyChange}
 								borderThickness={borderThickness()}
 								handleBorderThicknessChange={handleBorderThicknessChange}
+																		handleExportTheme={handleExportTheme}
+																		handleImportTheme={handleImportTheme}
 							/>
 						</Suspense>
 					</TabsContent>
