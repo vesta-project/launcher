@@ -759,6 +759,7 @@ pub async fn sync_current_skin_history(app: tauri::AppHandle, account_uuid: Stri
 #[derive(serde::Serialize)]
 pub struct CompleteSkinsResponse {
     pub current_skin_id: Option<String>,
+    pub current_cape_id: Option<String>,
     pub current_skin_base64: Option<String>,
     pub current_cape_base64: Option<String>,
     pub current_variant: String,
@@ -802,8 +803,12 @@ pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkin
     // figure out current skin id
     let mut current_skin_id = None;
     if let Some(ref base64_data) = account_model.skin_data {
-        if let Some(pos) = base64_data.find(',') {
-            let clean = &base64_data[pos + 1..];
+        if !base64_data.is_empty() {
+            let clean = if let Some(pos) = base64_data.find(',') {
+                &base64_data[pos + 1..]
+            } else {
+                base64_data
+            };
             if let Ok(bytes) = general_purpose::STANDARD.decode(clean) {
                 let computed_key = compute_texture_key(&bytes);
                 current_skin_id = Some(computed_key);
@@ -811,8 +816,25 @@ pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkin
         }
     }
 
+    // Determine current cape ID
+    let mut current_cape_id = None;
+    if let Some(ref base64_data) = account_model.cape_data {
+        if !base64_data.is_empty() {
+            let clean = if let Some(pos) = base64_data.find(',') {
+                &base64_data[pos + 1..]
+            } else {
+                base64_data
+            };
+            if let Ok(bytes) = general_purpose::STANDARD.decode(clean) {
+                let computed_key = compute_texture_key(&bytes);
+                current_cape_id = Some(computed_key);
+            }
+        }
+    }
+
     Ok(CompleteSkinsResponse {
         current_skin_id,
+        current_cape_id,
         current_skin_base64: account_model.skin_data,
         current_cape_base64: account_model.cape_data,
         current_variant,
