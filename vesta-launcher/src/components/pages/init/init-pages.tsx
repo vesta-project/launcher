@@ -1988,7 +1988,7 @@ function InitAppearancePage(props: InitPagesProps) {
 						theme_gradient_angle: theme.rotation ?? 135,
 						theme_gradient_type: theme.gradientType || "linear",
 						theme_gradient_harmony: theme.gradientHarmony || "none",
-						theme_border_width: theme.borderWidthSubtle ?? 1,
+						theme_border_width: theme.borderWidth ?? 1,
 					},
 				});
 			} catch (e) {

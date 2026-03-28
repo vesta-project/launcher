@@ -193,9 +193,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			currentThemeConfig.background_hue ??
 			220,
 	);
-	const [styleMode, setStyleMode] = createSignal<ThemeConfig["style"]>(
-		(currentThemeConfig.theme_style as ThemeConfig["style"]) ?? "glass",
-	);
+	const [opacity, setOpacity] = createSignal<number>(parseInt(currentThemeConfig.theme_style || "0") || 0);
 	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(
 		currentThemeConfig.theme_gradient_enabled ?? true,
 	);
@@ -440,7 +438,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					setBackgroundHue(config.background_hue);
 
 				if (config.theme_style)
-					setStyleMode(config.theme_style as ThemeConfig["style"]);
+					setOpacity(parseInt(config.theme_style || "0") || 0);
 				if (
 					config.theme_gradient_enabled !== null &&
 					config.theme_gradient_enabled !== undefined
@@ -474,7 +472,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "theme_primary_hue" && value !== null)
 					setBackgroundHue(value);
 				if (field === "theme_style" && value)
-					setStyleMode(value as ThemeConfig["style"]);
+					setOpacity(parseInt(value || "0") || 0);
 				if (field === "theme_gradient_enabled" && value !== null)
 					setGradientEnabled(value);
 				if (field === "theme_gradient_angle" && value !== null)
@@ -505,13 +503,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		const theme = getThemeById(id);
 		if (theme) {
 			setThemeId(id);
-			setStyleMode(theme.style);
+			setOpacity(theme.opacity ?? 0);
 			setGradientEnabled(theme.gradientEnabled);
 			setRotation(theme.rotation || 135);
 			setGradientType(theme.gradientType || "linear");
 			setGradientHarmony(theme.gradientHarmony || "none");
-			if (theme.borderWidthSubtle !== undefined) {
-				setBorderThickness(theme.borderWidthSubtle);
+			if (theme.borderWidth !== undefined) {
+				setBorderThickness(theme.borderWidth);
 			}
 
 			const newHue =
@@ -537,8 +535,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				"theme_gradient_harmony",
 				theme.gradientHarmony || "none",
 			);
-			if (theme.borderWidthSubtle !== undefined) {
-				updateThemeConfigLocal("theme_border_width", theme.borderWidthSubtle);
+			if (theme.borderWidth !== undefined) {
+				updateThemeConfigLocal("theme_border_width", theme.borderWidth);
 			}
 
 			if (hasTauriRuntime()) {
@@ -554,8 +552,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						theme_gradient_harmony: theme.gradientHarmony || "none",
 					};
 
-					if (theme.borderWidthSubtle !== undefined) {
-						updates.theme_border_width = theme.borderWidthSubtle;
+					if (theme.borderWidth !== undefined) {
+						updates.theme_border_width = theme.borderWidth;
 					}
 
 					await invoke("update_config_fields", {
@@ -590,7 +588,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	};
 
 	const handleStyleModeChange = async (mode: ThemeConfig["style"]) => {
-		setStyleMode(mode);
+		setOpacity(parseInt(mode || "0") || 0);
 		updateThemeConfigLocal("theme_style", mode);
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
@@ -599,6 +597,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			});
 		}
 	};
+
+	const handleOpacityChange = (val: number[]) => { setOpacity(val[0]); updateThemeConfigLocal("theme_style", val[0].toString()); if (hasTauriRuntime()) { invoke("update_config_field", { field: "theme_style", value: val[0].toString() }); } };
 
 	const handleGradientToggle = async (enabled: boolean) => {
 		setGradientEnabled(enabled);
@@ -790,7 +790,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			const themeToApply = validateTheme({
 				...currentTheme,
 				primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
-				style: (styleMode() ?? currentTheme.style) as ThemeConfig["style"],
+				opacity: opacity() ?? currentTheme.opacity ?? 0,
 				gradientEnabled: (gradientEnabled() ??
 					currentTheme.gradientEnabled) as boolean,
 				rotation: (rotation() ?? currentTheme.rotation) as number,
@@ -799,8 +799,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					| "radial",
 				gradientHarmony: (gradientHarmony() ??
 					currentTheme.gradientHarmony) as GradientHarmony,
-				borderWidthSubtle: borderThickness(),
-				borderWidthStrong: Math.max(borderThickness() + 1, 1),
+				borderWidth: borderThickness(),
 			});
 			applyTheme(themeToApply);
 		}
@@ -810,16 +809,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		if (loading()) return;
 
 		const root = document.documentElement;
-		if (styleMode() === "bordered") {
-			root.style.setProperty("--border-width-subtle", `${borderThickness()}px`);
-			root.style.setProperty(
-				"--border-width-strong",
-				`${Math.max(borderThickness() + 1, 1)}px`,
-			);
-		} else {
-			root.style.setProperty("--border-width-subtle", "1px");
-			root.style.setProperty("--border-width-strong", "1px");
-		}
 	});
 
 	return (
@@ -898,8 +887,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								canChangeHue={canChangeHue()}
 								backgroundHue={backgroundHue()}
 								handleHueChange={handleHueChange}
-								styleMode={styleMode()}
-								handleStyleModeChange={handleStyleModeChange}
+								opacity={opacity()}
+													handleOpacityChange={handleOpacityChange}
 								gradientEnabled={gradientEnabled()}
 								handleGradientToggle={handleGradientToggle}
 								gradientType={gradientType()}

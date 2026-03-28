@@ -17,8 +17,8 @@ interface AppearanceSettingsTabProps {
 	canChangeHue: boolean;
 	backgroundHue: number;
 	handleHueChange: (val: number[]) => void;
-	styleMode: ThemeConfig["style"];
-	handleStyleModeChange: (val: ThemeConfig["style"]) => void;
+	opacity: number;
+	handleOpacityChange: (val: number[]) => void;
 	gradientEnabled: boolean;
 	handleGradientToggle: (checked: boolean) => void;
 	gradientType: "linear" | "radial";
@@ -95,25 +95,28 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 					subHeader="Fine-tune the visual style and effects."
 				>
 					<SettingsField
-						label="Style Mode"
-						description="Choose the visual depth and transparency effects"
-						layout="inline"
+						label="Background Opacity"
+						description="Adjust transparency and blur effects (0 = frosted glass, 100 = solid)"
+						layout="stack"
 						control={
-							<ToggleGroup
-								value={props.styleMode ?? "glass"}
-								onChange={(val) => {
-									if (val)
-										props.handleStyleModeChange(val as ThemeConfig["style"]);
-								}}
+							<Slider
+								value={[props.opacity]}
+								onChange={props.handleOpacityChange}
+								minValue={0}
+								maxValue={100}
+								step={1}
+								style={{ width: "100%" }}
 							>
-								<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
-								<ToggleGroupItem value="satin">Satin</ToggleGroupItem>
-								<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
-								<ToggleGroupItem value="bordered">
-									Bordered
-								</ToggleGroupItem>
-								<ToggleGroupItem value="solid">Solid</ToggleGroupItem>
-							</ToggleGroup>
+								<div class={styles["slider__header"]}>
+									<div class={styles["slider__value-label"]}>
+										{props.opacity}%
+									</div>
+								</div>
+								<SliderTrack>
+									<SliderFill />
+									<SliderThumb />
+								</SliderTrack>
+							</Slider>
 						}
 					/>
 
@@ -214,8 +217,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						/>
 					</Show>
 
-					<Show when={props.styleMode === "bordered"}>
-						<SettingsField
+					<SettingsField
 							label="Border Thickness"
 							description="Width of the element borders in pixels"
 							layout="stack"
@@ -242,7 +244,6 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 								</div>
 							}
 						/>
-					</Show>
 				</SettingsCard>
 			</Show>
 		</div>

@@ -26,8 +26,12 @@ export interface ThemeConfig {
 	primarySat?: number;
 	/** Optional primary lightness override (0-100) */
 	primaryLight?: number;
-	/** Visual style mode */
-	style: StyleMode;
+	/** Surface opacity (0 to 100) */
+	opacity: number;
+	/** Global border width */
+	borderWidth?: number;
+	/** Legacy style mode */
+	style?: StyleMode;
 	/** Preferred color scheme */
 	colorScheme?: "light" | "dark";
 	/** Whether background gradient is enabled */
@@ -41,9 +45,8 @@ export interface ThemeConfig {
 	/** Optional thumbnail image URL */
 	thumbnail?: string;
 	/** Border width for subtle borders (px) */
-	borderWidthSubtle?: number;
 	/** Border width for strong borders (px) */
-	borderWidthStrong?: number;
+	
 	/** Custom CSS to inject when theme is active */
 	customCss?: string;
 	/** Whether the user can change the hue of this theme */
@@ -89,17 +92,13 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 			getNum(config.theme_primary_hue) ??
 			getNum(config.background_hue) ??
 			baseTheme.primaryHue,
+		opacity: (parseInt(config.theme_style || "0") || baseTheme.opacity) ?? 0,
+		borderWidth: config.theme_border_width ?? baseTheme.borderWidth,
 		style: config.theme_style ?? baseTheme.style,
 		gradientEnabled: config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
 		rotation: getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
 		gradientType: config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony: config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
-		borderWidthSubtle:
-			getNum(config.theme_border_width) ?? baseTheme.borderWidthSubtle,
-		borderWidthStrong:
-			getNum(config.theme_border_width) !== undefined
-				? Math.max((getNum(config.theme_border_width) as number) + 1, 1)
-				: baseTheme.borderWidthStrong,
 	});
 }
 
@@ -113,7 +112,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Vesta",
 		description: "Signature teal to purple to orange gradient",
 		primaryHue: 180,
-		style: "glass",
+		opacity: 0, borderWidth: 1, style: "glass",
 		gradientEnabled: true,
 		rotation: 180,
 		gradientType: "linear",
@@ -132,7 +131,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Solar",
 		description: "Signature warm orange satin with solid background",
 		primaryHue: 40,
-		style: "satin",
+		opacity: 50, borderWidth: 1, style: "satin",
 		gradientEnabled: false,
 		allowHueChange: false, // Locked to signature orange
 		allowStyleChange: false,
@@ -143,7 +142,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Neon",
 		description: "Signature electric pink glass with vibrant gradient",
 		primaryHue: 300,
-		style: "glass",
+		opacity: 0, borderWidth: 1, style: "glass",
 		gradientEnabled: true,
 		rotation: 135,
 		gradientType: "linear",
@@ -157,7 +156,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Classic",
 		description: "Clean customizable theme - Maximum accessibility",
 		primaryHue: 210,
-		style: "flat",
+		opacity: 100, borderWidth: 1, style: "flat",
 		gradientEnabled: false,
 		allowHueChange: true, // Customizable
 		allowStyleChange: false,
@@ -168,7 +167,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Forest",
 		description: "Signature natural green with subtle glass effect",
 		primaryHue: 140,
-		style: "satin",
+		opacity: 50, borderWidth: 1, style: "satin",
 		gradientEnabled: true,
 		rotation: 90,
 		gradientType: "linear",
@@ -182,7 +181,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Sunset",
 		description: "Signature warm gradient from purple to orange",
 		primaryHue: 270,
-		style: "glass",
+		opacity: 0, borderWidth: 1, style: "glass",
 		gradientEnabled: true,
 		rotation: 180,
 		gradientType: "linear",
@@ -197,7 +196,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		description:
 			"Ultra-dark Midnight mode — pure black surfaces for true blacks",
 		primaryHue: 240, // Dark blue for midnight theme preview
-		style: "solid",
+		opacity: 100, borderWidth: 0, style: "solid",
 		colorScheme: "dark",
 		gradientEnabled: false,
 		allowHueChange: true, // Allow hue change for accents
@@ -258,20 +257,19 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Old School",
 		description: "Classic customizable design with strong borders",
 		primaryHue: 210,
-		style: "bordered",
+		opacity: 100, borderWidth: 2, style: "bordered",
 		gradientEnabled: false,
 		allowHueChange: true, // Customizable
 		allowStyleChange: false,
 		allowBorderChange: false,
-		borderWidthSubtle: 2,
-		borderWidthStrong: 3,
+		
 	},
 	{
 		id: "custom",
 		name: "Custom",
 		description: "Unlock all controls to craft your own theme",
 		primaryHue: 220,
-		style: "glass",
+		opacity: 0, borderWidth: 1, style: "glass",
 		gradientEnabled: true,
 		rotation: 135,
 		gradientType: "linear",
@@ -279,8 +277,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowHueChange: true,
 		allowStyleChange: true,
 		allowBorderChange: true,
-		borderWidthSubtle: 1,
-		borderWidthStrong: 2,
+		
 	},
 ];
 
@@ -326,6 +323,8 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 			theme.primaryLight !== undefined && theme.primaryLight !== null
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
+		opacity: getVal(theme.opacity, defaultTheme.opacity ?? 0),
+		borderWidth: getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1),
 		style: theme.style || defaultTheme.style,
 		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
@@ -337,8 +336,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		gradientHarmony: theme.gradientHarmony || "none",
 		thumbnail: theme.thumbnail,
 		// Pass-through extras for runtime application
-		borderWidthSubtle: theme.borderWidthSubtle,
-		borderWidthStrong: theme.borderWidthStrong,
+		
 		customCss: theme.customCss,
 		allowHueChange: theme.allowHueChange,
 		allowStyleChange: theme.allowStyleChange,
@@ -414,19 +412,27 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	vars["--accent-low"] = accentPalette.low;
 	vars["--text-on-accent"] = accentPalette.textOnPrimary;
 
-	// Border widths: only override when style is bordered (custom thickness)
-	if (theme.style === "bordered") {
-		if (theme.borderWidthSubtle !== undefined) {
-			vars["--border-width-subtle"] = `${theme.borderWidthSubtle}px`;
-		}
-		if (theme.borderWidthStrong !== undefined) {
-			vars["--border-width-strong"] = `${theme.borderWidthStrong}px`;
-		}
+	const opacityValue = theme.opacity ?? 0;
+	// Map opacity 0 -> 100 to blur and alpha
+	// 0 opacity = 20px blur, 0.5 alpha
+	// 100 opacity = 0px blur, 1.0 alpha
+	const effectOpacity = 0.5 + (opacityValue / 100) * 0.5;
+	const blurPx = 20 - (opacityValue / 100) * 20;
+
+	vars["--effect-opacity"] = effectOpacity.toString();
+	vars["--effect-blur"] = `${blurPx}px`;
+	vars["--liquid-frost-blur"] = `${blurPx * 0.8}px`;
+
+	if (blurPx > 0) {
+		vars["--liquid-backdrop-filter"] = `blur(${blurPx}px) saturate(${1.5 - (opacityValue/100)*0.5})`;
 	} else {
-		// Reset to default border widths for other styles
-		vars["--border-width-subtle"] = "1px";
-		vars["--border-width-strong"] = "1px";
+		vars["--liquid-backdrop-filter"] = "none";
 	}
+
+	// Border width scaling
+	const bdWidth = theme.borderWidth ?? 1;
+	vars["--border-width-subtle"] = `${bdWidth}px`;
+	vars["--border-width-strong"] = `${bdWidth + 1}px`;
 
 	// When gradients are disabled, force a flat background to avoid residual tints
 	if (!theme.gradientEnabled) {
@@ -490,7 +496,7 @@ export function applyTheme(theme: ThemeConfig): void {
 	}
 
 	// Apply style mode attribute
-	root.setAttribute("data-style", theme.style);
+	root.setAttribute("data-style", theme.style ?? "solid");
 	root.setAttribute("data-gradient-type", theme.gradientType || "linear");
 
 	// Apply color scheme attribute (forces dark/light mode regardless of system)
