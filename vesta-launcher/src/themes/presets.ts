@@ -1077,15 +1077,15 @@ export function applyTheme(theme: ThemeConfig): void {
         root.setAttribute("data-theme-id", themeId);
         root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
 
-        const effectToSet = theme.windowEffect || "none";
-        if (currentWindowEffect !== effectToSet) {
-                root.setAttribute("data-window-effect", effectToSet);
-                if ((window as any).__TAURI_INTERNALS__) {
-                        import("@tauri-apps/api/core").then(({ invoke }) => {
-                                invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
-                        });
-                }
-        }
+	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
+	if (currentWindowEffect !== effectToSet || isFirstApply) {
+		root.setAttribute("data-window-effect", effectToSet);
+		if ((window as any).__TAURI_INTERNALS__) {
+			import("@tauri-apps/api/core").then(({ invoke }) => {
+				invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
+			});
+		}
+	}
 
 	// Ensure background behaves correctly when toggling gradient
 	if (theme.gradientEnabled) {
