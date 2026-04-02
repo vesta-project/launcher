@@ -90,7 +90,7 @@ use crate::schema::config::app_config;
 use crate::utils::db::{get_config_conn, get_vesta_conn};
 use diesel::prelude::*;
 use serde::{Deserialize, Serialize};
-use serde_json;
+use serde_json::{self, Value};
 use tauri::Emitter;
 
 /// Main application configuration struct
@@ -324,6 +324,434 @@ impl Default for AppConfig {
             default_min_memory: 2048,
         }
     }
+}
+
+fn theme_name_from_id(theme_id: &str) -> String {
+    match theme_id {
+        "vesta" => "Vesta",
+        "solar" => "Solar",
+        "neon" => "Neon",
+        "classic" => "Classic",
+        "forest" => "Forest",
+        "sunset" => "Sunset",
+        "prism" => "Prism",
+        "midnight" => "Midnight",
+        "oldschool" => "Old School",
+        "custom" => "Custom",
+        _ => "Custom Theme",
+    }
+    .to_string()
+}
+
+fn preset_theme_payload(theme_id: &str) -> Value {
+    let normalized = theme_id.trim().to_lowercase();
+
+    match normalized.as_str() {
+        "vesta" => serde_json::json!({
+            "id": "vesta",
+            "name": "Vesta",
+            "description": "Signature teal to purple to orange gradient",
+            "primaryHue": 180,
+            "opacity": 0,
+            "borderWidth": 1,
+            "style": "glass",
+            "gradientEnabled": true,
+            "rotation": 180,
+            "gradientType": "linear",
+            "gradientHarmony": "triadic",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+            "customCss": ":root {\n\t\t\t\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\n\t\t\t}",
+        }),
+        "solar" => serde_json::json!({
+            "id": "solar",
+            "name": "Solar",
+            "primaryHue": 40,
+            "opacity": 50,
+            "borderWidth": 1,
+            "style": "satin",
+            "gradientEnabled": false,
+            "gradientType": "linear",
+            "gradientHarmony": "none",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "neon" => serde_json::json!({
+            "id": "neon",
+            "name": "Neon",
+            "primaryHue": 300,
+            "opacity": 0,
+            "borderWidth": 1,
+            "style": "glass",
+            "gradientEnabled": true,
+            "rotation": 135,
+            "gradientType": "linear",
+            "gradientHarmony": "complementary",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "classic" => serde_json::json!({
+            "id": "classic",
+            "name": "Classic",
+            "primaryHue": 210,
+            "opacity": 100,
+            "borderWidth": 1,
+            "style": "flat",
+            "gradientEnabled": false,
+            "gradientType": "linear",
+            "gradientHarmony": "none",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "forest" => serde_json::json!({
+            "id": "forest",
+            "name": "Forest",
+            "primaryHue": 140,
+            "opacity": 50,
+            "borderWidth": 1,
+            "style": "satin",
+            "gradientEnabled": true,
+            "rotation": 90,
+            "gradientType": "linear",
+            "gradientHarmony": "analogous",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "sunset" => serde_json::json!({
+            "id": "sunset",
+            "name": "Sunset",
+            "primaryHue": 270,
+            "opacity": 0,
+            "borderWidth": 1,
+            "style": "glass",
+            "gradientEnabled": true,
+            "rotation": 180,
+            "gradientType": "linear",
+            "gradientHarmony": "triadic",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "prism" => serde_json::json!({
+            "id": "prism",
+            "name": "Prism",
+            "author": "Vesta Team",
+            "primaryHue": 200,
+            "opacity": 20,
+            "borderWidth": 1,
+            "style": "glass",
+            "gradientEnabled": true,
+            "rotation": 45,
+            "gradientType": "linear",
+            "gradientHarmony": "triadic",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "midnight" => serde_json::json!({
+            "id": "midnight",
+            "name": "Midnight",
+            "primaryHue": 240,
+            "opacity": 100,
+            "borderWidth": 0,
+            "style": "solid",
+            "gradientEnabled": false,
+            "gradientType": "linear",
+            "gradientHarmony": "none",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "oldschool" => serde_json::json!({
+            "id": "oldschool",
+            "name": "Old School",
+            "primaryHue": 210,
+            "opacity": 100,
+            "borderWidth": 2,
+            "style": "bordered",
+            "gradientEnabled": false,
+            "gradientType": "linear",
+            "gradientHarmony": "none",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        "custom" => serde_json::json!({
+            "id": "custom",
+            "name": "Custom",
+            "primaryHue": 220,
+            "opacity": 0,
+            "borderWidth": 1,
+            "style": "glass",
+            "gradientEnabled": true,
+            "rotation": 135,
+            "gradientType": "linear",
+            "gradientHarmony": "none",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+        _ => serde_json::json!({
+            "id": theme_id,
+            "name": theme_name_from_id(theme_id),
+            "primaryHue": 180,
+            "opacity": 0,
+            "borderWidth": 1,
+            "style": "glass",
+            "gradientEnabled": true,
+            "rotation": 135,
+            "gradientType": "linear",
+            "gradientHarmony": "none",
+            "backgroundOpacity": 25,
+            "windowEffect": "none",
+        }),
+    }
+}
+
+fn merge_theme_payload(base: &mut Value, overlay: Value) {
+    if let (Some(base_obj), Some(overlay_obj)) = (base.as_object_mut(), overlay.as_object()) {
+        for (key, value) in overlay_obj {
+            base_obj.insert(key.clone(), value.clone());
+        }
+    }
+}
+
+fn payload_from_scalar_fields(config: &AppConfig) -> Value {
+    let mut payload = preset_theme_payload(&config.theme_id);
+    if let Some(obj) = payload.as_object_mut() {
+        obj.insert("id".to_string(), Value::String(config.theme_id.clone()));
+        obj.insert(
+            "name".to_string(),
+            Value::String(theme_name_from_id(&config.theme_id)),
+        );
+        obj.insert(
+            "primaryHue".to_string(),
+            Value::Number(config.theme_primary_hue.into()),
+        );
+        obj.insert("style".to_string(), Value::String(config.theme_style.clone()));
+        obj.insert(
+            "gradientEnabled".to_string(),
+            Value::Bool(config.theme_gradient_enabled),
+        );
+
+        if let Some(v) = config.theme_primary_sat {
+            obj.insert("primarySat".to_string(), Value::Number(v.into()));
+        }
+        if let Some(v) = config.theme_primary_light {
+            obj.insert("primaryLight".to_string(), Value::Number(v.into()));
+        }
+        if let Some(v) = config.theme_gradient_angle {
+            obj.insert("rotation".to_string(), Value::Number(v.into()));
+        }
+        if let Some(v) = &config.theme_gradient_type {
+            obj.insert("gradientType".to_string(), Value::String(v.clone()));
+        }
+        if let Some(v) = &config.theme_gradient_harmony {
+            obj.insert("gradientHarmony".to_string(), Value::String(v.clone()));
+        }
+        if let Some(v) = config.theme_border_width {
+            obj.insert("borderWidth".to_string(), Value::Number(v.into()));
+        }
+        if let Some(v) = config.theme_background_opacity {
+            obj.insert("backgroundOpacity".to_string(), Value::Number(v.into()));
+        }
+        if let Some(v) = &config.theme_window_effect {
+            obj.insert("windowEffect".to_string(), Value::String(v.clone()));
+        }
+        if let Some(v) = &config.theme_advanced_overrides {
+            if !v.trim().is_empty() {
+                obj.insert("customCss".to_string(), Value::String(v.clone()));
+            }
+        }
+    }
+
+    payload
+}
+
+fn payload_string(payload: &Value) -> Option<String> {
+    payload.as_str().map(|v| v.to_string()).or_else(|| {
+        if payload.is_null() {
+            None
+        } else {
+            Some(payload.to_string())
+        }
+    })
+}
+
+fn apply_payload_to_scalar_fields(config: &mut AppConfig, payload: &Value) -> bool {
+    let Some(obj) = payload.as_object() else {
+        return false;
+    };
+
+    let mut changed = false;
+
+    if let Some(v) = obj.get("id").and_then(|v| v.as_str()) {
+        if config.theme_id != v {
+            config.theme_id = v.to_string();
+            changed = true;
+        }
+    }
+
+    if let Some(v) = obj.get("primaryHue").and_then(|v| v.as_i64()) {
+        let v = v as i32;
+        if config.theme_primary_hue != v {
+            config.theme_primary_hue = v;
+            changed = true;
+        }
+        if config.background_hue != Some(v) {
+            config.background_hue = Some(v);
+            changed = true;
+        }
+    }
+
+    if let Some(v) = obj.get("style").and_then(|v| v.as_str()) {
+        if config.theme_style != v {
+            config.theme_style = v.to_string();
+            changed = true;
+        }
+    }
+
+    if let Some(v) = obj.get("gradientEnabled").and_then(|v| v.as_bool()) {
+        if config.theme_gradient_enabled != v {
+            config.theme_gradient_enabled = v;
+            changed = true;
+        }
+    }
+
+    if obj.get("rotation").is_some() {
+        let next = obj.get("rotation").and_then(|v| v.as_i64()).map(|v| v as i32);
+        if config.theme_gradient_angle != next {
+            config.theme_gradient_angle = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("gradientType").is_some() {
+        let next = payload_string(obj.get("gradientType").unwrap());
+        if config.theme_gradient_type != next {
+            config.theme_gradient_type = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("gradientHarmony").is_some() {
+        let next = payload_string(obj.get("gradientHarmony").unwrap());
+        if config.theme_gradient_harmony != next {
+            config.theme_gradient_harmony = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("borderWidth").is_some() {
+        let next = obj
+            .get("borderWidth")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+        if config.theme_border_width != next {
+            config.theme_border_width = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("backgroundOpacity").is_some() {
+        let next = obj
+            .get("backgroundOpacity")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+        if config.theme_background_opacity != next {
+            config.theme_background_opacity = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("windowEffect").is_some() {
+        let next = payload_string(obj.get("windowEffect").unwrap());
+        if config.theme_window_effect != next {
+            config.theme_window_effect = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("primarySat").is_some() {
+        let next = obj.get("primarySat").and_then(|v| v.as_i64()).map(|v| v as i32);
+        if config.theme_primary_sat != next {
+            config.theme_primary_sat = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("primaryLight").is_some() {
+        let next = obj
+            .get("primaryLight")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+        if config.theme_primary_light != next {
+            config.theme_primary_light = next;
+            changed = true;
+        }
+    }
+
+    if obj.get("customCss").is_some() {
+        let next = payload_string(obj.get("customCss").unwrap());
+        if config.theme_advanced_overrides != next {
+            config.theme_advanced_overrides = next;
+            changed = true;
+        }
+    }
+
+    changed
+}
+
+fn build_canonical_theme_payload(config: &AppConfig) -> Value {
+    let parsed_payload = config
+        .theme_data
+        .as_ref()
+        .and_then(|raw| serde_json::from_str::<Value>(raw).ok())
+        .filter(|val| val.is_object());
+
+    match parsed_payload {
+        Some(existing) => {
+            let id_from_payload = existing
+                .get("id")
+                .and_then(|v| v.as_str())
+                .unwrap_or(config.theme_id.as_str())
+                .to_string();
+
+            let mut canonical = preset_theme_payload(&id_from_payload);
+            merge_theme_payload(&mut canonical, existing);
+            canonical
+        }
+        None => payload_from_scalar_fields(config),
+    }
+}
+
+pub fn canonical_theme_data_for_theme_id(theme_id: &str) -> String {
+    serde_json::to_string(&preset_theme_payload(theme_id)).unwrap_or_else(|_| {
+        AppConfig::default()
+            .theme_data
+            .unwrap_or_else(|| "{}".to_string())
+    })
+}
+
+/// Normalize theme config to ensure canonical blob + mirrored scalar fields stay in sync.
+pub fn normalize_theme_config_state() -> Result<(), anyhow::Error> {
+    let mut config = get_app_config()?;
+    let canonical_payload = build_canonical_theme_payload(&config);
+    let canonical_string = serde_json::to_string(&canonical_payload)
+        .map_err(|e| anyhow::anyhow!("Failed to serialize canonical theme payload: {}", e))?;
+
+    let mut changed = false;
+
+    if config.theme_data.as_deref() != Some(canonical_string.as_str()) {
+        config.theme_data = Some(canonical_string);
+        changed = true;
+    }
+
+    if apply_payload_to_scalar_fields(&mut config, &canonical_payload) {
+        changed = true;
+    }
+
+    if changed {
+        log::info!("Normalized canonical theme configuration state");
+        update_app_config(&config)?;
+    }
+
+    Ok(())
 }
 
 /// Initialize the config database

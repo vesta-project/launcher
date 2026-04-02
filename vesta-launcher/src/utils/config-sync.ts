@@ -384,28 +384,30 @@ export async function saveThemeUpdate(
 /** Apply a full config snapshot (used at startup) */
 export function applyConfigSnapshot(config: Record<string, any>): void {
 	// Extract theme fields for the initial application
+	const snapshot: Partial<AppThemeConfig> = {
+		theme_id: config.theme_id,
+		theme_mode: config.theme_mode,
+		theme_primary_hue: config.theme_primary_hue,
+		theme_primary_sat: config.theme_primary_sat,
+		theme_primary_light: config.theme_primary_light,
+		theme_style: config.theme_style,
+		theme_gradient_enabled: config.theme_gradient_enabled,
+		theme_gradient_angle: config.theme_gradient_angle,
+		theme_gradient_type: config.theme_gradient_type,
+		theme_gradient_harmony: config.theme_gradient_harmony,
+		theme_advanced_overrides: config.theme_advanced_overrides,
+		theme_border_width: config.theme_border_width,
+		theme_background_opacity: config.theme_background_opacity,
+		theme_window_effect: config.theme_window_effect,
+		theme_data: config.theme_data,
+		background_hue: config.background_hue,
+	};
+
 	batch(() => {
-		setCurrentThemeConfig({
-			theme_id: config.theme_id,
-			theme_mode: config.theme_mode,
-			theme_primary_hue: config.theme_primary_hue,
-			theme_primary_sat: config.theme_primary_sat,
-			theme_primary_light: config.theme_primary_light,
-			theme_style: config.theme_style,
-			theme_gradient_enabled: config.theme_gradient_enabled,
-			theme_gradient_angle: config.theme_gradient_angle,
-			theme_gradient_type: config.theme_gradient_type,
-			theme_gradient_harmony: config.theme_gradient_harmony,
-			theme_advanced_overrides: config.theme_advanced_overrides,
-			theme_border_width: config.theme_border_width,
-			theme_background_opacity: config.theme_background_opacity,
-			theme_window_effect: config.theme_window_effect,
-			theme_data: config.theme_data,
-			background_hue: config.background_hue,
-		});
+		setCurrentThemeConfig(snapshot);
 	});
 
-	applyTheme(configToTheme(currentThemeConfig));
+	applyTheme(configToTheme(snapshot));
 
 	if (typeof config.reduced_motion === "boolean") {
 		applyCommonConfigUpdates("reduced_motion", config.reduced_motion);

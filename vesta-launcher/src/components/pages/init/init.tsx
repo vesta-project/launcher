@@ -104,7 +104,9 @@ function InitPage() {
 
 	return (
 		<div
-			class={`${styles["animate--hue"]} ${styles["init-page__root"]}`}
+			class={`${styles["init-page__root"]} ${
+				initStep() === 0 ? styles["init-page__root--welcome"] : ""
+			}`}
 			data-tauri-drag-region
 		>
 			<TitleBar os={os()} />

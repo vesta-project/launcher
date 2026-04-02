@@ -394,9 +394,13 @@ export function AccountSettingsTab() {
         setPreviewSkinUrl(active.skin_url || "");
         setPreviewVariant(normalizeVariant(active.skin_variant));
         setPreviewCapeUrl(active.cape_url || "");
+        setPreviewComputedKey(null);
+        setPreviewCapeComputedKey(null);
         setSavedSnapshot({
           skinUrl: active.skin_url || "",
           capeUrl: active.cape_url || null,
+          skinKey: null,
+          capeKey: null,
           variant: normalizeVariant(active.skin_variant),
         });
 

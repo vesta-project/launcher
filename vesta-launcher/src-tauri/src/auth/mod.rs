@@ -18,7 +18,9 @@ use tokio::sync::oneshot;
 
 use crate::models::account::{Account, NewAccount};
 use crate::schema::account::dsl::*; // Bring table and column names into scope for queries
-use crate::utils::config::{get_app_config, update_app_config};
+use crate::utils::config::{
+    canonical_theme_data_for_theme_id, get_app_config, update_app_config,
+};
 use crate::utils::db::get_vesta_conn;
 
 pub const ACCOUNT_TYPE_GUEST: &str = "Guest";
@@ -471,6 +473,10 @@ async fn process_login_completion(
 
     let now_str = Utc::now().to_rfc3339();
     let current_config = get_app_config().unwrap_or_default();
+    let resolved_theme_data = current_config
+        .theme_data
+        .clone()
+        .unwrap_or_else(|| canonical_theme_data_for_theme_id(&current_config.theme_id));
 
     // Set all other accounts to inactive
     diesel::update(account)
@@ -496,7 +502,7 @@ async fn process_login_completion(
         new_account.created_at = Some(now_str.clone());
         new_account.updated_at = Some(now_str.clone());
         new_account.theme_id = Some(current_config.theme_id);
-        new_account.theme_data = current_config.theme_data;
+        new_account.theme_data = Some(resolved_theme_data.clone());
         new_account.theme_window_effect = current_config.theme_window_effect;
         new_account.theme_background_opacity = current_config.theme_background_opacity;
         new_account.account_type = "Microsoft".to_string();
@@ -522,7 +528,7 @@ async fn process_login_completion(
                 is_expired.eq(false),
                 updated_at.eq(Some(now_str.clone())),
                 theme_id.eq(Some(current_config.theme_id)),
-                theme_data.eq(current_config.theme_data),
+                theme_data.eq(Some(resolved_theme_data.clone())),
                 theme_window_effect.eq(current_config.theme_window_effect),
                 theme_background_opacity.eq(current_config.theme_background_opacity),
             ))
@@ -879,30 +885,49 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     let mut config = get_app_config().map_err(|e| e.to_string())?;
     config.active_account_uuid = Some(target_uuid.clone());
 
-    // Apply account theme settings to global config if they exist
+    // Apply account theme settings to global config, falling back to canonical payloads.
     let mut updates = std::collections::HashMap::new();
 
-    if let Some(val) = target_account.theme_id {
-        config.theme_id = val.clone();
-        updates.insert("theme_id".to_string(), serde_json::Value::String(val));
-    }
-    if let Some(val) = target_account.theme_data {
-        config.theme_data = Some(val.clone());
-        updates.insert("theme_data".to_string(), serde_json::Value::String(val));
-    }
-    if let Some(val) = target_account.theme_window_effect {
-        config.theme_window_effect = Some(val.clone());
+    let next_theme_id = target_account
+        .theme_id
+        .clone()
+        .unwrap_or_else(|| config.theme_id.clone());
+    if config.theme_id != next_theme_id {
+        config.theme_id = next_theme_id.clone();
         updates.insert(
-            "theme_window_effect".to_string(),
-            serde_json::Value::String(val),
+            "theme_id".to_string(),
+            serde_json::Value::String(next_theme_id.clone()),
         );
     }
-    if let Some(val) = target_account.theme_background_opacity {
-        config.theme_background_opacity = Some(val);
+
+    let next_theme_data = target_account.theme_data.clone().unwrap_or_else(|| {
+        canonical_theme_data_for_theme_id(next_theme_id.as_str())
+    });
+    if config.theme_data.as_deref() != Some(next_theme_data.as_str()) {
+        config.theme_data = Some(next_theme_data.clone());
         updates.insert(
-            "theme_background_opacity".to_string(),
-            serde_json::Value::Number(val.into()),
+            "theme_data".to_string(),
+            serde_json::Value::String(next_theme_data),
         );
+    }
+
+    if config.theme_window_effect != target_account.theme_window_effect {
+        config.theme_window_effect = target_account.theme_window_effect.clone();
+        let value = target_account
+            .theme_window_effect
+            .clone()
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null);
+        updates.insert("theme_window_effect".to_string(), value);
+    }
+
+    if config.theme_background_opacity != target_account.theme_background_opacity {
+        config.theme_background_opacity = target_account.theme_background_opacity;
+        let value = target_account
+            .theme_background_opacity
+            .map(|v| serde_json::Value::Number(v.into()))
+            .unwrap_or(serde_json::Value::Null);
+        updates.insert("theme_background_opacity".to_string(), value);
     }
 
     update_app_config(&config).map_err(|e| e.to_string())?;

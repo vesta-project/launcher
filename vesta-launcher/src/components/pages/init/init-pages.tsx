@@ -1940,6 +1940,8 @@ function InitAppearancePage(props: InitPagesProps) {
 			currentThemeConfig.background_hue ??
 			180,
 	);
+	const [explicitThemeSelected, setExplicitThemeSelected] = createSignal(false);
+	const [isPersistingTheme, setIsPersistingTheme] = createSignal(false);
 
 	onMount(async () => {
 		try {
@@ -1950,6 +1952,7 @@ function InitAppearancePage(props: InitPagesProps) {
 				config.theme_primary_hue !== undefined
 			)
 				setBackgroundHue(config.theme_primary_hue);
+			setExplicitThemeSelected(false);
 		} catch (e) {
 			console.error("Failed to load appearance config:", e);
 		}
@@ -1958,6 +1961,7 @@ function InitAppearancePage(props: InitPagesProps) {
 	const handlePresetSelect = async (id: string) => {
 		const theme = getThemeById(id);
 		if (theme) {
+			setIsPersistingTheme(true);
 			setThemeId(id);
 			const newHue =
 				theme.allowHueChange === false
@@ -1974,23 +1978,32 @@ function InitAppearancePage(props: InitPagesProps) {
 				primaryHue: newHue,
 			});
 
-			// Save to backend using centralized persistence system
-			await persistThemeUpdate({
-				themeId: id,
-				primaryHue: newHue,
-				opacity: theme.opacity,
-				gradientEnabled: theme.gradientEnabled,
-				rotation: theme.rotation,
-				gradientType: theme.gradientType,
-				gradientHarmony: theme.gradientHarmony,
-				borderWidth: theme.borderWidth,
-				backgroundOpacity: 25,
-				windowEffect: theme.windowEffect,
-			});
+			try {
+				// Save to backend using centralized persistence system
+				await persistThemeUpdate({
+					themeId: id,
+					primaryHue: newHue,
+					opacity: theme.opacity,
+					gradientEnabled: theme.gradientEnabled,
+					rotation: theme.rotation,
+					gradientType: theme.gradientType,
+					gradientHarmony: theme.gradientHarmony,
+					borderWidth: theme.borderWidth,
+					backgroundOpacity: 25,
+					windowEffect: theme.windowEffect,
+				});
+				setExplicitThemeSelected(true);
+			} catch (e) {
+				setExplicitThemeSelected(false);
+				console.error("Failed to persist selected onboarding theme:", e);
+			} finally {
+				setIsPersistingTheme(false);
+			}
 		}
 	};
 
 	const handleHueChange = async (values: number[]) => {
+		if (!explicitThemeSelected()) return;
 		const newHue = values[0];
 		setBackgroundHue(newHue);
 		
@@ -2015,6 +2028,9 @@ function InitAppearancePage(props: InitPagesProps) {
 				<p style={"font-size: 14px; opacity: 0.6"}>
 					Pick a starting look for Vesta. You can always change this later in
 					settings.
+				</p>
+				<p style={"font-size: 12px; opacity: 0.55; margin-top: 4px;"}>
+					Select a theme to continue.
 				</p>
 			</div>
 			<div
@@ -2048,7 +2064,7 @@ function InitAppearancePage(props: InitPagesProps) {
 					</div>
 				</section>
 
-				<Show when={canChangeHue()}>
+				<Show when={explicitThemeSelected() && canChangeHue()}>
 					<section
 						style={{
 							background: "rgba(255,255,255,0.03)",
@@ -2112,9 +2128,10 @@ function InitAppearancePage(props: InitPagesProps) {
 				<Button
 					color="primary"
 					style={{ "min-width": "180px" }}
+					disabled={!explicitThemeSelected() || isPersistingTheme()}
 					onClick={() => props.changeInitStep(props.initStep + 1)}
 				>
-					Next Step
+					{isPersistingTheme() ? "Saving Theme..." : "Next Step"}
 				</Button>
 			</div>
 		</>

@@ -20,7 +20,6 @@ import { showToast } from "@ui/toast/toast";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import {
 	applyCommonConfigUpdates,
-	applyConfigSnapshot,
 	onConfigUpdate,
 	subscribeToConfigUpdates,
 	unsubscribeFromConfigUpdates,
@@ -288,19 +287,17 @@ function Root(props: ChildrenProp) {
 	};
 
 	onMount(() => {
-		// Fetch and apply initial config/theme immediately to prevent flash
+		// Read startup config for update checks only.
+		// Initial theme application is handled by early bootstrap in index/theming.
 		if (hasTauriRuntime()) {
 			invoke<any>("get_config")
 				.then((config) => {
-					if (config) {
-						applyConfigSnapshot(config);
-						if (config.startup_check_updates) {
-							checkForAppUpdates(true);
-						}
+					if (config?.startup_check_updates) {
+						checkForAppUpdates(true);
 					}
 				})
 				.catch((error) =>
-					console.error("Failed to fetch initial config:", error),
+					console.error("Failed to read startup config:", error),
 				);
 		}
 
