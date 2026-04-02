@@ -33,7 +33,7 @@ import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { onConfigUpdate } from "@utils/config-sync";
 import { createNotification } from "@utils/notifications";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
-import styles from "./account-settings-tab.module.css";
+import styles from "./AccountTab.module.css";
 
 // UI Components
 import { 
@@ -210,7 +210,7 @@ const SkinPortrait = (props: { src: string; variant?: string }) => {
   );
 };
 
-export default function AccountSettingsTab() {
+export function AccountSettingsTab() {
   const [accounts, setAccounts] = createSignal<Account[]>([]);
   const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
   const [skins, setSkins] = createSignal<Skin[]>([]);

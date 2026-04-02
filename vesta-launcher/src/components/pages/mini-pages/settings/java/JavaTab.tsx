@@ -2,8 +2,8 @@ import { For, Show } from "solid-js";
 import { SettingsCard, SettingsField } from "@components/settings";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
-import { JavaOptionCard } from "./java-option-card";
-import styles from "./settings-page.module.css";
+import { JavaOptionCard } from "./JavaOptionCard";
+import styles from "../settings-page.module.css";
 
 interface JavaSettingsTabProps {
 	requirements: any[];

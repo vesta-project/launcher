@@ -92,6 +92,7 @@
 	gap: 24px;
 	padding-bottom: 40px;
 	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .settings-section {
@@ -118,6 +119,116 @@
 	grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
 	gap: 16px;
 	margin-top: 8px;
+	overflow-x: clip;
+}
+
+.theme-preset-grid.theme-preset-grid--list {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.theme-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	flex-wrap: wrap;
+	margin-top: 6px;
+}
+
+.theme-toolbar__left {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 1 1 auto;
+	min-width: 0;
+	flex-wrap: wrap;
+}
+
+.theme-toolbar__toggles {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	min-width: 0;
+}
+
+.theme-search-trigger {
+	height: 36px;
+	width: 36px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 8px;
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	background: var(--surface-base);
+	color: var(--text-secondary);
+	cursor: pointer;
+	transition: all 180ms ease;
+}
+
+.theme-search-trigger:hover {
+	color: var(--text-primary);
+	border-color: var(--border-strong);
+	background: var(--surface-raised);
+}
+
+.theme-search-trigger:focus-visible {
+	outline: 2px solid var(--accent-primary);
+	outline-offset: 2px;
+}
+
+.theme-search-input {
+	height: 36px;
+	border-radius: 8px;
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	background: var(--surface-base);
+	color: var(--text-primary);
+	padding: 0 10px;
+	font-size: var(--font-small);
+	transition: width 160ms ease;
+}
+
+.theme-search-input--expanded {
+	width: min(340px, 100%);
+	max-width: 100%;
+}
+
+.theme-search-input:focus {
+	outline: none;
+	border-color: var(--accent-primary);
+}
+
+.theme-search-input::placeholder {
+	color: var(--text-tertiary);
+}
+
+.theme-toolbar-icon {
+	width: 16px;
+	height: 16px;
+}
+
+@media (max-width: 840px) {
+	.theme-toolbar {
+		align-items: stretch;
+	}
+
+	.theme-toolbar__left {
+		flex: 1 1 100%;
+	}
+
+	.theme-search-input--expanded {
+		flex: 1 1 220px;
+		width: 100%;
+	}
+}
+
+.theme-empty-state {
+	margin-top: 6px;
+	padding: 12px;
+	border-radius: 8px;
+	border: var(--border-width-subtle) dashed var(--border-subtle);
+	color: var(--text-secondary);
+	font-size: var(--font-small);
+	background: var(--surface-low);
 }
 
 .hue-customization {

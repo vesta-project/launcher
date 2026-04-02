@@ -1,5 +1,4 @@
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-import { readTextFile, writeTextFile } from "@tauri-apps/plugin-fs";
 
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
@@ -43,9 +42,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	currentThemeConfig,
 	onConfigUpdate,
-	updateThemeConfigLocal,
+	saveThemeUpdate as persistThemeUpdate,
 } from "@utils/config-sync";
 import { openExternal } from "@utils/external-link";
+import { getActiveAccount } from "@utils/auth";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { startAppTutorial } from "@utils/tutorial";
 import { checkForAppUpdates, simulateUpdateProcess } from "@utils/updater";
@@ -63,21 +63,34 @@ import {
 	untrack,
 	batch,
 } from "solid-js";
+import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
-	configToTheme,
 	type GradientHarmony,
-	getThemeById,
+	getAllThemes,
 	PRESET_THEMES,
+	getSupportedWindowEffects,
+	getThemeById,
+	isBuiltinThemeId,
+	normalizeWindowEffectForCurrentOS,
+	parseThemeData,
+	removeCustomTheme,
 	type StyleMode,
 	type ThemeConfig,
+	type ThemeVariableValue,
+	upsertCustomTheme,
+	setCustomThemes,
 	validateTheme,
 } from "../../../../themes/presets";
-import { ThemePresetCard } from "../../../theme-preset-card/theme-preset-card";
-import { InstanceDefaultsTab } from "./instance-defaults-tab";
-import { type JavaOption, JavaOptionCard } from "./java-option-card";
-import AccountSettingsTab from "./account-settings-tab";
-import { NotificationSettingsTab } from "./notification-settings-tab";
+import { GeneralSettingsTab } from "./general/GeneralTab";
+import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
+import { JavaSettingsTab } from "./java/JavaTab";
+import { HelpSettingsTab } from "./help/HelpTab";
+import { DeveloperSettingsTab } from "./developer/DeveloperTab";
+import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
+import { type JavaOption, JavaOptionCard } from "./java/JavaOptionCard";
+import { AccountSettingsTab } from "./account/AccountTab";
+import { NotificationSettingsTab } from "./notifications/NotificationsTab";
 import styles from "./settings-page.module.css";
 import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
 import {
@@ -88,13 +101,6 @@ import {
 	managedJava,
 	systemMemory,
 } from "@stores/settings-cache";
-
-// Lazy-loaded tabs
-const GeneralSettingsTab = lazy(() => import("./general-settings-tab").then(m => ({ default: m.GeneralSettingsTab })));
-const AppearanceSettingsTab = lazy(() => import("./appearance-settings-tab").then(m => ({ default: m.AppearanceSettingsTab })));
-const JavaSettingsTab = lazy(() => import("./java-settings-tab").then(m => ({ default: m.JavaSettingsTab })));
-const HelpSettingsTab = lazy(() => import("./help-settings-tab").then(m => ({ default: m.HelpSettingsTab })));
-const DeveloperSettingsTab = lazy(() => import("./developer-settings-tab").then(m => ({ default: m.DeveloperSettingsTab })));
 
 
 export interface AppConfig {
@@ -131,6 +137,7 @@ export interface AppConfig {
 	theme_advanced_overrides?: string;
         theme_window_effect?: string;
         theme_background_opacity?: number;
+	theme_data?: string;
 	theme_border_width?: number;
 	setup_completed: boolean;
 	setup_step: number;
@@ -153,9 +160,38 @@ export interface AppConfig {
 	[key: string]: any;
 }
 
+interface SavedThemeEntry {
+	id: string;
+	name: string;
+	themeData: Record<string, any>;
+	createdAt: string;
+	updatedAt: string;
+}
+
+interface ThemeImportResponse {
+	theme: SavedThemeEntry;
+	warnings: string[];
+}
+
+type ThemeFilterMode = "all" | "builtin" | "imported";
+type ThemeViewMode = "grid" | "list";
+
 /**
  * Settings Page
  */
+function createDebounce<T extends (...args: any[]) => any>(
+	fn: T,
+	delay: number
+): { (...args: Parameters<T>): void; cancel: () => void } {
+	let timer: any;
+	const debounced = (...args: Parameters<T>) => {
+		clearTimeout(timer);
+		timer = setTimeout(() => fn(...args), delay);
+	};
+	debounced.cancel = () => clearTimeout(timer);
+	return debounced;
+}
+
 function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const activeRouter = createMemo(() => props.router || router());
 	const [version] = createResource(getVersion);
@@ -183,6 +219,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
 	const totalRam = systemMemory;
 
+	// Persistence debounce (100ms) - only for database writes
+	const debouncedPersistence = createDebounce(async (overrides: any) => {
+		await persistThemeUpdate(overrides);
+	}, 100);
+
 	createEffect(() => {
 		setSelectedTab(activeTab());
 	});
@@ -194,12 +235,18 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}));
 	});
 
+	onCleanup(() => {
+		debouncedPersistence.cancel();
+	});
+
 	const [backgroundHue, setBackgroundHue] = createSignal(
 		currentThemeConfig.theme_primary_hue ??
 			currentThemeConfig.background_hue ??
-			220,
+			180,
 	);
-	const [opacity, setOpacity] = createSignal<number>(parseInt(currentThemeConfig.theme_style || "0") || 0);
+	const [opacity, setOpacity] = createSignal<number>(
+		getThemeById(currentThemeConfig.theme_id || "vesta")?.opacity ?? 0,
+	);
 	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(
 		currentThemeConfig.theme_gradient_enabled ?? true,
 	);
@@ -215,15 +262,38 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [themeId, setThemeId] = createSignal<string>(
 		currentThemeConfig.theme_id ?? "vesta",
 	);
-	        const [borderThickness, setBorderThickness] = createSignal(
-                currentThemeConfig.theme_border_width ?? 1,
-        );
-        const [backgroundOpacity, setBackgroundOpacity] = createSignal(
-                currentThemeConfig.theme_background_opacity ?? 12,
-        );
-        const [windowEffect, setWindowEffect] = createSignal(
-                currentThemeConfig.theme_window_effect || "vibrancy",
-        );
+	const [themeCatalog, setThemeCatalog] = createSignal<ThemeConfig[]>(
+		getAllThemes(),
+	);
+	const [themeSearchQuery, setThemeSearchQuery] = createSignal("");
+	const [themeFilterMode, setThemeFilterMode] = createSignal<ThemeFilterMode>("all");
+	const [themeViewMode, setThemeViewMode] = createSignal<ThemeViewMode>("grid");
+	const [borderThickness, setBorderThickness] = createSignal(
+		currentThemeConfig.theme_border_width ?? 1,
+	);
+	const [backgroundOpacity, setBackgroundOpacity] = createSignal(
+		currentThemeConfig.theme_background_opacity ?? 12,
+	);
+	const [windowEffect, setWindowEffect] = createSignal(
+		currentThemeConfig.theme_window_effect || "vibrancy",
+	);
+	const [userVariables, setUserVariables] = createStore<Record<string, ThemeVariableValue>>(
+		untrack(() => parseThemeData(currentThemeConfig.theme_data).userVariables || {})
+	);
+	const userVariablesSnapshot = createMemo<Record<string, ThemeVariableValue>>(() => {
+		const snapshot: Record<string, ThemeVariableValue> = {};
+		for (const key of Object.keys(userVariables)) {
+			const value = userVariables[key];
+			if (
+				typeof value === "number" ||
+				typeof value === "string" ||
+				typeof value === "boolean"
+			) {
+				snapshot[key] = value;
+			}
+		}
+		return snapshot;
+	});
 
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
@@ -242,6 +312,115 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const canChangeHue = () => {
 		const id = themeId();
 		return id ? (getThemeById(id)?.allowHueChange ?? false) : false;
+	};
+
+	const showAdvancedControls = () => {
+		const theme = getThemeById(themeId());
+		if (!theme) return false;
+		return Boolean(
+			theme.id === "custom" ||
+			theme.allowStyleChange ||
+			theme.allowBorderChange ||
+			theme.variables?.length,
+		);
+	};
+
+	const getThemeSource = (theme: ThemeConfig): "builtin" | "imported" => {
+		return theme.source ?? (isBuiltinThemeId(theme.id) ? "builtin" : "imported");
+	};
+
+	const hasImportedThemes = createMemo(() =>
+		themeCatalog().some((theme) => getThemeSource(theme) === "imported"),
+	);
+
+	const filteredThemeCatalog = createMemo(() => {
+		const query = themeSearchQuery().trim().toLowerCase();
+		const filter = themeFilterMode();
+		const presetOrder = new Map<string, number>();
+		PRESET_THEMES.forEach((theme, index) => {
+			presetOrder.set(theme.id, index);
+		});
+		const pinnedBuiltins = new Map<string, number>([
+			["vesta", -2],
+			["custom", -1],
+		]);
+
+		return themeCatalog()
+			.map((theme, index) => ({ theme, index }))
+			.filter(({ theme }) => {
+				const source = getThemeSource(theme);
+				if (filter === "builtin" && source !== "builtin") return false;
+				if (filter === "imported" && source !== "imported") return false;
+
+				if (!query) return true;
+				const haystack = [theme.name, theme.author, theme.description]
+					.filter((value): value is string => Boolean(value))
+					.join(" ")
+					.toLowerCase();
+				return haystack.includes(query);
+			})
+			.sort((a, b) => {
+				const sourceA = getThemeSource(a.theme);
+				const sourceB = getThemeSource(b.theme);
+				if (sourceA !== sourceB) {
+					return sourceA === "builtin" ? -1 : 1;
+				}
+
+				if (sourceA === "builtin") {
+					const pinnedA = pinnedBuiltins.get(a.theme.id);
+					const pinnedB = pinnedBuiltins.get(b.theme.id);
+
+					if (pinnedA !== undefined || pinnedB !== undefined) {
+						if (pinnedA === undefined) return 1;
+						if (pinnedB === undefined) return -1;
+						if (pinnedA !== pinnedB) return pinnedA - pinnedB;
+					}
+
+					const presetA = presetOrder.get(a.theme.id) ?? Number.MAX_SAFE_INTEGER;
+					const presetB = presetOrder.get(b.theme.id) ?? Number.MAX_SAFE_INTEGER;
+					if (presetA !== presetB) {
+						return presetA - presetB;
+					}
+				}
+
+				return a.index - b.index;
+			})
+			.map(({ theme }) => theme);
+	});
+
+	createEffect(() => {
+		if (!hasImportedThemes() && themeFilterMode() === "imported") {
+			setThemeFilterMode("all");
+		}
+	});
+
+	const refreshThemeCatalog = async () => {
+		if (!hasTauriRuntime()) {
+			setThemeCatalog(getAllThemes());
+			return;
+		}
+
+		try {
+			const saved = await invoke<SavedThemeEntry[]>("list_saved_themes");
+			const customThemes = saved.map((entry) => {
+				const runtimeId = isBuiltinThemeId(entry.id)
+					? `imported-${entry.id}`
+					: entry.id;
+
+				return validateTheme({
+					...entry.themeData,
+					id: runtimeId,
+					libraryId: entry.id,
+					name: entry.name,
+					source: "imported",
+				});
+			});
+			setCustomThemes(customThemes);
+			setThemeCatalog(getAllThemes());
+		} catch (error) {
+			console.error("Failed to load saved themes:", error);
+			setThemeCatalog(getAllThemes());
+		}
 	};
 
 	// Flatten Java options into a simple array
@@ -400,6 +579,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		window.addEventListener("resize", handleResize);
 		onCleanup(() => window.removeEventListener("resize", handleResize));
 
+		await refreshThemeCatalog();
+
 		if (hasTauriRuntime()) {
 			let unlisten: (() => void) | undefined;
 			onCleanup(() => unlisten && unlisten());
@@ -449,8 +630,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				)
 					setBackgroundHue(config.background_hue);
 
-				if (config.theme_style)
-					setOpacity(parseInt(config.theme_style || "0") || 0);
+				if (config.theme_id) {
+					setOpacity(getThemeById(config.theme_id)?.opacity ?? 0);
+				}
 				if (
 					config.theme_gradient_enabled !== null &&
 					config.theme_gradient_enabled !== undefined
@@ -476,7 +658,25 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				)
 					setBackgroundOpacity(config.theme_background_opacity);
 				if (config.theme_window_effect)
-					setWindowEffect(config.theme_window_effect);
+					setWindowEffect(normalizeWindowEffectForCurrentOS(config.theme_window_effect));
+				
+				// CRITICAL: Handle the new consolidated theme_data JSON blob for deep-load
+				if (config.theme_data) {
+					const themeData = parseThemeData(config.theme_data);
+
+					if (themeData.primaryHue !== undefined) setBackgroundHue(themeData.primaryHue);
+					if (themeData.opacity !== undefined) setOpacity(themeData.opacity);
+					if (themeData.gradientEnabled !== undefined) setGradientEnabled(themeData.gradientEnabled);
+					if (themeData.rotation !== undefined) setRotation(themeData.rotation);
+					if (themeData.gradientType) setGradientType(themeData.gradientType as "linear" | "radial");
+					if (themeData.gradientHarmony) setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
+					if (themeData.borderWidth !== undefined) setBorderThickness(themeData.borderWidth);
+					if (themeData.backgroundOpacity !== undefined) setBackgroundOpacity(themeData.backgroundOpacity);
+					if (themeData.windowEffect) {
+						setWindowEffect(normalizeWindowEffectForCurrentOS(themeData.windowEffect));
+					}
+					if (themeData.userVariables) setUserVariables(reconcile(themeData.userVariables));
+				}
 			}
 
 			unsubscribeConfigUpdate = onConfigUpdate((field, value) => {
@@ -490,8 +690,12 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "theme_id" && value) setThemeId(value);
 				if (field === "theme_primary_hue" && value !== null)
 					setBackgroundHue(value);
-				if (field === "theme_style" && value)
-					setOpacity(parseInt(value || "0") || 0);
+				if (field === "theme_style" && value) {
+					const activeTheme = getThemeById(untrack(themeId));
+					if (activeTheme && activeTheme.style === value && activeTheme.opacity !== undefined) {
+						setOpacity(activeTheme.opacity);
+					}
+				}
 				if (field === "theme_gradient_enabled" && value !== null)
 					setGradientEnabled(value);
 				if (field === "theme_gradient_angle" && value !== null)
@@ -505,7 +709,34 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "theme_background_opacity" && value !== null)
 					setBackgroundOpacity(value);
 				if (field === "theme_window_effect" && value)
-					setWindowEffect(value);
+					setWindowEffect(normalizeWindowEffectForCurrentOS(value));
+				
+				// Handle real-time theme_data updates from other windows
+				if (field === "theme_data" && value) {
+					// Only apply updates if they didn't originate from this component's interactions
+					const themeData = parseThemeData(value);
+					batch(() => {
+						if (themeData.primaryHue !== undefined && themeData.primaryHue !== untrack(backgroundHue)) setBackgroundHue(themeData.primaryHue);
+						if (themeData.opacity !== undefined && themeData.opacity !== untrack(opacity)) setOpacity(themeData.opacity);
+						if (themeData.gradientEnabled !== undefined && themeData.gradientEnabled !== untrack(gradientEnabled)) setGradientEnabled(themeData.gradientEnabled);
+						if (themeData.rotation !== undefined && themeData.rotation !== untrack(rotation)) setRotation(themeData.rotation);
+						if (themeData.gradientType && themeData.gradientType !== untrack(gradientType)) setGradientType(themeData.gradientType as "linear" | "radial");
+						if (themeData.gradientHarmony && themeData.gradientHarmony !== untrack(gradientHarmony)) setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
+						if (themeData.borderWidth !== undefined && themeData.borderWidth !== untrack(borderThickness)) setBorderThickness(themeData.borderWidth);
+						if (themeData.backgroundOpacity !== undefined && themeData.backgroundOpacity !== untrack(backgroundOpacity)) setBackgroundOpacity(themeData.backgroundOpacity);
+						if (themeData.windowEffect && themeData.windowEffect !== untrack(windowEffect)) {
+							setWindowEffect(normalizeWindowEffectForCurrentOS(themeData.windowEffect));
+						}
+
+						if (themeData.userVariables) {
+							const currentVars = untrack(userVariablesSnapshot);
+							const hasChanged = JSON.stringify(currentVars) !== JSON.stringify(themeData.userVariables);
+							if (hasChanged) {
+								setUserVariables(reconcile(themeData.userVariables));
+							}
+						}
+					});
+				}
 
 				if (field.startsWith("default_")) {
 					setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
@@ -525,6 +756,15 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const handlePresetSelect = async (id: string) => {
 		const theme = getThemeById(id);
 		if (theme) {
+			const normalizedEffect =
+				theme.windowEffect !== undefined
+					? normalizeWindowEffectForCurrentOS(theme.windowEffect)
+					: windowEffect();
+			const finalHue =
+				theme.allowHueChange === false
+					? (theme.primaryHue ?? 180)
+					: backgroundHue();
+			
 			batch(() => {
 				setThemeId(id);
 				setOpacity(theme.opacity ?? 0);
@@ -538,248 +778,136 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (theme.backgroundOpacity !== undefined) {
 					setBackgroundOpacity(theme.backgroundOpacity);
 				}
-				if (theme.windowEffect !== undefined) {
-					setWindowEffect(theme.windowEffect);
+				if (normalizedEffect !== undefined) {
+					setWindowEffect(normalizedEffect);
 				}
+				setBackgroundHue(finalHue);
 
-				const newHue =
-					theme.allowHueChange === false
-						? (theme.primaryHue ?? 220)
-						: backgroundHue();
-				if (theme.primaryHue !== undefined && theme.allowHueChange === false) {
-					setBackgroundHue(newHue);
+				if (theme.variables && theme.variables.length > 0) {
+					const defaultVars: Record<string, ThemeVariableValue> = {};
+					theme.variables.forEach(v => {
+						defaultVars[v.key] = v.default;
+					});
+					setUserVariables(reconcile(defaultVars));
+				} else {
+					setUserVariables(reconcile({}));
 				}
 			});
 
-			// Capture values for local update
-			const finalHue =
-				theme.allowHueChange === false
-					? (theme.primaryHue ?? 220)
-					: backgroundHue();
-
-			// Update local config cache to prevent async updates from reverting state
-			updateThemeConfigLocal("theme_id", id);
-			updateThemeConfigLocal("theme_primary_hue", finalHue);
-			updateThemeConfigLocal("background_hue", finalHue);
-			updateThemeConfigLocal("theme_style", theme.style);
-			updateThemeConfigLocal("theme_gradient_enabled", theme.gradientEnabled);
-			updateThemeConfigLocal("theme_gradient_angle", theme.rotation ?? 135);
-			updateThemeConfigLocal(
-				"theme_gradient_type",
-				theme.gradientType || "linear",
-			);
-			updateThemeConfigLocal(
-				"theme_gradient_harmony",
-				theme.gradientHarmony || "none",
-			);
-			if (theme.borderWidth !== undefined) {
-				updateThemeConfigLocal("theme_border_width", theme.borderWidth);
-			}
-			if (theme.backgroundOpacity !== undefined) {
-				updateThemeConfigLocal("theme_background_opacity", theme.backgroundOpacity);
-			}
-			if (theme.windowEffect !== undefined) {
-				updateThemeConfigLocal("theme_window_effect", theme.windowEffect);
-			}
-
-			if (hasTauriRuntime()) {
-				try {
-					const updates: any = {
-						theme_id: id,
-						theme_primary_hue: finalHue,
-						background_hue: finalHue,
-						theme_style: theme.style,
-						theme_gradient_enabled: theme.gradientEnabled,
-						theme_gradient_angle: theme.rotation ?? 135,
-						theme_gradient_type: theme.gradientType || "linear",
-						theme_gradient_harmony: theme.gradientHarmony || "none",
-					};
-
-					if (theme.borderWidth !== undefined) {
-						updates.theme_border_width = theme.borderWidth;
-					}
-					if (theme.backgroundOpacity !== undefined) {
-						updates.theme_background_opacity = theme.backgroundOpacity;
-					}
-					if (theme.windowEffect !== undefined) {
-						updates.theme_window_effect = theme.windowEffect;
-					}
-
-					await invoke("update_config_fields", {
-						updates,
-					});
-				} catch (error) {
-					console.error("Failed to save theme preset selection:", error);
-				}
-			}
+			// Save the entire theme state
+			saveThemeUpdate({
+				id: theme.id,
+				author: theme.author,
+				source: theme.source,
+				primaryHue: finalHue,
+				opacity: theme.opacity,
+				style: theme.style,
+				gradientEnabled: theme.gradientEnabled,
+				rotation: theme.rotation,
+				gradientType: theme.gradientType,
+				gradientHarmony: theme.gradientHarmony,
+				borderWidth: theme.borderWidth,
+				backgroundOpacity: theme.backgroundOpacity,
+				windowEffect: normalizedEffect,
+				customCss: theme.customCss,
+				variables: theme.variables,
+				userVariables:
+					theme.variables?.reduce<Record<string, ThemeVariableValue>>(
+						(acc, variable) => {
+							acc[variable.key] = variable.default;
+							return acc;
+						},
+						{},
+					) || {},
+			});
 		}
 	};
 
-	const handleHueChange = async (values: number[]) => {
+	const handleHueChange = async (values: number[], live = false) => {
 		const newHue = values[0];
 		batch(() => {
 			setBackgroundHue(newHue);
 		});
-		updateThemeConfigLocal("theme_primary_hue", newHue);
-		updateThemeConfigLocal("background_hue", newHue);
-		// Save immediately
-		if (hasTauriRuntime()) {
-			try {
-				await invoke("update_config_fields", {
-					updates: {
-						theme_primary_hue: newHue,
-						background_hue: newHue,
-					},
-				});
-			} catch (error) {
-				console.error("Failed to persist hue immediately:", error);
-			}
-		}
+		saveThemeUpdate({ primaryHue: newHue }, live);
 	};
 
 	const handleStyleModeChange = async (mode: ThemeConfig["style"]) => {
 		setOpacity(parseInt(mode || "0") || 0);
-		updateThemeConfigLocal("theme_style", mode);
-		if (hasTauriRuntime()) {
-			await invoke("update_config_field", {
-				field: "theme_style",
-				value: mode,
-			});
-		}
+		saveThemeUpdate({ style: mode });
 	};
 
-	const handleOpacityChange = async (val: number[]) => {
+	const handleOpacityChange = async (val: number[], live = false) => {
 		const newOpacity = val[0];
 		setOpacity(newOpacity);
-		const styleStr = newOpacity.toString();
-		updateThemeConfigLocal("theme_style", styleStr);
-		if (hasTauriRuntime()) {
-			try {
-				await invoke("update_config_field", {
-					field: "theme_style",
-					value: styleStr,
-				});
-			} catch (e) {
-				console.error("Failed to persist opacity immediately:", e);
-			}
-		}
+		saveThemeUpdate({ opacity: newOpacity }, live);
 	};
 
 	const handleGradientToggle = async (enabled: boolean) => {
 		setGradientEnabled(enabled);
-		updateThemeConfigLocal("theme_gradient_enabled", enabled);
-		if (hasTauriRuntime()) {
-			await invoke("update_config_field", {
-				field: "theme_gradient_enabled",
-				value: enabled,
-			});
-		}
+		saveThemeUpdate({ gradientEnabled: enabled });
 	};
 
-	const handleRotationChange = async (values: number[]) => {
+	const handleRotationChange = async (values: number[], live = false) => {
 		const newRotation = Math.round(values[0]);
 		if (newRotation === rotation()) return;
 
 		setRotation(newRotation);
-		updateThemeConfigLocal("theme_gradient_angle", newRotation);
-
-		// Save immediately
-		if (hasTauriRuntime()) {
-			try {
-				await invoke("update_config_field", {
-					field: "theme_gradient_angle",
-					value: newRotation,
-				});
-			} catch (error) {
-				console.error("Failed to persist rotation immediately:", error);
-			}
-		}
+		saveThemeUpdate({ rotation: newRotation }, live);
 	};
 
-	const handleBorderThicknessChange = async (values: number[]) => {
+	const handleBorderThicknessChange = async (values: number[], live = false) => {
 		const newThickness = values[0];
 		if (newThickness === borderThickness()) return;
 
 		batch(() => {
 			setBorderThickness(newThickness);
 		});
-		updateThemeConfigLocal("theme_border_width", newThickness);
-		// Save immediately
-		if (hasTauriRuntime()) {
-			try {
-				await invoke("update_config_field", {
-					field: "theme_border_width",
-					value: newThickness,
-				});
-			} catch (error) {
-				console.error("Failed to persist border thickness immediately:", error);
-			}
-		}
+		saveThemeUpdate({ borderWidth: newThickness }, live);
 	};
-	const handleBackgroundOpacityChange = async (values: number[]) => {
+	const handleBackgroundOpacityChange = async (values: number[], live = false) => {
 		const newValue = values[0];
 		if (newValue === backgroundOpacity()) return;
 
 		batch(() => {
 			setBackgroundOpacity(newValue);
 		});
-		updateThemeConfigLocal("theme_background_opacity", newValue);
-
-                if (hasTauriRuntime()) {
-                        try {
-                                await invoke("update_config_field", {
-                                        field: "theme_background_opacity",
-                                        value: newValue,
-                                });
-                        } catch (e) {
-                                console.error("Failed to update background opacity immediately", e);
-                        }
-                }
-        };
+		saveThemeUpdate({ backgroundOpacity: newValue }, live);
+	};
 
 	const handleWindowEffectChange = async (val: string) => {
-		if (val === windowEffect()) return;
+		const normalizedEffect = normalizeWindowEffectForCurrentOS(val);
+		if (normalizedEffect === windowEffect()) return;
 
 		batch(() => {
-			setWindowEffect(val);
+			setWindowEffect(normalizedEffect);
 		});
-		updateThemeConfigLocal("theme_window_effect", val);
-
-                if (hasTauriRuntime()) {
-                        try {
-                                await invoke("update_config_field", {
-                                        field: "theme_window_effect",
-                                        value: val,
-                                });
-                        } catch (e) {
-                                console.error("Failed to update window effect immediately", e);
-                        }
-                }
-        };
+		saveThemeUpdate({ windowEffect: normalizedEffect });
+	};
 
 
 	const handleGradientTypeChange = async (type: "linear" | "radial") => {
 		if (type === gradientType()) return;
 
 		setGradientType(type);
-		updateThemeConfigLocal("theme_gradient_type", type);
-		if (hasTauriRuntime()) {
-			await invoke("update_config_field", {
-				field: "theme_gradient_type",
-				value: type,
-			});
-		}
+		saveThemeUpdate({ gradientType: type });
 	};
 
 	const handleGradientHarmonyChange = async (harmony: GradientHarmony) => {
 		setGradientHarmony(harmony);
-		updateThemeConfigLocal("theme_gradient_harmony", harmony);
-		if (hasTauriRuntime()) {
-			await invoke("update_config_field", {
-				field: "theme_gradient_harmony",
-				value: harmony,
-			});
-		}
+		saveThemeUpdate({ gradientHarmony: harmony });
+	};
+
+	const handleVariableChange = async (key: string, value: ThemeVariableValue, live = false) => {
+		const nextVariables = {
+			...untrack(userVariablesSnapshot),
+			[key]: value,
+		};
+		
+		batch(() => {
+			setUserVariables(reconcile(nextVariables));
+		});
+		
+		saveThemeUpdate({ userVariables: nextVariables }, live);
 	};
 
 	const handleReducedMotionToggle = async (checked: boolean) => {
@@ -866,6 +994,70 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
+	const saveThemeUpdate = async (overrides: Partial<ThemeConfig> = {}, live = false) => {
+		if (!hasTauriRuntime()) return;
+
+		// 1. Gather current UI state for the theme
+		const activeHue = overrides.primaryHue ?? backgroundHue();
+		const activeOpacity = overrides.opacity ?? opacity();
+		const activeThemeId = overrides.id ?? themeId();
+		const currentTheme = getThemeById(activeThemeId);
+		const activeStyle = overrides.style ?? currentTheme?.style ?? "glass";
+		const activeGradient = overrides.gradientEnabled ?? gradientEnabled();
+		const activeRotation = overrides.rotation ?? rotation();
+		const activeGType = overrides.gradientType ?? gradientType();
+		const activeGHarmony = overrides.gradientHarmony ?? gradientHarmony();
+		const activeBWidth = overrides.borderWidth ?? borderThickness();
+		const activeBgOp = overrides.backgroundOpacity ?? backgroundOpacity();
+		const activeWEffect = normalizeWindowEffectForCurrentOS(
+			overrides.windowEffect ?? windowEffect(),
+		);
+		const activeUserVars = overrides.userVariables ?? userVariablesSnapshot();
+		
+		// 2. Map frontend terms to central store persistence terminology
+		const persistenceData = {
+			themeId: activeThemeId,
+			themeName: overrides.name ?? currentTheme?.name,
+			author: overrides.author ?? currentTheme?.author,
+			description: overrides.description ?? currentTheme?.description,
+			primaryHue: activeHue,
+			opacity: activeOpacity,
+			style: activeStyle,
+			gradientEnabled: activeGradient,
+			rotation: activeRotation,
+			gradientType: activeGType,
+			gradientHarmony: activeGHarmony,
+			borderWidth: activeBWidth,
+			backgroundOpacity: activeBgOp,
+			windowEffect: activeWEffect,
+			customCss: overrides.customCss ?? currentTheme?.customCss,
+			variables: overrides.variables ?? currentTheme?.variables,
+			userVariables: activeUserVars,
+		};
+
+		// 3. Update local cache (immediate UI feedback for CSS)
+		applyTheme(validateTheme({
+			...currentTheme,
+			id: activeThemeId,
+			primaryHue: activeHue,
+			opacity: activeOpacity,
+			style: activeStyle,
+			gradientEnabled: activeGradient,
+			rotation: activeRotation,
+			gradientType: activeGType as any,
+			gradientHarmony: activeGHarmony as any,
+			borderWidth: activeBWidth,
+			backgroundOpacity: activeBgOp,
+			windowEffect: activeWEffect,
+			userVariables: activeUserVars,
+		}));
+
+		// 4. Persistence call (Debounced at 100ms through central system)
+		if (!live) {
+			debouncedPersistence(persistenceData);
+		}
+	};
+
 	const handleClearCache = async () => {
 		if (hasTauriRuntime()) {
 			try {
@@ -893,6 +1085,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 		const id = themeId();
 		const currentTheme = id ? getThemeById(id) : undefined;
+		const activeUserVars = userVariablesSnapshot();
 		if (currentTheme) {
 			const themeToApply = validateTheme({
 				...currentTheme,
@@ -909,6 +1102,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				borderWidth: borderThickness(),
 				backgroundOpacity: backgroundOpacity(),
 				windowEffect: windowEffect(),
+				userVariables: activeUserVars,
 			});
 			applyTheme(themeToApply);
 		}
@@ -920,6 +1114,120 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		const root = document.documentElement;
 	});
 
+	const migrateToCustomTheme = async (fromTheme: ThemeConfig) => {
+		const customTheme =
+			getThemeById("custom") ||
+			validateTheme({
+				id: "custom",
+				name: "Custom",
+				source: "builtin",
+				primaryHue: 220,
+				opacity: 0,
+				style: "glass",
+				gradientEnabled: true,
+				rotation: 135,
+				gradientType: "linear",
+				gradientHarmony: "none",
+				borderWidth: 1,
+			});
+
+		const migratedEffect = normalizeWindowEffectForCurrentOS(
+			fromTheme.windowEffect ?? customTheme.windowEffect,
+		);
+
+		batch(() => {
+			setThemeId("custom");
+			setBackgroundHue(fromTheme.primaryHue ?? customTheme.primaryHue);
+			setOpacity(fromTheme.opacity ?? customTheme.opacity ?? 0);
+			setGradientEnabled(fromTheme.gradientEnabled ?? customTheme.gradientEnabled);
+			setRotation(fromTheme.rotation ?? customTheme.rotation ?? 135);
+			setGradientType(fromTheme.gradientType ?? customTheme.gradientType ?? "linear");
+			setGradientHarmony(fromTheme.gradientHarmony ?? customTheme.gradientHarmony ?? "none");
+			setBorderThickness(fromTheme.borderWidth ?? customTheme.borderWidth ?? 1);
+			setBackgroundOpacity(fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity ?? 25);
+			setWindowEffect(migratedEffect);
+			setUserVariables(reconcile({}));
+		});
+
+		await saveThemeUpdate({
+			id: "custom",
+			name: customTheme.name,
+			author: customTheme.author,
+			source: "builtin",
+			primaryHue: fromTheme.primaryHue ?? customTheme.primaryHue,
+			opacity: fromTheme.opacity ?? customTheme.opacity,
+			style: fromTheme.style ?? customTheme.style,
+			gradientEnabled: fromTheme.gradientEnabled ?? customTheme.gradientEnabled,
+			rotation: fromTheme.rotation ?? customTheme.rotation,
+			gradientType: fromTheme.gradientType ?? customTheme.gradientType,
+			gradientHarmony: fromTheme.gradientHarmony ?? customTheme.gradientHarmony,
+			borderWidth: fromTheme.borderWidth ?? customTheme.borderWidth,
+			backgroundOpacity: fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity,
+			windowEffect: migratedEffect,
+			customCss: "",
+			variables: customTheme.variables,
+			userVariables: {},
+		});
+	};
+
+	const handleDeleteImportedTheme = async (targetThemeId: string) => {
+		const themeToDelete = themeCatalog().find((theme) => theme.id === targetThemeId);
+		if (!themeToDelete) return;
+
+		if (getThemeSource(themeToDelete) !== "imported") {
+			return;
+		}
+
+		const confirmed = await dialogStore.confirm(
+			"Delete Imported Theme",
+			`Delete \"${themeToDelete.name}\" from your imported theme library?`,
+			{
+				okLabel: "Delete",
+				cancelLabel: "Cancel",
+				isDestructive: true,
+				severity: "warning",
+			},
+		);
+
+		if (!confirmed) return;
+
+		const libraryThemeId = themeToDelete.libraryId || targetThemeId;
+
+		try {
+			if (hasTauriRuntime()) {
+				await invoke("delete_saved_theme", { themeId: libraryThemeId });
+			}
+
+			removeCustomTheme(targetThemeId);
+			setThemeCatalog(getAllThemes());
+
+			if (themeId() === targetThemeId) {
+				await migrateToCustomTheme(themeToDelete);
+				showToast({
+					title: "Theme Deleted",
+					description:
+						"Active imported theme was removed. You have been switched to Custom with migrated settings.",
+					severity: "info",
+				});
+			} else {
+				showToast({
+					title: "Theme Deleted",
+					description: `${themeToDelete.name} was removed from your imported library.`,
+					severity: "success",
+				});
+			}
+
+			await refreshThemeCatalog();
+		} catch (error) {
+			console.error("Failed to delete imported theme:", error);
+			dialogStore.alert(
+				"Delete Failed",
+				"Failed to delete the selected imported theme.",
+				"error",
+			);
+		}
+	};
+
 	
 	const handleExportTheme = async () => {
 		try {
@@ -927,9 +1235,19 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				dialogStore.alert("Platform Error", "Tauri runtime not found.", "error"); return;
 			}
 
+			if (themeId() !== "custom") {
+				dialogStore.alert(
+					"Export Unavailable",
+					"Only the Custom theme can be exported. Switch to Custom first.",
+					"warning",
+				);
+				return;
+			}
+
 			const themeClass = getThemeById(themeId()) || validateTheme({});
-			
-			// Ask for the name of the exported theme
+			const activeAccount = await getActiveAccount();
+			const author = activeAccount?.display_name || activeAccount?.username || "Anonymous";
+
 			const customName = await dialogStore.prompt(
 				"Theme Name",
 				"Enter a name for your theme before exporting.",
@@ -938,25 +1256,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 			if (!customName) return;
 
-			// Generate the exported theme metadata
-			const exported = {
-				version: 1,
-				type: "vesta-theme",
-				theme: {
-					id: themeClass.id,
-					name: customName,
-					primaryHue: themeClass.primaryHue,
-					opacity: themeClass.opacity,
-					style: themeClass.style,
-					gradientEnabled: themeClass.gradientEnabled,
-					rotation: themeClass.rotation,
-					gradientType: themeClass.gradientType,
-					gradientHarmony: themeClass.gradientHarmony,
-					borderWidth: themeClass.borderWidth,
-					customCss: themeClass.customCss
-				}
-			};
-
 			const savePath = await saveDialog({
 				title: "Export Theme",
 				defaultPath: `${customName.replace(/[^a-zA-Z0-9- ]/g, "_")}.vestatheme`,
@@ -964,7 +1263,12 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			});
 
 			if (savePath) {
-				await writeTextFile(savePath, JSON.stringify(exported, null, 2));
+				await invoke("export_theme", {
+					savePath,
+					customName,
+					author,
+					customCss: themeClass.customCss || ""
+				});
 				dialogStore.alert("Theme Exported", "Your theme has been exported successfully.", "success");
 			}
 		} catch (e) {
@@ -990,68 +1294,61 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			// though it might return string[]. we will safely cast.
 			const resolvedPath = Array.isArray(openPath) ? openPath[0] : openPath;
 
-			const content = await readTextFile(resolvedPath);
-			const parsed = JSON.parse(content);
-			
-			let importedConfig = parsed;
-			if (parsed.type === "vesta-theme" && parsed.theme) {
-				importedConfig = parsed.theme;
-			}
+			const result = await invoke<ThemeImportResponse>("import_theme_from_file", {
+				filePath: resolvedPath,
+			});
 
-			const safeTheme = validateTheme(importedConfig);
-			
-			// We override it as custom so that it doesn't just link to 'vesta' defaults if id overlaps.
-			safeTheme.id = "custom";
+			const importedTheme = validateTheme({
+				...result.theme.themeData,
+				id: result.theme.id,
+				libraryId: result.theme.id,
+				name: result.theme.name,
+				source: "imported",
+			});
 
-			if (safeTheme.customCss?.length === 0 && importedConfig.customCss?.length > 0) {
-				dialogStore.alert("Warning", "The theme imported contained unsafe CSS that was automatically purged.", "warning");
-			}
+			upsertCustomTheme(importedTheme);
+			setThemeCatalog(getAllThemes());
 
-			// Assign the Theme
-			try {
-				await invoke("update_config_fields", {
-					updates: {
-						theme_id: "custom",
-						theme_primary_hue: safeTheme.primaryHue,
-						theme_style: safeTheme.opacity?.toString() ?? "0",
-						theme_gradient_enabled: safeTheme.gradientEnabled,
-						theme_gradient_angle: safeTheme.rotation ?? 135,
-						theme_gradient_type: safeTheme.gradientType ?? "linear",
-						theme_gradient_harmony: safeTheme.gradientHarmony ?? "none",
-						theme_border_width: safeTheme.borderWidth ?? 1,
-						theme_advanced_overrides: safeTheme.customCss ?? ""
-					}
-				});
+			batch(() => {
+				setThemeId(importedTheme.id);
+				setBackgroundHue(importedTheme.primaryHue);
+				setOpacity(importedTheme.opacity ?? 0);
+				setGradientEnabled(importedTheme.gradientEnabled);
+				setRotation(importedTheme.rotation ?? 135);
+				setGradientType(importedTheme.gradientType ?? "linear");
+				setGradientHarmony(importedTheme.gradientHarmony ?? "none");
+				setBorderThickness(importedTheme.borderWidth ?? 1);
+				setBackgroundOpacity(importedTheme.backgroundOpacity ?? 25);
+				setWindowEffect(normalizeWindowEffectForCurrentOS(importedTheme.windowEffect));
+				setUserVariables(reconcile(importedTheme.userVariables || {}));
+			});
 
-				updateThemeConfigLocal("theme_id", "custom");
-				updateThemeConfigLocal("theme_primary_hue", safeTheme.primaryHue);
-				updateThemeConfigLocal("theme_style", safeTheme.opacity?.toString() ?? "0");
-				updateThemeConfigLocal("theme_gradient_enabled", safeTheme.gradientEnabled);
-				updateThemeConfigLocal("theme_gradient_angle", safeTheme.rotation ?? 135);
-				updateThemeConfigLocal("theme_gradient_type", safeTheme.gradientType ?? "linear");
-				updateThemeConfigLocal("theme_gradient_harmony", safeTheme.gradientHarmony ?? "none");
-				updateThemeConfigLocal("theme_border_width", safeTheme.borderWidth ?? 1);
-				updateThemeConfigLocal("theme_advanced_overrides", safeTheme.customCss ?? "");
+			await saveThemeUpdate({
+				id: importedTheme.id,
+				primaryHue: importedTheme.primaryHue,
+				opacity: importedTheme.opacity,
+				style: importedTheme.style,
+				gradientEnabled: importedTheme.gradientEnabled,
+				rotation: importedTheme.rotation,
+				gradientType: importedTheme.gradientType,
+				gradientHarmony: importedTheme.gradientHarmony,
+				borderWidth: importedTheme.borderWidth,
+				backgroundOpacity: importedTheme.backgroundOpacity,
+				windowEffect: normalizeWindowEffectForCurrentOS(importedTheme.windowEffect),
+				customCss: importedTheme.customCss,
+				variables: importedTheme.variables,
+				userVariables: importedTheme.userVariables || {},
+			});
 
-				// Update Local UI signals
-				setThemeId("custom");
-				setBackgroundHue(safeTheme.primaryHue);
-				setOpacity(safeTheme.opacity ?? 0);
-				setGradientEnabled(safeTheme.gradientEnabled);
-				setRotation(safeTheme.rotation ?? 135);
-				setGradientType(safeTheme.gradientType ?? "linear");
-				setGradientHarmony(safeTheme.gradientHarmony as any);
-				setBorderThickness(safeTheme.borderWidth ?? 1);
-
-				dialogStore.alert("Theme Imported", "Custom theme successfully loaded.", "success");
-			} catch (err: any) {
-				console.error("Theme Import error", err);
-				dialogStore.alert("Import Error", "Failed to update configs: " + String(err), "error");
+			if (result.warnings && result.warnings.length > 0) {
+				dialogStore.alert("Theme Imported With Warnings", result.warnings.join("\n"), "warning");
+			} else {
+				dialogStore.alert("Theme Imported", "Theme imported and added to your library.", "success");
 			}
 
 		} catch (e) {
 			console.error("Failed to import theme", e);
-			dialogStore.alert("Import Error", "Failed to read or parse the theme file.", "error");
+			dialogStore.alert("Import Error", "Failed to import the selected theme file.", "error");
 		}
 	};
 
@@ -1125,10 +1422,20 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					<TabsContent class={styles["tabs-content"]} value="appearance">
 						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Appearance...</div>}>
 							<AppearanceSettingsTab
-								PRESET_THEMES={PRESET_THEMES}
+								themes={filteredThemeCatalog()}
 								themeId={themeId()}
+								themeSearchQuery={themeSearchQuery()}
+								onThemeSearchQueryChange={setThemeSearchQuery}
+								themeFilterMode={themeFilterMode()}
+								onThemeFilterModeChange={setThemeFilterMode}
+								themeViewMode={themeViewMode()}
+								onThemeViewModeChange={setThemeViewMode}
+								hasImportedThemes={hasImportedThemes()}
+								handleDeleteTheme={handleDeleteImportedTheme}
+								canExportTheme={themeId() === "custom"}
 								handlePresetSelect={handlePresetSelect}
 								canChangeHue={canChangeHue()}
+								showAdvancedControls={showAdvancedControls()}
 								backgroundHue={backgroundHue()}
 								handleHueChange={handleHueChange}
 								opacity={opacity()}
@@ -1146,9 +1453,19 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
                                                                 backgroundOpacity={backgroundOpacity()}
                                                                 handleBackgroundOpacityChange={handleBackgroundOpacityChange}
                                                                 windowEffect={windowEffect()}
+										windowEffectOptions={getSupportedWindowEffects()}
                                                                 handleWindowEffectChange={handleWindowEffectChange}
                                                                 handleImportTheme={handleImportTheme}
                                                                 handleExportTheme={handleExportTheme}
+								                                themeVariables={
+										themeId()
+											? getThemeById(themeId())?.variables?.map((variable) => ({
+												...variable,
+												value: userVariablesSnapshot()[variable.key] ?? variable.default,
+											}))
+											: []
+								                                }
+                                                                handleVariableChange={handleVariableChange}
 							/>
 						</Suspense>
 					</TabsContent>

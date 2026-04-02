@@ -20,7 +20,7 @@ import {
 } from "@ui/slider/slider";
 import LauncherButton from "@ui/button/button";
 import { Component, createSignal } from "solid-js";
-import styles from "./settings-page.module.css";
+import styles from "../settings-page.module.css";
 import { Separator } from "@ui/separator/separator";
 
 export const InstanceDefaultsTab: Component<{

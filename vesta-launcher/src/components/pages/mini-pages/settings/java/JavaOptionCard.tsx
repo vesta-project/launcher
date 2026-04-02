@@ -10,7 +10,7 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { JSX, Show } from "solid-js";
-import styles from "./settings-page.module.css";
+import styles from "../settings-page.module.css";
 
 export interface JavaOption {
 	type: "managed" | "system" | "custom" | "browse";

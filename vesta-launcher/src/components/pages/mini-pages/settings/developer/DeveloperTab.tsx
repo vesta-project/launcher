@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { showToast } from "@ui/toast/toast";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { simulateUpdateProcess } from "@utils/updater";
-import styles from "./settings-page.module.css";
+import styles from "../settings-page.module.css";
 
 interface DeveloperSettingsTabProps {
 	debugLogging: boolean;

@@ -5,7 +5,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { setPageViewerOpen, router } from "@components/page-viewer/page-viewer";
 import { startAppTutorial } from "@utils/tutorial";
 import { checkForAppUpdates } from "@utils/updater";
-import styles from "./settings-page.module.css";
+import styles from "../settings-page.module.css";
 
 interface HelpSettingsTabProps {
 	close?: () => void;

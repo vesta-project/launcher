@@ -3,7 +3,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
 import { invoke } from "@tauri-apps/api/core";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import styles from "./settings-page.module.css";
+import styles from "../settings-page.module.css";
 
 interface GeneralSettingsTabProps {
 	reducedMotion: boolean;
