@@ -107,6 +107,7 @@ interface MinecraftProfile {
 
 interface CompleteSkinsResponse {
   current_skin_id: string | null;
+  current_cape_id: string | null;
   current_skin_base64: string | null;
   current_cape_base64: string | null;
   current_variant: "classic" | "slim";
@@ -227,12 +228,15 @@ export function AccountSettingsTab() {
   const [savedSnapshot, setSavedSnapshot] = createSignal<{
     skinUrl: string;
     capeUrl: string | null;
+    skinKey: string | null;
+    capeKey: string | null;
     variant: "classic" | "slim";
   } | null>(null);
 
   // Preview Signals
   const [previewSkinUrl, setPreviewSkinUrl] = createSignal<string>("");
   const [previewComputedKey, setPreviewComputedKey] = createSignal<string | null>(null);
+  const [previewCapeComputedKey, setPreviewCapeComputedKey] = createSignal<string | null>(null);
   // Cache for computed keys of preset textures to avoid repeated downloads
   const presetKeyCache = new Map<string, string>();
   const [presetKeyVersion, setPresetKeyVersion] = createSignal(0);
@@ -298,10 +302,13 @@ export function AccountSettingsTab() {
                  setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
                  setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
                  setPreviewComputedKey(res.current_skin_id);
+                 setPreviewCapeComputedKey(res.current_cape_id);
                  
                  setSavedSnapshot({
                    skinUrl: res.current_skin_base64 || active.skin_url || "",
                    capeUrl: res.current_cape_base64 || active.cape_url || null,
+                   skinKey: res.current_skin_id || null,
+                   capeKey: res.current_cape_id || null,
                    variant: res.current_variant as "classic"|"slim" || "classic",
                  });
                }
@@ -317,19 +324,27 @@ export function AccountSettingsTab() {
           setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
           setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
           setPreviewComputedKey(res.current_skin_id);
+          setPreviewCapeComputedKey(res.current_cape_id);
 
           setSavedSnapshot({
             skinUrl: res.current_skin_base64 || active.skin_url || "",
             capeUrl: res.current_cape_base64 || active.cape_url || null,
+            skinKey: res.current_skin_id || null,
+            capeKey: res.current_cape_id || null,
             variant: res.current_variant as "classic"|"slim" || "classic",
           });
         } else {
           setPreviewSkinUrl(active.skin_url || "");
           setPreviewVariant(normalizeVariant(active.skin_variant));
           setPreviewCapeUrl(active.cape_url || "");
+          setPreviewComputedKey(null);
+          setPreviewCapeComputedKey(null);
+
           setSavedSnapshot({
             skinUrl: active.skin_url || "",
             capeUrl: active.cape_url || null,
+            skinKey: null,
+            capeKey: null,
             variant: normalizeVariant(active.skin_variant),
           });
           setSkins(await invoke<Skin[]>("get_default_skins"));
@@ -405,19 +420,30 @@ export function AccountSettingsTab() {
 
     // Compare against the canonical "saved" snapshot from the server/loadData, 
     // NOT the initial active account object which might have stale URLs.
-    const currentSkin = snapshot.skinUrl || null;
-    const previewSkin = previewSkinUrl() || null;
-    const currentCape = snapshot.capeUrl || null;
-    const previewCape = previewCapeUrl() || null;
-    const currentVariant = snapshot.variant;
+    const previewSkin = previewSkinUrl() || "";
+    const previewCape = previewCapeUrl() || "";
     const previewVar = previewVariant();
+    
+    const previewSkinKey = previewComputedKey();
+    const previewCapeKey = previewCapeComputedKey();
 
-    // Use normalized comparison for base64/URLs to avoid false positives with trailing whitespace or encoding
-    const skinChanged = normalizeSkinComparable(previewSkin || "") !== normalizeSkinComparable(currentSkin || "");
-    const capeChanged = normalizeSkinComparable(previewCape || "") !== normalizeSkinComparable(currentCape || "");
-    const variantChanged = previewVar !== currentVariant;
+    // 1. If we have texture keys, they are the strictly authoritative way to check for dirty state
+    // because they represent the actual image bytes.
+    if (snapshot.skinKey && previewSkinKey) {
+        if (snapshot.skinKey !== previewSkinKey) return true;
+    } else {
+        // Fallback to URL normalization if keys aren't available for some reason
+        if (normalizeSkinComparable(previewSkin) !== normalizeSkinComparable(snapshot.skinUrl || "")) return true;
+    }
 
-    return skinChanged || capeChanged || variantChanged;
+    if (snapshot.capeKey !== undefined && previewCapeKey !== undefined) {
+        // Handle null vs string explicitly
+        if (snapshot.capeKey !== previewCapeKey) return true;
+    } else {
+        if (normalizeSkinComparable(previewCape) !== normalizeSkinComparable(snapshot.capeUrl || "")) return true;
+    }
+
+    return previewVar !== snapshot.variant;
   });
 
   const getSkinTexture = (skin: Skin | null, variant: "classic" | "slim"): string => {
@@ -719,8 +745,36 @@ export function AccountSettingsTab() {
     syncActiveSkinWithPreview();
   });
 
-  const handlePreviewCape = (cape: Cape | null) => {
-    setPreviewCapeUrl(cape?.url || null);
+  const handlePreviewCape = async (cape: Cape | null) => {
+    if (!cape) {
+      setPreviewCapeUrl(null);
+      setPreviewCapeComputedKey(null);
+      return;
+    }
+
+    setPreviewCapeUrl(cape.url);
+    // Determine the texture key for selection highlighting
+    if (cape.url.startsWith("data:")) {
+      try {
+        const key = await invoke<string>("compute_texture_key_from_base64", {
+          base64Data: cape.url,
+        });
+        setPreviewCapeComputedKey(key);
+      } catch (err) {
+        console.error("Failed to compute cape texture key:", err);
+        setPreviewCapeComputedKey(null);
+      }
+    } else {
+      try {
+        const [key] = await invoke<[string, string]>("compute_texture_key_from_url", {
+          textureUrl: cape.url,
+        });
+        setPreviewCapeComputedKey(key);
+      } catch (err) {
+        console.error("Failed to compute cape texture key from URL:", err);
+        setPreviewCapeComputedKey(null);
+      }
+    }
   };
 
   const handleSave = async () => {
@@ -773,10 +827,13 @@ export function AccountSettingsTab() {
       setPreviewVariant(res.current_variant as "classic"|"slim" || "classic");
       setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
       setPreviewComputedKey(res.current_skin_id);
+      setPreviewCapeComputedKey(res.current_cape_id);
       
       setSavedSnapshot({
         skinUrl: res.current_skin_base64 || active.skin_url || "",
         capeUrl: res.current_cape_base64 || active.cape_url || null,
+        skinKey: res.current_skin_id || null,
+        capeKey: res.current_cape_id || null,
         variant: res.current_variant as "classic"|"slim" || "classic",
       });
 
@@ -916,17 +973,8 @@ export function AccountSettingsTab() {
     setPreviewCapeUrl(snapshot.capeUrl || null);
     setPreviewVariant(snapshot.variant);
     
-    // Also reset the selection ID by looking it up from the known state
-    const active = activeAccount();
-    if (active) {
-      invoke<CompleteSkinsResponse>("get_complete_skin_data", { accountUuid: active.uuid })
-        .then(res => {
-          setPreviewComputedKey(res.current_skin_id);
-        })
-        .catch(() => setPreviewComputedKey(null));
-    } else {
-       setPreviewComputedKey(null);
-    }
+    setPreviewComputedKey(snapshot.skinKey);
+    setPreviewCapeComputedKey(snapshot.capeKey);
   };
 
   const renderSkinCategorySection = (category: string) => {
@@ -1241,7 +1289,7 @@ export function AccountSettingsTab() {
                     <div class={styles.capesGrid}>
                       <button
                         class={styles.capeItem}
-                        classList={{ [styles.selected]: !previewCapeUrl() }}
+                        classList={{ [styles.selected]: !previewCapeUrl() || previewCapeUrl() === "" }}
                         onClick={() => handlePreviewCape(null)}
                       >
                         <span class={styles.noneLabel}>NONE</span>
@@ -1255,7 +1303,33 @@ export function AccountSettingsTab() {
                       </button>
                       <For each={capes()}>
                         {(cape) => {
-                          const isSelected = createMemo(() => previewCapeUrl() === cape.url);
+                          const [presetKey, setPresetKey] = createSignal<string | null>(null);
+                          
+                          createEffect(async () => {
+                            if (cape.url.startsWith("data:")) {
+                              try {
+                                const key = await invoke<string>("compute_texture_key_from_base64", {
+                                  base64Data: cape.url,
+                                });
+                                setPresetKey(key);
+                              } catch {}
+                            } else {
+                              try {
+                                const [key] = await invoke<[string, string]>("compute_texture_key_from_url", {
+                                  textureUrl: cape.url,
+                                });
+                                setPresetKey(key);
+                              } catch {}
+                            }
+                          });
+
+                          const isSelected = createMemo(() => {
+                            const currentKey = previewCapeComputedKey();
+                            const myKey = presetKey();
+                            if (currentKey && myKey && currentKey === myKey) return true;
+                            return normalizeSkinComparable(previewCapeUrl() || "") === normalizeSkinComparable(cape.url);
+                          });
+
                           return (
                             <Tooltip>
                               <TooltipTrigger
