@@ -1,7 +1,7 @@
 -- Create app_config table
 CREATE TABLE app_config (
     id INTEGER PRIMARY KEY NOT NULL CHECK (id = 1),
-    background_hue INTEGER NOT NULL DEFAULT 220,
+    background_hue INTEGER NOT NULL DEFAULT 180,
     theme TEXT NOT NULL DEFAULT 'dark',
     language TEXT NOT NULL DEFAULT 'en',
     max_download_threads INTEGER NOT NULL DEFAULT 4,

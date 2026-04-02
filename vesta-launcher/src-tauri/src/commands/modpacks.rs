@@ -992,7 +992,7 @@ async fn prepare_instance(
 
             if let Some(gp) = global_path {
                 log::info!(
-                    "[prepare_instance] Found recommended Java {} path: {}",
+                    "[prepare_instance] Found recommended Java {:?} path: {}",
                     gp.major_version,
                     gp.path
                 );

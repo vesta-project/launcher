@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Microsoft account for authentication
 ///
 /// Stores OAuth tokens and user information for Microsoft authentication.
-#[derive(Queryable, Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
+#[derive(Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
 #[diesel(table_name = account)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Account {
@@ -21,24 +21,67 @@ pub struct Account {
     pub cape_url: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    pub theme_mode: Option<String>,
-    pub theme_primary_sat: Option<i32>,
-    pub theme_primary_light: Option<i32>,
     pub theme_id: Option<String>,
-    pub theme_primary_hue: Option<i32>,
-    pub theme_style: Option<String>,
-    pub theme_gradient_enabled: Option<bool>,
-    pub theme_gradient_angle: Option<i32>,
-    pub theme_gradient_type: Option<String>,
-    pub theme_gradient_harmony: Option<String>,
-    pub theme_advanced_overrides: Option<String>,
-    pub theme_border_width: Option<i32>,
     pub account_type: String,
     pub is_expired: bool,
     pub skin_variant: String,
     pub skin_data: Option<String>,
     pub cape_data: Option<String>,
-    pub window_transparency_enabled: Option<bool>,
+    pub theme_data: Option<String>,
+    pub theme_window_effect: Option<String>,
+    pub theme_background_opacity: Option<i32>,
+}
+
+impl diesel::Queryable<crate::schema::account::SqlType, diesel::sqlite::Sqlite> for Account {
+    type Row = (
+        i32,            // id
+        String,         // uuid
+        String,         // username
+        Option<String>, // display_name
+        Option<String>, // access_token
+        Option<String>, // refresh_token
+        Option<String>, // token_expires_at
+        bool,           // is_active
+        Option<String>, // skin_url
+        Option<String>, // cape_url
+        Option<String>, // created_at
+        Option<String>, // updated_at
+        Option<String>, // theme_id
+        String,         // account_type
+        bool,           // is_expired
+        String,         // skin_variant
+        Option<String>, // skin_data
+        Option<String>, // cape_data
+        Option<String>, // theme_data
+        Option<String>, // theme_window_effect
+        Option<i32>,    // theme_background_opacity
+    );
+
+    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
+        Ok(Account {
+            id: row.0,
+            uuid: row.1,
+            username: row.2,
+            display_name: row.3,
+            access_token: row.4,
+            refresh_token: row.5,
+            token_expires_at: row.6,
+            is_active: row.7,
+            skin_url: row.8,
+            cape_url: row.9,
+            created_at: row.10,
+            updated_at: row.11,
+            theme_id: row.12,
+            account_type: row.13,
+            is_expired: row.14,
+            skin_variant: row.15,
+            skin_data: row.16,
+            cape_data: row.17,
+            theme_data: row.18,
+            theme_window_effect: row.19,
+            theme_background_opacity: row.20,
+        })
+    }
 }
 
 /// New account (without id for insertion)
@@ -56,24 +99,15 @@ pub struct NewAccount {
     pub cape_url: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    pub theme_mode: Option<String>,
-    pub theme_primary_sat: Option<i32>,
-    pub theme_primary_light: Option<i32>,
     pub theme_id: Option<String>,
-    pub theme_primary_hue: Option<i32>,
-    pub theme_style: Option<String>,
-    pub theme_gradient_enabled: Option<bool>,
-    pub theme_gradient_angle: Option<i32>,
-    pub theme_gradient_type: Option<String>,
-    pub theme_gradient_harmony: Option<String>,
-    pub theme_advanced_overrides: Option<String>,
-    pub theme_border_width: Option<i32>,
     pub account_type: String,
     pub is_expired: bool,
     pub skin_variant: String,
     pub skin_data: Option<String>,
     pub cape_data: Option<String>,
-    pub window_transparency_enabled: Option<bool>,
+    pub theme_data: Option<String>,
+    pub theme_window_effect: Option<String>,
+    pub theme_background_opacity: Option<i32>,
 }
 
 impl Default for Account {
@@ -91,24 +125,15 @@ impl Default for Account {
             cape_url: None,
             created_at: None,
             updated_at: None,
-            theme_mode: None,
-            theme_primary_sat: None,
-            theme_primary_light: None,
             theme_id: None,
-            theme_primary_hue: None,
-            theme_style: None,
-            theme_gradient_enabled: None,
-            theme_gradient_angle: None,
-            theme_gradient_type: None,
-            theme_gradient_harmony: None,
-            theme_advanced_overrides: None,
-            theme_border_width: None,
             account_type: "Microsoft".to_string(),
             is_expired: false,
             skin_variant: "classic".into(),
             skin_data: None,
             cape_data: None,
-            window_transparency_enabled: None,
+            theme_data: None,
+            theme_window_effect: None,
+            theme_background_opacity: None,
         }
     }
 }
@@ -127,24 +152,15 @@ impl Default for NewAccount {
             cape_url: None,
             created_at: None,
             updated_at: None,
-            theme_mode: None,
-            theme_primary_sat: None,
-            theme_primary_light: None,
             theme_id: None,
-            theme_primary_hue: None,
-            theme_style: None,
-            theme_gradient_enabled: None,
-            theme_gradient_angle: None,
-            theme_gradient_type: None,
-            theme_gradient_harmony: None,
-            theme_advanced_overrides: None,
-            theme_border_width: None,
             account_type: "Microsoft".to_string(),
             is_expired: false,
             skin_variant: "classic".into(),
             skin_data: None,
             cape_data: None,
-            window_transparency_enabled: None,
+            theme_data: None,
+            theme_window_effect: None,
+            theme_background_opacity: None,
         }
     }
 }

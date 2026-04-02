@@ -288,6 +288,22 @@ function Root(props: ChildrenProp) {
 	};
 
 	onMount(() => {
+		// Fetch and apply initial config/theme immediately to prevent flash
+		if (hasTauriRuntime()) {
+			invoke<any>("get_config")
+				.then((config) => {
+					if (config) {
+						applyConfigSnapshot(config);
+						if (config.startup_check_updates) {
+							checkForAppUpdates(true);
+						}
+					}
+				})
+				.catch((error) =>
+					console.error("Failed to fetch initial config:", error),
+				);
+		}
+
 		// Initialize update listener and set OS attribute on root for global CSS
 		initUpdateListener();
 
@@ -515,18 +531,8 @@ function Root(props: ChildrenProp) {
 					console.error("Failed to cleanup notifications:", error);
 				});
 
-			// Check for updates on startup if enabled
-			if (hasTauriRuntime()) {
-				invoke<any>("get_config")
-					.then((config) => {
-						if (config.startup_check_updates) {
-							checkForAppUpdates(true);
-						}
-					})
-					.catch((error) =>
-						console.error("Failed to check for updates on startup:", error),
-					);
-			}
+			// Check for updates on startup if already handled in onMount
+			// (We moved the initial fetch to onMount for immediate theme application)
 
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()

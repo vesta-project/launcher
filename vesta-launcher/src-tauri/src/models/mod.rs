@@ -9,6 +9,7 @@ pub mod notification_seen_item;
 pub mod notification_subscription;
 pub mod pinning;
 pub mod resource;
+pub mod saved_theme;
 pub mod task_state;
 pub mod user_version_tracking;
 
@@ -20,6 +21,7 @@ pub use notification::Notification;
 pub use notification_seen_item::{NewNotificationSeenItem, NotificationSeenItem};
 pub use notification_subscription::{NewNotificationSubscription, NotificationSubscription};
 pub use resource::{ResourceProject, ResourceType, ResourceVersion, SourcePlatform};
+pub use saved_theme::{NewSavedTheme, SavedTheme};
 pub use task_state::TaskState;
 pub use user_version_tracking::UserVersionTracking;
 

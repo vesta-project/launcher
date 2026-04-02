@@ -92,7 +92,7 @@
 	font-family: "JetBrains Mono", "Fira Code", monospace;
 	letter-spacing: 4px;
 	font-weight: 700;
-	color: hsl(var(--color__primary-hue) 80% 80%);
+	color: hsl(var(--color__primary-hue) 60% 60%);
 	padding: 12px 24px;
 	background: rgba(0, 0, 0, 0.3);
 	border-radius: 8px;

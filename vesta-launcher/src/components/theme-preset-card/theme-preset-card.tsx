@@ -1,10 +1,14 @@
-import { type Component } from "solid-js";
+import { Show, type Component } from "solid-js";
 import { type ThemeConfig } from "../../themes/presets";
 import styles from "./theme-preset-card.module.css";
 
 interface ThemePresetCardProps {
 	theme: ThemeConfig;
+	source?: "builtin" | "imported";
+	viewMode?: "grid" | "list";
 	isSelected: boolean;
+	isDeletable?: boolean;
+	onDelete?: () => void;
 	onClick: () => void;
 }
 
@@ -16,7 +20,10 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 	return (
 		<button
 			class={styles["theme-preset-card"]}
-			classList={{ [styles["theme-preset-card--selected"]]: props.isSelected }}
+			classList={{
+				[styles["theme-preset-card--selected"]]: props.isSelected,
+				[styles["theme-preset-card--list"]]: props.viewMode === "list",
+			}}
 			onClick={props.onClick}
 			data-preview-style={props.theme.style}
 			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
@@ -58,11 +65,43 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 
 			{/* Theme Name */}
 			<div class={styles["theme-preset-card__info"]}>
+				<Show when={props.source === "imported" || (props.isDeletable && props.onDelete)}>
+					<div class={styles["theme-preset-card__meta"]}>
+						<Show when={props.source === "imported"}>
+							<span class={styles["theme-preset-card__source"]}>
+								Imported
+							</span>
+						</Show>
+						<Show when={props.isDeletable && props.onDelete}>
+							<span
+								class={styles["theme-preset-card__delete"]}
+								role="button"
+								tabIndex={0}
+								onClick={(event) => {
+									event.preventDefault();
+									event.stopPropagation();
+									props.onDelete?.();
+								}}
+								onKeyDown={(event) => {
+									if (event.key === "Enter" || event.key === " ") {
+										event.preventDefault();
+										event.stopPropagation();
+										props.onDelete?.();
+									}
+								}}
+							>
+								Delete
+							</span>
+						</Show>
+					</div>
+				</Show>
 				<span class={styles["theme-preset-card__name"]}>
 					{props.theme.name}
 				</span>
 				<span class={styles["theme-preset-card__description"]}>
-					{props.theme.description || props.theme.style}
+					{props.theme.author
+						? `by ${props.theme.author}`
+						: props.theme.description || props.theme.style}
 				</span>
 			</div>
 		</button>

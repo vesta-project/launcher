@@ -3,7 +3,7 @@
 diesel::table! {
     app_config (id) {
         id -> Integer,
-        background_hue -> Integer,
+        background_hue -> Nullable<Integer>,
         theme -> Text,
         language -> Text,
         max_download_threads -> Integer,
@@ -31,8 +31,6 @@ diesel::table! {
         theme_gradient_angle -> Nullable<Integer>,
         theme_gradient_harmony -> Nullable<Text>,
         theme_advanced_overrides -> Nullable<Text>,
-        theme_window_effect -> Nullable<Text>,
-        theme_background_opacity -> Nullable<Integer>,
         theme_gradient_type -> Nullable<Text>,
         theme_border_width -> Nullable<Integer>,
         setup_completed -> Bool,
@@ -49,13 +47,15 @@ diesel::table! {
         default_wrapper_command -> Nullable<Text>,
         default_post_exit_hook -> Nullable<Text>,
         default_min_memory -> Integer,
-        window_transparency_enabled -> Bool,
+        theme_window_effect -> Nullable<Text>,
+        theme_background_opacity -> Nullable<Integer>,
+        theme_data -> Nullable<Text>,
     }
 }
 
 diesel::table! {
     global_java_paths (major_version) {
-        major_version -> Integer,
+        major_version -> Nullable<Integer>,
         path -> Text,
         is_managed -> Bool,
     }

@@ -34,8 +34,6 @@
 		opacity: 1;
 		visibility: visible;
 		overflow: unset;
-		backdrop-filter: blur(var(--blur-base));
-		-webkit-backdrop-filter: blur(var(--blur-base));
 	}
 }
 

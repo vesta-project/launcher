@@ -96,12 +96,12 @@ use tauri::Emitter;
 /// Main application configuration struct
 ///
 /// This struct is the single source of truth for the app_config table schema.
-#[derive(Queryable, Selectable, Insertable, AsChangeset, Serialize, Deserialize, Clone, Debug)]
+#[derive(Selectable, Insertable, AsChangeset, Serialize, Deserialize, Clone, Debug)]
 #[diesel(table_name = app_config)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct AppConfig {
     pub id: i32, // Always 1 - we only have one config row
-    pub background_hue: i32,
+    pub background_hue: Option<i32>,
     pub theme: String,
     pub language: String,
     pub max_download_threads: i32,
@@ -131,8 +131,6 @@ pub struct AppConfig {
     pub theme_gradient_angle: Option<i32>, // Gradient angle in degrees
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
     pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
-    pub theme_window_effect: Option<String>,
-    pub theme_background_opacity: Option<i32>,
     pub theme_gradient_type: Option<String>, // "linear" or "radial"
     pub theme_border_width: Option<i32>, // Border thickness in pixels
 
@@ -158,14 +156,122 @@ pub struct AppConfig {
     pub default_wrapper_command: Option<String>,
     pub default_post_exit_hook: Option<String>,
     pub default_min_memory: i32,
-    pub window_transparency_enabled: bool,
+    pub theme_window_effect: Option<String>,
+    pub theme_background_opacity: Option<i32>,
+    pub theme_data: Option<String>,
+}
+
+impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite> for AppConfig {
+    type Row = (
+        i32, // id
+        Option<i32>, // background_hue
+        String, // theme
+        String, // language
+        i32, // max_download_threads
+        i32, // default_max_memory
+        Option<String>, // java_path
+        Option<String>, // default_game_dir
+        bool, // auto_update_enabled
+        bool, // notification_enabled
+        bool, // startup_check_updates
+        bool, // show_tray_icon
+        bool, // minimize_to_tray
+        bool, // reduced_motion
+        i32, // last_window_width
+        i32, // last_window_height
+        bool, // debug_logging
+        i32, // notification_retention_days
+        Option<String>, // active_account_uuid
+        String, // theme_id
+        String, // theme_mode
+        i32, // theme_primary_hue
+        Option<i32>, // theme_primary_sat
+        Option<i32>, // theme_primary_light
+        String, // theme_style
+        bool, // theme_gradient_enabled
+        Option<i32>, // theme_gradient_angle
+        Option<String>, // theme_gradient_harmony
+        Option<String>, // theme_advanced_overrides
+        Option<String>, // theme_gradient_type
+        Option<i32>, // theme_border_width
+        bool, // setup_completed
+        i32, // setup_step
+        bool, // tutorial_completed
+        bool, // use_dedicated_gpu
+        bool, // discord_presence_enabled
+        bool, // auto_install_dependencies
+        i32, // default_width
+        i32, // default_height
+        Option<String>, // default_java_args
+        Option<String>, // default_environment_variables
+        Option<String>, // default_pre_launch_hook
+        Option<String>, // default_wrapper_command
+        Option<String>, // default_post_exit_hook
+        i32, // default_min_memory
+        Option<String>, // theme_window_effect
+        Option<i32>, // theme_background_opacity
+        Option<String>, // theme_data
+    );
+
+    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
+        Ok(AppConfig {
+            id: row.0,
+            background_hue: row.1,
+            theme: row.2,
+            language: row.3,
+            max_download_threads: row.4,
+            default_max_memory: row.5,
+            java_path: row.6,
+            default_game_dir: row.7,
+            auto_update_enabled: row.8,
+            notification_enabled: row.9,
+            startup_check_updates: row.10,
+            show_tray_icon: row.11,
+            minimize_to_tray: row.12,
+            reduced_motion: row.13,
+            last_window_width: row.14,
+            last_window_height: row.15,
+            debug_logging: row.16,
+            notification_retention_days: row.17,
+            active_account_uuid: row.18,
+            theme_id: row.19,
+            theme_mode: row.20,
+            theme_primary_hue: row.21,
+            theme_primary_sat: row.22,
+            theme_primary_light: row.23,
+            theme_style: row.24,
+            theme_gradient_enabled: row.25,
+            theme_gradient_angle: row.26,
+            theme_gradient_harmony: row.27,
+            theme_advanced_overrides: row.28,
+            theme_gradient_type: row.29,
+            theme_border_width: row.30,
+            setup_completed: row.31,
+            setup_step: row.32,
+            tutorial_completed: row.33,
+            use_dedicated_gpu: row.34,
+            discord_presence_enabled: row.35,
+            auto_install_dependencies: row.36,
+            default_width: row.37,
+            default_height: row.38,
+            default_java_args: row.39,
+            default_environment_variables: row.40,
+            default_pre_launch_hook: row.41,
+            default_wrapper_command: row.42,
+            default_post_exit_hook: row.43,
+            default_min_memory: row.44,
+            theme_window_effect: row.45,
+            theme_background_opacity: row.46,
+            theme_data: row.47,
+        })
+    }
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
             id: 1,
-            background_hue: 220,
+            background_hue: None,
             theme: "dark".to_string(),
             language: "en".to_string(),
             max_download_threads: 4,
@@ -187,18 +293,19 @@ impl Default for AppConfig {
             // Theme system defaults
             theme_id: "vesta".to_string(), // theme_id - default to signature theme
             theme_mode: "template".to_string(), // theme_mode - start with easy mode
-            theme_primary_hue: 220,        // theme_primary_hue - default blue
+            theme_primary_hue: 180,        // theme_primary_hue - Vesta primary hue is 180
             theme_primary_sat: None,       // theme_primary_sat - advanced mode only
             theme_primary_light: None,     // theme_primary_light - advanced mode only
             theme_style: "glass".to_string(), // theme_style - default glass effect
             theme_gradient_enabled: true,  // theme_gradient_enabled - enable gradients
-            theme_gradient_angle: Some(135), // theme_gradient_angle - diagonal gradient
-            theme_gradient_harmony: Some("none".to_string()), // theme_gradient_harmony - no harmony by default
+            theme_gradient_angle: None,    // theme_gradient_angle - let preset decide
+            theme_gradient_harmony: None,  // theme_gradient_harmony - let preset decide
             theme_advanced_overrides: None, // theme_advanced_overrides - no custom overrides by default
-            theme_window_effect: Some("vibrancy".to_string()),
-            theme_background_opacity: Some(12),
-            theme_gradient_type: Some("linear".to_string()), // theme_gradient_type - linear gradient
-            theme_border_width: Some(1),                     // theme_border_width - default 1px
+            theme_window_effect: None,
+            theme_background_opacity: None,
+            theme_gradient_type: None, // theme_gradient_type - let preset decide
+            theme_border_width: None,                     // theme_border_width - let preset decide
+            theme_data: Some("{\"id\":\"vesta\",\"name\":\"Vesta\",\"description\":\"Signature teal to purple to orange gradient\",\"primaryHue\":180,\"opacity\":0,\"borderWidth\":1,\"style\":\"glass\",\"gradientEnabled\":true,\"rotation\":180,\"gradientType\":\"linear\",\"gradientHarmony\":\"triadic\",\"customCss\":\":root {\\n\\t\\t\\t\\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\\n\\t\\t\\t}\"}".to_string()),
 
             setup_completed: false,
             setup_step: 0,
@@ -215,7 +322,6 @@ impl Default for AppConfig {
             default_wrapper_command: None,
             default_post_exit_hook: None,
             default_min_memory: 2048,
-            window_transparency_enabled: true,
         }
     }
 }
@@ -292,21 +398,12 @@ fn sync_theme_to_account(
     // Normalize UUID
     let account_uuid = account_uuid.replace("-", "");
 
-    // Only sync visual aesthetic fields
+    // Only sync theme fields that are persisted on the account model
     let is_theme_field = match field {
         "theme_id"
-        | "theme_mode"
-        | "theme_primary_hue"
-        | "theme_primary_sat"
-        | "theme_primary_light"
-        | "theme_style"
-        | "theme_gradient_enabled"
-        | "theme_gradient_angle"
-        | "theme_gradient_type"
-        | "theme_gradient_harmony"
-        | "theme_advanced_overrides"
-        | "background_hue"
-        | "theme_border_width" => true,
+        | "theme_data"
+        | "theme_window_effect"
+        | "theme_background_opacity" => true,
         _ => false,
     };
 
@@ -316,8 +413,6 @@ fn sync_theme_to_account(
 
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
-    // Map config field names to account table column names if they differ
-    // In this case they match exactly or map to specific columns
     match field {
         "theme_id" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
@@ -325,69 +420,21 @@ fn sync_theme_to_account(
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
         }
-        "theme_mode" => {
+        "theme_data" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_mode.eq(value.as_str().unwrap_or("template")))
+                .set(theme_data.eq(value.as_str()))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
         }
-        "theme_primary_hue" | "background_hue" => {
+        "theme_window_effect" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_primary_hue.eq(value.as_i64().unwrap_or(220) as i32))
+                .set(theme_window_effect.eq(value.as_str()))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
         }
-        "theme_primary_sat" => {
+        "theme_background_opacity" => {
             diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_primary_sat.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_primary_light" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_primary_light.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_style" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_style.eq(value.as_str().unwrap_or("glass")))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_gradient_enabled" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_gradient_enabled.eq(value.as_bool().unwrap_or(true)))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_gradient_angle" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_gradient_angle.eq(value.as_i64().map(|v| v as i32)))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_gradient_type" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_gradient_type.eq(value.as_str()))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_gradient_harmony" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_gradient_harmony.eq(value.as_str()))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_advanced_overrides" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_advanced_overrides.eq(value.as_str()))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
-        }
-        "theme_border_width" => {
-            diesel::update(account.filter(uuid.eq(account_uuid)))
-                .set(theme_border_width.eq(value.as_i64().map(|v| v as i32)))
+                .set(theme_background_opacity.eq(value.as_i64().map(|v| v as i32)))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
         }

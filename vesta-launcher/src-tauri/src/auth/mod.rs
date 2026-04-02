@@ -496,17 +496,9 @@ async fn process_login_completion(
         new_account.created_at = Some(now_str.clone());
         new_account.updated_at = Some(now_str.clone());
         new_account.theme_id = Some(current_config.theme_id);
-        new_account.theme_mode = Some(current_config.theme_mode);
-        new_account.theme_primary_hue = Some(current_config.theme_primary_hue);
-        new_account.theme_primary_sat = current_config.theme_primary_sat;
-        new_account.theme_primary_light = current_config.theme_primary_light;
-        new_account.theme_style = Some(current_config.theme_style);
-        new_account.theme_gradient_enabled = Some(current_config.theme_gradient_enabled);
-        new_account.theme_gradient_angle = current_config.theme_gradient_angle;
-        new_account.theme_gradient_type = current_config.theme_gradient_type;
-        new_account.theme_gradient_harmony = current_config.theme_gradient_harmony;
-        new_account.theme_advanced_overrides = current_config.theme_advanced_overrides;
-        new_account.theme_border_width = current_config.theme_border_width;
+        new_account.theme_data = current_config.theme_data;
+        new_account.theme_window_effect = current_config.theme_window_effect;
+        new_account.theme_background_opacity = current_config.theme_background_opacity;
         new_account.account_type = "Microsoft".to_string();
 
         diesel::insert_into(account)
@@ -529,6 +521,10 @@ async fn process_login_completion(
                 is_active.eq(true),
                 is_expired.eq(false),
                 updated_at.eq(Some(now_str.clone())),
+                theme_id.eq(Some(current_config.theme_id)),
+                theme_data.eq(current_config.theme_data),
+                theme_window_effect.eq(current_config.theme_window_effect),
+                theme_background_opacity.eq(current_config.theme_background_opacity),
             ))
             .execute(&mut conn)
             .map_err(|e| anyhow::anyhow!("Failed to update account: {}", e))?;
@@ -890,74 +886,21 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
         config.theme_id = val.clone();
         updates.insert("theme_id".to_string(), serde_json::Value::String(val));
     }
-    if let Some(val) = target_account.theme_mode {
-        config.theme_mode = val.clone();
-        updates.insert("theme_mode".to_string(), serde_json::Value::String(val));
+    if let Some(val) = target_account.theme_data {
+        config.theme_data = Some(val.clone());
+        updates.insert("theme_data".to_string(), serde_json::Value::String(val));
     }
-    if let Some(val) = target_account.theme_primary_hue {
-        config.theme_primary_hue = val;
+    if let Some(val) = target_account.theme_window_effect {
+        config.theme_window_effect = Some(val.clone());
         updates.insert(
-            "theme_primary_hue".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
-    }
-    if let Some(val) = target_account.theme_primary_sat {
-        config.theme_primary_sat = Some(val);
-        updates.insert(
-            "theme_primary_sat".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
-    }
-    if let Some(val) = target_account.theme_primary_light {
-        config.theme_primary_light = Some(val);
-        updates.insert(
-            "theme_primary_light".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
-    }
-    if let Some(val) = target_account.theme_style {
-        config.theme_style = val.clone();
-        updates.insert("theme_style".to_string(), serde_json::Value::String(val));
-    }
-    if let Some(val) = target_account.theme_gradient_enabled {
-        config.theme_gradient_enabled = val;
-        updates.insert(
-            "theme_gradient_enabled".to_string(),
-            serde_json::Value::Bool(val),
-        );
-    }
-    if let Some(val) = target_account.theme_gradient_angle {
-        config.theme_gradient_angle = Some(val);
-        updates.insert(
-            "theme_gradient_angle".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
-    }
-    if let Some(val) = target_account.theme_gradient_type {
-        config.theme_gradient_type = Some(val.clone());
-        updates.insert(
-            "theme_gradient_type".to_string(),
+            "theme_window_effect".to_string(),
             serde_json::Value::String(val),
         );
     }
-    if let Some(val) = target_account.theme_gradient_harmony {
-        config.theme_gradient_harmony = Some(val.clone());
+    if let Some(val) = target_account.theme_background_opacity {
+        config.theme_background_opacity = Some(val);
         updates.insert(
-            "theme_gradient_harmony".to_string(),
-            serde_json::Value::String(val),
-        );
-    }
-    if let Some(val) = target_account.theme_advanced_overrides {
-        config.theme_advanced_overrides = Some(val.clone());
-        updates.insert(
-            "theme_advanced_overrides".to_string(),
-            serde_json::Value::String(val),
-        );
-    }
-    if let Some(val) = target_account.theme_border_width {
-        config.theme_border_width = Some(val);
-        updates.insert(
-            "theme_border_width".to_string(),
+            "theme_background_opacity".to_string(),
             serde_json::Value::Number(val.into()),
         );
     }

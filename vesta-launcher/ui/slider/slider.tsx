@@ -6,13 +6,17 @@ import styles from "./slider.module.css";
 
 // Root slider component
 const Slider = <T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SliderPrimitive.SliderRootProps<T>>,
+	props: PolymorphicProps<T, SliderPrimitive.SliderRootOptions & { onInput?: (value: number[]) => void, class?: string, onChange?: (value: number[]) => void }>,
 ) => {
-	const [local, others] = splitProps(props as any, ["class"]);
+	const [local, others] = splitProps(props as any, ["class", "onChange", "onInput"]);
 
 	return (
 		<SliderPrimitive.Root
 			class={clsx(styles.slider, local.class)}
+			onChange={(val: number[]) => {
+				local.onChange?.(val);
+				local.onInput?.(val);
+			}}
 			{...others}
 		/>
 	);

@@ -10,3 +10,4 @@ pub mod screenshots;
 pub mod shortcuts;
 pub mod skins;
 pub mod tasks;
+pub mod themes;
