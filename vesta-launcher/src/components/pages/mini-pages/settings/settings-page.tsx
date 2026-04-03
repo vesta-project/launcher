@@ -1,12 +1,22 @@
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
-
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import { dialogStore } from "@stores/dialog-store";
+import {
+	cacheSize,
+	detectedJava,
+	globalJavaPaths,
+	javaRequirements,
+	managedJava,
+	systemMemory,
+} from "@stores/settings-cache";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import {
+	open as openDialog,
+	save as saveDialog,
+} from "@tauri-apps/plugin-dialog";
 import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
 import {
@@ -16,6 +26,13 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
+import {
+	NumberField,
+	NumberFieldDecrementTrigger,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
+} from "@ui/number-field/number-field";
 import { Separator } from "@ui/separator/separator";
 import {
 	Slider,
@@ -39,17 +56,18 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { getActiveAccount } from "@utils/auth";
 import {
 	currentThemeConfig,
 	onConfigUpdate,
 	saveThemeUpdate as persistThemeUpdate,
 } from "@utils/config-sync";
 import { openExternal } from "@utils/external-link";
-import { getActiveAccount } from "@utils/auth";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { startAppTutorial } from "@utils/tutorial";
 import { checkForAppUpdates, simulateUpdateProcess } from "@utils/updater";
 import {
+	batch,
 	createEffect,
 	createMemo,
 	createResource,
@@ -61,47 +79,36 @@ import {
 	Show,
 	Suspense,
 	untrack,
-	batch,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
 	type GradientHarmony,
 	getAllThemes,
-	PRESET_THEMES,
 	getSupportedWindowEffects,
 	getThemeById,
 	isBuiltinThemeId,
 	normalizeWindowEffectForCurrentOS,
+	PRESET_THEMES,
 	parseThemeData,
 	removeCustomTheme,
 	type StyleMode,
+	setCustomThemes,
 	type ThemeConfig,
 	type ThemeVariableValue,
 	upsertCustomTheme,
-	setCustomThemes,
 	validateTheme,
 } from "../../../../themes/presets";
-import { GeneralSettingsTab } from "./general/GeneralTab";
-import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
-import { JavaSettingsTab } from "./java/JavaTab";
-import { HelpSettingsTab } from "./help/HelpTab";
-import { DeveloperSettingsTab } from "./developer/DeveloperTab";
-import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
-import { type JavaOption, JavaOptionCard } from "./java/JavaOptionCard";
 import { AccountSettingsTab } from "./account/AccountTab";
+import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
+import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
+import { DeveloperSettingsTab } from "./developer/DeveloperTab";
+import { GeneralSettingsTab } from "./general/GeneralTab";
+import { HelpSettingsTab } from "./help/HelpTab";
+import { type JavaOption, JavaOptionCard } from "./java/JavaOptionCard";
+import { JavaSettingsTab } from "./java/JavaTab";
 import { NotificationSettingsTab } from "./notifications/NotificationsTab";
 import styles from "./settings-page.module.css";
-import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
-import {
-	cacheSize,
-	detectedJava,
-	globalJavaPaths,
-	javaRequirements,
-	managedJava,
-	systemMemory,
-} from "@stores/settings-cache";
-
 
 export interface AppConfig {
 	id: number;
@@ -135,8 +142,8 @@ export interface AppConfig {
 	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
-        theme_window_effect?: string;
-        theme_background_opacity?: number;
+	theme_window_effect?: string;
+	theme_background_opacity?: number;
 	theme_data?: string;
 	theme_border_width?: number;
 	setup_completed: boolean;
@@ -181,7 +188,7 @@ type ThemeViewMode = "grid" | "list";
  */
 function createDebounce<T extends (...args: any[]) => any>(
 	fn: T,
-	delay: number
+	delay: number,
 ): { (...args: Parameters<T>): void; cancel: () => void } {
 	let timer: any;
 	const debounced = (...args: Parameters<T>) => {
@@ -266,7 +273,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		getAllThemes(),
 	);
 	const [themeSearchQuery, setThemeSearchQuery] = createSignal("");
-	const [themeFilterMode, setThemeFilterMode] = createSignal<ThemeFilterMode>("all");
+	const [themeFilterMode, setThemeFilterMode] =
+		createSignal<ThemeFilterMode>("all");
 	const [themeViewMode, setThemeViewMode] = createSignal<ThemeViewMode>("grid");
 	const [borderThickness, setBorderThickness] = createSignal(
 		currentThemeConfig.theme_border_width ?? 1,
@@ -277,27 +285,33 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [windowEffect, setWindowEffect] = createSignal(
 		currentThemeConfig.theme_window_effect || "vibrancy",
 	);
-	const [userVariables, setUserVariables] = createStore<Record<string, ThemeVariableValue>>(
-		untrack(() => parseThemeData(currentThemeConfig.theme_data).userVariables || {})
+	const [userVariables, setUserVariables] = createStore<
+		Record<string, ThemeVariableValue>
+	>(
+		untrack(
+			() => parseThemeData(currentThemeConfig.theme_data).userVariables || {},
+		),
 	);
-	const userVariablesSnapshot = createMemo<Record<string, ThemeVariableValue>>(() => {
-		const snapshot: Record<string, ThemeVariableValue> = {};
-		for (const key of Object.keys(userVariables)) {
-			const value = userVariables[key];
-			if (
-				typeof value === "number" ||
-				typeof value === "string" ||
-				typeof value === "boolean"
-			) {
-				snapshot[key] = value;
+	const userVariablesSnapshot = createMemo<Record<string, ThemeVariableValue>>(
+		() => {
+			const snapshot: Record<string, ThemeVariableValue> = {};
+			for (const key of Object.keys(userVariables)) {
+				const value = userVariables[key];
+				if (
+					typeof value === "number" ||
+					typeof value === "string" ||
+					typeof value === "boolean"
+				) {
+					snapshot[key] = value;
+				}
 			}
-		}
-		return snapshot;
-	});
+			return snapshot;
+		},
+	);
 
 	const [loading, setLoading] = createSignal(true);
 	const [reducedMotion, setReducedMotion] = createSignal(false);
-	
+
 	// Create local proxies of the global resources to maintain the [data, { refetch }] pattern
 	const [requirements] = javaRequirements;
 	const [detected, { refetch: refetchDetected }] = detectedJava;
@@ -319,14 +333,16 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		if (!theme) return false;
 		return Boolean(
 			theme.id === "custom" ||
-			theme.allowStyleChange ||
-			theme.allowBorderChange ||
-			theme.variables?.length,
+				theme.allowStyleChange ||
+				theme.allowBorderChange ||
+				theme.variables?.length,
 		);
 	};
 
 	const getThemeSource = (theme: ThemeConfig): "builtin" | "imported" => {
-		return theme.source ?? (isBuiltinThemeId(theme.id) ? "builtin" : "imported");
+		return (
+			theme.source ?? (isBuiltinThemeId(theme.id) ? "builtin" : "imported")
+		);
 	};
 
 	const hasImportedThemes = createMemo(() =>
@@ -376,8 +392,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						if (pinnedA !== pinnedB) return pinnedA - pinnedB;
 					}
 
-					const presetA = presetOrder.get(a.theme.id) ?? Number.MAX_SAFE_INTEGER;
-					const presetB = presetOrder.get(b.theme.id) ?? Number.MAX_SAFE_INTEGER;
+					const presetA =
+						presetOrder.get(a.theme.id) ?? Number.MAX_SAFE_INTEGER;
+					const presetB =
+						presetOrder.get(b.theme.id) ?? Number.MAX_SAFE_INTEGER;
 					if (presetA !== presetB) {
 						return presetA - presetB;
 					}
@@ -658,24 +676,35 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				)
 					setBackgroundOpacity(config.theme_background_opacity);
 				if (config.theme_window_effect)
-					setWindowEffect(normalizeWindowEffectForCurrentOS(config.theme_window_effect));
-				
+					setWindowEffect(
+						normalizeWindowEffectForCurrentOS(config.theme_window_effect),
+					);
+
 				// CRITICAL: Handle the new consolidated theme_data JSON blob for deep-load
 				if (config.theme_data) {
 					const themeData = parseThemeData(config.theme_data);
 
-					if (themeData.primaryHue !== undefined) setBackgroundHue(themeData.primaryHue);
+					if (themeData.primaryHue !== undefined)
+						setBackgroundHue(themeData.primaryHue);
 					if (themeData.opacity !== undefined) setOpacity(themeData.opacity);
-					if (themeData.gradientEnabled !== undefined) setGradientEnabled(themeData.gradientEnabled);
+					if (themeData.gradientEnabled !== undefined)
+						setGradientEnabled(themeData.gradientEnabled);
 					if (themeData.rotation !== undefined) setRotation(themeData.rotation);
-					if (themeData.gradientType) setGradientType(themeData.gradientType as "linear" | "radial");
-					if (themeData.gradientHarmony) setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
-					if (themeData.borderWidth !== undefined) setBorderThickness(themeData.borderWidth);
-					if (themeData.backgroundOpacity !== undefined) setBackgroundOpacity(themeData.backgroundOpacity);
+					if (themeData.gradientType)
+						setGradientType(themeData.gradientType as "linear" | "radial");
+					if (themeData.gradientHarmony)
+						setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
+					if (themeData.borderWidth !== undefined)
+						setBorderThickness(themeData.borderWidth);
+					if (themeData.backgroundOpacity !== undefined)
+						setBackgroundOpacity(themeData.backgroundOpacity);
 					if (themeData.windowEffect) {
-						setWindowEffect(normalizeWindowEffectForCurrentOS(themeData.windowEffect));
+						setWindowEffect(
+							normalizeWindowEffectForCurrentOS(themeData.windowEffect),
+						);
 					}
-					if (themeData.userVariables) setUserVariables(reconcile(themeData.userVariables));
+					if (themeData.userVariables)
+						setUserVariables(reconcile(themeData.userVariables));
 				}
 			}
 
@@ -692,7 +721,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					setBackgroundHue(value);
 				if (field === "theme_style" && value) {
 					const activeTheme = getThemeById(untrack(themeId));
-					if (activeTheme && activeTheme.style === value && activeTheme.opacity !== undefined) {
+					if (
+						activeTheme &&
+						activeTheme.style === value &&
+						activeTheme.opacity !== undefined
+					) {
 						setOpacity(activeTheme.opacity);
 					}
 				}
@@ -710,27 +743,66 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					setBackgroundOpacity(value);
 				if (field === "theme_window_effect" && value)
 					setWindowEffect(normalizeWindowEffectForCurrentOS(value));
-				
+
 				// Handle real-time theme_data updates from other windows
 				if (field === "theme_data" && value) {
 					// Only apply updates if they didn't originate from this component's interactions
 					const themeData = parseThemeData(value);
 					batch(() => {
-						if (themeData.primaryHue !== undefined && themeData.primaryHue !== untrack(backgroundHue)) setBackgroundHue(themeData.primaryHue);
-						if (themeData.opacity !== undefined && themeData.opacity !== untrack(opacity)) setOpacity(themeData.opacity);
-						if (themeData.gradientEnabled !== undefined && themeData.gradientEnabled !== untrack(gradientEnabled)) setGradientEnabled(themeData.gradientEnabled);
-						if (themeData.rotation !== undefined && themeData.rotation !== untrack(rotation)) setRotation(themeData.rotation);
-						if (themeData.gradientType && themeData.gradientType !== untrack(gradientType)) setGradientType(themeData.gradientType as "linear" | "radial");
-						if (themeData.gradientHarmony && themeData.gradientHarmony !== untrack(gradientHarmony)) setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
-						if (themeData.borderWidth !== undefined && themeData.borderWidth !== untrack(borderThickness)) setBorderThickness(themeData.borderWidth);
-						if (themeData.backgroundOpacity !== undefined && themeData.backgroundOpacity !== untrack(backgroundOpacity)) setBackgroundOpacity(themeData.backgroundOpacity);
-						if (themeData.windowEffect && themeData.windowEffect !== untrack(windowEffect)) {
-							setWindowEffect(normalizeWindowEffectForCurrentOS(themeData.windowEffect));
+						if (
+							themeData.primaryHue !== undefined &&
+							themeData.primaryHue !== untrack(backgroundHue)
+						)
+							setBackgroundHue(themeData.primaryHue);
+						if (
+							themeData.opacity !== undefined &&
+							themeData.opacity !== untrack(opacity)
+						)
+							setOpacity(themeData.opacity);
+						if (
+							themeData.gradientEnabled !== undefined &&
+							themeData.gradientEnabled !== untrack(gradientEnabled)
+						)
+							setGradientEnabled(themeData.gradientEnabled);
+						if (
+							themeData.rotation !== undefined &&
+							themeData.rotation !== untrack(rotation)
+						)
+							setRotation(themeData.rotation);
+						if (
+							themeData.gradientType &&
+							themeData.gradientType !== untrack(gradientType)
+						)
+							setGradientType(themeData.gradientType as "linear" | "radial");
+						if (
+							themeData.gradientHarmony &&
+							themeData.gradientHarmony !== untrack(gradientHarmony)
+						)
+							setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
+						if (
+							themeData.borderWidth !== undefined &&
+							themeData.borderWidth !== untrack(borderThickness)
+						)
+							setBorderThickness(themeData.borderWidth);
+						if (
+							themeData.backgroundOpacity !== undefined &&
+							themeData.backgroundOpacity !== untrack(backgroundOpacity)
+						)
+							setBackgroundOpacity(themeData.backgroundOpacity);
+						if (
+							themeData.windowEffect &&
+							themeData.windowEffect !== untrack(windowEffect)
+						) {
+							setWindowEffect(
+								normalizeWindowEffectForCurrentOS(themeData.windowEffect),
+							);
 						}
 
 						if (themeData.userVariables) {
 							const currentVars = untrack(userVariablesSnapshot);
-							const hasChanged = JSON.stringify(currentVars) !== JSON.stringify(themeData.userVariables);
+							const hasChanged =
+								JSON.stringify(currentVars) !==
+								JSON.stringify(themeData.userVariables);
 							if (hasChanged) {
 								setUserVariables(reconcile(themeData.userVariables));
 							}
@@ -764,7 +836,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				theme.allowHueChange === false
 					? (theme.primaryHue ?? 180)
 					: backgroundHue();
-			
+
 			batch(() => {
 				setThemeId(id);
 				setOpacity(theme.opacity ?? 0);
@@ -785,7 +857,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 				if (theme.variables && theme.variables.length > 0) {
 					const defaultVars: Record<string, ThemeVariableValue> = {};
-					theme.variables.forEach(v => {
+					theme.variables.forEach((v) => {
 						defaultVars[v.key] = v.default;
 					});
 					setUserVariables(reconcile(defaultVars));
@@ -831,7 +903,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ primaryHue: newHue }, live);
 	};
 
-	const handleStyleModeChange = async (mode: ThemeConfig["style"]) => {
+	const _handleStyleModeChange = async (mode: ThemeConfig["style"]) => {
 		setOpacity(parseInt(mode || "0") || 0);
 		saveThemeUpdate({ style: mode });
 	};
@@ -855,7 +927,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ rotation: newRotation }, live);
 	};
 
-	const handleBorderThicknessChange = async (values: number[], live = false) => {
+	const handleBorderThicknessChange = async (
+		values: number[],
+		live = false,
+	) => {
 		const newThickness = values[0];
 		if (newThickness === borderThickness()) return;
 
@@ -864,7 +939,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		});
 		saveThemeUpdate({ borderWidth: newThickness }, live);
 	};
-	const handleBackgroundOpacityChange = async (values: number[], live = false) => {
+	const handleBackgroundOpacityChange = async (
+		values: number[],
+		live = false,
+	) => {
 		const newValue = values[0];
 		if (newValue === backgroundOpacity()) return;
 
@@ -884,7 +962,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ windowEffect: normalizedEffect });
 	};
 
-
 	const handleGradientTypeChange = async (type: "linear" | "radial") => {
 		if (type === gradientType()) return;
 
@@ -897,16 +974,20 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ gradientHarmony: harmony });
 	};
 
-	const handleVariableChange = async (key: string, value: ThemeVariableValue, live = false) => {
+	const handleVariableChange = async (
+		key: string,
+		value: ThemeVariableValue,
+		live = false,
+	) => {
 		const nextVariables = {
 			...untrack(userVariablesSnapshot),
 			[key]: value,
 		};
-		
+
 		batch(() => {
 			setUserVariables(reconcile(nextVariables));
 		});
-		
+
 		saveThemeUpdate({ userVariables: nextVariables }, live);
 	};
 
@@ -994,7 +1075,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
-	const saveThemeUpdate = async (overrides: Partial<ThemeConfig> = {}, live = false) => {
+	const saveThemeUpdate = async (
+		overrides: Partial<ThemeConfig> = {},
+		live = false,
+	) => {
 		if (!hasTauriRuntime()) return;
 
 		// 1. Gather current UI state for the theme
@@ -1013,7 +1097,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			overrides.windowEffect ?? windowEffect(),
 		);
 		const activeUserVars = overrides.userVariables ?? userVariablesSnapshot();
-		
+
 		// 2. Map frontend terms to central store persistence terminology
 		const persistenceData = {
 			themeId: activeThemeId,
@@ -1036,21 +1120,23 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		};
 
 		// 3. Update local cache (immediate UI feedback for CSS)
-		applyTheme(validateTheme({
-			...currentTheme,
-			id: activeThemeId,
-			primaryHue: activeHue,
-			opacity: activeOpacity,
-			style: activeStyle,
-			gradientEnabled: activeGradient,
-			rotation: activeRotation,
-			gradientType: activeGType as any,
-			gradientHarmony: activeGHarmony as any,
-			borderWidth: activeBWidth,
-			backgroundOpacity: activeBgOp,
-			windowEffect: activeWEffect,
-			userVariables: activeUserVars,
-		}));
+		applyTheme(
+			validateTheme({
+				...currentTheme,
+				id: activeThemeId,
+				primaryHue: activeHue,
+				opacity: activeOpacity,
+				style: activeStyle,
+				gradientEnabled: activeGradient,
+				rotation: activeRotation,
+				gradientType: activeGType as any,
+				gradientHarmony: activeGHarmony as any,
+				borderWidth: activeBWidth,
+				backgroundOpacity: activeBgOp,
+				windowEffect: activeWEffect,
+				userVariables: activeUserVars,
+			}),
+		);
 
 		// 4. Persistence call (Debounced at 100ms through central system)
 		if (!live) {
@@ -1111,7 +1197,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	createEffect(() => {
 		if (loading()) return;
 
-		const root = document.documentElement;
+		const _root = document.documentElement;
 	});
 
 	const migrateToCustomTheme = async (fromTheme: ThemeConfig) => {
@@ -1139,12 +1225,20 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			setThemeId("custom");
 			setBackgroundHue(fromTheme.primaryHue ?? customTheme.primaryHue);
 			setOpacity(fromTheme.opacity ?? customTheme.opacity ?? 0);
-			setGradientEnabled(fromTheme.gradientEnabled ?? customTheme.gradientEnabled);
+			setGradientEnabled(
+				fromTheme.gradientEnabled ?? customTheme.gradientEnabled,
+			);
 			setRotation(fromTheme.rotation ?? customTheme.rotation ?? 135);
-			setGradientType(fromTheme.gradientType ?? customTheme.gradientType ?? "linear");
-			setGradientHarmony(fromTheme.gradientHarmony ?? customTheme.gradientHarmony ?? "none");
+			setGradientType(
+				fromTheme.gradientType ?? customTheme.gradientType ?? "linear",
+			);
+			setGradientHarmony(
+				fromTheme.gradientHarmony ?? customTheme.gradientHarmony ?? "none",
+			);
 			setBorderThickness(fromTheme.borderWidth ?? customTheme.borderWidth ?? 1);
-			setBackgroundOpacity(fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity ?? 25);
+			setBackgroundOpacity(
+				fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity ?? 25,
+			);
 			setWindowEffect(migratedEffect);
 			setUserVariables(reconcile({}));
 		});
@@ -1162,7 +1256,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			gradientType: fromTheme.gradientType ?? customTheme.gradientType,
 			gradientHarmony: fromTheme.gradientHarmony ?? customTheme.gradientHarmony,
 			borderWidth: fromTheme.borderWidth ?? customTheme.borderWidth,
-			backgroundOpacity: fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity,
+			backgroundOpacity:
+				fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity,
 			windowEffect: migratedEffect,
 			customCss: "",
 			variables: customTheme.variables,
@@ -1171,7 +1266,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	};
 
 	const handleDeleteImportedTheme = async (targetThemeId: string) => {
-		const themeToDelete = themeCatalog().find((theme) => theme.id === targetThemeId);
+		const themeToDelete = themeCatalog().find(
+			(theme) => theme.id === targetThemeId,
+		);
 		if (!themeToDelete) return;
 
 		if (getThemeSource(themeToDelete) !== "imported") {
@@ -1228,11 +1325,15 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
-	
 	const handleExportTheme = async () => {
 		try {
 			if (!hasTauriRuntime()) {
-				dialogStore.alert("Platform Error", "Tauri runtime not found.", "error"); return;
+				dialogStore.alert(
+					"Platform Error",
+					"Tauri runtime not found.",
+					"error",
+				);
+				return;
 			}
 
 			if (themeId() !== "custom") {
@@ -1246,12 +1347,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 			const themeClass = getThemeById(themeId()) || validateTheme({});
 			const activeAccount = await getActiveAccount();
-			const author = activeAccount?.display_name || activeAccount?.username || "Anonymous";
+			const author =
+				activeAccount?.display_name || activeAccount?.username || "Anonymous";
 
 			const customName = await dialogStore.prompt(
 				"Theme Name",
 				"Enter a name for your theme before exporting.",
-				{ defaultValue: "My Custom Theme" }
+				{ defaultValue: "My Custom Theme" },
 			);
 
 			if (!customName) return;
@@ -1259,7 +1361,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			const savePath = await saveDialog({
 				title: "Export Theme",
 				defaultPath: `${customName.replace(/[^a-zA-Z0-9- ]/g, "_")}.vestatheme`,
-				filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }]
+				filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }],
 			});
 
 			if (savePath) {
@@ -1267,9 +1369,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					savePath,
 					customName,
 					author,
-					customCss: themeClass.customCss || ""
+					customCss: themeClass.customCss || "",
 				});
-				dialogStore.alert("Theme Exported", "Your theme has been exported successfully.", "success");
+				dialogStore.alert(
+					"Theme Exported",
+					"Your theme has been exported successfully.",
+					"success",
+				);
 			}
 		} catch (e) {
 			console.error("Failed to export theme", e);
@@ -1280,23 +1386,31 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const handleImportTheme = async () => {
 		try {
 			if (!hasTauriRuntime()) {
-				dialogStore.alert("Platform Error", "Tauri runtime not found.", "error"); return;
+				dialogStore.alert(
+					"Platform Error",
+					"Tauri runtime not found.",
+					"error",
+				);
+				return;
 			}
 
 			const openPath = await openDialog({
 				title: "Import Theme",
 				filters: [{ name: "Vesta Theme", extensions: ["vestatheme", "json"] }],
-				multiple: false
+				multiple: false,
 			});
 			if (!openPath) return;
 
-			// openDialog with multiple: false returns string | null in v2 standard APIs, 
+			// openDialog with multiple: false returns string | null in v2 standard APIs,
 			// though it might return string[]. we will safely cast.
 			const resolvedPath = Array.isArray(openPath) ? openPath[0] : openPath;
 
-			const result = await invoke<ThemeImportResponse>("import_theme_from_file", {
-				filePath: resolvedPath,
-			});
+			const result = await invoke<ThemeImportResponse>(
+				"import_theme_from_file",
+				{
+					filePath: resolvedPath,
+				},
+			);
 
 			const importedTheme = validateTheme({
 				...result.theme.themeData,
@@ -1319,7 +1433,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setGradientHarmony(importedTheme.gradientHarmony ?? "none");
 				setBorderThickness(importedTheme.borderWidth ?? 1);
 				setBackgroundOpacity(importedTheme.backgroundOpacity ?? 25);
-				setWindowEffect(normalizeWindowEffectForCurrentOS(importedTheme.windowEffect));
+				setWindowEffect(
+					normalizeWindowEffectForCurrentOS(importedTheme.windowEffect),
+				);
 				setUserVariables(reconcile(importedTheme.userVariables || {}));
 			});
 
@@ -1334,21 +1450,34 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				gradientHarmony: importedTheme.gradientHarmony,
 				borderWidth: importedTheme.borderWidth,
 				backgroundOpacity: importedTheme.backgroundOpacity,
-				windowEffect: normalizeWindowEffectForCurrentOS(importedTheme.windowEffect),
+				windowEffect: normalizeWindowEffectForCurrentOS(
+					importedTheme.windowEffect,
+				),
 				customCss: importedTheme.customCss,
 				variables: importedTheme.variables,
 				userVariables: importedTheme.userVariables || {},
 			});
 
 			if (result.warnings && result.warnings.length > 0) {
-				dialogStore.alert("Theme Imported With Warnings", result.warnings.join("\n"), "warning");
+				dialogStore.alert(
+					"Theme Imported With Warnings",
+					result.warnings.join("\n"),
+					"warning",
+				);
 			} else {
-				dialogStore.alert("Theme Imported", "Theme imported and added to your library.", "success");
+				dialogStore.alert(
+					"Theme Imported",
+					"Theme imported and added to your library.",
+					"success",
+				);
 			}
-
 		} catch (e) {
 			console.error("Failed to import theme", e);
-			dialogStore.alert("Import Error", "Failed to import the selected theme file.", "error");
+			dialogStore.alert(
+				"Import Error",
+				"Failed to import the selected theme file.",
+				"error",
+			);
 		}
 	};
 
@@ -1398,7 +1527,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsList>
 
 					<TabsContent class={styles["tabs-content"]} value="general">
-						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading General Settings...</div>}>
+						<Suspense
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading General Settings...
+								</div>
+							}
+						>
 							<GeneralSettingsTab
 								reducedMotion={reducedMotion()}
 								handleReducedMotionToggle={handleReducedMotionToggle}
@@ -1420,7 +1555,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="appearance">
-						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Appearance...</div>}>
+						<Suspense
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading Appearance...
+								</div>
+							}
+						>
 							<AppearanceSettingsTab
 								themes={filteredThemeCatalog()}
 								themeId={themeId()}
@@ -1439,39 +1580,47 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								backgroundHue={backgroundHue()}
 								handleHueChange={handleHueChange}
 								opacity={opacity()}
-													handleOpacityChange={handleOpacityChange}
+								handleOpacityChange={handleOpacityChange}
 								gradientEnabled={gradientEnabled()}
 								handleGradientToggle={handleGradientToggle}
 								gradientType={gradientType()}
 								handleGradientTypeChange={handleGradientTypeChange}
 								rotation={rotation()}
 								handleRotationChange={handleRotationChange}
-								                                                                gradientHarmony={gradientHarmony()}
-                                                                handleGradientHarmonyChange={handleGradientHarmonyChange}
-                                                                borderThickness={borderThickness()}
-                                                                handleBorderThicknessChange={handleBorderThicknessChange}
-                                                                backgroundOpacity={backgroundOpacity()}
-                                                                handleBackgroundOpacityChange={handleBackgroundOpacityChange}
-                                                                windowEffect={windowEffect()}
-										windowEffectOptions={getSupportedWindowEffects()}
-                                                                handleWindowEffectChange={handleWindowEffectChange}
-                                                                handleImportTheme={handleImportTheme}
-                                                                handleExportTheme={handleExportTheme}
-								                                themeVariables={
-										themeId()
-											? getThemeById(themeId())?.variables?.map((variable) => ({
+								gradientHarmony={gradientHarmony()}
+								handleGradientHarmonyChange={handleGradientHarmonyChange}
+								borderThickness={borderThickness()}
+								handleBorderThicknessChange={handleBorderThicknessChange}
+								backgroundOpacity={backgroundOpacity()}
+								handleBackgroundOpacityChange={handleBackgroundOpacityChange}
+								windowEffect={windowEffect()}
+								windowEffectOptions={getSupportedWindowEffects()}
+								handleWindowEffectChange={handleWindowEffectChange}
+								handleImportTheme={handleImportTheme}
+								handleExportTheme={handleExportTheme}
+								themeVariables={
+									themeId()
+										? getThemeById(themeId())?.variables?.map((variable) => ({
 												...variable,
-												value: userVariablesSnapshot()[variable.key] ?? variable.default,
+												value:
+													userVariablesSnapshot()[variable.key] ??
+													variable.default,
 											}))
-											: []
-								                                }
-                                                                handleVariableChange={handleVariableChange}
+										: []
+								}
+								handleVariableChange={handleVariableChange}
 							/>
 						</Suspense>
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="java">
-						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Java Settings...</div>}>
+						<Suspense
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading Java Settings...
+								</div>
+							}
+						>
 							<JavaSettingsTab
 								requirements={requirements() || []}
 								javaOptions={javaOptions()}
@@ -1496,7 +1645,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="help">
-						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading...</div>}>
+						<Suspense
+							fallback={
+								<div class={styles["settings-tab-loading"]}>Loading...</div>
+							}
+						>
 							<HelpSettingsTab
 								close={props.close}
 								navigate={(path: string) => activeRouter()?.navigate(path)}
@@ -1510,7 +1663,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					</TabsContent>
 
 					<TabsContent class={styles["tabs-content"]} value="developer">
-						<Suspense fallback={<div class={styles["settings-tab-loading"]}>Loading Developer Tools...</div>}>
+						<Suspense
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading Developer Tools...
+								</div>
+							}
+						>
 							<DeveloperSettingsTab
 								debugLogging={debugLogging()}
 								handleDebugToggle={handleDebugToggle}

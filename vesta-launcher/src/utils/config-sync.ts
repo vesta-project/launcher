@@ -1,17 +1,17 @@
+import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
-import { invoke } from "@tauri-apps/api/core";
 import {
 	type AppThemeConfig,
-	type ThemeVariableValue,
 	applyTheme,
 	configToTheme,
 	getThemeById,
-	parseThemeData,
 	PRESET_THEMES,
+	parseThemeData,
 	serializeThemeData,
+	type ThemeVariableValue,
 } from "../themes/presets";
 
 interface ConfigUpdateEvent {
@@ -25,7 +25,9 @@ function isThemeConfigField(field: string): boolean {
 	return field.startsWith("theme_") || field === "background_hue";
 }
 
-function buildDefaultUserVariables(variables: unknown): Record<string, ThemeVariableValue> {
+function buildDefaultUserVariables(
+	variables: unknown,
+): Record<string, ThemeVariableValue> {
 	if (!Array.isArray(variables)) return {};
 
 	const defaults: Record<string, ThemeVariableValue> = {};
@@ -144,11 +146,13 @@ export function unsubscribeFromConfigUpdates(): void {
 	}
 }
 
-/** 
+/**
  * Global reactive configuration state
  * Using a SolidJS Store ensures nested updates (like theme_data) are tracked by components
  */
-export const [currentThemeConfig, setCurrentThemeConfig] = createStore<Partial<AppThemeConfig>>({
+export const [currentThemeConfig, setCurrentThemeConfig] = createStore<
+	Partial<AppThemeConfig>
+>({
 	theme_background_opacity: 25,
 });
 
@@ -235,7 +239,9 @@ export async function saveThemeUpdate(
 	const carriedThemeData = shouldCarryCurrentThemeData ? currentThemeData : {};
 
 	const activeVariables =
-		(overrides.variables as any) ?? carriedThemeData.variables ?? theme.variables;
+		(overrides.variables as any) ??
+		carriedThemeData.variables ??
+		theme.variables;
 	const fallbackUserVariables = buildDefaultUserVariables(activeVariables);
 	const updatedUserVariables =
 		overrides.userVariables ??
@@ -308,7 +314,10 @@ export async function saveThemeUpdate(
 		id: tid,
 		name: overrides.themeName ?? carriedThemeData.name ?? theme.name,
 		author: overrides.author ?? carriedThemeData.author ?? theme.author,
-		description: overrides.description ?? carriedThemeData.description ?? theme.description,
+		description:
+			overrides.description ??
+			carriedThemeData.description ??
+			theme.description,
 		primaryHue: activeHue,
 		primarySat:
 			overrides.primarySat ??
@@ -318,9 +327,7 @@ export async function saveThemeUpdate(
 		primaryLight:
 			overrides.primaryLight ??
 			carriedThemeData.primaryLight ??
-			(sameThemeAsStore
-				? currentThemeConfig.theme_primary_light
-				: undefined) ??
+			(sameThemeAsStore ? currentThemeConfig.theme_primary_light : undefined) ??
 			theme.primaryLight,
 		opacity: overrides.opacity ?? carriedThemeData.opacity ?? theme.opacity,
 		style: activeStyle as any,
@@ -342,11 +349,20 @@ export async function saveThemeUpdate(
 		setCurrentThemeConfig("theme_data", themeData);
 		setCurrentThemeConfig("theme_primary_hue", activeHue);
 		setCurrentThemeConfig("theme_style", activeStyle as any);
-		setCurrentThemeConfig("theme_gradient_enabled", activeGradientEnabled as any);
+		setCurrentThemeConfig(
+			"theme_gradient_enabled",
+			activeGradientEnabled as any,
+		);
 		setCurrentThemeConfig("theme_gradient_angle", activeRotation as any);
 		setCurrentThemeConfig("theme_gradient_type", activeGradientType as any);
-		setCurrentThemeConfig("theme_gradient_harmony", activeGradientHarmony as any);
-		setCurrentThemeConfig("theme_background_opacity", activeBackgroundOpacity as any);
+		setCurrentThemeConfig(
+			"theme_gradient_harmony",
+			activeGradientHarmony as any,
+		);
+		setCurrentThemeConfig(
+			"theme_background_opacity",
+			activeBackgroundOpacity as any,
+		);
 		setCurrentThemeConfig("theme_border_width", activeBorderWidth as any);
 		if (activeWindowEffect !== undefined) {
 			setCurrentThemeConfig("theme_window_effect", activeWindowEffect as any);

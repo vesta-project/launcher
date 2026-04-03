@@ -1,5 +1,15 @@
-import type { ThemeConfig, ThemeDataPayload, StyleMode, ThemeVariable, ThemeVariableValue, ThemeVariableType } from "../types";
-import { normalizeWindowEffectForCurrentOS, getCurrentOsHint } from "./themeToCSSVars";
+import type {
+	StyleMode,
+	ThemeConfig,
+	ThemeDataPayload,
+	ThemeVariable,
+	ThemeVariableType,
+	ThemeVariableValue,
+} from "../types";
+import {
+	getCurrentOsHint,
+	normalizeWindowEffectForCurrentOS,
+} from "./themeToCSSVars";
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -111,12 +121,18 @@ function parseVariableDefinitions(value: unknown): ThemeVariable[] | undefined {
 	return parsed.length > 0 ? parsed : undefined;
 }
 
-function parseUserVariables(value: unknown): Record<string, ThemeVariableValue> | undefined {
+function parseUserVariables(
+	value: unknown,
+): Record<string, ThemeVariableValue> | undefined {
 	if (!isObjectLike(value)) return undefined;
 
 	const parsed: Record<string, ThemeVariableValue> = {};
 	for (const [key, val] of Object.entries(value)) {
-		if (typeof val === "number" || typeof val === "string" || typeof val === "boolean") {
+		if (
+			typeof val === "number" ||
+			typeof val === "string" ||
+			typeof val === "boolean"
+		) {
 			parsed[key] = val;
 		}
 	}
@@ -147,20 +163,29 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.primaryLight = getNumber(source.primaryLight ?? source.primary_light);
 	out.opacity = getNumber(source.opacity);
 	out.style = getString(source.style) as StyleMode | undefined;
-	out.gradientEnabled = getBoolean(source.gradientEnabled ?? source.gradient_enabled);
+	out.gradientEnabled = getBoolean(
+		source.gradientEnabled ?? source.gradient_enabled,
+	);
 	out.rotation = getNumber(source.rotation);
 	out.gradientType = getString(source.gradientType ?? source.gradient_type) as
 		| "linear"
 		| "radial"
 		| undefined;
-	out.gradientHarmony = getString(source.gradientHarmony ?? source.gradient_harmony) as any;
+	out.gradientHarmony = getString(
+		source.gradientHarmony ?? source.gradient_harmony,
+	) as any;
 	out.borderWidth = getNumber(source.borderWidth ?? source.border_width);
-	out.backgroundOpacity = getNumber(source.backgroundOpacity ?? source.background_opacity);
+	out.backgroundOpacity = getNumber(
+		source.backgroundOpacity ?? source.background_opacity,
+	);
 	out.windowEffect = getString(source.windowEffect ?? source.window_effect);
 	out.customCss = getString(source.customCss ?? source.custom_css);
 	out.variables = parseVariableDefinitions(source.variables ?? source.params);
 	out.userVariables = parseUserVariables(
-		source.userVariables ?? source.user_variables ?? source.userParams ?? source.user_params,
+		source.userVariables ??
+			source.user_variables ??
+			source.userParams ??
+			source.user_params,
 	);
 
 	return out;
@@ -168,7 +193,7 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 
 export function sanitizeCustomCss(css: string): string {
 	if (!css) return css;
-	
+
 	const lowered = css.toLowerCase();
 	const blockedTokens = [
 		"@import",
@@ -179,14 +204,14 @@ export function sanitizeCustomCss(css: string): string {
 		"-moz-binding",
 		"behavior:",
 	];
-	
+
 	for (const token of blockedTokens) {
 		if (lowered.includes(token)) {
 			console.warn("Theme rejected: Potentially unsafe CSS detected.", token);
 			return "";
 		}
 	}
-	
+
 	return css;
 }
 
@@ -202,7 +227,11 @@ function normalizeUserVariables(
 		if (!userVariables) return undefined;
 		const filtered: Record<string, ThemeVariableValue> = {};
 		for (const [key, value] of Object.entries(userVariables)) {
-			if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
+			if (
+				typeof value === "number" ||
+				typeof value === "string" ||
+				typeof value === "boolean"
+			) {
 				filtered[key] = value;
 			}
 		}
@@ -214,13 +243,15 @@ function normalizeUserVariables(
 		const candidate = userVariables?.[variable.key];
 
 		if (variable.type === "number") {
-			const value = typeof candidate === "number" ? candidate : variable.default;
+			const value =
+				typeof candidate === "number" ? candidate : variable.default;
 			normalized[variable.key] = clamp(value, variable.min, variable.max);
 			continue;
 		}
 
 		if (variable.type === "color") {
-			normalized[variable.key] = typeof candidate === "string" ? candidate : variable.default;
+			normalized[variable.key] =
+				typeof candidate === "string" ? candidate : variable.default;
 			continue;
 		}
 
@@ -231,7 +262,8 @@ function normalizeUserVariables(
 		}
 
 		if (variable.type === "select") {
-			const selected = typeof candidate === "string" ? candidate : variable.default;
+			const selected =
+				typeof candidate === "string" ? candidate : variable.default;
 			const isAllowed = variable.options.some((opt) => opt.value === selected);
 			normalized[variable.key] = isAllowed ? selected : variable.default;
 		}
@@ -240,7 +272,11 @@ function normalizeUserVariables(
 	return normalized;
 }
 
-export function validateTheme(theme: Partial<ThemeConfig>, defaultTheme: ThemeConfig, isBuiltinThemeCheck: (id: string) => boolean): ThemeConfig {
+export function validateTheme(
+	theme: Partial<ThemeConfig>,
+	defaultTheme: ThemeConfig,
+	isBuiltinThemeCheck: (id: string) => boolean,
+): ThemeConfig {
 	// Helper to handle null/undefined from backend
 	const getVal = <T>(val: T | null | undefined, fallback: T): T =>
 		val !== null && val !== undefined ? val : fallback;
@@ -268,7 +304,11 @@ export function validateTheme(theme: Partial<ThemeConfig>, defaultTheme: ThemeCo
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
 		opacity: clamp(getVal(theme.opacity, defaultTheme.opacity ?? 0), 0, 100),
-		borderWidth: clamp(getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1), 0, 10),
+		borderWidth: clamp(
+			getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1),
+			0,
+			10,
+		),
 		style: theme.style || defaultTheme.style,
 		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
@@ -291,7 +331,8 @@ export function validateTheme(theme: Partial<ThemeConfig>, defaultTheme: ThemeCo
 						? "vibrancy"
 						: "none"),
 		),
-		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
+		backgroundOpacity:
+			theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
 		variables: theme.variables,
 		userVariables: normalizeUserVariables(theme.userVariables, theme.variables),
 	};

@@ -1,5 +1,5 @@
 import { generatePalette } from "../../utils/colorHelpers";
-import type { ThemeConfig, GradientHarmony } from "../types";
+import type { GradientHarmony, ThemeConfig } from "../types";
 
 /**
  * Convert theme config to CSS custom properties
@@ -8,9 +8,9 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
 		"--color__primary-hue": theme.primaryHue.toString(),
 		"--background-opacity":
-			(theme.backgroundOpacity !== undefined
+			theme.backgroundOpacity !== undefined
 				? (theme.backgroundOpacity / 100).toFixed(2)
-				: "0.25"),
+				: "0.25",
 		"--rotation": `${theme.rotation ?? 135}deg`,
 		"--gradient-type": theme.gradientType || "linear",
 		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
@@ -18,8 +18,8 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 
 	// Calculate harmony hues
 	const primary = theme.primaryHue;
-	let secondary = primary;
-	let accent = primary + 30; // Default analogous-ish accent
+	let secondary: number;
+	let accent: number; // Default analogous-ish accent
 
 	switch (theme.gradientHarmony) {
 		case "analogous":
@@ -84,7 +84,8 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		vars["--liquid-frost-blur"] = `${blurPx * 0.8}px`;
 
 		if (blurPx > 0) {
-			vars["--liquid-backdrop-filter"] = `blur(${blurPx}px) saturate(${1.5 - (opacityValue/100)*0.5})`;
+			vars["--liquid-backdrop-filter"] =
+				`blur(${blurPx}px) saturate(${1.5 - (opacityValue / 100) * 0.5})`;
 		} else {
 			vars["--liquid-backdrop-filter"] = "none";
 		}
@@ -127,7 +128,12 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		for (const v of theme.variables) {
 			const key = `--theme-var-${v.key}`;
 			if (!vars[key]) {
-				vars[key] = typeof v.default === "boolean" ? (v.default ? "1" : "0") : String(v.default);
+				vars[key] =
+					typeof v.default === "boolean"
+						? v.default
+							? "1"
+							: "0"
+						: String(v.default);
 			}
 		}
 	}
@@ -168,7 +174,10 @@ export function getSupportedWindowEffects(osHint?: string): string[] {
 	return [FALLBACK_WINDOW_EFFECT];
 }
 
-export function normalizeWindowEffectForCurrentOS(effect?: string, osHint?: string): string {
+export function normalizeWindowEffectForCurrentOS(
+	effect?: string,
+	osHint?: string,
+): string {
 	const requested = (effect || "").trim().toLowerCase();
 	if (!requested) return FALLBACK_WINDOW_EFFECT;
 

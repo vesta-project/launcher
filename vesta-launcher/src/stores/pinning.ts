@@ -138,7 +138,10 @@ export async function refreshPinnedMetadata() {
 				);
 			}
 		} catch (e) {
-			console.warn(`[Pinning] Failed to refresh metadata for ${pin.target_id}:`, e);
+			console.warn(
+				`[Pinning] Failed to refresh metadata for ${pin.target_id}:`,
+				e,
+			);
 		}
 	}
 }

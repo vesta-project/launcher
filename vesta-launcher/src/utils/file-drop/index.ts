@@ -13,7 +13,7 @@ type NormalizedDropZoneOptions = {
 	allowedExtensions: string[];
 };
 
-const DEFAULT_OPTIONS: NormalizedDropZoneOptions = {
+const _DEFAULT_OPTIONS: NormalizedDropZoneOptions = {
 	accept: "all",
 	allowedExtensions: [],
 };
@@ -86,7 +86,7 @@ class DropZoneManager {
 			this.isSummoning = true;
 			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			const win = getCurrentWindow();
-			const factor = await win.scaleFactor();
+			const _factor = await win.scaleFactor();
 			const size = await win.innerSize();
 			const pos = await win.innerPosition();
 

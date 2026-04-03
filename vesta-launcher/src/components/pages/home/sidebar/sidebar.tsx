@@ -13,8 +13,8 @@ import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-not
 import { instancesState } from "@stores/instances";
 import { type PinnedPage, pinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
-import { Separator } from "@ui/separator/separator";
 import { Popover, PopoverAnchor } from "@ui/popover/popover";
+import { Separator } from "@ui/separator/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
@@ -129,8 +129,14 @@ function Sidebar(props: SidebarProps) {
 			}}
 		>
 			<div class={styles["sidebar__root"]}>
-				<div class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}>
-					<Popover open={accountMenuOpen()} onOpenChange={setAccountMenuOpen} placement="right-start">
+				<div
+					class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}
+				>
+					<Popover
+						open={accountMenuOpen()}
+						onOpenChange={setAccountMenuOpen}
+						placement="right-start"
+					>
 						<PopoverAnchor>
 							<SidebarProfileButton
 								id={"profile-selector"}
@@ -153,7 +159,10 @@ function Sidebar(props: SidebarProps) {
 										return;
 									}
 								} catch (e) {
-									console.error("Failed to check guest status for Add Account:", e);
+									console.error(
+										"Failed to check guest status for Add Account:",
+										e,
+									);
 								}
 
 								openPage("/login");
@@ -196,7 +205,14 @@ function Sidebar(props: SidebarProps) {
 						onClick={() => props.openChanged(!props.open)}
 						tooltip_text={"Notifications"}
 					>
-						<div style={{ position: "relative", display: "flex", width: "20px", height: "20px" }}>
+						<div
+							style={{
+								position: "relative",
+								display: "flex",
+								width: "20px",
+								height: "20px",
+							}}
+						>
 							<BellIcon width="20" height="20" />
 							<Show when={notifData().hasActiveTask}>
 								<Tooltip placement="top">

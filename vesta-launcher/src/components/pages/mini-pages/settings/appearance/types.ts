@@ -1,4 +1,7 @@
-import { type ThemeConfig, type ThemeVariableValue } from "../../../../../themes/presets";
+import {
+	type ThemeConfig,
+	type ThemeVariableValue,
+} from "../../../../../themes/presets";
 
 export interface SettingsTabProps {
 	// Root state signals passed down
@@ -24,7 +27,7 @@ export interface SettingsTabProps {
 	setWindowEffect: (val: string) => void;
 	userVariables: Record<string, ThemeVariableValue>;
 	setUserVariables: (updater: any) => void;
-	
+
 	// Handlers
 	handlePresetSelect: (id: string) => Promise<void>;
 	handleHueChange: (values: number[], live?: boolean) => Promise<void>;
@@ -32,13 +35,23 @@ export interface SettingsTabProps {
 	handleOpacityChange: (val: number[], live?: boolean) => Promise<void>;
 	handleGradientToggle: (enabled: boolean) => Promise<void>;
 	handleRotationChange: (values: number[], live?: boolean) => Promise<void>;
-	handleBorderThicknessChange: (values: number[], live?: boolean) => Promise<void>;
-	handleBackgroundOpacityChange: (values: number[], live?: boolean) => Promise<void>;
+	handleBorderThicknessChange: (
+		values: number[],
+		live?: boolean,
+	) => Promise<void>;
+	handleBackgroundOpacityChange: (
+		values: number[],
+		live?: boolean,
+	) => Promise<void>;
 	handleWindowEffectChange: (val: string) => Promise<void>;
 	handleGradientTypeChange: (type: "linear" | "radial") => Promise<void>;
 	handleGradientHarmonyChange: (harmony: any) => Promise<void>;
-	handleVariableChange: (key: string, value: ThemeVariableValue, live?: boolean) => Promise<void>;
-	
+	handleVariableChange: (
+		key: string,
+		value: ThemeVariableValue,
+		live?: boolean,
+	) => Promise<void>;
+
 	// Catalog state
 	filteredThemeCatalog: () => ThemeConfig[];
 	themeSearchQuery: () => string;
@@ -49,7 +62,7 @@ export interface SettingsTabProps {
 	setThemeViewMode: (val: any) => void;
 	hasImportedThemes: () => boolean;
 	refreshThemeCatalog: () => Promise<void>;
-	
+
 	// General settings
 	reducedMotion: () => boolean;
 	handleReducedMotionToggle: (checked: boolean) => Promise<void>;

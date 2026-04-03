@@ -1,5 +1,5 @@
-import { Show } from "solid-js";
 import Button from "@ui/button/button";
+import { Show } from "solid-js";
 import styles from "./floating-save-footer.module.css";
 
 interface FloatingSaveFooterProps {
@@ -31,17 +31,17 @@ export default function FloatingSaveFooter(props: FloatingSaveFooterProps) {
 					<p>{props.message || "You have unsaved changes."}</p>
 				</div>
 				<div class={styles["save-footer-actions"]}>
-					<Button 
-						onClick={() => props.onCancel()} 
-						variant="ghost" 
+					<Button
+						onClick={() => props.onCancel()}
+						variant="ghost"
 						size="sm"
 						disabled={props.isSaving}
 					>
 						{props.cancelText || "Cancel"}
 					</Button>
-					<Button 
-						onClick={() => props.onSave()} 
-						variant="solid" 
+					<Button
+						onClick={() => props.onSave()}
+						variant="solid"
 						size="sm"
 						disabled={props.isSaving}
 					>

@@ -15,13 +15,7 @@ import {
 } from "@utils/auth";
 import { onConfigUpdate } from "@utils/config-sync";
 import { createNotification } from "@utils/notifications";
-import {
-	createEffect,
-	createResource,
-	For,
-	onCleanup,
-	Show,
-} from "solid-js";
+import { createEffect, createResource, For, onCleanup, Show } from "solid-js";
 import styles from "./account-popover.module.css";
 
 interface AccountPopoverProps {
@@ -30,7 +24,8 @@ interface AccountPopoverProps {
 }
 
 export function AccountPopover(props: AccountPopoverProps) {
-	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
+	const [accounts, { refetch: refetchAccounts }] =
+		createResource<Account[]>(getAccounts);
 	const [activeAccount, { refetch: refetchActive }] = createResource(
 		async () => {
 			try {
@@ -114,7 +109,9 @@ export function AccountPopover(props: AccountPopoverProps) {
 					<>
 						<div class={styles["active-account-section"]}>
 							<div class={styles["active-info"]}>
-								<div class={styles["active-username"]}>{account().username}</div>
+								<div class={styles["active-username"]}>
+									{account().username}
+								</div>
 								<Tooltip placement="right">
 									<TooltipTrigger
 										class={styles["active-uuid-container"]}
@@ -137,7 +134,9 @@ export function AccountPopover(props: AccountPopoverProps) {
 								>
 									Edit Skin
 								</Button>
-								<Show when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}>
+								<Show
+									when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}
+								>
 									<Button
 										variant="ghost"
 										size="sm"

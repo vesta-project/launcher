@@ -1,8 +1,8 @@
 import { SettingsCard, SettingsField } from "@components/settings";
-import LauncherButton from "@ui/button/button";
 import { invoke } from "@tauri-apps/api/core";
-import { showToast } from "@ui/toast/toast";
+import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { showToast } from "@ui/toast/toast";
 import { simulateUpdateProcess } from "@utils/updater";
 import styles from "../settings-page.module.css";
 
@@ -39,8 +39,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 								await invoke("reset_notification_system");
 								showToast({
 									title: "Notifications Reset",
-									description:
-										"Notification history and seen items cleared.",
+									description: "Notification history and seen items cleared.",
 									severity: "success",
 								});
 							}}
@@ -78,8 +77,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 									payload: {
 										client_key: "app_update_available",
 										title: "Update Available (Simulated)",
-										description:
-											"Vesta Launcher v9.9.9 is now available!",
+										description: "Vesta Launcher v9.9.9 is now available!",
 										severity: "info",
 										notification_type: "patient",
 										dismissible: true,
@@ -104,8 +102,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 								await invoke("start_demo_session");
 								showToast({
 									title: "Demo Account Added",
-									description:
-										"Temporal account 'DemoUser' is now active.",
+									description: "Temporal account 'DemoUser' is now active.",
 									severity: "success",
 								});
 							}}

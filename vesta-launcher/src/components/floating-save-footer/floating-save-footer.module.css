@@ -17,12 +17,12 @@
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 }
 
- .save-footer-actions {
-   display: flex;
-   justify-content: flex-end;
-   align-items: center;
-   gap: 0.5rem;
- }
+.save-footer-actions {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	gap: 0.5rem;
+}
 
 .save-footer-content p {
 	margin: 0;

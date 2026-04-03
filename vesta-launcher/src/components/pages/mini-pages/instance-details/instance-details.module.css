@@ -216,13 +216,13 @@
 
 /* Make console scrollbar thumb show pointer to indicate draggable thumb */
 .tab-console ::-webkit-scrollbar-thumb {
-    cursor: default;
+	cursor: default;
 }
 .tab-console ::-webkit-scrollbar {
-    width: 10px;
+	width: 10px;
 }
 .tab-console ::-webkit-scrollbar-track {
-    background: transparent;
+	background: transparent;
 }
 
 .content-wrapper {

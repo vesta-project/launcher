@@ -1,8 +1,8 @@
+import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import LauncherButton from "@ui/button/button";
-import { openExternal } from "@utils/external-link";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
-import { setPageViewerOpen, router } from "@components/page-viewer/page-viewer";
+import { openExternal } from "@utils/external-link";
 import { startAppTutorial } from "@utils/tutorial";
 import { checkForAppUpdates } from "@utils/updater";
 import styles from "../settings-page.module.css";
@@ -25,9 +25,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Documentation"
 					description="Technical overview of modding frameworks, runtime environments, and configuration."
 					control={
-						<LauncherButton
-							onClick={() => props.navigate("/modding-guide")}
-						>
+						<LauncherButton onClick={() => props.navigate("/modding-guide")}>
 							View Docs
 						</LauncherButton>
 					}
@@ -66,9 +64,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					</LauncherButton>
 					<LauncherButton
 						variant="ghost"
-						onClick={() =>
-							openExternal("https://discord.gg/zuDNHNHk8E")
-						}
+						onClick={() => openExternal("https://discord.gg/zuDNHNHk8E")}
 					>
 						Discord
 					</LauncherButton>
@@ -118,11 +114,17 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				<div class={styles["about-info"]}>
 					<div class={styles["about-field"]}>
 						<span>App Version</span>
-						<div style={{ display: "flex", "align-items": "center", gap: "0.5rem" }}>
+						<div
+							style={{
+								display: "flex",
+								"align-items": "center",
+								gap: "0.5rem",
+							}}
+						>
 							<span>{props.version || "..."}</span>
-							<LauncherButton 
-								variant="ghost" 
-								size="sm" 
+							<LauncherButton
+								variant="ghost"
+								size="sm"
 								onClick={() => {
 									router().navigate("/changelog");
 									setPageViewerOpen(true);
@@ -136,13 +138,13 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 						<span>Platform</span>
 						<span>Tauri + SolidJS</span>
 					</div>
-					
+
 					<a
 						href="https://www.gnu.org/licenses/gpl-3.0.html"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
-						<div class={styles["about-field"]} >
+						<div class={styles["about-field"]}>
 							<span>License</span>
 							<span>GNU General Public License v3.0</span>
 						</div>

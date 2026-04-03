@@ -51,28 +51,33 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 		let unlisten: (() => void) | undefined;
 		let cancelled = false;
 
-		listen<{ uuid?: string; force?: boolean }>("core://account-heads-updated", async (event) => {
-			const targetUuid = event.payload?.uuid;
-			// Normalize UUIDs before comparison so dashed/non-dashed variants match
-			const shouldRefresh = !targetUuid || !props.playerUuid ||
-				targetUuid.replace(/-/g, "") === props.playerUuid.replace(/-/g, "");
+		listen<{ uuid?: string; force?: boolean }>(
+			"core://account-heads-updated",
+			async (event) => {
+				const targetUuid = event.payload?.uuid;
+				// Normalize UUIDs before comparison so dashed/non-dashed variants match
+				const shouldRefresh =
+					!targetUuid ||
+					!props.playerUuid ||
+					targetUuid.replace(/-/g, "") === props.playerUuid.replace(/-/g, "");
 
-			if (!shouldRefresh) return;
+				if (!shouldRefresh) return;
 
-			// Pre-download the fresh head so the file cache is up-to-date before re-render
-			if (event.payload?.force && props.playerUuid) {
-				try {
-					await invoke("get_player_head_path", {
-						playerUuid: props.playerUuid,
-						forceDownload: true,
-					});
-				} catch {
-					// fall through to cached head
+				// Pre-download the fresh head so the file cache is up-to-date before re-render
+				if (event.payload?.force && props.playerUuid) {
+					try {
+						await invoke("get_player_head_path", {
+							playerUuid: props.playerUuid,
+							forceDownload: true,
+						});
+					} catch {
+						// fall through to cached head
+					}
 				}
-			}
 
-			setAvatarTimestamp(Date.now());
-		}).then((fn) => {
+				setAvatarTimestamp(Date.now());
+			},
+		).then((fn) => {
 			if (cancelled) {
 				fn();
 			} else {

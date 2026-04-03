@@ -1,10 +1,22 @@
-import { createEffect, createResource, createSignal, onCleanup, type Resource, type ResourceActions } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+import {
+	createEffect,
+	createResource,
+	createSignal,
+	onCleanup,
+	type Resource,
+	type ResourceActions,
+} from "solid-js";
 
 // Resource for Java requirements
-export const javaRequirements: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<any[]>(() =>
-	hasTauriRuntime() ? invoke("get_required_java_versions") : Promise.resolve([]),
+export const javaRequirements: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
+	hasTauriRuntime()
+		? invoke("get_required_java_versions")
+		: Promise.resolve([]),
 );
 
 // Auto-retry Manifest not ready
@@ -21,22 +33,34 @@ createEffect(() => {
 });
 
 // Resource for detected Java versions
-export const detectedJava: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<any[]>(() =>
+export const detectedJava: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
 	hasTauriRuntime() ? invoke("detect_java") : Promise.resolve([]),
 );
 
 // Resource for managed Java versions
-export const managedJava: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<any[]>(() =>
+export const managedJava: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
 	hasTauriRuntime() ? invoke("get_managed_javas") : Promise.resolve([]),
 );
 
 // Resource for global Java paths
-export const globalJavaPaths: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<any[]>(() =>
+export const globalJavaPaths: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
 	hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
 );
 
 // Resource for cache size
-export const cacheSize: [Resource<string>, ResourceActions<string | undefined>] = createResource<string>(() =>
+export const cacheSize: [
+	Resource<string>,
+	ResourceActions<string | undefined>,
+] = createResource<string>(() =>
 	hasTauriRuntime() ? invoke("get_cache_size") : Promise.resolve("0 bytes"),
 );
 

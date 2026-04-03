@@ -6,14 +6,12 @@ function createAuthStore() {
 	const [expiredAccount, setExpiredAccount] = createSignal<Account | null>(
 		null,
 	);
-	const [activeAccount, setActiveAccount] = createSignal<Account | null>(
-		null,
-	);
+	const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
 
 	const refreshState = async () => {
 		const active = await getActiveAccount();
 		setActiveAccount(active);
-		
+
 		if (active?.is_expired) {
 			setExpiredAccount(active);
 		} else {

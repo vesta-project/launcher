@@ -2006,7 +2006,7 @@ function InitAppearancePage(props: InitPagesProps) {
 		if (!explicitThemeSelected()) return;
 		const newHue = values[0];
 		setBackgroundHue(newHue);
-		
+
 		// Use central system for reactive update & persistence
 		await persistThemeUpdate({ primaryHue: newHue });
 	};

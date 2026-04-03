@@ -48,7 +48,6 @@ import {
 	DEFAULT_ICONS,
 	deleteInstance,
 	duplicateInstance,
-	sanitizeInstanceName,
 	getInstanceId,
 	getInstanceSlug,
 	installInstance,
@@ -58,6 +57,7 @@ import {
 	repairInstance,
 	resetInstance,
 	resumeInstanceOperation,
+	sanitizeInstanceName,
 } from "@utils/instances";
 import {
 	createSignal,

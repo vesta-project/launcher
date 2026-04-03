@@ -21,7 +21,7 @@ function TooltipContent(
 	const c = children(() => props.children);
 	return (
 		<TooltipPrimitive.Portal>
-			<TooltipPrimitive.Content class={styles["tooltip__content"] } {...others}>
+			<TooltipPrimitive.Content class={styles["tooltip__content"]} {...others}>
 				{c()}
 			</TooltipPrimitive.Content>
 		</TooltipPrimitive.Portal>

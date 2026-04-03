@@ -45,9 +45,21 @@
 	pointer-events: none;
 	z-index: 0;
 	background:
-		radial-gradient(circle at 14% 24%, hsl(var(--color__primary-hue) 86% 58% / 0.32), transparent 46%),
-		radial-gradient(circle at 82% 18%, hsl(calc(var(--color__primary-hue) + 110) 88% 55% / 0.22), transparent 40%),
-		radial-gradient(circle at 68% 78%, hsl(calc(var(--color__primary-hue) + 220) 72% 52% / 0.24), transparent 44%);
+		radial-gradient(
+			circle at 14% 24%,
+			hsl(var(--color__primary-hue) 86% 58% / 0.32),
+			transparent 46%
+		),
+		radial-gradient(
+			circle at 82% 18%,
+			hsl(calc(var(--color__primary-hue) + 110) 88% 55% / 0.22),
+			transparent 40%
+		),
+		radial-gradient(
+			circle at 68% 78%,
+			hsl(calc(var(--color__primary-hue) + 220) 72% 52% / 0.24),
+			transparent 44%
+		);
 	animation: welcome-gradient-drift 18s ease-in-out infinite;
 }
 

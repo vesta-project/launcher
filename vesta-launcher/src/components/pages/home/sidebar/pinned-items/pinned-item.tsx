@@ -1,6 +1,7 @@
 import PlayIcon from "@assets/play.svg";
 import StopIcon from "@assets/rounded-square.svg";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import * as HoverCard from "@kobalte/core/hover-card";
 import { instancesState, setLaunching } from "@stores/instances";
 import { type PinnedPage, pinning, unpinPage } from "@stores/pinning";
 import { resources } from "@stores/resources";
@@ -14,7 +15,6 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
-import * as HoverCard from "@kobalte/core/hover-card";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS, getInstanceSlug, killInstance } from "@utils/instances";
 import { clsx } from "clsx";

@@ -13,6 +13,7 @@ import {
 	CarouselPrevious,
 } from "@ui/carousel/carousel";
 import { Dialog, DialogContent, DialogOverlay } from "@ui/dialog/dialog";
+import useEmblaCarousel from "embla-carousel-solid";
 import {
 	createEffect,
 	createMemo,
@@ -23,7 +24,6 @@ import {
 	Show,
 } from "solid-js";
 import styles from "./image-viewer.module.css";
-import useEmblaCarousel from "embla-carousel-solid";
 
 interface ImageViewerProps {
 	src: string | null;
@@ -281,7 +281,9 @@ export function ImageViewer(props: ImageViewerProps) {
 														}}
 														style={{
 															"--image-scale": props.scale || 1,
-															"image-rendering": props.pixelated ? "pixelated" : "auto"
+															"image-rendering": props.pixelated
+																? "pixelated"
+																: "auto",
 														}}
 														draggable={false}
 														onError={() =>

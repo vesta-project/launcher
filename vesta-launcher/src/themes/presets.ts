@@ -95,7 +95,7 @@ export interface ThemeConfig {
 	thumbnail?: string;
 	/** Border width for subtle borders (px) */
 	/** Border width for strong borders (px) */
-	
+
 	/** Custom CSS to inject when theme is active */
 	customCss?: string;
 	/** Whether the user can change the hue of this theme */
@@ -104,8 +104,8 @@ export interface ThemeConfig {
 	allowStyleChange?: boolean;
 	/** Whether the user can change the border thickness of this theme */
 	allowBorderChange?: boolean;
-        windowEffect?: string;
-        backgroundOpacity?: number;
+	windowEffect?: string;
+	backgroundOpacity?: number;
 	variables?: ThemeVariable[];
 	userVariables?: Record<string, ThemeVariableValue>;
 }
@@ -127,8 +127,8 @@ export interface AppThemeConfig {
 	theme_gradient_harmony?: GradientHarmony;
 	theme_advanced_overrides?: string;
 	theme_border_width?: number;
-    theme_window_effect?: string;
-    theme_background_opacity?: number;
+	theme_window_effect?: string;
+	theme_background_opacity?: number;
 	background_hue?: number; // Legacy/Fallback
 }
 
@@ -189,7 +189,10 @@ export function getSupportedWindowEffects(osHint?: string): string[] {
 	return [FALLBACK_WINDOW_EFFECT];
 }
 
-export function normalizeWindowEffectForCurrentOS(effect?: string, osHint?: string): string {
+export function normalizeWindowEffectForCurrentOS(
+	effect?: string,
+	osHint?: string,
+): string {
 	const requested = (effect || "").trim().toLowerCase();
 	if (!requested) return FALLBACK_WINDOW_EFFECT;
 
@@ -307,12 +310,18 @@ function parseVariableDefinitions(value: unknown): ThemeVariable[] | undefined {
 	return parsed.length > 0 ? parsed : undefined;
 }
 
-function parseUserVariables(value: unknown): Record<string, ThemeVariableValue> | undefined {
+function parseUserVariables(
+	value: unknown,
+): Record<string, ThemeVariableValue> | undefined {
 	if (!isObjectLike(value)) return undefined;
 
 	const parsed: Record<string, ThemeVariableValue> = {};
 	for (const [key, val] of Object.entries(value)) {
-		if (typeof val === "number" || typeof val === "string" || typeof val === "boolean") {
+		if (
+			typeof val === "number" ||
+			typeof val === "string" ||
+			typeof val === "boolean"
+		) {
 			parsed[key] = val;
 		}
 	}
@@ -343,20 +352,29 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.primaryLight = getNumber(source.primaryLight ?? source.primary_light);
 	out.opacity = getNumber(source.opacity);
 	out.style = getString(source.style) as StyleMode | undefined;
-	out.gradientEnabled = getBoolean(source.gradientEnabled ?? source.gradient_enabled);
+	out.gradientEnabled = getBoolean(
+		source.gradientEnabled ?? source.gradient_enabled,
+	);
 	out.rotation = getNumber(source.rotation);
 	out.gradientType = getString(source.gradientType ?? source.gradient_type) as
 		| "linear"
 		| "radial"
 		| undefined;
-	out.gradientHarmony = getString(source.gradientHarmony ?? source.gradient_harmony) as GradientHarmony | undefined;
+	out.gradientHarmony = getString(
+		source.gradientHarmony ?? source.gradient_harmony,
+	) as GradientHarmony | undefined;
 	out.borderWidth = getNumber(source.borderWidth ?? source.border_width);
-	out.backgroundOpacity = getNumber(source.backgroundOpacity ?? source.background_opacity);
+	out.backgroundOpacity = getNumber(
+		source.backgroundOpacity ?? source.background_opacity,
+	);
 	out.windowEffect = getString(source.windowEffect ?? source.window_effect);
 	out.customCss = getString(source.customCss ?? source.custom_css);
 	out.variables = parseVariableDefinitions(source.variables ?? source.params);
 	out.userVariables = parseUserVariables(
-		source.userVariables ?? source.user_variables ?? source.userParams ?? source.user_params,
+		source.userVariables ??
+			source.user_variables ??
+			source.userParams ??
+			source.user_params,
 	);
 
 	return out;
@@ -409,21 +427,45 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 			getNum(themeData.primaryHue) ??
 			getNum(config.theme_primary_hue) ??
 			getNum(config.background_hue) ??
-			baseTheme.primaryHue ?? 180,
+			baseTheme.primaryHue ??
+			180,
 		opacity: getNum(themeData.opacity) ?? baseTheme.opacity ?? 0,
-		borderWidth: themeData.borderWidth ?? config.theme_border_width ?? baseTheme.borderWidth,
+		borderWidth:
+			themeData.borderWidth ??
+			config.theme_border_width ??
+			baseTheme.borderWidth,
 		style: themeData.style ?? config.theme_style ?? baseTheme.style,
-		gradientEnabled: themeData.gradientEnabled ?? config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
-		rotation: getNum(themeData.rotation) ?? getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
-		gradientType: themeData.gradientType ?? config.theme_gradient_type ?? baseTheme.gradientType,
-		gradientHarmony: themeData.gradientHarmony ?? config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
-		customCss: (themeData.customCss && themeData.customCss.trim().length > 0)
-			? themeData.customCss
-			: (config.theme_advanced_overrides && config.theme_advanced_overrides.trim().length > 0)
-				? config.theme_advanced_overrides
-				: baseTheme.customCss,
-		windowEffect: themeData.windowEffect ?? config.theme_window_effect ?? baseTheme.windowEffect,
-		backgroundOpacity: themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,
+		gradientEnabled:
+			themeData.gradientEnabled ??
+			config.theme_gradient_enabled ??
+			baseTheme.gradientEnabled,
+		rotation:
+			getNum(themeData.rotation) ??
+			getNum(config.theme_gradient_angle) ??
+			baseTheme.rotation,
+		gradientType:
+			themeData.gradientType ??
+			config.theme_gradient_type ??
+			baseTheme.gradientType,
+		gradientHarmony:
+			themeData.gradientHarmony ??
+			config.theme_gradient_harmony ??
+			baseTheme.gradientHarmony,
+		customCss:
+			themeData.customCss && themeData.customCss.trim().length > 0
+				? themeData.customCss
+				: config.theme_advanced_overrides &&
+						config.theme_advanced_overrides.trim().length > 0
+					? config.theme_advanced_overrides
+					: baseTheme.customCss,
+		windowEffect:
+			themeData.windowEffect ??
+			config.theme_window_effect ??
+			baseTheme.windowEffect,
+		backgroundOpacity:
+			themeData.backgroundOpacity ??
+			config.theme_background_opacity ??
+			baseTheme.backgroundOpacity,
 		author: themeData.author ?? baseTheme.author,
 		variables: themeData.variables ?? baseTheme.variables,
 		userVariables: themeData.userVariables,
@@ -440,7 +482,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Vesta",
 		description: "Signature teal to purple to orange gradient",
 		primaryHue: 180,
-		opacity: 0, borderWidth: 1, style: "glass",
+		opacity: 0,
+		borderWidth: 1,
+		style: "glass",
 		gradientEnabled: true,
 		rotation: 180,
 		gradientType: "linear",
@@ -459,7 +503,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Solar",
 		description: "Signature warm orange satin with solid background",
 		primaryHue: 40,
-		opacity: 50, borderWidth: 1, style: "satin",
+		opacity: 50,
+		borderWidth: 1,
+		style: "satin",
 		gradientEnabled: false,
 		allowHueChange: false, // Locked to signature orange
 		allowStyleChange: false,
@@ -470,7 +516,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Neon",
 		description: "Signature electric pink glass with vibrant gradient",
 		primaryHue: 300,
-		opacity: 0, borderWidth: 1, style: "glass",
+		opacity: 0,
+		borderWidth: 1,
+		style: "glass",
 		gradientEnabled: true,
 		rotation: 135,
 		gradientType: "linear",
@@ -484,7 +532,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Classic",
 		description: "Clean customizable theme - Maximum accessibility",
 		primaryHue: 210,
-		opacity: 100, borderWidth: 1, style: "flat",
+		opacity: 100,
+		borderWidth: 1,
+		style: "flat",
 		gradientEnabled: false,
 		allowHueChange: true, // Customizable
 		allowStyleChange: false,
@@ -495,7 +545,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Forest",
 		description: "Signature natural green with subtle glass effect",
 		primaryHue: 140,
-		opacity: 50, borderWidth: 1, style: "satin",
+		opacity: 50,
+		borderWidth: 1,
+		style: "satin",
 		gradientEnabled: true,
 		rotation: 90,
 		gradientType: "linear",
@@ -509,7 +561,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Sunset",
 		description: "Signature warm gradient from purple to orange",
 		primaryHue: 270,
-		opacity: 0, borderWidth: 1, style: "glass",
+		opacity: 0,
+		borderWidth: 1,
+		style: "glass",
 		gradientEnabled: true,
 		rotation: 180,
 		gradientType: "linear",
@@ -583,7 +637,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		description:
 			"Ultra-dark Midnight mode — pure black surfaces for true blacks",
 		primaryHue: 240, // Dark blue for midnight theme preview
-		opacity: 100, borderWidth: 0, style: "solid",
+		opacity: 100,
+		borderWidth: 0,
+		style: "solid",
 		colorScheme: "dark",
 		gradientEnabled: false,
 		allowHueChange: true, // Allow hue change for accents
@@ -650,19 +706,22 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		name: "Old School",
 		description: "Classic customizable design with strong borders",
 		primaryHue: 210,
-		opacity: 100, borderWidth: 2, style: "bordered",
+		opacity: 100,
+		borderWidth: 2,
+		style: "bordered",
 		gradientEnabled: false,
 		allowHueChange: true, // Customizable
 		allowStyleChange: false,
 		allowBorderChange: false,
-		
 	},
 	{
 		id: "custom",
 		name: "Custom",
 		description: "Unlock all controls to craft your own theme",
 		primaryHue: 220,
-		opacity: 0, borderWidth: 1, style: "glass",
+		opacity: 0,
+		borderWidth: 1,
+		style: "glass",
 		gradientEnabled: true,
 		rotation: 135,
 		gradientType: "linear",
@@ -670,7 +729,6 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowHueChange: true,
 		allowStyleChange: true,
 		allowBorderChange: true,
-		
 	},
 ];
 
@@ -678,7 +736,10 @@ export const PRESET_THEMES: ThemeConfig[] = [
  * Get a theme by ID
  */
 export function getThemeById(id: string): ThemeConfig | undefined {
-	return customThemeRegistry.get(id) || PRESET_THEMES.find((theme) => theme.id === id);
+	return (
+		customThemeRegistry.get(id) ||
+		PRESET_THEMES.find((theme) => theme.id === id)
+	);
 }
 
 export function isBuiltinThemeId(id: string): boolean {
@@ -702,7 +763,7 @@ export function getDefaultTheme(): ThemeConfig {
  */
 export function sanitizeCustomCss(css: string): string {
 	if (!css) return css;
-	
+
 	const lowered = css.toLowerCase();
 	const blockedTokens = [
 		"@import",
@@ -713,14 +774,14 @@ export function sanitizeCustomCss(css: string): string {
 		"-moz-binding",
 		"behavior:",
 	];
-	
+
 	for (const token of blockedTokens) {
 		if (lowered.includes(token)) {
 			console.warn("Theme rejected: Potentially unsafe CSS detected.", token);
 			return "";
 		}
 	}
-	
+
 	return css;
 }
 
@@ -732,7 +793,11 @@ function normalizeUserVariables(
 		if (!userVariables) return undefined;
 		const filtered: Record<string, ThemeVariableValue> = {};
 		for (const [key, value] of Object.entries(userVariables)) {
-			if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
+			if (
+				typeof value === "number" ||
+				typeof value === "string" ||
+				typeof value === "boolean"
+			) {
 				filtered[key] = value;
 			}
 		}
@@ -744,13 +809,15 @@ function normalizeUserVariables(
 		const candidate = userVariables?.[variable.key];
 
 		if (variable.type === "number") {
-			const value = typeof candidate === "number" ? candidate : variable.default;
+			const value =
+				typeof candidate === "number" ? candidate : variable.default;
 			normalized[variable.key] = clamp(value, variable.min, variable.max);
 			continue;
 		}
 
 		if (variable.type === "color") {
-			normalized[variable.key] = typeof candidate === "string" ? candidate : variable.default;
+			normalized[variable.key] =
+				typeof candidate === "string" ? candidate : variable.default;
 			continue;
 		}
 
@@ -761,7 +828,8 @@ function normalizeUserVariables(
 		}
 
 		if (variable.type === "select") {
-			const selected = typeof candidate === "string" ? candidate : variable.default;
+			const selected =
+				typeof candidate === "string" ? candidate : variable.default;
 			const isAllowed = variable.options.some((opt) => opt.value === selected);
 			normalized[variable.key] = isAllowed ? selected : variable.default;
 		}
@@ -800,7 +868,11 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
 		opacity: clamp(getVal(theme.opacity, defaultTheme.opacity ?? 0), 0, 100),
-		borderWidth: clamp(getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1), 0, 10),
+		borderWidth: clamp(
+			getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1),
+			0,
+			10,
+		),
 		style: theme.style || defaultTheme.style,
 		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
@@ -812,7 +884,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		gradientHarmony: theme.gradientHarmony || "none",
 		thumbnail: theme.thumbnail,
 		// Pass-through extras for runtime application
-		
+
 		customCss: theme.customCss ? sanitizeCustomCss(theme.customCss) : undefined,
 		allowHueChange: theme.allowHueChange,
 		allowStyleChange: theme.allowStyleChange,
@@ -825,7 +897,8 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 						? "vibrancy"
 						: "none"),
 		),
-		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
+		backgroundOpacity:
+			theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
 		variables: theme.variables,
 		userVariables: normalizeUserVariables(theme.userVariables, theme.variables),
 	};
@@ -838,9 +911,9 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
 		"--color__primary-hue": theme.primaryHue.toString(),
 		"--background-opacity":
-			(theme.backgroundOpacity !== undefined
+			theme.backgroundOpacity !== undefined
 				? (theme.backgroundOpacity / 100).toFixed(2)
-				: "0.25"),
+				: "0.25",
 		"--rotation": `${theme.rotation ?? 135}deg`,
 		"--gradient-type": theme.gradientType || "linear",
 		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
@@ -915,7 +988,8 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		vars["--liquid-frost-blur"] = `${blurPx * 0.8}px`;
 
 		if (blurPx > 0) {
-			vars["--liquid-backdrop-filter"] = `blur(${blurPx}px) saturate(${1.5 - (opacityValue/100)*0.5})`;
+			vars["--liquid-backdrop-filter"] =
+				`blur(${blurPx}px) saturate(${1.5 - (opacityValue / 100) * 0.5})`;
 		} else {
 			vars["--liquid-backdrop-filter"] = "none";
 		}
@@ -958,7 +1032,12 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		for (const v of theme.variables) {
 			const key = `--theme-var-${v.key}`;
 			if (!vars[key]) {
-				vars[key] = typeof v.default === "boolean" ? (v.default ? "1" : "0") : String(v.default);
+				vars[key] =
+					typeof v.default === "boolean"
+						? v.default
+							? "1"
+							: "0"
+						: String(v.default);
 			}
 		}
 	}
@@ -984,18 +1063,28 @@ export function applyTheme(theme: ThemeConfig): void {
 	const currentHue = style.getPropertyValue("--color__primary-hue").trim();
 	const currentRotation = style.getPropertyValue("--rotation").trim();
 	const currentSecondaryHue = style.getPropertyValue("--hue-secondary").trim();
-	const currentBackgroundOpacity = style.getPropertyValue("--background-opacity").trim();
+	const currentBackgroundOpacity = style
+		.getPropertyValue("--background-opacity")
+		.trim();
 	const currentOpacity = style.getPropertyValue("--effect-opacity").trim();
 	const currentWindowEffect = root.getAttribute("data-window-effect") || "none";
-	const currentBorderWidth = style.getPropertyValue("--border-width-subtle").trim();
-	const nextThemeVarKeys = Object.keys(vars).filter((key) => key.startsWith("--theme-var-"));
+	const currentBorderWidth = style
+		.getPropertyValue("--border-width-subtle")
+		.trim();
+	const nextThemeVarKeys = Object.keys(vars).filter((key) =>
+		key.startsWith("--theme-var-"),
+	);
 	const previousThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
 		.split(",")
 		.map((key) => key.trim())
 		.filter((key) => key.length > 0);
-	const hasRemovedThemeVars = previousThemeVarKeys.some((key) => !nextThemeVarKeys.includes(key));
+	const hasRemovedThemeVars = previousThemeVarKeys.some(
+		(key) => !nextThemeVarKeys.includes(key),
+	);
 
-	const styleTag = document.getElementById("theme-custom-css") as HTMLStyleElement | null;
+	const styleTag = document.getElementById(
+		"theme-custom-css",
+	) as HTMLStyleElement | null;
 	const currentCustomCss = (styleTag?.textContent || "").trim();
 	const nextCustomCss = (theme.customCss || "").trim();
 	const customCssChanged = currentCustomCss !== nextCustomCss;
@@ -1047,13 +1136,11 @@ export function applyTheme(theme: ThemeConfig): void {
 		currentWindowEffect === (theme.windowEffect || "none") &&
 		currentBorderWidth === vars["--border-width-subtle"]
 	) {
-		const anyVarChanged = nextThemeVarKeys.some(
-			(key) => {
-				const current = style.getPropertyValue(key).trim();
-				const next = vars[key];
-				return current !== next;
-			}
-		);
+		const anyVarChanged = nextThemeVarKeys.some((key) => {
+			const current = style.getPropertyValue(key).trim();
+			const next = vars[key];
+			return current !== next;
+		});
 
 		if (!anyVarChanged && !hasRemovedThemeVars && !customCssChanged) {
 			updateCustomCss(theme);
@@ -1061,28 +1148,32 @@ export function applyTheme(theme: ThemeConfig): void {
 		}
 	}
 
-        for (const staleKey of previousThemeVarKeys) {
-                if (!nextThemeVarKeys.includes(staleKey)) {
-                        style.removeProperty(staleKey);
-                }
-        }
+	for (const staleKey of previousThemeVarKeys) {
+		if (!nextThemeVarKeys.includes(staleKey)) {
+			style.removeProperty(staleKey);
+		}
+	}
 
-        for (const [key, value] of Object.entries(vars)) {
-                if (style.getPropertyValue(key).trim() !== value) {
-                        style.setProperty(key, value);
-                }
-        }
+	for (const [key, value] of Object.entries(vars)) {
+		if (style.getPropertyValue(key).trim() !== value) {
+			style.setProperty(key, value);
+		}
+	}
 
-        updateCustomCss(theme);
-        root.setAttribute("data-theme-id", themeId);
-        root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
+	updateCustomCss(theme);
+	root.setAttribute("data-theme-id", themeId);
+	root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
 
-	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
+	const effectToSet = normalizeWindowEffectForCurrentOS(
+		theme.windowEffect || "none",
+	);
 	if (currentWindowEffect !== effectToSet || isFirstApply) {
 		root.setAttribute("data-window-effect", effectToSet);
 		if ((window as any).__TAURI_INTERNALS__) {
 			import("@tauri-apps/api/core").then(({ invoke }) => {
-				invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
+				invoke("set_window_effect", { effect: effectToSet }).catch(
+					console.error,
+				);
 			});
 		}
 	}
@@ -1092,12 +1183,10 @@ export function applyTheme(theme: ThemeConfig): void {
 		root.setAttribute("data-gradient", "1");
 		// Let stylesheet-defined gradient and opacity take over (CSS media queries handle light/dark)
 		style.removeProperty("--background-color");
-		
 	} else {
 		root.setAttribute("data-gradient", "0");
 		// Force solid background
 		style.setProperty("--background-color", "var(--surface-base)");
-		
 	}
 
 	// Apply style mode attribute

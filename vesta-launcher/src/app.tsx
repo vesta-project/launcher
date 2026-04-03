@@ -6,12 +6,14 @@ import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
+import { prefetchChangelog } from "@stores/changelog";
 import {
 	cleanupDialogSystem,
 	dialogStore,
 	initializeDialogSystem,
 } from "@stores/dialog-store";
 import { initializeInstances, setupInstanceListeners } from "@stores/instances";
+import { prefetchSettingsData } from "@stores/settings-cache";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -40,8 +42,6 @@ import { ensureOsType, getOsType } from "@utils/os";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
-import { prefetchChangelog } from "@stores/changelog";
-import { prefetchSettingsData } from "@stores/settings-cache";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),

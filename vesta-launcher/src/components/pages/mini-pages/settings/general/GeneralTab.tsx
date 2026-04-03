@@ -1,7 +1,13 @@
 import { SettingsCard, SettingsField } from "@components/settings";
-import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
-import { NumberField, NumberFieldDecrementTrigger, NumberFieldGroup, NumberFieldIncrementTrigger, NumberFieldInput } from "@ui/number-field/number-field";
 import { invoke } from "@tauri-apps/api/core";
+import {
+	NumberField,
+	NumberFieldDecrementTrigger,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
+} from "@ui/number-field/number-field";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import styles from "../settings-page.module.css";
 

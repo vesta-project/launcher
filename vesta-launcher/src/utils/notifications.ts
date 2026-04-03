@@ -222,7 +222,11 @@ async function invokeNotificationAction(
 ): Promise<void> {
 	console.log(`[NotificationAction] Invoking: ${actionId} (key: ${clientKey})`);
 	try {
-		await invoke("invoke_notification_action", { actionId, clientKey, payload });
+		await invoke("invoke_notification_action", {
+			actionId,
+			clientKey,
+			payload,
+		});
 		console.log(`[NotificationAction] Successfully invoked ${actionId}`);
 	} catch (error) {
 		console.error(`[NotificationAction] Failed to invoke ${actionId}:`, error);
@@ -271,36 +275,36 @@ function handleProgressUpdate(
 		(n) => n.client_key && n.client_key === clientKey,
 	);
 
-		if (existing) {
-			const updateData: Partial<Notification> = {};
+	if (existing) {
+		const updateData: Partial<Notification> = {};
 
-			switch (update.type) {
-				case "progress":
-					updateData.progress = update.data.percent;
-					if (update.data.description !== undefined) {
-						updateData.description = update.data.description ?? undefined;
-					}
-					if (update.data.severity) {
-						updateData.type = update.data.severity;
-					}
-					if (update.data.title !== undefined) {
-						updateData.title = update.data.title ?? undefined;
-					}
-					break;
-				case "step":
-					updateData.title = update.data.name;
-					updateData.description = update.data.name;
-					if (update.data.total != null && update.data.total !== 0) {
-						updateData.total_steps = update.data.total;
-					}
-					break;
-				case "stepCount":
-					updateData.current_step = update.data.current;
-					if (update.data.total != null && update.data.total !== 0) {
-						updateData.total_steps = update.data.total;
-					}
-					break;
-				case "finished":
+		switch (update.type) {
+			case "progress":
+				updateData.progress = update.data.percent;
+				if (update.data.description !== undefined) {
+					updateData.description = update.data.description ?? undefined;
+				}
+				if (update.data.severity) {
+					updateData.type = update.data.severity;
+				}
+				if (update.data.title !== undefined) {
+					updateData.title = update.data.title ?? undefined;
+				}
+				break;
+			case "step":
+				updateData.title = update.data.name;
+				updateData.description = update.data.name;
+				if (update.data.total != null && update.data.total !== 0) {
+					updateData.total_steps = update.data.total;
+				}
+				break;
+			case "stepCount":
+				updateData.current_step = update.data.current;
+				if (update.data.total != null && update.data.total !== 0) {
+					updateData.total_steps = update.data.total;
+				}
+				break;
+			case "finished":
 				updateData.progress = 100;
 				if (update.data.message) {
 					updateData.description = update.data.message;
@@ -392,13 +396,18 @@ async function subscribeToBackendNotifications() {
 						severity: notif.severity,
 						notification_type: notif.notification_type,
 						duration:
-							notif.notification_type === "progress" && (notif.progress ?? 0) < 100
+							notif.notification_type === "progress" &&
+							(notif.progress ?? 0) < 100
 								? 0
 								: 5000,
 						dismissible: notif.dismissible,
 						actions: notif.actions,
 						onAction: (actionId, payload) => {
-							invokeNotificationAction(actionId, clientKey || undefined, payload);
+							invokeNotificationAction(
+								actionId,
+								clientKey || undefined,
+								payload,
+							);
 						},
 						onToastDismiss: (id) => closeAlert(id, true),
 						onToastForceClose: (id) => closeAlert(id, false),

@@ -193,7 +193,9 @@ function StandalonePageViewer() {
 						<WindowControls
 							class={
 								styles["standalone-page-viewer__controls"] +
-								styles[`standalone-page-viewer__controls--${osType() ?? "windows"}`]
+								styles[
+									`standalone-page-viewer__controls--${osType() ?? "windows"}`
+								]
 							}
 							platform={
 								osType() === "linux"

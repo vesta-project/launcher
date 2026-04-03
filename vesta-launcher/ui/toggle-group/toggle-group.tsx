@@ -6,9 +6,7 @@ import { children, splitProps, ValidComponent } from "solid-js";
 import styles from "./toggle-group.module.css";
 
 type ToggleGroupRootProps<T extends ValidComponent = "div"> =
-	ToggleGroupPrimitive.ToggleGroupRootProps<T> &
-		ClassProp &
-		ChildrenProp;
+	ToggleGroupPrimitive.ToggleGroupRootProps<T> & ClassProp & ChildrenProp;
 
 function ToggleGroup<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,

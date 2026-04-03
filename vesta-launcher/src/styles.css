@@ -47,22 +47,31 @@
 	   ============================================================================= */
 
 	/* Surface Hierarchy (with alpha for Windows Mica/Acrylic support) */
-	--surface-base: var(--surface-base-computed, hsl(
-		var(--color__primary-hue) 10% var(--lightness-surface-base) /
-		var(--effect-opacity)
-	));
-	--surface-raised: var(--surface-raised-computed, hsl(
-		var(--color__primary-hue) 15% var(--lightness-surface-raised) /
-		var(--effect-opacity)
-	));
-	--surface-overlay: var(--surface-overlay-computed, hsl(
-		var(--color__primary-hue) 20% var(--lightness-surface-overlay) /
-		var(--effect-opacity)
-	));
-	--surface-sunken: var(--surface-sunken-computed, hsl(
-		var(--color__primary-hue) 5% var(--lightness-surface-sunken) /
-		0.98
-	));
+	--surface-base: var(
+		--surface-base-computed,
+		hsl(
+			var(--color__primary-hue) 10% var(--lightness-surface-base) /
+			var(--effect-opacity)
+		)
+	);
+	--surface-raised: var(
+		--surface-raised-computed,
+		hsl(
+			var(--color__primary-hue) 15% var(--lightness-surface-raised) /
+			var(--effect-opacity)
+		)
+	);
+	--surface-overlay: var(
+		--surface-overlay-computed,
+		hsl(
+			var(--color__primary-hue) 20% var(--lightness-surface-overlay) /
+			var(--effect-opacity)
+		)
+	);
+	--surface-sunken: var(
+		--surface-sunken-computed,
+		hsl(var(--color__primary-hue) 5% var(--lightness-surface-sunken) / 0.98)
+	);
 
 	--app-background-tint: hsl(
 		var(--color__primary-hue) 10% var(--lightness-surface-base) /
@@ -198,10 +207,7 @@
 	--scrollbar-thumb-border: hsl(var(--color__primary-hue) 10% 20%);
 
 	/* Background Gradient Stops */
-	--gradient-stop-1: hsl(
-        var(--hue-accent) 80% 5% / 
-        var(--background-opacity)
-	);
+	--gradient-stop-1: hsl(var(--hue-accent) 80% 5% / var(--background-opacity));
 	--gradient-stop-2: hsl(
 		var(--color__primary-hue) 81% 40% /
 		var(--background-opacity)
@@ -305,11 +311,10 @@
 	--kb-menu-content-transform-origin: top center;
 }
 
-
 :root[data-os="macos"] body #app,
 :root[data-os="macos"] body #app-loader {
 	/* Windows without decorations dont have a border radius on macos */
-	border-radius: 12px!important;
+	border-radius: 12px !important;
 	overflow: hidden;
 }
 
@@ -343,8 +348,10 @@
 
 :root[data-os="macos"][data-window-effect="none"] #app,
 :root[data-os="macos"][data-window-effect=""] #app {
-    /* Set a solid background behind the gradient purely for macOS 'none' mode */
-    background-color: hsl(var(--color__primary-hue) 5% var(--lightness-surface-sunken)) !important;
+	/* Set a solid background behind the gradient purely for macOS 'none' mode */
+	background-color: hsl(
+		var(--color__primary-hue) 5% var(--lightness-surface-sunken)
+	) !important;
 }
 
 :root[data-os="macos"] body {
@@ -792,15 +799,14 @@ button {
 	cursor: text;
 }
 
-
 /* Let OS Window Effects show through by making the base app background transparent */
 :root:not([data-window-effect="none"]):not([data-window-effect=""]) #app {
-    background-color: transparent !important;
+	background-color: transparent !important;
 }
 
 /* Ensure 'none' effect on macOS results in a solid surface rather than transparency */
 :root[data-window-effect="none"] #app,
 :root[data-window-effect=""] #app {
-    background-color: var(--background-color) !important;
-    background-image: var(--background-image) !important;
+	background-color: var(--background-color) !important;
+	background-image: var(--background-image) !important;
 }

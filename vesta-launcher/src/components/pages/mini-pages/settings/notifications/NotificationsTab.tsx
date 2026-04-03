@@ -30,7 +30,7 @@ export const NotificationSettingsTab = () => {
 		await invoke("check_notifications_now");
 	};
 
-	const addPreset = async (title: string, url: string) => {
+	const _addPreset = async (title: string, url: string) => {
 		await invoke("subscribe_to_rss", { title, url });
 		refetch();
 	};
