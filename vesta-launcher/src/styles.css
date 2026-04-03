@@ -182,6 +182,7 @@
 	/* Blur Variables - Inherited by children */
 	--blur-base: var(--effect-blur);
 	--blur-overlay: 12px;
+	--blur-medium: 8px;
 	--blur-subtle: 4px;
 
 	/* =============================================================================

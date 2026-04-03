@@ -48,7 +48,6 @@ import {
 	DEFAULT_ICONS,
 	deleteInstance,
 	duplicateInstance,
-	getInstanceId,
 	getInstanceSlug,
 	installInstance,
 	isInstanceRunning,
@@ -83,14 +82,46 @@ interface InstanceCardProps {
 }
 
 export default function InstanceCard(props: InstanceCardProps) {
-	const [_hover, setHover] = createSignal(false);
 	const [leaveAnim, setLeaveAnim] = createSignal(false);
 	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
 	const [hasCrashed, setHasCrashed] = createSignal(false);
 	const [showCrashModal, setShowCrashModal] = createSignal(false);
 	const [showExportDialog, setShowExportDialog] = createSignal(false);
+	const [busy, setBusy] = createSignal(false);
+	const [launching, setLaunching] = createSignal(false);
+
+	let launchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	const clearLaunchTimeout = () => {
+		if (launchTimeoutId !== null) {
+			clearTimeout(launchTimeoutId);
+			launchTimeoutId = null;
+		}
+	};
+
+	const startLaunchingState = () => {
+		setLaunching(true);
+		clearLaunchTimeout();
+		launchTimeoutId = setTimeout(() => {
+			setLaunching(false);
+			launchTimeoutId = null;
+		}, 30000);
+	};
+
+	const clearLaunchingState = () => {
+		setLaunching(false);
+		clearLaunchTimeout();
+	};
 
 	const instanceSlug = getInstanceSlug(props.instance);
+	const instanceBackgroundImage = () => {
+		const rawPath = props.instance.iconPath || DEFAULT_ICONS[0];
+		if (rawPath.startsWith("linear-gradient")) {
+			return rawPath;
+		}
+
+		return `url('${resolveResourceUrl(rawPath)}')`;
+	};
 
 	onMount(() => {
 		const unlisteners: (() => void)[] = [];
@@ -118,9 +149,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						(payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
-					if (id === instanceSlug) {
-						setLaunching(false);
-					}
+					if (id === instanceSlug) clearLaunchingState();
 					setRunningIds((prev) => new Set(prev).add(id));
 				}),
 			);
@@ -135,9 +164,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						(payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
-					if (id === instanceSlug) {
-						setLaunching(false);
-					}
+					if (id === instanceSlug) clearLaunchingState();
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(id);
@@ -159,9 +186,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						(payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
-					if (id === instanceSlug) {
-						setLaunching(false);
-					}
+					if (id === instanceSlug) clearLaunchingState();
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(id);
@@ -182,6 +207,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					};
 					if (payload.instance_id === instanceSlug) {
 						setHasCrashed(true);
+						clearLaunchingState();
 					}
 				}),
 			);
@@ -190,6 +216,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setup();
 
 		onCleanup(() => {
+			clearLaunchTimeout();
 			for (const unlisten of unlisteners) {
 				unlisten();
 			}
@@ -221,9 +248,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const needsInstallation = () =>
 		!props.instance.installationStatus || isFailed();
-
-	const [busy, setBusy] = createSignal(false);
-	const [launching, setLaunching] = createSignal(false);
 
 	// Can only launch if installed and not busy/installing/running
 	const _canLaunch = () =>
@@ -271,7 +295,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 			}
 			setBusy(false);
 		} else {
-			setLaunching(true);
+			startLaunchingState();
 			try {
 				// Clear crash flag when attempting to launch
 				clearCrashDetails(instanceSlug);
@@ -292,7 +316,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					severity: "error",
 					duration: 5000,
 				});
-				setLaunching(false);
+				clearLaunchingState();
 			}
 			// Note: launching state is cleared when core://instance-launched or core://instance-exited occurs,
 			// but we can also clear it if launchInstance returns (meaning it's 'started')
@@ -350,25 +374,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 				as="div"
 				class={`${styles["instance-card"]}${isFailed() ? ` ${styles.failed}` : ""}${isInterrupted() ? ` ${styles.interrupted}` : ""}${leaveAnim() ? ` ${styles["instance-card-leave"]}` : ""}`}
 				onMouseOver={() => {
-					setHover(true);
 					setLeaveAnim(false);
 				}}
 				onMouseLeave={() => {
-					setHover(false);
 					setLeaveAnim(true);
 					setTimeout(() => setLeaveAnim(false), 250);
 				}}
 				onClick={openInstanceDetails}
-				style={
-					(props.instance.iconPath || "").startsWith("linear-gradient")
-						? {
-								// biome-ignore lint/style/noNonNullAssertion: iconPath is confirmed to be a gradient string above
-								background: props.instance.iconPath!,
-							}
-						: {
-								"background-image": `url('${resolveResourceUrl(props.instance.iconPath || DEFAULT_ICONS[0])}')`,
-							}
-				}
+				style={{
+					"--instance-bg-image": instanceBackgroundImage(),
+				}}
 				data-instance={instanceSlug}
 			>
 				<Switch>
@@ -467,6 +482,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 															: styles["launch"]
 										}`}
 										onClick={handleClick}
+										aria-label={playButtonTooltip()}
+										aria-busy={launching()}
+										aria-pressed={isRunning()}
 										disabled={isInstalling() || launching()}
 									>
 										{isInstalling() || launching() ? (
