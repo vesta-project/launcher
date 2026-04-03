@@ -1,22 +1,16 @@
 ﻿import CapeIcon from "@assets/cape-icon.svg";
-import ShieldIcon from "@assets/chip.svg";
-import ClipboardIcon from "@assets/clipboard.svg";
 import PlusIcon from "@assets/plus.svg";
 // Assets
 import RefreshIcon from "@assets/refresh.svg";
-import ArrowRightIcon from "@assets/right-arrow.svg";
 import ViewIcon from "@assets/search.svg";
 import SkinIcon from "@assets/skin-icon.svg";
 import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
 import { ResourceAvatar } from "@ui/avatar";
-import { Badge } from "@ui/badge";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 // UI Components
-import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import {
 	Select,
 	SelectContent,
@@ -212,7 +206,10 @@ const SkinPortrait = (props: { src: string; variant?: string }) => {
 
 	return (
 		<div class={styles.skinPortrait}>
-			<canvas ref={canvasRef} class={styles.skinPortraitCanvas} />
+			<canvas
+				ref={(el) => (canvasRef = el)}
+				class={styles.skinPortraitCanvas}
+			/>
 		</div>
 	);
 };

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[diesel(table_name = installed_resource)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct InstalledResource {
-    pub id: Option<i32>,
+    pub id: i32,
     pub instance_id: i32,
     pub platform: String,
     pub remote_id: String,

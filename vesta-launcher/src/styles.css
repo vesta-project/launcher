@@ -6,7 +6,7 @@
 	/* Base Hues (User Configurable) */
 	--color__primary-hue: 180;
 	--button-lightness: 35%;
-	--accent-base: var(--accent-base);
+	--accent-base: var(--color__primary-hue) 70% var(--button-lightness);
 	--hue-secondary: calc(
 		var(--color__primary-hue) +
 		180

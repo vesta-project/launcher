@@ -3,14 +3,7 @@ import { changelog, type GithubRelease } from "@stores/changelog";
 import { openExternal } from "@utils/external-link";
 import { sanitizeHtml } from "@utils/security";
 import { marked } from "marked";
-import {
-	createEffect,
-	createResource,
-	createSignal,
-	For,
-	onMount,
-	Show,
-} from "solid-js";
+import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./changelog.module.css";
 
 export default function ChangelogPage() {

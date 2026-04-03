@@ -1,5 +1,4 @@
 import { SettingsCard, SettingsField } from "@components/settings";
-import LauncherButton from "@ui/button/button";
 import {
 	NumberField,
 	NumberFieldDecrementTrigger,

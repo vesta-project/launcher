@@ -1346,11 +1346,11 @@ const ResourceDetailsPage: Component<{
 							</span>
 						</div>
 					</Show>
-					<Show when={project()?.authors && project()?.authors.length > 1}>
+					<Show when={project()?.authors && (project()?.authors?.length ?? 0) > 1}>
 						<div class={styles["meta-item"]}>
 							<span class={styles["label"]}>Authors</span>
 							<span class={styles["value"]}>
-								{project()?.authors.join(", ")}
+								{project()?.authors?.join(", ")}
 							</span>
 						</div>
 					</Show>
@@ -1621,8 +1621,8 @@ const ResourceDetailsPage: Component<{
 												</h1>
 												<span class={styles["compact-author"]}>
 													By{" "}
-													{project()?.authors && project()?.authors.length > 0
-														? project()?.authors[0]
+													{project()?.authors && (project()?.authors?.length ?? 0) > 0
+														? project()?.authors?.[0]
 														: project()?.author}
 												</span>
 												<Show
@@ -1663,8 +1663,8 @@ const ResourceDetailsPage: Component<{
 											<div class={styles["subtitle-left"]}>
 												<p class={styles.author}>
 													By{" "}
-													{project()?.authors && project()?.authors.length > 0
-														? project()?.authors[0]
+													{project()?.authors && (project()?.authors?.length ?? 0) > 0
+														? project()?.authors?.[0]
 														: project()?.author}
 												</p>
 												<Show

@@ -18,13 +18,21 @@ interface ThemePresetCardProps {
  */
 export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 	return (
-		<button
+		<div
 			class={styles["theme-preset-card"]}
 			classList={{
 				[styles["theme-preset-card--selected"]]: props.isSelected,
 				[styles["theme-preset-card--list"]]: props.viewMode === "list",
 			}}
+			role="button"
+			tabIndex={0}
 			onClick={props.onClick}
+			onKeyDown={(event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					props.onClick?.();
+				}
+			}}
 			data-preview-style={props.theme.style}
 			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
 			style={{
@@ -106,6 +114,6 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 						: props.theme.description || props.theme.style}
 				</span>
 			</div>
-		</button>
+		</div>
 	);
 };

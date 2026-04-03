@@ -1,6 +1,10 @@
 import sys
+import os
 
-filepath = '/Users/eatham/Vesta/launcher/vesta-launcher/src-tauri/src/schema/vesta.rs'
+# Use relative path from script location
+script_dir = os.path.dirname(os.path.abspath(__file__))
+filepath = os.path.join(script_dir, 'src', 'schema', 'vesta.rs')
+
 with open(filepath, 'r') as f:
     schema = f.read()
 

@@ -25,8 +25,10 @@ const Slider = <T extends ValidComponent = "div">(
 		<SliderPrimitive.Root
 			class={clsx(styles.slider, local.class)}
 			onChange={(val: number[]) => {
-				local.onChange?.(val);
 				local.onInput?.(val);
+			}}
+			onChangeEnd={(val: number[]) => {
+				local.onChange?.(val);
 			}}
 			{...others}
 		/>

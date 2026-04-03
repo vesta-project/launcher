@@ -60,7 +60,7 @@ impl Task for DownloadJavaTask {
             // Save to database
             let mut conn = get_config_conn().map_err(|e| e.to_string())?;
             let new_entry = GlobalJavaPath {
-                major_version: Some(major as i32),
+                major_version: major as i32,
                 path: java_path.to_string_lossy().to_string(),
                 is_managed: true,
             };
