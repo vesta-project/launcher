@@ -87,8 +87,8 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 	});
 
 	return (
-		    <div>
-			    <div class={styles["header"]}>
+		<div>
+			<div class={styles["header"]}>
 				<div style="display: flex; flex-direction: column; gap: 2px;">
 					<span class={styles["headerTitle"]}>Modpack Version</span>
 					<span class={styles["headerSubtitle"]}>
@@ -105,7 +105,10 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 					onClick={() => {
 						if (!props.disabled) setIsOpen(!isOpen());
 					}}
-					class={clsx(styles["triggerCard"], props.disabled && styles["disabled"])}
+					class={clsx(
+						styles["triggerCard"],
+						props.disabled && styles["disabled"],
+					)}
 					data-expanded={isOpen()}
 				>
 					<div class={styles["triggerMain"]}>
@@ -218,7 +221,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 										String(version.id) === props.currentVersionId;
 									const isConfirming = () => confirmingId() === version.id;
 
-										return (
+									return (
 										<div
 											ref={(el) => {
 												if (isCurrent) activeRowRef = el;
@@ -287,8 +290,12 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 														>
 															<div class={styles["confirmSlide"]}>
 																<div class={styles["slideInner"]}>
-																	<span class={styles["slideText"]}>Switch</span>
-																	<span class={styles["slideText"]}>Confirm?</span>
+																	<span class={styles["slideText"]}>
+																		Switch
+																	</span>
+																	<span class={styles["slideText"]}>
+																		Confirm?
+																	</span>
 																</div>
 															</div>
 														</Button>

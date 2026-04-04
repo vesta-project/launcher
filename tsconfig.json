@@ -26,9 +26,7 @@
 
 		"baseUrl": ".",
 		"paths": {
-			"~/*": [
-				"./vesta-launcher/src/*"
-			]
+			"~/*": ["./vesta-launcher/src/*"]
 		}
 	}
 }

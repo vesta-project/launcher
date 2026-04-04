@@ -6,6 +6,7 @@ import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
 import PlayIcon from "@assets/play.svg";
 import TrashIcon from "@assets/trash.svg";
+import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
@@ -89,7 +90,6 @@ import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { formatDate } from "@utils/date";
 import {
 	DEFAULT_ICONS,
@@ -362,7 +362,9 @@ export default function InstanceDetails(
 	const [useGlobalResolution, setUseGlobalResolution] = createSignal(
 		props.initialUseGlobalResolution ?? true,
 	);
-	const [gameWidth, setGameWidth] = createSignal(props.initialGameWidth || 1280);
+	const [gameWidth, setGameWidth] = createSignal(
+		props.initialGameWidth || 1280,
+	);
 	const [gameHeight, setGameHeight] = createSignal(
 		props.initialGameHeight || 720,
 	);
@@ -2150,7 +2152,9 @@ export default function InstanceDetails(
 												environmentVariables={environmentVariables()}
 												setEnvironmentVariables={setEnvironmentVariables}
 												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
-												setUseGlobalEnvironmentVariables={setUseGlobalEnvironmentVariables}
+												setUseGlobalEnvironmentVariables={
+													setUseGlobalEnvironmentVariables
+												}
 												setIsEnvDirty={setIsEnvDirty}
 												invoke={invoke}
 												showToast={showToast}
@@ -2173,7 +2177,11 @@ export default function InstanceDetails(
 					if (!i) return;
 					batch(() => {
 						setName(i.name);
-						setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
+						setIconPath(
+							i.iconPath ||
+								getStableIconId(DEFAULT_ICONS[0]) ||
+								DEFAULT_ICONS[0],
+						);
 						setMinMemory([i.minMemory]);
 						setMaxMemory([i.maxMemory]);
 						setUseGlobalMemory(i.useGlobalMemory);

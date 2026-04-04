@@ -25,10 +25,7 @@
 	justify-content: space-between;
 	height: 32px;
 	padding: 0 8px;
-	background: var(--liquid-background, var(--theme-background-secondary));
-	backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
-	-webkit-backdrop-filter: var(--liquid-backdrop-filter, blur(8px));
-	box-shadow: var(--liquid-box-shadow);
+	background: var(--surface-raised);
 	border-bottom: var(--border-width-subtle) solid
 		hsla(var(--color__primary-hue), 30%, 30%, 0.3);
 	flex-shrink: 0;
@@ -172,7 +169,8 @@
 .page-viewer-reload-spinner {
 	width: 32px;
 	height: 32px;
-	border: 3px solid hsla(var(--color__primary-hue), 80%, 80%, 0.2);
+	border: calc(var(--border-width-subtle) * 2) solid
+		hsla(var(--color__primary-hue), 80%, 80%, 0.2);
 	border-top-color: hsl(var(--color__primary-hue), 100%, 70%);
 	border-radius: 50%;
 	animation: rotate 0.8s linear infinite;

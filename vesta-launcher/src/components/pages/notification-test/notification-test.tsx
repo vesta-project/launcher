@@ -48,7 +48,7 @@ function NotificationTestPage() {
 					severity: "warning",
 					notification_type: "Patient",
 					dismissible: true,
-				}
+				},
 			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
@@ -67,7 +67,7 @@ function NotificationTestPage() {
 					severity: "error",
 					notification_type: "Patient",
 					dismissible: true,
-				}
+				},
 			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
@@ -86,7 +86,7 @@ function NotificationTestPage() {
 					severity: "info",
 					notification_type: "Progress",
 					progress: -1,
-				}
+				},
 			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
@@ -105,7 +105,7 @@ function NotificationTestPage() {
 					severity: "info",
 					notification_type: "Progress",
 					progress: 45,
-				}
+				},
 			});
 		} catch (error) {
 			console.error("Failed to create notification:", error);
@@ -133,7 +133,10 @@ function NotificationTestPage() {
 		setLoading(true);
 		try {
 			console.log("checkTables command is currently disabled in backend");
-			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
+			await dialogStore.alert(
+				"Debug",
+				"This debug command is currently disabled in the backend.",
+			);
 		} catch (error) {
 			console.error("Failed to check tables:", error);
 		} finally {
@@ -145,7 +148,10 @@ function NotificationTestPage() {
 		setLoading(true);
 		try {
 			console.log("rerunMigrations command is currently disabled in backend");
-			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
+			await dialogStore.alert(
+				"Debug",
+				"This debug command is currently disabled in the backend.",
+			);
 		} catch (error) {
 			console.error("Failed to rerun migrations:", error);
 		} finally {
@@ -157,7 +163,10 @@ function NotificationTestPage() {
 		setLoading(true);
 		try {
 			console.log("submit_test_task command is currently disabled in backend");
-			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
+			await dialogStore.alert(
+				"Debug",
+				"This debug command is currently disabled in the backend.",
+			);
 		} catch (error) {
 			console.error("Failed to submit task:", error);
 		} finally {

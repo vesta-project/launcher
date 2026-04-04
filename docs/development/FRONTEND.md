@@ -146,7 +146,7 @@ For app-wide styles, use `src/styles.css`.
 
 ### Theming
 
-Leverage CSS custom properties for theming. See [Theming System](../features/THEMING.md) for details.
+Leverage CSS custom properties for theming. Theme runtime is handled by `src/themes/presets.ts` and `src/themes/engine/*` (`parser`, `validation`, `themeToCSSVars`, `applier`, `effects`). Component styles should consume semantic/global tokens from `src/styles.css` and emitted theme variables instead of hardcoding preset-specific colors. See [Theming System](../features/THEMING.md) for the full model and variable list.
 
 ## Icons
 

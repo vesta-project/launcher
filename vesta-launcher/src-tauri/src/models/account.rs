@@ -5,7 +5,8 @@ use serde::{Deserialize, Serialize};
 /// Microsoft account for authentication
 ///
 /// Stores OAuth tokens and user information for Microsoft authentication.
-#[derive(Queryable, Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
+#[derive(Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
+#[derive(Queryable)]
 #[diesel(table_name = account)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Account {
@@ -21,23 +22,15 @@ pub struct Account {
     pub cape_url: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    pub theme_mode: Option<String>,
-    pub theme_primary_sat: Option<i32>,
-    pub theme_primary_light: Option<i32>,
     pub theme_id: Option<String>,
-    pub theme_primary_hue: Option<i32>,
-    pub theme_style: Option<String>,
-    pub theme_gradient_enabled: Option<bool>,
-    pub theme_gradient_angle: Option<i32>,
-    pub theme_gradient_type: Option<String>,
-    pub theme_gradient_harmony: Option<String>,
-    pub theme_advanced_overrides: Option<String>,
-    pub theme_border_width: Option<i32>,
     pub account_type: String,
     pub is_expired: bool,
     pub skin_variant: String,
     pub skin_data: Option<String>,
     pub cape_data: Option<String>,
+    pub theme_data: Option<String>,
+    pub theme_window_effect: Option<String>,
+    pub theme_background_opacity: Option<i32>,
 }
 
 /// New account (without id for insertion)
@@ -55,23 +48,15 @@ pub struct NewAccount {
     pub cape_url: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
-    pub theme_mode: Option<String>,
-    pub theme_primary_sat: Option<i32>,
-    pub theme_primary_light: Option<i32>,
     pub theme_id: Option<String>,
-    pub theme_primary_hue: Option<i32>,
-    pub theme_style: Option<String>,
-    pub theme_gradient_enabled: Option<bool>,
-    pub theme_gradient_angle: Option<i32>,
-    pub theme_gradient_type: Option<String>,
-    pub theme_gradient_harmony: Option<String>,
-    pub theme_advanced_overrides: Option<String>,
-    pub theme_border_width: Option<i32>,
     pub account_type: String,
     pub is_expired: bool,
     pub skin_variant: String,
     pub skin_data: Option<String>,
     pub cape_data: Option<String>,
+    pub theme_data: Option<String>,
+    pub theme_window_effect: Option<String>,
+    pub theme_background_opacity: Option<i32>,
 }
 
 impl Default for Account {
@@ -89,23 +74,15 @@ impl Default for Account {
             cape_url: None,
             created_at: None,
             updated_at: None,
-            theme_mode: None,
-            theme_primary_sat: None,
-            theme_primary_light: None,
             theme_id: None,
-            theme_primary_hue: None,
-            theme_style: None,
-            theme_gradient_enabled: None,
-            theme_gradient_angle: None,
-            theme_gradient_type: None,
-            theme_gradient_harmony: None,
-            theme_advanced_overrides: None,
-            theme_border_width: None,
             account_type: "Microsoft".to_string(),
             is_expired: false,
             skin_variant: "classic".into(),
             skin_data: None,
             cape_data: None,
+            theme_data: None,
+            theme_window_effect: None,
+            theme_background_opacity: None,
         }
     }
 }
@@ -124,23 +101,15 @@ impl Default for NewAccount {
             cape_url: None,
             created_at: None,
             updated_at: None,
-            theme_mode: None,
-            theme_primary_sat: None,
-            theme_primary_light: None,
             theme_id: None,
-            theme_primary_hue: None,
-            theme_style: None,
-            theme_gradient_enabled: None,
-            theme_gradient_angle: None,
-            theme_gradient_type: None,
-            theme_gradient_harmony: None,
-            theme_advanced_overrides: None,
-            theme_border_width: None,
             account_type: "Microsoft".to_string(),
             is_expired: false,
             skin_variant: "classic".into(),
             skin_data: None,
             cape_data: None,
+            theme_data: None,
+            theme_window_effect: None,
+            theme_background_opacity: None,
         }
     }
 }

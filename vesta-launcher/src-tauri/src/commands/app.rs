@@ -1,5 +1,7 @@
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
+use crate::notifications::manager::NotificationManager;
+use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use tauri::Manager;
 
 #[tauri::command]
@@ -485,4 +487,132 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
         }
         _ => Err(format!("Unknown action: {}", action)),
     }
+}
+
+
+#[tauri::command]
+pub fn get_window_effect_capabilities() -> crate::utils::window_effects::WindowEffectCapabilities {
+    crate::utils::window_effects::get_window_effect_capabilities()
+}
+
+fn notify_unsupported_window_effect(
+    app_handle: &tauri::AppHandle,
+    requested_effect: &str,
+    active_effect: &str,
+    os: &str,
+    os_version: Option<&str>,
+) {
+    let manager = app_handle.state::<NotificationManager>();
+    let version_suffix = os_version
+        .map(|value| format!(" ({})", value))
+        .unwrap_or_default();
+
+    let _ = manager.create(CreateNotificationInput {
+        client_key: Some(format!("window_effect_unsupported_{}_{}", os, requested_effect)),
+        title: Some("Window effect unavailable on this OS".to_string()),
+        description: Some(format!(
+            "The '{}' window effect is not supported on {}{}. Falling back to '{}'.",
+            requested_effect, os, version_suffix, active_effect
+        )),
+        severity: Some("warning".to_string()),
+        notification_type: Some(NotificationType::Immediate),
+        dismissible: Some(true),
+        persist: Some(false),
+        silent: Some(false),
+        progress: None,
+        current_step: None,
+        total_steps: None,
+        actions: None,
+        metadata: None,
+        show_on_completion: None,
+    });
+}
+
+#[tauri::command]
+pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result<(), String> {
+    let app_handle = window.app_handle();
+    let capabilities = crate::utils::window_effects::get_window_effect_capabilities();
+    let (active_effect, was_coerced) =
+        crate::utils::window_effects::normalize_window_effect(&effect, &capabilities);
+
+    if was_coerced {
+        notify_unsupported_window_effect(
+            &app_handle,
+            effect.as_str(),
+            active_effect.as_str(),
+            capabilities.os.as_str(),
+            capabilities.os_version.as_deref(),
+        );
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        use window_vibrancy::{
+            apply_acrylic, apply_blur, apply_mica, clear_acrylic, clear_blur, clear_mica,
+        };
+
+        if let Err(err) = clear_blur(&window) {
+            log::warn!("Failed to clear blur window effect: {}", err);
+        }
+        if let Err(err) = clear_acrylic(&window) {
+            log::warn!("Failed to clear acrylic window effect: {}", err);
+        }
+        if let Err(err) = clear_mica(&window) {
+            log::warn!("Failed to clear mica window effect: {}", err);
+        }
+
+        let apply_result = match active_effect.as_str() {
+            "blur" => apply_blur(&window, Some((18, 18, 18, 125))),
+            "acrylic" => apply_acrylic(&window, Some((18, 18, 18, 125))),
+            "mica" => apply_mica(&window, Some(true)),
+            _ => Ok(()),
+        };
+
+        if let Err(err) = apply_result {
+            let message = format!(
+                "Failed to apply window effect '{}' (requested '{}'): {}",
+                active_effect, effect, err
+            );
+            log::error!("{}", message);
+            return Err(message);
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        use window_vibrancy::{
+            apply_liquid_glass, apply_vibrancy, clear_liquid_glass, clear_vibrancy,
+            NSGlassEffectViewStyle, NSVisualEffectMaterial,
+        };
+
+        if let Err(err) = clear_vibrancy(&window) {
+            log::warn!("Failed to clear vibrancy window effect: {}", err);
+        }
+        if let Err(err) = clear_liquid_glass(&window) {
+            log::warn!("Failed to clear liquid_glass window effect: {}", err);
+        }
+
+        let radius = if active_effect.as_str() == "liquid_glass" { 16.0 } else { 10.0 };
+
+        let apply_result = match active_effect.as_str() {
+            "vibrancy" => {
+                apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(radius))
+            }
+            "liquid_glass" => {
+                apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(radius))
+            }
+            _ => Ok(()),
+        };
+
+        if let Err(err) = apply_result {
+            let message = format!(
+                "Failed to apply window effect '{}' (requested '{}'): {}",
+                active_effect, effect, err
+            );
+            log::error!("{}", message);
+            return Err(message);
+        }
+    }
+    
+    Ok(())
 }

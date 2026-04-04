@@ -17,8 +17,7 @@ import {
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { useOs } from "@utils/os";
-import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
-import { applyTheme, configToTheme } from "../../../themes/presets";
+import { createSignal, Match, onMount, Switch } from "solid-js";
 import styles from "./init.module.css";
 
 function InitPage() {
@@ -104,7 +103,9 @@ function InitPage() {
 
 	return (
 		<div
-			class={`${styles["animate--hue"]} ${styles["init-page__root"]}`}
+			class={`${styles["init-page__root"]} ${
+				initStep() === 0 ? styles["init-page__root--welcome"] : ""
+			}`}
 			data-tauri-drag-region
 		>
 			<TitleBar os={os()} />

@@ -319,23 +319,23 @@
 		grid-template-columns: 1fr;
 		overflow-y: auto;
 	}
-	
+
 	.resource-details-left {
 		overflow: visible;
 	}
-	
+
 	.resource-details-main {
 		overflow: visible;
 	}
-	
+
 	.main-scrollable-area {
 		overflow-y: visible;
 	}
-	
+
 	.resource-details-sidebar {
 		overflow: visible;
 	}
-	
+
 	.sidebar-scrollable-area {
 		overflow-y: visible;
 		mask-image: none;
@@ -855,7 +855,9 @@
 	font-size: 14px;
 	cursor: pointer;
 	border-bottom: 1px solid transparent;
-	transition: background 0.2s, color 0.2s;
+	transition:
+		background 0.2s,
+		color 0.2s;
 	user-select: none;
 }
 
@@ -888,9 +890,15 @@
 	line-height: 1.25;
 }
 
-.description h1 { font-size: 1.75rem; }
-.description h2 { font-size: 1.5rem; }
-.description h3 { font-size: 1.25rem; }
+.description h1 {
+	font-size: 1.75rem;
+}
+.description h2 {
+	font-size: 1.5rem;
+}
+.description h3 {
+	font-size: 1.25rem;
+}
 
 .description p {
 	margin-bottom: 1.25rem;
@@ -898,10 +906,18 @@
 }
 
 /* Legacy CurseForge font support */
-.description font[size="4"] { font-size: 1.25rem; }
-.description font[size="5"] { font-size: 1.5rem; }
-.description font[size="6"] { font-size: 1.75rem; }
-.description font[size="7"] { font-size: 2rem; }
+.description font[size="4"] {
+	font-size: 1.25rem;
+}
+.description font[size="5"] {
+	font-size: 1.5rem;
+}
+.description font[size="6"] {
+	font-size: 1.75rem;
+}
+.description font[size="7"] {
+	font-size: 2rem;
+}
 
 .description hr {
 	margin: 24px 0;

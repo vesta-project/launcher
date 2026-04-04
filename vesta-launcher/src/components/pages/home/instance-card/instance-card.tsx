@@ -11,53 +11,32 @@ import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
-import LauncherButton from "@ui/button/button";
 import {
 	ContextMenu,
-	ContextMenuCheckboxItem,
 	ContextMenuContent,
-	ContextMenuGroup,
-	ContextMenuGroupLabel,
 	ContextMenuItem,
-	ContextMenuItemLabel,
 	ContextMenuLabel,
 	ContextMenuPortal,
-	ContextMenuRadioGroup,
-	ContextMenuRadioItem,
 	ContextMenuSeparator,
 	ContextMenuShortcut,
-	ContextMenuSub,
-	ContextMenuSubContent,
-	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { ExportDialog } from "@ui/export-dialog";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
-import {
-	clearCrashDetails,
-	getCrashDetails,
-	isInstanceCrashed,
-} from "@utils/crash-handler";
+import { clearCrashDetails, isInstanceCrashed } from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
-	deleteInstance,
-	duplicateInstance,
-	sanitizeInstanceName,
-	getInstanceId,
 	getInstanceSlug,
 	installInstance,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
-	repairInstance,
-	resetInstance,
 	resumeInstanceOperation,
+	sanitizeInstanceName,
 } from "@utils/instances";
 import {
 	createSignal,
@@ -70,7 +49,6 @@ import {
 import {
 	handleDuplicate,
 	handleHardReset,
-	handleLaunch,
 	handleRepair,
 	handleUninstall,
 } from "../../../../handlers/instance-handler";
@@ -83,14 +61,46 @@ interface InstanceCardProps {
 }
 
 export default function InstanceCard(props: InstanceCardProps) {
-	const [_hover, setHover] = createSignal(false);
 	const [leaveAnim, setLeaveAnim] = createSignal(false);
 	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
 	const [hasCrashed, setHasCrashed] = createSignal(false);
 	const [showCrashModal, setShowCrashModal] = createSignal(false);
 	const [showExportDialog, setShowExportDialog] = createSignal(false);
+	const [busy, setBusy] = createSignal(false);
+	const [launching, setLaunching] = createSignal(false);
+
+	let launchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+
+	const clearLaunchTimeout = () => {
+		if (launchTimeoutId !== null) {
+			clearTimeout(launchTimeoutId);
+			launchTimeoutId = null;
+		}
+	};
+
+	const startLaunchingState = () => {
+		setLaunching(true);
+		clearLaunchTimeout();
+		launchTimeoutId = setTimeout(() => {
+			setLaunching(false);
+			launchTimeoutId = null;
+		}, 30000);
+	};
+
+	const clearLaunchingState = () => {
+		setLaunching(false);
+		clearLaunchTimeout();
+	};
 
 	const instanceSlug = getInstanceSlug(props.instance);
+	const instanceBackgroundImage = () => {
+		const rawPath = props.instance.iconPath || DEFAULT_ICONS[0];
+		if (rawPath.startsWith("linear-gradient")) {
+			return rawPath;
+		}
+
+		return `url('${resolveResourceUrl(rawPath)}')`;
+	};
 
 	onMount(() => {
 		const unlisteners: (() => void)[] = [];
@@ -118,9 +128,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						(payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
-					if (id === instanceSlug) {
-						setLaunching(false);
-					}
+					if (id === instanceSlug) clearLaunchingState();
 					setRunningIds((prev) => new Set(prev).add(id));
 				}),
 			);
@@ -135,9 +143,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						(payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
-					if (id === instanceSlug) {
-						setLaunching(false);
-					}
+					if (id === instanceSlug) clearLaunchingState();
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(id);
@@ -159,9 +165,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						(payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
-					if (id === instanceSlug) {
-						setLaunching(false);
-					}
+					if (id === instanceSlug) clearLaunchingState();
 					setRunningIds((prev) => {
 						const newSet = new Set(prev);
 						newSet.delete(id);
@@ -182,6 +186,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					};
 					if (payload.instance_id === instanceSlug) {
 						setHasCrashed(true);
+						clearLaunchingState();
 					}
 				}),
 			);
@@ -190,6 +195,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		setup();
 
 		onCleanup(() => {
+			clearLaunchTimeout();
 			for (const unlisten of unlisteners) {
 				unlisten();
 			}
@@ -221,9 +227,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const needsInstallation = () =>
 		!props.instance.installationStatus || isFailed();
-
-	const [busy, setBusy] = createSignal(false);
-	const [launching, setLaunching] = createSignal(false);
 
 	// Can only launch if installed and not busy/installing/running
 	const _canLaunch = () =>
@@ -271,7 +274,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 			}
 			setBusy(false);
 		} else {
-			setLaunching(true);
+			startLaunchingState();
 			try {
 				// Clear crash flag when attempting to launch
 				clearCrashDetails(instanceSlug);
@@ -292,7 +295,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					severity: "error",
 					duration: 5000,
 				});
-				setLaunching(false);
+				clearLaunchingState();
 			}
 			// Note: launching state is cleared when core://instance-launched or core://instance-exited occurs,
 			// but we can also clear it if launchInstance returns (meaning it's 'started')
@@ -350,25 +353,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 				as="div"
 				class={`${styles["instance-card"]}${isFailed() ? ` ${styles.failed}` : ""}${isInterrupted() ? ` ${styles.interrupted}` : ""}${leaveAnim() ? ` ${styles["instance-card-leave"]}` : ""}`}
 				onMouseOver={() => {
-					setHover(true);
 					setLeaveAnim(false);
 				}}
 				onMouseLeave={() => {
-					setHover(false);
 					setLeaveAnim(true);
 					setTimeout(() => setLeaveAnim(false), 250);
 				}}
 				onClick={openInstanceDetails}
-				style={
-					(props.instance.iconPath || "").startsWith("linear-gradient")
-						? {
-								// biome-ignore lint/style/noNonNullAssertion: iconPath is confirmed to be a gradient string above
-								background: props.instance.iconPath!,
-							}
-						: {
-								"background-image": `url('${resolveResourceUrl(props.instance.iconPath || DEFAULT_ICONS[0])}')`,
-							}
-				}
+				style={{
+					"--instance-bg-image": instanceBackgroundImage(),
+				}}
 				data-instance={instanceSlug}
 			>
 				<Switch>
@@ -467,6 +461,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 															: styles["launch"]
 										}`}
 										onClick={handleClick}
+										aria-label={playButtonTooltip()}
+										aria-busy={launching()}
+										aria-pressed={isRunning()}
 										disabled={isInstalling() || launching()}
 									>
 										{isInstalling() || launching() ? (

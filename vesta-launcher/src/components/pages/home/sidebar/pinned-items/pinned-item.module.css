@@ -1,104 +1,112 @@
 .pinned-item-container {
-    position: relative;
-    display: flex;
-    align-items: center;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+	position: relative;
+	display: flex;
+	align-items: center;
+	transition:
+		opacity 0.2s ease,
+		transform 0.2s ease;
 }
 
 .item-hidden {
-    opacity: 0;
-    pointer-events: none;
-    transform: scale(0.95);
+	opacity: 0;
+	pointer-events: none;
+	transform: scale(0.95);
 }
 
 .pinned-button {
-    z-index: 2;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    padding: 0 !important;
-    overflow: hidden;
-    /* Use outline pattern for overlay border like instance card */
-    outline: var(--border-width-strong) solid var(--border-glass);
-    outline-offset: calc(-1 * var(--border-width-strong));
-    border-radius: 4px;
+	z-index: 2;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	padding: 0 !important;
+	overflow: hidden;
+	/* Use outline pattern for overlay border like instance card */
+	outline: var(--border-width-strong) solid var(--border-glass);
+	outline-offset: calc(-1 * var(--border-width-strong));
+	border-radius: 4px;
 }
 
 .icon-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    overflow: hidden;
+	position: relative;
+	width: 100%;
+	height: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	overflow: hidden;
 }
 
 .icon-bg-blur {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(4px);
-    z-index: 0;
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.4);
+	backdrop-filter: blur(4px);
+	z-index: 0;
 }
 
 .pin-icon {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    position: relative;
-    z-index: 1;
-    transform-origin: center;
-    transition: transform 0.2s ease;
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+	position: relative;
+	z-index: 1;
+	transform-origin: center;
+	transition: transform 0.2s ease;
 }
 
 .icon-placeholder {
-    width: 100%;
-    height: 100%;
-    background: var(--primary);
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-weight: bold;
-    font-size: 14px;
-    position: relative;
-    z-index: 1;
+	width: 100%;
+	height: 100%;
+	background: var(--primary);
+	color: white;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-weight: bold;
+	font-size: 14px;
+	position: relative;
+	z-index: 1;
 }
 
 .status-dot {
-    position: absolute;
-    bottom: 0px;
-    right: 0px;
-    width: 8px;
-    height: 8px;
-    border-radius: 50%;
-    border: 2px solid var(--sidebar-bg);
-    z-index: 3;
+	position: absolute;
+	bottom: 0px;
+	right: 0px;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	border: 2px solid var(--sidebar-bg);
+	z-index: 3;
 }
 
 .status--launching {
-    background: #4ade80;
-    animation: pulse 1s infinite alternate;
+	background: #4ade80;
+	animation: pulse 1s infinite alternate;
 }
 
 .status--running {
-    background: #4ade80;
+	background: #4ade80;
 }
 
 .status-crashed {
-    position: absolute;
-    top: 0px;
-    right: 0px;
-    width: 8px;
-    height: 8px;
-    background: #ef4444;
-    border: 2px solid var(--sidebar-bg);
-    border-radius: 2px;
-    z-index: 3;
+	position: absolute;
+	top: 0px;
+	right: 0px;
+	width: 8px;
+	height: 8px;
+	background: #ef4444;
+	border: 2px solid var(--sidebar-bg);
+	border-radius: 2px;
+	z-index: 3;
 }
 
 @keyframes pulse {
-    from { transform: scale(0.8); opacity: 0.6; }
-    to { transform: scale(1.1); opacity: 1; }
+	from {
+		transform: scale(0.8);
+		opacity: 0.6;
+	}
+	to {
+		transform: scale(1.1);
+		opacity: 1;
+	}
 }
 
 .pinned-button-trigger {
@@ -127,7 +135,8 @@
 	box-shadow: 3px 0 10px hsl(0deg 0% 0% / 40%);
 	transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 	/* Animation: slide out from behind the icon */
-	animation: slideOutBeneath 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+	animation: slideOutBeneath 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)
+		forwards;
 }
 
 .action-button-stop {
@@ -143,14 +152,14 @@
 
 .action-button-play:hover {
 	background: var(--primary-hover);
-    width: 42px;
-    transform: translateX(4px);
+	width: 42px;
+	transform: translateX(4px);
 }
 
 .action-button-stop:hover {
 	background: #dc2626;
-    width: 42px;
-    transform: translateX(4px);
+	width: 42px;
+	transform: translateX(4px);
 }
 
 @keyframes slideOutBeneath {
@@ -179,37 +188,37 @@
 }
 
 .pinned-item-container :global(.context-menu__item) svg {
-    width: 14px;
-    height: 14px;
-    margin-right: 8px;
-    opacity: 0.8;
+	width: 14px;
+	height: 14px;
+	margin-right: 8px;
+	opacity: 0.8;
 }
 
 .pinned-item-container :global(.context-menu__item:hover) svg {
-    opacity: 1;
+	opacity: 1;
 }
 
 .menu-item--danger {
-    color: var(--semantic-error);
+	color: var(--semantic-error);
 }
 
 .menu-item--danger svg {
-    width: 14px;
-    height: 14px;
-    margin-right: 8px;
+	width: 14px;
+	height: 14px;
+	margin-right: 8px;
 }
 
 /* Hover / active effects: match sidebar button shadow + inner-icon zoom */
 .pinned-button:hover {
-    box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+	box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
 }
 
 .pinned-button:hover .pin-icon,
 .pinned-button:hover svg {
-    transform: scale(1.03);
+	transform: scale(1.03);
 }
 
 .pinned-button:active {
-    transform: scale(0.95);
-    transition-duration: 50ms;
+	transform: scale(0.95);
+	transition-duration: 50ms;
 }

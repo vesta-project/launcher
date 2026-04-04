@@ -88,7 +88,7 @@
 	border-radius: 12px;
 	border: 1px solid var(--border-subtle);
 	letter-spacing: 4px;
-	color: hsl(var(--color__primary-hue) 70% 60%);
+	color: hsl(var(--color__primary-hue) 60% 60%);
 }
 
 .login-page__copy-button {

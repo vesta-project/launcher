@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
-#[cfg(target_os = "windows")]
-use winver::WindowsVersion;
 
 static WINDOW_ID: Mutex<i32> = Mutex::new(0);
 
@@ -58,34 +56,15 @@ pub async fn launch_window(
 
     *window_id += 1;
 
-    #[cfg(target_os = "windows")]
-    let version = WindowsVersion::detect().expect("Failed to detect windows version");
+    let win = win_builder.build()?;
 
-    #[cfg(target_os = "windows")]
-    // If on windows 11
-    let win_builder = if version.major == 10 && version.build >= 22000 {
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::MicaDark)
-                .build(),
-        )
-    } else if version.major == 6 && version.minor == 1 {
-        // On windows 7
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::Blur)
-                .build(),
-        )
-    } else {
-        // TODO: Eventually windows 10
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::Acrylic)
-                .build(),
-        )
-    };
+    let effect = crate::utils::config::get_app_config()
+        .unwrap_or_default()
+        .theme_window_effect
+        .clone()
+        .unwrap_or_else(crate::utils::window_effects::default_window_effect);
 
-    win_builder.build()?;
+    crate::commands::app::set_window_effect(win.clone(), effect).unwrap_or(());
 
     Ok(())
 }

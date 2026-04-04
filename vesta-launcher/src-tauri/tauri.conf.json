@@ -25,9 +25,7 @@
 	"plugins": {
 		"deep-link": {
 			"desktop": {
-				"schemes": [
-					"vesta"
-				]
+				"schemes": ["vesta"]
 			}
 		},
 		"updater": {

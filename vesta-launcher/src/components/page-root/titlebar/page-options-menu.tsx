@@ -44,8 +44,7 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			const selected = resources.state.selectedProject;
 
 			// If we're on the page for this project, prefer the store's "live" name/icon
-			const isMatchesSelected =
-				selected && selected.id === projectId;
+			const isMatchesSelected = selected && selected.id === projectId;
 
 			return {
 				type: "resource" as const,

@@ -36,7 +36,7 @@ const SessionExpiredDialog: Component = () => {
 		navigate("/?login=true", { replace: true });
 	};
 
-	const handleAddAccount = () => {
+	const _handleAddAccount = () => {
 		// Just navigate to login flow without clearing current account
 		setExpiredAccount(null);
 		navigate("/?login=true", { replace: true });

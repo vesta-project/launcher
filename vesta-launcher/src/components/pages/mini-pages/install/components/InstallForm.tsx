@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import {
 	Combobox,
@@ -64,7 +65,6 @@ import {
 } from "solid-js";
 import { createStore } from "solid-js/store";
 import styles from "../install-page.module.css";
-import { invoke } from "@tauri-apps/api/core";
 
 export interface InstallFormProps {
 	compact?: boolean;
@@ -404,43 +404,47 @@ export function InstallForm(props: InstallFormProps) {
 	// If the user switches modloaders, and the current version is NOT compatible with it,
 	// we auto-switch to the latest version that DOES support it.
 	createEffect(
-		on(loader, (l) => {
-			const meta = pistonMetadata();
-			if (!meta || l === "vanilla" || normalizedIsModpack()) return;
+		on(
+			loader,
+			(l) => {
+				const meta = pistonMetadata();
+				if (!meta || l === "vanilla" || normalizedIsModpack()) return;
 
-			const currentV = mcVersion();
-			const vData = meta.game_versions.find((v) => v.id === currentV);
+				const currentV = mcVersion();
+				const vData = meta.game_versions.find((v) => v.id === currentV);
 
-			// Skip if somehow version metadata is missing
-			if (!currentV) return;
+				// Skip if somehow version metadata is missing
+				if (!currentV) return;
 
-			// Check if the current version supports this loader
-			const isUnsupported =
-				vData &&
-				!Object.keys(vData.loaders).some(
-					(key) => key.toLowerCase() === l.toLowerCase(),
-				);
-
-			if (isUnsupported) {
-				// Find first version that DOES support this loader (usually latest stable)
-				const compatible = meta.game_versions.find((v) =>
-					Object.keys(v.loaders).some(
+				// Check if the current version supports this loader
+				const isUnsupported =
+					vData &&
+					!Object.keys(vData.loaders).some(
 						(key) => key.toLowerCase() === l.toLowerCase(),
-					),
-				);
+					);
 
-				if (compatible) {
-					batch(() => {
-						setMcVersion(compatible.id);
-						showToast({
-							title: "Context Switched",
-							description: `${MODLOADER_DISPLAY_NAMES[l] || l} is not available for ${currentV}. Switched to ${compatible.id}.`,
-							severity: "info",
+				if (isUnsupported) {
+					// Find first version that DOES support this loader (usually latest stable)
+					const compatible = meta.game_versions.find((v) =>
+						Object.keys(v.loaders).some(
+							(key) => key.toLowerCase() === l.toLowerCase(),
+						),
+					);
+
+					if (compatible) {
+						batch(() => {
+							setMcVersion(compatible.id);
+							showToast({
+								title: "Context Switched",
+								description: `${MODLOADER_DISPLAY_NAMES[l] || l} is not available for ${currentV}. Switched to ${compatible.id}.`,
+								severity: "info",
+							});
 						});
-					});
+					}
 				}
-			}
-		}, { defer: true }),
+			},
+			{ defer: true },
+		),
 	);
 
 	// --- Derived Lists (Filtered for Standard Mode or Limited by Props) ---
@@ -789,42 +793,41 @@ export function InstallForm(props: InstallFormProps) {
 
 							<div class={styles["form-row"]}>
 								<div class={styles["flex-grow"]}>
-										<div class={styles["field-label-manual"]}>
-											Modloader
-											<HelpTrigger topic="MODLOADER_EXPLAINED" />
-										</div>
-										<ToggleGroup
-											class={styles["modloader-toggle-group"]}
-											value={loader()}
-											onChange={(v: string | null) => {
-												if (v) {
-													batch(() => {
-														setLoader(v);
-														setLoaderVer("");
-														setDirty("loader", true);
-													});
-												}
-											}}
-										>
-											<For each={availableLoaders()}>
-												{(l) => (
-													<ToggleGroupItem
-														value={l}
-														class={styles["modloader-pill"]}
-														classList={{
-															[styles["modloader-pill--unsupported"]]:
-																!currentVersionSupportedLoaders().includes(
-																	l.toLowerCase(),
-																),
-														}}
-													>
-														{MODLOADER_DISPLAY_NAMES[l] || l}
-													</ToggleGroupItem>
-												)}
-											</For>
-										</ToggleGroup>
+									<div class={styles["field-label-manual"]}>
+										Modloader
+										<HelpTrigger topic="MODLOADER_EXPLAINED" />
 									</div>
-
+									<ToggleGroup
+										class={styles["modloader-toggle-group"]}
+										value={loader()}
+										onChange={(v: string | null) => {
+											if (v) {
+												batch(() => {
+													setLoader(v);
+													setLoaderVer("");
+													setDirty("loader", true);
+												});
+											}
+										}}
+									>
+										<For each={availableLoaders()}>
+											{(l) => (
+												<ToggleGroupItem
+													value={l}
+													class={styles["modloader-pill"]}
+													classList={{
+														[styles["modloader-pill--unsupported"]]:
+															!currentVersionSupportedLoaders().includes(
+																l.toLowerCase(),
+															),
+													}}
+												>
+													{MODLOADER_DISPLAY_NAMES[l] || l}
+												</ToggleGroupItem>
+											)}
+										</For>
+									</ToggleGroup>
+								</div>
 							</div>
 
 							<div class={styles["standard-settings-grid"]}>
@@ -874,7 +877,6 @@ export function InstallForm(props: InstallFormProps) {
 								</div>
 
 								<div class={styles["form-row"]}>
-
 									<Show when={loader() !== "vanilla"}>
 										<div class={styles["flex-grow"]}>
 											<div class={styles["field-label-manual"]}>

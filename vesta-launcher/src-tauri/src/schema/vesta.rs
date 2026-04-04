@@ -14,23 +14,15 @@ diesel::table! {
         cape_url -> Nullable<Text>,
         created_at -> Nullable<Text>,
         updated_at -> Nullable<Text>,
-        theme_mode -> Nullable<Text>,
-        theme_primary_sat -> Nullable<Integer>,
-        theme_primary_light -> Nullable<Integer>,
         theme_id -> Nullable<Text>,
-        theme_primary_hue -> Nullable<Integer>,
-        theme_style -> Nullable<Text>,
-        theme_gradient_enabled -> Nullable<Bool>,
-        theme_gradient_angle -> Nullable<Integer>,
-        theme_gradient_type -> Nullable<Text>,
-        theme_gradient_harmony -> Nullable<Text>,
-        theme_advanced_overrides -> Nullable<Text>,
-        theme_border_width -> Nullable<Integer>,
         account_type -> Text,
         is_expired -> Bool,
         skin_variant -> Text,
         skin_data -> Nullable<Text>,
         cape_data -> Nullable<Text>,
+        theme_data -> Nullable<Text>,
+        theme_window_effect -> Nullable<Text>,
+        theme_background_opacity -> Nullable<Integer>,
     }
 }
 
@@ -195,6 +187,16 @@ diesel::table! {
 }
 
 diesel::table! {
+    saved_themes (id) {
+        id -> Text,
+        name -> Text,
+        theme_data -> Text,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     task_state (id) {
         id -> Text,
         task_type -> Text,
@@ -231,6 +233,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     pinned_page,
     resource_metadata_cache,
     resource_project,
+    saved_themes,
     task_state,
     user_version_tracking,
 );

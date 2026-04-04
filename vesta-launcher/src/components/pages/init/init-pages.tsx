@@ -61,7 +61,7 @@ import {
 } from "../../../themes/presets";
 import {
 	currentThemeConfig,
-	updateThemeConfigLocal,
+	saveThemeUpdate as persistThemeUpdate,
 } from "../../../utils/config-sync";
 import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
 import { ModdingGuideContent } from "../mini-pages/modding-guide/guide";
@@ -1152,6 +1152,7 @@ function InitLoginPage(props: InitPagesProps) {
 												"width: 240px; height: 48px; font-weight: 600; font-size: 16px;"
 											}
 											disabled={isStartingAuth()}
+											variant="ghost"
 										>
 											<Show
 												when={isStartingAuth()}
@@ -1937,8 +1938,10 @@ function InitAppearancePage(props: InitPagesProps) {
 	const [backgroundHue, setBackgroundHue] = createSignal(
 		currentThemeConfig.theme_primary_hue ??
 			currentThemeConfig.background_hue ??
-			220,
+			180,
 	);
+	const [explicitThemeSelected, setExplicitThemeSelected] = createSignal(false);
+	const [isPersistingTheme, setIsPersistingTheme] = createSignal(false);
 
 	onMount(async () => {
 		try {
@@ -1949,6 +1952,7 @@ function InitAppearancePage(props: InitPagesProps) {
 				config.theme_primary_hue !== undefined
 			)
 				setBackgroundHue(config.theme_primary_hue);
+			setExplicitThemeSelected(false);
 		} catch (e) {
 			console.error("Failed to load appearance config:", e);
 		}
@@ -1957,66 +1961,54 @@ function InitAppearancePage(props: InitPagesProps) {
 	const handlePresetSelect = async (id: string) => {
 		const theme = getThemeById(id);
 		if (theme) {
+			setIsPersistingTheme(true);
 			setThemeId(id);
 			const newHue =
 				theme.allowHueChange === false
-					? (theme.primaryHue ?? 220)
+					? (theme.primaryHue ?? 180)
 					: backgroundHue();
 
 			if (theme.primaryHue !== undefined && theme.allowHueChange === false) {
 				setBackgroundHue(newHue);
 			}
 
-			// Update local theme state
-			updateThemeConfigLocal("theme_id", id);
-			updateThemeConfigLocal("theme_primary_hue", newHue);
-
-			// Apply theme visually
+			// Apply theme visually for immediate feedback
 			applyTheme({
 				...theme,
 				primaryHue: newHue,
 			});
 
-			// Save to backend
 			try {
-				await invoke("update_config_fields", {
-					updates: {
-						theme_id: id,
-						theme_primary_hue: newHue,
-						theme_style: theme.style,
-						theme_gradient_enabled: theme.gradientEnabled,
-						theme_gradient_angle: theme.rotation ?? 135,
-						theme_gradient_type: theme.gradientType || "linear",
-						theme_gradient_harmony: theme.gradientHarmony || "none",
-						theme_border_width: theme.borderWidthSubtle ?? 1,
-					},
+				// Save to backend using centralized persistence system
+				await persistThemeUpdate({
+					themeId: id,
+					primaryHue: newHue,
+					opacity: theme.opacity,
+					gradientEnabled: theme.gradientEnabled,
+					rotation: theme.rotation,
+					gradientType: theme.gradientType,
+					gradientHarmony: theme.gradientHarmony,
+					borderWidth: theme.borderWidth,
+					backgroundOpacity: 25,
+					windowEffect: theme.windowEffect,
 				});
+				setExplicitThemeSelected(true);
 			} catch (e) {
-				console.error("Failed to save theme preset:", e);
+				setExplicitThemeSelected(false);
+				console.error("Failed to persist selected onboarding theme:", e);
+			} finally {
+				setIsPersistingTheme(false);
 			}
 		}
 	};
 
 	const handleHueChange = async (values: number[]) => {
+		if (!explicitThemeSelected()) return;
 		const newHue = values[0];
 		setBackgroundHue(newHue);
-		updateThemeConfigLocal("theme_primary_hue", newHue);
 
-		const theme = getThemeById(themeId());
-		if (theme) {
-			applyTheme({
-				...theme,
-				primaryHue: newHue,
-			});
-		}
-
-		try {
-			await invoke("update_config_fields", {
-				updates: { theme_primary_hue: newHue },
-			});
-		} catch (e) {
-			console.error("Failed to save hue:", e);
-		}
+		// Use central system for reactive update & persistence
+		await persistThemeUpdate({ primaryHue: newHue });
 	};
 
 	const canChangeHue = () => {
@@ -2036,6 +2028,9 @@ function InitAppearancePage(props: InitPagesProps) {
 				<p style={"font-size: 14px; opacity: 0.6"}>
 					Pick a starting look for Vesta. You can always change this later in
 					settings.
+				</p>
+				<p style={"font-size: 12px; opacity: 0.55; margin-top: 4px;"}>
+					Select a theme to continue.
 				</p>
 			</div>
 			<div
@@ -2069,7 +2064,7 @@ function InitAppearancePage(props: InitPagesProps) {
 					</div>
 				</section>
 
-				<Show when={canChangeHue()}>
+				<Show when={explicitThemeSelected() && canChangeHue()}>
 					<section
 						style={{
 							background: "rgba(255,255,255,0.03)",
@@ -2084,7 +2079,6 @@ function InitAppearancePage(props: InitPagesProps) {
 							minValue={0}
 							maxValue={360}
 							step={1}
-							class={styles["hue-track"]}
 						>
 							<div
 								style={{
@@ -2100,8 +2094,13 @@ function InitAppearancePage(props: InitPagesProps) {
 									{backgroundHue()}°
 								</div>
 							</div>
-							<SliderTrack>
-								<SliderFill style={{ background: "transparent" }} />
+							<SliderTrack
+								style={{
+									background:
+										"linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)",
+									height: "12px",
+								}}
+							>
 								<SliderThumb />
 							</SliderTrack>
 						</Slider>
@@ -2129,9 +2128,10 @@ function InitAppearancePage(props: InitPagesProps) {
 				<Button
 					color="primary"
 					style={{ "min-width": "180px" }}
+					disabled={!explicitThemeSelected() || isPersistingTheme()}
 					onClick={() => props.changeInitStep(props.initStep + 1)}
 				>
-					Next Step
+					{isPersistingTheme() ? "Saving Theme..." : "Next Step"}
 				</Button>
 			</div>
 		</>

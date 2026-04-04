@@ -4,13 +4,11 @@ use crate::notifications::manager::NotificationManager;
 use crate::notifications::subscriptions::manager::SubscriptionManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
-use crate::utils::config::{get_app_config, init_config_db};
+use crate::utils::config::{get_app_config, init_config_db, normalize_theme_config_state};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::Manager;
-#[cfg(target_os = "windows")]
-use winver::WindowsVersion;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -182,6 +180,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize default config row if needed
     if let Err(e) = init_config_db() {
         log::error!("Failed to initialize config table: {}", e);
+    }
+
+    // Normalize theme_data and mirrored scalar theme fields on startup
+    if let Err(e) = normalize_theme_config_state() {
+        log::error!("Failed to normalize startup theme config state: {}", e);
     }
 
     // Initialize version tracking defaults (including launcher version)
@@ -747,7 +750,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
             .transparent(true)
             .decorations(false);
-
+        
     // // Setup system tray icon and menu (conditional based on config)
     // let config = get_app_config()?;
     // if config.show_tray_icon {
@@ -788,45 +791,17 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // }
 
     #[cfg(target_os = "windows")]
-    let version = match WindowsVersion::detect() {
-        Some(v) => v,
-        None => {
-            log::warn!("Failed to detect Windows version. Using fallback window configuration.");
-            // Return a fallback version that will use basic window configuration
-            // TODO: Review this fallback later
-            WindowsVersion {
-                major: 10,
-                minor: 0,
-                build: 19000, // Pre-Windows 11 build number
-            }
-        }
-    };
-
-    #[cfg(target_os = "windows")]
-    // If on windows 11
-    let win_builder = if version.major == 10 && version.build >= 22000 {
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::MicaDark)
-                .build(),
-        )
-    } else if version.major == 6 && version.minor == 1 {
-        // On windows 7
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::Blur)
-                .build(),
-        )
-    } else {
-        // TODO: Eventually windows 10
-        win_builder.effects(
-            tauri::window::EffectsBuilder::new()
-                .effect(tauri::window::Effect::Acrylic)
-                .build(),
-        )
-    };
+    let win_builder = win_builder;
 
     let _main_win = win_builder.build()?;
+
+    let effect = crate::utils::config::get_app_config()
+        .unwrap_or_default()
+        .theme_window_effect
+        .clone()
+        .unwrap_or_else(crate::utils::window_effects::default_window_effect);
+
+    crate::commands::app::set_window_effect(_main_win.clone(), effect).unwrap_or(());
 
     // Setup sniffer window immediately
     // Temporarily disabled file drop sniffer

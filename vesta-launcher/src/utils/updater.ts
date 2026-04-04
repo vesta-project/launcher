@@ -3,10 +3,10 @@ import { listen } from "@tauri-apps/api/event";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import {
 	createNotification,
+	type NotificationAction,
 	PROGRESS_INDETERMINATE,
 	showAlert,
 	updateNotificationProgress,
-	type NotificationAction,
 } from "./notifications";
 
 let pendingUpdate: Update | null = null;
@@ -21,12 +21,16 @@ export function initUpdateListener() {
 	listen("core://install-app-update", async () => {
 		console.log("[Updater] Received core://install-app-update event");
 		if (pendingUpdate) {
-			console.log(`[Updater] Found pending update: ${pendingUpdate.version} (isDownloaded: ${isDownloaded}, isDownloading: ${isDownloading})`);
-			
+			console.log(
+				`[Updater] Found pending update: ${pendingUpdate.version} (isDownloaded: ${isDownloaded}, isDownloading: ${isDownloading})`,
+			);
+
 			// Check if already downloaded - Tauri plugin might lose state on hot-reload,
 			// but if the UI is showing the "Install" button, we likely have the 'Finished' event cached.
 			if (!isDownloaded) {
-				console.warn("[Updater] Update.install called but isDownloaded is false. Starting download...");
+				console.warn(
+					"[Updater] Update.install called but isDownloaded is false. Starting download...",
+				);
 				if (!isDownloading) {
 					await downloadUpdate();
 				}
@@ -35,7 +39,7 @@ export function initUpdateListener() {
 
 			try {
 				console.log("[Updater] Calling pendingUpdate.install()...");
-				
+
 				// Re-use the existing notification to show installation progress
 				await createNotification({
 					title: "Installing Update",
@@ -49,13 +53,15 @@ export function initUpdateListener() {
 
 				// We call it without parameters as the artifacts are already downloaded.
 				await pendingUpdate.install();
-				console.log("[Updater] pendingUpdate.install() call returned. Triggering backend restart...");
-				
+				console.log(
+					"[Updater] pendingUpdate.install() call returned. Triggering backend restart...",
+				);
+
 				// TRIGGER BACKEND RESTART explicitly as fallback for some platforms/dev modes
-				await invoke("invoke_notification_action", { 
-					actionId: "restart_app" 
+				await invoke("invoke_notification_action", {
+					actionId: "restart_app",
 				});
-				
+
 				console.log("[Updater] Restart command invoked.");
 			} catch (error) {
 				console.error("[Updater] Failed to install update:", error);
@@ -71,7 +77,9 @@ export function initUpdateListener() {
 				);
 			}
 		} else {
-			console.error("[Updater] Received install event but pendingUpdate is null");
+			console.error(
+				"[Updater] Received install event but pendingUpdate is null",
+			);
 			// If we don't have a pending update, check again
 			checkForAppUpdates(false);
 		}
@@ -172,16 +180,27 @@ export async function downloadUpdate() {
 		isDownloading = false;
 		isDownloaded = false;
 		console.error("Failed to download update:", error);
-		
+
 		let errorMessage = "Failed to download the update. Please try again.";
 		let errorTitle = "Download Error";
 
-		if (error && typeof error === "string" && (error.includes("Invalid encoding in minisign data") || error.includes("signature"))) {
+		if (
+			error &&
+			typeof error === "string" &&
+			(error.includes("Invalid encoding in minisign data") ||
+				error.includes("signature"))
+		) {
 			errorTitle = "Update Verification Failed";
-			errorMessage = "The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
-		} else if (error instanceof Error && (error.message.includes("Invalid encoding in minisign data") || error.message.includes("signature"))) {
+			errorMessage =
+				"The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
+		} else if (
+			error instanceof Error &&
+			(error.message.includes("Invalid encoding in minisign data") ||
+				error.message.includes("signature"))
+		) {
 			errorTitle = "Update Verification Failed";
-			errorMessage = "The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
+			errorMessage =
+				"The update signature is missing or malformed for this platform. This is likely an issue with the release build.";
 		}
 
 		await createNotification({

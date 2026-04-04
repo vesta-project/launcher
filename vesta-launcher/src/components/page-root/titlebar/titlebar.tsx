@@ -37,7 +37,7 @@ function TitleBar(props: TitleBarProps) {
 			setPageViewerOpen(true);
 		}
 	};
-	
+
 	return (
 		<div
 			classList={{

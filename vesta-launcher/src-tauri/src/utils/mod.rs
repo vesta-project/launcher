@@ -15,4 +15,5 @@ pub mod process_state;
 pub mod sanitize;
 pub mod url;
 pub mod version_tracking;
+pub mod window_effects;
 pub mod windows;

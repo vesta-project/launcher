@@ -7,21 +7,20 @@ import {
 	NumberFieldInput,
 	NumberFieldLabel,
 } from "@ui/number-field/number-field";
-import {
-	TextFieldInput,
-	TextFieldRoot,
-	TextFieldTextArea,
-} from "@ui/text-field/text-field";
+import { Separator } from "@ui/separator/separator";
 import {
 	Slider,
 	SliderFill,
 	SliderThumb,
 	SliderTrack,
 } from "@ui/slider/slider";
-import LauncherButton from "@ui/button/button";
+import {
+	TextFieldInput,
+	TextFieldRoot,
+	TextFieldTextArea,
+} from "@ui/text-field/text-field";
 import { Component, createSignal } from "solid-js";
-import styles from "./settings-page.module.css";
-import { Separator } from "@ui/separator/separator";
+import styles from "../settings-page.module.css";
 
 export const InstanceDefaultsTab: Component<{
 	config: any;
@@ -56,10 +55,20 @@ export const InstanceDefaultsTab: Component<{
 							class={styles["res-number-field"]}
 							style={{ flex: 1 }}
 							value={props.config.default_width}
-							onRawValueChange={(val) => props.updateConfig("default_width", val)}
+							onRawValueChange={(val) =>
+								props.updateConfig("default_width", val)
+							}
 							minValue={0}
 						>
-							<NumberFieldLabel style={{ "font-size": "12px", "margin-bottom": "4px", opacity: 0.6 }}>Width</NumberFieldLabel>
+							<NumberFieldLabel
+								style={{
+									"font-size": "12px",
+									"margin-bottom": "4px",
+									opacity: 0.6,
+								}}
+							>
+								Width
+							</NumberFieldLabel>
 							<NumberFieldGroup>
 								<NumberFieldInput placeholder="Width" />
 								<NumberFieldIncrementTrigger />
@@ -71,10 +80,20 @@ export const InstanceDefaultsTab: Component<{
 							class={styles["res-number-field"]}
 							style={{ flex: 1 }}
 							value={props.config.default_height}
-							onRawValueChange={(val) => props.updateConfig("default_height", val)}
+							onRawValueChange={(val) =>
+								props.updateConfig("default_height", val)
+							}
 							minValue={0}
 						>
-							<NumberFieldLabel style={{ "font-size": "12px", "margin-bottom": "4px", opacity: 0.6 }}>Height</NumberFieldLabel>
+							<NumberFieldLabel
+								style={{
+									"font-size": "12px",
+									"margin-bottom": "4px",
+									opacity: 0.6,
+								}}
+							>
+								Height
+							</NumberFieldLabel>
 							<NumberFieldGroup>
 								<NumberFieldInput placeholder="Height" />
 								<NumberFieldIncrementTrigger />
@@ -158,7 +177,10 @@ export const InstanceDefaultsTab: Component<{
 					<TextFieldTextArea
 						value={props.config.default_java_args || ""}
 						onInput={(e) =>
-							props.updateConfig("default_java_args", (e.currentTarget as HTMLTextAreaElement).value)
+							props.updateConfig(
+								"default_java_args",
+								(e.currentTarget as HTMLTextAreaElement).value,
+							)
 						}
 						placeholder="-Xmx4G -XX:+UseG1GC ..."
 						style={{ "min-height": "100px" }}
@@ -174,10 +196,17 @@ export const InstanceDefaultsTab: Component<{
 					<TextFieldTextArea
 						value={props.config.default_environment_variables || ""}
 						onInput={(e) =>
-							props.updateConfig("default_environment_variables", (e.currentTarget as HTMLTextAreaElement).value)
+							props.updateConfig(
+								"default_environment_variables",
+								(e.currentTarget as HTMLTextAreaElement).value,
+							)
 						}
 						placeholder="KEY=VALUE"
-						style={{ "min-height": "100px", "font-family": "var(--font-mono)", "font-size": "12px" }}
+						style={{
+							"min-height": "100px",
+							"font-family": "var(--font-mono)",
+							"font-size": "12px",
+						}}
 					/>
 				</TextFieldRoot>
 			</SettingsCard>

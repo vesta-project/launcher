@@ -1,7 +1,11 @@
 .container {
 	padding: 12px;
 	border-radius: 12px;
-	background: linear-gradient(145deg, var(--surface-raised), var(--surface-base));
+	background: linear-gradient(
+		145deg,
+		var(--surface-raised),
+		var(--surface-base)
+	);
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	box-shadow: var(--effect-shadow-sm);
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -174,4 +178,3 @@
 .severity-info .iconWrapper {
 	background: var(--semantic-info-bg);
 }
-

@@ -12,26 +12,26 @@ export interface ParsedResourceUrl {
 export function decodeCurseForgeLinkout(url: string): string {
 	try {
 		const parsed = new URL(url);
-			// Detect linkout redirect patterns. Some environments (dev servers, proxies)
-			// may rewrite external URLs to a local /linkout endpoint (e.g. localhost:1420/linkout?remoteUrl=...).
-			// We treat any path named "/linkout" that carries a `remoteUrl` query param as a redirect wrapper
-			// and extract + decode the real destination.
-			if (parsed.pathname === "/linkout") {
-				const remoteUrl = parsed.searchParams.get("remoteUrl");
-				if (remoteUrl) {
-					// CurseForge (and some proxies) sometimes double-encode the URL (e.g. %253a instead of %3a)
-					// Decode once, then decode again if it still contains percent-escapes.
-					let decoded = decodeURIComponent(remoteUrl);
-					if (decoded.includes("%")) {
-						try {
-							decoded = decodeURIComponent(decoded);
-						} catch {
-							// Ignore double-decode errors and keep the once-decoded value
-						}
+		// Detect linkout redirect patterns. Some environments (dev servers, proxies)
+		// may rewrite external URLs to a local /linkout endpoint (e.g. localhost:1420/linkout?remoteUrl=...).
+		// We treat any path named "/linkout" that carries a `remoteUrl` query param as a redirect wrapper
+		// and extract + decode the real destination.
+		if (parsed.pathname === "/linkout") {
+			const remoteUrl = parsed.searchParams.get("remoteUrl");
+			if (remoteUrl) {
+				// CurseForge (and some proxies) sometimes double-encode the URL (e.g. %253a instead of %3a)
+				// Decode once, then decode again if it still contains percent-escapes.
+				let decoded = decodeURIComponent(remoteUrl);
+				if (decoded.includes("%")) {
+					try {
+						decoded = decodeURIComponent(decoded);
+					} catch {
+						// Ignore double-decode errors and keep the once-decoded value
 					}
-					return decoded;
 				}
+				return decoded;
 			}
+		}
 	} catch {
 		// Fallback to original URL
 	}

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { createResource, For, Show } from "solid-js";
-import styles from "./settings-page.module.css";
+import styles from "../settings-page.module.css";
 
 export const NotificationSettingsTab = () => {
 	const [subscriptions, { refetch }] = createResource<any[]>(() =>
@@ -30,7 +30,7 @@ export const NotificationSettingsTab = () => {
 		await invoke("check_notifications_now");
 	};
 
-	const addPreset = async (title: string, url: string) => {
+	const _addPreset = async (title: string, url: string) => {
 		await invoke("subscribe_to_rss", { title, url });
 		refetch();
 	};

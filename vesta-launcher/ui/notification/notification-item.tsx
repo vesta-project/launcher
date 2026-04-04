@@ -99,7 +99,12 @@ export function NotificationItem(props: NotificationItemProps) {
 
 				<div class={styles.content}>
 					<div class={styles.header}>
-						<span class={clsx(styles.title, "selectable")}>{local.title || (local.notification_type === "progress" ? "Working..." : "Notification")}</span>
+						<span class={clsx(styles.title, "selectable")}>
+							{local.title ||
+								(local.notification_type === "progress"
+									? "Working..."
+									: "Notification")}
+						</span>
 						<div class={styles.headerActions}>
 							<Show when={local.created_at}>
 								<span class={clsx(styles.timestamp, "selectable")}>
@@ -128,12 +133,7 @@ export function NotificationItem(props: NotificationItemProps) {
 						</p>
 					</Show>
 
-					<Show
-						when={
-							local.progress !== undefined &&
-							local.progress !== null
-						}
-					>
+					<Show when={local.progress !== undefined && local.progress !== null}>
 						<div class={styles.progressWrapper}>
 							<Progress
 								progress={local.progress}

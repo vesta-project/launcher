@@ -6,7 +6,7 @@ export function formatDate(dateStr?: string | null) {
 			month: "short",
 			day: "numeric",
 		});
-	} catch (e) {
+	} catch (_e) {
 		return "Unknown";
 	}
 }

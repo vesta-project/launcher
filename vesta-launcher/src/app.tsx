@@ -6,12 +6,14 @@ import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
+import { prefetchChangelog } from "@stores/changelog";
 import {
 	cleanupDialogSystem,
 	dialogStore,
 	initializeDialogSystem,
 } from "@stores/dialog-store";
 import { initializeInstances, setupInstanceListeners } from "@stores/instances";
+import { prefetchSettingsData } from "@stores/settings-cache";
 import { invoke } from "@tauri-apps/api/core";
 import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
@@ -20,7 +22,6 @@ import { showToast } from "@ui/toast/toast";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import {
 	applyCommonConfigUpdates,
-	applyConfigSnapshot,
 	onConfigUpdate,
 	subscribeToConfigUpdates,
 	unsubscribeFromConfigUpdates,
@@ -41,8 +42,6 @@ import { ensureOsType, getOsType } from "@utils/os";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { createSignal, lazy, onCleanup, onMount } from "solid-js";
-import { prefetchChangelog } from "@stores/changelog";
-import { prefetchSettingsData } from "@stores/settings-cache";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -288,6 +287,20 @@ function Root(props: ChildrenProp) {
 	};
 
 	onMount(() => {
+		// Read startup config for update checks only.
+		// Initial theme application is handled by early bootstrap in index/theming.
+		if (hasTauriRuntime()) {
+			invoke<any>("get_config")
+				.then((config) => {
+					if (config?.startup_check_updates) {
+						checkForAppUpdates(true);
+					}
+				})
+				.catch((error) =>
+					console.error("Failed to read startup config:", error),
+				);
+		}
+
 		// Initialize update listener and set OS attribute on root for global CSS
 		initUpdateListener();
 
@@ -515,18 +528,8 @@ function Root(props: ChildrenProp) {
 					console.error("Failed to cleanup notifications:", error);
 				});
 
-			// Check for updates on startup if enabled
-			if (hasTauriRuntime()) {
-				invoke<any>("get_config")
-					.then((config) => {
-						if (config.startup_check_updates) {
-							checkForAppUpdates(true);
-						}
-					})
-					.catch((error) =>
-						console.error("Failed to check for updates on startup:", error),
-					);
-			}
+			// Check for updates on startup if already handled in onMount
+			// (We moved the initial fetch to onMount for immediate theme application)
 
 			// Setup config sync system (non-blocking)
 			subscribeToConfigUpdates()

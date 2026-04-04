@@ -17,7 +17,7 @@
 			rgb(175 175 175 / 15%) 0%,
 			rgb(159 159 159 / 15%) 20%,
 			rgb(36 35 35 / 30%) 45.5%,
-			rgb(0 0 0 / 85%) 100%
+			rgb(0 0 0 / 60%) 100%
 		),
 		var(
 			--instance-bg-image,
@@ -42,33 +42,22 @@
 	width: 100%;
 	aspect-ratio: 1;
 	border-radius: 6px;
-	outline: var(--border-width-strong) solid var(--border-strong);
+	outline: var(--border-width-strong) solid
+		var(--instance-card-outline, hsl(var(--color__primary-hue) 18% 78% / 0.22));
 	outline-offset: calc(-1 * var(--border-width-strong));
 }
 
-/* Glass mode uses subtle glass border */
-:root[data-style="glass"] .instance-card {
-	outline-color: var(--border-glass);
-
+/* Keep hover behavior consistent without changing border style per mode */
+.instance-card {
 	&:hover {
-		/* Subtle hover effect for glass mode - lighter overlay and gentle scale */
-		background-size: cover, cover;
+		/* Keep overlay stable and scale image by height to preserve old feel */
+		background-size:
+			cover,
+			auto 102%;
 		box-shadow: 0 6px 20px 0 rgb(0 0 0 / 15%);
-		background-image:
-			radial-gradient(
-				109.12% 79.52% at 47.71% 0%,
-				rgb(200 200 200 / 20%) 0%,
-				rgb(170 170 170 / 20%) 20%,
-				rgb(50 50 50 / 40%) 45.5%,
-				rgb(0 0 0 / 85%) 100%
-			),
-			var(
-				--instance-bg-image,
-				url("@assets/placeholder-images/placeholder-image1.jpg")
-			);
-		transform: scale(1.035);
+		transform: scale(1.03);
 		transition:
-			background-size 0.2s cubic-bezier(0.4, 1, 0.7, 1),
+			background-size 0.5s cubic-bezier(0.4, 1, 0.7, 1),
 			box-shadow 0.18s cubic-bezier(0.4, 1, 0.7, 1),
 			transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
 	}
@@ -77,124 +66,6 @@
 	:root[data-reduced-motion="true"] &:hover {
 		background-size: cover, cover;
 		box-shadow: none;
-		background-image:
-			radial-gradient(
-				109.12% 79.52% at 47.71% 0%,
-				rgb(175 175 175 / 15%) 0%,
-				rgb(159 159 159 / 15%) 20%,
-				rgb(36 35 35 / 30%) 45.5%,
-				rgb(0 0 0 / 85%) 100%
-			),
-			var(
-				--instance-bg-image,
-				url("@assets/placeholder-images/placeholder-image1.jpg")
-			);
-		transform: none;
-	}
-}
-
-/* Satin mode uses subtle border */
-:root[data-style="satin"] .instance-card {
-	outline-color: var(--border-glass);
-
-	&:hover {
-		/* Medium hover effect for satin mode - balanced overlay and scale */
-		background-size: cover, cover;
-		box-shadow: 0 7px 22px 0 rgb(0 0 0 / 16%);
-		background-image:
-			radial-gradient(
-				109.12% 79.52% at 47.71% 0%,
-				rgb(190 185 185 / 22%) 0%,
-				rgb(155 150 150 / 22%) 19.5%,
-				rgb(40 40 40 / 60%) 67.93%,
-				rgb(0 0 0 / 88%) 100%
-			),
-			var(
-				--instance-bg-image,
-				url("@assets/placeholder-images/placeholder-image1.jpg")
-			);
-		transform: scale(1.04);
-		transition:
-			background-size 0.2s cubic-bezier(0.4, 1, 0.7, 1),
-			box-shadow 0.18s cubic-bezier(0.4, 1, 0.7, 1),
-			transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
-	}
-
-	/* Disable hover effect when reduced motion is enabled */
-	:root[data-reduced-motion="true"] &:hover {
-		background-size: cover, cover;
-		box-shadow: none;
-		background-image:
-			radial-gradient(
-				109.12% 79.52% at 47.71% 0%,
-				rgb(175 175 175 / 15%) 0%,
-				rgb(159 159 159 / 15%) 20%,
-				rgb(36 35 35 / 30%) 45.5%,
-				rgb(0 0 0 / 85%) 100%
-			),
-			var(
-				--instance-bg-image,
-				url("@assets/placeholder-images/placeholder-image1.jpg")
-			);
-		transform: none;
-	}
-}
-
-/* Flat mode uses stronger, more prominent borders */
-:root[data-style="flat"] .instance-card {
-	outline-color: var(--border-strong);
-
-	/* &::before {
-    content: "";
-    position: absolute;
-    width: 175px;
-    height: 175px;
-    border-radius: 6px;
-    top: 0;
-    left: 0;
-    border: 2px solid hsl(0 0% 0% / 0.15);
-
-  } */
-
-	&:hover {
-		/* Slightly enlarge the background image and card on hover for a subtle effect */
-		background-size: cover, cover;
-		box-shadow: 0 8px 24px 0 rgb(0 0 0 / 18%);
-		background-image:
-			radial-gradient(
-				109.12% 79.52% at 47.71% 0%,
-				rgb(185 179 179 / 25%) 0%,
-				rgb(149 144 144 / 25%) 19.5%,
-				rgb(36 35 35 / 80%) 67.93%,
-				rgb(0 0 0 / 90%) 100%
-			),
-			var(
-				--instance-bg-image,
-				url("@assets/placeholder-images/placeholder-image1.jpg")
-			);
-		transform: scale(1.045);
-		transition:
-			background-size 0.2s cubic-bezier(0.4, 1, 0.7, 1),
-			box-shadow 0.18s cubic-bezier(0.4, 1, 0.7, 1),
-			transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
-	}
-
-	/* Disable hover effect when reduced motion is enabled */
-	:root[data-reduced-motion="true"] &:hover {
-		background-size: cover, cover;
-		box-shadow: none;
-		background-image:
-			radial-gradient(
-				109.12% 79.52% at 47.71% 0%,
-				rgb(175 175 175 / 20%) 0%,
-				rgb(159 159 159 / 20%) 20%,
-				rgb(36 35 35 / 20%) 45.5%,
-				rgb(0 0 0 / 70%) 100%
-			),
-			var(
-				--instance-bg-image,
-				url("@assets/placeholder-images/placeholder-image1.jpg")
-			);
 		transform: none;
 	}
 }
@@ -223,11 +94,10 @@
 	gap: 4px;
 	background: linear-gradient(
 		to top,
-		hsl(0 0% 0% / 0.8) 0%,
-		hsl(0 0% 0% / 0.4) 50%,
+		hsl(0 0% 0% / 0.56) 0%,
+		hsl(0 0% 0% / 0.22) 52%,
 		transparent 100%
 	);
-	backdrop-filter: blur(var(--blur-medium));
 	padding: 24px 16px 16px 16px;
 	margin: 0 -16px -16px -16px;
 	border-radius: 0 0 6px 6px;
@@ -432,13 +302,11 @@
 	bottom: 0;
 	display: flex;
 	flex-direction: column;
-	backdrop-filter: var(--liquid-backdrop-filter);
 	justify-content: center;
 	align-items: center;
 	gap: 4px;
 	background: hsl(0 0% 0% / 0.4);
 	border-radius: 6px;
-	backdrop-filter: blur(var(--blur-overlay));
 	z-index: 10;
 }
 

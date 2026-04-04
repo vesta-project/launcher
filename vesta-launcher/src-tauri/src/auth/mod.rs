@@ -18,7 +18,9 @@ use tokio::sync::oneshot;
 
 use crate::models::account::{Account, NewAccount};
 use crate::schema::account::dsl::*; // Bring table and column names into scope for queries
-use crate::utils::config::{get_app_config, update_app_config};
+use crate::utils::config::{
+    canonical_theme_data_for_theme_id, get_app_config, update_app_config,
+};
 use crate::utils::db::get_vesta_conn;
 
 pub const ACCOUNT_TYPE_GUEST: &str = "Guest";
@@ -471,6 +473,10 @@ async fn process_login_completion(
 
     let now_str = Utc::now().to_rfc3339();
     let current_config = get_app_config().unwrap_or_default();
+    let resolved_theme_data = current_config
+        .theme_data
+        .clone()
+        .unwrap_or_else(|| canonical_theme_data_for_theme_id(&current_config.theme_id));
 
     // Set all other accounts to inactive
     diesel::update(account)
@@ -496,17 +502,9 @@ async fn process_login_completion(
         new_account.created_at = Some(now_str.clone());
         new_account.updated_at = Some(now_str.clone());
         new_account.theme_id = Some(current_config.theme_id);
-        new_account.theme_mode = Some(current_config.theme_mode);
-        new_account.theme_primary_hue = Some(current_config.theme_primary_hue);
-        new_account.theme_primary_sat = current_config.theme_primary_sat;
-        new_account.theme_primary_light = current_config.theme_primary_light;
-        new_account.theme_style = Some(current_config.theme_style);
-        new_account.theme_gradient_enabled = Some(current_config.theme_gradient_enabled);
-        new_account.theme_gradient_angle = current_config.theme_gradient_angle;
-        new_account.theme_gradient_type = current_config.theme_gradient_type;
-        new_account.theme_gradient_harmony = current_config.theme_gradient_harmony;
-        new_account.theme_advanced_overrides = current_config.theme_advanced_overrides;
-        new_account.theme_border_width = current_config.theme_border_width;
+        new_account.theme_data = Some(resolved_theme_data.clone());
+        new_account.theme_window_effect = current_config.theme_window_effect;
+        new_account.theme_background_opacity = current_config.theme_background_opacity;
         new_account.account_type = "Microsoft".to_string();
 
         diesel::insert_into(account)
@@ -529,6 +527,10 @@ async fn process_login_completion(
                 is_active.eq(true),
                 is_expired.eq(false),
                 updated_at.eq(Some(now_str.clone())),
+                theme_id.eq(Some(current_config.theme_id)),
+                theme_data.eq(Some(resolved_theme_data.clone())),
+                theme_window_effect.eq(current_config.theme_window_effect),
+                theme_background_opacity.eq(current_config.theme_background_opacity),
             ))
             .execute(&mut conn)
             .map_err(|e| anyhow::anyhow!("Failed to update account: {}", e))?;
@@ -883,83 +885,49 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
     let mut config = get_app_config().map_err(|e| e.to_string())?;
     config.active_account_uuid = Some(target_uuid.clone());
 
-    // Apply account theme settings to global config if they exist
+    // Apply account theme settings to global config, falling back to canonical payloads.
     let mut updates = std::collections::HashMap::new();
 
-    if let Some(val) = target_account.theme_id {
-        config.theme_id = val.clone();
-        updates.insert("theme_id".to_string(), serde_json::Value::String(val));
-    }
-    if let Some(val) = target_account.theme_mode {
-        config.theme_mode = val.clone();
-        updates.insert("theme_mode".to_string(), serde_json::Value::String(val));
-    }
-    if let Some(val) = target_account.theme_primary_hue {
-        config.theme_primary_hue = val;
+    let next_theme_id = target_account
+        .theme_id
+        .clone()
+        .unwrap_or_else(|| config.theme_id.clone());
+    if config.theme_id != next_theme_id {
+        config.theme_id = next_theme_id.clone();
         updates.insert(
-            "theme_primary_hue".to_string(),
-            serde_json::Value::Number(val.into()),
+            "theme_id".to_string(),
+            serde_json::Value::String(next_theme_id.clone()),
         );
     }
-    if let Some(val) = target_account.theme_primary_sat {
-        config.theme_primary_sat = Some(val);
+
+    let next_theme_data = target_account.theme_data.clone().unwrap_or_else(|| {
+        canonical_theme_data_for_theme_id(next_theme_id.as_str())
+    });
+    if config.theme_data.as_deref() != Some(next_theme_data.as_str()) {
+        config.theme_data = Some(next_theme_data.clone());
         updates.insert(
-            "theme_primary_sat".to_string(),
-            serde_json::Value::Number(val.into()),
+            "theme_data".to_string(),
+            serde_json::Value::String(next_theme_data),
         );
     }
-    if let Some(val) = target_account.theme_primary_light {
-        config.theme_primary_light = Some(val);
-        updates.insert(
-            "theme_primary_light".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
+
+    if config.theme_window_effect != target_account.theme_window_effect {
+        config.theme_window_effect = target_account.theme_window_effect.clone();
+        let value = target_account
+            .theme_window_effect
+            .clone()
+            .map(serde_json::Value::String)
+            .unwrap_or(serde_json::Value::Null);
+        updates.insert("theme_window_effect".to_string(), value);
     }
-    if let Some(val) = target_account.theme_style {
-        config.theme_style = val.clone();
-        updates.insert("theme_style".to_string(), serde_json::Value::String(val));
-    }
-    if let Some(val) = target_account.theme_gradient_enabled {
-        config.theme_gradient_enabled = val;
-        updates.insert(
-            "theme_gradient_enabled".to_string(),
-            serde_json::Value::Bool(val),
-        );
-    }
-    if let Some(val) = target_account.theme_gradient_angle {
-        config.theme_gradient_angle = Some(val);
-        updates.insert(
-            "theme_gradient_angle".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
-    }
-    if let Some(val) = target_account.theme_gradient_type {
-        config.theme_gradient_type = Some(val.clone());
-        updates.insert(
-            "theme_gradient_type".to_string(),
-            serde_json::Value::String(val),
-        );
-    }
-    if let Some(val) = target_account.theme_gradient_harmony {
-        config.theme_gradient_harmony = Some(val.clone());
-        updates.insert(
-            "theme_gradient_harmony".to_string(),
-            serde_json::Value::String(val),
-        );
-    }
-    if let Some(val) = target_account.theme_advanced_overrides {
-        config.theme_advanced_overrides = Some(val.clone());
-        updates.insert(
-            "theme_advanced_overrides".to_string(),
-            serde_json::Value::String(val),
-        );
-    }
-    if let Some(val) = target_account.theme_border_width {
-        config.theme_border_width = Some(val);
-        updates.insert(
-            "theme_border_width".to_string(),
-            serde_json::Value::Number(val.into()),
-        );
+
+    if config.theme_background_opacity != target_account.theme_background_opacity {
+        config.theme_background_opacity = target_account.theme_background_opacity;
+        let value = target_account
+            .theme_background_opacity
+            .map(|v| serde_json::Value::Number(v.into()))
+            .unwrap_or(serde_json::Value::Null);
+        updates.insert("theme_background_opacity".to_string(), value);
     }
 
     update_app_config(&config).map_err(|e| e.to_string())?;

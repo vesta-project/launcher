@@ -4,7 +4,7 @@
 	   ============================================================================= */
 
 	/* Base Hues (User Configurable) */
-	--color__primary-hue: 220;
+	--color__primary-hue: 180;
 	--button-lightness: 35%;
 	--accent-base: var(--color__primary-hue) 70% var(--button-lightness);
 	--hue-secondary: calc(
@@ -40,28 +40,41 @@
 	/* Gradient Configuration */
 	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
 	--rotation: 135deg;
-	--background-opacity: 0.12;
+	--background-opacity: 0.25;
 
 	/* =============================================================================
 	   THEME SYSTEM - LAYER 2: SEMANTIC TOKENS (Abstract Intent)
 	   ============================================================================= */
 
 	/* Surface Hierarchy (with alpha for Windows Mica/Acrylic support) */
-	--surface-base: hsl(
-		var(--color__primary-hue) 10% var(--lightness-surface-base) /
-		0.95
+	--surface-base: var(
+		--surface-base-computed,
+		hsl(
+			var(--color__primary-hue) 10% var(--lightness-surface-base) /
+			var(--effect-opacity)
+		)
 	);
-	--surface-raised: hsl(
-		var(--color__primary-hue) 15% var(--lightness-surface-raised) /
-		var(--effect-opacity)
+	--surface-raised: var(
+		--surface-raised-computed,
+		hsl(
+			var(--color__primary-hue) 15% var(--lightness-surface-raised) /
+			var(--effect-opacity)
+		)
 	);
-	--surface-overlay: hsl(
-		var(--color__primary-hue) 20% var(--lightness-surface-overlay) /
-		var(--effect-opacity)
+	--surface-overlay: var(
+		--surface-overlay-computed,
+		hsl(
+			var(--color__primary-hue) 20% var(--lightness-surface-overlay) /
+			var(--effect-opacity)
+		)
 	);
-	--surface-sunken: hsl(
-		var(--color__primary-hue) 5% var(--lightness-surface-sunken) /
-		0.98
+	--surface-sunken: var(
+		--surface-sunken-computed,
+		hsl(var(--color__primary-hue) 5% var(--lightness-surface-sunken) / 0.98)
+	);
+
+	--app-background-tint: hsl(
+		var(--color__primary-hue) 10% var(--lightness-surface-base)
 	);
 
 	/* Borders */
@@ -74,9 +87,10 @@
 		0.7
 	);
 	--border-focus: hsl(var(--color__primary-hue) 70% 50% / 0.8);
-	--border-glass: hsl(var(--color__primary-hue) 10% 100% / 0.15);
+	--border-glass: hsl(var(--color__primary-hue) 10% 50% / 0.15);
 	--border-width-subtle: 1px;
 	--border-width-strong: 1px;
+	--border-radius-main: 12px;
 
 	/* Text Colors */
 	--text-primary: hsl(
@@ -136,9 +150,7 @@
 
 	/* Accent Colors */
 	--accent-primary: hsl(var(--color__primary-hue) 70% var(--button-lightness));
-	--accent-primary-hover: hsl(
-		var(--color__primary-hue) 80% calc(var(--button-lightness) + 10%)
-	);
+	--accent-primary-hover: var(--primary-hover);
 	--accent-secondary: hsl(var(--hue-secondary) 60% 50%);
 
 	--primary: var(--accent-primary);
@@ -169,6 +181,7 @@
 	/* Blur Variables - Inherited by children */
 	--blur-base: var(--effect-blur);
 	--blur-overlay: 12px;
+	--blur-medium: 8px;
 	--blur-subtle: 4px;
 
 	/* =============================================================================
@@ -194,10 +207,7 @@
 	--scrollbar-thumb-border: hsl(var(--color__primary-hue) 10% 20%);
 
 	/* Background Gradient Stops */
-	--gradient-stop-1: hsl(
-		var(--color__primary-hue) 80% 5% /
-		var(--background-opacity)
-	);
+	--gradient-stop-1: hsl(var(--hue-accent) 80% 5% / var(--background-opacity));
 	--gradient-stop-2: hsl(
 		var(--color__primary-hue) 81% 40% /
 		var(--background-opacity)
@@ -208,7 +218,8 @@
 	);
 
 	/* Background Gradient (Default to linear) */
-	--background-color: linear-gradient(
+	--background-color: var(--app-background-tint);
+	--background-image: linear-gradient(
 		var(--rotation, 135deg),
 		var(--gradient-stop-1) 0%,
 		var(--gradient-stop-2) 35%,
@@ -300,17 +311,16 @@
 	--kb-menu-content-transform-origin: top center;
 }
 
-
 :root[data-os="macos"] body #app,
 :root[data-os="macos"] body #app-loader {
 	/* Windows without decorations dont have a border radius on macos */
-	border-radius: 12px!important;
+	border-radius: 12px !important;
 	overflow: hidden;
 }
 
 /* Radial Gradient Override */
 :root[data-gradient-type="radial"] {
-	--background-color: radial-gradient(
+	--background-image: radial-gradient(
 		farthest-corner at calc(50% + 40% * cos(var(--rotation, 135deg)))
 			calc(50% + 40% * sin(var(--rotation, 135deg))),
 		var(--gradient-stop-2) 0%,
@@ -323,8 +333,8 @@
 	height: 100%;
 	width: 100%;
 	/* Ensure we have a solid base color under the transparent gradient */
-	background-color: var(--surface-base);
-	background-image: var(--background-color);
+	background-color: var(--background-color);
+	background-image: var(--background-image);
 	background-attachment: fixed;
 	background-size: cover;
 	min-width: 450px;
@@ -336,10 +346,20 @@
 	background-attachment: scroll;
 }
 
+:root[data-window-effect="transparent"] body,
+:root[data-window-effect="mica"] body,
+:root[data-window-effect="acrylic"] body,
+:root[data-window-effect="blur"] body,
+:root[data-window-effect="vibrancy"] body,
+:root[data-window-effect="liquid_glass"] body {
+	background: transparent !important;
+}
+
 body {
 	position: fixed;
 	width: 100%;
 	height: 100%;
+	background: var(--app-background-tint);
 	overflow: hidden;
 }
 
@@ -358,8 +378,7 @@ body {
 	--lightness-text-tertiary: 55%;
 	--lightness-border: 60%;
 
-	/* Make background gradient more visible in light mode */
-	--background-opacity: 0.6;
+	/* Make background gradient more visible in light mode (relying on global settings) */
 
 	/* Override the main background gradient stops for better light mode visibility */
 	--gradient-stop-1: hsl(
@@ -445,8 +464,7 @@ body {
 		--lightness-text-tertiary: 55%;
 		--lightness-border: 60%;
 
-		/* Make background gradient more visible in light mode */
-		--background-opacity: 0.6;
+		/* Make background gradient more visible in light mode (relying on global settings) */
 
 		/* Override the main background gradient stops for better light mode visibility */
 		--gradient-stop-1: hsl(
@@ -620,130 +638,6 @@ button {
 	scroll-behavior: auto !important;
 }
 
-/* =============================================================================
-   STYLE MODE OVERRIDES (Glass/Satin/Flat/Bordered)
-   ============================================================================= */
-
-/* Glass Mode (Default with proper blur effects) */
-:root[data-style="glass"],
-:root:not([data-style]) {
-	--effect-blur: 20px;
-	--effect-opacity: 0.75;
-	--effect-shadow-depth: 28px;
-	--effect-glow-opacity: 0.8;
-	--liquid-frost-blur: 16px;
-	--liquid-tint-opacity: 0.7;
-	--liquid-backdrop-filter: blur(16px) saturate(1.5);
-	--border-subtle: hsl(
-		var(--color__primary-hue) 12% var(--lightness-border) /
-		0.2
-	);
-	--border-strong: hsl(
-		var(--color__primary-hue) 30% var(--lightness-border) /
-		0.4
-	);
-}
-
-/* Satin Mode - Medium glass effect with more opacity */
-:root[data-style="satin"] {
-	--effect-blur: 10px;
-	--effect-opacity: 0.88;
-	--effect-shadow-depth: 16px;
-	--effect-glow-opacity: 0.5;
-	--liquid-frost-blur: 8px;
-	--liquid-tint-opacity: 0.9;
-	--liquid-backdrop-filter: blur(8px) saturate(1.2);
-	--border-subtle: hsl(
-		var(--color__primary-hue) 12% var(--lightness-border) /
-		0.35
-	);
-	--border-strong: hsl(
-		var(--color__primary-hue) 30% var(--lightness-border) /
-		0.55
-	);
-}
-
-/* Flat Mode - No transparency, solid colors, stronger borders */
-:root[data-style="flat"] {
-	--effect-blur: 0px;
-	--effect-opacity: 1;
-	--effect-shadow-depth: 6px;
-	--effect-glow-opacity: 0;
-	--liquid-frost-blur: 0px;
-	--liquid-tint-opacity: 1;
-	--liquid-backdrop-filter: none;
-	--border-subtle: hsl(
-		var(--color__primary-hue) 12% var(--lightness-border) /
-		0.5
-	);
-	--border-strong: hsl(
-		var(--color__primary-hue) 30% var(--lightness-border) /
-		0.8
-	);
-
-	/* Override surfaces to be fully opaque */
-	--surface-base: hsl(
-		var(--color__primary-hue) 10% var(--lightness-surface-base)
-	);
-	--surface-raised: hsl(
-		var(--color__primary-hue) 15% var(--lightness-surface-raised)
-	);
-	--surface-overlay: hsl(
-		var(--color__primary-hue) 20% var(--lightness-surface-overlay)
-	);
-	--surface-sunken: hsl(
-		var(--color__primary-hue) 5% var(--lightness-surface-sunken)
-	);
-}
-
-/* Solid Mode - Absolute zero transparency, 100% opaque background and surfaces */
-:root[data-style="solid"] {
-	--effect-blur: 0px;
-	--effect-opacity: 1;
-	--effect-shadow-depth: 4px;
-	--effect-glow-opacity: 0;
-	--liquid-frost-blur: 0px;
-	--liquid-tint-opacity: 1;
-	--liquid-backdrop-filter: none;
-	--background-opacity: 1;
-}
-
-/* Bordered Style Mode (no transparency/blur, strong borders) */
-/* Note: This removes blur/transparency but preserves hue and semantic colors */
-:root[data-bordered="true"] {
-	--liquid-backdrop-filter: none;
-	--liquid-background: var(--surface-base);
-	--liquid-box-shadow: 0 6px 16px hsl(0 0% 0% / 0.25);
-	--bg-glass: var(--surface-base);
-	--effect-blur: 0px;
-	/* Strengthen borders and elevation for clarity without blur */
-	--border-subtle: hsl(
-		var(--color__primary-hue) 12% var(--lightness-border) /
-		0.6
-	);
-	--border-strong: hsl(
-		var(--color__primary-hue) 30% var(--lightness-border) /
-		0.9
-	);
-	--border-glass: var(--border-strong);
-}
-
-/* macOS: slightly lighter glass effects for better drag performance on large windows */
-:root[data-os="macos"][data-style="glass"],
-:root[data-os="macos"]:not([data-style]) {
-	--effect-blur: 14px;
-	--effect-shadow-depth: 20px;
-	--liquid-frost-blur: 12px;
-	--liquid-backdrop-filter: blur(12px) saturate(1.3);
-}
-
-:root[data-os="macos"][data-style="satin"] {
-	--effect-blur: 8px;
-	--effect-shadow-depth: 14px;
-	--liquid-frost-blur: 6px;
-	--liquid-backdrop-filter: blur(6px) saturate(1.2);
-}
-
 /* Liquid Glass Utility Class */
 .liquid-glass {
 	background: var(--liquid-background);
@@ -751,7 +645,7 @@ button {
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	box-shadow: var(--liquid-box-shadow);
 	isolation: isolate;
-	border: 1px solid transparent;
+	border: var(--border-width-subtle, 1px) solid transparent;
 	position: relative;
 }
 
@@ -773,7 +667,7 @@ button {
 .driver-popover.driverjs-theme {
 	background-color: var(--surface-overlay) !important;
 	color: var(--text-primary) !important;
-	border: 1px solid var(--border-strong) !important;
+	border: var(--border-width-subtle) solid var(--border-strong) !important;
 	border-radius: 12px !important;
 	backdrop-filter: blur(16px) !important;
 	-webkit-backdrop-filter: blur(16px) !important;
@@ -901,4 +795,22 @@ button {
 	user-select: text !important;
 	-webkit-user-select: text !important;
 	cursor: text;
+}
+
+/* OS effects can fully expose the native material behind the webview */
+:root[data-window-effect="transparent"] #app,
+:root[data-window-effect="mica"] #app,
+:root[data-window-effect="acrylic"] #app,
+:root[data-window-effect="blur"] #app,
+:root[data-window-effect="vibrancy"] #app,
+:root[data-window-effect="liquid_glass"] #app {
+	background-color: transparent !important;
+	background-image: var(--background-image) !important;
+}
+
+/* Ensure 'none' effect on macOS results in a solid surface rather than transparency */
+:root[data-window-effect="none"] #app,
+:root[data-window-effect=""] #app {
+	background-color: var(--background-color) !important;
+	background-image: var(--background-image) !important;
 }

@@ -725,35 +725,35 @@ const ResourceCard: Component<{
 								const categoryObj = createMemo(() =>
 									resources.state.availableCategories.length > 0
 										? resources.state.availableCategories.find(
-											  (c) =>
-												  c.name.toLowerCase() === tag.toLowerCase() ||
-												  c.id.toLowerCase() === tag.toLowerCase(),
-										  )
+												(c) =>
+													c.name.toLowerCase() === tag.toLowerCase() ||
+													c.id.toLowerCase() === tag.toLowerCase(),
+											)
 										: null,
 								);
 
 								return (
-										<Badge
+									<Badge
 										variant="theme"
 										round
 										clickable
 										class={styles["resource-tag"]}
-											active={
-												resources.state.availableCategories.length > 0
-													? resources.state.categories.includes(
-														  (categoryObj()?.id || tag).toLowerCase(),
-													  )
-													: false
-											}
+										active={
+											resources.state.availableCategories.length > 0
+												? resources.state.categories.includes(
+														(categoryObj()?.id || tag).toLowerCase(),
+													)
+												: false
+										}
 										onClick={(e) => {
 											e.stopPropagation();
 											// Normalize tag to ID if possible
-												const filterId = categoryObj()?.id || tag;
+											const filterId = categoryObj()?.id || tag;
 											resources.toggleCategory(filterId.toLowerCase());
 											resources.setOffset(0);
 										}}
 									>
-											{categoryObj()?.name || tag}
+										{categoryObj()?.name || tag}
 									</Badge>
 								);
 							}}
@@ -970,27 +970,27 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 			return result;
 		}
 
-			// Flat list for Modrinth (Single group with empty name to avoid double header)
-			const items = filtered
-				.map((c) => ({
-					id: c.id,
-					name: c.name,
-					icon: c.icon_url,
-					displayIndex: c.display_index ?? 0,
-				}))
-				.sort((a, b) => a.name.localeCompare(b.name));
+		// Flat list for Modrinth (Single group with empty name to avoid double header)
+		const items = filtered
+			.map((c) => ({
+				id: c.id,
+				name: c.name,
+				icon: c.icon_url,
+				displayIndex: c.display_index ?? 0,
+			}))
+			.sort((a, b) => a.name.localeCompare(b.name));
 
-			if (items.length === 0) return [];
+		if (items.length === 0) return [];
 
-			return [
-				{
-					id: undefined as string | undefined,
-					name: "",
-					icon: undefined as string | undefined,
-					displayIndex: 0,
-					items,
-				},
-			];
+		return [
+			{
+				id: undefined as string | undefined,
+				name: "",
+				icon: undefined as string | undefined,
+				displayIndex: 0,
+				items,
+			},
+		];
 	});
 
 	const shouldShowLoader = () =>

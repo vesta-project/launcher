@@ -13,7 +13,8 @@
 	& .page-viewer-root {
 		width: 100%;
 		height: 100%;
-		border-radius: 8px;
+		border-radius: var(--border-radius-main);
+		border: var(--border-width-subtle) solid var(--border-subtle);
 
 		/* Apply Liquid Glass */
 		background: var(--liquid-background);
@@ -30,9 +31,9 @@
 	:root[data-bordered="true"] & .page-viewer-root {
 		backdrop-filter: none;
 		-webkit-backdrop-filter: none;
-		background: var(--bg-surface);
+		background: var(--surface-base);
 		box-shadow: 0 8px 32px 0 hsl(0 0% 0% / 0.37);
-		border: var(--border-width-subtle) solid var(--border-subtle);
+		border: var(--border-width-subtle) solid var(--border-strong);
 	}
 
 	/* Universal Bordered Style Override for children */

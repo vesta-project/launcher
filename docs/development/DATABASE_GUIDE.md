@@ -231,6 +231,36 @@ fn delete_user(user_id: i32) -> Result<(), diesel::result::Error> {
 - **Main database:** `get_vesta_conn()` for user data
 - **Config database:** `get_config_conn()` for app settings
 
+## Theme 2.0 Config Storage
+
+Theme state is persisted in the config database (`app_config`) and consumed by frontend theme engine code.
+
+Primary columns used by theming:
+
+- `theme_id`
+- `theme_mode`
+- `theme_primary_hue`
+- `theme_primary_sat`
+- `theme_primary_light`
+- `theme_style`
+- `theme_gradient_enabled`
+- `theme_gradient_angle`
+- `theme_gradient_type`
+- `theme_gradient_harmony`
+- `theme_border_width`
+- `theme_window_effect`
+- `theme_background_opacity`
+- `theme_advanced_overrides`
+- `theme_data`
+
+`theme_data` is an optional JSON payload used for richer theme metadata and variable payloads (for example: variable definitions and user variable values). It is parsed and normalized by the frontend parser (`src/themes/engine/parser.ts`) and merged with config fields in `src/themes/presets.ts` (`configToTheme`).
+
+Important behavior:
+
+- Scalar fields in app config remain the canonical persisted knobs.
+- `theme_data` extends those fields for advanced/custom payloads.
+- Values are validated and clamped in `src/themes/engine/validation.ts` before application.
+
 ## Benefits of Diesel
 
 ✅ **Type Safety** - Compile-time query checking  

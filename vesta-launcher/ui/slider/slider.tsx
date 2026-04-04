@@ -6,13 +6,36 @@ import styles from "./slider.module.css";
 
 // Root slider component
 const Slider = <T extends ValidComponent = "div">(
-	props: PolymorphicProps<T, SliderPrimitive.SliderRootProps<T>>,
+	props: PolymorphicProps<
+		T,
+		SliderPrimitive.SliderRootOptions & {
+			onInput?: (value: number[]) => void;
+			onCommit?: (value: number[]) => void;
+			class?: string;
+			onChange?: (value: number[]) => void;
+			onChangeEnd?: (value: number[]) => void;
+		}
+	>,
 ) => {
-	const [local, others] = splitProps(props as any, ["class"]);
+	const [local, others] = splitProps(props as any, [
+		"class",
+		"onChange",
+		"onInput",
+		"onCommit",
+		"onChangeEnd",
+	]);
 
 	return (
 		<SliderPrimitive.Root
 			class={clsx(styles.slider, local.class)}
+			onChange={(val: number[]) => {
+				local.onChange?.(val);
+				local.onInput?.(val);
+			}}
+			onChangeEnd={(val: number[]) => {
+				local.onChangeEnd?.(val);
+				local.onCommit?.(val);
+			}}
 			{...others}
 		/>
 	);
@@ -112,9 +135,9 @@ const SliderValueLabel = <T extends ValidComponent = "output">(
 
 export {
 	Slider,
-	SliderTrack,
 	SliderFill,
-	SliderThumb,
 	SliderLabel,
+	SliderThumb,
+	SliderTrack,
 	SliderValueLabel,
 };

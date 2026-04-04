@@ -1,7 +1,7 @@
 -- Add theme system fields to app_config table
 ALTER TABLE app_config ADD COLUMN theme_id TEXT NOT NULL DEFAULT 'vesta';
 ALTER TABLE app_config ADD COLUMN theme_mode TEXT NOT NULL DEFAULT 'template';
-ALTER TABLE app_config ADD COLUMN theme_primary_hue INTEGER NOT NULL DEFAULT 220;
+ALTER TABLE app_config ADD COLUMN theme_primary_hue INTEGER NOT NULL DEFAULT 180;
 ALTER TABLE app_config ADD COLUMN theme_primary_sat INTEGER;
 ALTER TABLE app_config ADD COLUMN theme_primary_light INTEGER;
 ALTER TABLE app_config ADD COLUMN theme_style TEXT NOT NULL DEFAULT 'glass';
