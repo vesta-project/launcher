@@ -19,7 +19,6 @@ diesel::table! {
         is_expired -> Bool,
         skin_variant -> Text,
         skin_data -> Nullable<Text>,
-        cape_data -> Nullable<Text>,
         theme_data -> Nullable<Text>,
         theme_window_effect -> Nullable<Text>,
         theme_background_opacity -> Nullable<Integer>,

@@ -1,0 +1,1 @@
+DROP INDEX IF EXISTS idx_account_skin_history_unique_identity;

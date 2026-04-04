@@ -3,17 +3,17 @@ use crate::models::skin_history::{AccountSkinHistory, NewAccountSkinHistory};
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use crate::schema::vesta::{account, account_skin_history};
+use crate::utils::cape_cache::{bytes_to_png_data_uri, get_or_cache_cape_bytes};
 use crate::utils::db::get_vesta_conn;
+use crate::utils::texture::compute_texture_key;
 use crate::auth::get_account_profile;
 use base64::{engine::general_purpose, Engine as _};
 use log::{error, info, warn};
 use diesel::prelude::*;
-use hex;
-use image;
 use piston_lib::api::minecraft_skins::detect_skin_variant;
 use piston_lib::api::minecraft_skins::get_default_skins as get_skins;
 use piston_lib::models::common::{MinecraftSkinVariant, Skin};
-use sha2::{Digest, Sha256};
+use std::collections::HashSet;
 use tauri::{command, Manager};
 use tauri::Emitter;
 
@@ -48,30 +48,6 @@ fn normalize_skin_variant(variant: &str) -> String {
     }
 }
 
-/// Computes a stable, content-based hash for an image.
-/// This canonicalizes the image to RGBA8 and includes dimensions in the hash
-/// to ensure that visually identical skins result in the same texture_key,
-/// which we use for deduplication and matching against history/presets.
-fn compute_texture_key(image_bytes: &[u8]) -> String {
-    if let Ok(img) = image::load_from_memory(image_bytes) {
-        let rgba = img.to_rgba8();
-        let (width, height) = rgba.dimensions();
-
-        let mut hasher = Sha256::new();
-        hasher.update(rgba.as_raw());
-        hasher.update(width.to_le_bytes());
-        hasher.update(height.to_le_bytes());
-        let hex = hex::encode(hasher.finalize());
-        return hex;
-    }
-
-    // Fallback to raw bytes hash if image parsing fails (e.g. corrupted file)
-    let mut hasher = Sha256::new();
-    hasher.update(image_bytes);
-    let hex = hex::encode(hasher.finalize());
-    hex
-}
-
 fn is_mojang_rate_limited(error_message: &str) -> bool {
     let lower = error_message.to_lowercase();
     lower.contains("429")
@@ -101,6 +77,32 @@ fn notify_mojang_rate_limit(app: &tauri::AppHandle, account_uuid: &str, operatio
         metadata: None,
         show_on_completion: None,
     });
+}
+
+fn dedupe_recent_history(
+    account_uuid: &str,
+    recent_history: Vec<AccountSkinHistory>,
+) -> Vec<AccountSkinHistory> {
+    let mut seen_texture_keys = HashSet::new();
+    let mut deduped = Vec::with_capacity(recent_history.len());
+    let mut duplicate_count = 0usize;
+
+    for item in recent_history {
+        if seen_texture_keys.insert(item.texture_key.clone()) {
+            deduped.push(item);
+        } else {
+            duplicate_count += 1;
+        }
+    }
+
+    if duplicate_count > 0 {
+        warn!(
+            "get_complete_skin_data: collapsed {} duplicate history rows for account {}",
+            duplicate_count, account_uuid
+        );
+    }
+
+    deduped
 }
 
 #[command]
@@ -226,72 +228,53 @@ pub async fn upload_account_skin(
         .access_token
         .ok_or_else(|| "Account has no access token".to_string())?;
 
-    let redacted_token = if token.len() > 6 { format!("{}...", &token[..6]) } else { "<redacted>".to_string() };
-    match account_skin_history::table
-        .filter(account_skin_history::account_uuid.eq(&normalized_uuid))
-        .filter(account_skin_history::texture_key.eq(&texture_key))
-        .first::<AccountSkinHistory>(&mut conn)
-    {
-        Ok(existing) => {
-            info!("upload_account_skin: MatchFound history_id={} account={} texture_key={}", existing.id, normalized_uuid, texture_key);
-            // refresh timestamp
-            diesel::update(account_skin_history::table.filter(account_skin_history::id.eq(existing.id)))
-                .set(account_skin_history::added_at.eq(diesel::dsl::sql::<diesel::sql_types::Text>("CURRENT_TIMESTAMP")))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to refresh existing skin history timestamp: {}", e))?;
-            
-            // Still upload to Mojang to set it as active if it matched history but isn't current on server
-            piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes)
-                .await
-                .map_err(|e| {
-                    let message = format!("Failed to upload skin to Mojang: {}", e);
-                    if is_mojang_rate_limited(&message) {
-                        notify_mojang_rate_limit(&app, &normalized_uuid, "Uploading skin");
-                    }
-                    message
-                })?;
-        }
-        Err(diesel::result::Error::NotFound) => {
-            // No existing entry — proceed to upload then save
-            piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes)
-                .await
-                .map_err(|e| {
-                    let message = format!("Failed to upload skin to Mojang: {}", e);
-                    if is_mojang_rate_limited(&message) {
-                        notify_mojang_rate_limit(&app, &normalized_uuid, "Uploading skin");
-                    }
-                    message
-                })?;
+    piston_lib::api::mojang::upload_skin(&token, &variant, file_bytes)
+        .await
+        .map_err(|e| {
+            let message = format!("Failed to upload skin to Mojang: {}", e);
+            if is_mojang_rate_limited(&message) {
+                notify_mojang_rate_limit(&app, &normalized_uuid, "Uploading skin");
+            }
+            message
+        })?;
 
-            info!("upload_account_skin: Upload successful for account={} texture_key={}", normalized_uuid, texture_key);
+    let image_data = if base64_data.starts_with("data:") {
+        base64_data.clone()
+    } else {
+        format!("data:image/png;base64,{}", base64_data)
+    };
 
-            // 4. Save to history
-            // Ensure we save the full data URI internally for consistency
-            let image_data = if base64_data.starts_with("data:") {
-                base64_data.clone()
-            } else {
-                format!("data:image/png;base64,{}", base64_data)
-            };
+    let new_history = NewAccountSkinHistory {
+        account_uuid: normalized_uuid.clone(),
+        texture_key: texture_key.clone(),
+        name: name.clone(),
+        variant: variant.clone(),
+        image_data: image_data.clone(),
+        source: "mojang".to_string(),
+    };
 
-            let new_history = NewAccountSkinHistory {
-                account_uuid: normalized_uuid.clone(),
-                texture_key: texture_key.clone(),
-                name: name.clone(),
-                variant: variant.clone(),
-                image_data,
-                source: "mojang".to_string(),
-            };
+    diesel::insert_into(account_skin_history::table)
+        .values(&new_history)
+        .on_conflict((account_skin_history::account_uuid, account_skin_history::texture_key))
+        .do_update()
+        .set((
+            account_skin_history::name.eq(name),
+            account_skin_history::variant.eq(variant),
+            account_skin_history::image_data.eq(image_data),
+            account_skin_history::source.eq("mojang".to_string()),
+            account_skin_history::added_at.eq(diesel::dsl::sql::<diesel::sql_types::Text>("CURRENT_TIMESTAMP")),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to save skin history: {}", e))?;
 
-            diesel::insert_into(account_skin_history::table)
-                .values(&new_history)
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to save skin history: {}", e))?;
-        }
-        Err(e) => return Err(format!("Failed to query skin history: {}", e)),
-    }
+    info!(
+        "upload_account_skin: Upserted history for account={} texture_key={}",
+        normalized_uuid, texture_key
+    );
 
     // 5. Update active account skin URL (fetch new profile)
     let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
+    emit_heads_updated(&app, &normalized_uuid, true);
     Ok(())
 }
 
@@ -344,6 +327,7 @@ pub async fn apply_history_skin(
 
     // 5. Update active account skin URL
     let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
+    emit_heads_updated(&app, &normalized_uuid, true);
     Ok(())
 }
 
@@ -397,6 +381,7 @@ pub async fn reset_account_skin(app: tauri::AppHandle, account_uuid: String) -> 
         })?;
 
     let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
+    emit_heads_updated(&app, &normalized_uuid, true);
     Ok(())
 }
 
@@ -520,6 +505,7 @@ pub async fn apply_preset_skin(
 
     // 5. Update active account skin URL
     let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
+    emit_heads_updated(&app, &normalized_uuid, true);
     Ok(())
 }
 
@@ -581,6 +567,7 @@ pub async fn change_skin_variant(
 
     // 4. Update local db from server-authoritative profile data
     let _ = crate::tasks::sync_profiles::sync_account_profile_data(&normalized_uuid, Some(app.clone()), false).await;
+    emit_heads_updated(&app, &normalized_uuid, true);
     Ok(())
 }
 
@@ -659,40 +646,32 @@ pub async fn sync_current_skin_history(app: tauri::AppHandle, account_uuid: Stri
 
     // 2. Download the texture and compute its content key
     // This allows us to link the server skin to existing history/presets by actual image content.
-    let (texture_key, image_data) = match reqwest::get(&active_skin.url).await {
-        Ok(response) => {
-            let status = response.status();
-            match response.bytes().await {
-                Ok(bytes) => {
-                    let bytes_vec = bytes.to_vec();
-                    let key = compute_texture_key(&bytes_vec);
-                    let base64_data = general_purpose::STANDARD.encode(&bytes_vec);
-                    info!("sync_current_skin_history: downloaded skin bytes_len={} texture_key={}", bytes_vec.len(), key);
-                    (key, format!("data:image/png;base64,{}", base64_data))
-                }
-                Err(e) => {
-                    error!("sync_current_skin_history: failed to read bytes from mojang (status={}): {}", status, e);
-                    // Fallback to URL-based key if download fails
-                    let mut hasher = Sha256::new();
-                    hasher.update(normalized_url.as_bytes());
-                    (
-                        format!("mojang:{}", hex::encode(hasher.finalize())),
-                        normalized_url.clone(),
-                    )
-                }
-            }
-        },
-        Err(e) => {
-            error!("sync_current_skin_history: failed to download skin from mojang: {}", e);
-            // Fallback to URL-based key if request fails
-            let mut hasher = Sha256::new();
-            hasher.update(normalized_url.as_bytes());
-            (
-                format!("mojang:{}", hex::encode(hasher.finalize())),
-                normalized_url.clone(),
-            )
-        }
-    };
+    let response = reqwest::get(&active_skin.url)
+        .await
+        .map_err(|e| format!("sync_current_skin_history: failed to download skin from mojang: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "sync_current_skin_history: bad status downloading skin: {}",
+            response.status()
+        ));
+    }
+
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| format!("sync_current_skin_history: failed to read downloaded skin bytes: {}", e))?;
+    let bytes_vec = bytes.to_vec();
+    let texture_key = compute_texture_key(&bytes_vec);
+    let image_data = format!(
+        "data:image/png;base64,{}",
+        general_purpose::STANDARD.encode(&bytes_vec)
+    );
+    info!(
+        "sync_current_skin_history: downloaded skin bytes_len={} texture_key={}",
+        bytes_vec.len(),
+        texture_key
+    );
 
     let variant = if active_skin.variant.to_lowercase() == "slim" {
         "slim".to_string()
@@ -706,42 +685,30 @@ pub async fn sync_current_skin_history(app: tauri::AppHandle, account_uuid: Stri
         format!("{} Current Skin", profile.name)
     };
 
-    // 3. Search history for a matching texture_key
-    // This identifies if the skin is a known preset or previously uploaded one.
-    let existing = account_skin_history::table
-        .filter(account_skin_history::account_uuid.eq(&normalized_uuid))
-        .filter(account_skin_history::texture_key.eq(&texture_key))
-        .first::<AccountSkinHistory>(&mut conn)
-        .optional()
-        .map_err(|e| format!("Database error checking history: {}", e))?;
+    let new_history = NewAccountSkinHistory {
+        account_uuid: normalized_uuid.clone(),
+        texture_key: texture_key.clone(),
+        name: skin_name,
+        variant: variant.clone(),
+        image_data,
+        source: "mojang".to_string(),
+    };
 
-    if let Some(h) = existing {
-        // Skin identified! Update and re-order history entry.
-        info!("sync_current_skin_history: MatchFound history_id={} texture_key={}", h.id, texture_key);
-        diesel::update(account_skin_history::table.filter(account_skin_history::id.eq(h.id)))
-            .set((
-                account_skin_history::variant.eq(&variant),
-                account_skin_history::added_at.eq(diesel::dsl::sql::<diesel::sql_types::Text>("CURRENT_TIMESTAMP")),
-            ))
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to update history timestamp: {}", e))?;
-    } else {
-        // Unknown skin: Add a new entry to history.
-        info!("sync_current_skin_history: No match found. Adding new skin to history. texture_key={}", texture_key);
-        let new_history = NewAccountSkinHistory {
-            account_uuid: normalized_uuid.clone(),
-            texture_key,
-            name: skin_name,
-            variant: variant.clone(),
-            image_data: image_data.clone(),
-            source: "mojang".to_string(), // Authenticate as official skin source
-        };
+    diesel::insert_into(account_skin_history::table)
+        .values(&new_history)
+        .on_conflict((account_skin_history::account_uuid, account_skin_history::texture_key))
+        .do_update()
+        .set((
+            account_skin_history::variant.eq(variant.clone()),
+            account_skin_history::added_at.eq(diesel::dsl::sql::<diesel::sql_types::Text>("CURRENT_TIMESTAMP")),
+        ))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to upsert skin history: {}", e))?;
 
-        diesel::insert_into(account_skin_history::table)
-            .values(&new_history)
-            .execute(&mut conn)
-            .map_err(|e| format!("Failed to insert new skin history: {}", e))?;
-    }
+    info!(
+        "sync_current_skin_history: upserted history for account={} texture_key={}",
+        normalized_uuid, texture_key
+    );
 
     // 4. Update the account record with canonical server URL and variant
     diesel::update(account::table.filter(account::uuid.eq(&normalized_uuid)))
@@ -760,6 +727,7 @@ pub async fn sync_current_skin_history(app: tauri::AppHandle, account_uuid: Stri
 pub struct CompleteSkinsResponse {
     pub current_skin_id: Option<String>,
     pub current_cape_id: Option<String>,
+    pub current_cape_profile_id: Option<String>,
     pub current_skin_base64: Option<String>,
     pub current_cape_base64: Option<String>,
     pub current_variant: String,
@@ -769,7 +737,10 @@ pub struct CompleteSkinsResponse {
 }
 
 #[command]
-pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkinsResponse, String> {
+pub async fn get_complete_skin_data(
+    app: tauri::AppHandle,
+    account_uuid: String,
+) -> Result<CompleteSkinsResponse, String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let normalized_uuid = account_uuid.replace("-", "");
 
@@ -778,15 +749,19 @@ pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkin
         .first::<Account>(&mut conn)
         .map_err(|e| format!("Account not found: {}", e))?;
 
-    let history = account_skin_history::table
+    let raw_history = account_skin_history::table
         .filter(account_skin_history::account_uuid.eq(&normalized_uuid))
         .order_by(account_skin_history::added_at.desc())
         .limit(50)
         .load::<AccountSkinHistory>(&mut conn)
         .unwrap_or_default();
 
+    let history = dedupe_recent_history(&normalized_uuid, raw_history);
+
     let mut capes = vec![];
     let mut current_variant = account_model.skin_variant.clone();
+    let mut current_cape_profile_id: Option<String> = None;
+    let mut current_cape_bytes: Option<Vec<u8>> = None;
     
     // Attempt to parse capes from profile if not guest
     if account_model.account_type != "Guest" {
@@ -794,7 +769,63 @@ pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkin
             if let Some(active_skin) = pick_active_skin(&profile) {
                 current_variant = normalize_skin_variant(&active_skin.variant);
             }
-            capes = profile.capes;
+
+            current_cape_profile_id = profile
+                .capes
+                .iter()
+                .find(|cape| cape.state.eq_ignore_ascii_case("ACTIVE"))
+                .or_else(|| profile.capes.first())
+                .map(|cape| cape.id.clone());
+
+            let active_cape_id = current_cape_profile_id.clone();
+            let mut cached_capes = Vec::with_capacity(profile.capes.len());
+
+            for mut cape in profile.capes {
+                match get_or_cache_cape_bytes(Some(&app), &normalized_uuid, &cape.id, &cape.url)
+                    .await
+                {
+                    Ok(Some(bytes)) => {
+                        if active_cape_id.as_deref() == Some(cape.id.as_str()) {
+                            current_cape_bytes = Some(bytes.clone());
+                        }
+                        cape.url = bytes_to_png_data_uri(&bytes);
+                    }
+                    Ok(None) => {}
+                    Err(e) => {
+                        warn!(
+                            "get_complete_skin_data: failed to cache cape {} for {}: {}",
+                            cape.id, normalized_uuid, e
+                        );
+                    }
+                }
+
+                cached_capes.push(cape);
+            }
+
+            capes = cached_capes;
+        }
+    }
+
+    if current_cape_bytes.is_none() {
+        if let Some(cape_url) = account_model.cape_url.as_deref() {
+            let fallback_cape_id = current_cape_profile_id
+                .clone()
+                .unwrap_or_else(|| "active".to_string());
+
+            match get_or_cache_cape_bytes(Some(&app), &normalized_uuid, &fallback_cape_id, cape_url)
+                .await
+            {
+                Ok(Some(bytes)) => {
+                    current_cape_bytes = Some(bytes);
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    warn!(
+                        "get_complete_skin_data: failed to resolve fallback current cape for {}: {}",
+                        normalized_uuid, e
+                    );
+                }
+            }
         }
     }
 
@@ -816,27 +847,20 @@ pub async fn get_complete_skin_data(account_uuid: String) -> Result<CompleteSkin
         }
     }
 
-    // Determine current cape ID
     let mut current_cape_id = None;
-    if let Some(ref base64_data) = account_model.cape_data {
-        if !base64_data.is_empty() {
-            let clean = if let Some(pos) = base64_data.find(',') {
-                &base64_data[pos + 1..]
-            } else {
-                base64_data
-            };
-            if let Ok(bytes) = general_purpose::STANDARD.decode(clean) {
-                let computed_key = compute_texture_key(&bytes);
-                current_cape_id = Some(computed_key);
-            }
-        }
+    let mut current_cape_base64 = None;
+
+    if let Some(bytes) = current_cape_bytes {
+        current_cape_id = Some(compute_texture_key(&bytes));
+        current_cape_base64 = Some(bytes_to_png_data_uri(&bytes));
     }
 
     Ok(CompleteSkinsResponse {
         current_skin_id,
         current_cape_id,
+        current_cape_profile_id,
         current_skin_base64: account_model.skin_data,
-        current_cape_base64: account_model.cape_data,
+        current_cape_base64,
         current_variant,
         recent_history: history,
         default_skins: defaults,

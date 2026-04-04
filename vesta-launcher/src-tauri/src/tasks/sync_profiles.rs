@@ -5,11 +5,12 @@ use crate::models::skin_history::NewAccountSkinHistory;
 use crate::schema::vesta::account_skin_history;
 use crate::schema::vesta::account;
 use crate::tasks::manager::{BoxFuture, Task, TaskContext};
+use crate::utils::cape_cache::get_or_cache_cape_bytes;
 use crate::utils::db::get_vesta_conn;
+use crate::utils::texture::compute_texture_key;
 use base64::{engine::general_purpose, Engine as _};
 use diesel::prelude::*;
 use log::{debug, info, warn};
-use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager};
 
 pub struct SyncAccountProfilesTask;
@@ -18,12 +19,6 @@ impl SyncAccountProfilesTask {
     pub fn new() -> Self {
         Self
     }
-}
-
-pub fn compute_texture_key(bytes: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(bytes);
-    hex::encode(hasher.finalize())
 }
 
 pub async fn download_to_base64_data_uri(url: &str) -> std::result::Result<String, String> {
@@ -120,44 +115,53 @@ pub async fn sync_account_profile_data(
 
             if let Ok(bytes) = general_purpose::STANDARD.decode(clean_base64) {
                 let texture_key = compute_texture_key(&bytes);
-                
-                let exists: i64 = account_skin_history::table
-                    .filter(account_skin_history::account_uuid.eq(&acc.uuid))
-                    .filter(account_skin_history::texture_key.eq(&texture_key))
-                    .count()
-                    .get_result(&mut conn)
-                    .unwrap_or(0);
+                let default_skins = piston_lib::api::minecraft_skins::get_default_skins();
+                let is_default = default_skins.iter().any(|s| {
+                    let variants = [piston_lib::models::common::MinecraftSkinVariant::Classic, piston_lib::models::common::MinecraftSkinVariant::Slim];
+                    variants.iter().any(|v| {
+                        let tex_url = s.get_texture(*v);
+                        let tex_str: &str = tex_url.as_ref();
+                        let mojang_str: &str = mojang_skin.url.as_ref();
+                        tex_str == mojang_str
+                    })
+                });
 
-                if exists == 0 {
-                    let default_skins = piston_lib::api::minecraft_skins::get_default_skins();
-                    let is_default = default_skins.iter().any(|s| {
-                        let variants = [piston_lib::models::common::MinecraftSkinVariant::Classic, piston_lib::models::common::MinecraftSkinVariant::Slim];
-                        variants.iter().any(|v| {
-                            let tex_url = s.get_texture(*v);
-                            let tex_str: &str = tex_url.as_ref();
-                            let mojang_str: &str = mojang_skin.url.as_ref();
-                            tex_str == mojang_str
-                        })
-                    });
-                        
-                    if !is_default {
-                        info!("[Sync] Persistence: Adding unique skin to history for account={}", acc.uuid);
-                        let new_history = NewAccountSkinHistory {
-                            account_uuid: acc.uuid.clone(),
-                            texture_key: texture_key.clone(),
-                            name: "Mojang Sync".to_string(),
-                            variant: server_variant.to_string(),
-                            image_data,
-                            source: "mojang".to_string(),
-                        };
-                        let _ = diesel::insert_into(account_skin_history::table)
-                            .values(&new_history)
-                            .execute(&mut conn);
-                    } else {
-                        info!("[Sync] Persistence: Current skin matches a default look. Skipping history.");
+                if !is_default {
+                    let new_history = NewAccountSkinHistory {
+                        account_uuid: acc.uuid.clone(),
+                        texture_key: texture_key.clone(),
+                        name: "Mojang Sync".to_string(),
+                        variant: server_variant.to_string(),
+                        image_data: image_data.clone(),
+                        source: "mojang".to_string(),
+                    };
+
+                    match diesel::insert_into(account_skin_history::table)
+                        .values(&new_history)
+                        .on_conflict((account_skin_history::account_uuid, account_skin_history::texture_key))
+                        .do_update()
+                        .set((
+                            account_skin_history::variant.eq(server_variant.to_string()),
+                            account_skin_history::image_data.eq(image_data),
+                            account_skin_history::added_at.eq(diesel::dsl::sql::<diesel::sql_types::Text>("CURRENT_TIMESTAMP")),
+                        ))
+                        .execute(&mut conn)
+                    {
+                        Ok(_) => {
+                            debug!(
+                                "[Sync] Persistence: Upserted skin history for account={} texture_key={}",
+                                acc.uuid, texture_key
+                            );
+                        }
+                        Err(e) => {
+                            warn!(
+                                "[Sync] Persistence: Failed to upsert skin history for account={} texture_key={}: {}",
+                                acc.uuid, texture_key, e
+                            );
+                        }
                     }
                 } else {
-                    debug!("[Sync] Persistence: Skin already exists in history.");
+                    info!("[Sync] Persistence: Current skin matches a default look. Skipping history.");
                 }
             } else {
                 warn!("[Sync] Persistence: Failed to decode base64 data for hashing");
@@ -171,21 +175,25 @@ pub async fn sync_account_profile_data(
 
     if let Some(mojang_cape) = active_cape {
         let cape_url_changed = acc.cape_url.as_deref() != Some(mojang_cape.url.as_str());
-
         let cape_url = mojang_cape.url.clone();
-        if cape_url_changed || acc.cape_data.is_none() {
-            match download_to_base64_data_uri(&cape_url).await {
-                Ok(base64_data) => {
-                    acc.cape_url = Some(cape_url);
-                    acc.cape_data = Some(base64_data);
-                    needs_db_update = true;
-                },
-                Err(e) => warn!("Failed to download cape to base64: {}", e),
-            }
+
+        if cape_url_changed {
+            acc.cape_url = Some(cape_url.clone());
+            needs_db_update = true;
         }
-    } else if acc.cape_url.is_some() || acc.cape_data.is_some() {
+
+        if let Err(e) = get_or_cache_cape_bytes(
+            app_handle.as_ref(),
+            &acc.uuid,
+            &mojang_cape.id,
+            &cape_url,
+        )
+        .await
+        {
+            warn!("[Sync] Failed to cache active cape for {}: {}", acc.uuid, e);
+        }
+    } else if acc.cape_url.is_some() {
         acc.cape_url = None;
-        acc.cape_data = None;
         needs_db_update = true;
     }
 
@@ -195,8 +203,7 @@ pub async fn sync_account_profile_data(
                 account::skin_url.eq(acc.skin_url),
                 account::skin_data.eq(acc.skin_data),
                 account::skin_variant.eq(acc.skin_variant),
-                account::cape_url.eq(acc.cape_url),
-                account::cape_data.eq(acc.cape_data)
+                account::cape_url.eq(acc.cape_url)
             ))
             .execute(&mut conn);
         

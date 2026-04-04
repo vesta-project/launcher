@@ -4,7 +4,6 @@ import PlusIcon from "@assets/plus.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import ViewIcon from "@assets/search.svg";
 import SkinIcon from "@assets/skin-icon.svg";
-import { router } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { readFile } from "@tauri-apps/plugin-fs";
@@ -38,7 +37,6 @@ import {
 	createMemo,
 	createSignal,
 	For,
-	on,
 	onCleanup,
 	onMount,
 	Show,
@@ -89,16 +87,9 @@ interface Cape {
 	url: string;
 }
 
-interface MinecraftProfile {
-	id: string;
-	name: string;
-	skins: Array<{ id: string; state: string; url: string; variant: string }>;
-	capes: Array<{ id: string; state: string; url: string; alias: string }>;
-}
-
 interface CompleteSkinsResponse {
 	current_skin_id: string | null;
-	current_cape_id: string | null;
+	current_cape_profile_id: string | null;
 	current_skin_base64: string | null;
 	current_cape_base64: string | null;
 	current_variant: "classic" | "slim";
@@ -111,6 +102,11 @@ const normalizeVariant = (value?: string | null): "classic" | "slim" => {
 	return String(value || "classic").toLowerCase() === "slim"
 		? "slim"
 		: "classic";
+};
+
+const isGuestOrDemoAccountType = (accountType?: string | null): boolean => {
+	const normalized = String(accountType || "").toLowerCase();
+	return normalized === "guest" || normalized === "demo";
 };
 
 const normalizeSkinComparable = (value: string): string => {
@@ -234,7 +230,7 @@ export function AccountSettingsTab() {
 		skinUrl: string;
 		capeUrl: string | null;
 		skinKey: string | null;
-		capeKey: string | null;
+		capeId: string | null;
 		variant: "classic" | "slim";
 	} | null>(null);
 
@@ -243,47 +239,11 @@ export function AccountSettingsTab() {
 	const [previewComputedKey, setPreviewComputedKey] = createSignal<
 		string | null
 	>(null);
-	const [previewCapeComputedKey, setPreviewCapeComputedKey] = createSignal<
-		string | null
-	>(null);
-	// Cache for computed keys of preset textures to avoid repeated downloads
-	const presetKeyCache = new Map<string, string>();
-	const [presetKeyVersion, _setPresetKeyVersion] = createSignal(0);
+	const [previewCapeId, setPreviewCapeId] = createSignal<string | null>(null);
 	const [previewCapeUrl, setPreviewCapeUrl] = createSignal<string | null>("");
 	const [previewVariant, setPreviewVariant] = createSignal<"classic" | "slim">(
 		"classic",
 	);
-
-	const _applyAuthoritativeVariant = (
-		accountUuid: string,
-		variant: "classic" | "slim",
-	) => {
-		const current = activeAccount();
-		if (!current || current.uuid !== accountUuid) return;
-
-		if (normalizeVariant(current.skin_variant) !== variant) {
-			setActiveAccount({ ...current, skin_variant: variant });
-		}
-
-		setPreviewVariant(variant);
-		setSavedSnapshot((snapshot) =>
-			snapshot ? { ...snapshot, variant } : snapshot,
-		);
-	};
-
-	const _detectVariantFromSkinData = async (
-		skinUrl: string,
-	): Promise<"classic" | "slim" | null> => {
-		if (!skinUrl || !skinUrl.startsWith("data:")) return null;
-		try {
-			const detected = await invoke<string>("detect_base64_skin_variant", {
-				base64Data: skinUrl,
-			});
-			return normalizeVariant(detected);
-		} catch {
-			return null;
-		}
-	};
 
 	const loadData = async () => {
 		try {
@@ -294,7 +254,7 @@ export function AccountSettingsTab() {
 			if (active) {
 				setActiveAccount(active);
 
-				if (active.account_type !== "guest" && active.account_type !== "demo") {
+				if (!isGuestOrDemoAccountType(active.account_type)) {
 					// Trigger a background sync on mount to ensure we have the latest from Mojang
 					invoke("force_sync_account_profile", { accountUuid: active.uuid })
 						.then(async () => {
@@ -322,8 +282,7 @@ export function AccountSettingsTab() {
 								!snapshot ||
 								(normalizeSkinComparable(previewSkinUrl() || "") ===
 									normalizeSkinComparable(snapshot.skinUrl) &&
-									normalizeSkinComparable(previewCapeUrl() || "") ===
-										normalizeSkinComparable(snapshot.capeUrl || "") &&
+									previewCapeId() === snapshot.capeId &&
 									previewVariant() === snapshot.variant)
 							) {
 								setPreviewSkinUrl(
@@ -336,13 +295,13 @@ export function AccountSettingsTab() {
 									res.current_cape_base64 || active.cape_url || "",
 								);
 								setPreviewComputedKey(res.current_skin_id);
-								setPreviewCapeComputedKey(res.current_cape_id);
+								setPreviewCapeId(res.current_cape_profile_id || null);
 
 								setSavedSnapshot({
 									skinUrl: res.current_skin_base64 || active.skin_url || "",
 									capeUrl: res.current_cape_base64 || active.cape_url || null,
 									skinKey: res.current_skin_id || null,
-									capeKey: res.current_cape_id || null,
+									capeId: res.current_cape_profile_id || null,
 									variant:
 										(res.current_variant as "classic" | "slim") || "classic",
 								});
@@ -375,13 +334,13 @@ export function AccountSettingsTab() {
 					);
 					setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 					setPreviewComputedKey(res.current_skin_id);
-					setPreviewCapeComputedKey(res.current_cape_id);
+					setPreviewCapeId(res.current_cape_profile_id || null);
 
 					setSavedSnapshot({
 						skinUrl: res.current_skin_base64 || active.skin_url || "",
 						capeUrl: res.current_cape_base64 || active.cape_url || null,
 						skinKey: res.current_skin_id || null,
-						capeKey: res.current_cape_id || null,
+						capeId: res.current_cape_profile_id || null,
 						variant: (res.current_variant as "classic" | "slim") || "classic",
 					});
 				} else {
@@ -389,13 +348,13 @@ export function AccountSettingsTab() {
 					setPreviewVariant(normalizeVariant(active.skin_variant));
 					setPreviewCapeUrl(active.cape_url || "");
 					setPreviewComputedKey(null);
-					setPreviewCapeComputedKey(null);
+					setPreviewCapeId(null);
 
 					setSavedSnapshot({
 						skinUrl: active.skin_url || "",
 						capeUrl: active.cape_url || null,
 						skinKey: null,
-						capeKey: null,
+						capeId: null,
 						variant: normalizeVariant(active.skin_variant),
 					});
 					setSkins(await invoke<Skin[]>("get_default_skins"));
@@ -415,8 +374,8 @@ export function AccountSettingsTab() {
 		const unsubscribe = onConfigUpdate(async (field) => {
 			if (field === "active_account_uuid") {
 				const active = (await getActiveAccount()) as any as Account;
-				if (active && active.uuid !== activeAccount()?.uuid) {
-					setActiveAccount(active);
+				if (active?.uuid !== activeAccount()?.uuid) {
+					await loadData();
 				}
 			}
 		});
@@ -439,31 +398,6 @@ export function AccountSettingsTab() {
 		onCleanup(() => window.removeEventListener("resize", evaluateLayoutModes));
 	});
 
-	createEffect(
-		on(activeAccount, (active) => {
-			if (active) {
-				setPreviewSkinUrl(active.skin_url || "");
-				setPreviewVariant(normalizeVariant(active.skin_variant));
-				setPreviewCapeUrl(active.cape_url || "");
-				setPreviewComputedKey(null);
-				setPreviewCapeComputedKey(null);
-				setSavedSnapshot({
-					skinUrl: active.skin_url || "",
-					capeUrl: active.cape_url || null,
-					skinKey: null,
-					capeKey: null,
-					variant: normalizeVariant(active.skin_variant),
-				});
-
-				if (active.account_type !== "guest") {
-				} else {
-					setCapes([]);
-					setSkinHistory([]);
-				}
-			}
-		}),
-	);
-
 	const isDirty = createMemo(() => {
 		const active = activeAccount();
 		const snapshot = savedSnapshot();
@@ -472,11 +406,10 @@ export function AccountSettingsTab() {
 		// Compare against the canonical "saved" snapshot from the server/loadData,
 		// NOT the initial active account object which might have stale URLs.
 		const previewSkin = previewSkinUrl() || "";
-		const previewCape = previewCapeUrl() || "";
 		const previewVar = previewVariant();
 
 		const previewSkinKey = previewComputedKey();
-		const previewCapeKey = previewCapeComputedKey();
+		const previewCapeSelectionId = previewCapeId();
 
 		// 1. If we have texture keys, they are the strictly authoritative way to check for dirty state
 		// because they represent the actual image bytes.
@@ -491,16 +424,7 @@ export function AccountSettingsTab() {
 				return true;
 		}
 
-		if (snapshot.capeKey !== undefined && previewCapeKey !== undefined) {
-			// Handle null vs string explicitly
-			if (snapshot.capeKey !== previewCapeKey) return true;
-		} else {
-			if (
-				normalizeSkinComparable(previewCape) !==
-				normalizeSkinComparable(snapshot.capeUrl || "")
-			)
-				return true;
-		}
+		if (snapshot.capeId !== previewCapeSelectionId) return true;
 
 		return previewVar !== snapshot.variant;
 	});
@@ -524,137 +448,59 @@ export function AccountSettingsTab() {
 		return source.texture || source.url || "";
 	};
 
-	const getSkinUniqueId = (skin: Skin): string | null => {
-		return skin.texture_key || null;
-	};
-
 	const activeSkin = createMemo(() => {
-		const url = previewSkinUrl();
-		if (!url) return null;
-		// depend on preset key cache updates to ensure comparisons wait for hashing if needed
-		const _presetVer = presetKeyVersion();
-		const normalizedPreview = normalizeSkinComparable(url);
-
-		// 1. Check presets first
-		const preset = skins().find((s) => {
-			const c = normalizeSkinComparable(getSkinTexture(s, "classic"));
-			const sl = normalizeSkinComparable(getSkinTexture(s, "slim"));
-
-			// Attempt simple string match (URLs/base64)
-			if (c === normalizedPreview || sl === normalizedPreview) {
-				console.log("MatchFound: preset (string match)", {
-					preset: s.name || s.texture_key,
-				});
-				return true;
-			}
-
-			// Fallback: Attempt image-byte match via computed texture keys
-			const computed = previewComputedKey();
-			if (computed) {
-				// Match against preset's static texture_key
-				if (s.texture_key && s.texture_key === computed) {
-					console.log("MatchFound: preset (texture_key match)", {
-						preset: s.name || s.texture_key,
-						computed,
-					});
-					return true;
-				}
-
-				// Match against cached hashes of the preset's variant textures (classic/slim)
-				const classicTex = getSkinTexture(s, "classic");
-				const slimTex = getSkinTexture(s, "slim");
-				const classicKey = classicTex
-					? presetKeyCache.get(classicTex)
-					: undefined;
-				const slimKey = slimTex ? presetKeyCache.get(slimTex) : undefined;
-
-				if (classicKey && classicKey === computed) {
-					console.log("MatchFound: preset (classic variant key match)", {
-						preset: s.name || s.texture_key,
-						key: classicKey,
-					});
-					return true;
-				}
-				if (slimKey && slimKey === computed) {
-					console.log("MatchFound: preset (slim variant key match)", {
-						preset: s.name || s.texture_key,
-						key: slimKey,
-					});
-					return true;
-				}
-			}
-			return false;
-		});
-		if (preset) return preset;
-
-		// 2. Check local skin history
-		let historyItem: SkinHistory | undefined = undefined;
 		const previewKey = previewComputedKey();
 
-		for (const h of skinHistory()) {
-			const comparable = normalizeSkinComparable(h.image_data);
-			if (comparable === normalizedPreview) {
-				console.log("MatchFound: history (string match)", {
-					texture_key: h.texture_key,
-				});
-				historyItem = h;
-				break;
-			}
+		if (previewKey) {
+			const presetByKey = skins().find((skin) => skin.texture_key === previewKey);
+			if (presetByKey) return presetByKey;
 
-			if (previewKey && h.texture_key === previewKey) {
-				console.log("MatchFound: history (texture_key match)", {
-					texture_key: h.texture_key,
-					source: h.source,
-				});
-				historyItem = h;
-				break;
-			}
-		}
-
-		if (historyItem) {
-			// Map history entry to Skin object for UI rendering
-			return {
-				texture_key: historyItem.texture_key,
-				name: historyItem.name,
-				source: {
-					type: historyItem.source || "custom",
-					classic_texture: historyItem.image_data,
-					slim_texture: historyItem.image_data,
-				},
-			} as any as Skin;
-		}
-		return null;
-	});
-
-	const _activeSkinId = createMemo(() => {
-		const active = activeSkin();
-		if (active) return getSkinUniqueId(active);
-
-		const currentUrl = previewSkinUrl();
-		if (!currentUrl) return null;
-
-		const normalizedCurrent = normalizeSkinComparable(currentUrl);
-
-		const previewKeyForId = previewComputedKey();
-		for (const item of skinHistory()) {
-			const comparable = normalizeSkinComparable(item.image_data);
-			const matched = comparable === normalizedCurrent;
-			if (matched) {
-				return item.texture_key;
-			}
-			if (previewKeyForId) {
-				const matchByKey = item.texture_key === previewKeyForId;
-				if (matchByKey) {
-					console.log("MatchFound: history (texture_key match)", {
-						texture_key: item.texture_key,
-						source: item.source,
-					});
-					return item.texture_key;
-				}
+			const historyByKey = skinHistory().find(
+				(item) => item.texture_key === previewKey,
+			);
+			if (historyByKey) {
+				return {
+					texture_key: historyByKey.texture_key,
+					name: historyByKey.name,
+					source: {
+						type: historyByKey.source || "custom",
+						classic_texture: historyByKey.image_data,
+						slim_texture: historyByKey.image_data,
+					},
+				} as any as Skin;
 			}
 		}
 
-		return null;
+		const previewUrl = previewSkinUrl();
+		if (!previewUrl) return null;
+
+		const normalizedPreview = normalizeSkinComparable(previewUrl);
+		const presetByUrl = skins().find((skin) => {
+			const classicComparable = normalizeSkinComparable(
+				getSkinTexture(skin, "classic"),
+			);
+			const slimComparable = normalizeSkinComparable(getSkinTexture(skin, "slim"));
+			return (
+				classicComparable === normalizedPreview ||
+				slimComparable === normalizedPreview
+			);
+		});
+		if (presetByUrl) return presetByUrl;
+
+		const historyByUrl = skinHistory().find(
+			(item) => normalizeSkinComparable(item.image_data) === normalizedPreview,
+		);
+		if (!historyByUrl) return null;
+
+		return {
+			texture_key: historyByUrl.texture_key,
+			name: historyByUrl.name,
+			source: {
+				type: historyByUrl.source || "custom",
+				classic_texture: historyByUrl.image_data,
+				slim_texture: historyByUrl.image_data,
+			},
+		} as any as Skin;
 	});
 
 	const isSkinSelected = (itemUrl: string, itemTextureKey: string) => {
@@ -712,20 +558,22 @@ export function AccountSettingsTab() {
 	);
 
 	const filteredRecentHistory = createMemo(() => {
-		return skinHistory().filter((item) => {
+		const defaultTextureKeys = new Set(
+			skins().map((skin) => skin.texture_key).filter(Boolean),
+		);
+		const seenHistoryTextureKeys = new Set<string>();
+		let duplicateCount = 0;
+
+		const filtered = skinHistory().filter((item) => {
 			// Hide if it matches a preset (don't duplicate preset in recent)
-			const comparable = normalizeSkinComparable(item.image_data);
-			const isPreset = skins().some((skin) => {
-				const classic = normalizeSkinComparable(
-					getSkinTexture(skin, "classic"),
-				);
-				const slim = normalizeSkinComparable(getSkinTexture(skin, "slim"));
-				return (
-					comparable.length > 0 &&
-					(comparable === classic || comparable === slim)
-				);
-			});
-			if (isPreset) return false;
+			if (defaultTextureKeys.has(item.texture_key)) return false;
+
+			if (seenHistoryTextureKeys.has(item.texture_key)) {
+				duplicateCount += 1;
+				return false;
+			}
+
+			seenHistoryTextureKeys.add(item.texture_key);
 
 			// Don't show in "Recent" if it belongs to a known category (it will show there instead)
 			if (
@@ -741,6 +589,14 @@ export function AccountSettingsTab() {
 
 			return true;
 		});
+
+		if (duplicateCount > 0 && import.meta.env.DEV) {
+			console.warn(
+				`[AccountTab] Deduped ${duplicateCount} duplicate skin history entries by texture_key`,
+			);
+		}
+
+		return filtered;
 	});
 
 	const handlePreviewSkin = async (skin: Skin) => {
@@ -753,10 +609,6 @@ export function AccountSettingsTab() {
 		setPreviewSkinUrl(item.image_data);
 		setPreviewVariant(normalizeVariant(item.variant));
 		setPreviewComputedKey(item.texture_key);
-	};
-
-	const syncActiveSkinWithPreview = () => {
-		// Logic now handled by activeSkin memo and previewSkinUrl signal
 	};
 
 	const handleUploadSkin = async () => {
@@ -857,43 +709,15 @@ export function AccountSettingsTab() {
 		}
 	};
 
-	createEffect(() => {
-		syncActiveSkinWithPreview();
-	});
-
-	const handlePreviewCape = async (cape: Cape | null) => {
+	const handlePreviewCape = (cape: Cape | null) => {
 		if (!cape) {
 			setPreviewCapeUrl(null);
-			setPreviewCapeComputedKey(null);
+			setPreviewCapeId(null);
 			return;
 		}
 
 		setPreviewCapeUrl(cape.url);
-		// Determine the texture key for selection highlighting
-		if (cape.url.startsWith("data:")) {
-			try {
-				const key = await invoke<string>("compute_texture_key_from_base64", {
-					base64Data: cape.url,
-				});
-				setPreviewCapeComputedKey(key);
-			} catch (err) {
-				console.error("Failed to compute cape texture key:", err);
-				setPreviewCapeComputedKey(null);
-			}
-		} else {
-			try {
-				const [key] = await invoke<[string, string]>(
-					"compute_texture_key_from_url",
-					{
-						textureUrl: cape.url,
-					},
-				);
-				setPreviewCapeComputedKey(key);
-			} catch (err) {
-				console.error("Failed to compute cape texture key from URL:", err);
-				setPreviewCapeComputedKey(null);
-			}
-		}
+		setPreviewCapeId(cape.id);
 	};
 
 	const handleSave = async () => {
@@ -924,19 +748,17 @@ export function AccountSettingsTab() {
 				}
 			}
 
-			if (previewCapeUrl() !== (active.cape_url || "")) {
-				if (!previewCapeUrl() || previewCapeUrl() === "") {
+			const snapshot = savedSnapshot();
+			if ((snapshot?.capeId || null) !== previewCapeId()) {
+				if (!previewCapeId()) {
 					await invoke("hide_account_cape", {
 						accountUuid: active.uuid,
 					});
 				} else {
-					const selectedCape = capes().find((c) => c.url === previewCapeUrl());
-					if (selectedCape) {
-						await invoke("change_account_cape", {
-							accountUuid: active.uuid,
-							capeId: selectedCape.id,
-						});
-					}
+					await invoke("change_account_cape", {
+						accountUuid: active.uuid,
+						capeId: previewCapeId(),
+					});
 				}
 			}
 
@@ -960,13 +782,13 @@ export function AccountSettingsTab() {
 			);
 			setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 			setPreviewComputedKey(res.current_skin_id);
-			setPreviewCapeComputedKey(res.current_cape_id);
+			setPreviewCapeId(res.current_cape_profile_id || null);
 
 			setSavedSnapshot({
 				skinUrl: res.current_skin_base64 || active.skin_url || "",
 				capeUrl: res.current_cape_base64 || active.cape_url || null,
 				skinKey: res.current_skin_id || null,
-				capeKey: res.current_cape_id || null,
+				capeId: res.current_cape_profile_id || null,
 				variant: (res.current_variant as "classic" | "slim") || "classic",
 			});
 
@@ -974,11 +796,6 @@ export function AccountSettingsTab() {
 			setAccounts(accs);
 			const updatedAccount = accs.find((a) => a.uuid === active.uuid);
 			if (updatedAccount) setActiveAccount(updatedAccount);
-
-			// 4. Refresh sidecar data
-			if (active.account_type !== "guest") {
-				await Promise.all([]);
-			}
 
 			createNotification({
 				title: "Account Updated",
@@ -997,47 +814,11 @@ export function AccountSettingsTab() {
 		}
 	};
 
-	const _handleForceSync = async () => {
-		const active = activeAccount();
-		if (
-			!active ||
-			active.account_type === "guest" ||
-			active.account_type === "demo"
-		)
-			return;
-
-		setSaving(true);
-		try {
-			await invoke("force_sync_account_profile", { accountUuid: active.uuid });
-			await loadData();
-			createNotification({
-				title: "Profile Synced",
-				description: "Successfully forced a refresh from Mojang.",
-				notification_type: "immediate",
-			});
-		} catch (err) {
-			console.error("Force sync failed:", err);
-			createNotification({
-				title: "Sync Failed",
-				description: String(err),
-				notification_type: "alert",
-			});
-		} finally {
-			setSaving(false);
-		}
-	};
-
-	const handleAddAccount = () => {
-		router().navigate("/login");
-	};
-
 	const selectAccount = async (acc: Account) => {
 		setActiveAccount(acc);
 		await persistActiveAccount(acc.uuid);
+		await loadData();
 	};
-
-	// Prevent lint errors for unused variables that are planned for future use
-	void handleAddAccount;
 
 	const toggleNarrowView = () => {
 		setNarrowView((current) => (current === "browse" ? "preview" : "browse"));
@@ -1115,7 +896,7 @@ export function AccountSettingsTab() {
 		setPreviewVariant(snapshot.variant);
 
 		setPreviewComputedKey(snapshot.skinKey);
-		setPreviewCapeComputedKey(snapshot.capeKey);
+		setPreviewCapeId(snapshot.capeId);
 	};
 
 	const renderSkinCategorySection = (category: string) => {
@@ -1139,29 +920,20 @@ export function AccountSettingsTab() {
 				);
 
 			const combined = [...defaults];
-			const seenComparables = new Set<string>();
+			const seenTextureKeys = new Set<string>();
 
 			for (const existing of combined) {
-				const comparable =
-					normalizeSkinComparable(getSkinTexture(existing, "classic")) ||
-					normalizeSkinComparable(getSkinTexture(existing, "slim"));
-				if (comparable) {
-					seenComparables.add(comparable);
+				if (existing.texture_key) {
+					seenTextureKeys.add(existing.texture_key);
 				}
 			}
 
 			for (const h of historyPresets) {
-				const comparable =
-					normalizeSkinComparable(getSkinTexture(h, "classic")) ||
-					normalizeSkinComparable(getSkinTexture(h, "slim"));
-
-				if (comparable && seenComparables.has(comparable)) {
+				if (!h.texture_key || seenTextureKeys.has(h.texture_key)) {
 					continue;
 				}
 
-				if (comparable) {
-					seenComparables.add(comparable);
-				}
+				seenTextureKeys.add(h.texture_key);
 
 				combined.push(h);
 			}
@@ -1478,13 +1250,12 @@ export function AccountSettingsTab() {
 											<button
 												class={styles.capeItem}
 												classList={{
-													[styles.selected]:
-														!previewCapeUrl() || previewCapeUrl() === "",
+													[styles.selected]: !previewCapeId(),
 												}}
 												onClick={() => handlePreviewCape(null)}
 											>
 												<span class={styles.noneLabel}>NONE</span>
-												<Show when={!previewCapeUrl()}>
+												<Show when={!previewCapeId()}>
 													<span class={styles.selectedBadge}>
 														<svg viewBox="0 0 24 24">
 															<polyline points="20 6 9 17 4 12" />
@@ -1494,45 +1265,9 @@ export function AccountSettingsTab() {
 											</button>
 											<For each={capes()}>
 												{(cape) => {
-													const [presetKey, setPresetKey] = createSignal<
-														string | null
-													>(null);
-
-													createEffect(async () => {
-														if (cape.url.startsWith("data:")) {
-															try {
-																const key = await invoke<string>(
-																	"compute_texture_key_from_base64",
-																	{
-																		base64Data: cape.url,
-																	},
-																);
-																setPresetKey(key);
-															} catch {}
-														} else {
-															try {
-																const [key] = await invoke<[string, string]>(
-																	"compute_texture_key_from_url",
-																	{
-																		textureUrl: cape.url,
-																	},
-																);
-																setPresetKey(key);
-															} catch {}
-														}
-													});
-
-													const isSelected = createMemo(() => {
-														const currentKey = previewCapeComputedKey();
-														const myKey = presetKey();
-														if (currentKey && myKey && currentKey === myKey)
-															return true;
-														return (
-															normalizeSkinComparable(
-																previewCapeUrl() || "",
-															) === normalizeSkinComparable(cape.url)
-														);
-													});
+													const isSelected = createMemo(
+														() => previewCapeId() === cape.id,
+													);
 
 													return (
 														<Tooltip>
