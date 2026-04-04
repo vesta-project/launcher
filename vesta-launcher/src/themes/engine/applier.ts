@@ -1,6 +1,6 @@
-import { themeToCSSVars } from "./themeToCSSVars";
-import { normalizeWindowEffectForCurrentOS } from "./effects";
 import type { ThemeConfig } from "../types";
+import { normalizeWindowEffectForCurrentOS } from "./effects";
+import { themeToCSSVars } from "./themeToCSSVars";
 
 export function applyTheme(theme: ThemeConfig): void {
 	const root = document.documentElement;

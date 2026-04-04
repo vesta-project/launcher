@@ -43,23 +43,23 @@ import {
 	onMount,
 	Show,
 	Suspense,
-	untrack
+	untrack,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
+	type GradientHarmony,
 	getAllThemes,
 	getSupportedWindowEffects,
 	getThemeById,
-	type GradientHarmony,
 	isBuiltinThemeId,
 	loadWindowEffectCapabilities,
 	normalizeWindowEffectForCurrentOS,
-	parseThemeData,
 	PRESET_THEMES,
+	parseThemeData,
 	removeCustomTheme,
-	setCustomThemes,
 	type StyleMode,
+	setCustomThemes,
 	type ThemeConfig,
 	type ThemeVariableValue,
 	upsertCustomTheme,

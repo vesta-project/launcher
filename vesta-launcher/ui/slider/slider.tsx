@@ -134,6 +134,10 @@ const SliderValueLabel = <T extends ValidComponent = "output">(
 };
 
 export {
-    Slider, SliderFill, SliderLabel, SliderThumb, SliderTrack, SliderValueLabel
+	Slider,
+	SliderFill,
+	SliderLabel,
+	SliderThumb,
+	SliderTrack,
+	SliderValueLabel,
 };
-

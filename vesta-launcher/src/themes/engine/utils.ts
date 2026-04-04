@@ -1,4 +1,3 @@
-
 /**
  * Utility: Clamp a number between min and max
  */

@@ -20,16 +20,13 @@ import {
 	ContextMenuPortal,
 	ContextMenuSeparator,
 	ContextMenuShortcut,
-	ContextMenuTrigger
+	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { ExportDialog } from "@ui/export-dialog";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
-import {
-	clearCrashDetails,
-	isInstanceCrashed
-} from "@utils/crash-handler";
+import { clearCrashDetails, isInstanceCrashed } from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
@@ -39,7 +36,7 @@ import {
 	killInstance,
 	launchInstance,
 	resumeInstanceOperation,
-	sanitizeInstanceName
+	sanitizeInstanceName,
 } from "@utils/instances";
 import {
 	createSignal,
@@ -53,7 +50,7 @@ import {
 	handleDuplicate,
 	handleHardReset,
 	handleRepair,
-	handleUninstall
+	handleUninstall,
 } from "../../../../handlers/instance-handler";
 import styles from "./instance-card.module.css";
 

@@ -3,10 +3,7 @@ export { PRESET_THEMES } from "./presets/builtin";
 import { parseThemeData } from "./engine/parser";
 import { getDefaultTheme, validateTheme } from "./engine/validation";
 import { PRESET_THEMES } from "./presets/builtin";
-import type {
-	AppThemeConfig,
-	ThemeConfig,
-} from "./types";
+import type { AppThemeConfig, ThemeConfig } from "./types";
 
 export type {
 	AppThemeConfig,
@@ -16,7 +13,7 @@ export type {
 	ThemeDataPayload,
 	ThemeVariable,
 	ThemeVariableType,
-	ThemeVariableValue
+	ThemeVariableValue,
 } from "./types";
 
 /**
@@ -126,10 +123,13 @@ export { applyTheme } from "./engine/applier";
 export {
 	getSupportedWindowEffects,
 	loadWindowEffectCapabilities,
-	normalizeWindowEffectForCurrentOS
+	normalizeWindowEffectForCurrentOS,
 } from "./engine/effects";
 // Re-export common engine functions for convenience
 export { parseThemeData, serializeThemeData } from "./engine/parser";
 export { themeToCSSVars } from "./engine/themeToCSSVars";
-export { getDefaultTheme, isBuiltinThemeId, validateTheme } from "./engine/validation";
-
+export {
+	getDefaultTheme,
+	isBuiltinThemeId,
+	validateTheme,
+} from "./engine/validation";

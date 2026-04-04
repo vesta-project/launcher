@@ -25,7 +25,10 @@ let capabilityCache: WindowEffectCapabilities | null = null;
 let capabilityPending: Promise<WindowEffectCapabilities | null> | null = null;
 
 function hasTauriRuntime(): boolean {
-	return typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
+	return (
+		typeof window !== "undefined" &&
+		Boolean((window as any).__TAURI_INTERNALS__)
+	);
 }
 
 function normalizeCapabilityPayload(
@@ -52,17 +55,16 @@ function normalizeCapabilityPayload(
 	};
 }
 
-export async function loadWindowEffectCapabilities(): Promise<
-	WindowEffectCapabilities | null
-> {
+export async function loadWindowEffectCapabilities(): Promise<WindowEffectCapabilities | null> {
 	if (capabilityCache) return capabilityCache;
 	if (capabilityPending) return capabilityPending;
 	if (!hasTauriRuntime()) return null;
 
 	capabilityPending = import("@tauri-apps/api/core")
 		.then(async ({ invoke }) => {
-			const payload =
-				await invoke<WindowEffectCapabilities>("get_window_effect_capabilities");
+			const payload = await invoke<WindowEffectCapabilities>(
+				"get_window_effect_capabilities",
+			);
 			capabilityCache = normalizeCapabilityPayload(payload);
 			return capabilityCache;
 		})

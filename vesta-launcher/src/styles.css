@@ -347,7 +347,6 @@
 	background-attachment: scroll;
 }
 
-
 :root:not([data-window-effect="none"]):not([data-window-effect=""]) body {
 	background: transparent !important;
 }

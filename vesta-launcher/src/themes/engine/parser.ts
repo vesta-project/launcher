@@ -1,10 +1,10 @@
 import type {
+	GradientHarmony,
 	StyleMode,
 	ThemeDataPayload,
 	ThemeVariable,
 	ThemeVariableType,
 	ThemeVariableValue,
-	GradientHarmony,
 } from "../types";
 
 export function isObjectLike(value: unknown): value is Record<string, unknown> {
@@ -35,7 +35,9 @@ export function getString(value: unknown): string | undefined {
 	return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function parseVariableDefinitions(value: unknown): ThemeVariable[] | undefined {
+export function parseVariableDefinitions(
+	value: unknown,
+): ThemeVariable[] | undefined {
 	if (!Array.isArray(value)) return undefined;
 
 	const parsed: ThemeVariable[] = [];

@@ -1,7 +1,7 @@
-import { clamp } from "./utils";
-import { getCurrentOsHint, normalizeWindowEffectForCurrentOS } from "./effects";
-import type { ThemeConfig, ThemeVariable, ThemeVariableValue } from "../types";
 import { PRESET_THEMES } from "../presets/builtin";
+import type { ThemeConfig, ThemeVariable, ThemeVariableValue } from "../types";
+import { getCurrentOsHint, normalizeWindowEffectForCurrentOS } from "./effects";
+import { clamp } from "./utils";
 
 /**
  * Strip malicious or structural-breaking css from user themes.
@@ -31,11 +31,11 @@ export function sanitizeCustomCss(css: string): string {
 }
 
 export function isBuiltinThemeId(id: string): boolean {
-    return PRESET_THEMES.some((theme) => theme.id === id);
+	return PRESET_THEMES.some((theme) => theme.id === id);
 }
 
 export function getDefaultTheme(): ThemeConfig {
-    return PRESET_THEMES[0];
+	return PRESET_THEMES[0];
 }
 
 export function normalizeUserVariables(

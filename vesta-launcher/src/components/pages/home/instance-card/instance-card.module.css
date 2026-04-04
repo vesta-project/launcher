@@ -51,7 +51,9 @@
 .instance-card {
 	&:hover {
 		/* Keep overlay stable and scale image by height to preserve old feel */
-		background-size: cover, auto 102%;
+		background-size:
+			cover,
+			auto 102%;
 		box-shadow: 0 6px 20px 0 rgb(0 0 0 / 15%);
 		transform: scale(1.03);
 		transition:
