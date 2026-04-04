@@ -4,13 +4,13 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
-	type AppThemeConfig,
 	applyTheme,
 	configToTheme,
 	getThemeById,
-	PRESET_THEMES,
 	parseThemeData,
+	PRESET_THEMES,
 	serializeThemeData,
+	type AppThemeConfig,
 	type ThemeVariableValue,
 } from "../themes/presets";
 
@@ -99,11 +99,21 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 					updateQueue = [];
 					batchTimeout = null;
 					let hasThemeUpdate = false;
+					let hasThemeIdUpdate = false;
+					let previousThemeId = currentThemeConfig.theme_id;
 
 					batch(() => {
 						for (const { field, value } of currentUpdates) {
 							if (isThemeConfigField(field)) {
 								hasThemeUpdate = true;
+							}
+							if (
+								field === "theme_id" &&
+								typeof value === "string" &&
+								value !== previousThemeId
+							) {
+								hasThemeIdUpdate = true;
+								previousThemeId = value;
 							}
 
 							// Notify all registered handlers
@@ -121,8 +131,10 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 							console.log(`Config synced (batched): ${field} = ${value}`);
 						}
 
-						if (hasThemeUpdate) {
-							applyTheme(configToTheme(currentThemeConfig));
+						if (hasThemeUpdate || hasThemeIdUpdate) {
+							applyTheme(configToTheme(currentThemeConfig), {
+								transition: hasThemeIdUpdate ? "preset-switch" : "none",
+							});
 						}
 					});
 				}, 0);

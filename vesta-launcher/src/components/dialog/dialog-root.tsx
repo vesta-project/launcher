@@ -1,12 +1,12 @@
 import { type DialogInstance, dialogStore } from "@stores/dialog-store";
 import Button from "@ui/button/button";
 import {
-	Dialog,
-	DialogContent,
-	DialogDescription,
-	DialogFooter,
-	DialogHeader,
-	DialogTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
 } from "@ui/dialog/dialog";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { Component, createSignal, For, Show } from "solid-js";
@@ -67,7 +67,7 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (
 								placeholder={props.dialog.input?.placeholder}
 								type={props.dialog.input?.isPassword ? "password" : "text"}
 								autofocus
-								onKeyDown={(e) => {
+								onKeyDown={(e: KeyboardEvent) => {
 									if (e.key === "Enter") {
 										const action = primaryAction();
 										if (action) handleAction(action.id);

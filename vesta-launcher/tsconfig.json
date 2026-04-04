@@ -3,12 +3,13 @@
 		"strict": true,
 		"target": "ESNext",
 		"module": "ESNext",
-		"moduleResolution": "node",
+		"moduleResolution": "bundler",
 		"allowSyntheticDefaultImports": true,
 		"esModuleInterop": true,
 		"jsx": "preserve",
 		"jsxImportSource": "solid-js",
 		"skipLibCheck": true,
+		"ignoreDeprecations": "5.0",
 		"types": [
 			"solid-js",
 			"vite-plugin-solid-svg/types-component-solid",
@@ -16,14 +17,13 @@
 		],
 		"noEmit": true,
 		"isolatedModules": true,
-		"baseUrl": "./",
 		"paths": {
-			"@components/*": ["src/components/*"],
-			"@ui/*": ["ui/*"],
-			"@assets/*": ["src/assets/*"],
-			"@utils/*": ["src/utils/*"],
-			"@stores/*": ["src/stores/*"],
-			"~/*": ["src/*"]
+			"@components/*": ["./src/components/*"],
+			"@ui/*": ["./ui/*"],
+			"@assets/*": ["./src/assets/*"],
+			"@utils/*": ["./src/utils/*"],
+			"@stores/*": ["./src/stores/*"],
+			"~/*": ["./src/*"]
 		}
 	}
 }

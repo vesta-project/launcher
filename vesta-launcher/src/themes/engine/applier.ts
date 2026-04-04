@@ -1,8 +1,17 @@
 import type { ThemeConfig } from "../types";
 import { normalizeWindowEffectForCurrentOS } from "./effects";
 import { themeToCSSVars } from "./themeToCSSVars";
+import {
+    startThemeTransition,
+    type ThemeApplyOptions,
+} from "./transitionManager";
 
-export function applyTheme(theme: ThemeConfig): void {
+export type { ThemeApplyOptions, ThemeApplyTransition } from "./transitionManager";
+
+export function applyTheme(
+	theme: ThemeConfig,
+	options: ThemeApplyOptions = {},
+): void {
 	const root = document.documentElement;
 	const style = root.style;
 
@@ -107,6 +116,8 @@ export function applyTheme(theme: ThemeConfig): void {
 			style.removeProperty(staleKey);
 		}
 	}
+
+	startThemeTransition(options);
 
 	for (const [key, value] of Object.entries(vars)) {
 		if (style.getPropertyValue(key).trim() !== value) {

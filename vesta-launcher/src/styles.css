@@ -337,8 +337,15 @@
 	background-image: var(--background-image);
 	background-attachment: fixed;
 	background-size: cover;
+	opacity: 1;
+	transition: opacity var(--theme-transition-duration, 140ms)
+		cubic-bezier(0.4, 0, 0.2, 1);
 	min-width: 450px;
 	overflow: hidden;
+}
+
+:root[data-theme-transition="preset-switch"] #app {
+	opacity: 0.94;
 }
 
 /* macOS-specific: avoid fixed background attachment, which is expensive while dragging */

@@ -55,10 +55,10 @@ function normalizeCapabilityPayload(
 	};
 }
 
-export async function loadWindowEffectCapabilities(): Promise<WindowEffectCapabilities | null> {
-	if (capabilityCache) return capabilityCache;
+export function loadWindowEffectCapabilities(): Promise<WindowEffectCapabilities | null> {
+	if (capabilityCache) return Promise.resolve(capabilityCache);
 	if (capabilityPending) return capabilityPending;
-	if (!hasTauriRuntime()) return null;
+	if (!hasTauriRuntime()) return Promise.resolve(null);
 
 	capabilityPending = import("@tauri-apps/api/core")
 		.then(async ({ invoke }) => {

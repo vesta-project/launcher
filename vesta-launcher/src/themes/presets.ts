@@ -13,7 +13,7 @@ export type {
 	ThemeDataPayload,
 	ThemeVariable,
 	ThemeVariableType,
-	ThemeVariableValue,
+	ThemeVariableValue
 } from "./types";
 
 /**
@@ -119,11 +119,15 @@ export function getThemeById(id: string): ThemeConfig | undefined {
 	);
 }
 
-export { applyTheme } from "./engine/applier";
+export {
+	applyTheme,
+	type ThemeApplyOptions,
+	type ThemeApplyTransition
+} from "./engine/applier";
 export {
 	getSupportedWindowEffects,
 	loadWindowEffectCapabilities,
-	normalizeWindowEffectForCurrentOS,
+	normalizeWindowEffectForCurrentOS
 } from "./engine/effects";
 // Re-export common engine functions for convenience
 export { parseThemeData, serializeThemeData } from "./engine/parser";
@@ -131,5 +135,6 @@ export { themeToCSSVars } from "./engine/themeToCSSVars";
 export {
 	getDefaultTheme,
 	isBuiltinThemeId,
-	validateTheme,
+	validateTheme
 } from "./engine/validation";
+

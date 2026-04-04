@@ -78,6 +78,7 @@ interface InitPagesProps {
 	goToStep: (step: number) => Promise<void>;
 	goNext: () => Promise<void>;
 	goBack: () => Promise<void>;
+	onThemeActivated?: () => void;
 	navigate?: (to: string, options?: Partial<NavigateOptions>) => void;
 	isLoginOnly?: boolean;
 	hasInstalledInstance?: boolean;
@@ -1972,6 +1973,8 @@ function InitAppearancePage(props: InitPagesProps) {
 			applyTheme({
 				...theme,
 				primaryHue: newHue,
+			}, {
+				transition: "preset-switch",
 			});
 
 			try {
@@ -1989,6 +1992,7 @@ function InitAppearancePage(props: InitPagesProps) {
 					windowEffect: theme.windowEffect,
 				});
 				setExplicitThemeSelected(true);
+				props.onThemeActivated?.();
 			} catch (e) {
 				setExplicitThemeSelected(false);
 				console.error("Failed to persist selected onboarding theme:", e);

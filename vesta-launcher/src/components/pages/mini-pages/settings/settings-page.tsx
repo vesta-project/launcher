@@ -48,18 +48,18 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
-	type GradientHarmony,
 	getAllThemes,
 	getSupportedWindowEffects,
 	getThemeById,
+	type GradientHarmony,
 	isBuiltinThemeId,
 	loadWindowEffectCapabilities,
 	normalizeWindowEffectForCurrentOS,
-	PRESET_THEMES,
 	parseThemeData,
+	PRESET_THEMES,
 	removeCustomTheme,
-	type StyleMode,
 	setCustomThemes,
+	type StyleMode,
 	type ThemeConfig,
 	type ThemeVariableValue,
 	upsertCustomTheme,
@@ -801,7 +801,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		unsubscribeConfigUpdate?.();
 	});
 
-	const handlePresetSelect = async (id: string) => {
+	const handlePresetSelect = (id: string) => {
 		const theme = getThemeById(id);
 		if (theme) {
 			const normalizedEffect =
@@ -871,7 +871,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
-	const handleHueChange = async (values: number[], live = false) => {
+	const handleHueChange = (values: number[], live = false) => {
 		const newHue = values[0];
 		batch(() => {
 			setBackgroundHue(newHue);
@@ -879,23 +879,23 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ primaryHue: newHue }, live);
 	};
 
-	const _handleStyleModeChange = async (mode: ThemeConfig["style"]) => {
+	const _handleStyleModeChange = (mode: ThemeConfig["style"]) => {
 		setOpacity(parseInt(mode || "0") || 0);
 		saveThemeUpdate({ style: mode });
 	};
 
-	const handleOpacityChange = async (val: number[], live = false) => {
+	const handleOpacityChange = (val: number[], live = false) => {
 		const newOpacity = val[0];
 		setOpacity(newOpacity);
 		saveThemeUpdate({ opacity: newOpacity }, live);
 	};
 
-	const handleGradientToggle = async (enabled: boolean) => {
+	const handleGradientToggle = (enabled: boolean) => {
 		setGradientEnabled(enabled);
 		saveThemeUpdate({ gradientEnabled: enabled });
 	};
 
-	const handleRotationChange = async (values: number[], live = false) => {
+	const handleRotationChange = (values: number[], live = false) => {
 		const newRotation = Math.round(values[0]);
 		if (newRotation === rotation()) return;
 
@@ -903,7 +903,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ rotation: newRotation }, live);
 	};
 
-	const handleBorderThicknessChange = async (
+	const handleBorderThicknessChange = (
 		values: number[],
 		live = false,
 	) => {
@@ -915,7 +915,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		});
 		saveThemeUpdate({ borderWidth: newThickness }, live);
 	};
-	const handleBackgroundOpacityChange = async (
+	const handleBackgroundOpacityChange = (
 		values: number[],
 		live = false,
 	) => {
@@ -928,7 +928,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ backgroundOpacity: newValue }, live);
 	};
 
-	const handleWindowEffectChange = async (val: string) => {
+	const handleWindowEffectChange = (val: string) => {
 		const normalizedEffect = normalizeWindowEffectForCurrentOS(val);
 		if (normalizedEffect === windowEffect()) return;
 
@@ -938,19 +938,19 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ windowEffect: normalizedEffect });
 	};
 
-	const handleGradientTypeChange = async (type: "linear" | "radial") => {
+	const handleGradientTypeChange = (type: "linear" | "radial") => {
 		if (type === gradientType()) return;
 
 		setGradientType(type);
 		saveThemeUpdate({ gradientType: type });
 	};
 
-	const handleGradientHarmonyChange = async (harmony: GradientHarmony) => {
+	const handleGradientHarmonyChange = (harmony: GradientHarmony) => {
 		setGradientHarmony(harmony);
 		saveThemeUpdate({ gradientHarmony: harmony });
 	};
 
-	const handleVariableChange = async (
+	const handleVariableChange = (
 		key: string,
 		value: ThemeVariableValue,
 		live = false,
@@ -1051,11 +1051,21 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
-	const saveThemeUpdate = async (
+	const saveThemeUpdate = (
 		overrides: Partial<ThemeConfig> = {},
 		live = false,
 	) => {
 		if (!hasTauriRuntime()) return;
+		const currentAppliedThemeId =
+			document.documentElement.getAttribute("data-theme-id") ||
+			currentThemeConfig.theme_id ||
+			themeId();
+		const hasThemeIdOverride =
+			typeof overrides.id === "string" && overrides.id.length > 0;
+		const applyTransition =
+			hasThemeIdOverride && overrides.id !== currentAppliedThemeId
+				? "preset-switch"
+				: "none";
 
 		// 1. Gather current UI state for the theme
 		const activeHue = overrides.primaryHue ?? backgroundHue();
@@ -1112,6 +1122,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				windowEffect: activeWEffect,
 				userVariables: activeUserVars,
 			}),
+			{ transition: applyTransition },
 		);
 
 		// 4. Persistence call (Debounced at 100ms through central system)

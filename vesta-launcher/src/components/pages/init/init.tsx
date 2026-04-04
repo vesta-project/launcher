@@ -17,7 +17,7 @@ import {
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { useOs } from "@utils/os";
-import { createSignal, Match, onMount, Switch } from "solid-js";
+import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import {
     getCanonicalBackStep,
     getNextInitStep,
@@ -28,6 +28,7 @@ import {
 import styles from "./init.module.css";
 
 type NavigationDirection = "forward" | "backward" | "direct";
+type AtmosphereState = "active" | "fading" | "off";
 
 function InitPage() {
 	const navigate = useNavigate();
@@ -39,7 +40,45 @@ function InitPage() {
 	const [hasInstalledInstance, setHasInstalledInstance] = createSignal(false);
 	const [isLoading, setIsLoading] = createSignal(true);
 	const [isLoginOnly, setIsLoginOnly] = createSignal(false);
+	const [onboardingAtmosphereState, setOnboardingAtmosphereState] =
+		createSignal<AtmosphereState>("active");
 	const os = useOs();
+	let atmosphereFadeTimer: ReturnType<typeof setTimeout> | null = null;
+
+	const clearAtmosphereFadeTimer = () => {
+		if (atmosphereFadeTimer) {
+			clearTimeout(atmosphereFadeTimer);
+			atmosphereFadeTimer = null;
+		}
+	};
+
+	const handleThemeActivated = () => {
+		if (onboardingAtmosphereState() === "off") {
+			return;
+		}
+
+		const reducedMotionEnabled =
+			document.documentElement.getAttribute("data-reduced-motion") === "true";
+		if (reducedMotionEnabled) {
+			clearAtmosphereFadeTimer();
+			setOnboardingAtmosphereState("off");
+			return;
+		}
+
+		if (onboardingAtmosphereState() !== "fading") {
+			setOnboardingAtmosphereState("fading");
+		}
+
+		clearAtmosphereFadeTimer();
+		atmosphereFadeTimer = setTimeout(() => {
+			setOnboardingAtmosphereState("off");
+			atmosphereFadeTimer = null;
+		}, 180);
+	};
+
+	onCleanup(() => {
+		clearAtmosphereFadeTimer();
+	});
 
 	const persistSetupStep = async (step: InitStep) => {
 		if (isLoginOnly()) {
@@ -198,6 +237,7 @@ function InitPage() {
 						// Setup done but logged out OR session expired OR force login -> Jump to Login
 						setIsLoginOnly(true);
 						setGuideVisited(false);
+						setOnboardingAtmosphereState("off");
 						await applyStep(INIT_STEPS.LOGIN, {
 							replaceHistory: true,
 							persist: false,
@@ -213,6 +253,10 @@ function InitPage() {
 						resumeStep = INIT_STEPS.JAVA;
 						await invoke("set_setup_step", { step: INIT_STEPS.JAVA });
 					}
+
+					setOnboardingAtmosphereState(
+						resumeStep <= INIT_STEPS.APPEARANCE ? "active" : "off",
+					);
 
 					await applyStep(resumeStep, {
 						replaceHistory: true,
@@ -240,8 +284,12 @@ function InitPage() {
 	return (
 		<div
 			class={`${styles["init-page__root"]} ${
-				initStep() === INIT_STEPS.WELCOME
+				onboardingAtmosphereState() !== "off"
 					? styles["init-page__root--welcome"]
+					: ""
+			} ${
+				onboardingAtmosphereState() === "fading"
+					? styles["init-page__root--welcome-fading"]
 					: ""
 			}`}
 			data-tauri-drag-region
@@ -306,6 +354,7 @@ function InitPage() {
 							goToStep={goToStep}
 							goNext={goNext}
 							goBack={goBack}
+							onThemeActivated={handleThemeActivated}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>

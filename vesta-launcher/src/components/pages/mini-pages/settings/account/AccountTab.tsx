@@ -599,7 +599,7 @@ export function AccountSettingsTab() {
 		return filtered;
 	});
 
-	const handlePreviewSkin = async (skin: Skin) => {
+	const handlePreviewSkin = (skin: Skin) => {
 		const texture = getSkinTexture(skin, previewVariant());
 		setPreviewSkinUrl(texture);
 		setPreviewComputedKey(skin.texture_key || null);

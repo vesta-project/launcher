@@ -75,6 +75,17 @@
 	animation: welcome-gradient-breathe 10s ease-in-out infinite;
 }
 
+.init-page__root--welcome::before,
+.init-page__root--welcome::after {
+	transition: opacity 180ms ease-out;
+}
+
+.init-page__root--welcome-fading::before,
+.init-page__root--welcome-fading::after {
+	animation-play-state: paused;
+	opacity: 0;
+}
+
 .init-page__wrapper {
 	display: grid;
 	grid-template-rows: auto 1fr auto;
