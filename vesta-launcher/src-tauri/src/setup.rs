@@ -214,8 +214,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             if let Ok(mut config) = crate::utils::config::get_app_config() {
                 if config.active_account_uuid == Some(crate::auth::GUEST_UUID.to_string()) {
                     config.active_account_uuid = None;
-                    let _ = crate::utils::config::update_app_config(&config);
                 }
+
+                // Guest mode is temporary; onboarding should restart from welcome after teardown.
+                config.setup_completed = false;
+                config.setup_step = 0;
+                let _ = crate::utils::config::update_app_config(&config);
             }
         }
     }

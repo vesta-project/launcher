@@ -55,3 +55,42 @@ export function getCanonicalBackStep(
 
 	return getPreviousInitStep(step);
 }
+
+/**
+ * Recover from legacy guest-mode state where setup_completed was written
+ * while onboarding was still on early steps (welcome/guide/login).
+ */
+export function shouldRecoverLegacyGuestCompletion(
+	setupCompleted: boolean,
+	setupStep: unknown,
+): boolean {
+	if (!setupCompleted) {
+		return false;
+	}
+
+	return normalizeInitStep(setupStep) <= INIT_STEPS.LOGIN;
+}
+
+interface InitAccountLike {
+	is_expired?: boolean | null;
+	account_type?: string | null;
+}
+
+export function isGuestOrDemoAccountType(
+	accountType?: string | null,
+): boolean {
+	const normalizedType = String(accountType || "")
+		.trim()
+		.toLowerCase();
+	return normalizedType === "guest" || normalizedType === "demo";
+}
+
+export function isSkippableAuthenticatedAccount(
+	account: InitAccountLike | null | undefined,
+): boolean {
+	if (!account || account.is_expired) {
+		return false;
+	}
+
+	return !isGuestOrDemoAccountType(account.account_type);
+}

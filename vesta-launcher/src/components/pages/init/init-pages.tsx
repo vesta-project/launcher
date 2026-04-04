@@ -79,6 +79,7 @@ interface InitPagesProps {
 	goNext: () => Promise<void>;
 	goBack: () => Promise<void>;
 	onThemeActivated?: () => void;
+	onExitLoginOnlyMode?: () => void;
 	navigate?: (to: string, options?: Partial<NavigateOptions>) => void;
 	isLoginOnly?: boolean;
 	hasInstalledInstance?: boolean;
@@ -1002,7 +1003,23 @@ function InitLoginPage(props: InitPagesProps) {
 				const isForceLogin = searchParams.get("login") === "true";
 
 				if (props.isLoginOnly || isForceLogin) {
-					props.navigate?.("/home", { replace: true });
+					void (async () => {
+						try {
+							const config = await invoke<any>("get_config");
+							if (!config?.setup_completed) {
+								props.onExitLoginOnlyMode?.();
+								await props.goNext();
+								return;
+							}
+						} catch (error) {
+							console.error("Failed to resolve post-login onboarding flow:", error);
+							props.onExitLoginOnlyMode?.();
+							await props.goNext();
+							return;
+						}
+
+						props.navigate?.("/home", { replace: true });
+					})();
 				} else {
 					void props.goNext();
 				}
@@ -1048,10 +1065,6 @@ function InitLoginPage(props: InitPagesProps) {
 			}
 
 			await invoke("start_guest_session");
-			await invoke("update_config_field", {
-				field: "setup_completed",
-				value: true,
-			});
 			window.location.href = "/home";
 		} catch (error) {
 			setErrorMessage(`Failed to start guest session: ${error}`);

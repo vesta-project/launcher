@@ -202,6 +202,7 @@ impl ActionHandler for LogoutGuestHandler {
         use crate::utils::config::{get_app_config, update_app_config};
         if let Ok(mut config) = get_app_config() {
             config.setup_completed = false;
+            config.setup_step = 0;
             config.active_account_uuid = None;
             let _ = update_app_config(&config);
         }

@@ -23,7 +23,10 @@ import {
     getNextInitStep,
     INIT_STEPS,
     type InitStep,
+    isGuestOrDemoAccountType,
+    isSkippableAuthenticatedAccount,
     normalizeInitStep,
+    shouldRecoverLegacyGuestCompletion,
 } from "./init-flow";
 import styles from "./init.module.css";
 
@@ -121,7 +124,7 @@ function InitPage() {
 	const hasValidSession = async () => {
 		try {
 			const account = await invoke<any>("get_active_account");
-			return Boolean(account && !account.is_expired);
+			return isSkippableAuthenticatedAccount(account);
 		} catch (error) {
 			console.error("Failed to check active account:", error);
 			return false;
@@ -226,11 +229,40 @@ function InitPage() {
 			try {
 				const config = await invoke<any>("get_config");
 				const account = await invoke<any>("get_active_account");
-				const hasValidAccount = Boolean(account && !account.is_expired);
+				const hasValidAccount = isSkippableAuthenticatedAccount(account);
+				const forceGuestLoginOnly =
+					forceLoginRequested &&
+					isGuestOrDemoAccountType(account?.account_type);
+				let setupCompleted = Boolean(config.setup_completed);
+				let setupStep = normalizeInitStep(config.setup_step);
 
-				if (config.setup_completed) {
+				if (shouldRecoverLegacyGuestCompletion(setupCompleted, setupStep)) {
+					try {
+						await invoke("reset_onboarding");
+						setupCompleted = false;
+						setupStep = INIT_STEPS.WELCOME;
+					} catch (error) {
+						console.error(
+							"Failed to recover legacy guest completion state:",
+							error,
+						);
+					}
+				}
+
+				if (forceGuestLoginOnly) {
+					setIsLoginOnly(true);
+					setGuideVisited(false);
+					setOnboardingAtmosphereState("off");
+					await applyStep(INIT_STEPS.LOGIN, {
+						replaceHistory: true,
+						persist: false,
+					});
+					return;
+				}
+
+				if (setupCompleted) {
 					if (hasValidAccount && !forceLoginRequested) {
-						// Setup done and logged in (including Guest) and session not expired -> Home
+						// Setup done and logged in with valid session -> Home
 						navigate("/home", { replace: true });
 						return;
 					} else {
@@ -245,7 +277,7 @@ function InitPage() {
 					}
 				} else {
 					// Setup not done -> Resume or start onboarding
-					let resumeStep = normalizeInitStep(config.setup_step);
+					let resumeStep = setupStep;
 					setGuideVisited(resumeStep === INIT_STEPS.GUIDE);
 
 					// If we are resuming at login but already have a valid account, skip to Java
@@ -335,6 +367,7 @@ function InitPage() {
 							goNext={goNext}
 							goBack={goBack}
 							isLoginOnly={isLoginOnly()}
+							onExitLoginOnlyMode={() => setIsLoginOnly(false)}
 							navigate={navigate}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>

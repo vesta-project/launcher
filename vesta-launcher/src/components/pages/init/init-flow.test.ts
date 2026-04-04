@@ -4,7 +4,10 @@ import {
     getNextInitStep,
     getPreviousInitStep,
     INIT_STEPS,
+    isGuestOrDemoAccountType,
+    isSkippableAuthenticatedAccount,
     normalizeInitStep,
+    shouldRecoverLegacyGuestCompletion,
 } from "./init-flow";
 
 describe("init-flow", () => {
@@ -34,5 +37,57 @@ describe("init-flow", () => {
 		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, true)).toBe(
 			INIT_STEPS.GUIDE,
 		);
+	});
+
+	it("detects stale guest completion states for recovery", () => {
+		expect(
+			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.WELCOME),
+		).toBe(true);
+		expect(
+			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.GUIDE),
+		).toBe(true);
+		expect(
+			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.LOGIN),
+		).toBe(true);
+		expect(
+			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.JAVA),
+		).toBe(false);
+		expect(
+			shouldRecoverLegacyGuestCompletion(false, INIT_STEPS.LOGIN),
+		).toBe(false);
+	});
+
+	it("treats guest and demo accounts as non-skippable auth sessions", () => {
+		expect(
+			isSkippableAuthenticatedAccount({
+				account_type: "Guest",
+				is_expired: false,
+			}),
+		).toBe(false);
+		expect(
+			isSkippableAuthenticatedAccount({
+				account_type: "demo",
+				is_expired: false,
+			}),
+		).toBe(false);
+		expect(
+			isSkippableAuthenticatedAccount({
+				account_type: "Microsoft",
+				is_expired: false,
+			}),
+		).toBe(true);
+		expect(
+			isSkippableAuthenticatedAccount({
+				account_type: "Microsoft",
+				is_expired: true,
+			}),
+		).toBe(false);
+	});
+
+	it("detects guest and demo account types case-insensitively", () => {
+		expect(isGuestOrDemoAccountType("Guest")).toBe(true);
+		expect(isGuestOrDemoAccountType("demo")).toBe(true);
+		expect(isGuestOrDemoAccountType("Microsoft")).toBe(false);
+		expect(isGuestOrDemoAccountType(null)).toBe(false);
 	});
 });
