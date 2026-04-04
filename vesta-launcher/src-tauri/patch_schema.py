@@ -1,43 +1,39 @@
-import sys
 import os
+import sys
 
-# Use relative path from script location
+# Keep this helper aligned with Diesel migrations; migrations remain source of truth.
 script_dir = os.path.dirname(os.path.abspath(__file__))
-filepath = os.path.join(script_dir, 'src', 'schema', 'vesta.rs')
+filepath = os.path.join(script_dir, "src", "schema", "vesta.rs")
 
-with open(filepath, 'r') as f:
-    schema = f.read()
+with open(filepath, "r", encoding="utf-8") as handle:
+    schema = handle.read()
 
-# Add window_transparency_enabled
-schema = schema.replace(
-    'cape_data -> Nullable<Text>,\n    }',
-    'cape_data -> Nullable<Text>,\n        window_transparency_enabled -> Nullable<Bool>,\n    }'
-)
-
-# Add saved_themes
+# Add saved_themes only if absent, matching Diesel's sqlite text timestamps.
 themes_table = """
 diesel::table! {
     saved_themes (id) {
         id -> Text,
         name -> Text,
         theme_data -> Text,
-        created_at -> Timestamp,
-        updated_at -> Timestamp,
+        created_at -> Text,
+        updated_at -> Text,
     }
 }
 """
-schema = schema.replace(
-    'diesel::table! {\n    task_state (id) {',
-    themes_table + '\ndiesel::table! {\n    task_state (id) {'
-)
 
-# Add to allow_tables_to_appear_in_same_query
-schema = schema.replace(
-    '    resource_project,\n    task_state,',
-    '    resource_project,\n    saved_themes,\n    task_state,'
-)
+task_state_anchor = "diesel::table! {\n    task_state (id) {"
+if "saved_themes (id)" not in schema and task_state_anchor in schema:
+    schema = schema.replace(task_state_anchor, themes_table + "\n" + task_state_anchor, 1)
 
-with open(filepath, 'w') as f:
-    f.write(schema)
+allow_tables_anchor = "    resource_project,\n    task_state,"
+if "    saved_themes,\n" not in schema and allow_tables_anchor in schema:
+    schema = schema.replace(
+        allow_tables_anchor,
+        "    resource_project,\n    saved_themes,\n    task_state,",
+        1,
+    )
+
+with open(filepath, "w", encoding="utf-8") as handle:
+    handle.write(schema)
 
 sys.exit(0)

@@ -101,7 +101,7 @@ use tauri::Emitter;
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct AppConfig {
     pub id: i32, // Always 1 - we only have one config row
-    pub background_hue: Option<i32>,
+    pub background_hue: i32,
     pub theme: String,
     pub language: String,
     pub max_download_threads: i32,
@@ -164,7 +164,7 @@ pub struct AppConfig {
 impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite> for AppConfig {
     type Row = (
         i32, // id
-        Option<i32>, // background_hue
+        i32, // background_hue
         String, // theme
         String, // language
         i32, // max_download_threads
@@ -271,7 +271,7 @@ impl Default for AppConfig {
     fn default() -> Self {
         AppConfig {
             id: 1,
-            background_hue: None,
+            background_hue: 180,
             theme: "dark".to_string(),
             language: "en".to_string(),
             max_download_threads: 4,
@@ -593,8 +593,8 @@ fn apply_payload_to_scalar_fields(config: &mut AppConfig, payload: &Value) -> bo
             config.theme_primary_hue = v;
             changed = true;
         }
-        if config.background_hue != Some(v) {
-            config.background_hue = Some(v);
+        if config.background_hue != v {
+            config.background_hue = v;
             changed = true;
         }
     }

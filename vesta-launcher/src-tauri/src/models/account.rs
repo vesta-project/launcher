@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// Stores OAuth tokens and user information for Microsoft authentication.
 #[derive(Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
+#[derive(Queryable)]
 #[diesel(table_name = account)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Account {
@@ -30,58 +31,6 @@ pub struct Account {
     pub theme_data: Option<String>,
     pub theme_window_effect: Option<String>,
     pub theme_background_opacity: Option<i32>,
-}
-
-impl diesel::Queryable<crate::schema::account::SqlType, diesel::sqlite::Sqlite> for Account {
-    type Row = (
-        i32,            // id
-        String,         // uuid
-        String,         // username
-        Option<String>, // display_name
-        Option<String>, // access_token
-        Option<String>, // refresh_token
-        Option<String>, // token_expires_at
-        bool,           // is_active
-        Option<String>, // skin_url
-        Option<String>, // cape_url
-        Option<String>, // created_at
-        Option<String>, // updated_at
-        Option<String>, // theme_id
-        String,         // account_type
-        bool,           // is_expired
-        String,         // skin_variant
-        Option<String>, // skin_data
-        Option<String>, // cape_data
-        Option<String>, // theme_data
-        Option<String>, // theme_window_effect
-        Option<i32>,    // theme_background_opacity
-    );
-
-    fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
-        Ok(Account {
-            id: row.0,
-            uuid: row.1,
-            username: row.2,
-            display_name: row.3,
-            access_token: row.4,
-            refresh_token: row.5,
-            token_expires_at: row.6,
-            is_active: row.7,
-            skin_url: row.8,
-            cape_url: row.9,
-            created_at: row.10,
-            updated_at: row.11,
-            theme_id: row.12,
-            account_type: row.13,
-            is_expired: row.14,
-            skin_variant: row.15,
-            skin_data: row.16,
-            cape_data: row.17,
-            theme_data: row.18,
-            theme_window_effect: row.19,
-            theme_background_opacity: row.20,
-        })
-    }
 }
 
 /// New account (without id for insertion)

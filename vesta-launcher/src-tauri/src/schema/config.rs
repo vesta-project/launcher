@@ -3,7 +3,7 @@
 diesel::table! {
     app_config (id) {
         id -> Integer,
-        background_hue -> Nullable<Integer>,
+        background_hue -> Integer,
         theme -> Text,
         language -> Text,
         max_download_threads -> Integer,

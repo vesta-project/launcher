@@ -19,20 +19,19 @@ interface ThemePresetCardProps {
 export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 	return (
 		<div
+			class={styles["theme-preset-card-wrapper"]}
+			classList={{
+				[styles["theme-preset-card--list"]]: props.viewMode === "list",
+			}}
+		>
+			<button
+				type="button"
 			class={styles["theme-preset-card"]}
 			classList={{
 				[styles["theme-preset-card--selected"]]: props.isSelected,
 				[styles["theme-preset-card--list"]]: props.viewMode === "list",
 			}}
-			role="button"
-			tabIndex={0}
 			onClick={props.onClick}
-			onKeyDown={(event) => {
-				if (event.key === "Enter" || event.key === " ") {
-					event.preventDefault();
-					props.onClick?.();
-				}
-			}}
 			data-preview-style={props.theme.style}
 			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
 			style={{
@@ -73,36 +72,9 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 
 			{/* Theme Name */}
 			<div class={styles["theme-preset-card__info"]}>
-				<Show
-					when={
-						props.source === "imported" || (props.isDeletable && props.onDelete)
-					}
-				>
+					<Show when={props.source === "imported"}>
 					<div class={styles["theme-preset-card__meta"]}>
-						<Show when={props.source === "imported"}>
 							<span class={styles["theme-preset-card__source"]}>Imported</span>
-						</Show>
-						<Show when={props.isDeletable && props.onDelete}>
-							<span
-								class={styles["theme-preset-card__delete"]}
-								role="button"
-								tabIndex={0}
-								onClick={(event) => {
-									event.preventDefault();
-									event.stopPropagation();
-									props.onDelete?.();
-								}}
-								onKeyDown={(event) => {
-									if (event.key === "Enter" || event.key === " ") {
-										event.preventDefault();
-										event.stopPropagation();
-										props.onDelete?.();
-									}
-								}}
-							>
-								Delete
-							</span>
-						</Show>
 					</div>
 				</Show>
 				<span class={styles["theme-preset-card__name"]}>
@@ -114,6 +86,20 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 						: props.theme.description || props.theme.style}
 				</span>
 			</div>
+			</button>
+			<Show when={props.isDeletable && props.onDelete}>
+				<button
+					type="button"
+					class={styles["theme-preset-card__delete"]}
+					onClick={(event) => {
+						event.preventDefault();
+						event.stopPropagation();
+						props.onDelete?.();
+					}}
+				>
+					Delete
+				</button>
+			</Show>
 		</div>
 	);
 };

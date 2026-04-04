@@ -547,29 +547,70 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
 
     #[cfg(target_os = "windows")]
     {
-        use window_vibrancy::{apply_blur, apply_acrylic, apply_mica, clear_blur, clear_acrylic, clear_mica};
-        let _ = clear_blur(&window);
-        let _ = clear_acrylic(&window);
-        let _ = clear_mica(&window);
-        match active_effect.as_str() {
-            "blur" => { let _ = apply_blur(&window, Some((18, 18, 18, 125))); },
-            "acrylic" => { let _ = apply_acrylic(&window, Some((18, 18, 18, 125))); },
-            "mica" => { let _ = apply_mica(&window, Some(true)); },
-            _ => {}
+        use window_vibrancy::{
+            apply_acrylic, apply_blur, apply_mica, clear_acrylic, clear_blur, clear_mica,
+        };
+
+        if let Err(err) = clear_blur(&window) {
+            log::warn!("Failed to clear blur window effect: {}", err);
+        }
+        if let Err(err) = clear_acrylic(&window) {
+            log::warn!("Failed to clear acrylic window effect: {}", err);
+        }
+        if let Err(err) = clear_mica(&window) {
+            log::warn!("Failed to clear mica window effect: {}", err);
+        }
+
+        let apply_result = match active_effect.as_str() {
+            "blur" => apply_blur(&window, Some((18, 18, 18, 125))),
+            "acrylic" => apply_acrylic(&window, Some((18, 18, 18, 125))),
+            "mica" => apply_mica(&window, Some(true)),
+            _ => Ok(()),
+        };
+
+        if let Err(err) = apply_result {
+            let message = format!(
+                "Failed to apply window effect '{}' (requested '{}'): {}",
+                active_effect, effect, err
+            );
+            log::error!("{}", message);
+            return Err(message);
         }
     }
 
     #[cfg(target_os = "macos")]
     {
-        use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial, apply_liquid_glass, clear_liquid_glass, NSGlassEffectViewStyle};
-        let _ = clear_vibrancy(&window);
-        let _ = clear_liquid_glass(&window);
+        use window_vibrancy::{
+            apply_liquid_glass, apply_vibrancy, clear_liquid_glass, clear_vibrancy,
+            NSGlassEffectViewStyle, NSVisualEffectMaterial,
+        };
+
+        if let Err(err) = clear_vibrancy(&window) {
+            log::warn!("Failed to clear vibrancy window effect: {}", err);
+        }
+        if let Err(err) = clear_liquid_glass(&window) {
+            log::warn!("Failed to clear liquid_glass window effect: {}", err);
+        }
+
         let radius = if active_effect.as_str() == "liquid_glass" { 16.0 } else { 10.0 };
 
-        match active_effect.as_str() {
-            "vibrancy" => { let _ = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(radius)); },
-            "liquid_glass" => { let _ = apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(radius)); },
-            _ => {}
+        let apply_result = match active_effect.as_str() {
+            "vibrancy" => {
+                apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(radius))
+            }
+            "liquid_glass" => {
+                apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(radius))
+            }
+            _ => Ok(()),
+        };
+
+        if let Err(err) = apply_result {
+            let message = format!(
+                "Failed to apply window effect '{}' (requested '{}'): {}",
+                active_effect, effect, err
+            );
+            log::error!("{}", message);
+            return Err(message);
         }
     }
     

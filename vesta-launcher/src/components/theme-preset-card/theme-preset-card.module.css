@@ -1,3 +1,8 @@
+.theme-preset-card-wrapper {
+	position: relative;
+	width: 180px;
+}
+
 .theme-preset-card {
 	all: unset;
 	position: relative; /* needed for pseudo elements */
@@ -43,6 +48,10 @@
 	flex-direction: row;
 	align-items: center;
 	min-height: 92px;
+}
+
+.theme-preset-card-wrapper.theme-preset-card--list {
+	width: 100%;
 }
 
 .theme-preset-card.theme-preset-card--list:hover {
@@ -218,8 +227,14 @@
 }
 
 .theme-preset-card__delete {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	z-index: 4;
 	font-size: 11px;
 	color: hsl(0 80% 70%);
+	background: hsl(0 50% 20% / 0.18);
+	border: 1px solid hsl(0 60% 45% / 0.35);
 	padding: 2px 4px;
 	border-radius: 4px;
 	cursor: pointer;

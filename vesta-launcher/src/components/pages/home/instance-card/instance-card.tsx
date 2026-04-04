@@ -11,28 +11,16 @@ import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { listen } from "@tauri-apps/api/event";
-import { ask } from "@tauri-apps/plugin-dialog";
-import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
-import LauncherButton from "@ui/button/button";
 import {
 	ContextMenu,
-	ContextMenuCheckboxItem,
 	ContextMenuContent,
-	ContextMenuGroup,
-	ContextMenuGroupLabel,
 	ContextMenuItem,
-	ContextMenuItemLabel,
 	ContextMenuLabel,
 	ContextMenuPortal,
-	ContextMenuRadioGroup,
-	ContextMenuRadioItem,
 	ContextMenuSeparator,
 	ContextMenuShortcut,
-	ContextMenuSub,
-	ContextMenuSubContent,
-	ContextMenuSubTrigger,
-	ContextMenuTrigger,
+	ContextMenuTrigger
 } from "@ui/context-menu/context-menu";
 import { ExportDialog } from "@ui/export-dialog";
 import { showToast } from "@ui/toast/toast";
@@ -40,23 +28,18 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import {
 	clearCrashDetails,
-	getCrashDetails,
-	isInstanceCrashed,
+	isInstanceCrashed
 } from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
-	deleteInstance,
-	duplicateInstance,
 	getInstanceSlug,
 	installInstance,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
-	repairInstance,
-	resetInstance,
 	resumeInstanceOperation,
-	sanitizeInstanceName,
+	sanitizeInstanceName
 } from "@utils/instances";
 import {
 	createSignal,
@@ -69,9 +52,8 @@ import {
 import {
 	handleDuplicate,
 	handleHardReset,
-	handleLaunch,
 	handleRepair,
-	handleUninstall,
+	handleUninstall
 } from "../../../../handlers/instance-handler";
 import styles from "./instance-card.module.css";
 

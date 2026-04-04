@@ -10,8 +10,10 @@ const Slider = <T extends ValidComponent = "div">(
 		T,
 		SliderPrimitive.SliderRootOptions & {
 			onInput?: (value: number[]) => void;
+			onCommit?: (value: number[]) => void;
 			class?: string;
 			onChange?: (value: number[]) => void;
+			onChangeEnd?: (value: number[]) => void;
 		}
 	>,
 ) => {
@@ -19,16 +21,20 @@ const Slider = <T extends ValidComponent = "div">(
 		"class",
 		"onChange",
 		"onInput",
+		"onCommit",
+		"onChangeEnd",
 	]);
 
 	return (
 		<SliderPrimitive.Root
 			class={clsx(styles.slider, local.class)}
 			onChange={(val: number[]) => {
+				local.onChange?.(val);
 				local.onInput?.(val);
 			}}
 			onChangeEnd={(val: number[]) => {
-				local.onChange?.(val);
+				local.onChangeEnd?.(val);
+				local.onCommit?.(val);
 			}}
 			{...others}
 		/>
@@ -128,10 +134,6 @@ const SliderValueLabel = <T extends ValidComponent = "output">(
 };
 
 export {
-	Slider,
-	SliderTrack,
-	SliderFill,
-	SliderThumb,
-	SliderLabel,
-	SliderValueLabel,
+    Slider, SliderFill, SliderLabel, SliderThumb, SliderTrack, SliderValueLabel
 };
+
