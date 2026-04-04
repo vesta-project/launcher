@@ -1,4 +1,4 @@
-import { NavigateOptions, useNavigate } from "@solidjs/router";
+import { NavigateOptions } from "@solidjs/router";
 import networkStore from "@stores/network";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
@@ -9,20 +9,15 @@ import {
 	ComboboxControl,
 	ComboboxInput,
 	ComboboxItem,
-	ComboboxItemIndicator,
-	ComboboxItemLabel,
-	ComboboxTrigger,
+	ComboboxTrigger
 } from "@ui/combobox/combobox";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import { Separator } from "@ui/separator/separator";
 import {
 	Slider,
-	SliderFill,
-	SliderLabel,
 	SliderThumb,
-	SliderTrack,
-	SliderValueLabel,
+	SliderTrack
 } from "@ui/slider/slider";
 import {
 	TextFieldInput,
@@ -32,14 +27,14 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { openExternal as openUrl } from "@utils/external-link";
 import {
-	type CreateInstanceData,
 	createInstance,
 	DEFAULT_ICONS,
 	getMinecraftVersions,
 	getStableIconId,
-	type Instance,
 	installInstance,
 	isDefaultIcon,
+	type CreateInstanceData,
+	type Instance,
 	type PistonMetadata,
 } from "@utils/instances";
 import { startAppTutorial } from "@utils/tutorial";
@@ -56,8 +51,7 @@ import {
 import {
 	applyTheme,
 	getThemeById,
-	PRESET_THEMES,
-	ThemeConfig,
+	PRESET_THEMES
 } from "../../../themes/presets";
 import {
 	currentThemeConfig,
@@ -81,7 +75,9 @@ interface DetectedJava {
 
 interface InitPagesProps {
 	initStep: number;
-	changeInitStep: (n: number) => void;
+	goToStep: (step: number) => Promise<void>;
+	goNext: () => Promise<void>;
+	goBack: () => Promise<void>;
 	navigate?: (to: string, options?: Partial<NavigateOptions>) => void;
 	isLoginOnly?: boolean;
 	hasInstalledInstance?: boolean;
@@ -182,7 +178,7 @@ function InitFirstPage(props: InitPagesProps) {
 			>
 				<Button
 					color="primary"
-					onClick={() => props.changeInitStep(2)} // Skip guide (Step 1) and go to Login (Step 2)
+					onClick={() => void props.goToStep(2)} // Skip guide (Step 1) and go to Login (Step 2)
 					style={{
 						width: "clamp(240px, 40%, 320px)",
 						height: "clamp(44px, 6vh, 54px)",
@@ -208,10 +204,10 @@ function InitFirstPage(props: InitPagesProps) {
 				</Show>
 				<Button
 					variant="ghost"
-					onClick={() => props.changeInitStep(1)} // Go to Guide (Step 1)
+					onClick={() => void props.goToStep(1)} // Go to Guide (Step 1)
 					style={{ opacity: 0.6, "font-size": "clamp(12px, 1.5vh, 14px)" }}
 				>
-					Wait, what does this all mean?
+					How does minecraft modding work?
 				</Button>
 			</div>
 		</>
@@ -249,7 +245,7 @@ function InitGuidePage(props: InitPagesProps) {
 			<div class={styles["init-page__bottom"]} style={{ "margin-top": "20px" }}>
 				<Button
 					color="primary"
-					onClick={() => props.changeInitStep(2)} // Move to Login
+					onClick={() => void props.goToStep(2)} // Move to Login
 					style={{ "min-width": "200px" }}
 				>
 					Got it, let's continue
@@ -318,7 +314,7 @@ function InitDataStoragePage(props: InitPagesProps) {
 				field: "default_game_dir",
 				value: installDir(),
 			});
-			props.changeInitStep(props.initStep + 1);
+			await props.goNext();
 		} catch (e) {
 			console.error("Failed to save installation dir:", e);
 		}
@@ -486,7 +482,7 @@ function InitDataStoragePage(props: InitPagesProps) {
 					<Button
 						variant="ghost"
 						size="sm"
-						onClick={() => props.changeInitStep(props.initStep - 1)}
+						onClick={() => void props.goBack()}
 					>
 						Back
 					</Button>
@@ -666,7 +662,7 @@ function InitInstallationPage(props: InitPagesProps) {
 				props.onInstanceInstalled();
 			} else {
 				// Move to next page if callback not provided
-				props.changeInitStep(props.initStep + 1);
+				await props.goNext();
 			}
 		} catch (error) {
 			console.error("[Onboarding] Installation failed:", error);
@@ -676,7 +672,7 @@ function InitInstallationPage(props: InitPagesProps) {
 	};
 
 	const handleSkip = () => {
-		props.changeInitStep(props.initStep + 1);
+		void props.goNext();
 	};
 
 	return (
@@ -950,7 +946,7 @@ function InitFinishedPage(props: InitPagesProps) {
 					<Button
 						variant="ghost"
 						size="sm"
-						onClick={() => props.changeInitStep(props.initStep - 1)}
+						onClick={() => void props.goBack()}
 					>
 						Back
 					</Button>
@@ -1007,7 +1003,7 @@ function InitLoginPage(props: InitPagesProps) {
 				if (props.isLoginOnly || isForceLogin) {
 					props.navigate?.("/home", { replace: true });
 				} else {
-					props.changeInitStep(props.initStep + 1);
+					void props.goNext();
 				}
 			} else if (event.stage === "Cancelled") {
 				setIsAuthenticating(false);
@@ -1396,7 +1392,7 @@ function InitLoginPage(props: InitPagesProps) {
 					<Button
 						variant="ghost"
 						size="sm"
-						onClick={() => props.changeInitStep(props.initStep - 1)}
+						onClick={() => void props.goBack()}
 					>
 						Go Back
 					</Button>
@@ -1527,7 +1523,7 @@ function InitJavaPage(props: InitPagesProps) {
 			await Promise.all(tasks);
 
 			// Move to next step immediately as tasks are now handled in the background
-			props.changeInitStep(props.initStep + 1);
+			await props.goNext();
 		} catch (e) {
 			console.error("Failed to apply Java settings:", e);
 		} finally {
@@ -1909,7 +1905,7 @@ function InitJavaPage(props: InitPagesProps) {
 					<Show when={!props.hasInstalledInstance}>
 						<Button
 							variant="ghost"
-							onClick={() => props.changeInitStep(props.initStep - 1)}
+							onClick={() => void props.goBack()}
 							disabled={isApplying()}
 							size="sm"
 						>
@@ -2011,9 +2007,17 @@ function InitAppearancePage(props: InitPagesProps) {
 		await persistThemeUpdate({ primaryHue: newHue });
 	};
 
+	const isSelected = (id: string) => {
+		return explicitThemeSelected() && themeId() === id;
+	};
+
 	const canChangeHue = () => {
 		const theme = getThemeById(themeId());
 		return theme?.allowHueChange ?? false;
+	};
+
+	const canProceed = () => {
+		return explicitThemeSelected() && !isPersistingTheme();
 	};
 
 	return (
@@ -2056,7 +2060,7 @@ function InitAppearancePage(props: InitPagesProps) {
 							{(theme) => (
 								<ThemePresetCard
 									theme={theme}
-									isSelected={themeId() === theme.id}
+									isSelected={isSelected(theme.id)}
 									onClick={() => handlePresetSelect(theme.id)}
 								/>
 							)}
@@ -2120,7 +2124,7 @@ function InitAppearancePage(props: InitPagesProps) {
 					<Button
 						variant="ghost"
 						size="sm"
-						onClick={() => props.changeInitStep(props.initStep - 1)}
+						onClick={() => void props.goBack()}
 					>
 						Back
 					</Button>
@@ -2128,8 +2132,8 @@ function InitAppearancePage(props: InitPagesProps) {
 				<Button
 					color="primary"
 					style={{ "min-width": "180px" }}
-					disabled={!explicitThemeSelected() || isPersistingTheme()}
-					onClick={() => props.changeInitStep(props.initStep + 1)}
+					disabled={!canProceed()}
+					onClick={() => void props.goNext()}
 				>
 					{isPersistingTheme() ? "Saving Theme..." : "Next Step"}
 				</Button>
@@ -2139,12 +2143,9 @@ function InitAppearancePage(props: InitPagesProps) {
 }
 
 export {
-	InitAppearancePage,
-	InitFinishedPage,
+	InitAppearancePage, InitDataStoragePage, InitFinishedPage,
 	InitFirstPage,
-	InitGuidePage,
-	InitJavaPage,
-	InitLoginPage,
-	InitDataStoragePage,
-	InitInstallationPage,
+	InitGuidePage, InitInstallationPage, InitJavaPage,
+	InitLoginPage
 };
+

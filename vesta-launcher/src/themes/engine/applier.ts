@@ -135,12 +135,14 @@ export function applyTheme(theme: ThemeConfig): void {
 	// Ensure background behaves correctly when toggling gradient
 	if (theme.gradientEnabled) {
 		root.setAttribute("data-gradient", "1");
-		// Let stylesheet-defined gradient and opacity take over (CSS media queries handle light/dark)
+		// Let stylesheet-defined gradient and tint take over and clear stale inline overrides.
 		style.removeProperty("--background-color");
+		style.removeProperty("--background-image");
 	} else {
 		root.setAttribute("data-gradient", "0");
-		// Force solid background
+		// Force a flat background and clear gradient image explicitly.
 		style.setProperty("--background-color", "var(--app-background-tint)");
+		style.setProperty("--background-image", "none");
 	}
 
 	// Apply style mode attribute

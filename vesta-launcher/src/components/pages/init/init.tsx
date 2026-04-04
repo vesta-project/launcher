@@ -1,32 +1,182 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import {
-	PageViewer,
-	pageViewerOpen,
-	setPageViewerOpen,
+    PageViewer,
+    pageViewerOpen,
+    setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
 import {
-	InitAppearancePage,
-	InitDataStoragePage,
-	InitFinishedPage,
-	InitFirstPage,
-	InitGuidePage,
-	InitInstallationPage,
-	InitJavaPage,
-	InitLoginPage,
+    InitAppearancePage,
+    InitDataStoragePage,
+    InitFinishedPage,
+    InitFirstPage,
+    InitGuidePage,
+    InitInstallationPage,
+    InitJavaPage,
+    InitLoginPage,
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { useOs } from "@utils/os";
 import { createSignal, Match, onMount, Switch } from "solid-js";
+import {
+    getCanonicalBackStep,
+    getNextInitStep,
+    INIT_STEPS,
+    type InitStep,
+    normalizeInitStep,
+} from "./init-flow";
 import styles from "./init.module.css";
+
+type NavigationDirection = "forward" | "backward" | "direct";
 
 function InitPage() {
 	const navigate = useNavigate();
-	const [initStep, setInitStep] = createSignal(0);
+	const [initStep, setInitStep] = createSignal<InitStep>(INIT_STEPS.WELCOME);
+	const [stepHistory, setStepHistory] = createSignal<InitStep[]>([
+		INIT_STEPS.WELCOME,
+	]);
+	const [guideVisited, setGuideVisited] = createSignal(false);
 	const [hasInstalledInstance, setHasInstalledInstance] = createSignal(false);
 	const [isLoading, setIsLoading] = createSignal(true);
 	const [isLoginOnly, setIsLoginOnly] = createSignal(false);
 	const os = useOs();
+
+	const persistSetupStep = async (step: InitStep) => {
+		if (isLoginOnly()) {
+			return;
+		}
+
+		await invoke("set_setup_step", { step });
+	};
+
+	const applyStep = async (
+		step: InitStep,
+		options?: {
+			replaceHistory?: boolean;
+			recordHistory?: boolean;
+			persist?: boolean;
+		},
+	) => {
+		setInitStep(step);
+
+		if (step === INIT_STEPS.GUIDE) {
+			setGuideVisited(true);
+		}
+
+		if (options?.replaceHistory) {
+			setStepHistory([step]);
+		} else if (options?.recordHistory !== false) {
+			setStepHistory((previous) => {
+				if (previous[previous.length - 1] === step) {
+					return previous;
+				}
+				return [...previous, step];
+			});
+		}
+
+		if (options?.persist !== false) {
+			await persistSetupStep(step);
+		}
+	};
+
+	const hasValidSession = async () => {
+		try {
+			const account = await invoke<any>("get_active_account");
+			return Boolean(account && !account.is_expired);
+		} catch (error) {
+			console.error("Failed to check active account:", error);
+			return false;
+		}
+	};
+
+	const getDirection = (
+		from: InitStep,
+		to: InitStep,
+	): NavigationDirection => {
+		if (to > from) {
+			return "forward";
+		}
+		if (to < from) {
+			return "backward";
+		}
+		return "direct";
+	};
+
+	const resolveStepWithGuards = async (
+		requestedStep: InitStep,
+		direction: NavigationDirection,
+	): Promise<InitStep> => {
+		if (requestedStep !== INIT_STEPS.LOGIN) {
+			return requestedStep;
+		}
+
+		if (isLoginOnly()) {
+			return INIT_STEPS.LOGIN;
+		}
+
+		const validSession = await hasValidSession();
+		if (!validSession) {
+			return INIT_STEPS.LOGIN;
+		}
+
+		if (direction === "backward") {
+			return guideVisited() ? INIT_STEPS.GUIDE : INIT_STEPS.WELCOME;
+		}
+
+		return INIT_STEPS.JAVA;
+	};
+
+	const goToStep = async (
+		rawStep: number,
+		options?: { replaceHistory?: boolean; recordHistory?: boolean },
+	) => {
+		const requestedStep = normalizeInitStep(rawStep);
+		const direction = getDirection(initStep(), requestedStep);
+		const targetStep = await resolveStepWithGuards(requestedStep, direction);
+		await applyStep(targetStep, {
+			replaceHistory: options?.replaceHistory,
+			recordHistory: options?.recordHistory,
+		});
+	};
+
+	const goNext = async () => {
+		const nextStep = getNextInitStep(initStep());
+		await goToStep(nextStep);
+	};
+
+	const goBack = async () => {
+		if (isLoginOnly()) {
+			return;
+		}
+
+		const history = stepHistory();
+		if (history.length > 1) {
+			const historyWithoutCurrent = history.slice(0, -1);
+			const previousStep = historyWithoutCurrent[historyWithoutCurrent.length - 1];
+			const guardedPreviousStep = await resolveStepWithGuards(
+				previousStep,
+				"backward",
+			);
+
+			if (guardedPreviousStep !== previousStep) {
+				const targetIndex = historyWithoutCurrent.lastIndexOf(guardedPreviousStep);
+				if (targetIndex >= 0) {
+					setStepHistory(historyWithoutCurrent.slice(0, targetIndex + 1));
+				} else {
+					setStepHistory([...historyWithoutCurrent, guardedPreviousStep]);
+				}
+			} else {
+				setStepHistory(historyWithoutCurrent);
+			}
+
+			await applyStep(guardedPreviousStep, { recordHistory: false });
+			return;
+		}
+
+		const fallbackStep = getCanonicalBackStep(initStep(), guideVisited());
+		const targetStep = await resolveStepWithGuards(fallbackStep, "backward");
+		await applyStep(targetStep, { recordHistory: false });
+	};
 
 	onMount(() => {
 		const searchParams = new URLSearchParams(window.location.search);
@@ -37,28 +187,37 @@ function InitPage() {
 			try {
 				const config = await invoke<any>("get_config");
 				const account = await invoke<any>("get_active_account");
+				const hasValidAccount = Boolean(account && !account.is_expired);
 
 				if (config.setup_completed) {
-					if (account && !account.is_expired && !forceLoginRequested) {
+					if (hasValidAccount && !forceLoginRequested) {
 						// Setup done and logged in (including Guest) and session not expired -> Home
 						navigate("/home", { replace: true });
 						return;
 					} else {
 						// Setup done but logged out OR session expired OR force login -> Jump to Login
 						setIsLoginOnly(true);
-						setInitStep(2); // Step 2 is Login
+						setGuideVisited(false);
+						await applyStep(INIT_STEPS.LOGIN, {
+							replaceHistory: true,
+							persist: false,
+						});
 					}
 				} else {
 					// Setup not done -> Resume or start onboarding
-					let resumeStep = config.setup_step || 0;
+					let resumeStep = normalizeInitStep(config.setup_step);
+					setGuideVisited(resumeStep === INIT_STEPS.GUIDE);
 
 					// If we are resuming at login but already have a valid account, skip to Java
-					if (resumeStep === 2 && account && !account.is_expired) {
-						resumeStep = 3;
-						await invoke("set_setup_step", { step: 3 });
+					if (resumeStep === INIT_STEPS.LOGIN && hasValidAccount) {
+						resumeStep = INIT_STEPS.JAVA;
+						await invoke("set_setup_step", { step: INIT_STEPS.JAVA });
 					}
 
-					setInitStep(resumeStep);
+					await applyStep(resumeStep, {
+						replaceHistory: true,
+						persist: false,
+					});
 				}
 			} catch (e) {
 				console.error("Failed to initialize app state:", e);
@@ -67,29 +226,6 @@ function InitPage() {
 			}
 		}, 0);
 	});
-
-	const handleStepChange = async (nextStep: number) => {
-		let step = nextStep;
-
-		// If going to login step, check if already authenticated with valid session
-		if (step === 2 && !isLoginOnly()) {
-			const account = await invoke<any>("get_active_account");
-			if (account && !account.is_expired) {
-				if (nextStep < initStep()) {
-					// User is going back from Java or later, skip login backwards
-					step = 0;
-				} else {
-					// User is going forward, skip login forwards to Java
-					step = 3;
-				}
-			}
-		}
-
-		setInitStep(step);
-		if (!isLoginOnly()) {
-			await invoke("set_setup_step", { step: step });
-		}
-	};
 
 	//navigate("/home", { replace: true });
 
@@ -104,7 +240,9 @@ function InitPage() {
 	return (
 		<div
 			class={`${styles["init-page__root"]} ${
-				initStep() === 0 ? styles["init-page__root--welcome"] : ""
+				initStep() === INIT_STEPS.WELCOME
+					? styles["init-page__root--welcome"]
+					: ""
 			}`}
 			data-tauri-drag-region
 		>
@@ -126,62 +264,78 @@ function InitPage() {
 							{/* Add a spinner here if available */}
 						</div>
 					</Match>
-					<Match when={initStep() == 0}>
+					<Match when={initStep() === INIT_STEPS.WELCOME}>
 						<InitFirstPage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 						/>
 					</Match>
-					<Match when={initStep() == 1}>
+					<Match when={initStep() === INIT_STEPS.GUIDE}>
 						<InitGuidePage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 						/>
 					</Match>
-					<Match when={initStep() == 2}>
+					<Match when={initStep() === INIT_STEPS.LOGIN}>
 						<InitLoginPage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 							isLoginOnly={isLoginOnly()}
 							navigate={navigate}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 3}>
+					<Match when={initStep() === INIT_STEPS.JAVA}>
 						<InitJavaPage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 4}>
+					<Match when={initStep() === INIT_STEPS.APPEARANCE}>
 						<InitAppearancePage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 5}>
+					<Match when={initStep() === INIT_STEPS.DATA_STORAGE}>
 						<InitDataStoragePage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>
 					</Match>
-					<Match when={initStep() == 6}>
+					<Match when={initStep() === INIT_STEPS.INSTALLATION}>
 						<InitInstallationPage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 							onInstanceInstalled={() => {
 								setHasInstalledInstance(true);
-								handleStepChange(7);
+								void goToStep(INIT_STEPS.FINISHED);
 							}}
 						/>
 					</Match>
-					<Match when={initStep() == 7}>
+					<Match when={initStep() === INIT_STEPS.FINISHED}>
 						<InitFinishedPage
 							initStep={initStep()}
-							changeInitStep={handleStepChange}
+							goToStep={goToStep}
+							goNext={goNext}
+							goBack={goBack}
 							navigate={navigate}
 							hasInstalledInstance={hasInstalledInstance()}
 						/>

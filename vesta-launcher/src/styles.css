@@ -529,7 +529,7 @@ body {
 	}
 
 	/* Override #app background for light mode */
-	/* Note: When gradients are disabled, JS sets --background-color to var(--surface-base) */
+	/* Note: When gradients are disabled, JS sets --background-color to var(--app-background-tint) */
 	/* The gradient's transparent colors let Mica show through when enabled */
 	#app {
 		backdrop-filter: none;

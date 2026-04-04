@@ -102,11 +102,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	vars["--border-width-subtle"] = `${bdWidth}px`;
 	vars["--border-width-strong"] = `${bdWidth + 1}px`;
 
-	// When gradients are disabled, force a flat background to avoid residual tints
-	if (!theme.gradientEnabled) {
-		vars["--background-color"] = "var(--app-background-tint)";
-		vars["--background-image"] = "none";
-	}
+	// Gradient on/off background switching is handled in applyTheme() to avoid stale inline states.
 
 	// Advanced mode overrides
 	if (theme.primarySat !== undefined) {
