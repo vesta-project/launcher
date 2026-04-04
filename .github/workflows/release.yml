@@ -246,6 +246,7 @@ jobs:
           find target/${{ matrix.target }}/release/bundle/ -type f \( \
             -name "*.msi" -o \
             -name "*.msi.zip" -o \
+            -name "*.exe" -o \
             -name "*.dmg" -o \
             -name "*.deb" -o \
             -name "*.AppImage" -o \
@@ -280,6 +281,13 @@ jobs:
                   else
                     target_name="Vesta_Launcher_${VERSION}_x64.msi.zip"
                   fi
+                fi
+                ;;
+              exe)
+                if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
+                  target_name="Vesta_Launcher_${VERSION}_arm64-setup.exe"
+                else
+                  target_name="Vesta_Launcher_${VERSION}_x64-setup.exe"
                 fi
                 ;;
               dmg)
@@ -334,6 +342,7 @@ jobs:
           path: |
             target/${{ matrix.target }}/release/bundle/**/*.msi
             target/${{ matrix.target }}/release/bundle/**/*.msi.zip
+            target/${{ matrix.target }}/release/bundle/**/*.exe
             target/${{ matrix.target }}/release/bundle/**/*.dmg
             target/${{ matrix.target }}/release/bundle/**/*.deb
             target/${{ matrix.target }}/release/bundle/**/*.AppImage
@@ -386,51 +395,108 @@ jobs:
           PUB_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
           NOTES="Automatic release"
 
-          FILES=$(aws s3 ls s3://vesta-project/launcher/releases/$VERSION/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com | awk '{print $4}')
-          
-          # Use jq to safely construct the JSON object
+          FILES=$(aws s3api list-objects-v2 \
+            --bucket vesta-project \
+            --prefix "launcher/releases/$VERSION/" \
+            --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com \
+            --query 'Contents[].Key' \
+            --output json | jq -r --arg prefix "launcher/releases/$VERSION/" '(. // [])[] | sub("^" + $prefix; "")')
+
+          if [ -z "$FILES" ]; then
+            echo "Error: No artifacts found in R2 for version $VERSION"
+            exit 1
+          fi
+
+          echo "::group::R2 artifacts for $VERSION"
+          printf '%s\n' "$FILES" | sed '/^$/d' | sort
+          echo "::endgroup::"
+
           JSON_DATA="{}"
-          
-          for file in $FILES; do
-            if [[ "$file" == *.sig ]]; then continue; fi
 
-            PLATFORM=""
-            IS_INSTALLER=false
-            
-            case "$file" in
-              # Web Installers (IS_INSTALLER=true)
-              Vesta_Launcher_${VERSION}_x64.msi) PLATFORM="windows-x86_64"; IS_INSTALLER=true ;;
-              Vesta_Launcher_${VERSION}_arm64.msi) PLATFORM="windows-aarch64"; IS_INSTALLER=true ;;
-              Vesta_Launcher_${VERSION}_x64.dmg) PLATFORM="darwin-x86_64"; IS_INSTALLER=true ;;
-              Vesta_Launcher_${VERSION}_aarch64.dmg) PLATFORM="darwin-aarch64"; IS_INSTALLER=true ;;
-              vesta-launcher_${VERSION}_arm64.deb) PLATFORM="linux-aarch64"; IS_INSTALLER=true ;;
-              vesta-launcher_${VERSION}_amd64.deb) PLATFORM="linux-x86_64"; IS_INSTALLER=true ;;
+          file_exists() {
+            local needle="$1"
+            printf '%s\n' "$FILES" | grep -Fxq "$needle"
+          }
 
-              # Updater Artifacts (IS_INSTALLER=false)
-              Vesta_Launcher_${VERSION}_x64.msi.zip) PLATFORM="windows-x86_64"; IS_INSTALLER=false ;;
-              Vesta_Launcher_${VERSION}_arm64.msi.zip) PLATFORM="windows-aarch64"; IS_INSTALLER=false ;;
-              Vesta_Launcher_${VERSION}_x64.app.tar.gz) PLATFORM="darwin-x86_64"; IS_INSTALLER=false ;;
-              Vesta_Launcher_${VERSION}_aarch64.app.tar.gz) PLATFORM="darwin-aarch64"; IS_INSTALLER=false ;;
-              Vesta_Launcher_${VERSION}_x86_64.AppImage) PLATFORM="linux-x86_64"; IS_INSTALLER=false ;;
-              Vesta_Launcher_${VERSION}_aarch64.AppImage) PLATFORM="linux-aarch64"; IS_INSTALLER=false ;;
-            esac
+          read_signature() {
+            local artifact="$1"
+            local sig_file="${artifact}.sig"
+            local signature_raw
+            signature_raw=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$sig_file" - --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com 2>/dev/null || true)
 
-            if [ -n "$PLATFORM" ] && [ "$IS_INSTALLER" = false ]; then
-              SIG_FILE="$file.sig"
-              SIGNATURE_RAW=$(aws s3 cp "s3://vesta-project/launcher/releases/$VERSION/$SIG_FILE" - --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com 2>/dev/null || echo "")
-              
-              if echo "$SIGNATURE_RAW" | grep -q "untrusted comment"; then
-                SIGNATURE=$(echo "$SIGNATURE_RAW" | sed -n '2p')
-              else
-                SIGNATURE="$SIGNATURE_RAW"
-              fi
-              
-              JSON_DATA=$(echo "$JSON_DATA" | jq --arg plat "$PLATFORM" \
-                --arg url "https://r2.vestalauncher.com/launcher/releases/$VERSION/$file" \
-                --arg sig "$SIGNATURE" \
-                '.[$plat] = {"url": $url, "signature": $sig}')
+            if [ -z "$signature_raw" ]; then
+              echo ""
+              return
             fi
-          done
+
+            if echo "$signature_raw" | grep -q "untrusted comment"; then
+              echo "$signature_raw" | sed -n '2p'
+            else
+              echo "$signature_raw"
+            fi
+          }
+
+          add_platform() {
+            local platform="$1"
+            shift
+            local candidate
+            local signature
+
+            for candidate in "$@"; do
+              if ! file_exists "$candidate"; then
+                continue
+              fi
+
+              signature=$(read_signature "$candidate")
+              if [ -z "$signature" ]; then
+                echo "Skipping $candidate for $platform because signature is missing or empty"
+                continue
+              fi
+
+              echo "Selected $platform => $candidate"
+              JSON_DATA=$(echo "$JSON_DATA" | jq --arg plat "$platform" \
+                --arg url "https://r2.vestalauncher.com/launcher/releases/$VERSION/$candidate" \
+                --arg sig "$signature" \
+                '.[$plat] = {"url": $url, "signature": $sig}')
+              return
+            done
+
+            echo "No signed artifact found for $platform"
+          }
+
+          # Windows: default MSI, then MSI.ZIP, then setup EXE fallback.
+          add_platform "windows-x86_64" \
+            "Vesta_Launcher_${VERSION}_x64.msi" \
+            "Vesta_Launcher_${VERSION}_x64.msi.zip" \
+            "Vesta_Launcher_${VERSION}_x64-setup.exe" \
+            "Vesta Launcher_${VERSION}_x64-setup.exe"
+          add_platform "windows-aarch64" \
+            "Vesta_Launcher_${VERSION}_arm64.msi" \
+            "Vesta_Launcher_${VERSION}_arm64.msi.zip" \
+            "Vesta_Launcher_${VERSION}_arm64-setup.exe" \
+            "Vesta_Launcher_${VERSION}_aarch64-setup.exe" \
+            "Vesta Launcher_${VERSION}_arm64-setup.exe"
+
+          # Keep existing updater artifact preferences for macOS and Linux.
+          add_platform "darwin-x86_64" "Vesta_Launcher_${VERSION}_x64.app.tar.gz"
+          add_platform "darwin-aarch64" "Vesta_Launcher_${VERSION}_aarch64.app.tar.gz"
+          add_platform "linux-x86_64" "Vesta_Launcher_${VERSION}_x86_64.AppImage"
+          add_platform "linux-aarch64" "Vesta_Launcher_${VERSION}_aarch64.AppImage"
+
+          WINDOWS_EXPECTED=false
+          if [ "${{ github.event_name }}" = "push" ]; then
+            WINDOWS_EXPECTED=true
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.build_windows }}" = "true" ]; then
+            WINDOWS_EXPECTED=true
+          fi
+
+          if [ "$WINDOWS_EXPECTED" = "true" ]; then
+            if ! echo "$JSON_DATA" | jq -e 'has("windows-x86_64") and has("windows-aarch64")' > /dev/null; then
+              echo "Error: Missing Windows platform entries in latest.json while Windows builds are enabled"
+              echo "$JSON_DATA" | jq .
+              exit 1
+            fi
+          fi
 
           jq -n \
             --arg v "$VERSION" \
