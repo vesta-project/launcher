@@ -140,7 +140,7 @@ export function applyTheme(theme: ThemeConfig): void {
 	} else {
 		root.setAttribute("data-gradient", "0");
 		// Force solid background
-		style.setProperty("--background-color", "var(--surface-base)");
+		style.setProperty("--background-color", "var(--app-background-tint)");
 	}
 
 	// Apply style mode attribute

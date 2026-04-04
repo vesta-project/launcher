@@ -100,65 +100,65 @@ export const PRESET_THEMES: ThemeConfig[] = [
 		allowStyleChange: false,
 		allowBorderChange: false,
 	},
-	{
-		id: "prism",
-		name: "Prism",
-		description: "Technicolor glass with reactive variables",
-		author: "Vesta Team",
-		primaryHue: 200,
-		opacity: 20,
-		borderWidth: 1,
-		style: "glass",
-		gradientEnabled: true,
-		rotation: 45,
-		gradientType: "linear",
-		gradientHarmony: "triadic",
-		allowHueChange: true,
-		allowStyleChange: false,
-		allowBorderChange: false,
-		variables: [
-			{
-				name: "Glow Intensity",
-				key: "glow-intensity",
-				type: "number",
-				min: 0,
-				max: 100,
-				default: 50,
-				unit: "%",
-			},
-			{
-				name: "Glass Blur",
-				key: "glass-blur",
-				type: "number",
-				min: 0,
-				max: 40,
-				default: 12,
-				unit: "px",
-			},
-			{
-				name: "Edge Sharpness",
-				key: "edge-sharpness",
-				type: "number",
-				min: 0,
-				max: 100,
-				default: 50,
-				unit: "%",
-			},
-		],
-		customCss: `
-            :root {
-                --effect-glow-strength: calc(var(--theme-var-glow-intensity) / 100);
-                --glass-blur-radius: calc(var(--theme-var-glass-blur) * 1px);
-                --border-opacity: calc(var(--theme-var-edge-sharpness) / 100);
+	// {
+	// 	id: "prism",
+	// 	name: "Prism",
+	// 	description: "Technicolor glass with reactive variables",
+	// 	author: "Vesta Team",
+	// 	primaryHue: 200,
+	// 	opacity: 20,
+	// 	borderWidth: 1,
+	// 	style: "glass",
+	// 	gradientEnabled: true,
+	// 	rotation: 45,
+	// 	gradientType: "linear",
+	// 	gradientHarmony: "triadic",
+	// 	allowHueChange: true,
+	// 	allowStyleChange: false,
+	// 	allowBorderChange: false,
+	// 	variables: [
+	// 		{
+	// 			name: "Glow Intensity",
+	// 			key: "glow-intensity",
+	// 			type: "number",
+	// 			min: 0,
+	// 			max: 100,
+	// 			default: 50,
+	// 			unit: "%",
+	// 		},
+	// 		{
+	// 			name: "Glass Blur",
+	// 			key: "glass-blur",
+	// 			type: "number",
+	// 			min: 0,
+	// 			max: 40,
+	// 			default: 12,
+	// 			unit: "px",
+	// 		},
+	// 		{
+	// 			name: "Edge Sharpness",
+	// 			key: "edge-sharpness",
+	// 			type: "number",
+	// 			min: 0,
+	// 			max: 100,
+	// 			default: 50,
+	// 			unit: "%",
+	// 		},
+	// 	],
+	// 	customCss: `
+	//         :root {
+	//             --effect-glow-strength: calc(var(--theme-var-glow-intensity) / 100);
+	//             --glass-blur-radius: calc(var(--theme-var-glass-blur) * 1px);
+	//             --border-opacity: calc(var(--theme-var-edge-sharpness) / 100);
 
-                --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
-                --effect-blur: var(--glass-blur-radius);
-                --effect-shadow: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
-                --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
-                --background-opacity: 0.15;
-            }
-        `,
-	},
+	//             --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
+	//             --effect-blur: var(--glass-blur-radius);
+	//             --effect-shadow: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
+	//             --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
+	//             --background-opacity: 0.15;
+	//         }
+	//     `,
+	// },
 	{
 		id: "midnight",
 		name: "Midnight",

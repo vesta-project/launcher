@@ -74,8 +74,7 @@
 	);
 
 	--app-background-tint: hsl(
-		var(--color__primary-hue) 10% var(--lightness-surface-base) /
-		var(--background-opacity)
+		var(--color__primary-hue) 10% var(--lightness-surface-base)
 	);
 
 	/* Borders */
@@ -347,7 +346,12 @@
 	background-attachment: scroll;
 }
 
-:root:not([data-window-effect="none"]):not([data-window-effect=""]) body {
+:root[data-window-effect="transparent"] body,
+:root[data-window-effect="mica"] body,
+:root[data-window-effect="acrylic"] body,
+:root[data-window-effect="blur"] body,
+:root[data-window-effect="vibrancy"] body,
+:root[data-window-effect="liquid_glass"] body {
 	background: transparent !important;
 }
 
@@ -355,6 +359,7 @@ body {
 	position: fixed;
 	width: 100%;
 	height: 100%;
+	background: var(--app-background-tint);
 	overflow: hidden;
 }
 
@@ -792,9 +797,15 @@ button {
 	cursor: text;
 }
 
-/* Let OS Window Effects show through by making the base app background transparent */
-:root:not([data-window-effect="none"]):not([data-window-effect=""]) #app {
+/* OS effects can fully expose the native material behind the webview */
+:root[data-window-effect="transparent"] #app,
+:root[data-window-effect="mica"] #app,
+:root[data-window-effect="acrylic"] #app,
+:root[data-window-effect="blur"] #app,
+:root[data-window-effect="vibrancy"] #app,
+:root[data-window-effect="liquid_glass"] #app {
 	background-color: transparent !important;
+	background-image: var(--background-image) !important;
 }
 
 /* Ensure 'none' effect on macOS results in a solid surface rather than transparency */

@@ -104,7 +104,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 
 	// When gradients are disabled, force a flat background to avoid residual tints
 	if (!theme.gradientEnabled) {
-		vars["--background-color"] = "var(--surface-base)";
+		vars["--background-color"] = "var(--app-background-tint)";
 		vars["--background-image"] = "none";
 	}
 
