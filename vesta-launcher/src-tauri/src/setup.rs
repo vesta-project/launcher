@@ -9,10 +9,6 @@ use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::Manager;
-#[cfg(target_os = "windows")]
-use winver::WindowsVersion;
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -799,13 +795,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let _main_win = win_builder.build()?;
 
-    crate::commands::app::set_window_effect(_main_win.clone(), crate::utils::config::get_app_config().unwrap_or_default().theme_window_effect.clone().unwrap_or_else(|| {
-        if cfg!(target_os = "windows") {
-            "mica".to_string()
-        } else {
-            "vibrancy".to_string()
-        }
-    })).unwrap_or(());
+    let effect = crate::utils::config::get_app_config()
+        .unwrap_or_default()
+        .theme_window_effect
+        .clone()
+        .unwrap_or_else(crate::utils::window_effects::default_window_effect);
+
+    crate::commands::app::set_window_effect(_main_win.clone(), effect).unwrap_or(());
 
     // Setup sniffer window immediately
     // Temporarily disabled file drop sniffer

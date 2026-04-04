@@ -1,10 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
 use tauri::Manager;
-#[cfg(target_os = "windows")]
-use winver::WindowsVersion;
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 static WINDOW_ID: Mutex<i32> = Mutex::new(0);
 
@@ -66,13 +62,7 @@ pub async fn launch_window(
         .unwrap_or_default()
         .theme_window_effect
         .clone()
-        .unwrap_or_else(|| {
-            if cfg!(target_os = "windows") {
-                "mica".to_string()
-            } else {
-                "vibrancy".to_string()
-            }
-        });
+        .unwrap_or_else(crate::utils::window_effects::default_window_effect);
 
     crate::commands::app::set_window_effect(win.clone(), effect).unwrap_or(());
 

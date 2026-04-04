@@ -1,21 +1,23 @@
 export { PRESET_THEMES } from "./presets/builtin";
+
+import { parseThemeData } from "./engine/parser";
+import { getDefaultTheme, validateTheme } from "./engine/validation";
 import { PRESET_THEMES } from "./presets/builtin";
-export type {
-	AppThemeConfig,
-	GradientHarmony,
-	ThemeConfig,
-	StyleMode,
-	ThemeVariableValue,
-	ThemeVariable,
-	ThemeVariableType,
-	ThemeDataPayload,
-} from "./types";
 import type {
 	AppThemeConfig,
 	ThemeConfig,
 } from "./types";
-import { parseThemeData } from "./engine/parser";
-import { validateTheme, getDefaultTheme, isBuiltinThemeId } from "./engine/validation";
+
+export type {
+	AppThemeConfig,
+	GradientHarmony,
+	StyleMode,
+	ThemeConfig,
+	ThemeDataPayload,
+	ThemeVariable,
+	ThemeVariableType,
+	ThemeVariableValue
+} from "./types";
 
 /**
  * Vesta Launcher Theme System - Theme Management
@@ -120,10 +122,14 @@ export function getThemeById(id: string): ThemeConfig | undefined {
 	);
 }
 
+export { applyTheme } from "./engine/applier";
+export {
+	getSupportedWindowEffects,
+	loadWindowEffectCapabilities,
+	normalizeWindowEffectForCurrentOS
+} from "./engine/effects";
 // Re-export common engine functions for convenience
 export { parseThemeData, serializeThemeData } from "./engine/parser";
-export { validateTheme, getDefaultTheme, isBuiltinThemeId } from "./engine/validation";
-export { applyTheme } from "./engine/applier";
 export { themeToCSSVars } from "./engine/themeToCSSVars";
-export { getSupportedWindowEffects, normalizeWindowEffectForCurrentOS } from "./engine/effects";
+export { getDefaultTheme, isBuiltinThemeId, validateTheme } from "./engine/validation";
 

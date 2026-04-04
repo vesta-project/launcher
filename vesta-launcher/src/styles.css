@@ -347,15 +347,8 @@
 	background-attachment: scroll;
 }
 
-:root[data-os="macos"][data-window-effect="none"] #app,
-:root[data-os="macos"][data-window-effect=""] #app {
-	/* Set a solid background behind the gradient purely for macOS 'none' mode */
-	background-color: hsl(
-		var(--color__primary-hue) 5% var(--lightness-surface-sunken)
-	) !important;
-}
 
-:root[data-os="macos"] body {
+:root:not([data-window-effect="none"]):not([data-window-effect=""]) body {
 	background: transparent !important;
 }
 

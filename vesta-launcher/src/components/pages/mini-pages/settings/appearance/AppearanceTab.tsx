@@ -174,6 +174,8 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 		switch (effect) {
 			case "none":
 				return "None";
+			case "transparent":
+				return "Transparent";
 			case "vibrancy":
 				return "Vibrancy";
 			case "liquid_glass":

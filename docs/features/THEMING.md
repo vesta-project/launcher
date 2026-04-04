@@ -200,11 +200,43 @@ Rejected CSS resolves to an empty string.
 
 ## Window Effects
 
-The requested effect is normalized against current OS support:
+Window effects are now runtime-gated in backend using OS + OS version detection.
 
-- macOS: `none`, `vibrancy`, `liquid_glass`
-- Windows: `none`, `mica`, `acrylic`, `blur`
-- fallback platforms: `none`
+The frontend requests capabilities from `get_window_effect_capabilities`, and settings only render effects returned by backend.
+
+### Supported effects by platform
+
+- Windows:
+	- `none` (all supported Windows versions)
+	- `transparent` (all supported Windows versions)
+	- `blur` (Windows 7/10/11)
+	- `acrylic` (Windows 10/11)
+	- `mica` (Windows 11 only; hidden on Windows 10)
+- macOS:
+	- `none`
+	- `transparent`
+	- `vibrancy`
+	- `liquid_glass` (macOS 26+ only; hidden on older macOS)
+- Linux and other platforms:
+	- `none`
+	- `transparent`
+
+### Fallback and safety behavior
+
+- If unsupported effect is requested (stale config, imported theme, or manual payload), backend coerces it to `none`.
+- Backend emits a warning notification (`Immediate`, non-persistent) describing the fallback.
+- Theme import normalization uses the same runtime capability logic as live application.
+- Startup and additional windows choose a capability-aware default effect:
+	- Windows 11 prefers `mica`
+	- Windows 10 prefers `acrylic`
+	- macOS prefers `vibrancy`
+	- Other platforms default to `none`
+
+### Transparent effect semantics
+
+- `transparent` is cross-platform and does not apply vibrancy/mica/acrylic APIs.
+- Backend clears native effects and leaves transparency behavior to window transparency + CSS layering.
+- When effect is not `none`, body background is transparent so native effect/transparency can show through.
 
 OS hint source order:
 
@@ -238,3 +270,5 @@ Theme application sets or updates:
 - `vesta-launcher/src/themes/*`
 - `vesta-launcher/src/themes/engine/*`
 - `vesta-launcher/src-tauri/src/utils/config/mod.rs`
+- `vesta-launcher/src-tauri/src/utils/window_effects.rs`
+- `vesta-launcher/src-tauri/src/commands/app.rs`

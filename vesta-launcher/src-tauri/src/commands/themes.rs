@@ -263,23 +263,10 @@ fn normalize_window_effect_for_platform(effect: Option<String>) -> (Option<Strin
         return (None, false);
     }
 
-    #[cfg(target_os = "macos")]
-    let is_supported = matches!(
-        normalized.as_str(),
-        "none" | "vibrancy" | "liquid_glass"
-    );
-
-    #[cfg(target_os = "windows")]
-    let is_supported = matches!(normalized.as_str(), "none" | "mica" | "acrylic" | "blur");
-
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    let is_supported = matches!(normalized.as_str(), "none");
-
-    if is_supported {
-        (Some(normalized), false)
-    } else {
-        (Some("none".to_string()), true)
-    }
+    let capabilities = crate::utils::window_effects::get_window_effect_capabilities();
+    let (effect, coerced) =
+        crate::utils::window_effects::normalize_window_effect(normalized.as_str(), &capabilities);
+    (Some(effect), coerced)
 }
 
 fn normalize_import_payload(source: Value) -> Result<(ThemeLibraryTheme, Vec<String>), String> {

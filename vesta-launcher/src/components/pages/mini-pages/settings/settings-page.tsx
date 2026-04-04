@@ -1,6 +1,6 @@
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
-import { SettingsCard, SettingsField } from "@components/settings";
+import { router } from "@components/page-viewer/page-viewer";
+import { SettingsCard } from "@components/settings";
 import { dialogStore } from "@stores/dialog-store";
 import {
 	cacheSize,
@@ -17,35 +17,7 @@ import {
 	open as openDialog,
 	save as saveDialog,
 } from "@tauri-apps/plugin-dialog";
-import { Badge } from "@ui/badge";
 import LauncherButton from "@ui/button/button";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from "@ui/context-menu/context-menu";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import {
-	NumberField,
-	NumberFieldDecrementTrigger,
-	NumberFieldGroup,
-	NumberFieldIncrementTrigger,
-	NumberFieldInput,
-} from "@ui/number-field/number-field";
-import { Separator } from "@ui/separator/separator";
-import {
-	Slider,
-	SliderFill,
-	SliderThumb,
-	SliderTrack,
-} from "@ui/slider/slider";
-import {
-	Switch,
-	SwitchControl,
-	SwitchLabel,
-	SwitchThumb,
-} from "@ui/switch/switch";
 import {
 	Tabs,
 	TabsContent,
@@ -54,46 +26,40 @@ import {
 	TabsTrigger,
 } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { getActiveAccount } from "@utils/auth";
 import {
 	currentThemeConfig,
 	onConfigUpdate,
 	saveThemeUpdate as persistThemeUpdate,
 } from "@utils/config-sync";
-import { openExternal } from "@utils/external-link";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { startAppTutorial } from "@utils/tutorial";
-import { checkForAppUpdates, simulateUpdateProcess } from "@utils/updater";
 import {
 	batch,
 	createEffect,
 	createMemo,
 	createResource,
 	createSignal,
-	For,
-	lazy,
 	onCleanup,
 	onMount,
 	Show,
 	Suspense,
-	untrack,
+	untrack
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import {
 	applyTheme,
-	type GradientHarmony,
 	getAllThemes,
 	getSupportedWindowEffects,
 	getThemeById,
+	type GradientHarmony,
 	isBuiltinThemeId,
+	loadWindowEffectCapabilities,
 	normalizeWindowEffectForCurrentOS,
-	PRESET_THEMES,
 	parseThemeData,
+	PRESET_THEMES,
 	removeCustomTheme,
-	type StyleMode,
 	setCustomThemes,
+	type StyleMode,
 	type ThemeConfig,
 	type ThemeVariableValue,
 	upsertCustomTheme,
@@ -105,7 +71,7 @@ import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
 import { DeveloperSettingsTab } from "./developer/DeveloperTab";
 import { GeneralSettingsTab } from "./general/GeneralTab";
 import { HelpSettingsTab } from "./help/HelpTab";
-import { type JavaOption, JavaOptionCard } from "./java/JavaOptionCard";
+import { type JavaOption } from "./java/JavaOptionCard";
 import { JavaSettingsTab } from "./java/JavaTab";
 import { NotificationSettingsTab } from "./notifications/NotificationsTab";
 import styles from "./settings-page.module.css";
@@ -283,7 +249,12 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		currentThemeConfig.theme_background_opacity ?? 12,
 	);
 	const [windowEffect, setWindowEffect] = createSignal(
-		currentThemeConfig.theme_window_effect || "vibrancy",
+		normalizeWindowEffectForCurrentOS(
+			currentThemeConfig.theme_window_effect || "none",
+		),
+	);
+	const [windowEffectOptions, setWindowEffectOptions] = createSignal<string[]>(
+		getSupportedWindowEffects(),
 	);
 	const [userVariables, setUserVariables] = createStore<
 		Record<string, ThemeVariableValue>
@@ -598,6 +569,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		onCleanup(() => window.removeEventListener("resize", handleResize));
 
 		await refreshThemeCatalog();
+		const capabilities = await loadWindowEffectCapabilities();
+		if (capabilities?.supportedEffects?.length) {
+			setWindowEffectOptions(capabilities.supportedEffects);
+			setWindowEffect((current) => normalizeWindowEffectForCurrentOS(current));
+		}
 
 		if (hasTauriRuntime()) {
 			let unlisten: (() => void) | undefined;
@@ -1594,7 +1570,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								backgroundOpacity={backgroundOpacity()}
 								handleBackgroundOpacityChange={handleBackgroundOpacityChange}
 								windowEffect={windowEffect()}
-								windowEffectOptions={getSupportedWindowEffects()}
+								windowEffectOptions={windowEffectOptions()}
 								handleWindowEffectChange={handleWindowEffectChange}
 								handleImportTheme={handleImportTheme}
 								handleExportTheme={handleExportTheme}

@@ -1,5 +1,7 @@
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
+use crate::notifications::manager::NotificationManager;
+use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use tauri::Manager;
 
 #[tauri::command]
@@ -489,14 +491,67 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
 
 
 #[tauri::command]
+pub fn get_window_effect_capabilities() -> crate::utils::window_effects::WindowEffectCapabilities {
+    crate::utils::window_effects::get_window_effect_capabilities()
+}
+
+fn notify_unsupported_window_effect(
+    app_handle: &tauri::AppHandle,
+    requested_effect: &str,
+    active_effect: &str,
+    os: &str,
+    os_version: Option<&str>,
+) {
+    let manager = app_handle.state::<NotificationManager>();
+    let version_suffix = os_version
+        .map(|value| format!(" ({})", value))
+        .unwrap_or_default();
+
+    let _ = manager.create(CreateNotificationInput {
+        client_key: Some(format!("window_effect_unsupported_{}_{}", os, requested_effect)),
+        title: Some("Window effect unavailable on this OS".to_string()),
+        description: Some(format!(
+            "The '{}' window effect is not supported on {}{}. Falling back to '{}'.",
+            requested_effect, os, version_suffix, active_effect
+        )),
+        severity: Some("warning".to_string()),
+        notification_type: Some(NotificationType::Immediate),
+        dismissible: Some(true),
+        persist: Some(false),
+        silent: Some(false),
+        progress: None,
+        current_step: None,
+        total_steps: None,
+        actions: None,
+        metadata: None,
+        show_on_completion: None,
+    });
+}
+
+#[tauri::command]
 pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result<(), String> {
+    let app_handle = window.app_handle();
+    let capabilities = crate::utils::window_effects::get_window_effect_capabilities();
+    let (active_effect, was_coerced) =
+        crate::utils::window_effects::normalize_window_effect(&effect, &capabilities);
+
+    if was_coerced {
+        notify_unsupported_window_effect(
+            &app_handle,
+            effect.as_str(),
+            active_effect.as_str(),
+            capabilities.os.as_str(),
+            capabilities.os_version.as_deref(),
+        );
+    }
+
     #[cfg(target_os = "windows")]
     {
         use window_vibrancy::{apply_blur, apply_acrylic, apply_mica, clear_blur, clear_acrylic, clear_mica};
         let _ = clear_blur(&window);
         let _ = clear_acrylic(&window);
         let _ = clear_mica(&window);
-        match effect.as_str() {
+        match active_effect.as_str() {
             "blur" => { let _ = apply_blur(&window, Some((18, 18, 18, 125))); },
             "acrylic" => { let _ = apply_acrylic(&window, Some((18, 18, 18, 125))); },
             "mica" => { let _ = apply_mica(&window, Some(true)); },
@@ -509,21 +564,9 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
         use window_vibrancy::{apply_vibrancy, clear_vibrancy, NSVisualEffectMaterial, apply_liquid_glass, clear_liquid_glass, NSGlassEffectViewStyle};
         let _ = clear_vibrancy(&window);
         let _ = clear_liquid_glass(&window);
-        
-        let mut radius = 10.0;
-        if let Ok(output) = std::process::Command::new("sw_vers").arg("-productVersion").output() {
-            if let Ok(version) = String::from_utf8(output.stdout) {
-                if let Some(major) = version.split('.').next() {
-                    if let Ok(major_num) = major.parse::<i32>() {
-                        if major_num >= 26 || major_num >= 15 {
-                            radius = 16.0;
-                        }
-                    }
-                }
-            }
-        }
-        
-        match effect.as_str() {
+        let radius = if active_effect.as_str() == "liquid_glass" { 16.0 } else { 10.0 };
+
+        match active_effect.as_str() {
             "vibrancy" => { let _ = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(radius)); },
             "liquid_glass" => { let _ = apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(radius)); },
             _ => {}
