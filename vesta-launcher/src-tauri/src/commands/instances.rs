@@ -914,15 +914,16 @@ pub async fn delete_instance(
 }
 
 #[tauri::command]
-pub fn get_instance_required_java(instance_id: i32) -> Result<u32, String> {
+pub async fn get_instance_required_java(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+) -> Result<u32, String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let inst = instance
         .find(instance_id)
         .first::<Instance>(&mut conn)
         .map_err(|e| e.to_string())?;
-    Ok(crate::utils::java::get_required_java_for_version(
-        &inst.minecraft_version,
-    ))
+    crate::utils::java::resolve_required_java_major(&app_handle, &inst.minecraft_version).await
 }
 
 #[tauri::command]
@@ -1011,10 +1012,12 @@ pub async fn launch_instance(
             if !path.is_empty() {
                 path
             } else {
-                self::resolve_java_path_for_version(&instance_data.minecraft_version)
+                self::resolve_java_path_for_version(&app_handle, &instance_data.minecraft_version)
+                    .await?
             }
         } else {
-            self::resolve_java_path_for_version(&instance_data.minecraft_version)
+            self::resolve_java_path_for_version(&app_handle, &instance_data.minecraft_version)
+                .await?
         }
     };
 
@@ -1570,29 +1573,12 @@ pub async fn is_instance_running(instance_data: Instance) -> Result<bool, String
 pub async fn get_minecraft_versions(
     app_handle: tauri::AppHandle,
 ) -> Result<piston_lib::game::metadata::PistonMetadata, String> {
-    if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
-        if let Some(meta) = cache.get() {
-            return Ok(meta);
-        }
+    if let Some(metadata) = crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?
+    {
+        return Ok(metadata);
     }
 
-    let data_dir = crate::utils::db_manager::get_app_config_dir()
-        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-
-    let start = std::time::Instant::now();
-    let metadata_res = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir).await;
-
-    if let Some(nm) = app_handle.try_state::<crate::utils::network::NetworkManager>() {
-        nm.report_request_result(start.elapsed().as_millis(), metadata_res.is_ok());
-    }
-
-    let metadata = metadata_res.map_err(|e| e.to_string())?;
-
-    if let Some(cache) = app_handle.try_state::<crate::metadata_cache::MetadataCache>() {
-        cache.set(&metadata);
-    }
-
-    Ok(metadata)
+    Err("MANIFEST_NOT_READY".to_string())
 }
 
 #[tauri::command]
@@ -1926,8 +1912,12 @@ pub async fn update_instance_modpack_version(
     Ok(())
 }
 
-fn resolve_java_path_for_version(mc_version: &str) -> String {
-    let required_major = crate::utils::java::get_required_java_for_version(mc_version);
+async fn resolve_java_path_for_version(
+    app_handle: &tauri::AppHandle,
+    mc_version: &str,
+) -> Result<String, String> {
+    let required_major = crate::utils::java::resolve_required_java_major(app_handle, mc_version)
+        .await?;
 
     let global_path = (|| -> Option<String> {
         use crate::schema::config::global_java_paths::dsl::*;
@@ -1940,7 +1930,7 @@ fn resolve_java_path_for_version(mc_version: &str) -> String {
             .ok()
     })();
 
-    global_path.unwrap_or_else(|| {
+    Ok(global_path.unwrap_or_else(|| {
         // Try to find java in PATH
         #[cfg(windows)]
         let default_java = "java.exe";
@@ -1951,5 +1941,5 @@ fn resolve_java_path_for_version(mc_version: &str) -> String {
             .ok()
             .and_then(|p| p.to_str().map(|s| s.to_string()))
             .unwrap_or_else(|| default_java.to_string())
-    })
+    }))
 }

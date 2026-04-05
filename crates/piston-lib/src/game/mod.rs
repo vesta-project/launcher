@@ -1,4 +1,5 @@
 pub mod installer;
+pub mod java_policy;
 pub mod launcher;
 pub mod metadata;
 pub mod modpack;

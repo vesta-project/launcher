@@ -1,6 +1,7 @@
 use super::types::*;
+use crate::game::java_policy::{preferred_java_major, LEGACY_JAVA_MAJOR};
 use anyhow::{Context, Result};
-use chrono::Utc;
+use chrono::{Datelike, Utc};
 use std::collections::{HashMap, HashSet};
 
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -12,6 +13,10 @@ const NEOFORGE_API_VERSIONS: &str = "https://maven.neoforged.net/api/maven/versi
 const NEOFORGE_API_FALLBACK_VERSIONS: &str =
     "https://maven.creeperhost.net/api/maven/versions/releases/";
 const NEOFORGE_GAV: &str = "net/neoforged/neoforge";
+const JAVA_RUNTIME_ALL_URL: &str =
+    "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+const JAVA_METADATA_REQUIRED_YEAR: i32 = 2014;
+const FALLBACK_RUNTIME_JAVA_MAJORS: [u32; 4] = [25, 21, 17, LEGACY_JAVA_MAJOR];
 
 #[derive(Debug, serde::Deserialize)]
 struct VersionStruct {
@@ -46,16 +51,22 @@ struct ForgeVersionList {
     version: Vec<String>,
 }
 
+#[derive(Debug, serde::Deserialize)]
+struct RuntimeAllJavaEntry {
+    version: RuntimeVersionInfo,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RuntimeVersionInfo {
+    name: String,
+}
+
 /// Fetch and build complete PistonMetadata
 pub async fn fetch_metadata() -> Result<PistonMetadata> {
     log::info!("Fetching PistonMetadata from all sources...");
 
     // Create HTTP client with timeout and user-agent that mimics a browser to avoid blocking
-    let http_client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 VestaLauncher/1.0")
-        .build()
-        .context("Failed to create HTTP client")?;
+    let http_client = build_http_client()?;
 
     // Fetch Mojang vanilla versions (required - fail fast if this fails)
     log::info!("Vanilla");
@@ -118,54 +129,19 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
             release: mojang_manifest.latest.release.clone(),
             snapshot: mojang_manifest.latest.snapshot.clone(),
         },
-        required_java_major_versions: Vec::new(),
+        required_java_major_versions: fetch_runtime_java_majors(&http_client)
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!(
+                    "Failed to fetch Java runtimes from launchermeta: {}. Using fallback majors {:?}",
+                    e,
+                    FALLBACK_RUNTIME_JAVA_MAJORS
+                );
+                FALLBACK_RUNTIME_JAVA_MAJORS.to_vec()
+            }),
+        // Per-version Java majors are resolved lazily when needed (install/launch paths).
+        java_major_version_by_game_version: HashMap::new(),
     };
-
-    // Detect required Java versions from latest releases/snapshots
-    let mut detected_javas = std::collections::BTreeSet::new();
-    
-    // Always include Java 8 and 17 as baseline for legacy/modding
-    detected_javas.insert(8);
-    detected_javas.insert(17);
-
-    // Fetch Java requirements for latest release and snapshot
-    let latest_release_url = mojang_manifest.versions.iter()
-        .find(|v| v.id == mojang_manifest.latest.release)
-        .map(|v| v.url.clone());
-    
-    let latest_snapshot_url = mojang_manifest.versions.iter()
-        .find(|v| v.id == mojang_manifest.latest.snapshot)
-        .map(|v| v.url.clone());
-
-    // Parallelize Java version detection
-    let java_release_fut = async {
-        if let Some(url) = latest_release_url {
-            if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
-                return detail.java_version.map(|jv| jv.major_version);
-            }
-        }
-        None
-    };
-
-    let java_snapshot_fut = async {
-        if let Some(url) = latest_snapshot_url {
-            if let Ok(detail) = fetch_version_detail(&http_client, &url).await {
-                return detail.java_version.map(|jv| jv.major_version);
-            }
-        }
-        None
-    };
-
-    let (java_release, java_snapshot) = tokio::join!(java_release_fut, java_snapshot_fut);
-
-    if let Some(jv) = java_release {
-        detected_javas.insert(jv);
-    }
-    if let Some(jv) = java_snapshot {
-        detected_javas.insert(jv);
-    }
-
-    metadata.required_java_major_versions = detected_javas.into_iter().rev().collect();
 
     // Sort versions and loaders correctly
     metadata.sort_all_versions();
@@ -181,6 +157,147 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
     );
 
     Ok(metadata)
+}
+
+/// Fetch Java major version for a single Minecraft version directly from Mojang metadata.
+/// Falls back to Java 8 for legacy/pre-metadata versions when javaVersion is absent.
+pub async fn fetch_java_major_for_version(version_id: &str) -> Result<u32> {
+    let client = build_http_client()?;
+    let manifest = fetch_mojang_manifest_with_client(&client).await?;
+
+    let version = manifest
+        .versions
+        .iter()
+        .find(|v| v.id == version_id)
+        .context(format!("Minecraft version '{}' not found in Mojang manifest", version_id))?;
+
+    let detail = fetch_version_detail(&client, &version.url).await?;
+    java_major_from_version_detail(
+        &version.id,
+        &version.version_type,
+        &version.release_time,
+        detail.java_version,
+    )
+}
+
+/// Fetch only latest release/snapshot identifiers from Mojang manifest.
+pub async fn fetch_latest_versions() -> Result<LatestVersions> {
+    let client = build_http_client()?;
+    let manifest = fetch_mojang_manifest_with_client(&client).await?;
+    Ok(LatestVersions {
+        release: manifest.latest.release,
+        snapshot: manifest.latest.snapshot,
+    })
+}
+
+fn build_http_client() -> Result<reqwest::Client> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 VestaLauncher/1.0")
+        .build()
+        .context("Failed to create HTTP client")
+}
+
+async fn fetch_runtime_java_majors(client: &reqwest::Client) -> Result<Vec<u32>> {
+    let response = send_with_retry(client, JAVA_RUNTIME_ALL_URL, 3, 1000).await?;
+    let data: HashMap<String, HashMap<String, Vec<RuntimeAllJavaEntry>>> = response
+        .json()
+        .await
+        .context("Failed to parse java-runtime all.json")?;
+
+    let mut majors = std::collections::BTreeSet::new();
+
+    for (_platform, components) in data {
+        for (component, entries) in components {
+            // Ignore non-runtime payloads like minecraft-java-exe.
+            if !component.starts_with("java-runtime-") && component != "jre-legacy" {
+                continue;
+            }
+
+            for entry in entries {
+                if let Some(major) = parse_runtime_java_major(&entry.version.name) {
+                    majors.insert(preferred_java_major(major));
+                } else {
+                    log::warn!(
+                        "Could not parse Java major from runtime version name '{}' (component '{}')",
+                        entry.version.name,
+                        component
+                    );
+                }
+            }
+        }
+    }
+
+    if majors.is_empty() {
+        anyhow::bail!("java-runtime all.json did not yield any runtime Java majors")
+    }
+
+    let out: Vec<u32> = majors.into_iter().rev().collect();
+    log::info!("Resolved runtime Java majors from launchermeta: {:?}", out);
+    Ok(out)
+}
+
+fn parse_runtime_java_major(version_name: &str) -> Option<u32> {
+    if let Some(rest) = version_name.strip_prefix("1.") {
+        let second = rest
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>();
+        if !second.is_empty() {
+            return second.parse::<u32>().ok();
+        }
+    }
+
+    let leading = version_name
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>();
+    if leading.is_empty() {
+        return None;
+    }
+
+    leading.parse::<u32>().ok()
+}
+
+fn java_major_from_version_detail(
+    version_id: &str,
+    version_type: &str,
+    release_time: &str,
+    java_version: Option<MojangJavaVersion>,
+) -> Result<u32> {
+    if let Some(java) = java_version {
+        return Ok(java.major_version);
+    }
+
+    if is_legacy_mojang_version(version_type, release_time) {
+        log::warn!(
+            "Missing javaVersion for legacy/pre-metadata version '{}' (type '{}', release '{}'), defaulting to Java {}",
+            version_id,
+            version_type,
+            release_time,
+            LEGACY_JAVA_MAJOR
+        );
+        return Ok(LEGACY_JAVA_MAJOR);
+    }
+
+    anyhow::bail!(
+        "Missing javaVersion.majorVersion for non-legacy Minecraft version '{}' (type '{}', release '{}')",
+        version_id,
+        version_type,
+        release_time
+    )
+}
+
+fn is_legacy_mojang_version(version_type: &str, release_time: &str) -> bool {
+    if matches!(version_type, "old_alpha" | "old_beta") {
+        return true;
+    }
+
+    // Mojang omits javaVersion for part of the 1.6-era (2013) release/snapshot range.
+    // Treat those pre-2014 builds as legacy for Java-major fallback purposes.
+    chrono::DateTime::parse_from_rfc3339(release_time)
+        .map(|dt| dt.year() < JAVA_METADATA_REQUIRED_YEAR)
+        .unwrap_or(false)
 }
 
 fn build_initial_game_versions(

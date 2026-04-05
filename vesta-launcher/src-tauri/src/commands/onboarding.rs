@@ -1,4 +1,3 @@
-use crate::metadata_cache::MetadataCache;
 use crate::models::java::GlobalJavaPath;
 use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version, path as path_col, is_managed as is_managed_col};
 use crate::tasks::installers::java::DownloadJavaTask;
@@ -18,57 +17,80 @@ pub struct JavaRequirement {
     pub is_required_for_latest: bool,
 }
 
+fn java_requirement_name(version: u32) -> String {
+    match version {
+        8 => "Java 8 (Legacy)".to_string(),
+        17 => "Java 17".to_string(),
+        21 => "Java 21".to_string(),
+        25 => "Java 25".to_string(),
+        _ => format!("Java {}", version),
+    }
+}
+
 #[tauri::command]
 pub async fn get_required_java_versions(
     app_handle: AppHandle,
 ) -> Result<Vec<JavaRequirement>, String> {
-    let cache = app_handle.state::<MetadataCache>();
-    let metadata = cache.get();
+    let metadata = crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?;
 
     let mut requirements = Vec::new();
 
     if let Some(meta) = metadata {
-        log::info!(
-            "Metadata cache accessed, versions found: {}, required_javas: {:?}",
-            meta.game_versions.len(),
+        let latest_required_major = crate::utils::java::resolve_required_java_from_manifest(
+            &meta,
+            &meta.latest.release,
+        )
+        .or_else(|_| {
+            crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.snapshot)
+        })
+        .ok()
+        .or_else(|| {
             meta.required_java_major_versions
-        );
+                .first()
+                .copied()
+                .map(crate::utils::java::preferred_java_major)
+        });
 
-        if meta.required_java_major_versions.is_empty() {
-            log::warn!(
-                "Metadata cache present but required_java_major_versions is empty. Using defaults."
-            );
-            let default_versions = vec![21, 17, 8];
-            for version in default_versions {
-                requirements.push(JavaRequirement {
-                    major_version: version,
-                    recommended_name: match version {
-                        21 => "Java 21 (Modern)".to_string(),
-                        17 => "Java 17 (1.18 - 1.20)".to_string(),
-                        8 => "Java 8 (Legacy)".to_string(),
-                        _ => format!("Java {}", version),
-                    },
-                    is_required_for_latest: version == 21,
-                });
+        let latest_required_major = match latest_required_major {
+            Some(v) => v,
+            None => {
+                log::warn!(
+                    "Manifest does not contain Java runtime majors; forcing refresh"
+                );
+                let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
+                return Err("MANIFEST_NOT_READY".to_string());
             }
-            return Ok(requirements);
+        };
+
+        let mut versions: Vec<u32> = meta
+            .required_java_major_versions
+            .iter()
+            .copied()
+            .map(crate::utils::java::preferred_java_major)
+            .collect();
+        versions.sort_unstable_by(|a, b| b.cmp(a));
+        versions.dedup();
+
+        if versions.is_empty() {
+            let set: std::collections::BTreeSet<u32> =
+                meta.java_major_version_by_game_version
+                    .values()
+                    .copied()
+                    .map(crate::utils::java::preferred_java_major)
+                    .collect();
+            versions = set.into_iter().rev().collect();
         }
 
-        for version in meta.required_java_major_versions {
-            let is_latest = version == 25 || version == 21; // Simple heuristic for now
+        if versions.is_empty() {
+            let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
+            return Err("MANIFEST_NOT_READY".to_string());
+        }
 
-            let name = match version {
-                25 => "Java 25".to_string(),
-                21 => "Java 21".to_string(),
-                17 => "Java 17 (1.18 - 1.20)".to_string(),
-                8 => "Java 8 (Legacy)".to_string(),
-                _ => format!("Java {}", version),
-            };
-
+        for version in versions {
             requirements.push(JavaRequirement {
                 major_version: version,
-                recommended_name: name,
-                is_required_for_latest: is_latest,
+                recommended_name: java_requirement_name(version),
+                is_required_for_latest: version == latest_required_major,
             });
         }
     } else {

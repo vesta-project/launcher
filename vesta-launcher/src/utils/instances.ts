@@ -188,6 +188,8 @@ export interface PistonMetadata {
 		release: string;
 		snapshot: string;
 	};
+	required_java_major_versions?: number[];
+	java_major_version_by_game_version?: Record<string, number>;
 }
 
 /** Returns the virtual demo instance object used in Guest mode */

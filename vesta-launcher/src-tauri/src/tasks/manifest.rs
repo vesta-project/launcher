@@ -33,6 +33,14 @@ impl Task for GenerateManifestTask {
         }
     }
 
+    fn id(&self) -> Option<String> {
+        if self.force_refresh {
+            Some("generate_manifest_force_refresh".to_string())
+        } else {
+            Some("generate_manifest".to_string())
+        }
+    }
+
     fn cancellable(&self) -> bool {
         false
     }

@@ -29,12 +29,14 @@ impl SubscriptionProvider for GameVersionProvider {
             log::error!("Failed to initialize version tracking defaults: {}", e);
         }
         
-        let manifest = piston_lib::game::metadata::fetch_metadata().await.map_err(|e| anyhow::anyhow!("Failed to fetch manifest: {}", e))?;
+        let latest = piston_lib::game::metadata::fetch_latest_versions()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch latest versions: {}", e))?;
         
         let mut items = Vec::new();
         
         // Release check
-        let latest_release = &manifest.latest.release;
+        let latest_release = &latest.release;
         if VersionTrackingRepository::is_version_newer("minecraft_release", latest_release)? {
             items.push(NotificationUpdateItem {
                 id: format!("minecraft_release_{}", latest_release),
@@ -53,7 +55,7 @@ impl SubscriptionProvider for GameVersionProvider {
         }
         
         // Snapshot check
-        let latest_snapshot = &manifest.latest.snapshot;
+        let latest_snapshot = &latest.snapshot;
         if VersionTrackingRepository::is_version_newer("minecraft_snapshot", latest_snapshot)? {
             items.push(NotificationUpdateItem {
                 id: format!("minecraft_snapshot_{}", latest_snapshot),

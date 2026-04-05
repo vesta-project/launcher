@@ -1,7 +1,7 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::models::java::GlobalJavaPath;
 use crate::models::resource::SourcePlatform;
-use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version, path as path_col, is_managed as is_managed_col};
+use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version};
 use crate::schema::vesta::instance::dsl::*;
 use crate::tasks::installers::modpack::InstallModpackTask;
 use crate::tasks::manager::TaskManager;
@@ -895,36 +895,8 @@ pub async fn get_modpack_info_from_url(
     res
 }
 
-fn get_recommended_java_version(mc_version: &str) -> i32 {
-    let parts: Vec<&str> = mc_version.split('.').collect();
-    if parts.len() >= 2 {
-        if let Ok(minor) = parts[1].parse::<i32>() {
-            if minor >= 20 {
-                // Check for 1.20.5+
-                if parts.len() >= 3 {
-                    if let Ok(patch) = parts[2].parse::<i32>() {
-                        if minor == 20 && patch >= 5 {
-                            return 21;
-                        }
-                    }
-                }
-                if minor > 20 {
-                    return 21;
-                }
-                return 17;
-            }
-            if minor >= 18 {
-                return 17;
-            }
-            if minor >= 17 {
-                return 16;
-            }
-        }
-    }
-    8
-}
-
 async fn prepare_instance(
+    app_handle: &AppHandle,
     conn: &mut SqliteConnection,
     instance_data: &Instance,
 ) -> Result<NewInstance, String> {
@@ -983,26 +955,38 @@ async fn prepare_instance(
 
     // If no Java path provided, try to find a recommended one from global config
     if current_java_path.is_none() {
-        if let Ok(mut config_conn) = get_config_conn() {
-            let reco_version = get_recommended_java_version(&instance_data.minecraft_version);
-            let global_path = global_java_paths
-                .filter(major_version.eq(reco_version as i32))
-                .first::<GlobalJavaPath>(&mut config_conn)
-                .ok();
+        let recommended_major =
+            crate::utils::java::resolve_required_java_major(app_handle, &instance_data.minecraft_version)
+                .await;
 
-            if let Some(gp) = global_path {
-                log::info!(
-                    "[prepare_instance] Found recommended Java {:?} path: {}",
-                    gp.major_version,
-                    gp.path
-                );
-                current_java_path = Some(gp.path);
-            } else {
-                // Fallback to any Java version if the specific one isn't found?
-                // Or just let it be None and have the installer download Zulu
-                log::info!(
-                    "[prepare_instance] No recommended Java {} found in global config",
-                    reco_version
+        match recommended_major {
+            Ok(recommended_major) => {
+                if let Ok(mut config_conn) = get_config_conn() {
+                    let global_path = global_java_paths
+                        .filter(major_version.eq(recommended_major as i32))
+                        .first::<GlobalJavaPath>(&mut config_conn)
+                        .ok();
+
+                    if let Some(gp) = global_path {
+                        log::info!(
+                            "[prepare_instance] Found recommended Java {:?} path: {}",
+                            gp.major_version,
+                            gp.path
+                        );
+                        current_java_path = Some(gp.path);
+                    } else {
+                        log::info!(
+                            "[prepare_instance] No recommended Java {} found in global config",
+                            recommended_major
+                        );
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "[prepare_instance] Could not resolve required Java for '{}': {}",
+                    instance_data.minecraft_version,
+                    e
                 );
             }
         }
@@ -1105,7 +1089,7 @@ pub async fn install_modpack_from_zip(
 
     let mut conn = get_vesta_conn().map_err(|e| format!("DB Error: {}", e))?;
 
-    let new_inst = prepare_instance(&mut conn, &instance_data).await?;
+    let new_inst = prepare_instance(&_app, &mut conn, &instance_data).await?;
 
     diesel::insert_into(instance)
         .values(&new_inst)
@@ -1461,7 +1445,7 @@ pub async fn install_modpack_from_url(
 
     let mut conn = get_vesta_conn().map_err(|e| format!("DB Error: {}", e))?;
 
-    let new_inst = prepare_instance(&mut conn, &instance_data).await?;
+    let new_inst = prepare_instance(&_app, &mut conn, &instance_data).await?;
     log::info!(
         "[install_modpack_from_url] Prepared instance: {} (dir: {:?})",
         new_inst.name,

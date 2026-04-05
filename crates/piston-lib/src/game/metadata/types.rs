@@ -14,8 +14,12 @@ pub struct PistonMetadata {
     /// Latest release and snapshot versions
     pub latest: LatestVersions,
 
-    /// Unique Java versions required by the latest release, snapshot, and major legacy versions
+    /// Java runtime majors available/required for managed runtime selection.
     pub required_java_major_versions: Vec<u32>,
+
+    /// Required Java major version for each Minecraft version id (resolved lazily on-demand).
+    #[serde(default)]
+    pub java_major_version_by_game_version: HashMap<String, u32>,
 }
 
 /// Latest version information

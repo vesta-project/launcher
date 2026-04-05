@@ -7,6 +7,7 @@ use crate::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion}
 use crate::game::installer::core::traits::ModloaderInstaller;
 use crate::game::installer::types::{InstallSpec, OsType, ProgressReporter};
 use crate::game::installer::{track_artifact_from_path, try_restore_artifact};
+use crate::game::java_policy::preferred_java_major;
 use anyhow::{Context, Result};
 use futures::future::BoxFuture;
 use futures::stream::{self, StreamExt};
@@ -637,7 +638,17 @@ pub async fn install_vanilla(
     reporter.set_percent(85);
 
     let java_version = if let Some(java_info) = &version_info.java_version {
-        JavaVersion::new(java_info.major_version)
+        let preferred_major = preferred_java_major(java_info.major_version);
+
+        if preferred_major != java_info.major_version {
+            log::info!(
+                "Preferring Java {} over declared Java {} for compatibility",
+                preferred_major,
+                java_info.major_version
+            );
+        }
+
+        JavaVersion::new(preferred_major)
     } else {
         JavaVersion::new(8) // Default to Java 8 for old versions
     };

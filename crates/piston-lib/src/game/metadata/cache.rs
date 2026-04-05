@@ -19,6 +19,24 @@ pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata
     load_or_fetch_metadata_ext(data_dir, CACHE_DURATION_HOURS).await
 }
 
+/// Load cached metadata only, without triggering any network fetch.
+pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Option<PistonMetadata>> {
+    let metadata_path = metadata_cache_path(data_dir);
+
+    if !metadata_path.exists() && try_restore_artifact(METADATA_LABEL, &metadata_path).await? {
+        log::info!("Restored cached piston metadata file from artifact cache");
+    }
+
+    if !metadata_path.exists() {
+        return Ok(None);
+    }
+
+    let mut metadata = load_cached_metadata(&metadata_path).await?;
+    track_metadata_file(&metadata_path).await.ok();
+    metadata.sort_all_versions();
+    Ok(Some(metadata))
+}
+
 /// Load cached metadata with custom stale threshold
 pub async fn load_or_fetch_metadata_ext(data_dir: &PathBuf, max_age_hours: i64) -> Result<PistonMetadata> {
     let metadata_path = metadata_cache_path(data_dir);

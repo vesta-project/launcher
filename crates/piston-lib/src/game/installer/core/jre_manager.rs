@@ -26,20 +26,26 @@ impl JavaVersion {
     }
 
     pub fn from_component(component: &str) -> Result<Self> {
-        // Parse strings like "java-runtime-gamma", "jre-legacy", "java-runtime-alpha"
-        let major = match component {
-            "jre-legacy" => 8,
-            "java-runtime-alpha" => 8,
-            "java-runtime-beta" => 16,
-            "java-runtime-gamma" => 17,
-            "java-runtime-delta" => 21,
-            "java-runtime-epsilon" => 25,
-            _ => {
-                // Try to parse as number
-                component.parse().unwrap_or(17)
-            }
-        };
-        Ok(Self::new(major))
+        if component.eq_ignore_ascii_case("jre-legacy") {
+            return Ok(Self::new(8));
+        }
+
+        if let Ok(major) = component.parse::<u32>() {
+            return Ok(Self::new(major));
+        }
+
+        let digits: String = component.chars().filter(|c| c.is_ascii_digit()).collect();
+        if !digits.is_empty() {
+            let major = digits
+                .parse::<u32>()
+                .context("Failed to parse Java major from component digits")?;
+            return Ok(Self::new(major));
+        }
+
+        anyhow::bail!(
+            "Could not derive Java major version from component '{}'",
+            component
+        )
     }
 }
 
@@ -405,31 +411,9 @@ mod tests {
     #[test]
     fn parses_java_version_from_component() {
         assert_eq!(JavaVersion::from_component("jre-legacy").unwrap().major, 8);
-        assert_eq!(
-            JavaVersion::from_component("java-runtime-alpha")
-                .unwrap()
-                .major,
-            8
-        );
-        assert_eq!(
-            JavaVersion::from_component("java-runtime-beta")
-                .unwrap()
-                .major,
-            16
-        );
-        assert_eq!(
-            JavaVersion::from_component("java-runtime-gamma")
-                .unwrap()
-                .major,
-            17
-        );
-        assert_eq!(
-            JavaVersion::from_component("java-runtime-delta")
-                .unwrap()
-                .major,
-            21
-        );
         assert_eq!(JavaVersion::from_component("17").unwrap().major, 17);
+        assert_eq!(JavaVersion::from_component("java-runtime-21").unwrap().major, 21);
+        assert!(JavaVersion::from_component("java-runtime-delta").is_err());
     }
 
     #[test]
