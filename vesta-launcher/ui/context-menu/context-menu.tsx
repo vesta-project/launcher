@@ -29,7 +29,11 @@ function ContextMenuContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.Content
-				class={clsx(styles["context-menu__content"], props.class)}
+				class={clsx(
+					styles["context-menu__content"],
+					"liquid-glass",
+					props.class,
+				)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>

@@ -149,10 +149,18 @@
 	padding: 6px;
 	border-radius: 8px;
 	border: var(--border-width-subtle) solid var(--border-glass);
-	background-color: var(--surface-base);
+  background-color: var(--surface-overlay);
+  backdrop-filter: var(--liquid-backdrop-filter);
+  -webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	outline: none;
 	transform-origin: var(--kb-menu-content-transform-origin);
 	animation: contentHide 200ms ease-in forwards;
+}
+
+:root[data-bordered="true"] .context-menu__content,
+:root[data-bordered="true"] .context-menu__sub-content {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
 }
 
 .context-menu__content[data-expanded],

@@ -25,12 +25,19 @@
 	justify-content: space-between;
 	height: 32px;
 	padding: 0 8px;
-	background: var(--surface-raised);
+	background: var(--surface-overlay);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	border-bottom: var(--border-width-subtle) solid
 		hsla(var(--color__primary-hue), 30%, 30%, 0.3);
 	flex-shrink: 0;
 	user-select: none;
 	z-index: 10;
+}
+
+:root[data-bordered="true"] .page-viewer-navbar {
+	backdrop-filter: none;
+	-webkit-backdrop-filter: none;
 }
 
 .page-viewer-navbar-right {
