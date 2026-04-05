@@ -3,10 +3,9 @@ import * as ContextMenuPrimitive from "@kobalte/core/context-menu";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
 import {
-	type ComponentProps,
-	children,
-	splitProps,
-	ValidComponent,
+    type ComponentProps,
+    splitProps,
+    ValidComponent
 } from "solid-js";
 import styles from "./context-menu.module.css";
 
@@ -241,21 +240,9 @@ function ContextMenuRadioItem<T extends ValidComponent = "div">(
 }
 
 export {
-	ContextMenu,
-	ContextMenuLabel,
-	ContextMenuTrigger,
-	ContextMenuPortal,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuItemLabel,
-	ContextMenuShortcut,
-	ContextMenuSeparator,
-	ContextMenuSub,
-	ContextMenuSubTrigger,
-	ContextMenuSubContent,
-	ContextMenuCheckboxItem,
-	ContextMenuGroup,
-	ContextMenuGroupLabel,
-	ContextMenuRadioGroup,
-	ContextMenuRadioItem,
+    ContextMenu, ContextMenuCheckboxItem, ContextMenuContent, ContextMenuGroup,
+    ContextMenuGroupLabel, ContextMenuItem,
+    ContextMenuItemLabel, ContextMenuLabel, ContextMenuPortal, ContextMenuRadioGroup,
+    ContextMenuRadioItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger
 };
+

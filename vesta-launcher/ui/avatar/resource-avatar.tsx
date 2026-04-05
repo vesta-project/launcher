@@ -2,14 +2,13 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { resolveResourceUrl } from "@utils/assets";
 import {
-	Component,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	JSX,
-	onCleanup,
-	Show,
+    Component,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    onCleanup,
+    Show
 } from "solid-js";
 import styles from "./avatar.module.css";
 
@@ -34,6 +33,8 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 	const [playerHeadPath] = createResource(
 		() => ({ uuid: props.playerUuid, t: avatarTimestamp() }),
 		async ({ uuid, t }) => {
+			if (!uuid) return null;
+
 			try {
 				const path = await invoke<string>("get_player_head_path", {
 					playerUuid: uuid,

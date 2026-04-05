@@ -1,11 +1,11 @@
 import { FunctionAnimation, SkinViewer, WalkingAnimation } from "skinview3d";
 import {
-	createEffect,
-	JSX,
-	on,
-	onCleanup,
-	onMount,
-	splitProps,
+    createEffect,
+    JSX,
+    on,
+    onCleanup,
+    onMount,
+    splitProps,
 } from "solid-js";
 
 export interface SkinViewerProps extends JSX.HTMLAttributes<HTMLDivElement> {
@@ -51,8 +51,8 @@ export function SkinView3d(props: SkinViewerProps) {
 			canvas: document.createElement("canvas"),
 			width: local.width || containerRef.clientWidth || 300,
 			height: local.height || containerRef.clientHeight || 400,
-			skin: local.skinUrl || (undefined as any),
-			cape: local.capeUrl || (undefined as any),
+			skin: local.skinUrl || undefined,
+			cape: local.capeUrl || undefined,
 			model: local.model === "slim" ? "slim" : "default",
 		});
 
@@ -114,9 +114,13 @@ export function SkinView3d(props: SkinViewerProps) {
 			() => local.skinUrl,
 			(url) => {
 				if (viewer) {
-					viewer.loadSkin(url || (undefined as any), {
-						model: local.model === "slim" ? "slim" : "default",
-					});
+					if (!url) {
+						viewer.loadSkin(null);
+					} else {
+						viewer.loadSkin(url, {
+							model: local.model === "slim" ? "slim" : "default",
+						});
+					}
 				}
 			},
 		),
@@ -128,9 +132,9 @@ export function SkinView3d(props: SkinViewerProps) {
 			(url) => {
 				if (viewer) {
 					if (!url) {
-						viewer.loadCape(null as any);
+						viewer.loadCape(null);
 					} else {
-						viewer.loadCape(url as any);
+						viewer.loadCape(url);
 					}
 				}
 			},
@@ -142,12 +146,11 @@ export function SkinView3d(props: SkinViewerProps) {
 			() => local.model,
 			(model) => {
 				if (viewer) {
-					// In skinview3d, playerObject.skin.texture is a Texture object, not a URL
-					// To switch models for the current skin, we should just update modelType
-					// If that doesn't work visually, we need to re-apply the texture source
-					viewer.loadSkin(local.skinUrl || (undefined as any), {
-						model: model === "slim" ? "slim" : "default",
-					});
+					if (local.skinUrl) {
+						viewer.loadSkin(local.skinUrl, {
+							model: model === "slim" ? "slim" : "default",
+						});
+					}
 				}
 			},
 		),
