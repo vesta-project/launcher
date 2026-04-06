@@ -20,8 +20,7 @@ This document describes the high-level architecture of Vesta Launcher and where 
   - `NetworkManager`: Manages network connectivity and status.
   - `ResourceManager`: Handles external resources (Modrinth, CurseForge API interactions).
   - `ResourceWatcher`: Monitors file system changes for instances.
-  - `MetadataCache`: In-memory caching for game metadata.
-- **Installer Processors:** Some installers invoke Java-based processors (external JARs). These processors receive command-line arguments that may reference files under `data/*` — the Rust code extracts `data/*` entries into the install `data_dir` so processors can access them.
+  - `MetadataCache`: In-memory caching for game metadata.- **Startup Process**: Managed by a multi-stage bootstrap in both Rust and TypeScript ([STARTUP_PROCESS.md](STARTUP_PROCESS.md)).- **Installer Processors:** Some installers invoke Java-based processors (external JARs). These processors receive command-line arguments that may reference files under `data/*` — the Rust code extracts `data/*` entries into the install `data_dir` so processors can access them.
 - **Cross-platform Considerations:** File canonicalization and path normalization are performed in several places; tests that canonicalize paths may fail in some environments.
 
 ## Where to Look for Behavior

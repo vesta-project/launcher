@@ -98,5 +98,3 @@ Appendix: quick rules
 - Always perform atomic writes and verify before swap/replace.
 - Prefer processed artifacts where available to avoid running installers/processors on the client.
 - Telemetry must be opt-in and minimal.
-
-If you want, I can add a small JSON `vesta.config.example.json` and a sample `mirrors.json` schema next. Tell me if you want those added now.

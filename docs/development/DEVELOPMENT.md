@@ -34,11 +34,14 @@ This document covers typical developer workflows, code conventions, and where to
   cargo test -p piston-lib --lib
   ```
 
-### Building & Versioning
+### building-&-versioning
 - **Build for Production (Installer/Executable):**
   ```bash
   bun run vesta:build
   ```
+
+### Startup & Bootstrap
+For details on how the launcher handles window initialization, the initial loading splash, and theme synchronization during startup, see [v:\launcher\docs\architecture\STARTUP_PROCESS.md](v:\launcher\docs\architecture\STARTUP_PROCESS.md).
 
 - **Bump Version:**
   ```bash
