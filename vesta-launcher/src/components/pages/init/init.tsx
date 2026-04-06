@@ -1,50 +1,89 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import {
-    PageViewer,
-    pageViewerOpen,
-    setPageViewerOpen,
+	PageViewer,
+	pageViewerOpen,
+	setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
 import {
-    InitAppearancePage,
-    InitDataStoragePage,
-    InitFinishedPage,
-    InitFirstPage,
-    InitGuidePage,
-    InitInstallationPage,
-    InitJavaPage,
-    InitLoginPage,
+	InitAppearancePage,
+	InitDataStoragePage,
+	InitFinishedPage,
+	InitFirstPage,
+	InitGuidePage,
+	InitInstallationPage,
+	InitJavaPage,
+	InitLoginPage,
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
 import { useOs } from "@utils/os";
+import { consumeInitBootstrapState } from "@utils/startup-bootstrap";
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import {
-    getCanonicalBackStep,
-    getNextInitStep,
-    INIT_STEPS,
-    type InitStep,
-    isGuestOrDemoAccountType,
-    isSkippableAuthenticatedAccount,
-    normalizeInitStep,
-    shouldRecoverLegacyGuestCompletion,
+	getCanonicalBackStep,
+	getNextInitStep,
+	INIT_STEPS,
+	type InitStep,
+	isGuestOrDemoAccountType,
+	isSkippableAuthenticatedAccount,
+	normalizeInitStep,
+	shouldRecoverLegacyGuestCompletion,
 } from "./init-flow";
 import styles from "./init.module.css";
 
 type NavigationDirection = "forward" | "backward" | "direct";
 type AtmosphereState = "active" | "fading" | "off";
 
+function isValidAtmosphereState(value: unknown): value is AtmosphereState {
+	return value === "active" || value === "fading" || value === "off";
+}
+
+function isValidStartupState(
+	state: ReturnType<typeof consumeInitBootstrapState>,
+): state is {
+	initStep: InitStep;
+	loginOnly: boolean;
+	guideVisited: boolean;
+	atmosphereState: AtmosphereState;
+} {
+	if (!state) {
+		return false;
+	}
+
+	return (
+		normalizeInitStep(state.initStep) === state.initStep &&
+		typeof state.loginOnly === "boolean" &&
+		typeof state.guideVisited === "boolean" &&
+		isValidAtmosphereState(state.atmosphereState)
+	);
+}
+
 function InitPage() {
 	const navigate = useNavigate();
-	const [initStep, setInitStep] = createSignal<InitStep>(INIT_STEPS.WELCOME);
-	const [stepHistory, setStepHistory] = createSignal<InitStep[]>([
-		INIT_STEPS.WELCOME,
-	]);
-	const [guideVisited, setGuideVisited] = createSignal(false);
+	const consumedStartupState = consumeInitBootstrapState();
+	const startupState = isValidStartupState(consumedStartupState)
+		? consumedStartupState
+		: null;
+
+	if (consumedStartupState && !startupState) {
+		console.warn(
+			"Invalid startup bootstrap state detected; falling back to InitPage runtime initialization.",
+			consumedStartupState,
+		);
+	}
+
+	const initialStep = startupState?.initStep ?? INIT_STEPS.WELCOME;
+	const [initStep, setInitStep] = createSignal<InitStep>(initialStep);
+	const [stepHistory, setStepHistory] = createSignal<InitStep[]>([initialStep]);
+	const [guideVisited, setGuideVisited] = createSignal(
+		startupState?.guideVisited ?? false,
+	);
 	const [hasInstalledInstance, setHasInstalledInstance] = createSignal(false);
-	const [isLoading, setIsLoading] = createSignal(true);
-	const [isLoginOnly, setIsLoginOnly] = createSignal(false);
+	const [isLoginOnly, setIsLoginOnly] = createSignal(
+		startupState?.loginOnly ?? false,
+	);
 	const [onboardingAtmosphereState, setOnboardingAtmosphereState] =
-		createSignal<AtmosphereState>("active");
+		createSignal<AtmosphereState>(startupState?.atmosphereState ?? "active");
 	const os = useOs();
 	let atmosphereFadeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -221,11 +260,16 @@ function InitPage() {
 	};
 
 	onMount(() => {
+		if (startupState) {
+			// Safe short-circuit: bootstrap already resolved and validated init state.
+			return;
+		}
+
 		const searchParams = new URLSearchParams(window.location.search);
 		const forceLoginRequested = searchParams.get("login") === "true";
 
 		// Initial setup check
-		setTimeout(async () => {
+		void (async () => {
 			try {
 				const config = await invoke<any>("get_config");
 				const account = await invoke<any>("get_active_account");
@@ -297,10 +341,8 @@ function InitPage() {
 				}
 			} catch (e) {
 				console.error("Failed to initialize app state:", e);
-			} finally {
-				setIsLoading(false);
 			}
-		}, 0);
+		})();
 	});
 
 	//navigate("/home", { replace: true });
@@ -329,21 +371,6 @@ function InitPage() {
 			<TitleBar os={os()} />
 			<div class={styles["init-page__wrapper"]}>
 				<Switch>
-					<Match when={isLoading()}>
-						<div
-							style={{
-								display: "flex",
-								"justify-content": "center",
-								"align-items": "center",
-								height: "100%",
-								"flex-direction": "column",
-								gap: "1rem",
-							}}
-						>
-							<h1 style={{ "font-size": "24px" }}>Loading Vesta...</h1>
-							{/* Add a spinner here if available */}
-						</div>
-					</Match>
 					<Match when={initStep() === INIT_STEPS.WELCOME}>
 						<InitFirstPage
 							initStep={initStep()}

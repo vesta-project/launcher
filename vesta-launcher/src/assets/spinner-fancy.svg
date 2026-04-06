@@ -1,0 +1,74 @@
+<svg width="140" height="140" viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%">
+        <animate attributeName="stop-color"
+          values="#47EBD3; #2D7FF9; #6B21A8; #D946EF; #F97316; #47EBD3"
+          dur="6s"
+          repeatCount="indefinite"/>
+      </stop>
+      <stop offset="100%">
+        <animate attributeName="stop-color"
+          values="#2D7FF9; #6B21A8; #D946EF; #F97316; #47EBD3; #2D7FF9"
+          dur="6s"
+          repeatCount="indefinite"/>
+      </stop>
+    </linearGradient>
+
+    <filter id="goo">
+      <feGaussianBlur stdDeviation="3" result="blur"/>
+      <feColorMatrix in="blur" mode="matrix"
+        values="1 0 0 0 0
+                0 1 0 0 0
+                0 0 1 0 0
+                0 0 0 18 -7"/>
+    </filter>
+  </defs>
+
+  <circle cx="60" cy="60" r="42" fill="none" stroke="#e2e8f0" stroke-width="12" opacity="0.3" />
+
+  <g filter="url(#goo)">
+    <circle
+      cx="60" cy="60" r="42"
+      fill="none"
+      stroke="url(#grad)"
+      stroke-width="12"
+      stroke-linecap="round"
+      transform="rotate(-90 60 60)"
+    >
+      <animate
+        attributeName="stroke-dasharray"
+        values="20 243.89; 150 113.89; 20 243.89"
+        dur="2s"
+        repeatCount="indefinite"
+      />
+      <animate
+        attributeName="stroke-dashoffset"
+        values="0; -263.89; -527.78"
+        dur="2s"
+        repeatCount="indefinite"
+        calcMode="linear"
+      />
+    </circle>
+
+    <circle r="8" fill="url(#grad)">
+      <animateMotion
+        dur="2s"
+        repeatCount="indefinite"
+        path="M60,18 a42,42 0 1,1 0,84 a42,42 0 1,1 0,-84"/>
+      <animate 
+        attributeName="r" 
+        values="7;11;7" 
+        dur="1s" 
+        repeatCount="indefinite"/>
+    </circle>
+
+    <circle r="5" fill="url(#grad)">
+      <animateMotion
+        dur="2s"
+        begin="-0.2s"
+        repeatCount="indefinite"
+        path="M60,18 a42,42 0 1,1 0,84 a42,42 0 1,1 0,-84"/>
+    </circle>
+  </g>
+</svg>

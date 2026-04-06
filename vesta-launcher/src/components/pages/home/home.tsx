@@ -1,38 +1,29 @@
-import BellIcon from "@assets/bell.svg";
-import GearIcon from "@assets/gear.svg";
-import logo from "@assets/logo.svg";
-import PlusIcon from "@assets/plus.svg";
-import SearchIcon from "@assets/search.svg";
-import ConnectionStatus from "@components/page-root/connection-status";
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import {
-	PageViewer,
-	pageViewerOpen,
-	router,
-	setPageViewerOpen,
+    PageViewer,
+    pageViewerOpen,
+    setPageViewerOpen
 } from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import {
-	instancesError,
-	instancesLoading,
-	instances as instancesStore,
+    initializeInstances,
+    instancesError,
+    instancesInitialized,
+    instancesLoading,
+    instances as instancesStore,
 } from "@stores/instances";
 import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
-import { attachConsole, info } from "@tauri-apps/plugin-log";
-import { WindowControls, WindowTitlebar } from "@tauri-controls-v2/solid";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import { clearToasts, showToast, Toaster } from "@ui/toast/toast";
+import { clearToasts, Toaster } from "@ui/toast/toast";
 import { useOs } from "@utils/os";
 import { startAppTutorial } from "@utils/tutorial";
 import {
-	createEffect,
-	createMemo,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-	Show,
+    createEffect,
+    createSignal,
+    For,
+    onMount,
+    Show
 } from "solid-js";
 import styles from "./home.module.css";
 import Sidebar from "./sidebar/sidebar";
@@ -45,6 +36,17 @@ function HomePage() {
 
 	onMount(async () => {
 		void initializePinning();
+
+		if (!instancesInitialized()) {
+			void initializeInstances().catch((error) => {
+				console.error("Failed to initialize instances from HomePage:", error);
+			});
+		}
+
+		void invoke("preload_account_heads").catch((error) => {
+			console.error("Failed to preload account heads:", error);
+		});
+
 		const config = await invoke<any>("get_config");
 		if (!config.tutorial_completed) {
 			// Small delay to ensure UI is ready

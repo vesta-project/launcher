@@ -799,11 +799,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     let _main_win = win_builder.build()?;
 
-    let effect = crate::utils::config::get_app_config()
-        .unwrap_or_default()
-        .theme_window_effect
-        .clone()
-        .unwrap_or_else(crate::utils::window_effects::default_window_effect);
+    // Always start with a solid, non-transparent window effect during bootstrap.
+    // The frontend theme engine will apply the persisted effect once config/theme has loaded.
+    let effect = "none".to_string();
 
     crate::commands::app::set_window_effect(_main_win.clone(), effect).unwrap_or(());
 

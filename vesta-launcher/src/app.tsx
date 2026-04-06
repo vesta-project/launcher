@@ -1,21 +1,19 @@
 import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
-import { FatalPage, setFatalInfo } from "@components/pages/fatal/fatal-page";
+import { FatalPage } from "@components/pages/fatal/fatal-page";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
-import { Route, Router, useNavigate, useSearchParams } from "@solidjs/router";
-import { prefetchChangelog } from "@stores/changelog";
+import { Route, Router, useNavigate } from "@solidjs/router";
 import {
 	cleanupDialogSystem,
 	dialogStore,
 	initializeDialogSystem,
 } from "@stores/dialog-store";
-import { initializeInstances, setupInstanceListeners } from "@stores/instances";
-import { prefetchSettingsData } from "@stores/settings-cache";
+import { setupInstanceListeners } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
-import { emit, listen, UnlistenFn } from "@tauri-apps/api/event";
+import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
 import { ChildrenProp } from "@ui/props";
 import { showToast } from "@ui/toast/toast";
@@ -30,18 +28,15 @@ import { subscribeToCrashEvents } from "@utils/crash-handler";
 import {
 	cleanupFileDropSystem,
 	getDropZoneManager,
-	initializeFileDropSystem,
 } from "@utils/file-drop";
-import { getMinecraftVersions } from "@utils/instances";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 } from "@utils/notifications";
-import { ensureOsType, getOsType } from "@utils/os";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
-import { createSignal, lazy, onCleanup, onMount } from "solid-js";
+import { lazy, onCleanup, onMount } from "solid-js";
 
 const StandalonePageViewer = lazy(
 	() => import("@components/page-viewer/standalone-page-viewer"),
@@ -304,10 +299,6 @@ function Root(props: ChildrenProp) {
 		// Initialize update listener and set OS attribute on root for global CSS
 		initUpdateListener();
 
-		// Trigger pre-fetching
-		prefetchChangelog();
-		prefetchSettingsData();
-
 		listen("core://check-for-updates", () => {
 			if (!hasCheckedForUpdatesOnStartup) {
 				hasCheckedForUpdatesOnStartup = true;
@@ -387,13 +378,13 @@ function Root(props: ChildrenProp) {
 				console.error("Failed to setup deep-link handler:", error);
 			});
 
-		// Defer non-critical initialization to not block UI render
-		// This allows the window to show immediately while background tasks start
-		setTimeout(() => {
-			// Initialize instance store from backend (non-blocking)
-			setupInstanceListeners();
-			initializeInstances().catch((error) => {
-				console.error("Failed to initialize instance store:", error);
+		// Defer non-critical initialization until the next frame.
+		// This avoids fixed startup delays while still keeping first render responsive.
+		requestAnimationFrame(() => {
+			// Instance data bootstrapping is handled by startup bootstrap/home route.
+			// This only wires background listeners and intentionally remains non-blocking.
+			void setupInstanceListeners().catch((error) => {
+				console.error("Failed to initialize instance listeners:", error);
 			});
 
 			// Setup notification system (non-blocking)
@@ -439,12 +430,6 @@ function Root(props: ChildrenProp) {
 						console.error("Failed to get DB status:", err);
 					});
 			}
-
-			// Preload account heads (non-blocking)
-			// This ensures skins are up to date on launch
-			invoke("preload_account_heads").catch((error) => {
-				console.error("Failed to preload account heads:", error);
-			});
 
 			// Handle CLI Arguments & Deep Links
 			const handleCLI = async (args: string[]) => {
@@ -504,18 +489,9 @@ function Root(props: ChildrenProp) {
 
 			listen<string[]>("core://handle-cli", (event) => {
 				handleCLI(event.payload);
+			}).catch((error) => {
+				console.error("Failed to subscribe to CLI handler:", error);
 			});
-
-			// Preload Minecraft versions metadata in background (non-blocking)
-			// This warms up the cache so install page loads instantly
-			getMinecraftVersions()
-				.then(() => {
-					console.log("Preloaded Minecraft versions metadata");
-				})
-				.catch((error) => {
-					// Silent fail - install page will fetch on demand if preload fails
-					console.warn("Failed to preload Minecraft versions:", error);
-				});
 
 			// Cleanup notifications in background (don't block startup)
 			cleanupNotifications()
@@ -545,7 +521,7 @@ function Root(props: ChildrenProp) {
 			// initializeFileDropSystem().catch((error) => {
 			// 	console.error("Failed to initialize file drop system:", error);
 			// });
-		}, 100); // 100ms delay to ensure UI renders first
+		});
 
 		window.addEventListener("dragenter", handleWindowDragEnter);
 		window.addEventListener("dragover", handleWindowDragOver);
@@ -574,15 +550,6 @@ function Root(props: ChildrenProp) {
 		window.removeEventListener("drop", handleWindowDrop);
 
 		// (Hover clock cleanup removed)
-	});
-
-	// Hide loader on first paint rather than a fixed timeout
-	requestAnimationFrame(() => {
-		const loader = document.getElementById("app-loader");
-		if (loader) {
-			loader.classList.add("hidden");
-			setTimeout(() => loader.remove(), 300);
-		}
 	});
 
 	return (

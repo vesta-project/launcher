@@ -3,8 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
 	createDemoInstance,
-	DEMO_INSTANCE_ID,
-	type Instance,
+	type Instance
 } from "@utils/instances";
 import { createStore, reconcile } from "solid-js/store";
 
@@ -20,6 +19,7 @@ type InstancesState = {
 	launchingIds: Record<string, boolean>;
 	runningIds: Record<string, RunningMetadata>;
 	loading: boolean;
+	initialized: boolean;
 	error: string | null;
 };
 
@@ -29,39 +29,67 @@ const [instancesState, setInstancesState] = createStore<InstancesState>({
 	launchingIds: {},
 	runningIds: {},
 	loading: false,
+	initialized: false,
 	error: null,
 });
+
+let initializePromise: Promise<void> | null = null;
 
 export function setLaunching(slug: string, launching: boolean) {
 	setInstancesState("launchingIds", (prev) => ({ ...prev, [slug]: launching }));
 }
 
-// Initialize instances from backend
-export async function initializeInstances() {
-	setInstancesState({ loading: true, error: null });
-	try {
-		const [fetchedInstances, account] = await Promise.all([
-			invoke<Instance[]>("list_instances"),
-			invoke<any>("get_active_account"),
-		]);
-
-		let instances = fetchedInstances;
-		if (account && account.account_type === ACCOUNT_TYPE_GUEST) {
-			const virtualInstance = createDemoInstance();
-			instances = [virtualInstance, ...instances];
-		}
-
-		setInstancesState({
-			instances: instances,
-			loading: false,
-		});
-	} catch (err) {
-		console.error("Failed to initialize instances:", err);
-		setInstancesState({
-			error: err instanceof Error ? err.message : String(err),
-			loading: false,
-		});
+/**
+ * Initialize instance store from backend.
+ *
+ * Idempotency rules:
+ * - If an initialization is already in-flight, callers join that promise.
+ * - If store is already initialized and `force` is false, this is a no-op and
+ *   returns `Promise.resolve()` without creating a new in-flight promise.
+ * - When `force` is true, a refresh is executed even after prior initialization.
+ */
+export function initializeInstances(force = false): Promise<void> {
+	if (initializePromise) {
+		return initializePromise;
 	}
+
+	if (instancesState.initialized && !force) {
+		return Promise.resolve();
+	}
+
+	initializePromise = (async () => {
+		setInstancesState({ loading: true, error: null });
+		try {
+			const [fetchedInstances, account] = await Promise.all([
+				invoke<Instance[]>("list_instances"),
+				invoke<any>("get_active_account"),
+			]);
+
+			let instances = fetchedInstances;
+			if (account && account.account_type === ACCOUNT_TYPE_GUEST) {
+				const virtualInstance = createDemoInstance();
+				instances = [virtualInstance, ...instances];
+			}
+
+			setInstancesState({
+				instances,
+				loading: false,
+				initialized: true,
+				error: null,
+			});
+		} catch (err) {
+			console.error("Failed to initialize instances:", err);
+			setInstancesState({
+				error: err instanceof Error ? err.message : String(err),
+				loading: false,
+				initialized: false,
+			});
+		}
+	})().finally(() => {
+		initializePromise = null;
+	});
+
+	return initializePromise;
 }
 
 // Update single instance in store
@@ -145,7 +173,9 @@ export function setupInstanceListeners() {
 				});
 
 				// Refresh instance metadata if crashed/playtime updated
-				initializeInstances();
+				void initializeInstances(true).catch((error) => {
+					console.error("Failed to refresh instances after exit:", error);
+				});
 			},
 		);
 
@@ -155,13 +185,20 @@ export function setupInstanceListeners() {
 				console.log(
 					"[InstancesStore] Active account changed, re-initializing...",
 				);
-				initializeInstances();
+				void initializeInstances(true).catch((error) => {
+					console.error(
+						"Failed to refresh instances after account change:",
+						error,
+					);
+				});
 			}
 		});
 
 		await listen<any>("core://account-heads-updated", () => {
 			console.log("[InstancesStore] Account heads updated, re-initializing...");
-			initializeInstances();
+			void initializeInstances(true).catch((error) => {
+				console.error("Failed to refresh instances after head update:", error);
+			});
 		});
 	})();
 
@@ -171,6 +208,7 @@ export function setupInstanceListeners() {
 // Export read-only accessor
 export const instances = () => instancesState.instances;
 export const instancesLoading = () => instancesState.loading;
+export const instancesInitialized = () => instancesState.initialized;
 export const instancesError = () => instancesState.error;
 
 // Export state for debugging

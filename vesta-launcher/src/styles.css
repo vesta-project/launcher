@@ -312,7 +312,7 @@
 }
 
 :root[data-os="macos"] body #app,
-:root[data-os="macos"] body #app-loader {
+:root[data-os="macos"] body #startup-loader {
 	/* Windows without decorations dont have a border radius on macos */
 	border-radius: 12px !important;
 	overflow: hidden;

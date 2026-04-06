@@ -1,11 +1,14 @@
 /* @refresh reload */
 
-import { initTheme, isThemeReady } from "@components/theming";
-import { Show } from "solid-js";
+import {
+    applyStartupRouteTarget,
+    bootstrapStartup,
+} from "@utils/startup-bootstrap";
+import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
-import "./styles.css";
 import "./reset.css";
+import "./styles.css";
 
 const root = document.getElementById("app");
 
@@ -57,43 +60,43 @@ function disableMenu() {
 
 disableMenu();
 
-// Start theme initialization
-initTheme().catch((err) => {
-	console.error("Theme init failed; using defaults:", err);
-});
+const [isStartupReady, setIsStartupReady] = createSignal(false);
 
-// Render app with a guard for the initial theme loading
+function retireStartupLoader() {
+	const loader = document.getElementById("startup-loader");
+	if (!loader) {
+		return;
+	}
+
+	const appRoot = document.getElementById("app");
+	if (!appRoot || appRoot.childElementCount > 0) {
+		loader.remove();
+		return;
+	}
+
+	const observer = new MutationObserver(() => {
+		if (appRoot.childElementCount > 0) {
+			observer.disconnect();
+			loader.remove();
+		}
+	});
+
+	observer.observe(appRoot, { childList: true });
+}
+
+void bootstrapStartup()
+	.then((result) => {
+		applyStartupRouteTarget(result.target);
+	})
+	.catch((error) => {
+		console.error("Startup bootstrap failed:", error);
+	})
+	.finally(() => {
+		setIsStartupReady(true);
+		queueMicrotask(() => retireStartupLoader());
+	});
+
 render(
-	() => (
-		<Show
-			when={isThemeReady()}
-			fallback={
-				<div
-					id="app-loader"
-					style={{
-						display: "flex",
-						height: "100vh",
-						width: "100vw",
-						"align-items": "center",
-						"justify-content": "center",
-						background: "#0a0a0a",
-						color: "white",
-						"font-family": "system-ui, sans-serif",
-						"border-radius": "inherit",
-						overflow: "hidden",
-					}}
-				>
-					<div style={{ "text-align": "center" }}>
-						<div class="spinner" style={{ "margin-bottom": "12px" }}></div>
-						<p style={{ opacity: 0.5, "font-size": "14px" }}>
-							Initializing Vesta...
-						</p>
-					</div>
-				</div>
-			}
-		>
-			<App />
-		</Show>
-	),
+	() => <Show when={isStartupReady()}><App /></Show>,
 	root as MountableElement,
 );
