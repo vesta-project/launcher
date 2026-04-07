@@ -111,12 +111,26 @@ pub async fn install_loader(
         };
 
         if !metadata.is_loader_available(&spec.version_id, loader_type, Some(version)) {
-            log::warn!(
-                "{} {} may not be officially supported for Minecraft {}",
-                loader_name,
-                version,
-                spec.version_id
-            );
+            let latest_compatible =
+                metadata.get_latest_loader_version(&spec.version_id, loader_type);
+
+            return Err(anyhow::anyhow!(match latest_compatible {
+                Some(latest) => format!(
+                    "{} version {} is not available for Minecraft {}. Try {} version {} instead, or omit the loader version to use the latest compatible version automatically.",
+                    loader_name,
+                    version,
+                    spec.version_id,
+                    loader_name,
+                    latest
+                ),
+                None => format!(
+                    "{} version {} is not available for Minecraft {}. Check which {} versions are compatible with this Minecraft version and try again.",
+                    loader_name,
+                    version,
+                    spec.version_id,
+                    loader_name
+                ),
+            }));
         }
 
         version.clone()

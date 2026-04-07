@@ -1,33 +1,34 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
 import {
-	PageViewer,
-	pageViewerOpen,
-	setPageViewerOpen,
+    PageViewer,
+    pageViewerOpen,
+    setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
 import {
-	InitAppearancePage,
-	InitDataStoragePage,
-	InitFinishedPage,
-	InitFirstPage,
-	InitGuidePage,
-	InitInstallationPage,
-	InitJavaPage,
-	InitLoginPage,
+    InitAppearancePage,
+    InitDataStoragePage,
+    InitFinishedPage,
+    InitFirstPage,
+    InitGuidePage,
+    InitInstallationPage,
+    InitJavaPage,
+    InitLoginPage,
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
+import { Toaster } from "@ui/toast/toast";
 import { useOs } from "@utils/os";
 import { consumeInitBootstrapState } from "@utils/startup-bootstrap";
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
 import {
-	getCanonicalBackStep,
-	getNextInitStep,
-	INIT_STEPS,
-	type InitStep,
-	isGuestOrDemoAccountType,
-	isSkippableAuthenticatedAccount,
-	normalizeInitStep,
-	shouldRecoverLegacyGuestCompletion,
+    getCanonicalBackStep,
+    getNextInitStep,
+    INIT_STEPS,
+    type InitStep,
+    isGuestOrDemoAccountType,
+    isSkippableAuthenticatedAccount,
+    normalizeInitStep,
+    shouldRecoverLegacyGuestCompletion,
 } from "./init-flow";
 import styles from "./init.module.css";
 
@@ -450,6 +451,7 @@ function InitPage() {
 						/>
 					</Match>
 				</Switch>
+				<Toaster />
 				{/*{initStep()}*/}
 			</div>
 			<PageViewer

@@ -94,6 +94,11 @@
 	flex-direction: row !important;
 	justify-content: space-between;
 	flex-wrap: nowrap;
+	align-items: center;
+}
+
+.settings-field--inline .settings-field-info {
+	justify-content: center;
 }
 
 /* Stack layout (Slider, ToggleGroup) - Always stacked, full width below */
@@ -159,6 +164,21 @@
 	align-items: center;
 	justify-content: flex-end;
 	flex-shrink: 0;
+}
+
+.settings-field-content-wrapper {
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	min-height: 32px;
+}
+
+.settings-field--stack .settings-field-content-wrapper {
+	width: 100%;
+	justify-content: flex-start;
+	align-items: stretch;
+	min-height: 0;
 }
 
 @media (max-width: 800px) {

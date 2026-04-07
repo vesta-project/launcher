@@ -1,67 +1,70 @@
+import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import {
-	Combobox,
-	ComboboxContent,
-	ComboboxControl,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxItemIndicator,
-	ComboboxItemLabel,
-	ComboboxTrigger,
+    Combobox,
+    ComboboxContent,
+    ComboboxControl,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxTrigger
 } from "@ui/combobox/combobox";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import {
-	NumberField,
-	NumberFieldDecrementTrigger,
-	NumberFieldGroup,
-	NumberFieldIncrementTrigger,
-	NumberFieldInput,
-	NumberFieldLabel,
+    NumberField,
+    NumberFieldDecrementTrigger,
+    NumberFieldGroup,
+    NumberFieldIncrementTrigger,
+    NumberFieldInput,
+    NumberFieldLabel,
 } from "@ui/number-field/number-field";
 import { Separator } from "@ui/separator/separator";
 import {
-	Slider,
-	SliderFill,
-	SliderThumb,
-	SliderTrack,
+    Slider,
+    SliderFill,
+    SliderThumb,
+    SliderTrack,
 } from "@ui/slider/slider";
 import {
-	Switch,
-	SwitchControl,
-	SwitchLabel,
-	SwitchThumb,
+    Switch,
+    SwitchControl,
+    SwitchLabel,
+    SwitchThumb,
 } from "@ui/switch/switch";
 import {
-	TextFieldInput,
-	TextFieldLabel,
-	TextFieldRoot,
+    TextFieldInput,
+    TextFieldLabel,
+    TextFieldRoot,
 } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import {
-	DEFAULT_ICONS,
-	GameVersionMetadata,
-	getMinecraftVersions,
-	getStableIconId,
-	Instance,
-	isDefaultIcon,
-	LoaderVersionInfo,
-	PistonMetadata,
+    DEFAULT_ICONS,
+    GameVersionMetadata,
+    getMinecraftVersions,
+    getStableIconId,
+    Instance,
+    isDefaultIcon,
+    PistonMetadata,
 } from "@utils/instances";
 import { getSystemMemoryMb, ModpackInfo } from "@utils/modpacks";
 import {
-	Accessor,
-	batch,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	For,
-	on,
-	onMount,
-	Show,
+    describeSelectionAdjustments,
+    getAllModloaders,
+    getLoaderVersionsForGameVersion,
+    getModloadersForGameVersion,
+    getNotifiableSelectionAdjustments,
+    MODLOADER_DISPLAY_NAMES,
+    resolveCompatibleVersionSelection,
+} from "@utils/version-selection";
+import {
+    batch,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    onMount,
+    Show
 } from "solid-js";
 import { createStore } from "solid-js/store";
 import styles from "../install-page.module.css";
@@ -114,14 +117,6 @@ interface DirtyState {
 	jvmArgs?: boolean;
 	res?: boolean;
 }
-
-const MODLOADER_DISPLAY_NAMES: Record<string, string> = {
-	vanilla: "Vanilla",
-	fabric: "Fabric",
-	forge: "Forge",
-	neoforge: "NeoForge",
-	quilt: "Quilt",
-};
 
 /**
  * InstallForm is a dedicated component for instance configuration.
@@ -220,6 +215,15 @@ export function InstallForm(props: InstallFormProps) {
 			// We create a composite string for the combobox to use for filtering
 			searchString: `${v.version_number} ${(v.game_versions as string[]).join(" ")} ${(v.loaders as string[]).join(" ")}`,
 		}));
+	});
+
+	const selectedModpackVersionOption = createMemo(() => {
+		const selectedId = props.selectedModpackVersionId;
+		if (!selectedId) return null;
+		return (
+			searchableModpackVersions().find((version) => version.id === selectedId) ||
+			null
+		);
 	});
 
 	// --- State Normalization ---
@@ -385,67 +389,66 @@ export function InstallForm(props: InstallFormProps) {
 		}
 	});
 
-	createEffect(() => {
-		// Automatically select the best loader version when loader or MC version changes
-		const versions = availableLoaderVers();
-		if (versions.length > 0) {
-			const current = loaderVer();
-			const exists = versions.some((v) => v.version === current);
+	const [compatibilityInitialized, setCompatibilityInitialized] =
+		createSignal(false);
 
-			// If nothing set, or if current selection is invalid for this loader/MC combo
-			if (!current || !exists) {
-				const latestStable = versions.find((v: LoaderVersionInfo) => v.stable);
-				setLoaderVer(latestStable ? latestStable.version : versions[0].version);
+	createEffect(() => {
+		const meta = pistonMetadata();
+		if (!meta || normalizedIsModpack()) return;
+
+		const currentVersion = mcVersion();
+		if (!currentVersion) return;
+
+		const resolved = resolveCompatibleVersionSelection({
+			metadata: meta,
+			minecraftVersion: currentVersion,
+			modloader: loader(),
+			modloaderVersion: loaderVer(),
+			includeSnapshots: includeSnapshots(),
+			supportedMcVersions: props.supportedMcVersions,
+			supportedModloaders: props.supportedModloaders,
+		});
+
+		const changed =
+			resolved.minecraftVersion !== currentVersion ||
+			resolved.modloader !== loader() ||
+			resolved.modloaderVersion !== loaderVer();
+
+		if (!changed) {
+			if (!compatibilityInitialized()) {
+				setCompatibilityInitialized(true);
 			}
+			return;
+		}
+
+		batch(() => {
+			if (resolved.minecraftVersion !== currentVersion) {
+				setMcVersion(resolved.minecraftVersion);
+			}
+			if (resolved.modloader !== loader()) {
+				setLoader(resolved.modloader);
+			}
+			if (resolved.modloaderVersion !== loaderVer()) {
+				setLoaderVer(resolved.modloaderVersion);
+			}
+		});
+
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(
+			resolved.adjustments,
+		);
+
+		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
+			showToast({
+				title: "Compatibility Adjusted",
+				description: describeSelectionAdjustments(notifiableAdjustments),
+				severity: "info",
+			});
+		}
+
+		if (!compatibilityInitialized()) {
+			setCompatibilityInitialized(true);
 		}
 	});
-
-	// --- CROSS-SELECTION LOGIC (Pillar-driven helper) ---
-	// If the user switches modloaders, and the current version is NOT compatible with it,
-	// we auto-switch to the latest version that DOES support it.
-	createEffect(
-		on(
-			loader,
-			(l) => {
-				const meta = pistonMetadata();
-				if (!meta || l === "vanilla" || normalizedIsModpack()) return;
-
-				const currentV = mcVersion();
-				const vData = meta.game_versions.find((v) => v.id === currentV);
-
-				// Skip if somehow version metadata is missing
-				if (!currentV) return;
-
-				// Check if the current version supports this loader
-				const isUnsupported =
-					vData &&
-					!Object.keys(vData.loaders).some(
-						(key) => key.toLowerCase() === l.toLowerCase(),
-					);
-
-				if (isUnsupported) {
-					// Find first version that DOES support this loader (usually latest stable)
-					const compatible = meta.game_versions.find((v) =>
-						Object.keys(v.loaders).some(
-							(key) => key.toLowerCase() === l.toLowerCase(),
-						),
-					);
-
-					if (compatible) {
-						batch(() => {
-							setMcVersion(compatible.id);
-							showToast({
-								title: "Context Switched",
-								description: `${MODLOADER_DISPLAY_NAMES[l] || l} is not available for ${currentV}. Switched to ${compatible.id}.`,
-								severity: "info",
-							});
-						});
-					}
-				}
-			},
-			{ defer: true },
-		),
-	);
 
 	// --- Derived Lists (Filtered for Standard Mode or Limited by Props) ---
 
@@ -494,32 +497,13 @@ export function InstallForm(props: InstallFormProps) {
 		const meta = pistonMetadata();
 		if (!meta) return [loader() || "vanilla"];
 
-		// In pillar-driven selection, we show all possible loaders that satisfy the platform/resource requirements,
-		// regardless of the currently selected Minecraft version. The auto-switch logic handles compatibility.
-		const set = new Set(["vanilla"]);
-
-		// We collect all loaders available in the metadata
-		meta.game_versions.forEach((v) => {
-			Object.keys(v.loaders).forEach((l) => {
-				const loaderName = l.toLowerCase();
-				// Filter by supportedModloaders if provided by the modpack/resource
-				if (props.supportedModloaders && props.supportedModloaders.length > 0) {
-					if (props.supportedModloaders.includes(loaderName)) {
-						set.add(loaderName);
-					}
-				} else {
-					set.add(loaderName);
-				}
-			});
-		});
-
-		// Ensure current selection is always included to prevent UI flickers
-		const currentL = loader();
-		if (currentL) {
-			set.add(currentL.toLowerCase());
+		const loaders = getAllModloaders(meta, props.supportedModloaders);
+		const currentLoader = loader().toLowerCase();
+		if (currentLoader && !loaders.includes(currentLoader)) {
+			return [currentLoader, ...loaders];
 		}
 
-		return Array.from(set);
+		return loaders;
 	});
 
 	const currentVersionSupportedLoaders = createMemo(() => {
@@ -527,13 +511,16 @@ export function InstallForm(props: InstallFormProps) {
 		const currentV = mcVersion();
 		if (!meta || !currentV) return ["vanilla"];
 
-		const vData = meta.game_versions.find((v) => v.id === currentV);
-		if (!vData) return ["vanilla"];
+		return getModloadersForGameVersion(meta, currentV);
+	});
 
-		return [
-			"vanilla",
-			...Object.keys(vData.loaders).map((l) => l.toLowerCase()),
-		];
+	const modloaderSwitcherOptions = createMemo(() => {
+		const supportedLoaders = currentVersionSupportedLoaders();
+		return availableLoaders().map((loaderId) => ({
+			value: loaderId,
+			label: MODLOADER_DISPLAY_NAMES[loaderId] || loaderId,
+			supported: supportedLoaders.includes(loaderId.toLowerCase()),
+		}));
 	});
 
 	const availableLoaderVers = createMemo(() => {
@@ -545,11 +532,10 @@ export function InstallForm(props: InstallFormProps) {
 		if (!meta || !currentV || currentL === "vanilla")
 			return currentLV ? [{ version: currentLV, stable: true }] : [];
 
-		const vData = meta.game_versions.find((v) => v.id === currentV);
-		const list = vData?.loaders[currentL] || [];
+		const list = getLoaderVersionsForGameVersion(meta, currentV, currentL);
 
 		if (currentLV && !list.some((v) => v.version === currentLV)) {
-			const synthetic: LoaderVersionInfo = { version: currentLV, stable: true };
+			const synthetic = { version: currentLV, stable: true };
 			return [synthetic, ...list];
 		}
 
@@ -717,13 +703,25 @@ export function InstallForm(props: InstallFormProps) {
 									</div>
 									<Combobox<any>
 										options={searchableModpackVersions()}
-										value={props.selectedModpackVersionId}
-										onChange={(id: any) => {
-											if (id) props.onModpackVersionChange?.(id);
+										value={selectedModpackVersionOption()}
+										onChange={(version: any) => {
+											if (version?.id) {
+												props.onModpackVersionChange?.(version.id);
+											}
 										}}
 										optionValue={(v) => v.id}
+										optionLabel={(v) => {
+											const mcVersion = v.game_versions?.[0];
+											return mcVersion
+												? `${v.version_number} (MC ${mcVersion})`
+												: v.version_number;
+										}}
 										optionTextValue={(v) => v.searchString}
-										placeholder="Select version..."
+										placeholder={
+											props.selectedModpackVersionId
+												? "Loading version..."
+												: "Select version..."
+										}
 										itemComponent={(p) => (
 											<ComboboxItem item={p.item}>
 												<div class={styles["version-item-content"]}>
@@ -734,30 +732,14 @@ export function InstallForm(props: InstallFormProps) {
 														{(p.item.rawValue.game_versions as string[]).join(
 															", ",
 														)}{" "}
-														� {(p.item.rawValue.loaders as string[]).join(", ")}
+														- {(p.item.rawValue.loaders as string[]).join(", ")}
 													</span>
 												</div>
 											</ComboboxItem>
 										)}
 									>
 										<ComboboxControl aria-label="Modpack Version Selection">
-											<ComboboxInput
-												as="input"
-												value={(() => {
-													const selected = props.modpackVersions?.find(
-														(v) => v.id === props.selectedModpackVersionId,
-													);
-													if (!selected) {
-														if (props.selectedModpackVersionId)
-															return "Loading version...";
-														return "";
-													}
-													const mcV = selected.game_versions?.[0];
-													return mcV
-														? `${selected.version_number} (MC ${mcV})`
-														: selected.version_number;
-												})()}
-											/>
+											<ComboboxInput as="input" />
 											<ComboboxTrigger />
 										</ComboboxControl>
 										<ComboboxContent />
@@ -797,36 +779,17 @@ export function InstallForm(props: InstallFormProps) {
 										Modloader
 										<HelpTrigger topic="MODLOADER_EXPLAINED" />
 									</div>
-									<ToggleGroup
-										class={styles["modloader-toggle-group"]}
+									<ModloaderSwitcher
+										options={modloaderSwitcherOptions()}
 										value={loader()}
-										onChange={(v: string | null) => {
-											if (v) {
-												batch(() => {
-													setLoader(v);
-													setLoaderVer("");
-													setDirty("loader", true);
-												});
-											}
+										onChange={(nextLoader) => {
+											batch(() => {
+												setLoader(nextLoader);
+												setLoaderVer("");
+												setDirty("loader", true);
+											});
 										}}
-									>
-										<For each={availableLoaders()}>
-											{(l) => (
-												<ToggleGroupItem
-													value={l}
-													class={styles["modloader-pill"]}
-													classList={{
-														[styles["modloader-pill--unsupported"]]:
-															!currentVersionSupportedLoaders().includes(
-																l.toLowerCase(),
-															),
-													}}
-												>
-													{MODLOADER_DISPLAY_NAMES[l] || l}
-												</ToggleGroupItem>
-											)}
-										</For>
-									</ToggleGroup>
+									/>
 								</div>
 							</div>
 
@@ -892,11 +855,39 @@ export function InstallForm(props: InstallFormProps) {
 													}
 												}}
 												placeholder="Latest"
-												itemComponent={(p) => (
-													<ComboboxItem item={p.item}>
-														{p.item.rawValue}
-													</ComboboxItem>
-												)}
+												itemComponent={(p) => {
+													const versionInfo = availableLoaderVers().find(
+														(v) => v.version === p.item.rawValue,
+													);
+													return (
+														<ComboboxItem item={p.item}>
+															<div
+																style={{
+																	display: "flex",
+																	"justify-content": "space-between",
+																	width: "100%",
+																	"align-items": "center",
+																	gap: "12px",
+																}}
+															>
+																<span>{p.item.rawValue}</span>
+																<Show when={!versionInfo?.stable}>
+																	<span
+																		style={{
+																			"font-size": "10px",
+																			background: "var(--surface-raised)",
+																			padding: "2px 6px",
+																			"border-radius": "4px",
+																			opacity: 0.6,
+																		}}
+																	>
+																		Experimental
+																	</span>
+																</Show>
+															</div>
+														</ComboboxItem>
+													);
+												}}
 											>
 												<ComboboxControl aria-label="Loader Version Picker">
 													<ComboboxInput />

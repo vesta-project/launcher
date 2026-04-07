@@ -59,7 +59,7 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 					<div class={styles["settings-field-label-wrapper"]}>
 						<span class={styles["settings-field-label"]}>{props.label}</span>
 						<Show when={props.helpTopic}>
-							<HelpTrigger topic={props.helpTopic!} />
+							<HelpTrigger topic={props.helpTopic??""} />
 						</Show>
 					</div>
 					<Show when={props.description}>

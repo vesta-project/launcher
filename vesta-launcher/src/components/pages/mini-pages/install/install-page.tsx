@@ -3,32 +3,32 @@ import GlobeIcon from "@assets/earth-globe.svg";
 import SearchIcon from "@assets/search.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { ResourceVersion, resources, SourcePlatform } from "@stores/resources";
+import { resources, ResourceVersion, SourcePlatform } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Badge } from "@ui/badge";
 import { Separator } from "@ui/separator/separator";
 import { showToast } from "@ui/toast/toast";
 import {
-	createInstance,
-	getInstance,
-	type Instance,
-	installInstance,
+    createInstance,
+    getInstance,
+    installInstance,
+    type Instance,
 } from "@utils/instances";
 import {
-	getModpackInfo,
-	getModpackInfoFromUrl,
-	installModpackFromUrl,
-	installModpackFromZip,
-	ModpackInfo,
+    getModpackInfo,
+    getModpackInfoFromUrl,
+    installModpackFromUrl,
+    installModpackFromZip,
+    ModpackInfo,
 } from "@utils/modpacks";
 import {
-	batch,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	onMount,
-	Show,
+    batch,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    onMount,
+    Show,
 } from "solid-js";
 import { InstallForm } from "./components/InstallForm";
 import styles from "./install-page.module.css";
@@ -223,6 +223,37 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 			}
 		},
 	);
+
+	createEffect(() => {
+		const versions = projectVersions();
+		const selectedId = selectedModpackVersionId();
+		if (!versions || versions.length === 0 || !selectedId) return;
+
+		const match = versions.find(
+			(version: ResourceVersion) =>
+				version.id === selectedId || version.version_number === selectedId,
+		);
+
+		if (match) {
+			if (match.id !== selectedId) {
+				setSelectedModpackVersionId(match.id);
+			}
+			return;
+		}
+
+		const fallback = versions[0];
+		batch(() => {
+			setSelectedModpackVersionId(fallback.id);
+			setModpackUrl(fallback.download_url);
+		});
+
+		showToast({
+			title: "Version Updated",
+			description:
+				"The selected modpack version is no longer available. Switched to the latest available version.",
+			severity: "info",
+		});
+	});
 
 	// --- Effect: Reactive Metadata Sync ---
 	// Whenever the modpack source changes, fetch its info.

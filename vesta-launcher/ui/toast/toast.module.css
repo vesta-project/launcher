@@ -3,7 +3,7 @@
 
 	position: fixed;
 	bottom: 0;
-	left: 64px;
+	left: 0;
 	display: flex;
 	flex-direction: column;
 	padding: var(--viewport-padding);
@@ -15,6 +15,10 @@
 	z-index: var(--z-toast);
 	outline: none;
 	pointer-events: none;
+}
+
+:global(.page--home) .toast__list {
+	left: 64px;
 }
 
 .toast {

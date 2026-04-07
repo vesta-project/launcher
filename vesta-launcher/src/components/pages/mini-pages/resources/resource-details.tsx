@@ -1,5 +1,4 @@
 import BellIcon from "@assets/bell.svg";
-import CloseIcon from "@assets/close.svg";
 import CurseForgeIcon from "@assets/curseforge.svg";
 import HeartIcon from "@assets/heart.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
@@ -7,55 +6,60 @@ import RightArrowIcon from "@assets/right-arrow.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
-import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import {
-	findBestVersion,
-	ResourceDependency,
-	ResourceProject,
-	ResourceVersion,
-	resources,
-	SourcePlatform,
+    findBestVersion,
+    ResourceDependency,
+    ResourceProject,
+    resources,
+    ResourceVersion,
+    SourcePlatform,
 } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import {
-	Pagination,
-	PaginationEllipsis,
-	PaginationItem,
-	PaginationItems,
-	PaginationNext,
-	PaginationPrevious,
+    Pagination,
+    PaginationEllipsis,
+    PaginationItem,
+    PaginationItems,
+    PaginationNext,
+    PaginationPrevious,
 } from "@ui/pagination/pagination";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@ui/select/select";
+import {
+    Switch,
+    SwitchControl,
+    SwitchLabel,
+    SwitchThumb,
+} from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { formatDate } from "@utils/date";
 import { openExternal } from "@utils/external-link";
-import { DEFAULT_ICONS, type Instance, isDefaultIcon } from "@utils/instances";
+import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import { getCompatibilityForInstance } from "@utils/resources";
 import { marked } from "marked";
 import {
-	Component,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	For,
-	on,
-	onCleanup,
-	onMount,
-	Show,
-	untrack,
+    Component,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    For,
+    on,
+    onCleanup,
+    onMount,
+    Show,
+    untrack,
 } from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-details.module.css";
@@ -225,6 +229,7 @@ const ResourceDetailsPage: Component<{
 	});
 
 	const [versionFilter, setVersionFilter] = createSignal("");
+	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
 	const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<
 		string | null
 	>(null);
@@ -546,6 +551,7 @@ const ResourceDetailsPage: Component<{
 						activeRouter()?.removeQuery("activeTab");
 					}
 					setVersionFilter("");
+					setIncludeSnapshots(false);
 					setVersionPage(1);
 					setSelectedGalleryItem(null);
 				}
@@ -553,18 +559,100 @@ const ResourceDetailsPage: Component<{
 		),
 	);
 
+	const selectedInstance = createMemo(() => {
+		const instId = resources.state.selectedInstanceId;
+		if (!instId) return null;
+		return instancesState.instances.find((i) => i.id === instId) || null;
+	});
+
+	const formatLoaderName = (loader?: string | null) => {
+		const normalized = (loader || "vanilla").toLowerCase();
+		const labels: Record<string, string> = {
+			vanilla: "Vanilla",
+			fabric: "Fabric",
+			forge: "Forge",
+			quilt: "Quilt",
+			neoforge: "NeoForge",
+		};
+		return labels[normalized] || `${normalized[0]?.toUpperCase() || ""}${normalized.slice(1)}`;
+	};
+
+	const compatibilityFilteredVersions = createMemo(() => {
+		const inst = selectedInstance();
+		if (!inst || isModpack()) return resources.state.versions;
+
+		return resources.state.versions.filter((version) => {
+			const compatibility = getCompatibilityForInstance(project(), version, inst);
+			return compatibility.type !== "incompatible";
+		});
+	});
+
+	const hasCompatibleSnapshotVersions = createMemo(() =>
+		compatibilityFilteredVersions().some((v) => v.release_type !== "release"),
+	);
+
 	const filteredVersions = createMemo(() => {
-		const query = versionFilter().toLowerCase();
-		let list = resources.state.versions;
+		const query = versionFilter().trim().toLowerCase();
+		let list = compatibilityFilteredVersions();
+
+		if (!includeSnapshots()) {
+			list = list.filter((v) => v.release_type === "release");
+		}
+
 		if (query) {
 			list = list.filter(
 				(v) =>
 					v.version_number.toLowerCase().includes(query) ||
+					v.file_name.toLowerCase().includes(query) ||
+					v.release_type.toLowerCase().includes(query) ||
 					v.game_versions.some((gv) => gv.toLowerCase().includes(query)) ||
 					v.loaders.some((l) => l.toLowerCase().includes(query)),
 			);
 		}
 		return list;
+	});
+
+	const versionEmptyState = createMemo(() => {
+		const query = versionFilter().trim();
+		const selectedInst = selectedInstance();
+
+		if (resources.state.versions.length === 0) {
+			return {
+				title: "No versions available",
+				description: "This project did not return any versions from the selected platform.",
+			};
+		}
+
+		if (
+			selectedInst &&
+			!isModpack() &&
+			compatibilityFilteredVersions().length === 0
+		) {
+			return {
+				title: "No compatible versions for this instance",
+				description: `No versions support Minecraft ${selectedInst.minecraftVersion} with ${formatLoaderName(selectedInst.modloader)}. Try another instance or adjust your target version.`,
+			};
+		}
+
+		if (query.length > 0) {
+			return {
+				title: "No versions match your filter",
+				description: `No versions matched \"${query}\". Try a broader search term.`,
+			};
+		}
+
+		if (!includeSnapshots() && hasCompatibleSnapshotVersions()) {
+			return {
+				title: "Only snapshot versions are available",
+				description:
+					"Enable Include Snapshots to show beta and alpha builds for this selection.",
+			};
+		}
+
+		return {
+			title: "No versions to display",
+			description: "Try another instance or clear your filters.",
+		};
 	});
 
 	createEffect(() => {
@@ -579,6 +667,10 @@ const ResourceDetailsPage: Component<{
 
 	const totalPages = createMemo(() =>
 		Math.ceil(filteredVersions().length / versionsPerPage),
+	);
+
+	const compatibleVersionCount = createMemo(() =>
+		compatibilityFilteredVersions().length,
 	);
 
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
@@ -2106,7 +2198,51 @@ const ResourceDetailsPage: Component<{
 															}}
 															class={styles["version-search-input"]}
 														/>
+														<div class={styles["version-filter-toggles"]}>
+															<Switch
+																checked={includeSnapshots()}
+																onCheckedChange={(checked: boolean) => {
+																	setIncludeSnapshots(checked);
+																	setVersionPage(1);
+																}}
+																class={styles["version-switch"]}
+															>
+																<SwitchControl class={styles["version-switch__control"]}>
+																	<SwitchThumb class={styles["version-switch__thumb"]} />
+																</SwitchControl>
+																<SwitchLabel class={styles["version-switch__label"]}>
+																	Include Snapshots
+																</SwitchLabel>
+															</Switch>
+															<span class={styles["version-filter-count"]}>
+																{filteredVersions().length} / {resources.state.versions.length} shown
+															</span>
+														</div>
 													</div>
+
+													<Show when={selectedInstance() && !isModpack()}>
+														<div
+															class={styles["version-compatibility-notice"]}
+															classList={{
+																[styles["version-compatibility-notice--warning"]]:
+																	compatibleVersionCount() === 0,
+															}}
+														>
+															<div class={styles["version-compatibility-title"]}>
+																<Show
+																	when={compatibleVersionCount() > 0}
+																	fallback="No compatible versions for selected instance"
+																>
+																	Showing {compatibleVersionCount()} compatible version
+																	{compatibleVersionCount() === 1 ? "" : "s"}
+																</Show>
+															</div>
+															<div class={styles["version-compatibility-description"]}>
+																Target: {selectedInstance()?.name} · Minecraft {selectedInstance()?.minecraftVersion} · {formatLoaderName(selectedInstance()?.modloader)}
+															</div>
+														</div>
+													</Show>
+
 													<div
 														class={`${styles["version-list"]} ${styles["full-width"]}`}
 													>
@@ -2114,9 +2250,22 @@ const ResourceDetailsPage: Component<{
 															when={!resources.state.loading}
 															fallback={<div>Loading versions...</div>}
 														>
-															<For each={paginatedVersions()}>
-																{(version) => (
-																	<div class={styles["version-item"]}>
+															<Show
+																when={filteredVersions().length > 0}
+																fallback={
+																	<div class={styles["version-empty-state"]}>
+																		<div class={styles["version-empty-state__title"]}>
+																			{versionEmptyState().title}
+																		</div>
+																		<div class={styles["version-empty-state__description"]}>
+																			{versionEmptyState().description}
+																		</div>
+																	</div>
+																}
+															>
+																<For each={paginatedVersions()}>
+																	{(version) => (
+																		<div class={styles["version-item"]}>
 																		<div class={styles["version-main-info"]}>
 																			<span class={styles["version-name"]}>
 																				{version.version_number}
@@ -2377,6 +2526,7 @@ const ResourceDetailsPage: Component<{
 																	</Pagination>
 																</div>
 															</Show>
+														</Show>
 														</Show>
 													</div>
 												</div>

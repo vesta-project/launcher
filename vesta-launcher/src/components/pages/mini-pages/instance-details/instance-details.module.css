@@ -1913,6 +1913,155 @@
 	animation: pulse 2s infinite;
 }
 
+.version-picker-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	width: 100%;
+}
+
+.versioning-game-options {
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+}
+
+.versioning-section-title {
+	font-size: 13px;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	color: var(--text-secondary);
+	opacity: 0.8;
+}
+
+.versioning-modloader-toggle-group {
+	display: flex;
+	gap: 4px;
+	background: var(--surface-low);
+	padding: 4px;
+	border-radius: 12px;
+	border: 1px solid var(--border-subtle);
+	width: fit-content;
+	max-width: 100%;
+	flex-wrap: wrap;
+}
+
+.versioning-modloader-pill {
+	padding: 6px 16px;
+	border-radius: 8px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	cursor: pointer;
+	border: none;
+	background: transparent;
+	outline: none;
+}
+
+.versioning-modloader-pill:hover {
+	color: var(--text-primary);
+	background: var(--surface-medium);
+}
+
+.versioning-modloader-pill[data-checked] {
+	background: var(--primary);
+	color: white;
+}
+
+.versioning-modloader-pill--unsupported {
+	opacity: 0.45;
+}
+
+.versioning-modloader-pill--unsupported:hover {
+	opacity: 0.72;
+}
+
+.versioning-version-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: nowrap;
+}
+
+.versioning-version-input {
+  flex: 1;
+  min-width: 200px;
+}
+
+.version-toggle-row {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+@media (max-width: 580px) {
+  .versioning-version-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  .version-toggle-row {
+    justify-content: flex-start;
+    padding-left: 4px;
+  }
+}
+.version-snapshot-switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+
+.version-snapshot-switch__control {
+	display: inline-flex;
+	align-items: center;
+	height: 20px;
+	width: 36px;
+	padding: 0 2px;
+	background-color: var(--surface-medium);
+	border: 1px solid var(--border-subtle);
+	border-radius: 10px;
+	transition: background-color 250ms;
+}
+
+.version-snapshot-switch[data-checked] .version-snapshot-switch__control {
+	background-color: var(--primary);
+	border-color: var(--primary);
+}
+
+.version-snapshot-switch__thumb {
+	width: 14px;
+	height: 14px;
+	background-color: white;
+	border-radius: 50%;
+	transition: transform 250ms;
+}
+
+.version-snapshot-switch[data-checked] .version-snapshot-switch__thumb {
+	transform: translateX(16px);
+}
+
+.version-snapshot-switch__label {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	user-select: none;
+}
+
+.version-snapshot-switch[data-checked] .version-snapshot-switch__label {
+	color: var(--text-primary);
+}
+
+.versioning-action-row {
+	display: flex;
+	justify-content: flex-end;
+	margin-top: 4px;
+}
+
 /* 
  * MODERN RESOURCE TABLE SYSTEM
  * Fixed header/column "merging system" with correct z-index hierarchy

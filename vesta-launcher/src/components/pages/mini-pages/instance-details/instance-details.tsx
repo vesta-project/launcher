@@ -1,37 +1,30 @@
-import FolderIcon from "@assets/folder.svg";
-import SettingsIcon from "@assets/gear.svg";
-import InfoIcon from "@assets/help.svg";
-import LinkIcon from "@assets/link.svg";
-import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
-import PlayIcon from "@assets/play.svg";
+import PinIcon from "@assets/pin.svg";
 import TrashIcon from "@assets/trash.svg";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { SettingsCard, SettingsField } from "@components/settings";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import { instancesState } from "@stores/instances";
 import {
-	isPinned as isPinnedInStore,
-	pinning,
-	pinPage,
-	unpinPage,
+    isPinned as isPinnedInStore,
+    pinning,
+    pinPage,
+    unpinPage,
 } from "@stores/pinning";
 import {
-	findBestVersion,
-	type InstalledResource,
-	type ResourceVersion,
-	resources,
+    findBestVersion,
+    resources,
+    type InstalledResource,
+    type ResourceVersion,
 } from "@stores/resources";
 import {
-	createColumnHelper,
-	createSolidTable,
-	flexRender,
-	getCoreRowModel,
-	getFilteredRowModel,
-	getSortedRowModel,
+    createColumnHelper,
+    createSolidTable,
+    getCoreRowModel,
+    getFilteredRowModel,
+    getSortedRowModel
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -39,102 +32,56 @@ import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import { Checkbox } from "@ui/checkbox/checkbox";
-import {
-	Combobox,
-	ComboboxContent,
-	ComboboxControl,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxTrigger,
-} from "@ui/combobox/combobox";
-import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
-} from "@ui/context-menu/context-menu";
 import { ExportDialog } from "@ui/export-dialog";
-import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import { IconPicker } from "@ui/icon-picker/icon-picker";
-import {
-	Popover,
-	PopoverCloseButton,
-	PopoverContent,
-	PopoverTrigger,
-} from "@ui/popover/popover";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectLabel,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
-import { Separator } from "@ui/separator/separator";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import {
-	Slider,
-	SliderFill,
-	SliderLabel,
-	SliderThumb,
-	SliderTrack,
-	SliderValueLabel,
-} from "@ui/slider/slider";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
-import {
-	TextFieldInput,
-	TextFieldLabel,
-	TextFieldRoot,
-} from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import { formatDate } from "@utils/date";
 import {
-	DEFAULT_ICONS,
-	deleteInstance,
-	duplicateInstance,
-	type GameVersionMetadata,
-	getInstanceBySlug,
-	getMinecraftVersions,
-	getStableIconId,
-	installInstance,
-	isDefaultIcon,
-	isInstanceRunning,
-	killInstance,
-	type LoaderVersionInfo,
-	launchInstance,
-	type PistonMetadata,
-	repairInstance,
-	resetInstance,
-	resumeInstanceOperation,
-	unlinkInstance,
-	updateInstance,
-	updateInstanceModpackVersion,
+    DEFAULT_ICONS,
+    duplicateInstance,
+    getInstanceBySlug,
+    getMinecraftVersions,
+    getStableIconId,
+    installInstance,
+    isDefaultIcon,
+    isInstanceRunning,
+    killInstance,
+    launchInstance,
+    repairInstance,
+    resumeInstanceOperation,
+    unlinkInstance,
+    updateInstance,
+    updateInstanceModpackVersion
 } from "@utils/instances";
 import {
-	batch,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	For,
-	on,
-	onCleanup,
-	onMount,
-	Show,
+    describeSelectionAdjustments,
+    getAllModloaders,
+    getLoaderVersionsForGameVersion,
+    getModloaderDisplayName,
+    getModloadersForGameVersion,
+    getNotifiableSelectionAdjustments,
+    resolveCompatibleVersionSelection,
+} from "@utils/version-selection";
+import {
+    batch,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    on,
+    onCleanup,
+    onMount,
+    Show
 } from "solid-js";
 import {
-	handleDuplicate,
-	handleHardReset,
-	handleLaunch,
-	handleRepair,
-	handleUninstall,
+    handleHardReset,
+    handleUninstall
 } from "~/handlers/instance-handler";
 import styles from "./instance-details.module.css";
 import type { ModpackVersion } from "./modpack-version-selector";
-import { ModpackVersionSelector } from "./modpack-version-selector";
 import { ConsoleTab } from "./tabs/ConsoleTab";
 // Tabs
 import { HomeTab } from "./tabs/HomeTab";
@@ -269,14 +216,6 @@ export default function InstanceDetails(
 			});
 		}
 	};
-
-	const loadersList = [
-		{ label: "Vanilla", value: "vanilla" },
-		{ label: "Fabric", value: "fabric" },
-		{ label: "Forge", value: "forge" },
-		{ label: "NeoForge", value: "neoforge" },
-		{ label: "Quilt", value: "quilt" },
-	];
 
 	// Handle slug from props first, then fallback to router params
 	const getSlug = () => {
@@ -971,9 +910,23 @@ export default function InstanceDetails(
 	>(null);
 
 	const [mcVersions] = createResource(getMinecraftVersions);
+	const loadersList = createMemo(() => {
+		const metadata = mcVersions();
+		const loaderIds = metadata
+			? getAllModloaders(metadata)
+			: ["vanilla", "fabric", "forge", "neoforge", "quilt"];
+
+		return loaderIds.map((loaderId) => ({
+			label: getModloaderDisplayName(loaderId),
+			value: loaderId,
+		}));
+	});
 	const [selectedMcVersion, setSelectedMcVersion] = createSignal("");
+	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
 	const [selectedLoader, setSelectedLoader] = createSignal("vanilla");
 	const [selectedLoaderVersion, setSelectedLoaderVersion] = createSignal("");
+	const [compatibilityInitialized, setCompatibilityInitialized] =
+		createSignal(false);
 
 	const [modpackVersions, { refetch: refetchModpackVersions }] = createResource(
 		() => {
@@ -1000,22 +953,58 @@ export default function InstanceDetails(
 	);
 
 	const searchableMcVersions = createMemo(() => {
-		return (mcVersions()?.game_versions || []).map((v) => ({
-			...v,
-			searchString: v.id,
+		const versions = mcVersions()?.game_versions || [];
+		const selected = selectedMcVersion();
+
+		let visibleVersions = includeSnapshots()
+			? versions
+			: versions.filter((version) => version.stable);
+
+		if (selected && !visibleVersions.some((version) => version.id === selected)) {
+			const selectedMeta = versions.find((version) => version.id === selected);
+			if (selectedMeta) {
+				visibleVersions = [selectedMeta, ...visibleVersions];
+			}
+		}
+
+		return visibleVersions.map((version) => ({
+			...version,
+			searchString: `${version.id} ${version.version_type || ""}`.trim(),
 		}));
 	});
 
+	const currentVersionSupportedLoaders = createMemo(() => {
+		const metadata = mcVersions();
+		const version = selectedMcVersion();
+		if (!metadata || !version) return [selectedLoader().toLowerCase() || "vanilla"];
+
+		const supported = getModloadersForGameVersion(metadata, version);
+		const current = selectedLoader().toLowerCase();
+		if (current && !supported.includes(current)) {
+			return [current, ...supported];
+		}
+
+		return supported;
+	});
+
 	const searchableLoaderVersions = createMemo(() => {
-		const mv = mcVersions();
-		const sv = selectedMcVersion();
-		const sl = selectedLoader();
-		if (!mv || !sv || !sl) return [];
+		const metadata = mcVersions();
+		const version = selectedMcVersion();
+		const loader = selectedLoader();
+		if (!metadata || !version || !loader) return [];
 
-		const vMeta = mv.game_versions.find((gv) => gv.id === sv);
-		if (!vMeta) return [];
+		let loaderInfo = getLoaderVersionsForGameVersion(metadata, version, loader);
+		const selectedVersion = selectedLoaderVersion();
+		if (
+			selectedVersion &&
+			!loaderInfo.some((loaderVersion) => loaderVersion.version === selectedVersion)
+		) {
+			loaderInfo = [
+				{ version: selectedVersion, stable: true },
+				...loaderInfo,
+			];
+		}
 
-		const loaderInfo = vMeta.loaders[sl] || [];
 		return loaderInfo.map((l) => ({
 			...l,
 			id: l.version,
@@ -1030,10 +1019,16 @@ export default function InstanceDetails(
 		if (inst && tab === "versioning") {
 			// If mc version isn't set yet (initial load of tab for this instance), set it
 			if (!selectedMcVersion()) {
+				const metadata = mcVersions();
+				const currentMeta = metadata?.game_versions.find(
+					(version) => version.id === inst.minecraftVersion,
+				);
+
 				batch(() => {
 					setSelectedMcVersion(inst.minecraftVersion);
 					setSelectedLoader((inst.modloader || "vanilla").toLowerCase());
 					setSelectedLoaderVersion(inst.modloaderVersion || "");
+					setIncludeSnapshots(currentMeta ? !currentMeta.stable : false);
 
 					if (inst.modpackId && !selectedModpackVersionId()) {
 						setSelectedModpackVersionId(
@@ -1042,6 +1037,81 @@ export default function InstanceDetails(
 					}
 				});
 			}
+		}
+	});
+
+	createEffect(() => {
+		const inst = instance();
+		const tab = activeTab();
+		const metadata = mcVersions();
+		const currentVersion = selectedMcVersion();
+
+		if (
+			!inst ||
+			tab !== "versioning" ||
+			inst.modpackId ||
+			!metadata ||
+			!currentVersion
+		) {
+			return;
+		}
+
+		const selectedMeta = metadata.game_versions.find(
+			(version) => version.id === currentVersion,
+		);
+		if (!compatibilityInitialized() && selectedMeta && !selectedMeta.stable) {
+			if (!includeSnapshots()) {
+				setIncludeSnapshots(true);
+				return;
+			}
+		}
+
+		const resolved = resolveCompatibleVersionSelection({
+			metadata,
+			minecraftVersion: currentVersion,
+			modloader: selectedLoader(),
+			modloaderVersion: selectedLoaderVersion(),
+			includeSnapshots: includeSnapshots(),
+		});
+
+		const changed =
+			resolved.minecraftVersion !== currentVersion ||
+			resolved.modloader !== selectedLoader() ||
+			resolved.modloaderVersion !== selectedLoaderVersion();
+
+		if (!changed) {
+			if (!compatibilityInitialized()) {
+				setCompatibilityInitialized(true);
+			}
+			return;
+		}
+
+		batch(() => {
+			if (resolved.minecraftVersion !== currentVersion) {
+				setSelectedMcVersion(resolved.minecraftVersion);
+			}
+			if (resolved.modloader !== selectedLoader()) {
+				setSelectedLoader(resolved.modloader);
+			}
+			if (resolved.modloaderVersion !== selectedLoaderVersion()) {
+				setSelectedLoaderVersion(resolved.modloaderVersion);
+			}
+		});
+
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(
+			resolved.adjustments,
+		);
+
+		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
+			showToast({
+				title: "Compatibility Adjusted",
+				description: describeSelectionAdjustments(notifiableAdjustments),
+				severity: "info",
+			});
+		}
+
+		if (!compatibilityInitialized()) {
+			setCompatibilityInitialized(true);
 		}
 	});
 
@@ -1059,6 +1129,20 @@ export default function InstanceDetails(
 		);
 		if (match && String(match.id) !== current) {
 			setSelectedModpackVersionId(String(match.id));
+			return;
+		}
+
+		if (!match && vs.length > 0) {
+			const fallbackId = String(vs[0].id);
+			if (fallbackId !== current) {
+				setSelectedModpackVersionId(fallbackId);
+				showToast({
+					title: "Version Updated",
+					description:
+						"The previously selected modpack version is unavailable. Switched to the latest available version.",
+					severity: "info",
+				});
+			}
 		}
 	});
 
@@ -1113,9 +1197,11 @@ export default function InstanceDetails(
 		const slug = activeRouter()?.currentParams.get()?.slug;
 		if (slug) {
 			setSelectedMcVersion("");
+			setIncludeSnapshots(false);
 			setSelectedLoader("vanilla");
 			setSelectedLoaderVersion("");
 			setSelectedModpackVersionId(null);
+			setCompatibilityInitialized(false);
 		}
 	});
 
@@ -1170,21 +1256,56 @@ export default function InstanceDetails(
 	const handleStandardUpdate = async () => {
 		const inst = instance();
 		if (!inst) return;
+		if (!selectedMcVersion()) return;
+
+		let nextMcVersion = selectedMcVersion();
+		let nextLoader = selectedLoader().toLowerCase();
+		let nextLoaderVersion = selectedLoaderVersion();
+
+		const metadata = mcVersions();
+		if (metadata) {
+			const resolved = resolveCompatibleVersionSelection({
+				metadata,
+				minecraftVersion: nextMcVersion,
+				modloader: nextLoader,
+				modloaderVersion: nextLoaderVersion,
+				includeSnapshots: includeSnapshots(),
+			});
+
+			nextMcVersion = resolved.minecraftVersion;
+			nextLoader = resolved.modloader;
+			nextLoaderVersion = resolved.modloaderVersion;
+
+			if (resolved.adjustments.length > 0) {
+				batch(() => {
+					setSelectedMcVersion(nextMcVersion);
+					setSelectedLoader(nextLoader);
+					setSelectedLoaderVersion(nextLoaderVersion);
+				});
+
+				const notifiableAdjustments = getNotifiableSelectionAdjustments(
+					resolved.adjustments,
+				);
+
+				if (notifiableAdjustments.length > 0) {
+					showToast({
+						title: "Compatibility Adjusted",
+						description: describeSelectionAdjustments(notifiableAdjustments),
+						severity: "info",
+					});
+				}
+			}
+		}
 
 		setBusy(true);
 		try {
 			// updateInstance expects full Instance object
 			await updateInstance({
 				...inst,
-				minecraftVersion: selectedMcVersion(),
-				modloader:
-					selectedLoader().toLowerCase() === "vanilla"
-						? null
-						: selectedLoader(),
+				minecraftVersion: nextMcVersion,
+				modloader: nextLoader === "vanilla" ? null : nextLoader,
 				modloaderVersion:
-					selectedLoader().toLowerCase() === "vanilla"
-						? null
-						: selectedLoaderVersion(),
+					nextLoader === "vanilla" ? null : nextLoaderVersion || null,
 			});
 			await repairInstance(inst.id);
 			await refetch();
@@ -2057,13 +2178,16 @@ export default function InstanceDetails(
 												handleUnlink={handleUnlink}
 												router={activeRouter()}
 												searchableMcVersions={searchableMcVersions}
+												includeSnapshots={includeSnapshots}
+												setIncludeSnapshots={setIncludeSnapshots}
 												selectedMcVersion={selectedMcVersion}
 												setSelectedMcVersion={setSelectedMcVersion}
 												selectedLoader={selectedLoader}
 												setSelectedLoader={setSelectedLoader}
 												selectedLoaderVersion={selectedLoaderVersion}
 												setSelectedLoaderVersion={setSelectedLoaderVersion}
-												loadersList={loadersList}
+												loadersList={loadersList()}
+												currentVersionSupportedLoaders={currentVersionSupportedLoaders}
 												searchableLoaderVersions={searchableLoaderVersions}
 												handleStandardUpdate={handleStandardUpdate}
 												setShowExportDialog={setShowExportDialog}

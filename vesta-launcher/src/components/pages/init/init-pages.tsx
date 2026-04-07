@@ -1,61 +1,68 @@
+import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { NavigateOptions } from "@solidjs/router";
 import networkStore from "@stores/network";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import Button from "@ui/button/button";
 import {
-	Combobox,
-	ComboboxContent,
-	ComboboxControl,
-	ComboboxInput,
-	ComboboxItem,
-	ComboboxTrigger
+    Combobox,
+    ComboboxContent,
+    ComboboxControl,
+    ComboboxInput,
+    ComboboxItem,
+    ComboboxTrigger
 } from "@ui/combobox/combobox";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import { Separator } from "@ui/separator/separator";
 import {
-	Slider,
-	SliderThumb,
-	SliderTrack
+    Slider,
+    SliderThumb,
+    SliderTrack
 } from "@ui/slider/slider";
-import {
-	TextFieldInput,
-	TextFieldLabel,
-	TextFieldRoot,
-} from "@ui/text-field/text-field";
-import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
+import { TextFieldInput, TextFieldLabel, TextFieldRoot } from "@ui/text-field/text-field";
+import { showToast } from "@ui/toast/toast";
 import { openExternal as openUrl } from "@utils/external-link";
 import {
-	createInstance,
-	DEFAULT_ICONS,
-	getMinecraftVersions,
-	getStableIconId,
-	installInstance,
-	isDefaultIcon,
-	type CreateInstanceData,
-	type Instance,
-	type PistonMetadata,
+    createInstance,
+    DEFAULT_ICONS,
+    getMinecraftVersions,
+    getStableIconId,
+    installInstance,
+    isDefaultIcon,
+    type CreateInstanceData,
+    type Instance,
+    type PistonMetadata,
 } from "@utils/instances";
 import { startAppTutorial } from "@utils/tutorial";
 import {
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-	Show,
+    describeSelectionAdjustments,
+    getAllModloaders,
+    getLoaderVersionsForGameVersion,
+    getModloaderDisplayName,
+    getModloadersForGameVersion,
+    getNotifiableSelectionAdjustments,
+    resolveCompatibleVersionSelection,
+} from "@utils/version-selection";
+import {
+    batch,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    For,
+    onCleanup,
+    onMount,
+    Show,
 } from "solid-js";
 import {
-	applyTheme,
-	getThemeById,
-	PRESET_THEMES
+    applyTheme,
+    getThemeById,
+    PRESET_THEMES
 } from "../../../themes/presets";
 import {
-	currentThemeConfig,
-	saveThemeUpdate as persistThemeUpdate,
+    currentThemeConfig,
+    saveThemeUpdate as persistThemeUpdate,
 } from "../../../utils/config-sync";
 import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
 import { ModdingGuideContent } from "../mini-pages/modding-guide/guide";
@@ -549,21 +556,25 @@ function InitInstallationPage(props: InitPagesProps) {
 
 	// Get available modloaders for selected version
 	const availableModloaders = createMemo(() => {
+		const meta = metadata();
+		if (!meta) return ["vanilla"];
+		return getAllModloaders(meta);
+	});
+
+	const currentVersionSupportedLoaders = createMemo(() => {
 		const version = selectedVersion();
 		const meta = metadata();
 		if (!version || !meta) return ["vanilla"];
+		return getModloadersForGameVersion(meta, version);
+	});
 
-		const gameVersion = meta.game_versions.find((v) => v.id === version);
-		if (!gameVersion) return ["vanilla"];
-
-		const loaderKeys = Object.keys(gameVersion.loaders);
-		// Deduplicate and ensure vanilla is first
-		const uniqueLoaders = new Set(["vanilla"]);
-		for (const key of loaderKeys) {
-			uniqueLoaders.add(key);
-		}
-
-		return Array.from(uniqueLoaders);
+	const modloaderSwitcherOptions = createMemo(() => {
+		const supportedLoaders = currentVersionSupportedLoaders();
+		return availableModloaders().map((loaderId) => ({
+			value: loaderId,
+			label: getModloaderDisplayName(loaderId),
+			supported: supportedLoaders.includes(loaderId.toLowerCase()),
+		}));
 	});
 
 	// Get available loader versions
@@ -572,25 +583,63 @@ function InitInstallationPage(props: InitPagesProps) {
 		const loader = selectedModloader();
 		const meta = metadata();
 		if (!version || !loader || loader === "vanilla" || !meta) return [];
-
-		const gameVersion = meta.game_versions.find((v) => v.id === version);
-		return gameVersion?.loaders[loader] || [];
+		return getLoaderVersionsForGameVersion(meta, version, loader);
 	});
 
-	// Auto-update loader versions
+	const [compatibilityInitialized, setCompatibilityInitialized] =
+		createSignal(false);
+
 	createEffect(() => {
-		const loaders = availableModloaders();
-		if (!loaders.includes(selectedModloader())) {
-			setSelectedModloader("vanilla");
+		const meta = metadata();
+		const version = selectedVersion();
+		if (!meta || !version) return;
+
+		const resolved = resolveCompatibleVersionSelection({
+			metadata: meta,
+			minecraftVersion: version,
+			modloader: selectedModloader(),
+			modloaderVersion: selectedModloaderVersion(),
+			includeSnapshots: false,
+		});
+
+		const changed =
+			resolved.minecraftVersion !== version ||
+			resolved.modloader !== selectedModloader() ||
+			resolved.modloaderVersion !== selectedModloaderVersion();
+
+		if (!changed) {
+			if (!compatibilityInitialized()) {
+				setCompatibilityInitialized(true);
+			}
+			return;
 		}
-	});
 
-	createEffect(() => {
-		const versions = availableLoaderVersions();
-		if (versions.length > 0) {
-			setSelectedModloaderVersion(versions[0].version);
-		} else {
-			setSelectedModloaderVersion("");
+		batch(() => {
+			if (resolved.minecraftVersion !== version) {
+				setSelectedVersion(resolved.minecraftVersion);
+			}
+			if (resolved.modloader !== selectedModloader()) {
+				setSelectedModloader(resolved.modloader);
+			}
+			if (resolved.modloaderVersion !== selectedModloaderVersion()) {
+				setSelectedModloaderVersion(resolved.modloaderVersion);
+			}
+		});
+
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(
+			resolved.adjustments,
+		);
+
+		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
+			showToast({
+				title: "Compatibility Adjusted",
+				description: describeSelectionAdjustments(notifiableAdjustments),
+				severity: "info",
+			});
+		}
+
+		if (!compatibilityInitialized()) {
+			setCompatibilityInitialized(true);
 		}
 	});
 
@@ -741,22 +790,11 @@ function InitInstallationPage(props: InitPagesProps) {
 						{/* Modloader Selection */}
 						<div class={styles["init-form-field"]}>
 							<label class={styles["init-form-label"]}>Modloader</label>
-							<ToggleGroup
+							<ModloaderSwitcher
+								options={modloaderSwitcherOptions()}
 								value={selectedModloader()}
-								onChange={(val) => val && setSelectedModloader(val as string)}
-								class={styles["modloader-pills"]}
-							>
-								<For each={availableModloaders()}>
-									{(loader) => (
-										<ToggleGroupItem
-											value={loader}
-											class="badge badge--pill badge--clickable badge--variant-surface"
-										>
-											{loader.charAt(0).toUpperCase() + loader.slice(1)}
-										</ToggleGroupItem>
-									)}
-								</For>
-							</ToggleGroup>
+								onChange={setSelectedModloader}
+							/>
 						</div>
 
 						<div style={{ display: "flex", gap: "15px" }}>
@@ -767,7 +805,16 @@ function InitInstallationPage(props: InitPagesProps) {
 								<Combobox
 									options={
 										metadata()
-											?.game_versions.filter((v) => v.stable)
+											?.game_versions.filter(
+												(v) =>
+													v.stable &&
+													(selectedModloader() === "vanilla" ||
+														Object.keys(v.loaders).some(
+															(l) =>
+																l.toLowerCase() ===
+																selectedModloader().toLowerCase(),
+														)),
+											)
 											.map((v) => v.id) || []
 									}
 									value={selectedVersion()}
@@ -805,11 +852,39 @@ function InitInstallationPage(props: InitPagesProps) {
 										value={selectedModloaderVersion()}
 										onChange={setSelectedModloaderVersion}
 										placeholder={`Select ${selectedModloader()} version...`}
-										itemComponent={(itemProps) => (
-											<ComboboxItem item={itemProps.item}>
-												{itemProps.item.rawValue}
-											</ComboboxItem>
-										)}
+										itemComponent={(itemProps) => {
+											const versionInfo = availableLoaderVersions().find(
+												(v) => v.version === itemProps.item.rawValue,
+											);
+											return (
+												<ComboboxItem item={itemProps.item}>
+													<div
+														style={{
+															display: "flex",
+															"justify-content": "space-between",
+															width: "100%",
+															"align-items": "center",
+															gap: "12px",
+														}}
+													>
+														<span>{itemProps.item.rawValue}</span>
+														<Show when={!versionInfo?.stable}>
+															<span
+																style={{
+																	"font-size": "10px",
+																	background: "var(--surface-raised)",
+																	padding: "2px 6px",
+																	"border-radius": "4px",
+																	opacity: 0.6,
+																}}
+															>
+																Experimental
+															</span>
+														</Show>
+													</div>
+												</ComboboxItem>
+											);
+										}}
 									>
 										<ComboboxControl
 											aria-label="Loader Version"
@@ -2160,9 +2235,9 @@ function InitAppearancePage(props: InitPagesProps) {
 }
 
 export {
-	InitAppearancePage, InitDataStoragePage, InitFinishedPage,
-	InitFirstPage,
-	InitGuidePage, InitInstallationPage, InitJavaPage,
-	InitLoginPage
+    InitAppearancePage, InitDataStoragePage, InitFinishedPage,
+    InitFirstPage,
+    InitGuidePage, InitInstallationPage, InitJavaPage,
+    InitLoginPage
 };
 
