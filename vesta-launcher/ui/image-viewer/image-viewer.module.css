@@ -172,7 +172,8 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	cursor: default;
+	cursor: pointer;
+	overscroll-behavior: contain;
 }
 
 .navBtn {
@@ -234,7 +235,7 @@
 	align-items: center;
 	justify-content: center;
 	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-	cursor: default;
+	cursor: pointer;
 	overflow: hidden;
 }
 
@@ -244,19 +245,39 @@
 	width: auto;
 	height: auto;
 	object-fit: contain;
+	display: block;
 	box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
 	transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 	border-radius: 4px;
 	cursor: zoom-in;
+	user-select: none;
+	touch-action: manipulation;
+	will-change: transform;
 	transform-origin: var(--zoom-x, center) var(--zoom-y, center);
-	transform: scale(var(--image-scale, 1));
+	transform: translate(var(--pan-x, 0px), var(--pan-y, 0px))
+		scale(var(--image-scale, 1));
 }
 
 .imageContainer.zoomed img {
-	transform: scale(calc(2.2 * var(--image-scale, 1)));
+	transform: translate(var(--pan-x, 0px), var(--pan-y, 0px))
+		scale(calc(2.2 * var(--image-scale, 1)));
+	transition: transform 0.1s linear;
 	box-shadow: none;
 	border-radius: 0;
-	cursor: zoom-out;
+	cursor: grab;
+}
+
+.imageContainer.zoomed.panned img {
+	transform-origin: center center;
+}
+
+.imageContainer.zoomed.dragging img {
+	transition: none;
+	cursor: grabbing;
+}
+
+.imageContainer.zoomed:active img {
+	cursor: grabbing;
 }
 
 .imageContainer.zoomed::-webkit-scrollbar {
