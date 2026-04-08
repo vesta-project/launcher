@@ -355,21 +355,24 @@
 	background-attachment: scroll;
 }
 
-:root[data-window-effect="transparent"] body,
-:root[data-window-effect="mica"] body,
-:root[data-window-effect="acrylic"] body,
-:root[data-window-effect="blur"] body,
-:root[data-window-effect="vibrancy"] body,
-:root[data-window-effect="liquid_glass"] body {
-	background: transparent !important;
-}
-
 body {
 	position: fixed;
 	width: 100%;
 	height: 100%;
-	background: var(--app-background-tint);
+	background: transparent;
 	overflow: hidden;
+}
+
+:root:not([data-window-effect]) body,
+:root[data-window-effect="none"] body,
+:root[data-window-effect=""] body {
+	background: var(--app-background-tint) !important;
+}
+
+:root[data-window-effect]:not([data-window-effect="none"]):not(
+		[data-window-effect=""]
+	) body {
+	background: transparent !important;
 }
 
 /* =============================================================================
@@ -538,8 +541,6 @@ body {
 	}
 
 	/* Override #app background for light mode */
-	/* Note: When gradients are disabled, JS sets --background-color to var(--app-background-tint) */
-	/* The gradient's transparent colors let Mica show through when enabled */
 	#app {
 		backdrop-filter: none;
 	}
@@ -807,12 +808,9 @@ button {
 }
 
 /* OS effects can fully expose the native material behind the webview */
-:root[data-window-effect="transparent"] #app,
-:root[data-window-effect="mica"] #app,
-:root[data-window-effect="acrylic"] #app,
-:root[data-window-effect="blur"] #app,
-:root[data-window-effect="vibrancy"] #app,
-:root[data-window-effect="liquid_glass"] #app {
+:root[data-window-effect]:not([data-window-effect="none"]):not(
+		[data-window-effect=""]
+	) #app {
 	background-color: transparent !important;
 	background-image: var(--background-image) !important;
 }

@@ -752,6 +752,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .inner_size(1200_f64, 700_f64)
             .min_inner_size(520_f64, 465_f64)
             .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
+            // Keep startup hidden until frontend requests show, so the first visible frame is the loader.
+            .visible(false)
             .transparent(true)
             .decorations(false);
         
@@ -798,6 +800,18 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let win_builder = win_builder;
 
     let _main_win = win_builder.build()?;
+
+    // Safety fallback: if frontend startup handshake fails, don't leave the app hidden forever.
+    {
+        let fallback_window = _main_win.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            if matches!(fallback_window.is_visible(), Ok(false)) {
+                log::warn!("Main window still hidden after startup timeout; forcing show fallback");
+                let _ = fallback_window.show();
+            }
+        });
+    }
 
     // Always start with a solid, non-transparent window effect during bootstrap.
     // The frontend theme engine will apply the persisted effect once config/theme has loaded.

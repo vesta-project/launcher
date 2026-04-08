@@ -1,8 +1,8 @@
 /* @refresh reload */
 
 import {
-    applyStartupRouteTarget,
-    bootstrapStartup,
+	applyStartupRouteTarget,
+	bootstrapStartup,
 } from "@utils/startup-bootstrap";
 import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
@@ -14,6 +14,14 @@ const root = document.getElementById("app");
 
 if (!root) {
 	throw new Error("Root element not found");
+}
+
+if ((window as any).__TAURI_INTERNALS__) {
+	void import("@tauri-apps/api/core")
+		.then(({ invoke }) => invoke("show_window_from_tray"))
+		.catch((error) => {
+			console.warn("Failed to show startup window:", error);
+		});
 }
 
 // Add Ctrl+R / Cmd+R reload handler

@@ -5,12 +5,14 @@ import { createSignal } from "solid-js";
 
 const [isThemeReady, setIsThemeReady] = createSignal(false);
 let themeInitPromise: Promise<Record<string, any> | null> | null = null;
+const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
 
 function applyStartupFallbackTheme(): void {
 	const root = document.documentElement;
 	if (!root.getAttribute("data-window-effect")) {
 		root.setAttribute("data-window-effect", "none");
 	}
+	root.setAttribute(STARTUP_FALLBACK_ATTR, "1");
 
 	root.style.setProperty("--app-background-tint", "#141414");
 	root.style.setProperty("--background-color", "#141414");

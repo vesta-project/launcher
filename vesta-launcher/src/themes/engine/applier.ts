@@ -8,6 +8,52 @@ import {
 
 export type { ThemeApplyOptions, ThemeApplyTransition } from "./transitionManager";
 
+const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
+
+function clearStartupFallbackIfActive(
+	root: HTMLElement,
+	style: CSSStyleDeclaration,
+): void {
+	if (root.getAttribute(STARTUP_FALLBACK_ATTR) !== "1") {
+		return;
+	}
+
+	style.removeProperty("--app-background-tint");
+	style.removeProperty("--background-color");
+	style.removeProperty("--background-image");
+	root.removeAttribute(STARTUP_FALLBACK_ATTR);
+}
+
+function applyBackgroundState(
+	theme: ThemeConfig,
+	effectToSet: string,
+	root: HTMLElement,
+	style: CSSStyleDeclaration,
+): void {
+	const isWindowEffectEnabled = effectToSet !== "none" && effectToSet !== "";
+
+	if (theme.gradientEnabled) {
+		root.setAttribute("data-gradient", "1");
+		style.removeProperty("--background-image");
+	} else {
+		root.setAttribute("data-gradient", "0");
+		style.setProperty("--background-image", "none");
+	}
+
+	if (isWindowEffectEnabled) {
+		// Native effects should always reveal the OS material with no static app tint.
+		style.removeProperty("--background-color");
+		return;
+	}
+
+	if (theme.gradientEnabled) {
+		style.removeProperty("--background-color");
+		return;
+	}
+
+	style.setProperty("--background-color", "var(--app-background-tint)");
+}
+
 export function applyTheme(
 	theme: ThemeConfig,
 	options: ThemeApplyOptions = {},
@@ -34,6 +80,9 @@ export function applyTheme(
 	const currentBorderWidth = style
 		.getPropertyValue("--border-width-subtle")
 		.trim();
+	const effectToSet = normalizeWindowEffectForCurrentOS(
+		theme.windowEffect || "none",
+	);
 	const nextThemeVarKeys = Object.keys(vars).filter((key) =>
 		key.startsWith("--theme-var-"),
 	);
@@ -96,7 +145,7 @@ export function applyTheme(
 		currentSecondaryHue === vars["--hue-secondary"] &&
 		numMatch(currentBackgroundOpacity, vars["--background-opacity"]) &&
 		numMatch(currentOpacity, vars["--effect-opacity"]) &&
-		currentWindowEffect === (theme.windowEffect || "none") &&
+		currentWindowEffect === effectToSet &&
 		currentBorderWidth === vars["--border-width-subtle"]
 	) {
 		const anyVarChanged = nextThemeVarKeys.some((key) => {
@@ -125,13 +174,14 @@ export function applyTheme(
 		}
 	}
 
+	clearStartupFallbackIfActive(root, style);
+
 	updateCustomCss(theme);
 	root.setAttribute("data-theme-id", themeId);
 	root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
 
-	const effectToSet = normalizeWindowEffectForCurrentOS(
-		theme.windowEffect || "none",
-	);
+	applyBackgroundState(theme, effectToSet, root, style);
+
 	if (currentWindowEffect !== effectToSet || isFirstApply) {
 		root.setAttribute("data-window-effect", effectToSet);
 		if ((window as any).__TAURI_INTERNALS__) {
@@ -141,19 +191,6 @@ export function applyTheme(
 				);
 			});
 		}
-	}
-
-	// Ensure background behaves correctly when toggling gradient
-	if (theme.gradientEnabled) {
-		root.setAttribute("data-gradient", "1");
-		// Let stylesheet-defined gradient and tint take over and clear stale inline overrides.
-		style.removeProperty("--background-color");
-		style.removeProperty("--background-image");
-	} else {
-		root.setAttribute("data-gradient", "0");
-		// Force a flat background and clear gradient image explicitly.
-		style.setProperty("--background-color", "var(--app-background-tint)");
-		style.setProperty("--background-image", "none");
 	}
 
 	// Apply style mode attribute
