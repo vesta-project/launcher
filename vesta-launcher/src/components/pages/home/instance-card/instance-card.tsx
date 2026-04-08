@@ -6,7 +6,7 @@ import ForgeLogo from "@assets/forge-logo.svg";
 import NeoForgeLogo from "@assets/neoforge-logo.svg";
 import PlayIcon from "@assets/play.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
-import RefreshIcon from "@assets/refresh.svg";
+import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
@@ -238,7 +238,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				props.instance.lastOperation === "hard-reset"
 					? "Hard reset"
 					: props.instance.lastOperation || "Installation";
-			return `${op} interrupted. Click to resume.`;
+			return `${op.slice(0, 1).toUpperCase() + op.slice(1).toLowerCase()} interrupted. Click to resume.`;
 		}
 
 		return needsInstallation()
@@ -469,7 +469,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 										{isInstalling() || launching() ? (
 											<div class={styles["instance-card-spinner"]} />
 										) : isInterrupted() ? (
-											<RefreshIcon />
+											<ReloadIcon />
 										) : needsInstallation() ? (
 											<ErrorIcon />
 										) : isRunning() ? (

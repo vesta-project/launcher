@@ -1,3 +1,4 @@
+import ReloadIcon from "@assets/reload.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import { flexRender } from "@tanstack/solid-table";
@@ -88,20 +89,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									when={props.checkingUpdates}
 									fallback={
 										<>
-											<svg
-												xmlns="http://www.w3.org/2000/svg"
-												width="14"
-												height="14"
-												viewBox="0 0 24 24"
-												fill="none"
-												stroke="currentColor"
-												stroke-width="2"
-												stroke-linecap="round"
-												stroke-linejoin="round"
-											>
-												<path d="M21 12a9 9 0 1 1-6.219-8.56" />
-												<polyline points="22 4 22 10 16 10" />
-											</svg>
+											<ReloadIcon />
 											Check Updates
 										</>
 									}
