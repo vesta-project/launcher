@@ -27,6 +27,10 @@ impl Task for DownloadJavaTask {
         true
     }
 
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
     fn starting_description(&self) -> String {
         format!("Preparing to download Java {}...", self.major_version)
     }
@@ -49,6 +53,7 @@ impl Task for DownloadJavaTask {
 
             let reporter = TaskProgressReporter {
                 ctx: ctx.clone(),
+                last_percent: std::sync::atomic::AtomicI32::new(-1),
             };
 
             let version = JavaVersion::new(major);
@@ -84,6 +89,7 @@ impl Task for DownloadJavaTask {
 
 struct TaskProgressReporter {
     ctx: TaskContext,
+    last_percent: std::sync::atomic::AtomicI32,
 }
 
 impl ProgressReporter for TaskProgressReporter {
@@ -100,11 +106,13 @@ impl ProgressReporter for TaskProgressReporter {
     fn update_bytes(&self, transferred: u64, total: Option<u64>) {
         if let Some(total) = total {
             let percent = (transferred as f64 / total as f64 * 100.0) as i32;
-            self.ctx.update_progress(percent, None, None);
+            self.set_percent(percent);
         }
     }
 
     fn set_percent(&self, percent: i32) {
+        self.last_percent
+            .store(percent, std::sync::atomic::Ordering::Relaxed);
         self.ctx.update_progress(percent, None, None);
     }
 
@@ -113,7 +121,18 @@ impl ProgressReporter for TaskProgressReporter {
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
-        self.ctx.update_progress(-1, Some(current as i32), total.map(|t| t as i32));
+        let known_percent = self
+            .last_percent
+            .load(std::sync::atomic::Ordering::Relaxed);
+        self.ctx.update_progress(
+            if known_percent >= 0 {
+                known_percent
+            } else {
+                -1
+            },
+            Some(current as i32),
+            total.map(|t| t as i32),
+        );
 
         if let Some(ref channel) = self.ctx.progress_channel {
             let _ = channel.send(ProgressUpdate::StepCount {

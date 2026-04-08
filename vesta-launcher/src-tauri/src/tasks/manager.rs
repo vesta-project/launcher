@@ -33,14 +33,9 @@ impl TaskContext {
         }
 
         // 2. Fallback to classic NotificationManager
+        // Keep current progress and step counters intact while updating text.
         let manager = self.app_handle.state::<NotificationManager>();
-        let _ = manager.update_progress_with_description(
-            self.notification_id.clone(),
-            PROGRESS_INDETERMINATE, // We keep it at indeterminate if we don't know the exact progress
-            None,
-            None,
-            description,
-        );
+        let _ = manager.upsert_description(&self.notification_id, &description);
     }
 
     pub fn update_progress(&self, progress: i32, current_step: Option<i32>, total_steps: Option<i32>) {
@@ -248,6 +243,18 @@ impl TaskManager {
                     serde_json::to_string(&actions).ok()
                 };
 
+                let task_total_steps = task.total_steps();
+                let initial_current_step = if task_total_steps > 0 {
+                    Some(0)
+                } else {
+                    None
+                };
+                let initial_total_steps = if task_total_steps > 0 {
+                    Some(task_total_steps)
+                } else {
+                    None
+                };
+
                 if let Err(e) = manager
                     .create(CreateNotificationInput {
                         client_key: Some(client_key.clone()),
@@ -260,8 +267,8 @@ impl TaskManager {
                         silent: Some(false),
                         actions: actions_json,
                         progress: Some(PROGRESS_INDETERMINATE), // Indeterminate until picked up
-                        current_step: Some(0),
-                        total_steps: Some(task.total_steps()),
+                        current_step: initial_current_step,
+                        total_steps: initial_total_steps,
                         metadata: None,
                         show_on_completion: Some(task.show_completion_notification()),
                     })
@@ -373,8 +380,8 @@ impl TaskManager {
                         let _ = manager.update_progress_with_description(
                             key_clone.clone(),
                             0,
-                            Some(0),
-                            Some(task.total_steps()),
+                            initial_current_step,
+                            initial_total_steps,
                             task.starting_description(),
                         );
                     }
@@ -402,11 +409,17 @@ impl TaskManager {
                             }
 
                             // 2. Auto completion update back to classic NotificationManager
+                            let final_step = if task_total_steps > 0 {
+                                Some(task_total_steps)
+                            } else {
+                                None
+                            };
+
                             let _ = manager.update_progress_with_description_and_severity(
                                 key_clone.clone(),
                                 100,
-                                Some(task.total_steps()),
-                                Some(task.total_steps()),
+                                final_step,
+                                final_step,
                                 task.completion_description(),
                                 Some(NotificationSeverity::Success),
                             );

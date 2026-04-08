@@ -349,9 +349,13 @@ pub async fn install_vanilla(
         total_assets
     );
 
+    
     // Prepare asset downloads and track cached entries
+    reporter.start_step("Preparing asset downloads ", None);
+    reporter.set_percent(35);
     let mut assets_to_download = Vec::new();
     let mut cached_assets = 0usize;
+
 
     for (asset_name, asset_obj) in asset_index_file.objects.into_iter() {
         let hash_prefix = asset_obj.hash[0..2].to_string();
@@ -413,6 +417,12 @@ pub async fn install_vanilla(
     );
 
     // Download assets in parallel with BatchDownloader
+    reporter.start_step(
+        &format!("Downloading assets ({} total)", total_assets),
+        None,
+    );
+    reporter.set_percent(50);
+    
     let batch_downloader = BatchDownloader::new(client.clone(), spec.concurrency);
     let artifacts = assets_to_download
         .into_iter()

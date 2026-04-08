@@ -17,10 +17,6 @@
 	pointer-events: none;
 }
 
-:global(.page--home) .toast__list {
-	left: 64px;
-}
-
 .toast {
 	pointer-events: auto;
 	outline: none;

@@ -21,6 +21,8 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync::Arc;
+use tokio::io::AsyncReadExt;
 use tokio::process::Command;
 
 /// Forge library definition
@@ -849,7 +851,7 @@ async fn execute_processors(
             processor.jar
         );
 
-        execute_single_processor(processor, spec, &data_variables).await?;
+        execute_single_processor(processor, spec, &data_variables, reporter.clone()).await?;
 
         // Verify outputs after execution
         verify_processor_outputs(processor, &data_variables, &spec.libraries_dir())?;
@@ -1028,6 +1030,7 @@ async fn execute_single_processor(
     processor: &Processor,
     spec: &InstallSpec,
     data_variables: &HashMap<String, String>,
+    reporter: Arc<dyn ProgressReporter>,
 ) -> Result<()> {
     let java_program = spec
         .java_path
@@ -1099,22 +1102,73 @@ async fn execute_single_processor(
 
     log::debug!("Executing: {:?}", command);
 
-    // Execute with timeout (5 minutes should be enough for most processors)
-    let timeout_duration = std::time::Duration::from_secs(300);
-    let output = tokio::time::timeout(timeout_duration, command.output())
-        .await
-        .context("Processor execution timed out after 5 minutes")?
+    let mut child = command
+        .spawn()
         .context("Failed to spawn processor Java process")?;
 
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut child_stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("Failed to capture processor stdout"))?;
+    let mut child_stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| anyhow::anyhow!("Failed to capture processor stderr"))?;
+
+    let stdout_task = tokio::spawn(async move {
+        let mut buf = Vec::new();
+        child_stdout.read_to_end(&mut buf).await.map(|_| buf)
+    });
+    let stderr_task = tokio::spawn(async move {
+        let mut buf = Vec::new();
+        child_stderr.read_to_end(&mut buf).await.map(|_| buf)
+    });
+
+    // Keep checking cancellation while the processor runs.
+    let timeout_duration = std::time::Duration::from_secs(300);
+    let started_at = std::time::Instant::now();
+
+    let status = loop {
+        if reporter.is_cancelled() {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            anyhow::bail!("Installation cancelled by user");
+        }
+
+        if started_at.elapsed() >= timeout_duration {
+            let _ = child.kill().await;
+            let _ = child.wait().await;
+            stdout_task.abort();
+            stderr_task.abort();
+            anyhow::bail!("Processor execution timed out after 5 minutes");
+        }
+
+        match tokio::time::timeout(std::time::Duration::from_millis(250), child.wait()).await {
+            Ok(wait_result) => {
+                break wait_result.context("Failed to wait for processor Java process")?;
+            }
+            Err(_) => continue,
+        }
+    };
+
+    let stdout = stdout_task
+        .await
+        .context("Failed to collect processor stdout")??;
+    let stderr = stderr_task
+        .await
+        .context("Failed to collect processor stderr")??;
+
+    if !status.success() {
+        let stderr = String::from_utf8_lossy(&stderr);
+        let stdout = String::from_utf8_lossy(&stdout);
         log::error!("Processor failed:");
         log::error!("  Main class: {}", main_class);
         log::error!("  Args: {:?}", args);
         log::error!("  stdout: {}", stdout);
         log::error!("  stderr: {}", stderr);
-        anyhow::bail!("Processor exited with code: {:?}", output.status.code());
+        anyhow::bail!("Processor exited with code: {:?}", status.code());
     }
 
     Ok(())

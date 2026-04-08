@@ -75,7 +75,10 @@ function HomePage() {
 				open={pageViewerOpen()}
 				viewChanged={() => setPageViewerOpen(false)}
 			/>
-			<Toaster style={{ visibility: sidebarOpen() ? "hidden" : "visible" }} />
+			<Toaster
+				class={styles["home__toaster"]}
+				style={{ visibility: sidebarOpen() ? "hidden" : "visible" }}
+			/>
 		</div>
 	);
 }

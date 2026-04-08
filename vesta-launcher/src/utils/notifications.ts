@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { showToast, tryRemoveToast, updateToast } from "@ui/toast/toast";
-import { createSignal, JSX } from "solid-js";
+import { createSignal } from "solid-js";
 
 const [notifications, setNotifications] = createSignal<Notification[]>([]);
 let _notificationCache: Notification[] = [];
@@ -87,6 +87,94 @@ interface BackendNotification {
 	show_on_completion?: boolean | null;
 }
 
+function toDisplayProgress(
+	notification_type: NotificationType | undefined,
+	progress: number | null | undefined,
+): number | null {
+	if (notification_type !== "progress") {
+		return null;
+	}
+
+	return progress ?? PROGRESS_INDETERMINATE;
+}
+
+function getToastDuration(
+	notification_type: NotificationType | undefined,
+	progress: number | null | undefined,
+): number {
+	if (notification_type === "progress" && (progress ?? PROGRESS_INDETERMINATE) < 100) {
+		return 0;
+	}
+
+	return 5000;
+}
+
+function mergeWithBackendSnapshot(
+	existing: Notification,
+	notif: BackendNotification,
+): Notification {
+	return {
+		...existing,
+		backend_id: notif.id,
+		type: notif.severity,
+		title: notif.title,
+		description: notif.description || undefined,
+		progress: toDisplayProgress(notif.notification_type, notif.progress),
+		current_step: notif.current_step,
+		total_steps: notif.total_steps,
+		client_key: notif.client_key ?? existing.client_key,
+		notification_type: notif.notification_type,
+		dismissible: notif.dismissible,
+		persist: notif.persist,
+		silent: notif.silent,
+		actions: notif.actions,
+		metadata: notif.metadata,
+		show_on_completion: notif.show_on_completion,
+	};
+}
+
+function updateExistingNotificationFromBackendSnapshot(
+	notif: BackendNotification,
+): boolean {
+	const existing = _notificationCache.find(
+		(n) =>
+			(n.backend_id === notif.id && n.backend_id !== -1) ||
+			(!!notif.client_key && n.client_key === notif.client_key),
+	);
+
+	if (!existing) {
+		return false;
+	}
+
+	const merged = mergeWithBackendSnapshot(existing, notif);
+	const clientKey = merged.client_key;
+
+	updateToast(existing.id, {
+		title: merged.title,
+		description: merged.description,
+		progress: merged.progress,
+		current_step: merged.current_step,
+		total_steps: merged.total_steps,
+		severity: merged.type,
+		notification_type: merged.notification_type,
+		duration: getToastDuration(merged.notification_type, merged.progress),
+		dismissible: merged.dismissible,
+		actions: merged.actions,
+		onAction: (actionId, payload) => {
+			invokeNotificationAction(actionId, clientKey || undefined, payload);
+		},
+		onToastDismiss: (id) => closeAlert(id, true),
+		onToastForceClose: (id) => closeAlert(id, false),
+	});
+
+	_notificationCache = _notificationCache.map((n) =>
+		n.id === existing.id ? merged : n,
+	);
+	setNotifications([..._notificationCache]);
+
+	return true;
+}
+
 function showAlert(
 	severity: NotificationSeverity,
 	title?: string,
@@ -121,8 +209,7 @@ function showAlert(
 		const id = showToast({
 			title,
 			description,
-			duration:
-				notification_type === "progress" && (progress ?? 0) < 100 ? 0 : 5000,
+			duration: getToastDuration(notification_type, displayProgress),
 			severity,
 			notification_type,
 			progress: displayProgress,
@@ -148,7 +235,7 @@ function showAlert(
 			type: severity,
 			title,
 			description,
-			progress,
+			progress: displayProgress,
 			current_step,
 			total_steps,
 			client_key,
@@ -294,14 +381,14 @@ function handleProgressUpdate(
 			case "step":
 				updateData.title = update.data.name;
 				updateData.description = update.data.name;
-				if (update.data.total != null && update.data.total !== 0) {
-					updateData.total_steps = update.data.total;
+				if (update.data.total !== undefined) {
+					updateData.total_steps = update.data.total ?? undefined;
 				}
 				break;
 			case "stepCount":
 				updateData.current_step = update.data.current;
-				if (update.data.total != null && update.data.total !== 0) {
-					updateData.total_steps = update.data.total;
+				if (update.data.total !== undefined) {
+					updateData.total_steps = update.data.total ?? undefined;
 				}
 				break;
 			case "finished":
@@ -314,14 +401,26 @@ function handleProgressUpdate(
 				break;
 		}
 
-		updateToast(existing.id, {
+		const merged: Notification = {
 			...existing,
 			...updateData,
+		};
+
+		updateToast(existing.id, {
+			title: merged.title,
+			description: merged.description,
+			progress: merged.progress,
+			current_step: merged.current_step,
+			total_steps: merged.total_steps,
+			severity: merged.type,
+			notification_type: merged.notification_type,
+			dismissible: merged.dismissible,
+			actions: merged.actions,
 			duration: update.type === "finished" ? 5000 : 0,
 		});
 
 		_notificationCache = _notificationCache.map((n) =>
-			n.client_key === clientKey ? { ...n, ...updateData } : n,
+			n.client_key === clientKey ? merged : n,
 		);
 		setNotifications([..._notificationCache]);
 	}
@@ -363,75 +462,11 @@ async function subscribeToBackendNotifications() {
 			async (event) => {
 				const notif = event.payload;
 
-				// Check if we already have this notification in our list (by backend_id or client_key)
-				let updated = false;
-
-				// 1. Try to find by backend_id first (for database-stored ones)
-				let existing = _notificationCache.find(
-					(n) => n.backend_id === notif.id && n.backend_id !== -1,
-				);
-
-				// 2. Fallback to client_key if provided
-				if (!existing && notif.client_key) {
-					if (_pendingShowKeys.has(notif.client_key)) {
-						return;
-					}
-					existing = _notificationCache.find(
-						(n) => n.client_key === notif.client_key,
-					);
+				if (notif.client_key && _pendingShowKeys.has(notif.client_key)) {
+					return;
 				}
 
-				if (existing) {
-					updated = true;
-					// Update existing toast and notification state
-					const clientKey = notif.client_key;
-
-					updateToast(existing.id, {
-						title: notif.title,
-						description: notif.description || undefined,
-						progress:
-							notif.notification_type === "progress" ? notif.progress : null,
-						current_step: notif.current_step,
-						total_steps: notif.total_steps,
-						severity: notif.severity,
-						notification_type: notif.notification_type,
-						duration:
-							notif.notification_type === "progress" &&
-							(notif.progress ?? 0) < 100
-								? 0
-								: 5000,
-						dismissible: notif.dismissible,
-						actions: notif.actions,
-						onAction: (actionId, payload) => {
-							invokeNotificationAction(
-								actionId,
-								clientKey || undefined,
-								payload,
-							);
-						},
-						onToastDismiss: (id) => closeAlert(id, true),
-						onToastForceClose: (id) => closeAlert(id, false),
-					});
-
-					_notificationCache = _notificationCache.map((n) =>
-						(n.backend_id === notif.id && n.backend_id !== -1) ||
-						(notif.client_key && n.client_key === notif.client_key)
-							? {
-									...n,
-									title: notif.title,
-									description: notif.description || undefined,
-									progress: notif.progress,
-									current_step: notif.current_step,
-									total_steps: notif.total_steps,
-									type: notif.severity,
-									notification_type: notif.notification_type,
-									dismissible: notif.dismissible,
-									actions: notif.actions,
-								}
-							: n,
-					);
-					setNotifications([..._notificationCache]);
-				}
+				const updated = updateExistingNotificationFromBackendSnapshot(notif);
 
 				if (!updated) {
 					// Show toast for Progress, Immediate, and non-silent Patient notifications
@@ -474,23 +509,20 @@ async function subscribeToBackendNotifications() {
 			async (event) => {
 				const notif = event.payload;
 
-				// Use unified bridge to update UI if key is present
+				// Merge full progress snapshots to avoid losing step metadata.
 				if (notif.client_key) {
-					handleProgressUpdate(notif.client_key, {
-						type: "progress",
-						data: {
-							percent: notif.progress ?? 0,
-							description: notif.description,
-							severity: notif.severity as NotificationSeverity,
-						},
-					});
+					updateExistingNotificationFromBackendSnapshot(notif);
+					const displayProgress = toDisplayProgress(
+						notif.notification_type,
+						notif.progress,
+					);
 
-					// If we still didn't find an existing notification in handleProgressUpdate,
-					// keep the original logic for creating one from scratch if missing.
-					const existing = _notificationCache.find(
+					// If we still don't have a cached toast for this key (race / missed create event),
+					// create one now so progress updates remain visible.
+					const stillMissing = !_notificationCache.some(
 						(n) => n.client_key && n.client_key === notif.client_key,
 					);
-					if (!existing) {
+					if (stillMissing) {
 						// If we don't have a matching ephemeral toast for this client_key (race / missed event),
 						// create one now so progress updates are visible in the UI.
 
@@ -508,7 +540,7 @@ async function subscribeToBackendNotifications() {
 									notif.severity,
 									notif.title,
 									notif.description || undefined,
-									notif.progress,
+									displayProgress,
 									notif.current_step,
 									notif.total_steps,
 									notif.client_key,
@@ -570,26 +602,10 @@ function unsubscribeFromBackendNotifications() {
 }
 
 export {
-	type Notification,
-	type BackendNotification,
-	type NotificationType,
-	type NotificationSeverity,
-	type NotificationAction,
-	type NotificationActionType,
-	notifications,
-	showAlert,
-	closeAlert,
-	removeAllAlerts,
-	createNotification,
-	invokeNotificationAction,
-	updateNotificationProgress,
-	listNotifications,
-	markNotificationRead,
-	deleteNotification,
-	cleanupNotifications,
-	clearAllDismissibleNotifications,
-	subscribeToBackendNotifications,
-	unsubscribeFromBackendNotifications,
-	handleProgressUpdate,
-	persistentNotificationTrigger,
+    cleanupNotifications,
+    clearAllDismissibleNotifications, closeAlert, createNotification, deleteNotification, handleProgressUpdate, invokeNotificationAction, listNotifications,
+    markNotificationRead, notifications, persistentNotificationTrigger, removeAllAlerts, showAlert, subscribeToBackendNotifications,
+    unsubscribeFromBackendNotifications, updateNotificationProgress, type BackendNotification, type Notification, type NotificationAction,
+    type NotificationActionType, type NotificationSeverity, type NotificationType
 };
+

@@ -175,8 +175,20 @@ impl Task for ResetInstanceTask {
         "Resetting Instance".to_string()
     }
 
+    fn id(&self) -> Option<String> {
+        Some(format!("reset_instance_{}", self.instance_id))
+    }
+
     fn cancellable(&self) -> bool {
         false
+    }
+
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
+    fn starting_description(&self) -> String {
+        "Preparing hard reset...".to_string()
     }
 
     fn completion_description(&self) -> String {
@@ -205,7 +217,8 @@ impl Task for ResetInstanceTask {
             }
 
             ctx.update_description("Reinstalling...".to_string());
-            let install_task = InstallInstanceTask::new(inst);
+            let mut install_task = InstallInstanceTask::new(inst);
+            install_task.set_update_notification_title(false);
             install_task.run(ctx).await?;
 
             Ok(())
@@ -228,8 +241,20 @@ impl Task for RepairInstanceTask {
         "Repairing Instance".to_string()
     }
 
+    fn id(&self) -> Option<String> {
+        Some(format!("repair_instance_{}", self.instance_id))
+    }
+
     fn cancellable(&self) -> bool {
         true
+    }
+
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
+    fn starting_description(&self) -> String {
+        "Preparing repair...".to_string()
     }
 
     fn completion_description(&self) -> String {
@@ -251,7 +276,8 @@ impl Task for RepairInstanceTask {
             ctx.update_description("Verifying and repairing all files...".to_string());
 
             // Reinstall task with hash verification already handled by piston-lib
-            let install_task = InstallInstanceTask::new(inst);
+            let mut install_task = InstallInstanceTask::new(inst);
+            install_task.set_update_notification_title(false);
             install_task.run(ctx).await?;
 
             Ok(())

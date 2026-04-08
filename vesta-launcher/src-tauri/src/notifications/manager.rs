@@ -802,7 +802,7 @@ impl NotificationManager {
             if current_step.is_some() {
                 notification.current_step = current_step;
             }
-            if total_steps.is_some() && total_steps != Some(0) {
+            if total_steps.is_some() {
                 notification.total_steps = total_steps;
             }
 

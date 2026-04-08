@@ -194,6 +194,25 @@ UPDATE AppConfig SET notification_retention_days = 60 WHERE id = 1;  -- 60-day r
 - `progress = 0-100` - Percentage progress bar
 - When `progress >= 100`, notification is considered complete
 
+### Live Progress Contract (Task Notifications)
+- Prefer `client_key`-based progress notifications for long-running work.
+- Treat unknown step counts as `null`, not `0`. `0/0` should not be used as a placeholder.
+- When emitting percent updates for an active task, include last-known step metadata when available so bar and numeric counters stay in sync.
+- For dynamic totals, initialize `current_step` and `total_steps` as `null` and start filling values only after real counts are known.
+
+#### Recommended backend sequence
+1. Create progress notification with `progress=-1`, `client_key`, and task actions (Cancel/Pause if applicable).
+2. Emit descriptive stage updates (`description`) as phases change.
+3. Emit determinate percent updates (`progress`) as data becomes available.
+4. Emit/refresh step counters (`current_step`, `total_steps`) whenever granular counts are known.
+5. On completion, set `progress=100` and convert to final state (Patient or auto-delete based on `show_on_completion`).
+
+#### Cancellation responsiveness guidelines
+- Network-heavy loops should check cancellation before each item/chunk.
+- Long subprocess stages should support active cancellation by terminating child processes.
+- File-write/finalization stages should check cancellation at safe boundaries.
+- Rule of thumb: every stage expected to run longer than ~1 second should have at least one cancellation checkpoint.
+
 ### Severity Colors
 - `error` - Red (`#e74c3c`)
 - `warning` - Yellow/Orange (`#f39c12`)

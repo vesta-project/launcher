@@ -20,6 +20,7 @@ use crate::tasks::manager::{Task, TaskContext};
 pub struct InstallInstanceTask {
     instance: Instance,
     dry_run: bool,
+    update_notification_title: bool,
 }
 
 impl InstallInstanceTask {
@@ -27,11 +28,16 @@ impl InstallInstanceTask {
         Self {
             instance,
             dry_run: false,
+            update_notification_title: true,
         }
     }
 
     pub fn set_dry_run(&mut self, dry_run: bool) {
         self.dry_run = dry_run;
+    }
+
+    pub fn set_update_notification_title(&mut self, update_notification_title: bool) {
+        self.update_notification_title = update_notification_title;
     }
 }
 
@@ -88,11 +94,14 @@ impl Task for InstallInstanceTask {
     fn run(&self, ctx: TaskContext) -> futures::future::BoxFuture<'static, Result<(), String>> {
         let instance = self.instance.clone();
         let dry_run = self.dry_run;
+        let update_notification_title = self.update_notification_title;
         let app_handle = ctx.app_handle.clone();
         let notification_id = ctx.notification_id.clone();
         let pause_rx = ctx.pause_rx.clone();
 
-        ctx.set_title(format!("Installing {}", instance.name));
+        if update_notification_title {
+            ctx.set_title(format!("Installing {}", instance.name));
+        }
 
         Box::pin(async move {
             log::info!(
@@ -152,6 +161,8 @@ impl Task for InstallInstanceTask {
                         std::time::Instant::now() - std::time::Duration::from_secs(1),
                     )),
                     last_percent: std::sync::atomic::AtomicI32::new(-1),
+                    last_step_current: std::sync::atomic::AtomicI32::new(-1),
+                    last_step_total: std::sync::atomic::AtomicI32::new(-1),
                 });
 
             tauri::async_runtime::spawn(async move {
@@ -286,6 +297,8 @@ pub struct TauriProgressReporter {
     // Throttling state for progress events
     pub last_emit: Arc<std::sync::Mutex<std::time::Instant>>,
     pub last_percent: std::sync::atomic::AtomicI32,
+    pub last_step_current: std::sync::atomic::AtomicI32,
+    pub last_step_total: std::sync::atomic::AtomicI32,
 }
 
 impl ProgressReporter for TauriProgressReporter {
@@ -294,6 +307,12 @@ impl ProgressReporter for TauriProgressReporter {
         let name_log = name_str.clone();
         let ctx = self.ctx.clone();
         let current_step = self.current_step.clone();
+
+        // Each top-level step starts a new counting context.
+        self.last_step_current
+            .store(-1, std::sync::atomic::Ordering::Relaxed);
+        self.last_step_total
+            .store(-1, std::sync::atomic::Ordering::Relaxed);
 
         // 1. Update overall status via unified context
         ctx.update_description(name_str.clone());
@@ -344,7 +363,27 @@ impl ProgressReporter for TauriProgressReporter {
         if allow {
             self.last_percent
                 .store(percent, std::sync::atomic::Ordering::Relaxed);
-            self.ctx.update_progress(percent, None, None);
+
+            let current_step = self
+                .last_step_current
+                .load(std::sync::atomic::Ordering::Relaxed);
+            let total_steps = self
+                .last_step_total
+                .load(std::sync::atomic::Ordering::Relaxed);
+
+            self.ctx.update_progress(
+                percent,
+                if current_step >= 0 {
+                    Some(current_step)
+                } else {
+                    None
+                },
+                if total_steps >= 0 {
+                    Some(total_steps)
+                } else {
+                    None
+                },
+            );
         }
     }
 
@@ -358,7 +397,26 @@ impl ProgressReporter for TauriProgressReporter {
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
-        self.ctx.update_progress(-1, Some(current as i32), total.map(|t| t as i32));
+        let current_i32 = current as i32;
+        let total_i32 = total.map(|t| t as i32);
+
+        self.last_step_current
+            .store(current_i32, std::sync::atomic::Ordering::Relaxed);
+        self.last_step_total.store(
+            total_i32.unwrap_or(-1),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
+        let known_percent = self.last_percent.load(std::sync::atomic::Ordering::Relaxed);
+        self.ctx.update_progress(
+            if known_percent >= 0 {
+                known_percent
+            } else {
+                -1
+            },
+            Some(current_i32),
+            total_i32,
+        );
 
         if let Some(ref channel) = self.ctx.progress_channel {
             let _ = channel.send(ProgressUpdate::StepCount {
@@ -403,8 +461,26 @@ impl ProgressReporter for TauriProgressReporter {
             .to_string();
         let message_log = message_str.clone();
 
+        let current_step = self
+            .last_step_current
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let total_steps = self
+            .last_step_total
+            .load(std::sync::atomic::Ordering::Relaxed);
+
+        let current_step = if current_step >= 0 {
+            Some(current_step)
+        } else {
+            None
+        };
+        let total_steps = if total_steps >= 0 {
+            Some(total_steps)
+        } else {
+            None
+        };
+
         if success {
-            self.ctx.update_full(100, message_str, None, None);
+            self.ctx.update_full(100, message_str, current_step, total_steps);
             log::info!("Installation completed successfully");
         } else {
             // Handle error case - usually via a separate notification or status

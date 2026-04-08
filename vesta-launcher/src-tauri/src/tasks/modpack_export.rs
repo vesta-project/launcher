@@ -63,6 +63,8 @@ impl Task for ModpackExportTask {
             dry_run: false,
             last_emit: Arc::new(std::sync::Mutex::new(std::time::Instant::now())),
             last_percent: std::sync::atomic::AtomicI32::new(0),
+            last_step_current: std::sync::atomic::AtomicI32::new(-1),
+            last_step_total: std::sync::atomic::AtomicI32::new(-1),
         });
 
         Box::pin(async move {

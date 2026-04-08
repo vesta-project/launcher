@@ -155,6 +155,8 @@ impl Task for InstallModpackTask {
                         std::time::Instant::now() - std::time::Duration::from_secs(1),
                     )),
                     last_percent: std::sync::atomic::AtomicI32::new(-1),
+                    last_step_current: std::sync::atomic::AtomicI32::new(-1),
+                    last_step_total: std::sync::atomic::AtomicI32::new(-1),
                 });
 
             let modpack_path = match source {

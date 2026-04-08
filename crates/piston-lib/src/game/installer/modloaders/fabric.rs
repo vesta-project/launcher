@@ -90,17 +90,30 @@ pub async fn install_loader(
     profile_base_url: &str,
     maven_url: &str,
 ) -> Result<()> {
+    let ensure_not_cancelled = || -> Result<()> {
+        if reporter.is_cancelled() {
+            return Err(anyhow!("Installation cancelled by user"));
+        }
+        Ok(())
+    };
+
+    ensure_not_cancelled()?;
+
     // Step 1: Install vanilla base
     reporter.start_step("Installing vanilla base", Some(5));
+    ensure_not_cancelled()?;
     install_vanilla(spec, reporter.clone()).await?;
+    ensure_not_cancelled()?;
 
     // (deferred until loader_version is known)
 
     // Step 2: Determine loader version
     reporter.start_step(&format!("Fetching {} loader version", loader_name), Some(5));
+    ensure_not_cancelled()?;
 
     // Load metadata to verify version compatibility
     let metadata = load_or_fetch_metadata(&spec.data_dir()).await?;
+    ensure_not_cancelled()?;
 
     let loader_version = if let Some(ref version) = spec.modloader_version {
         // Verify the specified version exists
@@ -155,6 +168,7 @@ pub async fn install_loader(
 
     log::info!("Using {} loader version: {}", loader_name, loader_version);
     reporter.set_message(&format!("Using {} loader {}", loader_name, loader_version));
+    ensure_not_cancelled()?;
 
     // Prepare client jar in the installed-version folder for processors.
     let installed_id_temp = format!(
@@ -174,6 +188,7 @@ pub async fn install_loader(
     )
     .await
     .context("Failed to prepare installed client jar for loader")?;
+    ensure_not_cancelled()?;
 
     // create shared client for loader install
     let client = Client::builder()
@@ -184,6 +199,7 @@ pub async fn install_loader(
 
     // Step 3: Download profile JSON
     reporter.start_step(&format!("Downloading {} profile", loader_name), Some(5));
+    ensure_not_cancelled()?;
     let profile_url = format!(
         "{}/{}/{}/profile/json",
         profile_base_url, spec.version_id, loader_version
@@ -193,6 +209,7 @@ pub async fn install_loader(
         load_or_fetch_loader_profile(&client, spec, loader_name, &loader_version, &profile_url)
             .await
             .with_context(|| format!("Failed to download {} profile", loader_name))?;
+    ensure_not_cancelled()?;
 
     log::debug!(
         "{} profile ID: {}, inherits: {}",
@@ -203,6 +220,7 @@ pub async fn install_loader(
 
     // Step 4: Download libraries (concurrent)
     reporter.start_step(&format!("Downloading {} libraries", loader_name), Some(5));
+    ensure_not_cancelled()?;
 
     let libraries_dir = spec.libraries_dir();
     let lib_downloader = crate::game::installer::core::library::LibraryDownloader::new(
@@ -235,11 +253,13 @@ pub async fn install_loader(
     lib_downloader
         .download_libraries_concurrent(library_specs, 8, 0, 100)
         .await?;
+    ensure_not_cancelled()?;
 
     log::info!("All {} {} libraries downloaded", total_libs, loader_name);
 
     // Step 5: Write merged version JSON
     reporter.start_step(&format!("Finalizing {} installation", loader_name), Some(5));
+    ensure_not_cancelled()?;
     // Write merged JSON into a new installed-version directory so loader variants
     // live under versions/<installed_id> (e.g. fabric-loader-0.38.2-1.20.1)
     let loader_id = format!(
@@ -288,12 +308,14 @@ pub async fn install_loader(
     };
 
     let unified = UnifiedManifest::merge(vanilla_manifest, Some(loader_manifest), os);
+    ensure_not_cancelled()?;
 
     let loader_json_path = installed_dir.join(format!("{}.json", loader_id));
     std::fs::write(
         loader_json_path,
         serde_json::to_string_pretty(&unified)?,
     )?;
+    ensure_not_cancelled()?;
 
     reporter.set_percent(100);
     log::info!("{} installation completed successfully", loader_name);

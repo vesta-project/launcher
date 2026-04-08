@@ -60,6 +60,17 @@ export const Progress = <T extends ValidComponent = "div">(
 	);
 
 	const mergedStyle = Object.assign({}, (rest as any).style || {}, cssVars);
+	const hasStepInfo =
+		local.current_step != null &&
+		local.total_steps != null &&
+		local.total_steps > 0 &&
+		local.current_step >= 0;
+	const normalizedCurrent = hasStepInfo
+		? Math.min(local.current_step as number, local.total_steps as number)
+		: null;
+	const stepText = hasStepInfo
+		? `${normalizedCurrent}/${local.total_steps}`
+		: null;
 
 	return (
 		<ProgressPrimitive.Root
@@ -83,9 +94,9 @@ export const Progress = <T extends ValidComponent = "div">(
 						)}
 					/>
 				</ProgressPrimitive.Track>
-				{local.current_step != null && local.total_steps != null && (
+				{hasStepInfo && (
 					<div class={styles["progress__steps"]}>
-						{local.current_step}/{local.total_steps}
+						{stepText}
 					</div>
 				)}
 			</div>

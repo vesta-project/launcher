@@ -41,3 +41,7 @@
 		}
 	}
 }
+
+.home__toaster {
+	left: 64px !important;
+}

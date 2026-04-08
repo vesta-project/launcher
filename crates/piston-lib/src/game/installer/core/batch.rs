@@ -21,6 +21,44 @@ pub struct BatchDownloader {
     concurrency: usize,
 }
 
+struct BatchFileProgressReporter {
+    parent: Arc<dyn ProgressReporter>,
+}
+
+impl ProgressReporter for BatchFileProgressReporter {
+    fn start_step(&self, _name: &str, _total_steps: Option<u32>) {}
+
+    fn update_bytes(&self, _transferred: u64, _total: Option<u64>) {}
+
+    fn set_percent(&self, _percent: i32) {}
+
+    fn set_message(&self, _message: &str) {}
+
+    fn set_step_count(&self, _current: u32, _total: Option<u32>) {}
+
+    fn set_substep(&self, _name: Option<&str>, _current: Option<u32>, _total: Option<u32>) {}
+
+    fn set_actions(
+        &self,
+        _actions: Option<Vec<crate::game::installer::types::NotificationActionSpec>>,
+    ) {
+    }
+
+    fn done(&self, _success: bool, _message: Option<&str>) {}
+
+    fn is_cancelled(&self) -> bool {
+        self.parent.is_cancelled()
+    }
+
+    fn is_paused(&self) -> bool {
+        self.parent.is_paused()
+    }
+
+    fn is_dry_run(&self) -> bool {
+        self.parent.is_dry_run()
+    }
+}
+
 impl BatchDownloader {
     pub fn new(client: Client, concurrency: usize) -> Self {
         Self {
@@ -51,6 +89,7 @@ impl BatchDownloader {
         }
 
         let downloaded = Arc::new(AtomicUsize::new(0));
+        reporter.set_percent(base_progress);
         reporter.set_step_count(0, Some(total as u32));
 
         stream::iter(unique_artifacts)
@@ -94,14 +133,18 @@ impl BatchDownloader {
                         for url in &artifact.urls {
                             let current = downloaded.load(Ordering::SeqCst) + 1;
                             log::info!("Downloading: {} from {} ({}/{})", artifact.name, url, current, total);
-                            reporter.set_message(&format!("Downloading resources... ({}/{})", current, total));
+                            reporter.set_message("Downloading resources...");
+
+                            let file_reporter = BatchFileProgressReporter {
+                                parent: reporter.clone(),
+                            };
                             
                             match download_to_path(
                                 &client,
                                 url,
                                 &artifact.path,
                                 artifact.sha1.as_deref(),
-                                &*reporter,
+                                &file_reporter,
                             ).await {
                                 Ok(_) => {
                                     success = true;
