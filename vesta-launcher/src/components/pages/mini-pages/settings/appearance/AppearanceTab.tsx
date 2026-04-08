@@ -226,15 +226,17 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				</p>
 				<div class={styles["theme-toolbar"]}>
 					<div class={styles["theme-toolbar__left"]}>
-						<button
-							type="button"
+						<Button
+							variant="slate"
+							size="icon"
+							icon_only={true}
 							class={styles["theme-search-trigger"]}
 							onClick={expandSearch}
 							title="Search themes"
 							aria-label="Search themes"
 						>
 							<SearchIcon class={styles["theme-toolbar-icon"]} />
-						</button>
+						</Button>
 						<Show when={isSearchExpanded()}>
 							<input
 								ref={(element) => {

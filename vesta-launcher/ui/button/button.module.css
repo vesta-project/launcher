@@ -1,7 +1,10 @@
 .launcher-button {
-	--button-color: hsla(var(--accent-base) / 1); /* To fix intellisese errors */
+	--button-color: var(--secondary-low);
+	--button-fg: var(--text-primary);
+	--button-text: var(--text-primary);
+	--button-border: var(--border-subtle);
 
-	border: 2px solid transparent;
+	border: var(--button-border-width, var(--border-width-subtle)) solid transparent;
 	border-radius: 0.5rem;
 	user-select: none;
 	display: inline-flex;
@@ -9,15 +12,21 @@
 	justify-content: center;
 	gap: 8px;
 	white-space: nowrap;
+	transition:
+		background-color 180ms ease,
+		border-color 180ms ease,
+		color 180ms ease,
+		box-shadow 180ms ease,
+		transform 180ms ease;
+	color: var(--button-text);
 }
 
 .launcher-button:hover:not(:disabled) {
-	filter: brightness(110%);
-	box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+	transform: translateY(-1px);
 }
 
 .launcher-button:hover:not(:disabled) > * {
-	transform: scale(108%);
+	transform: none;
 }
 
 .launcher-button:active:not(:disabled) {
@@ -44,32 +53,54 @@
 
 .launcher-button--solid {
 	background-color: var(--button-color);
+	color: var(--button-fg);
+	border-color: var(--button-border);
 }
 
 .launcher-button--outline {
 	background-color: transparent;
-	color: var(--button-color);
-	border: 2px solid var(--button-color);
+	color: var(--button-text);
+	border-color: var(--button-text);
 }
 
 .launcher-button--ghost {
 	background-color: transparent;
 	border: none;
-	color: var(--button-color);
+	color: var(--button-text);
 
 	&:hover:not(:disabled) {
 		background-color: hsla(0 0% 100% / 0.1);
 	}
 }
 
+.launcher-button--slate {
+	background: var(--surface-base);
+	border-color: var(--border-subtle);
+	color: var(--text-secondary);
+
+	&:hover:not(:disabled) {
+		background: var(--surface-raised);
+		border-color: var(--border-strong);
+		color: var(--text-primary);
+		filter: none;
+	}
+}
+
 .launcher-button--shadow {
 	background-color: hsla(0 0% 0% / 0.15);
+	color: var(--button-fg);
 	box-shadow:
 		0 4px 6px -1px rgb(0 0 0 / 0.1),
 		0 2px 4px -2px rgb(0 0 0 / 0.1);
 
 	&:hover:not(:disabled) {
 		background-color: hsla(0 0% 0% / 0.2);
+		filter: brightness(110%);
+		box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+
+		> * {
+			transform: scale(108%);
+		}
 	}
 }
 
@@ -90,7 +121,7 @@
 
 .launcher-button--destructive {
 	--button-color: hsla(0 100% 50% / 0.8);
-	color: white;
+	color: var(--text-on-accent);
 }
 
 /* Size modifications */

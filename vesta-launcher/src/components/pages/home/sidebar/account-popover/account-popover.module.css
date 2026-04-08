@@ -6,7 +6,7 @@
 	background: var(--surface-overlay);
 	backdrop-filter: blur(24px);
 	-webkit-backdrop-filter: blur(24px);
-	border: 1px solid var(--border-strong);
+	border: var(--border-width-subtle) solid var(--border-strong);
 	border-radius: var(--radius-lg);
 	box-shadow:
 		0 12px 40px rgba(0, 0, 0, 0.5),
@@ -100,7 +100,7 @@
 }
 
 .divider {
-	height: 1px;
+	height: var(--border-width-divider);
 	background: var(--border-subtle);
 	margin: 4px 8px;
 	width: calc(100% - 16px);

@@ -3,6 +3,7 @@
 	display: flex;
 	border-radius: 6px;
 	background-color: var(--surface-raised);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 	overflow: hidden;
 }
 
@@ -29,13 +30,13 @@
 }
 
 .toggle-group__item:hover {
-	background-color: rgba(255, 255, 255, 0.05);
+	background-color: var(--surface-overlay);
 	color: var(--text-primary);
 }
 
 .toggle-group__item[data-pressed] {
 	background-color: var(--accent-primary);
-	color: white;
+	color: var(--text-on-accent);
 }
 
 .toggle-group__item[data-disabled] {

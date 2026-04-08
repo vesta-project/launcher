@@ -7,7 +7,7 @@
 	line-height: 1.4;
 	outline: none;
 	background-color: var(--surface-raised);
-	border: 1px solid var(--border-subtle);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 	color: var(--text-primary);
 	transition:
 		box-shadow 150ms ease,
@@ -63,7 +63,7 @@
 	border-bottom-right-radius: 6px;
 	padding: 0 10px;
 	background-color: transparent;
-	border-left: 1px solid hsl(var(--color__primary-hue) 11% 25% / 30%);
+	border-left: var(--border-width-subtle) solid var(--border-subtle);
 	color: hsl(var(--color__primary-hue) 5% 70%);
 	font-size: 16px;
 	line-height: 0;
@@ -98,7 +98,7 @@
 .combobox__content {
 	background-color: var(--surface-overlay);
 	border-radius: 6px;
-	border: 1px solid var(--border-subtle);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 	backdrop-filter: var(--liquid-backdrop-filter);
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	box-shadow:

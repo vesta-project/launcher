@@ -12,8 +12,7 @@ import {
 	NumberFieldDecrementTrigger,
 	NumberFieldGroup,
 	NumberFieldIncrementTrigger,
-	NumberFieldInput,
-	NumberFieldLabel,
+	NumberFieldInput
 } from "@ui/number-field/number-field";
 import {
 	Select,
@@ -31,8 +30,7 @@ import {
 import {
 	Switch,
 	SwitchControl,
-	SwitchLabel,
-	SwitchThumb,
+	SwitchThumb
 } from "@ui/switch/switch";
 import {
 	TextFieldInput,
@@ -116,14 +114,30 @@ export const SettingsTab = (p: SettingsTabProps) => {
 	});
 
 	// Memory Multi-Thumb Logic
-	const memoryRange = createMemo(() => [p.minMemory[0], p.maxMemory[0]]);
+	const sliderMaxMemory = createMemo(() => Math.max(512, p.totalRam || 512));
+	const memoryRange = createMemo(() => {
+		const rawMin = p.minMemory[0] ?? 2048;
+		const rawMax = p.maxMemory[0] ?? 4096;
+		const boundedMin = Math.max(512, Math.min(rawMin, sliderMaxMemory()));
+		const boundedMax = Math.max(512, Math.min(rawMax, sliderMaxMemory()));
+		return boundedMin <= boundedMax
+			? [boundedMin, boundedMax]
+			: [boundedMax, boundedMin];
+	});
 	const handleMemoryChange = (val: number[]) => {
+		if (!Array.isArray(val) || val.length < 2) return;
+
+		const normalizedMin = Math.max(512, Math.min(val[0], sliderMaxMemory()));
+		const normalizedMax = Math.max(512, Math.min(val[1], sliderMaxMemory()));
+		const nextMin = Math.min(normalizedMin, normalizedMax);
+		const nextMax = Math.max(normalizedMin, normalizedMax);
+
 		// Guard against phantom changes (e.g. from Slider mount/sync)
-		if (val[0] === p.minMemory[0] && val[1] === p.maxMemory[0]) return;
+		if (nextMin === p.minMemory[0] && nextMax === p.maxMemory[0]) return;
 
 		batch(() => {
-			p.setMinMemory([val[0]]);
-			p.setMaxMemory([val[1]]);
+			p.setMinMemory([nextMin]);
+			p.setMaxMemory([nextMax]);
 			p.setIsMinMemDirty(true);
 			p.setIsMaxMemDirty(true);
 		});
@@ -443,7 +457,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									value={memoryRange()}
 									onChange={handleMemoryChange}
 									minValue={512}
-									maxValue={p.totalRam}
+									maxValue={sliderMaxMemory()}
 									step={512}
 								>
 									<div class={styles["slider__header"]}>
@@ -725,7 +739,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					{p.saving()
 						? "Saving…"
 						: p.isInstalling
-							? "Installing..."
+							? "Please wait for installation to finish"
 							: "Save Settings"}
 				</Button>
 			</div>

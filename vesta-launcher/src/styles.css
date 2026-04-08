@@ -90,6 +90,8 @@
 	--border-glass: hsl(var(--color__primary-hue) 10% 50% / 0.15);
 	--border-width-subtle: 1px;
 	--border-width-strong: 1px;
+	--border-width-divider: 1px;
+	--button-border-width: 1px;
 	--border-radius-main: 12px;
 
 	/* Text Colors */
@@ -417,9 +419,9 @@ body {
 	--icon-muted: hsl(var(--color__primary-hue) 10% 50%);
 
 	/* Button text/icon colors for light mode */
-	--text-on-accent: hsl(
-		var(--color__primary-hue) 5% 95%
-	); /* Keep light text on accent buttons */
+	--text-on-primary: hsl(var(--color__primary-hue) 5% 12%);
+	--text-on-secondary: hsl(var(--color__primary-hue) 5% 12%);
+	--text-on-accent: hsl(var(--color__primary-hue) 5% 12%);
 
 	/* Header and navigation colors for light mode (DARK text/icons) */
 	--page-viewer-nav-color: hsl(var(--color__primary-hue) 30% 25%);
@@ -503,9 +505,9 @@ body {
 		--icon-muted: hsl(var(--color__primary-hue) 10% 50%);
 
 		/* Button text/icon colors for light mode */
-		--text-on-accent: hsl(
-			var(--color__primary-hue) 5% 95%
-		); /* Keep light text on accent buttons */
+		--text-on-primary: hsl(var(--color__primary-hue) 5% 12%);
+		--text-on-secondary: hsl(var(--color__primary-hue) 5% 12%);
+		--text-on-accent: hsl(var(--color__primary-hue) 5% 12%);
 
 		/* Header and navigation colors for light mode (DARK text/icons) */
 		--page-viewer-nav-color: hsl(var(--color__primary-hue) 30% 25%);

@@ -8,7 +8,7 @@
 .text-field__text-area {
 	display: block;
 	width: 100%;
-	border: 1px solid var(--border-subtle);
+	border: var(--border-width-subtle) solid var(--border-subtle);
 	border-radius: 6px;
 	line-height: 1.4;
 	color: var(--text-primary);

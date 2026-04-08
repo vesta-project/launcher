@@ -3,67 +3,67 @@ import { router } from "@components/page-viewer/page-viewer";
 import { SettingsCard } from "@components/settings";
 import { dialogStore } from "@stores/dialog-store";
 import {
-	cacheSize,
-	detectedJava,
-	globalJavaPaths,
-	javaRequirements,
-	managedJava,
-	systemMemory,
+    cacheSize,
+    detectedJava,
+    globalJavaPaths,
+    javaRequirements,
+    managedJava,
+    systemMemory,
 } from "@stores/settings-cache";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import {
-	open as openDialog,
-	save as saveDialog,
+    open as openDialog,
+    save as saveDialog,
 } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import {
-	Tabs,
-	TabsContent,
-	TabsIndicator,
-	TabsList,
-	TabsTrigger,
+    Tabs,
+    TabsContent,
+    TabsIndicator,
+    TabsList,
+    TabsTrigger,
 } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
 import {
-	currentThemeConfig,
-	onConfigUpdate,
-	saveThemeUpdate as persistThemeUpdate,
+    currentThemeConfig,
+    onConfigUpdate,
+    saveThemeUpdate as persistThemeUpdate,
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import {
-	batch,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	onCleanup,
-	onMount,
-	Show,
-	Suspense,
-	untrack,
+    batch,
+    createEffect,
+    createMemo,
+    createResource,
+    createSignal,
+    onCleanup,
+    onMount,
+    Show,
+    Suspense,
+    untrack,
 } from "solid-js";
 import { createStore, reconcile } from "solid-js/store";
 import {
-	applyTheme,
-	getAllThemes,
-	getSupportedWindowEffects,
-	getThemeById,
-	type GradientHarmony,
-	isBuiltinThemeId,
-	loadWindowEffectCapabilities,
-	normalizeWindowEffectForCurrentOS,
-	parseThemeData,
-	PRESET_THEMES,
-	removeCustomTheme,
-	setCustomThemes,
-	type StyleMode,
-	type ThemeConfig,
-	type ThemeVariableValue,
-	upsertCustomTheme,
-	validateTheme,
+    applyTheme,
+    getAllThemes,
+    getSupportedWindowEffects,
+    getThemeById,
+    type GradientHarmony,
+    isBuiltinThemeId,
+    loadWindowEffectCapabilities,
+    normalizeWindowEffectForCurrentOS,
+    parseThemeData,
+    PRESET_THEMES,
+    removeCustomTheme,
+    setCustomThemes,
+    type StyleMode,
+    type ThemeConfig,
+    type ThemeVariableValue,
+    upsertCustomTheme,
+    validateTheme,
 } from "../../../../themes/presets";
 import { AccountSettingsTab } from "./account/AccountTab";
 import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
@@ -907,7 +907,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		values: number[],
 		live = false,
 	) => {
-		const newThickness = values[0];
+		const newThickness = Math.max(0, Math.min(8, Math.round(values[0])));
 		if (newThickness === borderThickness()) return;
 
 		batch(() => {

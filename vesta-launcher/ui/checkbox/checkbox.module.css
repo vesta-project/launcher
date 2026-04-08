@@ -29,7 +29,7 @@
 	justify-content: center;
 	width: 1.5em;
 	height: 1.5em;
-	border: 2px solid var(--border-subtle);
+	border: var(--border-width-strong) solid var(--border-subtle);
 	border-radius: 6px;
 	background: var(--surface-base);
 	color: var(--text-primary);
@@ -66,6 +66,7 @@
 .checkbox[data-indeterminate] .checkbox__control {
 	background-color: var(--accent-primary);
 	border-color: var(--accent-primary);
+	border-width: var(--border-width-strong);
 	color: var(--text-on-accent);
 }
 

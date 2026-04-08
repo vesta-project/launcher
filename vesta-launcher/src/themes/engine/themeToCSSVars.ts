@@ -101,6 +101,8 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const bdWidth = theme.borderWidth ?? 1;
 	vars["--border-width-subtle"] = `${bdWidth}px`;
 	vars["--border-width-strong"] = `${bdWidth + 1}px`;
+	vars["--border-width-divider"] = `${Math.max(1, bdWidth)}px`;
+	vars["--button-border-width"] = `${Math.max(1, bdWidth)}px`;
 
 	// Gradient on/off background switching is handled in applyTheme() to avoid stale inline states.
 

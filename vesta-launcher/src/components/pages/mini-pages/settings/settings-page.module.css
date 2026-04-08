@@ -155,21 +155,12 @@
 .theme-search-trigger {
 	height: 36px;
 	width: 36px;
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
 	border-radius: 8px;
-	border: var(--border-width-subtle) solid var(--border-subtle);
-	background: var(--surface-base);
-	color: var(--text-secondary);
-	cursor: pointer;
-	transition: all 180ms ease;
+	padding: 0;
 }
 
 .theme-search-trigger:hover {
-	color: var(--text-primary);
-	border-color: var(--border-strong);
-	background: var(--surface-raised);
+	box-shadow: 0 6px 18px hsl(0 0% 0% / 0.16);
 }
 
 .theme-search-trigger:focus-visible {
