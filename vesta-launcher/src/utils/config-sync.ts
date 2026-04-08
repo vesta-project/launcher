@@ -4,14 +4,14 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
-	applyTheme,
-	configToTheme,
-	getThemeById,
-	parseThemeData,
-	PRESET_THEMES,
-	serializeThemeData,
-	type AppThemeConfig,
-	type ThemeVariableValue,
+    applyTheme,
+    configToTheme,
+    getThemeById,
+    parseThemeData,
+    PRESET_THEMES,
+    serializeThemeData,
+    type AppThemeConfig,
+    type ThemeVariableValue,
 } from "../themes/presets";
 
 interface ConfigUpdateEvent {
