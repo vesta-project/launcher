@@ -8,23 +8,23 @@ import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import { instancesState } from "@stores/instances";
 import {
-    isPinned as isPinnedInStore,
-    pinning,
-    pinPage,
-    unpinPage,
+	isPinned as isPinnedInStore,
+	pinning,
+	pinPage,
+	unpinPage,
 } from "@stores/pinning";
 import {
-    findBestVersion,
-    resources,
-    type InstalledResource,
-    type ResourceVersion,
+	findBestVersion,
+	resources,
+	type InstalledResource,
+	type ResourceVersion,
 } from "@stores/resources";
 import {
-    createColumnHelper,
-    createSolidTable,
-    getCoreRowModel,
-    getFilteredRowModel,
-    getSortedRowModel
+	createColumnHelper,
+	createSolidTable,
+	getCoreRowModel,
+	getFilteredRowModel,
+	getSortedRowModel
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -40,45 +40,45 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
-    DEFAULT_ICONS,
-    duplicateInstance,
-    getInstanceBySlug,
-    getMinecraftVersions,
-    getStableIconId,
-    installInstance,
-    isDefaultIcon,
-    isInstanceRunning,
-    killInstance,
-    launchInstance,
-    repairInstance,
-    resumeInstanceOperation,
-    unlinkInstance,
-    updateInstance,
-    updateInstanceModpackVersion
+	DEFAULT_ICONS,
+	duplicateInstance,
+	getInstanceBySlug,
+	getMinecraftVersions,
+	getStableIconId,
+	installInstance,
+	isDefaultIcon,
+	isInstanceRunning,
+	killInstance,
+	launchInstance,
+	repairInstance,
+	resumeInstanceOperation,
+	unlinkInstance,
+	updateInstance,
+	updateInstanceModpackVersion
 } from "@utils/instances";
 import {
-    describeSelectionAdjustments,
-    getAllModloaders,
-    getLoaderVersionsForGameVersion,
-    getModloaderDisplayName,
-    getModloadersForGameVersion,
-    getNotifiableSelectionAdjustments,
-    resolveCompatibleVersionSelection,
+	describeSelectionAdjustments,
+	getAllModloaders,
+	getLoaderVersionsForGameVersion,
+	getModloaderDisplayName,
+	getModloadersForGameVersion,
+	getNotifiableSelectionAdjustments,
+	resolveCompatibleVersionSelection,
 } from "@utils/version-selection";
 import {
-    batch,
-    createEffect,
-    createMemo,
-    createResource,
-    createSignal,
-    on,
-    onCleanup,
-    onMount,
-    Show
+	batch,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	on,
+	onCleanup,
+	onMount,
+	Show
 } from "solid-js";
 import {
-    handleHardReset,
-    handleUninstall
+	handleHardReset,
+	handleUninstall
 } from "~/handlers/instance-handler";
 import styles from "./instance-details.module.css";
 import type { ModpackVersion } from "./modpack-version-selector";
@@ -184,6 +184,16 @@ export const areIconsEqual = (a?: string | null, b?: string | null) => {
 	return false;
 };
 
+const getProjectRecordKey = (
+	platform: string | null | undefined,
+	id: string | null | undefined,
+) => {
+	if (!platform || !id) return null;
+	return `${platform.toLowerCase()}:${id}`;
+};
+
+const AUTO_RESYNC_COOLDOWN_MS = 5 * 60 * 1000;
+
 export default function InstanceDetails(
 	props: InstanceDetailsProps & {
 		setRefetch?: (fn: () => Promise<void>) => void;
@@ -259,22 +269,31 @@ export default function InstanceDetails(
 		installedResources,
 		async (resourcesList) => {
 			if (!resourcesList || resourcesList.length === 0) return {};
-			const ids = resourcesList
+			const refs = resourcesList
 				.filter(
 					(r) =>
-						r.remote_id && r.platform !== "manual" && r.platform !== "unknown",
+						r.remote_id &&
+						(r.platform === "modrinth" || r.platform === "curseforge"),
 				)
-				.map((r) => r.remote_id);
+				.map((r) => ({
+					platform: r.platform,
+					id: r.remote_id,
+				}));
 
-			if (ids.length === 0) return {};
+			if (refs.length === 0) return {};
 
 			try {
-				const records: any[] = await invoke("get_cached_resource_projects", {
-					ids,
+				const records: any[] = await invoke("get_or_hydrate_resource_projects", {
+					refs,
+					allowNetwork: true,
+					refreshStale: false,
 				});
 				const map: Record<string, any> = {};
 				for (const r of records) {
-					map[r.id] = r;
+					const key = getProjectRecordKey(r.source, r.id);
+					if (key) {
+						map[key] = r;
+					}
 				}
 				return map;
 			} catch (e) {
@@ -283,6 +302,86 @@ export default function InstanceDetails(
 			}
 		},
 	);
+
+	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<
+		Record<number, number>
+	>({});
+	const [autoResyncInFlight, setAutoResyncInFlight] = createSignal(false);
+
+	const getLinkedResourceRefs = (resourcesList: InstalledResource[] | undefined) => {
+		if (!resourcesList || resourcesList.length === 0) return [];
+		return resourcesList
+			.filter(
+				(r) =>
+					!!r.remote_id &&
+					(r.platform === "modrinth" || r.platform === "curseforge"),
+			)
+			.map((r) => ({ platform: r.platform, id: r.remote_id }));
+	};
+
+	const getMetadataHoleCount = (
+		resourcesList: InstalledResource[] | undefined,
+		recordMap: Record<string, any> | undefined,
+	) => {
+		const refs = getLinkedResourceRefs(resourcesList);
+		if (refs.length === 0) return 0;
+
+		let holes = 0;
+		for (const ref of refs) {
+			const key = getProjectRecordKey(ref.platform, ref.id);
+			if (!key) {
+				holes += 1;
+				continue;
+			}
+
+			const record = recordMap?.[key];
+			if (!record) {
+				holes += 1;
+				continue;
+			}
+
+			const summaryMissing = !record.summary || !String(record.summary).trim();
+			const expectsIcon = !!record.icon_url;
+			const iconMissing =
+				expectsIcon &&
+				(!record.icon_data ||
+					(Array.isArray(record.icon_data) && record.icon_data.length === 0));
+
+			if (summaryMissing || iconMissing) {
+				holes += 1;
+			}
+		}
+
+		return holes;
+	};
+
+	const triggerConditionalResync = async (reason: string) => {
+		const current = instance();
+		if (!current || !current.gameDirectory) return;
+		if (autoResyncInFlight()) return;
+
+		const now = Date.now();
+		const last = autoResyncByInstance()[current.id] || 0;
+		if (now - last < AUTO_RESYNC_COOLDOWN_MS) return;
+
+		const holes = getMetadataHoleCount(installedResources(), projectRecords());
+		if (holes === 0) return;
+
+		console.info(
+			`[InstanceDetails] Triggering conditional resync (${reason}), ${holes} metadata holes detected`,
+		);
+
+		setAutoResyncInFlight(true);
+		setAutoResyncByInstance((prev) => ({ ...prev, [current.id]: now }));
+		try {
+			await resources.sync(current.id, slug(), current.gameDirectory || "");
+			await refetchResources();
+		} catch (e) {
+			console.error("[InstanceDetails] Conditional resync failed:", e);
+		} finally {
+			setAutoResyncInFlight(false);
+		}
+	};
 
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
@@ -388,12 +487,31 @@ export default function InstanceDetails(
 	});
 
 	const [modpackIconBase64] = createResource(
-		() => instance()?.modpackIconUrl,
-		async (url) => {
-			if (!url) return null;
+		() => {
+			const current = instance();
+			if (!current?.modpackId || !current?.modpackPlatform) return null;
+
+			const platform = current.modpackPlatform.toLowerCase();
+			if (platform !== "modrinth" && platform !== "curseforge") return null;
+
+			return {
+				platform,
+				id: current.modpackId,
+			};
+		},
+		async (modpackRef) => {
+			if (!modpackRef) return null;
 			try {
-				const response = await fetch(url);
-				const blob = await response.blob();
+				const records: any[] = await invoke("get_or_hydrate_resource_projects", {
+					refs: [modpackRef],
+					allowNetwork: true,
+					refreshStale: false,
+				});
+
+				const record = records[0];
+				if (!record?.icon_data) return null;
+
+				const blob = new Blob([new Uint8Array(record.icon_data)]);
 				return new Promise<string>((resolve, reject) => {
 					const reader = new FileReader();
 					reader.onload = () => resolve(reader.result as string);
@@ -1316,22 +1434,12 @@ export default function InstanceDetails(
 		}
 	};
 
-	// Auto-resync and check updates when entering resources tab
+	// Check updates when entering resources tab; resync only if metadata holes are detected.
 	createEffect(async () => {
 		const tab = activeTab();
 		const inst = instance();
 		if (tab === "resources" && inst && !busy()) {
-			// Always sync folders when switching to resources tab
-			try {
-				await invoke("sync_instance_resources", {
-					instanceId: inst.id,
-					instanceSlug: slug(),
-					gameDir: inst.gameDirectory,
-				});
-				await refetchResources();
-			} catch (e) {
-				console.error("Auto-sync failed:", e);
-			}
+			await triggerConditionalResync("resources-tab-enter");
 
 			// Then check for updates if needed
 			const now = Date.now();
@@ -1344,6 +1452,29 @@ export default function InstanceDetails(
 			}
 		}
 	});
+
+	createEffect(
+		on(
+			() =>
+				[
+					instance()?.id,
+					installedResources.loading,
+					projectRecords.loading,
+					installedResources(),
+					projectRecords(),
+				] as const,
+			([id, installedLoading, recordsLoading, resourcesList, records]) => {
+				if (!id || installedLoading || recordsLoading) return;
+				if (!resourcesList || resourcesList.length === 0) return;
+
+				const holes = getMetadataHoleCount(resourcesList, records || {});
+				if (holes > 0) {
+					void triggerConditionalResync("instance-load-holes");
+				}
+			},
+			{ defer: true },
+		),
+	);
 
 	const checkUpdates = async () => {
 		const inst = instance();
@@ -1449,7 +1580,7 @@ export default function InstanceDetails(
 				const inst = instance();
 				if (id && inst) {
 					resources.clearSelection();
-					resources.sync(id, slug(), inst.gameDirectory || "");
+					void triggerConditionalResync("instance-switch");
 				}
 			},
 			{ defer: true },
@@ -1485,7 +1616,14 @@ export default function InstanceDetails(
 						onClick={(e: MouseEvent) => e.stopPropagation()}
 					>
 						<ResourceIcon
-							record={projectRecords()?.[info.row.original.remote_id]}
+							record={
+								projectRecords()?.[
+									getProjectRecordKey(
+										info.row.original.platform,
+										info.row.original.remote_id,
+									) || ""
+								]
+							}
 							name={info.row.original.display_name}
 						/>
 						<Checkbox
@@ -2121,6 +2259,7 @@ export default function InstanceDetails(
 											<HomeTab
 												instance={inst()}
 												installedResources={installedResources() || []}
+												isRunning={isRunning()}
 											/>
 										</Show>
 									</Show>

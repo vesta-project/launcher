@@ -89,7 +89,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									when={props.checkingUpdates}
 									fallback={
 										<>
-											<ReloadIcon />
+											<ReloadIcon class={styles["check-updates-icon"]} />
 											Check Updates
 										</>
 									}

@@ -8,6 +8,7 @@ import styles from "../instance-details.module.css";
 interface HomeTabProps {
 	instance: any;
 	installedResources: any[];
+	isRunning: boolean;
 }
 
 export const HomeTab = (props: HomeTabProps) => {
@@ -97,7 +98,7 @@ export const HomeTab = (props: HomeTabProps) => {
 					<div class={styles["details-row"]}>
 						<span class={styles["details-key"]}>Runtime</span>
 						<span class={styles["details-value"]}>
-							{inst().isRunning ? "Running" : "Stopped"}
+							{props.isRunning ? "Running" : "Stopped"}
 						</span>
 					</div>
 				</div>

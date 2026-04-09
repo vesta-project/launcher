@@ -178,10 +178,13 @@ diesel::table! {
         source -> Text,
         name -> Text,
         summary -> Text,
+        description -> Nullable<Text>,
         icon_url -> Nullable<Text>,
         icon_data -> Nullable<Binary>,
         project_type -> Text,
         last_updated -> Timestamp,
+        metadata_synced_at -> Nullable<Timestamp>,
+        icon_synced_at -> Nullable<Timestamp>,
     }
 }
 

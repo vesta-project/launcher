@@ -100,10 +100,20 @@ pub struct ResourceProjectRecord {
     pub source: String,
     pub name: String,
     pub summary: String,
+    pub description: Option<String>,
     pub icon_url: Option<String>,
     pub icon_data: Option<Vec<u8>>,
     pub project_type: String,
     pub last_updated: String,
+    pub metadata_synced_at: Option<String>,
+    pub icon_synced_at: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceProjectRef {
+    pub platform: SourcePlatform,
+    pub id: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, Default)]

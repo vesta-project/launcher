@@ -7,9 +7,9 @@ use tokio::sync::Mutex;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceMetadataCacheRecord,
-    ResourceProject, ResourceProjectRecord, ResourceType, ResourceVersion, SearchQuery,
-    SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceCategory, ResourceDependency,
+    ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
+    SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
@@ -18,6 +18,46 @@ use crate::schema::vesta::installed_resource::dsl as ir_dsl;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
 use crate::schema::vesta::resource_project::dsl as rp_dsl;
 use crate::utils::db::get_vesta_conn;
+
+fn is_record_incomplete(record: &ResourceProjectRecord) -> bool {
+    let summary_missing = record.summary.trim().is_empty();
+
+    let expects_icon = record
+        .icon_url
+        .as_ref()
+        .map(|url| !url.trim().is_empty())
+        .unwrap_or(false);
+    let icon_missing = record
+        .icon_data
+        .as_ref()
+        .map(|bytes| bytes.is_empty())
+        .unwrap_or(true)
+        && expects_icon;
+
+    summary_missing || icon_missing
+}
+
+async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()?;
+
+    let response = client.get(url).send().await?;
+    if !response.status().is_success() {
+        return Err(anyhow!(
+            "Icon download failed with HTTP {} for {}",
+            response.status(),
+            url
+        ));
+    }
+
+    let bytes = response.bytes().await?;
+    if bytes.is_empty() {
+        return Err(anyhow!("Downloaded icon is empty for {}", url));
+    }
+
+    Ok(bytes.to_vec())
+}
 
 #[derive(Clone)]
 pub struct ResourceManager {
@@ -355,11 +395,14 @@ impl ResourceManager {
         let mut results = Vec::new();
         let mut missing_ids = Vec::new();
 
-        for id in ids {
-            if let Ok(Some(cached)) = self.get_cached_project(platform, id).await {
-                results.push(cached);
-            } else {
-                missing_ids.push(id.clone());
+        {
+            let cache = self.project_cache.lock().await;
+            for id in ids {
+                if let Some(cached) = cache.get(&(platform, id.clone())) {
+                    results.push(cached.clone());
+                } else {
+                    missing_ids.push(id.clone());
+                }
             }
         }
 
@@ -375,9 +418,6 @@ impl ResourceManager {
                 let mut cache = self.project_cache.lock().await;
                 cache.insert((platform, project.id.clone()), project.clone());
             }
-            let _ = self
-                .save_project_to_cache(platform, &project.id, &project)
-                .await;
             let _ = self.cache_project_metadata(platform, &project).await;
             results.push(project);
         }
@@ -393,12 +433,6 @@ impl ResourceManager {
             }
         }
 
-        if let Ok(Some(cached)) = self.get_cached_project(platform, id).await {
-            let mut cache = self.project_cache.lock().await;
-            cache.insert((platform, id.to_string()), cached.clone());
-            return Ok(cached);
-        }
-
         let source = self.get_source(platform).await?;
         let project = source.get_project(id).await?;
 
@@ -408,13 +442,6 @@ impl ResourceManager {
             if id != project.id {
                 cache.insert((platform, project.id.clone()), project.clone());
             }
-        }
-
-        let _ = self.save_project_to_cache(platform, id, &project).await;
-        if id != project.id {
-            let _ = self
-                .save_project_to_cache(platform, &project.id, &project)
-                .await;
         }
         let _ = self.cache_project_metadata(platform, &project).await;
 
@@ -429,33 +456,23 @@ impl ResourceManager {
         mc_version: Option<&str>,
         loader: Option<&str>,
     ) -> Result<Vec<ResourceVersion>> {
-        if !ignore_cache && mc_version.is_none() && loader.is_none() {
+        let can_use_memory_cache = !ignore_cache && mc_version.is_none() && loader.is_none();
+
+        if can_use_memory_cache {
             let cache = self.version_cache.lock().await;
             if let Some(versions) = cache.get(&(platform, project_id.to_string())) {
                 return Ok(versions.clone());
             }
         }
 
-        if !ignore_cache && mc_version.is_none() && loader.is_none() {
-            if let Ok(Some(versions)) = self.get_cached_versions(platform, project_id).await {
-                let mut cache = self.version_cache.lock().await;
-                cache.insert((platform, project_id.to_string()), versions.clone());
-                return Ok(versions);
-            }
-        }
-
         let source = self.get_source(platform).await?;
         let versions = source.get_versions(project_id, mc_version, loader).await?;
 
-        if mc_version.is_none() && loader.is_none() {
+        if can_use_memory_cache {
             {
                 let mut cache = self.version_cache.lock().await;
                 cache.insert((platform, project_id.to_string()), versions.clone());
             }
-
-            let _ = self
-                .save_versions_to_cache(platform, project_id, &versions)
-                .await;
         }
 
         Ok(versions)
@@ -582,12 +599,93 @@ impl ResourceManager {
             let mut p_cache = self.project_cache.lock().await;
             p_cache.insert((platform, project.id.clone()), project.clone());
         }
-
-        let _ = self
-            .save_project_to_cache(platform, &project.id, &project)
-            .await;
+        let _ = self.cache_project_metadata(platform, &project).await;
 
         Ok((project, version))
+    }
+
+    pub async fn get_project_record_for_source(
+        &self,
+        platform: SourcePlatform,
+        id: &str,
+    ) -> Result<Option<ResourceProjectRecord>> {
+        let mut conn = get_vesta_conn()?;
+        let source = format!("{:?}", platform).to_lowercase();
+
+        let record = rp_dsl::resource_project
+            .filter(rp_dsl::id.eq(id))
+            .filter(rp_dsl::source.eq(source))
+            .first::<ResourceProjectRecord>(&mut conn)
+            .optional()?;
+
+        Ok(record)
+    }
+
+    pub async fn get_or_hydrate_project_records(
+        &self,
+        refs: &[ResourceProjectRef],
+        allow_network: bool,
+        refresh_stale: bool,
+    ) -> Result<Vec<ResourceProjectRecord>> {
+        if refs.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let mut seen = HashSet::new();
+        let mut unique_refs = Vec::new();
+
+        for project_ref in refs {
+            let key = (project_ref.platform, project_ref.id.clone());
+            if seen.insert(key) {
+                unique_refs.push(project_ref.clone());
+            }
+        }
+
+        let mut refs_to_hydrate = Vec::new();
+        for project_ref in &unique_refs {
+            let record = self
+                .get_project_record_for_source(project_ref.platform, &project_ref.id)
+                .await?;
+
+            match record {
+                Some(ref existing) if is_record_incomplete(existing) || refresh_stale => {
+                    refs_to_hydrate.push(project_ref.clone());
+                }
+                Some(_) => {}
+                None => refs_to_hydrate.push(project_ref.clone()),
+            }
+        }
+
+        if allow_network {
+            for project_ref in refs_to_hydrate {
+                if let Err(e) = self.get_project(project_ref.platform, &project_ref.id).await {
+                    log::warn!(
+                        "[ResourceManager] Failed to hydrate project {}/{}: {}",
+                        format!("{:?}", project_ref.platform).to_lowercase(),
+                        project_ref.id,
+                        e
+                    );
+                }
+            }
+        }
+
+        let mut records = Vec::new();
+        let mut returned = HashSet::new();
+
+        for project_ref in refs {
+            let record = self
+                .get_project_record_for_source(project_ref.platform, &project_ref.id)
+                .await?;
+
+            if let Some(record) = record {
+                let key = (record.source.clone(), record.id.clone());
+                if returned.insert(key) {
+                    records.push(record);
+                }
+            }
+        }
+
+        Ok(records)
     }
 
     pub async fn refresh_resources_for_instance(
@@ -633,127 +731,6 @@ impl ResourceManager {
         Ok(())
     }
 
-    async fn get_cached_project(
-        &self,
-        platform: SourcePlatform,
-        id: &str,
-    ) -> Result<Option<ResourceProject>> {
-        let platform_str = format!("{:?}", platform).to_lowercase();
-        let mut conn = get_vesta_conn()?;
-
-        let record = rmc_dsl::resource_metadata_cache
-            .filter(rmc_dsl::source.eq(&platform_str))
-            .filter(rmc_dsl::remote_id.eq(id))
-            .filter(rmc_dsl::expires_at.gt(chrono::Utc::now().to_rfc3339()))
-            .first::<ResourceMetadataCacheRecord>(&mut conn)
-            .optional()?;
-
-        if let Some(rec) = record {
-            let project: ResourceProject = serde_json::from_str(&rec.project_data)?;
-            return Ok(Some(project));
-        }
-
-        Ok(None)
-    }
-
-    async fn get_cached_versions(
-        &self,
-        platform: SourcePlatform,
-        id: &str,
-    ) -> Result<Option<Vec<ResourceVersion>>> {
-        let platform_str = format!("{:?}", platform).to_lowercase();
-        let mut conn = get_vesta_conn()?;
-
-        let record = rmc_dsl::resource_metadata_cache
-            .filter(rmc_dsl::source.eq(&platform_str))
-            .filter(rmc_dsl::remote_id.eq(id))
-            .filter(rmc_dsl::expires_at.gt(chrono::Utc::now().to_rfc3339()))
-            .first::<ResourceMetadataCacheRecord>(&mut conn)
-            .optional()?;
-
-        if let Some(rec) = record {
-            if let Some(v_data) = rec.versions_data {
-                let versions: Vec<ResourceVersion> = serde_json::from_str(&v_data)?;
-                return Ok(Some(versions));
-            }
-        }
-
-        Ok(None)
-    }
-
-    async fn save_project_to_cache(
-        &self,
-        platform: SourcePlatform,
-        id: &str,
-        project: &ResourceProject,
-    ) -> Result<()> {
-        let platform_str = format!("{:?}", platform).to_lowercase();
-        let project_json = serde_json::to_string(project)?;
-        let mut conn = get_vesta_conn()?;
-
-        let now = chrono::Utc::now();
-        let expires = now + chrono::Duration::hours(24);
-        let now_str = now.to_rfc3339();
-        let expires_str = expires.to_rfc3339();
-
-        diesel::insert_into(rmc_dsl::resource_metadata_cache)
-            .values((
-                rmc_dsl::source.eq(&platform_str),
-                rmc_dsl::remote_id.eq(id),
-                rmc_dsl::project_data.eq(project_json),
-                rmc_dsl::last_updated.eq(&now_str),
-                rmc_dsl::expires_at.eq(&expires_str),
-            ))
-            .on_conflict((rmc_dsl::source, rmc_dsl::remote_id))
-            .do_update()
-            .set((
-                rmc_dsl::project_data.eq(&serde_json::to_string(project)?),
-                rmc_dsl::last_updated.eq(&now_str),
-                rmc_dsl::expires_at.eq(&expires_str),
-            ))
-            .execute(&mut conn)?;
-
-        Ok(())
-    }
-
-    async fn save_versions_to_cache(
-        &self,
-        platform: SourcePlatform,
-        id: &str,
-        versions: &[ResourceVersion],
-    ) -> Result<()> {
-        let platform_str = format!("{:?}", platform).to_lowercase();
-        let versions_json = serde_json::to_string(versions)?;
-        let mut conn = get_vesta_conn()?;
-
-        let now = chrono::Utc::now();
-        let expires = now + chrono::Duration::hours(24);
-        let now_str = now.to_rfc3339();
-        let expires_str = expires.to_rfc3339();
-
-        let affected = diesel::update(
-            rmc_dsl::resource_metadata_cache
-                .filter(rmc_dsl::source.eq(&platform_str))
-                .filter(rmc_dsl::remote_id.eq(id)),
-        )
-        .set((
-            rmc_dsl::versions_data.eq(versions_json),
-            rmc_dsl::last_updated.eq(now_str),
-            rmc_dsl::expires_at.eq(expires_str),
-        ))
-        .execute(&mut conn)?;
-
-        if affected == 0 {
-            log::warn!(
-                "Tried to cache versions for {}/{} but no project record exists",
-                platform_str,
-                id
-            );
-        }
-
-        Ok(())
-    }
-
     async fn get_source(&self, platform: SourcePlatform) -> Result<Arc<dyn ResourceSource>> {
         let sources = self.sources.lock().await;
         sources
@@ -770,40 +747,78 @@ impl ResourceManager {
     ) -> Result<()> {
         let mut conn = get_vesta_conn()?;
         let now = chrono::Utc::now().to_rfc3339();
+        let platform_str = format!("{:?}", platform).to_lowercase();
 
         // 1. Check if we have an existing record with icon_data
         let existing: Option<ResourceProjectRecord> = rp_dsl::resource_project
             .filter(rp_dsl::id.eq(&project.id))
+            .filter(rp_dsl::source.eq(&platform_str))
             .first(&mut conn)
             .optional()?;
 
         let mut icon_data = existing.as_ref().and_then(|e| e.icon_data.clone());
+        let existing_icon_url = existing.as_ref().and_then(|e| e.icon_url.clone());
+        let icon_url_changed = existing_icon_url != project.icon_url;
+        let mut icon_synced_at = existing.as_ref().and_then(|e| e.icon_synced_at.clone());
 
-        // 2. If we have a URL but no data, download it
-        if icon_data.is_none() {
+        // 2. Download icon data if missing, or refresh it when icon URL changed.
+        if icon_data.is_none() || icon_url_changed {
             if let Some(url) = &project.icon_url {
                 if !url.is_empty() {
-                    match reqwest::get(url).await {
-                        Ok(resp) => {
-                            if let Ok(bytes) = resp.bytes().await {
-                                icon_data = Some(bytes.to_vec());
-                            }
+                    match download_icon_with_timeout(url).await {
+                        Ok(bytes) => {
+                            icon_data = Some(bytes);
+                            icon_synced_at = Some(now.clone());
                         }
-                        Err(e) => log::warn!("Failed to download icon for {}: {}", project.id, e),
+                        Err(e) => {
+                            log::warn!(
+                                "Failed to download icon for {} ({}): {}",
+                                project.id,
+                                url,
+                                e
+                            );
+                        }
                     }
                 }
             }
         }
 
+        let description = project
+            .description
+            .as_ref()
+            .map(|d| d.trim())
+            .filter(|d| !d.is_empty())
+            .map(|d| d.to_string())
+            .or_else(|| existing.as_ref().and_then(|e| e.description.clone()))
+            .or_else(|| {
+                if project.summary.trim().is_empty() {
+                    None
+                } else {
+                    Some(project.summary.clone())
+                }
+            });
+
+        let summary = if project.summary.trim().is_empty() {
+            existing
+                .as_ref()
+                .map(|e| e.summary.clone())
+                .unwrap_or_default()
+        } else {
+            project.summary.clone()
+        };
+
         let record = ResourceProjectRecord {
             id: project.id.clone(),
-            source: format!("{:?}", platform).to_lowercase(),
+            source: platform_str,
             name: project.name.clone(),
-            summary: project.summary.clone(),
+            summary,
+            description,
             icon_url: project.icon_url.clone(),
             icon_data,
             project_type: format!("{:?}", project.resource_type).to_lowercase(),
-            last_updated: now,
+            last_updated: now.clone(),
+            metadata_synced_at: Some(now),
+            icon_synced_at,
         };
 
         diesel::insert_into(rp_dsl::resource_project)

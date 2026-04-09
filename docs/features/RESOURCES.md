@@ -193,6 +193,22 @@ The system implements sophisticated dependency resolution:
 2. **Database Cache**: Persistent caching of API responses
 3. **File Cache**: Local storage of downloaded files
 
+### Durable Project Cache (2026-04)
+The backend now treats resource project card data as durable and backend-owned.
+
+- `resource_project` persists linkage and display metadata indefinitely, including:
+    - `id`, `source`, `project_type`
+    - `name`, `summary`, `description`
+    - `icon_url`, `icon_data`
+    - `last_updated`, `metadata_synced_at`, `icon_synced_at`
+- `resource_metadata_cache` remains TTL-based for volatile payloads (serialized project payload + versions).
+- `get_or_hydrate_resource_projects` command accepts `[{ platform, id }]` refs and:
+    - returns existing durable rows immediately
+    - hydrates missing/incomplete rows from backend sources when network is allowed
+    - keeps old icon bytes if refresh download fails, preventing icon regressions
+
+This allows instance resource views to request backend-hydrated project records instead of relying on frontend URL fetches.
+
 ### Cache Invalidation
 - **Time-based**: Automatic expiration after configurable periods
 - **Version-based**: Invalidation when new versions are detected

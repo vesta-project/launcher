@@ -936,7 +936,7 @@ const ResourceDetailsPage: Component<{
 					const fallback: ResourceProject = {
 						id: cached.id,
 						source: platform,
-						resource_type: cached.resource_type as any,
+						resource_type: cached.project_type as any,
 						name: cached.name,
 						summary: cached.summary || "",
 						description:

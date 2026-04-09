@@ -1407,6 +1407,14 @@
 
 .toolbar-actions button svg {
 	flex-shrink: 0;
+	width: 14px;
+	height: 14px;
+}
+
+.check-updates-icon {
+	width: 14px;
+	height: 14px;
+	flex-shrink: 0;
 }
 
 .selection-action-bar {
@@ -2607,6 +2615,50 @@
 	background: var(--surface-raised);
 	border-color: var(--border-subtle);
 	color: var(--text-secondary);
+}
+
+.details-section {
+	background: var(--surface-glass);
+	border-radius: 14px;
+	border: var(--border-width-subtle) solid var(--border-glass);
+	padding: 20px;
+}
+
+.details-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.details-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 2px;
+	border-bottom: var(--border-width-subtle) solid var(--border-subtle);
+}
+
+.details-row:last-child {
+	border-bottom: none;
+	padding-bottom: 2px;
+}
+
+.details-key {
+	font-size: 0.78rem;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+	opacity: 0.85;
+}
+
+.details-value {
+	font-size: 0.92rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	text-align: right;
+	word-break: break-word;
 }
 
 .stat-value {

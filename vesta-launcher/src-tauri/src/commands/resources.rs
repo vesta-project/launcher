@@ -1,7 +1,7 @@
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
     ResourceCategory, ResourceProject, ResourceType, ResourceVersion, SearchQuery, SearchResponse,
-    SourcePlatform,
+    SourcePlatform, ResourceProjectRef,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
@@ -124,6 +124,22 @@ pub async fn get_cached_resource_projects(
     ids: Vec<String>,
 ) -> Result<Vec<crate::models::resource::ResourceProjectRecord>> {
     Ok(resource_manager.get_project_records(&ids)?)
+}
+
+#[tauri::command]
+pub async fn get_or_hydrate_resource_projects(
+    resource_manager: State<'_, ResourceManager>,
+    refs: Vec<ResourceProjectRef>,
+    allow_network: Option<bool>,
+    refresh_stale: Option<bool>,
+) -> Result<Vec<crate::models::resource::ResourceProjectRecord>> {
+    Ok(resource_manager
+        .get_or_hydrate_project_records(
+            &refs,
+            allow_network.unwrap_or(true),
+            refresh_stale.unwrap_or(false),
+        )
+        .await?)
 }
 
 #[tauri::command]

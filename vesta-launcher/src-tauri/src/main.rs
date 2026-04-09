@@ -223,6 +223,7 @@ fn main() {
             commands::resources::cache_resource_metadata,
             commands::resources::get_cached_resource_project,
             commands::resources::get_cached_resource_projects,
+            commands::resources::get_or_hydrate_resource_projects,
             commands::resources::get_resource_projects,
             commands::resources::get_resource_versions,
             commands::resources::find_peer_resource,
