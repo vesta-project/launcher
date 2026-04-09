@@ -2231,7 +2231,7 @@ export default function InstanceDetails(
 												disabled={busy() || isInstalling()}
 												color={isRunning() ? "destructive" : "primary"}
 												variant="solid"
-												size={activeTab() === "home" ? "lg" : "md"}
+												size="lg"
 												class={styles["details-play-button"]}
 											>
 												<Show when={busy()}>

@@ -1,4 +1,3 @@
-import BackArrowIcon from "@assets/back-arrow.svg";
 import FolderIcon from "@assets/folder.svg";
 import HistoryIcon from "@assets/history.svg";
 import RefreshIcon from "@assets/refresh.svg";
@@ -279,7 +278,10 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							variant="ghost"
 							size="md"
 							onClick={() => consoleStore.clear()}
-							class={styles["console-tool-btn-trash"]}
+							class={clsx(
+								styles["console-tool-btn"],
+								styles["console-tool-btn-trash"],
+							)}
 						>
 							<TrashIcon />
 						</TooltipTrigger>

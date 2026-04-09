@@ -517,12 +517,6 @@
 	transition: all 0.2s ease !important;
 }
 
-.instance-details-header.shrunk .details-play-button {
-	height: 40px !important;
-	min-width: 112px;
-	font-size: 0.9rem !important;
-}
-
 .details-play-button:hover {
 	transform: translateY(-2px);
 	box-shadow: 0 8px 25px hsl(var(--color__primary-hue) 60% 40% / 0.6);
@@ -850,14 +844,13 @@
 }
 
 .console-tool-btn-trash {
-	color: var(--semantic-error) !important;
-	width: 32px !important;
-	height: 32px !important;
-	padding: 0 !important;
+	color: var(--text-secondary) !important;
 }
 
 .console-tool-btn-trash:hover {
-	background: rgba(var(--semantic-error-rgb), 0.1) !important;
+	color: var(--semantic-error) !important;
+	background: color-mix(in srgb, var(--semantic-error) 14%, transparent)
+		!important;
 }
 
 .trash-fill-fix {

@@ -75,7 +75,7 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 							<Show when={props.actionLabel}>
 								<LauncherButton
 									color={props.destructive ? "destructive" : "secondary"}
-									variant={props.destructive ? "shadow" : "solid"}
+									variant={props.destructive ? "outline" : "solid"}
 									onClick={handleAction}
 									disabled={props.disabled}
 								>
