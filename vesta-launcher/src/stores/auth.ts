@@ -3,9 +3,7 @@ import { Account, getActiveAccount } from "@utils/auth";
 import { createRoot, createSignal } from "solid-js";
 
 function createAuthStore() {
-	const [expiredAccount, setExpiredAccount] = createSignal<Account | null>(
-		null,
-	);
+	const [expiredAccount, setExpiredAccount] = createSignal<Account | null>(null);
 	const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
 
 	const refreshState = async () => {

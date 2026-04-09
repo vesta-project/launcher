@@ -1,18 +1,14 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
+import { PageViewer, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import {
-    PageViewer,
-    pageViewerOpen,
-    setPageViewerOpen,
-} from "@components/page-viewer/page-viewer";
-import {
-    InitAppearancePage,
-    InitDataStoragePage,
-    InitFinishedPage,
-    InitFirstPage,
-    InitGuidePage,
-    InitInstallationPage,
-    InitJavaPage,
-    InitLoginPage,
+	InitAppearancePage,
+	InitDataStoragePage,
+	InitFinishedPage,
+	InitFirstPage,
+	InitGuidePage,
+	InitInstallationPage,
+	InitJavaPage,
+	InitLoginPage,
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
@@ -20,17 +16,17 @@ import { Toaster } from "@ui/toast/toast";
 import { useOs } from "@utils/os";
 import { consumeInitBootstrapState } from "@utils/startup-bootstrap";
 import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
-import {
-    getCanonicalBackStep,
-    getNextInitStep,
-    INIT_STEPS,
-    type InitStep,
-    isGuestOrDemoAccountType,
-    isSkippableAuthenticatedAccount,
-    normalizeInitStep,
-    shouldRecoverLegacyGuestCompletion,
-} from "./init-flow";
 import styles from "./init.module.css";
+import {
+	getCanonicalBackStep,
+	getNextInitStep,
+	INIT_STEPS,
+	type InitStep,
+	isGuestOrDemoAccountType,
+	isSkippableAuthenticatedAccount,
+	normalizeInitStep,
+	shouldRecoverLegacyGuestCompletion,
+} from "./init-flow";
 
 type NavigationDirection = "forward" | "backward" | "direct";
 type AtmosphereState = "active" | "fading" | "off";
@@ -39,9 +35,7 @@ function isValidAtmosphereState(value: unknown): value is AtmosphereState {
 	return value === "active" || value === "fading" || value === "off";
 }
 
-function isValidStartupState(
-	state: ReturnType<typeof consumeInitBootstrapState>,
-): state is {
+function isValidStartupState(state: ReturnType<typeof consumeInitBootstrapState>): state is {
 	initStep: InitStep;
 	loginOnly: boolean;
 	guideVisited: boolean;
@@ -62,9 +56,7 @@ function isValidStartupState(
 function InitPage() {
 	const navigate = useNavigate();
 	const consumedStartupState = consumeInitBootstrapState();
-	const startupState = isValidStartupState(consumedStartupState)
-		? consumedStartupState
-		: null;
+	const startupState = isValidStartupState(consumedStartupState) ? consumedStartupState : null;
 
 	if (consumedStartupState && !startupState) {
 		console.warn(
@@ -76,15 +68,12 @@ function InitPage() {
 	const initialStep = startupState?.initStep ?? INIT_STEPS.WELCOME;
 	const [initStep, setInitStep] = createSignal<InitStep>(initialStep);
 	const [stepHistory, setStepHistory] = createSignal<InitStep[]>([initialStep]);
-	const [guideVisited, setGuideVisited] = createSignal(
-		startupState?.guideVisited ?? false,
-	);
+	const [guideVisited, setGuideVisited] = createSignal(startupState?.guideVisited ?? false);
 	const [hasInstalledInstance, setHasInstalledInstance] = createSignal(false);
-	const [isLoginOnly, setIsLoginOnly] = createSignal(
-		startupState?.loginOnly ?? false,
+	const [isLoginOnly, setIsLoginOnly] = createSignal(startupState?.loginOnly ?? false);
+	const [onboardingAtmosphereState, setOnboardingAtmosphereState] = createSignal<AtmosphereState>(
+		startupState?.atmosphereState ?? "active",
 	);
-	const [onboardingAtmosphereState, setOnboardingAtmosphereState] =
-		createSignal<AtmosphereState>(startupState?.atmosphereState ?? "active");
 	const os = useOs();
 	let atmosphereFadeTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -171,10 +160,7 @@ function InitPage() {
 		}
 	};
 
-	const getDirection = (
-		from: InitStep,
-		to: InitStep,
-	): NavigationDirection => {
+	const getDirection = (from: InitStep, to: InitStep): NavigationDirection => {
 		if (to > from) {
 			return "forward";
 		}
@@ -235,10 +221,7 @@ function InitPage() {
 		if (history.length > 1) {
 			const historyWithoutCurrent = history.slice(0, -1);
 			const previousStep = historyWithoutCurrent[historyWithoutCurrent.length - 1];
-			const guardedPreviousStep = await resolveStepWithGuards(
-				previousStep,
-				"backward",
-			);
+			const guardedPreviousStep = await resolveStepWithGuards(previousStep, "backward");
 
 			if (guardedPreviousStep !== previousStep) {
 				const targetIndex = historyWithoutCurrent.lastIndexOf(guardedPreviousStep);
@@ -276,8 +259,7 @@ function InitPage() {
 				const account = await invoke<any>("get_active_account");
 				const hasValidAccount = isSkippableAuthenticatedAccount(account);
 				const forceGuestLoginOnly =
-					forceLoginRequested &&
-					isGuestOrDemoAccountType(account?.account_type);
+					forceLoginRequested && isGuestOrDemoAccountType(account?.account_type);
 				let setupCompleted = Boolean(config.setup_completed);
 				let setupStep = normalizeInitStep(config.setup_step);
 
@@ -287,10 +269,7 @@ function InitPage() {
 						setupCompleted = false;
 						setupStep = INIT_STEPS.WELCOME;
 					} catch (error) {
-						console.error(
-							"Failed to recover legacy guest completion state:",
-							error,
-						);
+						console.error("Failed to recover legacy guest completion state:", error);
 					}
 				}
 
@@ -331,9 +310,7 @@ function InitPage() {
 						await invoke("set_setup_step", { step: INIT_STEPS.JAVA });
 					}
 
-					setOnboardingAtmosphereState(
-						resumeStep <= INIT_STEPS.APPEARANCE ? "active" : "off",
-					);
+					setOnboardingAtmosphereState(resumeStep <= INIT_STEPS.APPEARANCE ? "active" : "off");
 
 					await applyStep(resumeStep, {
 						replaceHistory: true,
@@ -359,34 +336,18 @@ function InitPage() {
 	return (
 		<div
 			class={`${styles["init-page__root"]} ${
-				onboardingAtmosphereState() !== "off"
-					? styles["init-page__root--welcome"]
-					: ""
-			} ${
-				onboardingAtmosphereState() === "fading"
-					? styles["init-page__root--welcome-fading"]
-					: ""
-			}`}
+				onboardingAtmosphereState() !== "off" ? styles["init-page__root--welcome"] : ""
+			} ${onboardingAtmosphereState() === "fading" ? styles["init-page__root--welcome-fading"] : ""}`}
 			data-tauri-drag-region
 		>
 			<TitleBar os={os()} />
 			<div class={styles["init-page__wrapper"]}>
 				<Switch>
 					<Match when={initStep() === INIT_STEPS.WELCOME}>
-						<InitFirstPage
-							initStep={initStep()}
-							goToStep={goToStep}
-							goNext={goNext}
-							goBack={goBack}
-						/>
+						<InitFirstPage initStep={initStep()} goToStep={goToStep} goNext={goNext} goBack={goBack} />
 					</Match>
 					<Match when={initStep() === INIT_STEPS.GUIDE}>
-						<InitGuidePage
-							initStep={initStep()}
-							goToStep={goToStep}
-							goNext={goNext}
-							goBack={goBack}
-						/>
+						<InitGuidePage initStep={initStep()} goToStep={goToStep} goNext={goNext} goBack={goBack} />
 					</Match>
 					<Match when={initStep() === INIT_STEPS.LOGIN}>
 						<InitLoginPage
@@ -454,10 +415,7 @@ function InitPage() {
 				<Toaster />
 				{/*{initStep()}*/}
 			</div>
-			<PageViewer
-				open={pageViewerOpen()}
-				viewChanged={() => setPageViewerOpen(false)}
-			/>
+			<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
 		</div>
 	);
 }

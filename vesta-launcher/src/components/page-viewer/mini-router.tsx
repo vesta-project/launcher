@@ -52,12 +52,9 @@ class MiniRouter {
 		get: Accessor<string | null>;
 	};
 	isReloading: Accessor<boolean>;
-	private setCurrentPathProps: (
-		props: Record<string, unknown> | undefined,
-	) => void;
+	private setCurrentPathProps: (props: Record<string, unknown> | undefined) => void;
 	private setIsReloading: (value: boolean) => void;
-	private stateProviders: Map<string, () => Record<string, unknown>> =
-		new Map();
+	private stateProviders: Map<string, () => Record<string, unknown>> = new Map();
 	history: {
 		past: HistoryEntry[];
 		future: HistoryEntry[];
@@ -73,10 +70,7 @@ class MiniRouter {
 	removeQuery: (key: string, push?: boolean) => void;
 	reload: () => Promise<void>;
 	setState: (state: Record<string, unknown>) => void;
-	registerStateProvider: (
-		path: string,
-		provider: () => Record<string, unknown>,
-	) => void;
+	registerStateProvider: (path: string, provider: () => Record<string, unknown>) => void;
 	getSnapshot: () => Record<string, unknown>;
 	forwards: () => void;
 	backwards: () => void;
@@ -96,20 +90,16 @@ class MiniRouter {
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
 
-		const [getCanExit, setCanExitSignal] = createSignal<
-			(() => Promise<boolean>) | null
-		>(null);
+		const [getCanExit, setCanExitSignal] = createSignal<(() => Promise<boolean>) | null>(null);
 
 		this.getCanExit = getCanExit;
 		this.setCanExit = (fn) => setCanExitSignal(() => fn);
 
-		const [getCurrentPath, setCurrentPath] = createSignal<string>(
-			props.currentPath ?? "",
-		);
+		const [getCurrentPath, setCurrentPath] = createSignal<string>(props.currentPath ?? "");
 
-		const [getCurrentParams, setCurrentParams] = createSignal<
-			Record<string, unknown>
-		>(props.initialParams || {});
+		const [getCurrentParams, setCurrentParams] = createSignal<Record<string, unknown>>(
+			props.initialParams || {},
+		);
 
 		const [getCurrentPathProps, setCurrentPathProps] = createSignal<
 			Record<string, unknown> | undefined
@@ -127,8 +117,7 @@ class MiniRouter {
 		this.currentParams = { set: setCurrentParams, get: getCurrentParams };
 
 		this.currentElement = createMemo(() => {
-			const pathConfig =
-				this.paths[this.currentPath.get()] ?? this.paths["404"];
+			const pathConfig = this.paths[this.currentPath.get()] ?? this.paths["404"];
 			const params = this.currentParams.get();
 			const props = this.currentPathProps();
 
@@ -139,9 +128,7 @@ class MiniRouter {
 		});
 
 		const [getHistoryPast, setHistoryPast] = createSignal<HistoryEntry[]>([]);
-		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>(
-			[],
-		);
+		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>([]);
 
 		this.history = {
 			get past() {
@@ -214,14 +201,7 @@ class MiniRouter {
 				props,
 			});
 			this.history.future = [];
-			console.log(
-				"Navigating to:",
-				path,
-				"with params:",
-				params,
-				"and props:",
-				props,
-			);
+			console.log("Navigating to:", path, "with params:", params, "and props:", props);
 		};
 
 		// Update query params. Can optionally create history entry (for tabs)
@@ -246,11 +226,7 @@ class MiniRouter {
 				this.currentParams.set(newParams);
 			}
 
-			console.log(
-				`Updated query param ${key}:`,
-				value,
-				push ? "(push)" : "(replace)",
-			);
+			console.log(`Updated query param ${key}:`, value, push ? "(push)" : "(replace)");
 		};
 
 		// Remove a query param
@@ -282,10 +258,7 @@ class MiniRouter {
 			console.log("Updated component state:", state);
 		};
 
-		this.registerStateProvider = (
-			path: string,
-			provider: () => Record<string, unknown>,
-		) => {
+		this.registerStateProvider = (path: string, provider: () => Record<string, unknown>) => {
 			this.stateProviders.set(path, provider);
 		};
 

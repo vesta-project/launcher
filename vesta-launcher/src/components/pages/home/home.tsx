@@ -1,16 +1,12 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
-import {
-    PageViewer,
-    pageViewerOpen,
-    setPageViewerOpen
-} from "@components/page-viewer/page-viewer";
+import { PageViewer, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import {
-    initializeInstances,
-    instancesError,
-    instancesInitialized,
-    instancesLoading,
-    instances as instancesStore,
+	initializeInstances,
+	instancesError,
+	instancesInitialized,
+	instancesLoading,
+	instances as instancesStore,
 } from "@stores/instances";
 import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
@@ -18,13 +14,7 @@ import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
 import { useOs } from "@utils/os";
 import { startAppTutorial } from "@utils/tutorial";
-import {
-    createEffect,
-    createSignal,
-    For,
-    onMount,
-    Show
-} from "solid-js";
+import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./home.module.css";
 import Sidebar from "./sidebar/sidebar";
 
@@ -71,10 +61,7 @@ function HomePage() {
 				open={sidebarOpen()}
 			/>
 			<MainMenu />
-			<PageViewer
-				open={pageViewerOpen()}
-				viewChanged={() => setPageViewerOpen(false)}
-			/>
+			<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
 			<Toaster
 				class={styles["home__toaster"]}
 				style={{ visibility: sidebarOpen() ? "hidden" : "visible" }}
@@ -95,9 +82,7 @@ function MainMenu() {
 			}}
 		>
 			<div style={{ display: "flex", "justify-content": "flex-end" }}>
-				<Skeleton
-					style={{ width: "32px", height: "32px", "border-radius": "5px" }}
-				/>
+				<Skeleton style={{ width: "32px", height: "32px", "border-radius": "5px" }} />
 			</div>
 			<div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
 				<Skeleton style={{ width: "70%", height: "16px" }} />
@@ -139,9 +124,7 @@ function MainMenu() {
 							No instances found. Create one to get started!
 						</p>
 					</Show>
-					<For each={instancesStore()}>
-						{(instance) => <InstanceCard instance={instance} />}
-					</For>
+					<For each={instancesStore()}>{(instance) => <InstanceCard instance={instance} />}</For>
 				</div>
 			</div>
 		</div>

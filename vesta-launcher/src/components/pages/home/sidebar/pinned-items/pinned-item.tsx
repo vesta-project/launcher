@@ -35,9 +35,7 @@ export function PinnedItem(props: PinnedItemProps) {
 
 	const instance = createMemo(() => {
 		if (props.pin.page_type !== "instance") return null;
-		return instancesState.instances.find(
-			(i) => getInstanceSlug(i) === props.pin.target_id,
-		);
+		return instancesState.instances.find((i) => getInstanceSlug(i) === props.pin.target_id);
 	});
 
 	onMount(() => {
@@ -74,12 +72,8 @@ export function PinnedItem(props: PinnedItemProps) {
 		// });
 	});
 
-	const isLaunching = createMemo(
-		() => instancesState.launchingIds[props.pin.target_id],
-	);
-	const isRunning = createMemo(
-		() => instancesState.runningIds[props.pin.target_id],
-	);
+	const isLaunching = createMemo(() => instancesState.launchingIds[props.pin.target_id]);
+	const isRunning = createMemo(() => instancesState.runningIds[props.pin.target_id]);
 	const isCrashed = createMemo(() => instance()?.crashed);
 
 	const resource = createMemo(() => {
@@ -251,11 +245,7 @@ export function PinnedItem(props: PinnedItemProps) {
 						gutter={-12}
 						placement="right"
 					>
-						<HoverCard.Trigger
-							as="div"
-							class={styles["pinned-button-trigger"]}
-							onClick={handleClick}
-						>
+						<HoverCard.Trigger as="div" class={styles["pinned-button-trigger"]} onClick={handleClick}>
 							<SidebarButton
 								tooltip_text={displayName()}
 								tooltip_placement="right"
@@ -267,16 +257,9 @@ export function PinnedItem(props: PinnedItemProps) {
 										when={displayIcon()}
 										fallback={
 											<div class={styles["icon-placeholder"]}>
-												<Show
-													when={props.pin.page_type === "instance"}
-													fallback={displayName()[0]}
-												>
+												<Show when={props.pin.page_type === "instance"} fallback={displayName()[0]}>
 													<div class={styles["icon-bg-blur"]} />
-													<img
-														src={resolveResourceUrl(DEFAULT_ICONS[0])}
-														alt=""
-														class={styles["pin-icon"]}
-													/>
+													<img src={resolveResourceUrl(DEFAULT_ICONS[0])} alt="" class={styles["pin-icon"]} />
 												</Show>
 											</div>
 										}
@@ -290,14 +273,10 @@ export function PinnedItem(props: PinnedItemProps) {
 									</Show>
 
 									<Show when={isLaunching()}>
-										<div
-											class={`${styles["status-dot"]} ${styles["status--launching"]}`}
-										/>
+										<div class={`${styles["status-dot"]} ${styles["status--launching"]}`} />
 									</Show>
 									<Show when={isRunning() && !isLaunching()}>
-										<div
-											class={`${styles["status-dot"]} ${styles["status--running"]}`}
-										/>
+										<div class={`${styles["status-dot"]} ${styles["status--running"]}`} />
 									</Show>
 									<Show when={isCrashed()}>
 										<div class={styles["status-crashed"]} />
@@ -315,19 +294,10 @@ export function PinnedItem(props: PinnedItemProps) {
 												? styles["action-button-stop"]
 												: styles["action-button-play"]
 										}
-										onClick={
-											isRunning() || isLaunching() ? handleKill : handleLaunch
-										}
-										title={
-											isRunning() || isLaunching()
-												? "Kill Instance"
-												: "Quick Launch"
-										}
+										onClick={isRunning() || isLaunching() ? handleKill : handleLaunch}
+										title={isRunning() || isLaunching() ? "Kill Instance" : "Quick Launch"}
 									>
-										<Show
-											when={isRunning() || isLaunching()}
-											fallback={<PlayIcon />}
-										>
+										<Show when={isRunning() || isLaunching()} fallback={<PlayIcon />}>
 											<StopIcon />
 										</Show>
 									</button>
@@ -348,19 +318,11 @@ export function PinnedItem(props: PinnedItemProps) {
 					<Show when={props.pin.page_type === "instance"}>
 						<ContextMenuItem
 							onClick={(e) =>
-								isRunning() || isLaunching()
-									? handleKill(e as any)
-									: handleLaunch(e as any)
+								isRunning() || isLaunching() ? handleKill(e as any) : handleLaunch(e as any)
 							}
-							class={
-								isRunning() || isLaunching() ? styles["menu-item--danger"] : ""
-							}
+							class={isRunning() || isLaunching() ? styles["menu-item--danger"] : ""}
 						>
-							<span>
-								{isRunning() || isLaunching()
-									? "Kill Instance"
-									: "Launch Instance"}
-							</span>
+							<span>{isRunning() || isLaunching() ? "Kill Instance" : "Launch Instance"}</span>
 						</ContextMenuItem>
 					</Show>
 					<ContextMenuSeparator />
@@ -373,10 +335,7 @@ export function PinnedItem(props: PinnedItemProps) {
 						<span>Add to Desktop</span>
 					</ContextMenuItem>
 					<ContextMenuSeparator />
-					<ContextMenuItem
-						onClick={() => unpinPage(props.pin.id)}
-						class={styles["menu-item--danger"]}
-					>
+					<ContextMenuItem onClick={() => unpinPage(props.pin.id)} class={styles["menu-item--danger"]}>
 						<span>Unpin</span>
 					</ContextMenuItem>
 				</ContextMenuContent>

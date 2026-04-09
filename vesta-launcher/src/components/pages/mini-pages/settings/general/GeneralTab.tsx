@@ -1,11 +1,11 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import { invoke } from "@tauri-apps/api/core";
 import {
-    NumberField,
-    NumberFieldDecrementTrigger,
-    NumberFieldGroup,
-    NumberFieldIncrementTrigger,
-    NumberFieldInput,
+	NumberField,
+	NumberFieldDecrementTrigger,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
 } from "@ui/number-field/number-field";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
@@ -33,10 +33,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Reduced Motion"
 					description="Disable UI animations for a faster and cleaner experience."
 					headerRight={
-						<Switch
-							checked={props.reducedMotion}
-							onCheckedChange={props.handleReducedMotionToggle}
-						>
+						<Switch checked={props.reducedMotion} onCheckedChange={props.handleReducedMotionToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -50,10 +47,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Discord Rich Presence"
 					description="Show your current game and status on Discord."
 					headerRight={
-						<Switch
-							checked={props.discordPresenceEnabled}
-							onCheckedChange={props.handleDiscordToggle}
-						>
+						<Switch checked={props.discordPresenceEnabled} onCheckedChange={props.handleDiscordToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>

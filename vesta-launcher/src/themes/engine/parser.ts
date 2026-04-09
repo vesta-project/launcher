@@ -35,9 +35,7 @@ export function getString(value: unknown): string | undefined {
 	return trimmed.length > 0 ? trimmed : undefined;
 }
 
-export function parseVariableDefinitions(
-	value: unknown,
-): ThemeVariable[] | undefined {
+export function parseVariableDefinitions(value: unknown): ThemeVariable[] | undefined {
 	if (!Array.isArray(value)) return undefined;
 
 	const parsed: ThemeVariable[] = [];
@@ -119,18 +117,12 @@ export function parseVariableDefinitions(
 	return parsed.length > 0 ? parsed : undefined;
 }
 
-export function parseUserVariables(
-	value: unknown,
-): Record<string, ThemeVariableValue> | undefined {
+export function parseUserVariables(value: unknown): Record<string, ThemeVariableValue> | undefined {
 	if (!isObjectLike(value)) return undefined;
 
 	const parsed: Record<string, ThemeVariableValue> = {};
 	for (const [key, val] of Object.entries(value)) {
-		if (
-			typeof val === "number" ||
-			typeof val === "string" ||
-			typeof val === "boolean"
-		) {
+		if (typeof val === "number" || typeof val === "string" || typeof val === "boolean") {
 			parsed[key] = val;
 		}
 	}
@@ -161,29 +153,22 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.primaryLight = getNumber(source.primaryLight ?? source.primary_light);
 	out.opacity = getNumber(source.opacity);
 	out.style = getString(source.style) as StyleMode | undefined;
-	out.gradientEnabled = getBoolean(
-		source.gradientEnabled ?? source.gradient_enabled,
-	);
+	out.gradientEnabled = getBoolean(source.gradientEnabled ?? source.gradient_enabled);
 	out.rotation = getNumber(source.rotation);
 	out.gradientType = getString(source.gradientType ?? source.gradient_type) as
 		| "linear"
 		| "radial"
 		| undefined;
-	out.gradientHarmony = getString(
-		source.gradientHarmony ?? source.gradient_harmony,
-	) as GradientHarmony | undefined;
+	out.gradientHarmony = getString(source.gradientHarmony ?? source.gradient_harmony) as
+		| GradientHarmony
+		| undefined;
 	out.borderWidth = getNumber(source.borderWidth ?? source.border_width);
-	out.backgroundOpacity = getNumber(
-		source.backgroundOpacity ?? source.background_opacity,
-	);
+	out.backgroundOpacity = getNumber(source.backgroundOpacity ?? source.background_opacity);
 	out.windowEffect = getString(source.windowEffect ?? source.window_effect);
 	out.customCss = getString(source.customCss ?? source.custom_css);
 	out.variables = parseVariableDefinitions(source.variables ?? source.params);
 	out.userVariables = parseUserVariables(
-		source.userVariables ??
-			source.user_variables ??
-			source.userParams ??
-			source.user_params,
+		source.userVariables ?? source.user_variables ?? source.userParams ?? source.user_params,
 	);
 
 	return out;

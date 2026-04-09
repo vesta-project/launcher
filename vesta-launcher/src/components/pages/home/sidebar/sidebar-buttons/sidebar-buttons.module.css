@@ -42,11 +42,7 @@
 
 .sidebar-action-button {
 	padding: 10px;
-	background: linear-gradient(
-		to bottom,
-		hsl(0deg 0% 71% / 1%),
-		hsl(0deg 0% 40% / 1%)
-	);
+	background: linear-gradient(to bottom, hsl(0deg 0% 71% / 1%), hsl(0deg 0% 40% / 1%));
 	transition-property: background-color;
 	transition-duration: 20ms;
 	transition-timing-function: linear;
@@ -63,11 +59,7 @@
 			fill: var(--icon-primary);
 		}
 
-		background: linear-gradient(
-			-45deg,
-			hsl(0deg 0% 71% / 9%),
-			hsl(0deg 0% 40% / 9%)
-		);
+		background: linear-gradient(-45deg, hsl(0deg 0% 71% / 9%), hsl(0deg 0% 40% / 9%));
 	}
 }
 

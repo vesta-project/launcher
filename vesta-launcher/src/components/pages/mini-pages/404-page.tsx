@@ -15,9 +15,7 @@ export default function InvalidPage(props: { close?: () => void }) {
 			}}
 		>
 			<h1 style={{ "font-size": "4rem", margin: 0, opacity: 0.2 }}>404</h1>
-			<p style={{ "font-size": "1.25rem", opacity: 0.6 }}>
-				This page doesn't exist.
-			</p>
+			<p style={{ "font-size": "1.25rem", opacity: 0.6 }}>This page doesn't exist.</p>
 			<LauncherButton onClick={() => props.close?.()}>Close</LauncherButton>
 		</div>
 	);

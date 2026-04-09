@@ -31,20 +31,10 @@ export default function FloatingSaveFooter(props: FloatingSaveFooterProps) {
 					<p>{props.message || "You have unsaved changes."}</p>
 				</div>
 				<div class={styles["save-footer-actions"]}>
-					<Button
-						onClick={() => props.onCancel()}
-						variant="ghost"
-						size="sm"
-						disabled={props.isSaving}
-					>
+					<Button onClick={() => props.onCancel()} variant="ghost" size="sm" disabled={props.isSaving}>
 						{props.cancelText || "Cancel"}
 					</Button>
-					<Button
-						onClick={() => props.onSave()}
-						variant="solid"
-						size="sm"
-						disabled={props.isSaving}
-					>
+					<Button onClick={() => props.onSave()} variant="solid" size="sm" disabled={props.isSaving}>
 						{props.saveText || "Save Changes"}
 					</Button>
 				</div>

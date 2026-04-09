@@ -30,8 +30,7 @@ const fetchChangelog = async (): Promise<GithubRelease[]> => {
 };
 
 // Resource for automatic fetching and caching
-const [changelog, { refetch }] =
-	createResource<GithubRelease[]>(fetchChangelog);
+const [changelog, { refetch }] = createResource<GithubRelease[]>(fetchChangelog);
 
 export { changelog, refetch as refetchChangelog };
 

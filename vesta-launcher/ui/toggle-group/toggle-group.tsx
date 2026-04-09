@@ -14,10 +14,7 @@ function ToggleGroup<T extends ValidComponent = "div">(
 	const [local, rest] = splitProps(props as any, ["class", "children"]);
 
 	return (
-		<ToggleGroupPrimitive.Root
-			class={clsx(styles["toggle-group"], local.class)}
-			{...rest}
-		>
+		<ToggleGroupPrimitive.Root class={clsx(styles["toggle-group"], local.class)} {...rest}>
 			{local.children}
 		</ToggleGroupPrimitive.Root>
 	);
@@ -32,11 +29,7 @@ type ToggleGroupItemProps = ToggleGroupPrimitive.ToggleGroupItemProps &
 function ToggleGroupItem<T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, ToggleGroupItemProps>,
 ) {
-	const [local, rest] = splitProps(props as any, [
-		"class",
-		"children",
-		"value",
-	]);
+	const [local, rest] = splitProps(props as any, ["class", "children", "value"]);
 	return (
 		<ToggleGroupPrimitive.Item
 			value={local.value}

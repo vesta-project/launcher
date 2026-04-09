@@ -596,11 +596,7 @@
 	display: flex;
 	justify-content: center;
 	align-items: center;
-	background: radial-gradient(
-		circle at center,
-		var(--surface-overlay) 0%,
-		transparent 70%
-	);
+	background: radial-gradient(circle at center, var(--surface-overlay) 0%, transparent 70%);
 	position: relative;
 }
 
@@ -709,8 +705,7 @@
 
 /* Fallback for legacy 64x32 skins (where armRight doesn't exist at 36,52) */
 .legacyArmRight {
-	background-position: calc(44 / (64 - var(--arm-w, 4px)) * 100%)
-		calc(20 / (64 - 12) * 100%);
+	background-position: calc(44 / (64 - var(--arm-w, 4px)) * 100%) calc(20 / (64 - 12) * 100%);
 	transform: scaleX(-1);
 }
 

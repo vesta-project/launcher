@@ -32,10 +32,7 @@ export default function DebugTestPage() {
 						setCheckboxChecked(val);
 					}}
 				>
-					<label>
-						Project Checkbox (Status:{" "}
-						{checkboxChecked() ? "Checked" : "Unchecked"})
-					</label>
+					<label>Project Checkbox (Status: {checkboxChecked() ? "Checked" : "Unchecked"})</label>
 				</Checkbox>
 			</section>
 
@@ -76,8 +73,7 @@ export default function DebugTestPage() {
 						style={{
 							padding: "8px 16px",
 							border: "1px solid #444",
-							background:
-								toggleValue() === "one" ? "var(--primary)" : "transparent",
+							background: toggleValue() === "one" ? "var(--primary)" : "transparent",
 						}}
 					>
 						Option One
@@ -87,8 +83,7 @@ export default function DebugTestPage() {
 						style={{
 							padding: "8px 16px",
 							border: "1px solid #444",
-							background:
-								toggleValue() === "two" ? "var(--primary)" : "transparent",
+							background: toggleValue() === "two" ? "var(--primary)" : "transparent",
 						}}
 					>
 						Option Two

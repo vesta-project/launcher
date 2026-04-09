@@ -51,17 +51,9 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 		async (source) => {
 			let info: ModpackInfo | undefined;
 			if (source.zipPath)
-				info = await getModpackInfo(
-					source.zipPath,
-					source.modpackId,
-					source.modpackPlatform,
-				);
+				info = await getModpackInfo(source.zipPath, source.modpackId, source.modpackPlatform);
 			else if (source.url)
-				info = await getModpackInfoFromUrl(
-					source.url,
-					source.modpackId,
-					source.modpackPlatform,
-				);
+				info = await getModpackInfoFromUrl(source.url, source.modpackId, source.modpackPlatform);
 
 			if (info) {
 				if (source.manualIcon) info.iconUrl = source.manualIcon;
@@ -100,10 +92,7 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 	};
 
 	return (
-		<Dialog
-			open={props.isOpen}
-			onOpenChange={(open) => !open && props.onClose()}
-		>
+		<Dialog open={props.isOpen} onOpenChange={(open) => !open && props.onClose()}>
 			<DialogContent
 				style={{
 					width: showAdvanced() || isInstalling() ? "900px" : "440px",
@@ -114,15 +103,11 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 			>
 				<DialogHeader>
 					<DialogTitle>Install Modpack</DialogTitle>
-					<DialogDescription>
-						Configure your new instance for this modpack.
-					</DialogDescription>
+					<DialogDescription>Configure your new instance for this modpack.</DialogDescription>
 				</DialogHeader>
 
 				<Show when={modpackInfo.loading}>
-					<div style={{ padding: "20px", "text-align": "center" }}>
-						Analyzing modpack...
-					</div>
+					<div style={{ padding: "20px", "text-align": "center" }}>Analyzing modpack...</div>
 				</Show>
 
 				<Show when={modpackInfo()} keyed>

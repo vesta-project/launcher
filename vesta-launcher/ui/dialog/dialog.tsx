@@ -2,14 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as DialogPrimitive from "@kobalte/core/dialog";
 import { ClassProp } from "@ui/props";
 import clsx from "clsx";
-import {
-	Component,
-	ComponentProps,
-	JSX,
-	Show,
-	splitProps,
-	ValidComponent,
-} from "solid-js";
+import { Component, ComponentProps, JSX, Show, splitProps, ValidComponent } from "solid-js";
 import styles from "./dialog.module.css";
 
 const Dialog = DialogPrimitive.Root;
@@ -24,27 +17,21 @@ const DialogPortal: Component<DialogPrimitive.DialogPortalProps> = (props) => {
 	);
 };
 
-type DialogOverlayProps<T extends ValidComponent = "div"> =
-	DialogPrimitive.DialogOverlayProps<T> & ClassProp;
+type DialogOverlayProps<T extends ValidComponent = "div"> = DialogPrimitive.DialogOverlayProps<T> &
+	ClassProp;
 
 const DialogOverlay = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, DialogOverlayProps<T>>,
 ) => {
 	const [local, rest] = splitProps(props as DialogOverlayProps, ["class"]);
-	return (
-		<DialogPrimitive.Overlay
-			class={clsx(styles["dialog__overlay"], local.class)}
-			{...rest}
-		/>
-	);
+	return <DialogPrimitive.Overlay class={clsx(styles["dialog__overlay"], local.class)} {...rest} />;
 };
 
-type DialogContentProps<T extends ValidComponent = "div"> =
-	DialogPrimitive.DialogContentProps<T> &
-		ClassProp & {
-			children?: JSX.Element;
-			hideCloseButton?: boolean;
-		};
+type DialogContentProps<T extends ValidComponent = "div"> = DialogPrimitive.DialogContentProps<T> &
+	ClassProp & {
+		children?: JSX.Element;
+		hideCloseButton?: boolean;
+	};
 
 const DialogContent = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, DialogContentProps<T>>,
@@ -57,10 +44,7 @@ const DialogContent = <T extends ValidComponent = "div">(
 	return (
 		<DialogPortal>
 			<DialogOverlay />
-			<DialogPrimitive.Content
-				class={clsx(styles["dialog__content"], local.class)}
-				{...rest}
-			>
+			<DialogPrimitive.Content class={clsx(styles["dialog__content"], local.class)} {...rest}>
 				{local.children}
 				<Show when={!local.hideCloseButton}>
 					<DialogPrimitive.CloseButton class={styles["dialog__close-btn"]}>
@@ -109,8 +93,8 @@ const DialogFooter: Component<ComponentProps<"div"> & ClassProp> = (props) => {
 	return <div class={clsx(styles["dialog__footer"], local.class)} {...rest} />;
 };
 
-type DialogTitleProps<T extends ValidComponent = "h2"> =
-	DialogPrimitive.DialogTitleProps<T> & ClassProp;
+type DialogTitleProps<T extends ValidComponent = "h2"> = DialogPrimitive.DialogTitleProps<T> &
+	ClassProp;
 
 const DialogTitle = <T extends ValidComponent = "h2">(
 	props: PolymorphicProps<T, DialogTitleProps<T>>,

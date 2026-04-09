@@ -1,8 +1,8 @@
 import type { PistonMetadata } from "@utils/instances";
 import {
-    getAllModloaders,
-    getNotifiableSelectionAdjustments,
-    resolveCompatibleVersionSelection,
+	getAllModloaders,
+	getNotifiableSelectionAdjustments,
+	resolveCompatibleVersionSelection,
 } from "@utils/version-selection";
 import { describe, expect, it } from "vitest";
 
@@ -64,11 +64,9 @@ describe("version-selection", () => {
 		expect(resolved.minecraftVersion).toBe("1.20.1");
 		expect(resolved.modloader).toBe("fabric");
 		expect(resolved.modloaderVersion).toBe("0.15.10");
-		expect(
-			resolved.adjustments.some(
-				(adjustment) => adjustment.code === "modloaderVersion",
-			),
-		).toBe(true);
+		expect(resolved.adjustments.some((adjustment) => adjustment.code === "modloaderVersion")).toBe(
+			true,
+		);
 	});
 
 	it("clears loader version when vanilla is selected", () => {
@@ -111,9 +109,7 @@ describe("version-selection", () => {
 		});
 
 		const notifiable = getNotifiableSelectionAdjustments(resolved.adjustments);
-		expect(
-			notifiable.some((adjustment) => adjustment.code === "modloaderVersion"),
-		).toBe(true);
+		expect(notifiable.some((adjustment) => adjustment.code === "modloaderVersion")).toBe(true);
 	});
 
 	it("keeps major compatibility adjustments for notifications", () => {

@@ -131,20 +131,14 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 
 								<div class={styles["info-section"]}>
 									<h3>Timestamp</h3>
-									<p class={styles["timestamp"]}>
-										{new Date(details().timestamp).toLocaleString()}
-									</p>
+									<p class={styles["timestamp"]}>{new Date(details().timestamp).toLocaleString()}</p>
 								</div>
 
 								<Show when={details().report_path}>
 									<div class={styles["info-section"]}>
 										<h3>Crash Report</h3>
 										<p class={styles["report-path"]}>{details().report_path}</p>
-										<LauncherButton
-											onClick={openCrashReport}
-											variant="outline"
-											size="sm"
-										>
+										<LauncherButton onClick={openCrashReport} variant="outline" size="sm">
 											View Report
 										</LauncherButton>
 									</div>
@@ -152,9 +146,7 @@ export default function CrashDetailsModal(props: CrashDetailsModalProps) {
 							</div>
 
 							<div class={styles["crash-actions"]}>
-								<p class={styles["action-hint"]}>
-									Try these steps to fix the crash:
-								</p>
+								<p class={styles["action-hint"]}>Try these steps to fix the crash:</p>
 								<ul>
 									<Switch>
 										<Match when={crashDetails()?.crash_type === "launch_mod"}>

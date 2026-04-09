@@ -1,20 +1,12 @@
 import { PolymorphicProps } from "@kobalte/core";
 import * as ButtonPrimitive from "@kobalte/core/button";
 import { ChildrenProp } from "@ui/props";
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipPlacement,
-    TooltipTrigger,
-} from "@ui/tooltip/tooltip";
+import { Tooltip, TooltipContent, TooltipPlacement, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { children, mergeProps, Show, splitProps } from "solid-js";
 import styles from "./button.module.css";
 
 export interface ButtonProps
-	extends PolymorphicProps<
-		"button",
-		ButtonPrimitive.ButtonRootProps & ChildrenProp
-	> {
+	extends PolymorphicProps<"button", ButtonPrimitive.ButtonRootProps & ChildrenProp> {
 	color?: "none" | "primary" | "secondary" | "destructive" | "warning";
 	variant?: "solid" | "outline" | "ghost" | "shadow" | "slate";
 	size?: "sm" | "md" | "lg" | "xl" | "icon";
@@ -66,13 +58,9 @@ function Button(p: ButtonProps) {
 			? "var(--text-primary)"
 			: "var(--text-on-accent)";
 	const buttonTextVar =
-		local.color !== "none" && local.color !== "secondary"
-			? buttonColorVar
-			: "var(--text-primary)";
+		local.color !== "none" && local.color !== "secondary" ? buttonColorVar : "var(--text-primary)";
 	const buttonBorderVar =
-		local.color === "none" || local.color === "secondary"
-			? "var(--border-subtle)"
-			: "transparent";
+		local.color === "none" || local.color === "secondary" ? "var(--border-subtle)" : "transparent";
 
 	return (
 		<Tooltip placement={props.tooltip_placement}>

@@ -23,9 +23,7 @@ interface ModpackVersionSelectorProps {
 }
 
 export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
-	const [selectedId, setSelectedId] = createSignal<string | null>(
-		props.currentVersionId,
-	);
+	const [selectedId, setSelectedId] = createSignal<string | null>(props.currentVersionId);
 	const [searchQuery, setSearchQuery] = createSignal("");
 	const [isOpen, setIsOpen] = createSignal(false);
 	const [confirmingId, setConfirmingId] = createSignal<string | null>(null);
@@ -91,24 +89,16 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 			<div class={styles["header"]}>
 				<div style="display: flex; flex-direction: column; gap: 2px;">
 					<span class={styles["headerTitle"]}>Modpack Version</span>
-					<span class={styles["headerSubtitle"]}>
-						Manage installed builds and engine settings.
-					</span>
+					<span class={styles["headerSubtitle"]}>Manage installed builds and engine settings.</span>
 				</div>
 			</div>
 
-			<Show
-				when={!props.loading}
-				fallback={<Skeleton class={styles["triggerSkeleton"]} />}
-			>
+			<Show when={!props.loading} fallback={<Skeleton class={styles["triggerSkeleton"]} />}>
 				<div
 					onClick={() => {
 						if (!props.disabled) setIsOpen(!isOpen());
 					}}
-					class={clsx(
-						styles["triggerCard"],
-						props.disabled && styles["disabled"],
-					)}
+					class={clsx(styles["triggerCard"], props.disabled && styles["disabled"])}
 					data-expanded={isOpen()}
 				>
 					<div class={styles["triggerMain"]}>
@@ -211,14 +201,10 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 							</div>
 						</div>
 
-						<div
-							class={styles["versionListContainer"]}
-							style={{ "max-height": "400px" }}
-						>
+						<div class={styles["versionListContainer"]} style={{ "max-height": "400px" }}>
 							<For each={filteredVersions()}>
 								{(version) => {
-									const isCurrent =
-										String(version.id) === props.currentVersionId;
+									const isCurrent = String(version.id) === props.currentVersionId;
 									const isConfirming = () => confirmingId() === version.id;
 
 									return (
@@ -227,8 +213,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 												if (isCurrent) activeRowRef = el;
 											}}
 											onMouseLeave={() => {
-												if (confirmingId() === version.id)
-													setConfirmingId(null);
+												if (confirmingId() === version.id) setConfirmingId(null);
 											}}
 											class={clsx(
 												styles["versionRow"],
@@ -251,15 +236,9 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 												</div>
 												<div class={styles["metaContainer"]}>
 													<div class={styles["versionHeader"]}>
-														<span class={styles["versionNumber"]}>
-															{version.version_number}
-														</span>
+														<span class={styles["versionNumber"]}>{version.version_number}</span>
 														<Badge
-															variant={
-																version.release_type === "release"
-																	? "secondary"
-																	: "outline"
-															}
+															variant={version.release_type === "release" ? "secondary" : "outline"}
 															class={styles["releaseTypeBadge"]}
 														>
 															{version.release_type}
@@ -290,12 +269,8 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 														>
 															<div class={styles["confirmSlide"]}>
 																<div class={styles["slideInner"]}>
-																	<span class={styles["slideText"]}>
-																		Switch
-																	</span>
-																	<span class={styles["slideText"]}>
-																		Confirm?
-																	</span>
+																	<span class={styles["slideText"]}>Switch</span>
+																	<span class={styles["slideText"]}>Confirm?</span>
 																</div>
 															</div>
 														</Button>

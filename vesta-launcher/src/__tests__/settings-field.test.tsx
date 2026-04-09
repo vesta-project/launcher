@@ -3,7 +3,7 @@
 import { SettingsField } from "@components/settings";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { confirm } from "@tauri-apps/plugin-dialog";
-import { Show, createSignal } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
@@ -19,9 +19,7 @@ vi.mock("@ui/button/button", () => ({
 }));
 
 vi.mock("@ui/help-trigger/help-trigger", () => ({
-	HelpTrigger: (props: { topic: string }) => (
-		<span data-testid="help-trigger">{props.topic}</span>
-	),
+	HelpTrigger: (props: { topic: string }) => <span data-testid="help-trigger">{props.topic}</span>,
 }));
 
 describe("SettingsField", () => {
@@ -47,11 +45,7 @@ describe("SettingsField", () => {
 
 	it("renders action fallback button when headerRight is not provided", () => {
 		render(() => (
-			<SettingsField
-				label="Clear Cache"
-				actionLabel="Clear Now"
-				onAction={() => Promise.resolve()}
-			/>
+			<SettingsField label="Clear Cache" actionLabel="Clear Now" onAction={() => Promise.resolve()} />
 		));
 
 		expect(screen.getByRole("button", { name: "Clear Now" })).toBeTruthy();
@@ -82,11 +76,7 @@ describe("SettingsField", () => {
 
 	it("supports legacy stack control fallback", () => {
 		render(() => (
-			<SettingsField
-				label="Legacy Field"
-				layout="stack"
-				control={<div>Legacy Stack Control</div>}
-			/>
+			<SettingsField label="Legacy Field" layout="stack" control={<div>Legacy Stack Control</div>} />
 		));
 
 		expect(screen.getByText("Legacy Stack Control")).toBeTruthy();
@@ -100,9 +90,7 @@ describe("SettingsField", () => {
 				<SettingsField
 					label="Allocation Range"
 					headerRight={
-						<button onClick={() => setUseGlobal((current) => !current)}>
-							Toggle Global
-						</button>
+						<button onClick={() => setUseGlobal((current) => !current)}>Toggle Global</button>
 					}
 					body={
 						<Show when={!useGlobal()} fallback={<div>Using global memory</div>}>

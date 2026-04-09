@@ -1,8 +1,4 @@
-import {
-    type GameVersionMetadata,
-    LoaderVersionInfo,
-    PistonMetadata,
-} from "@utils/instances";
+import { type GameVersionMetadata, LoaderVersionInfo, PistonMetadata } from "@utils/instances";
 
 const LOADER_SORT_ORDER = ["vanilla", "fabric", "forge", "neoforge", "quilt"];
 
@@ -14,10 +10,7 @@ export const MODLOADER_DISPLAY_NAMES: Record<string, string> = {
 	quilt: "Quilt",
 };
 
-type SelectionAdjustmentCode =
-	| "minecraftVersion"
-	| "modloader"
-	| "modloaderVersion";
+type SelectionAdjustmentCode = "minecraftVersion" | "modloader" | "modloaderVersion";
 
 export interface VersionSelectionAdjustment {
 	code: SelectionAdjustmentCode;
@@ -73,9 +66,7 @@ function getCandidateGameVersions(
 	supportedMcVersions?: string[],
 ): GameVersionMetadata[] {
 	const supportedSet =
-		supportedMcVersions && supportedMcVersions.length > 0
-			? new Set(supportedMcVersions)
-			: null;
+		supportedMcVersions && supportedMcVersions.length > 0 ? new Set(supportedMcVersions) : null;
 
 	let candidates = metadata.game_versions.filter((version) => {
 		if (!includeSnapshots && !version.stable) return false;
@@ -134,10 +125,9 @@ function fallbackLoaderForVersion(
 ): string {
 	if (!versionMeta) return "vanilla";
 
-	const loaders = [
-		"vanilla",
-		...Object.keys(versionMeta.loaders).map((key) => lower(key)),
-	].filter((loader) => !supportedLoaders || supportedLoaders.has(loader));
+	const loaders = ["vanilla", ...Object.keys(versionMeta.loaders).map((key) => lower(key))].filter(
+		(loader) => !supportedLoaders || supportedLoaders.has(loader),
+	);
 
 	if (loaders.includes("vanilla")) return "vanilla";
 	return loaders[0] || "vanilla";
@@ -152,9 +142,7 @@ export function getModloaderDisplayName(modloader: string): string {
 	return MODLOADER_DISPLAY_NAMES[normalized] || normalized;
 }
 
-export function describeSelectionAdjustments(
-	adjustments: VersionSelectionAdjustment[],
-): string {
+export function describeSelectionAdjustments(adjustments: VersionSelectionAdjustment[]): string {
 	return adjustments.map((adjustment) => adjustment.message).join(" ");
 }
 
@@ -231,11 +219,7 @@ export function resolveCompatibleVersionSelection(
 
 	const adjustments: VersionSelectionAdjustment[] = [];
 
-	if (
-		supportedLoaders &&
-		modloader !== "vanilla" &&
-		!supportedLoaders.has(modloader)
-	) {
+	if (supportedLoaders && modloader !== "vanilla" && !supportedLoaders.has(modloader)) {
 		adjustments.push({
 			code: "modloader",
 			message: `${getModloaderDisplayName(modloader)} is not supported in this context. Switched to Vanilla.`,

@@ -10,37 +10,14 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { ResourceAvatar } from "@ui/avatar";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 // UI Components
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { SkinView3d } from "@ui/skin-viewer";
-import {
-	Tabs,
-	TabsContent,
-	TabsIndicator,
-	TabsList,
-	TabsTrigger,
-} from "@ui/tabs/tabs";
+import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from "@ui/tabs/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	getActiveAccount,
-	setActiveAccount as persistActiveAccount,
-} from "@utils/auth";
+import { getActiveAccount, setActiveAccount as persistActiveAccount } from "@utils/auth";
 import { onConfigUpdate } from "@utils/config-sync";
 import { createNotification } from "@utils/notifications";
-import {
-	createEffect,
-	createMemo,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "./AccountTab.module.css";
 
 interface Account {
@@ -99,9 +76,7 @@ interface CompleteSkinsResponse {
 }
 
 const normalizeVariant = (value?: string | null): "classic" | "slim" => {
-	return String(value || "classic").toLowerCase() === "slim"
-		? "slim"
-		: "classic";
+	return String(value || "classic").toLowerCase() === "slim" ? "slim" : "classic";
 };
 
 const isGuestOrDemoAccountType = (accountType?: string | null): boolean => {
@@ -133,22 +108,14 @@ const toTitleCase = (value: string): string => {
 		.replace(/\s+/g, " ")
 		.trim()
 		.split(" ")
-		.map((word) =>
-			word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word,
-		)
+		.map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word))
 		.join(" ");
 };
 
-const formatTooltipName = (
-	name: string | undefined,
-	source: string | undefined,
-): string => {
+const formatTooltipName = (name: string | undefined, source: string | undefined): string => {
 	if (!name) return "Skin";
 	const normalizedSource = (source || "").toLowerCase();
-	if (
-		normalizedSource === "default" ||
-		normalizedSource.startsWith("default:")
-	) {
+	if (normalizedSource === "default" || normalizedSource.startsWith("default:")) {
 		return toTitleCase(name);
 	}
 	return name;
@@ -202,10 +169,7 @@ const SkinPortrait = (props: { src: string; variant?: string }) => {
 
 	return (
 		<div class={styles.skinPortrait}>
-			<canvas
-				ref={(el) => (canvasRef = el)}
-				class={styles.skinPortraitCanvas}
-			/>
+			<canvas ref={(el) => (canvasRef = el)} class={styles.skinPortraitCanvas} />
 		</div>
 	);
 };
@@ -222,9 +186,7 @@ export function AccountSettingsTab() {
 	const [compactActionMode, setCompactActionMode] = createSignal(false);
 	const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
 	const [isSingleNarrowToggle, setIsSingleNarrowToggle] = createSignal(false);
-	const [narrowView, setNarrowView] = createSignal<"browse" | "preview">(
-		"browse",
-	);
+	const [narrowView, setNarrowView] = createSignal<"browse" | "preview">("browse");
 
 	const [savedSnapshot, setSavedSnapshot] = createSignal<{
 		skinUrl: string;
@@ -236,14 +198,10 @@ export function AccountSettingsTab() {
 
 	// Preview Signals
 	const [previewSkinUrl, setPreviewSkinUrl] = createSignal<string>("");
-	const [previewComputedKey, setPreviewComputedKey] = createSignal<
-		string | null
-	>(null);
+	const [previewComputedKey, setPreviewComputedKey] = createSignal<string | null>(null);
 	const [previewCapeId, setPreviewCapeId] = createSignal<string | null>(null);
 	const [previewCapeUrl, setPreviewCapeUrl] = createSignal<string | null>("");
-	const [previewVariant, setPreviewVariant] = createSignal<"classic" | "slim">(
-		"classic",
-	);
+	const [previewVariant, setPreviewVariant] = createSignal<"classic" | "slim">("classic");
 
 	const loadData = async () => {
 		try {
@@ -258,14 +216,11 @@ export function AccountSettingsTab() {
 					// Trigger a background sync on mount to ensure we have the latest from Mojang
 					invoke("force_sync_account_profile", { accountUuid: active.uuid })
 						.then(async () => {
-							console.log(
-								"[AccountSettings] Background sync on mount completed",
-							);
+							console.log("[AccountSettings] Background sync on mount completed");
 							// Fetch the updated data from DB after the sync finishes
-							const res = await invoke<CompleteSkinsResponse>(
-								"get_complete_skin_data",
-								{ accountUuid: active.uuid },
-							);
+							const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", {
+								accountUuid: active.uuid,
+							});
 							setSkins(res.default_skins);
 							setSkinHistory(res.recent_history);
 							setCapes(
@@ -285,15 +240,9 @@ export function AccountSettingsTab() {
 									previewCapeId() === snapshot.capeId &&
 									previewVariant() === snapshot.variant)
 							) {
-								setPreviewSkinUrl(
-									res.current_skin_base64 || active.skin_url || "",
-								);
-								setPreviewVariant(
-									(res.current_variant as "classic" | "slim") || "classic",
-								);
-								setPreviewCapeUrl(
-									res.current_cape_base64 || active.cape_url || "",
-								);
+								setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
+								setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
+								setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 								setPreviewComputedKey(res.current_skin_id);
 								setPreviewCapeId(res.current_cape_profile_id || null);
 
@@ -302,22 +251,15 @@ export function AccountSettingsTab() {
 									capeUrl: res.current_cape_base64 || active.cape_url || null,
 									skinKey: res.current_skin_id || null,
 									capeId: res.current_cape_profile_id || null,
-									variant:
-										(res.current_variant as "classic" | "slim") || "classic",
+									variant: (res.current_variant as "classic" | "slim") || "classic",
 								});
 							}
 						})
-						.catch((err) =>
-							console.error(
-								"[AccountSettings] Background sync on mount failed:",
-								err,
-							),
-						);
+						.catch((err) => console.error("[AccountSettings] Background sync on mount failed:", err));
 
-					const res = await invoke<CompleteSkinsResponse>(
-						"get_complete_skin_data",
-						{ accountUuid: active.uuid },
-					);
+					const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", {
+						accountUuid: active.uuid,
+					});
 					setSkins(res.default_skins);
 					setSkinHistory(res.recent_history);
 					setCapes(
@@ -329,9 +271,7 @@ export function AccountSettingsTab() {
 					);
 
 					setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
-					setPreviewVariant(
-						(res.current_variant as "classic" | "slim") || "classic",
-					);
+					setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
 					setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 					setPreviewComputedKey(res.current_skin_id);
 					setPreviewCapeId(res.current_cape_profile_id || null);
@@ -417,10 +357,7 @@ export function AccountSettingsTab() {
 			if (snapshot.skinKey !== previewSkinKey) return true;
 		} else {
 			// Fallback to URL normalization if keys aren't available for some reason
-			if (
-				normalizeSkinComparable(previewSkin) !==
-				normalizeSkinComparable(snapshot.skinUrl || "")
-			)
+			if (normalizeSkinComparable(previewSkin) !== normalizeSkinComparable(snapshot.skinUrl || ""))
 				return true;
 		}
 
@@ -429,10 +366,7 @@ export function AccountSettingsTab() {
 		return previewVar !== snapshot.variant;
 	});
 
-	const getSkinTexture = (
-		skin: Skin | null,
-		variant: "classic" | "slim",
-	): string => {
+	const getSkinTexture = (skin: Skin | null, variant: "classic" | "slim"): string => {
 		if (!skin) return "";
 		const { source } = skin;
 		if (!source) return "";
@@ -455,9 +389,7 @@ export function AccountSettingsTab() {
 			const presetByKey = skins().find((skin) => skin.texture_key === previewKey);
 			if (presetByKey) return presetByKey;
 
-			const historyByKey = skinHistory().find(
-				(item) => item.texture_key === previewKey,
-			);
+			const historyByKey = skinHistory().find((item) => item.texture_key === previewKey);
 			if (historyByKey) {
 				return {
 					texture_key: historyByKey.texture_key,
@@ -476,14 +408,9 @@ export function AccountSettingsTab() {
 
 		const normalizedPreview = normalizeSkinComparable(previewUrl);
 		const presetByUrl = skins().find((skin) => {
-			const classicComparable = normalizeSkinComparable(
-				getSkinTexture(skin, "classic"),
-			);
+			const classicComparable = normalizeSkinComparable(getSkinTexture(skin, "classic"));
 			const slimComparable = normalizeSkinComparable(getSkinTexture(skin, "slim"));
-			return (
-				classicComparable === normalizedPreview ||
-				slimComparable === normalizedPreview
-			);
+			return classicComparable === normalizedPreview || slimComparable === normalizedPreview;
 		});
 		if (presetByUrl) return presetByUrl;
 
@@ -546,20 +473,18 @@ export function AccountSettingsTab() {
 	});
 
 	const defaultCategories = createMemo(() =>
-		skinHistoryCategories().filter(
-			(category) => !category.toLowerCase().includes("event"),
-		),
+		skinHistoryCategories().filter((category) => !category.toLowerCase().includes("event")),
 	);
 
 	const eventCategories = createMemo(() =>
-		skinHistoryCategories().filter((category) =>
-			category.toLowerCase().includes("event"),
-		),
+		skinHistoryCategories().filter((category) => category.toLowerCase().includes("event")),
 	);
 
 	const filteredRecentHistory = createMemo(() => {
 		const defaultTextureKeys = new Set(
-			skins().map((skin) => skin.texture_key).filter(Boolean),
+			skins()
+				.map((skin) => skin.texture_key)
+				.filter(Boolean),
 		);
 		const seenHistoryTextureKeys = new Set<string>();
 		let duplicateCount = 0;
@@ -629,10 +554,7 @@ export function AccountSettingsTab() {
 				const filePath = typeof file === "string" ? file : (file as any).path;
 				const fileData = await readFile(filePath);
 				const base64 = btoa(
-					new Uint8Array(fileData).reduce(
-						(data, byte) => data + String.fromCharCode(byte),
-						"",
-					),
+					new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), ""),
 				);
 				const dataUrl = `data:image/png;base64,${base64}`;
 				setPreviewSkinUrl(dataUrl);
@@ -647,10 +569,7 @@ export function AccountSettingsTab() {
 					detectedVariant = normalizeVariant(detected);
 					setPreviewVariant(detectedVariant);
 				} catch (e) {
-					console.warn(
-						"Could not auto-detect uploaded skin variant, keeping current selection",
-						e,
-					);
+					console.warn("Could not auto-detect uploaded skin variant, keeping current selection", e);
 				}
 
 				// Add to history preview immediately
@@ -659,10 +578,9 @@ export function AccountSettingsTab() {
 					// Compute the authoritative texture_key for the uploaded bytes via backend
 					let computedKey: string | null = null;
 					try {
-						computedKey = await invoke<string>(
-							"compute_texture_key_from_base64",
-							{ base64Data: dataUrl },
-						);
+						computedKey = await invoke<string>("compute_texture_key_from_base64", {
+							base64Data: dataUrl,
+						});
 						console.log("uploadSkin: computed texture_key for uploaded file", {
 							computedKey,
 						});
@@ -692,9 +610,7 @@ export function AccountSettingsTab() {
 							source: "local",
 						};
 						// Add to start and dedup by texture_key (prefer authoritative key when available)
-						const filtered = prev.filter(
-							(h) => h.texture_key !== newEntry.texture_key,
-						);
+						const filtered = prev.filter((h) => h.texture_key !== newEntry.texture_key);
 						return [newEntry, ...filtered];
 					});
 				}
@@ -740,10 +656,7 @@ export function AccountSettingsTab() {
 						accountUuid: active.uuid,
 						textureUrl: previewSkinUrl(),
 						variant: previewVariant(),
-						category:
-							(activeSkin()?.source as any)?.category ||
-							activeSkin()?.source.type ||
-							"Preset",
+						category: (activeSkin()?.source as any)?.category || activeSkin()?.source.type || "Preset",
 					});
 				}
 			}
@@ -762,10 +675,9 @@ export function AccountSettingsTab() {
 				}
 			}
 
-			const res = await invoke<CompleteSkinsResponse>(
-				"get_complete_skin_data",
-				{ accountUuid: active.uuid },
-			);
+			const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", {
+				accountUuid: active.uuid,
+			});
 			setSkins(res.default_skins);
 			setSkinHistory(res.recent_history);
 			setCapes(
@@ -777,9 +689,7 @@ export function AccountSettingsTab() {
 			);
 
 			setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
-			setPreviewVariant(
-				(res.current_variant as "classic" | "slim") || "classic",
-			);
+			setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
 			setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 			setPreviewComputedKey(res.current_skin_id);
 			setPreviewCapeId(res.current_cape_profile_id || null);
@@ -826,9 +736,7 @@ export function AccountSettingsTab() {
 
 	const getAccountDisplayName = (account?: Account | null) => {
 		if (!account) return "Select account";
-		return (
-			account.display_name || account.username || account.name || "Account"
-		);
+		return account.display_name || account.username || account.name || "Account";
 	};
 
 	const renderAccountSwitcher = (triggerClass?: string) => (
@@ -852,9 +760,7 @@ export function AccountSettingsTab() {
 							shape="square"
 						/>
 						<div class={styles.accountSelectText}>
-							<span class={styles.accountSelectName}>
-								{getAccountDisplayName(props.item.rawValue)}
-							</span>
+							<span class={styles.accountSelectName}>{getAccountDisplayName(props.item.rawValue)}</span>
 						</div>
 					</div>
 				</SelectItem>
@@ -864,9 +770,7 @@ export function AccountSettingsTab() {
 				<SelectValue<Account>>
 					{(state) => {
 						const selected = state.selectedOption();
-						const selectedName = getAccountDisplayName(
-							selected || activeAccount(),
-						);
+						const selectedName = getAccountDisplayName(selected || activeAccount());
 						return (
 							<div class={styles.accountSelectValue}>
 								<ResourceAvatar
@@ -901,9 +805,7 @@ export function AccountSettingsTab() {
 
 	const renderSkinCategorySection = (category: string) => {
 		const categorySkins = () => {
-			const defaults = skins().filter(
-				(s) => (s.source as any).category === category,
-			);
+			const defaults = skins().filter((s) => (s.source as any).category === category);
 			const historyPresets = skinHistory()
 				.filter((h) => h.source === category)
 				.map(
@@ -953,8 +855,7 @@ export function AccountSettingsTab() {
 						<For each={categorySkins()}>
 							{(skin) => {
 								const classicTexture = getSkinTexture(skin, "classic");
-								const preferredTexture =
-									getSkinTexture(skin, previewVariant()) || classicTexture;
+								const preferredTexture = getSkinTexture(skin, previewVariant()) || classicTexture;
 
 								const isSelected = createMemo(() => {
 									return isSkinSelected(preferredTexture, skin.texture_key);
@@ -972,9 +873,7 @@ export function AccountSettingsTab() {
 											>
 												<SkinPortrait
 													src={preferredTexture}
-													variant={
-														(skin.source as any)?.variant || previewVariant()
-													}
+													variant={(skin.source as any)?.variant || previewVariant()}
 												/>
 												<Tooltip>
 													<TooltipTrigger
@@ -1000,10 +899,7 @@ export function AccountSettingsTab() {
 											</div>
 										</TooltipTrigger>
 										<TooltipContent>
-											{formatTooltipName(
-												skin.name || "Default Skin",
-												(skin.source as any)?.type,
-											)}
+											{formatTooltipName(skin.name || "Default Skin", (skin.source as any)?.type)}
 										</TooltipContent>
 									</Tooltip>
 								);
@@ -1017,10 +913,7 @@ export function AccountSettingsTab() {
 
 	return (
 		<div class={styles.container}>
-			<Show
-				when={activeAccount()}
-				fallback={<div class={styles.noAccount}>No account connected</div>}
-			>
+			<Show when={activeAccount()} fallback={<div class={styles.noAccount}>No account connected</div>}>
 				{(active) => (
 					<>
 						<Show when={isNarrowLayout()}>
@@ -1068,17 +961,12 @@ export function AccountSettingsTab() {
 													onClick={toggleNarrowView}
 													aria-label={`Switch to ${narrowView() === "browse" ? "preview" : "browse"} view`}
 												>
-													<Show
-														when={narrowView() === "browse"}
-														fallback={<SkinIcon width="16" height="16" />}
-													>
+													<Show when={narrowView() === "browse"} fallback={<SkinIcon width="16" height="16" />}>
 														<ViewIcon width="16" height="16" />
 													</Show>
 												</TooltipTrigger>
 												<TooltipContent>
-													{narrowView() === "browse"
-														? "Switch to preview"
-														: "Switch to browse"}
+													{narrowView() === "browse" ? "Switch to preview" : "Switch to browse"}
 												</TooltipContent>
 											</Tooltip>
 										}
@@ -1135,34 +1023,20 @@ export function AccountSettingsTab() {
 						<div
 							class={styles.leftSection}
 							classList={{
-								[styles.hiddenOnNarrow]:
-									isNarrowLayout() && narrowView() !== "browse",
+								[styles.hiddenOnNarrow]: isNarrowLayout() && narrowView() !== "browse",
 							}}
 						>
-							<Tabs
-								value={browseTab()}
-								onChange={setBrowseTab}
-								class={styles.browseTabs}
-							>
+							<Tabs value={browseTab()} onChange={setBrowseTab} class={styles.browseTabs}>
 								<div class={styles.browseTabsHeader}>
 									<TabsList class={styles.browseTabsList}>
 										<TabsIndicator />
-										<TabsTrigger
-											class={styles.browseTabsTrigger}
-											value="recent"
-										>
+										<TabsTrigger class={styles.browseTabsTrigger} value="recent">
 											Recent
 										</TabsTrigger>
-										<TabsTrigger
-											class={styles.browseTabsTrigger}
-											value="defaults"
-										>
+										<TabsTrigger class={styles.browseTabsTrigger} value="defaults">
 											Default
 										</TabsTrigger>
-										<TabsTrigger
-											class={styles.browseTabsTrigger}
-											value="events"
-										>
+										<TabsTrigger class={styles.browseTabsTrigger} value="events">
 											Events
 										</TabsTrigger>
 										<TabsTrigger class={styles.browseTabsTrigger} value="capes">
@@ -1179,9 +1053,7 @@ export function AccountSettingsTab() {
 										<div class={styles.presetsGrid}>
 											<For each={filteredRecentHistory()}>
 												{(item) => {
-													const selected = createMemo(() =>
-														isSkinSelected(item.image_data, item.texture_key),
-													);
+													const selected = createMemo(() => isSkinSelected(item.image_data, item.texture_key));
 													return (
 														<Tooltip>
 															<TooltipTrigger as="div">
@@ -1192,10 +1064,7 @@ export function AccountSettingsTab() {
 																	}}
 																	onClick={() => handlePreviewHistory(item)}
 																>
-																	<SkinPortrait
-																		src={item.image_data}
-																		variant={item.variant}
-																	/>
+																	<SkinPortrait src={item.image_data} variant={item.variant} />
 																	<Tooltip placement="top">
 																		<TooltipTrigger
 																			as="button"
@@ -1208,9 +1077,7 @@ export function AccountSettingsTab() {
 																		>
 																			<ViewIcon width="16" />
 																		</TooltipTrigger>
-																		<TooltipContent>
-																			View raw texture
-																		</TooltipContent>
+																		<TooltipContent>View raw texture</TooltipContent>
 																	</Tooltip>
 																	<Show when={selected()}>
 																		<span class={styles.selectedBadge}>✓</span>
@@ -1229,15 +1096,11 @@ export function AccountSettingsTab() {
 								</TabsContent>
 
 								<TabsContent value="defaults">
-									<For each={defaultCategories()}>
-										{(category) => renderSkinCategorySection(category)}
-									</For>
+									<For each={defaultCategories()}>{(category) => renderSkinCategorySection(category)}</For>
 								</TabsContent>
 
 								<TabsContent value="events">
-									<For each={eventCategories()}>
-										{(category) => renderSkinCategorySection(category)}
-									</For>
+									<For each={eventCategories()}>{(category) => renderSkinCategorySection(category)}</For>
 								</TabsContent>
 
 								<TabsContent value="capes">
@@ -1265,9 +1128,7 @@ export function AccountSettingsTab() {
 											</button>
 											<For each={capes()}>
 												{(cape) => {
-													const isSelected = createMemo(
-														() => previewCapeId() === cape.id,
-													);
+													const isSelected = createMemo(() => previewCapeId() === cape.id);
 
 													return (
 														<Tooltip>
@@ -1305,8 +1166,7 @@ export function AccountSettingsTab() {
 						<aside
 							class={styles.visualizerSidebar}
 							classList={{
-								[styles.hiddenOnNarrow]:
-									isNarrowLayout() && narrowView() !== "preview",
+								[styles.hiddenOnNarrow]: isNarrowLayout() && narrowView() !== "preview",
 							}}
 						>
 							<Show when={isDirty() && !isNarrowLayout()}>
@@ -1325,12 +1185,7 @@ export function AccountSettingsTab() {
 										>
 											Revert
 										</button>
-										<button
-											type="button"
-											class={styles.saveButton}
-											disabled={saving()}
-											onClick={handleSave}
-										>
+										<button type="button" class={styles.saveButton} disabled={saving()} onClick={handleSave}>
 											<Show when={saving()}>
 												<RefreshIcon width="18" class="spin" />
 											</Show>
@@ -1341,9 +1196,7 @@ export function AccountSettingsTab() {
 							</Show>
 
 							<Show when={!isDirty() && !isNarrowLayout()}>
-								<section>
-									{renderAccountSwitcher(styles.accountSwitcherSelect)}
-								</section>
+								<section>{renderAccountSwitcher(styles.accountSwitcherSelect)}</section>
 							</Show>
 
 							<section class={styles.visualizerCard}>

@@ -81,8 +81,7 @@ function Sidebar(props: SidebarProps) {
 					(n) =>
 						n.notification_type === "progress" &&
 						n.progress !== null &&
-						(n.progress === PROGRESS_INDETERMINATE ||
-							(n.progress >= 0 && n.progress < 100)),
+						(n.progress === PROGRESS_INDETERMINATE || (n.progress >= 0 && n.progress < 100)),
 				);
 				return { totalCount, hasActiveTask };
 			} catch (_error) {
@@ -129,14 +128,8 @@ function Sidebar(props: SidebarProps) {
 			}}
 		>
 			<div class={styles["sidebar__root"]}>
-				<div
-					class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}
-				>
-					<Popover
-						open={accountMenuOpen()}
-						onOpenChange={setAccountMenuOpen}
-						placement="right-start"
-					>
+				<div class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}>
+					<Popover open={accountMenuOpen()} onOpenChange={setAccountMenuOpen} placement="right-start">
 						<PopoverAnchor>
 							<SidebarProfileButton
 								id={"profile-selector"}
@@ -159,10 +152,7 @@ function Sidebar(props: SidebarProps) {
 										return;
 									}
 								} catch (e) {
-									console.error(
-										"Failed to check guest status for Add Account:",
-										e,
-									);
+									console.error("Failed to check guest status for Add Account:", e);
 								}
 
 								openPage("/login");
@@ -190,9 +180,7 @@ function Sidebar(props: SidebarProps) {
 							<div class={styles["sidebar__pins-container"]}>
 								<Separator class={styles["pins-separator"]} />
 								<div class={styles["sidebar__pins"]}>
-									<For each={pinning.pins}>
-										{(pin: PinnedPage) => <PinnedItem pin={pin} />}
-									</For>
+									<For each={pinning.pins}>{(pin: PinnedPage) => <PinnedItem pin={pin} />}</For>
 								</div>
 							</div>
 						</Show>
@@ -225,9 +213,7 @@ function Sidebar(props: SidebarProps) {
 							<Show when={notifData().totalCount > 0}>
 								<Tooltip placement="top">
 									<TooltipTrigger>
-										<div class={styles["notification-badge"]}>
-											{notifData().totalCount}
-										</div>
+										<div class={styles["notification-badge"]}>{notifData().totalCount}</div>
 									</TooltipTrigger>
 									<TooltipContent>{`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}</TooltipContent>
 								</Tooltip>

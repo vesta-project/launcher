@@ -1,9 +1,6 @@
 /* @refresh reload */
 
-import {
-	applyStartupRouteTarget,
-	bootstrapStartup,
-} from "@utils/startup-bootstrap";
+import { applyStartupRouteTarget, bootstrapStartup } from "@utils/startup-bootstrap";
 import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
@@ -105,6 +102,10 @@ void bootstrapStartup()
 	});
 
 render(
-	() => <Show when={isStartupReady()}><App /></Show>,
+	() => (
+		<Show when={isStartupReady()}>
+			<App />
+		</Show>
+	),
 	root as MountableElement,
 );

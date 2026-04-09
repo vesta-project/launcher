@@ -1,9 +1,5 @@
 import type { Instance } from "@stores/instances";
-import {
-	isGameVersionCompatible,
-	ResourceProject,
-	ResourceVersion,
-} from "@stores/resources";
+import { isGameVersionCompatible, ResourceProject, ResourceVersion } from "@stores/resources";
 
 export interface CompatibilityResult {
 	type: "compatible" | "warning" | "incompatible";
@@ -19,10 +15,7 @@ export const getCompatibilityForInstance = (
 	const resType = project?.resource_type;
 
 	// 1. Version check (Most important)
-	const matchesVersion = isGameVersionCompatible(
-		version.game_versions,
-		instance.minecraftVersion,
-	);
+	const matchesVersion = isGameVersionCompatible(version.game_versions, instance.minecraftVersion);
 	if (!matchesVersion) {
 		return {
 			type: "incompatible",
@@ -42,11 +35,7 @@ export const getCompatibilityForInstance = (
 	}
 
 	// Shaders, resource packs, and datapacks are generally compatible across loaders
-	if (
-		resType === "shader" ||
-		resType === "resourcepack" ||
-		resType === "datapack"
-	)
+	if (resType === "shader" || resType === "resourcepack" || resType === "datapack")
 		return { type: "compatible" };
 
 	const versionLoaders = version.loaders.map((l) => l.toLowerCase());
@@ -96,9 +85,7 @@ export interface ShaderEngineInfo {
 	key: "iris" | "oculus";
 }
 
-export const getShaderEnginesInOrder = (
-	loader?: string | null,
-): ShaderEngineInfo[] => {
+export const getShaderEnginesInOrder = (loader?: string | null): ShaderEngineInfo[] => {
 	const l = loader?.toLowerCase() || "";
 
 	const iris: ShaderEngineInfo = {

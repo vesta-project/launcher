@@ -6,15 +6,7 @@ import ForwardsArrowIcon from "@assets/right-arrow.svg";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import {
-	children,
-	createMemo,
-	createSignal,
-	type JSX,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { children, createMemo, createSignal, type JSX, onCleanup, onMount, Show } from "solid-js";
 import styles from "./unified-page-viewer.module.css";
 
 interface NavbarButtonProps {
@@ -112,10 +104,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 
 	return (
 		<div class={styles["unified-page-viewer-root"]} data-os={props.os}>
-			<header
-				class={styles["page-viewer-navbar"]}
-				data-tauri-drag-region={props.showWindowControls}
-			>
+			<header class={styles["page-viewer-navbar"]} data-tauri-drag-region={props.showWindowControls}>
 				<Show when={isMac()}>
 					<div
 						class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}
@@ -124,11 +113,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</div>
 				</Show>
 				<div class={styles["page-viewer-navbar-left"]}>
-					<NavbarButton
-						onClick={handleBack}
-						text="Back"
-						disabled={!canGoBack()}
-					>
+					<NavbarButton onClick={handleBack} text="Back" disabled={!canGoBack()}>
 						<BackArrowIcon />
 					</NavbarButton>
 					<NavbarButton
@@ -139,11 +124,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						<ForwardsArrowIcon />
 					</NavbarButton>
 					<Show when={props.router.getRefetch()}>
-						<NavbarButton
-							onClick={() => props.router.reload()}
-							text="Reload"
-							loading={isReloading()}
-						>
+						<NavbarButton onClick={() => props.router.reload()} text="Reload" loading={isReloading()}>
 							<RefreshIcon />
 						</NavbarButton>
 					</Show>
@@ -153,12 +134,8 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					class={styles["page-viewer-navbar-center"]}
 					data-tauri-drag-region={props.showWindowControls}
 				>
-					<span
-						class={styles["page-viewer-title"]}
-						data-tauri-drag-region={props.showWindowControls}
-					>
-						{props.router.customName.get() ||
-							props.router.currentElement().name}
+					<span class={styles["page-viewer-title"]} data-tauri-drag-region={props.showWindowControls}>
+						{props.router.customName.get() || props.router.currentElement().name}
 						{props.titleSuffix && ` - ${props.titleSuffix}`}
 					</span>
 				</div>
@@ -181,9 +158,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 					</Show>
 
 					<Show when={!isMac()}>
-						<div class={styles["page-viewer-window-controls-wrapper"]}>
-							{props.windowControls}
-						</div>
+						<div class={styles["page-viewer-window-controls-wrapper"]}>{props.windowControls}</div>
 					</Show>
 
 					{props.children}

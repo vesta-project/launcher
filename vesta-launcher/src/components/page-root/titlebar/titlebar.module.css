@@ -39,13 +39,7 @@
 	}
 }
 
-:root[data-os="windows"]
-	div
-	.titlebar
-	.titlebar__window-controls
-	button
-	svg
-	path {
+:root[data-os="windows"] div .titlebar .titlebar__window-controls button svg path {
 	fill: var(--titlebar__svg--color);
 }
 

@@ -33,8 +33,7 @@ export const startAppTutorial = (onComplete?: () => void) => {
 				element: "#profile-selector",
 				popover: {
 					title: "Profiles",
-					description:
-						"Manage your Minecraft accounts and switch between them.",
+					description: "Manage your Minecraft accounts and switch between them.",
 					side: "right",
 					align: "center",
 				},
@@ -43,8 +42,7 @@ export const startAppTutorial = (onComplete?: () => void) => {
 				element: "#sidebar-settings",
 				popover: {
 					title: "Settings",
-					description:
-						"Customize Vesta, manage Java, and re-run this tutorial anytime.",
+					description: "Customize Vesta, manage Java, and re-run this tutorial anytime.",
 					side: "right",
 					align: "end",
 				},

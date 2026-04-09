@@ -4,14 +4,14 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { batch } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
-    applyTheme,
-    configToTheme,
-    getThemeById,
-    parseThemeData,
-    PRESET_THEMES,
-    serializeThemeData,
-    type AppThemeConfig,
-    type ThemeVariableValue,
+	type AppThemeConfig,
+	applyTheme,
+	configToTheme,
+	getThemeById,
+	PRESET_THEMES,
+	parseThemeData,
+	serializeThemeData,
+	type ThemeVariableValue,
 } from "../themes/presets";
 
 interface ConfigUpdateEvent {
@@ -25,9 +25,7 @@ function isThemeConfigField(field: string): boolean {
 	return field.startsWith("theme_") || field === "background_hue";
 }
 
-function buildDefaultUserVariables(
-	variables: unknown,
-): Record<string, ThemeVariableValue> {
+function buildDefaultUserVariables(variables: unknown): Record<string, ThemeVariableValue> {
 	if (!Array.isArray(variables)) return {};
 
 	const defaults: Record<string, ThemeVariableValue> = {};
@@ -87,59 +85,49 @@ export async function subscribeToConfigUpdates(): Promise<void> {
 		let updateQueue: ConfigUpdateEvent[] = [];
 		let batchTimeout: any = null;
 
-		configUnlisten = await listen<ConfigUpdateEvent>(
-			"config-updated",
-			(event) => {
-				updateQueue.push(event.payload);
+		configUnlisten = await listen<ConfigUpdateEvent>("config-updated", (event) => {
+			updateQueue.push(event.payload);
 
-				if (batchTimeout) return;
+			if (batchTimeout) return;
 
-				batchTimeout = setTimeout(() => {
-					const currentUpdates = [...updateQueue];
-					updateQueue = [];
-					batchTimeout = null;
-					let hasThemeUpdate = false;
-					let hasThemeIdUpdate = false;
-					let previousThemeId = currentThemeConfig.theme_id;
+			batchTimeout = setTimeout(() => {
+				const currentUpdates = [...updateQueue];
+				updateQueue = [];
+				batchTimeout = null;
+				let hasThemeUpdate = false;
+				let hasThemeIdUpdate = false;
+				let previousThemeId = currentThemeConfig.theme_id;
 
-					batch(() => {
-						for (const { field, value } of currentUpdates) {
-							if (isThemeConfigField(field)) {
-								hasThemeUpdate = true;
-							}
-							if (
-								field === "theme_id" &&
-								typeof value === "string" &&
-								value !== previousThemeId
-							) {
-								hasThemeIdUpdate = true;
-								previousThemeId = value;
-							}
-
-							// Notify all registered handlers
-							updateHandlers.forEach((handler) => {
-								try {
-									handler(field, value);
-								} catch (error) {
-									console.error(
-										`Handler failed for config update ${field}:`,
-										error,
-									);
-								}
-							});
-
-							console.log(`Config synced (batched): ${field} = ${value}`);
+				batch(() => {
+					for (const { field, value } of currentUpdates) {
+						if (isThemeConfigField(field)) {
+							hasThemeUpdate = true;
+						}
+						if (field === "theme_id" && typeof value === "string" && value !== previousThemeId) {
+							hasThemeIdUpdate = true;
+							previousThemeId = value;
 						}
 
-						if (hasThemeUpdate || hasThemeIdUpdate) {
-							applyTheme(configToTheme(currentThemeConfig), {
-								transition: hasThemeIdUpdate ? "preset-switch" : "none",
-							});
-						}
-					});
-				}, 0);
-			},
-		);
+						// Notify all registered handlers
+						updateHandlers.forEach((handler) => {
+							try {
+								handler(field, value);
+							} catch (error) {
+								console.error(`Handler failed for config update ${field}:`, error);
+							}
+						});
+
+						console.log(`Config synced (batched): ${field} = ${value}`);
+					}
+
+					if (hasThemeUpdate || hasThemeIdUpdate) {
+						applyTheme(configToTheme(currentThemeConfig), {
+							transition: hasThemeIdUpdate ? "preset-switch" : "none",
+						});
+					}
+				});
+			}, 0);
+		});
 	})();
 
 	await setupPromise;
@@ -162,9 +150,7 @@ export function unsubscribeFromConfigUpdates(): void {
  * Global reactive configuration state
  * Using a SolidJS Store ensures nested updates (like theme_data) are tracked by components
  */
-export const [currentThemeConfig, setCurrentThemeConfig] = createStore<
-	Partial<AppThemeConfig>
->({
+export const [currentThemeConfig, setCurrentThemeConfig] = createStore<Partial<AppThemeConfig>>({
 	theme_background_opacity: 25,
 });
 
@@ -251,14 +237,10 @@ export async function saveThemeUpdate(
 	const carriedThemeData = shouldCarryCurrentThemeData ? currentThemeData : {};
 
 	const activeVariables =
-		(overrides.variables as any) ??
-		carriedThemeData.variables ??
-		theme.variables;
+		(overrides.variables as any) ?? carriedThemeData.variables ?? theme.variables;
 	const fallbackUserVariables = buildDefaultUserVariables(activeVariables);
 	const updatedUserVariables =
-		overrides.userVariables ??
-		carriedThemeData.userVariables ??
-		fallbackUserVariables;
+		overrides.userVariables ?? carriedThemeData.userVariables ?? fallbackUserVariables;
 
 	const activeHue =
 		overrides.primaryHue ??
@@ -275,9 +257,7 @@ export async function saveThemeUpdate(
 	const activeGradientEnabled =
 		overrides.gradientEnabled ??
 		carriedThemeData.gradientEnabled ??
-		(sameThemeAsStore
-			? currentThemeConfig.theme_gradient_enabled
-			: undefined) ??
+		(sameThemeAsStore ? currentThemeConfig.theme_gradient_enabled : undefined) ??
 		theme.gradientEnabled ??
 		true;
 	const activeRotation =
@@ -295,9 +275,7 @@ export async function saveThemeUpdate(
 	const activeGradientHarmony =
 		overrides.gradientHarmony ??
 		carriedThemeData.gradientHarmony ??
-		(sameThemeAsStore
-			? currentThemeConfig.theme_gradient_harmony
-			: undefined) ??
+		(sameThemeAsStore ? currentThemeConfig.theme_gradient_harmony : undefined) ??
 		theme.gradientHarmony ??
 		"none";
 	const activeBorderWidth =
@@ -309,9 +287,7 @@ export async function saveThemeUpdate(
 	const activeBackgroundOpacity =
 		overrides.backgroundOpacity ??
 		carriedThemeData.backgroundOpacity ??
-		(sameThemeAsStore
-			? currentThemeConfig.theme_background_opacity
-			: undefined) ??
+		(sameThemeAsStore ? currentThemeConfig.theme_background_opacity : undefined) ??
 		theme.backgroundOpacity ??
 		25;
 	const activeWindowEffect =
@@ -319,17 +295,13 @@ export async function saveThemeUpdate(
 		carriedThemeData.windowEffect ??
 		(sameThemeAsStore ? currentThemeConfig.theme_window_effect : undefined) ??
 		theme.windowEffect;
-	const activeCustomCss =
-		overrides.customCss ?? carriedThemeData.customCss ?? theme.customCss;
+	const activeCustomCss = overrides.customCss ?? carriedThemeData.customCss ?? theme.customCss;
 
 	const themeData = serializeThemeData({
 		id: tid,
 		name: overrides.themeName ?? carriedThemeData.name ?? theme.name,
 		author: overrides.author ?? carriedThemeData.author ?? theme.author,
-		description:
-			overrides.description ??
-			carriedThemeData.description ??
-			theme.description,
+		description: overrides.description ?? carriedThemeData.description ?? theme.description,
 		primaryHue: activeHue,
 		primarySat:
 			overrides.primarySat ??
@@ -361,20 +333,11 @@ export async function saveThemeUpdate(
 		setCurrentThemeConfig("theme_data", themeData);
 		setCurrentThemeConfig("theme_primary_hue", activeHue);
 		setCurrentThemeConfig("theme_style", activeStyle as any);
-		setCurrentThemeConfig(
-			"theme_gradient_enabled",
-			activeGradientEnabled as any,
-		);
+		setCurrentThemeConfig("theme_gradient_enabled", activeGradientEnabled as any);
 		setCurrentThemeConfig("theme_gradient_angle", activeRotation as any);
 		setCurrentThemeConfig("theme_gradient_type", activeGradientType as any);
-		setCurrentThemeConfig(
-			"theme_gradient_harmony",
-			activeGradientHarmony as any,
-		);
-		setCurrentThemeConfig(
-			"theme_background_opacity",
-			activeBackgroundOpacity as any,
-		);
+		setCurrentThemeConfig("theme_gradient_harmony", activeGradientHarmony as any);
+		setCurrentThemeConfig("theme_background_opacity", activeBackgroundOpacity as any);
 		setCurrentThemeConfig("theme_border_width", activeBorderWidth as any);
 		if (activeWindowEffect !== undefined) {
 			setCurrentThemeConfig("theme_window_effect", activeWindowEffect as any);

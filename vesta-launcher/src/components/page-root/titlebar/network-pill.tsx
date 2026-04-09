@@ -35,11 +35,7 @@ function NetworkPill() {
 					[styles["network-pill"]]: true,
 					[styles["network-pill--refreshing"]]: isRefreshing(),
 				}}
-				title={
-					isRefreshing()
-						? "Checking connection..."
-						: `${label()} - Click to retry`
-				}
+				title={isRefreshing() ? "Checking connection..." : `${label()} - Click to retry`}
 				onClick={handleRetry}
 			>
 				<div class={styles["network-pill__icon"]}>
@@ -66,13 +62,7 @@ function NetworkPill() {
 						>
 							<path d="M5 9a10 10 0 0 1 14 0" />
 							<path d="M8.5 12.5a6 6 0 0 1 7 0" />
-							<circle
-								cx="12"
-								cy="16"
-								r="1.2"
-								fill="currentColor"
-								stroke="none"
-							/>
+							<circle cx="12" cy="16" r="1.2" fill="currentColor" stroke="none" />
 						</svg>
 					</Show>
 					<Show when={!isRefreshing() && status() === "offline"}>

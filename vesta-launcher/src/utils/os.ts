@@ -47,8 +47,7 @@ export function ensureOsType(): Promise<OsType | undefined> {
 // Usage: const os = useOs(); then read os() inside components.
 export function useOs(defaultOs: string = "windows") {
 	// Try to get OS from data-os attribute (set by init script in index.html)
-	const initialOsAttr =
-		document.documentElement.getAttribute("data-os") || defaultOs;
+	const initialOsAttr = document.documentElement.getAttribute("data-os") || defaultOs;
 	const [os, setOs] = createSignal<string>(initialOsAttr);
 
 	onMount(() => {

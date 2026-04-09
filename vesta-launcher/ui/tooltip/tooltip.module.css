@@ -8,8 +8,7 @@
 	background-color: hsl(var(--color__primary-hue) 20% 20%);
 	padding: 2px 8px;
 	border-radius: 3px;
-	border: var(--border-width-strong) solid
-		hsl(var(--color__primary-hue) 20% 60% / 5%);
+	border: var(--border-width-strong) solid hsl(var(--color__primary-hue) 20% 60% / 5%);
 	z-index: var(--z-popover);
 }
 

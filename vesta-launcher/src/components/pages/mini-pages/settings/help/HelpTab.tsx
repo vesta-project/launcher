@@ -25,9 +25,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Documentation"
 					description="Technical overview of modding frameworks, runtime environments, and configuration."
 					headerRight={
-						<LauncherButton onClick={() => props.navigate("/modding-guide")}>
-							View Docs
-						</LauncherButton>
+						<LauncherButton onClick={() => props.navigate("/modding-guide")}>View Docs</LauncherButton>
 					}
 				/>
 			</SettingsCard>
@@ -50,22 +48,14 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 			</SettingsCard>
 
 			<SettingsCard header="Support">
-				<div
-					class={styles["social-links"]}
-					style={{ display: "flex", gap: "8px" }}
-				>
+				<div class={styles["social-links"]} style={{ display: "flex", gap: "8px" }}>
 					<LauncherButton
 						variant="ghost"
-						onClick={() =>
-							openExternal("https://github.com/vesta-project/launcher")
-						}
+						onClick={() => openExternal("https://github.com/vesta-project/launcher")}
 					>
 						GitHub
 					</LauncherButton>
-					<LauncherButton
-						variant="ghost"
-						onClick={() => openExternal("https://discord.gg/zuDNHNHk8E")}
-					>
+					<LauncherButton variant="ghost" onClick={() => openExternal("https://discord.gg/zuDNHNHk8E")}>
 						Discord
 					</LauncherButton>
 				</div>
@@ -76,10 +66,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Automatic Updates"
 					description="Download and install updates automatically in the background"
 					headerRight={
-						<Switch
-							checked={props.autoUpdateEnabled}
-							onCheckedChange={props.handleAutoUpdateToggle}
-						>
+						<Switch checked={props.autoUpdateEnabled} onCheckedChange={props.handleAutoUpdateToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -90,10 +77,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Check on Startup"
 					description="Check for new versions when the launcher starts"
 					headerRight={
-						<Switch
-							checked={props.startupCheckUpdates}
-							onCheckedChange={props.handleStartupCheckToggle}
-						>
+						<Switch checked={props.startupCheckUpdates} onCheckedChange={props.handleStartupCheckToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -102,11 +86,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				/>
 				<SettingsField
 					label="Update Check"
-					headerRight={
-						<LauncherButton onClick={() => checkForAppUpdates()}>
-							Check Now
-						</LauncherButton>
-					}
+					headerRight={<LauncherButton onClick={() => checkForAppUpdates()}>Check Now</LauncherButton>}
 				/>
 			</SettingsCard>
 
@@ -139,11 +119,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 						<span>Tauri + SolidJS</span>
 					</div>
 
-					<a
-						href="https://www.gnu.org/licenses/gpl-3.0.html"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
+					<a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener noreferrer">
 						<div class={styles["about-field"]}>
 							<span>License</span>
 							<span>GNU General Public License v3.0</span>

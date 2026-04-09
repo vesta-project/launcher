@@ -1,10 +1,10 @@
 import {
-    INIT_STEPS,
-    type InitStep,
-    isGuestOrDemoAccountType,
-    isSkippableAuthenticatedAccount,
-    normalizeInitStep,
-    shouldRecoverLegacyGuestCompletion,
+	INIT_STEPS,
+	type InitStep,
+	isGuestOrDemoAccountType,
+	isSkippableAuthenticatedAccount,
+	normalizeInitStep,
+	shouldRecoverLegacyGuestCompletion,
 } from "@components/pages/init/init-flow";
 import { initTheme } from "@components/theming";
 import { initializeInstances } from "@stores/instances";
@@ -81,8 +81,7 @@ async function resolveInitStateFromConfigAndAccount(
 	forceLoginRequested: boolean,
 ): Promise<{ target: StartupTarget; initState: InitBootstrapState }> {
 	const hasValidAccount = isSkippableAuthenticatedAccount(account);
-	const forceGuestLoginOnly =
-		forceLoginRequested && isGuestOrDemoAccountType(account?.account_type);
+	const forceGuestLoginOnly = forceLoginRequested && isGuestOrDemoAccountType(account?.account_type);
 	let setupCompleted = Boolean(config.setup_completed);
 	let setupStep = normalizeInitStep(config.setup_step);
 
@@ -176,11 +175,7 @@ export async function bootstrapStartup(): Promise<StartupBootstrapResult> {
 			console.error("Failed to load active account during startup:", error);
 		}
 
-		const resolved = await resolveInitStateFromConfigAndAccount(
-			config,
-			account,
-			forceLoginRequested,
-		);
+		const resolved = await resolveInitStateFromConfigAndAccount(config, account, forceLoginRequested);
 		const rootStartupPath = isRootPath(window.location.pathname);
 
 		if (resolved.target === "home") {

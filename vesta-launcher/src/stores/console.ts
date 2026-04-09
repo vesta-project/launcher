@@ -3,13 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { createStore } from "solid-js/store";
 import { instancesState } from "./instances";
 
-export type LogLevel =
-	| "INFO"
-	| "WARN"
-	| "ERROR"
-	| "DEBUG"
-	| "FATAL"
-	| "UNKNOWN";
+export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG" | "FATAL" | "UNKNOWN";
 
 export interface LogLine {
 	id: number;
@@ -134,14 +128,11 @@ export const consoleStore = {
 			},
 		);
 
-		const exitUnlisten = await listen<{ instance_id: string }>(
-			"core://instance-exited",
-			(event) => {
-				if (event.payload.instance_id === instanceSlug) {
-					setState("isLive", false);
-				}
-			},
-		);
+		const exitUnlisten = await listen<{ instance_id: string }>("core://instance-exited", (event) => {
+			if (event.payload.instance_id === instanceSlug) {
+				setState("isLive", false);
+			}
+		});
 
 		return () => {
 			logUnlisten();
@@ -154,9 +145,7 @@ export const consoleStore = {
 		setState("isCatchingUp", true);
 		try {
 			const runningMeta = instancesState.runningIds[instanceSlug];
-			const since =
-				state.lastCatchupTime ||
-				(runningMeta ? runningMeta.startTime : undefined);
+			const since = state.lastCatchupTime || (runningMeta ? runningMeta.startTime : undefined);
 
 			const caughtUpLines = await invoke<string[]>("read_instance_log", {
 				instanceIdSlug: instanceSlug,

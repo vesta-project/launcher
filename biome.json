@@ -12,6 +12,15 @@
 			}
 		}
 	},
+	"formatter": {
+		"enabled": true,
+		"formatWithErrors": false,
+		"indentStyle": "tab",
+		"indentWidth": 1,
+		"lineEnding": "lf",
+		"lineWidth": 100,
+		"attributePosition": "auto"
+	},
 	"linter": {
 		"enabled": true,
 		"rules": {

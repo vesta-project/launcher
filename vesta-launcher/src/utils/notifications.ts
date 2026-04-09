@@ -133,9 +133,7 @@ function mergeWithBackendSnapshot(
 	};
 }
 
-function updateExistingNotificationFromBackendSnapshot(
-	notif: BackendNotification,
-): boolean {
+function updateExistingNotificationFromBackendSnapshot(notif: BackendNotification): boolean {
 	const existing = _notificationCache.find(
 		(n) =>
 			(n.backend_id === notif.id && n.backend_id !== -1) ||
@@ -167,9 +165,7 @@ function updateExistingNotificationFromBackendSnapshot(
 		onToastForceClose: (id) => closeAlert(id, false),
 	});
 
-	_notificationCache = _notificationCache.map((n) =>
-		n.id === existing.id ? merged : n,
-	);
+	_notificationCache = _notificationCache.map((n) => (n.id === existing.id ? merged : n));
 	setNotifications([..._notificationCache]);
 
 	return true;
@@ -351,16 +347,11 @@ async function deleteNotification(id: number): Promise<void> {
 /**
  * Shared logic to handle a progress update from either a Tauri Event OR a Tauri Channel
  */
-function handleProgressUpdate(
-	clientKey: string | undefined | null,
-	update: ProgressUpdate,
-) {
+function handleProgressUpdate(clientKey: string | undefined | null, update: ProgressUpdate) {
 	if (!clientKey) return;
 
 	// Always try to update existing toast if we have it in our ephemeral list
-	const existing = _notificationCache.find(
-		(n) => n.client_key && n.client_key === clientKey,
-	);
+	const existing = _notificationCache.find((n) => n.client_key && n.client_key === clientKey);
 
 	if (existing) {
 		const updateData: Partial<Notification> = {};
@@ -419,9 +410,7 @@ function handleProgressUpdate(
 			duration: update.type === "finished" ? 5000 : 0,
 		});
 
-		_notificationCache = _notificationCache.map((n) =>
-			n.client_key === clientKey ? merged : n,
-		);
+		_notificationCache = _notificationCache.map((n) => (n.client_key === clientKey ? merged : n));
 		setNotifications([..._notificationCache]);
 	}
 }
@@ -432,9 +421,7 @@ async function clearAllDismissibleNotifications(): Promise<number> {
 
 async function cleanupNotifications(): Promise<number> {
 	// Get retention days from config, default to 30
-	const config = await invoke<{ notification_retention_days: number }>(
-		"get_config",
-	);
+	const config = await invoke<{ notification_retention_days: number }>("get_config");
 	const retentionDays = config?.notification_retention_days || 30;
 	return await invoke<number>("cleanup_notifications", { retentionDays });
 }
@@ -443,8 +430,7 @@ async function cleanupNotifications(): Promise<number> {
 let unsubscribeFns: Array<() => void> = [];
 
 // Signal to trigger refetch of persistent notifications
-const [persistentNotificationTrigger, setPersistentNotificationTrigger] =
-	createSignal(0);
+const [persistentNotificationTrigger, setPersistentNotificationTrigger] = createSignal(0);
 
 function triggerPersistentNotificationRefetch() {
 	setPersistentNotificationTrigger((prev) => prev + 1);
@@ -457,51 +443,48 @@ async function subscribeToBackendNotifications() {
 
 	subscriptionPromise = (async () => {
 		// Listen for new/updated notifications
-		const unsubNotif = await listen<BackendNotification>(
-			"core://notification",
-			async (event) => {
-				const notif = event.payload;
+		const unsubNotif = await listen<BackendNotification>("core://notification", async (event) => {
+			const notif = event.payload;
 
-				if (notif.client_key && _pendingShowKeys.has(notif.client_key)) {
-					return;
-				}
+			if (notif.client_key && _pendingShowKeys.has(notif.client_key)) {
+				return;
+			}
 
-				const updated = updateExistingNotificationFromBackendSnapshot(notif);
+			const updated = updateExistingNotificationFromBackendSnapshot(notif);
 
-				if (!updated) {
-					// Show toast for Progress, Immediate, and non-silent Patient notifications
-					const shouldShowToast =
-						notif.notification_type === "immediate" ||
-						notif.notification_type === "progress" ||
-						(notif.notification_type === "patient" && !notif.silent);
+			if (!updated) {
+				// Show toast for Progress, Immediate, and non-silent Patient notifications
+				const shouldShowToast =
+					notif.notification_type === "immediate" ||
+					notif.notification_type === "progress" ||
+					(notif.notification_type === "patient" && !notif.silent);
 
-					if (shouldShowToast) {
-						if (notif.client_key) _pendingShowKeys.add(notif.client_key);
-						try {
-							await showAlert(
-								notif.severity,
-								notif.title,
-								notif.description || undefined,
-								notif.progress,
-								notif.current_step,
-								notif.total_steps,
-								notif.client_key,
-								notif.notification_type,
-								notif.dismissible,
-								notif.actions,
-								notif.metadata,
-								notif.id,
-							);
-						} finally {
-							if (notif.client_key) _pendingShowKeys.delete(notif.client_key);
-						}
+				if (shouldShowToast) {
+					if (notif.client_key) _pendingShowKeys.add(notif.client_key);
+					try {
+						await showAlert(
+							notif.severity,
+							notif.title,
+							notif.description || undefined,
+							notif.progress,
+							notif.current_step,
+							notif.total_steps,
+							notif.client_key,
+							notif.notification_type,
+							notif.dismissible,
+							notif.actions,
+							notif.metadata,
+							notif.id,
+						);
+					} finally {
+						if (notif.client_key) _pendingShowKeys.delete(notif.client_key);
 					}
 				}
+			}
 
-				// Trigger refetch for sidebar to show all notification types
-				triggerPersistentNotificationRefetch();
-			},
-		);
+			// Trigger refetch for sidebar to show all notification types
+			triggerPersistentNotificationRefetch();
+		});
 
 		// Listen for progress updates
 		const unsubProgress = await listen<BackendNotification>(
@@ -512,10 +495,7 @@ async function subscribeToBackendNotifications() {
 				// Merge full progress snapshots to avoid losing step metadata.
 				if (notif.client_key) {
 					updateExistingNotificationFromBackendSnapshot(notif);
-					const displayProgress = toDisplayProgress(
-						notif.notification_type,
-						notif.progress,
-					);
+					const displayProgress = toDisplayProgress(notif.notification_type, notif.progress);
 
 					// If we still don't have a cached toast for this key (race / missed create event),
 					// create one now so progress updates remain visible.
@@ -530,10 +510,7 @@ async function subscribeToBackendNotifications() {
 							return;
 						}
 
-						if (
-							notif.notification_type === "immediate" ||
-							notif.notification_type === "progress"
-						) {
+						if (notif.notification_type === "immediate" || notif.notification_type === "progress") {
 							if (notif.client_key) _pendingShowKeys.add(notif.client_key);
 							try {
 								await showAlert(
@@ -563,30 +540,23 @@ async function subscribeToBackendNotifications() {
 		);
 
 		// Listen for notification updates (read/delete)
-		const unsubUpdated = await listen<any>(
-			"core://notification-updated",
-			(event) => {
-				const payload = event.payload;
-				// If a notification was deleted by the backend, remove the ephemeral toast using client_key
-				if (payload && payload.deleted) {
-					const clientKey = payload.client_key as string | undefined;
-					if (clientKey) {
-						// Remove any ephemeral toast matching this client_key
-						const existing = _notificationCache.find(
-							(n) => n.client_key === clientKey,
-						);
-						if (existing) {
-							tryRemoveToast(existing.id);
-							_notificationCache = _notificationCache.filter(
-								(n) => n.client_key !== clientKey,
-							);
-							setNotifications([..._notificationCache]);
-						}
+		const unsubUpdated = await listen<any>("core://notification-updated", (event) => {
+			const payload = event.payload;
+			// If a notification was deleted by the backend, remove the ephemeral toast using client_key
+			if (payload && payload.deleted) {
+				const clientKey = payload.client_key as string | undefined;
+				if (clientKey) {
+					// Remove any ephemeral toast matching this client_key
+					const existing = _notificationCache.find((n) => n.client_key === clientKey);
+					if (existing) {
+						tryRemoveToast(existing.id);
+						_notificationCache = _notificationCache.filter((n) => n.client_key !== clientKey);
+						setNotifications([..._notificationCache]);
 					}
 				}
-				triggerPersistentNotificationRefetch();
-			},
-		);
+			}
+			triggerPersistentNotificationRefetch();
+		});
 
 		unsubscribeFns = [unsubNotif, unsubProgress, unsubUpdated];
 	})();
@@ -602,10 +572,26 @@ function unsubscribeFromBackendNotifications() {
 }
 
 export {
-    cleanupNotifications,
-    clearAllDismissibleNotifications, closeAlert, createNotification, deleteNotification, handleProgressUpdate, invokeNotificationAction, listNotifications,
-    markNotificationRead, notifications, persistentNotificationTrigger, removeAllAlerts, showAlert, subscribeToBackendNotifications,
-    unsubscribeFromBackendNotifications, updateNotificationProgress, type BackendNotification, type Notification, type NotificationAction,
-    type NotificationActionType, type NotificationSeverity, type NotificationType
+	cleanupNotifications,
+	clearAllDismissibleNotifications,
+	closeAlert,
+	createNotification,
+	deleteNotification,
+	handleProgressUpdate,
+	invokeNotificationAction,
+	listNotifications,
+	markNotificationRead,
+	notifications,
+	persistentNotificationTrigger,
+	removeAllAlerts,
+	showAlert,
+	subscribeToBackendNotifications,
+	unsubscribeFromBackendNotifications,
+	updateNotificationProgress,
+	type BackendNotification,
+	type Notification,
+	type NotificationAction,
+	type NotificationActionType,
+	type NotificationSeverity,
+	type NotificationType,
 };
-

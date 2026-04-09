@@ -2,11 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as ContextMenuPrimitive from "@kobalte/core/context-menu";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import {
-    type ComponentProps,
-    splitProps,
-    ValidComponent
-} from "solid-js";
+import { type ComponentProps, splitProps, ValidComponent } from "solid-js";
 import styles from "./context-menu.module.css";
 
 function ContextMenu(props: ContextMenuPrimitive.ContextMenuRootProps) {
@@ -28,11 +24,7 @@ function ContextMenuContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.Content
-				class={clsx(
-					styles["context-menu__content"],
-					"liquid-glass",
-					props.class,
-				)}
+				class={clsx(styles["context-menu__content"], "liquid-glass", props.class)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
@@ -49,17 +41,14 @@ function ContextMenuLabel(props: ComponentProps<"div">) {
 	);
 }
 
-type ContextMenuItemProps = ContextMenuPrimitive.ContextMenuItemProps &
-	ClassProp;
+type ContextMenuItemProps = ContextMenuPrimitive.ContextMenuItemProps & ClassProp;
 
 function ContextMenuItem<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuItemProps>,
 ) {
 	const [_, rest] = splitProps(props as ContextMenuItemProps, ["class"]);
 
-	return (
-		<ContextMenuPrimitive.Item class={styles["context-menu__item"]} {...rest} />
-	);
+	return <ContextMenuPrimitive.Item class={styles["context-menu__item"]} {...rest} />;
 }
 
 const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
@@ -67,46 +56,30 @@ const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
 function ContextMenuShortcut(props: ComponentProps<"span">) {
 	const [_, rest] = splitProps(props, ["class"]);
 
-	return (
-		<span
-			class={clsx(styles["context-menu__shortcut"], props.class)}
-			{...rest}
-		/>
-	);
+	return <span class={clsx(styles["context-menu__shortcut"], props.class)} {...rest} />;
 }
 
-type ContextMenuSeparatorProps =
-	ContextMenuPrimitive.ContextMenuSeparatorProps & ClassProp;
+type ContextMenuSeparatorProps = ContextMenuPrimitive.ContextMenuSeparatorProps & ClassProp;
 
 function ContextMenuSeparator<T extends ValidComponent = "hr">(
 	props: PolymorphicProps<T, ContextMenuSeparatorProps>,
 ) {
 	const [, rest] = splitProps(props as ContextMenuSeparatorProps, ["class"]);
-	return (
-		<ContextMenuPrimitive.Separator
-			class={styles["context-menu__separator"]}
-			{...rest}
-		/>
-	);
+	return <ContextMenuPrimitive.Separator class={styles["context-menu__separator"]} {...rest} />;
 }
 
 const ContextMenuSub = ContextMenuPrimitive.Sub;
 
-type ContextMenuSubTriggerProps =
-	ContextMenuPrimitive.ContextMenuSubTriggerProps & ChildrenProp & ClassProp;
+type ContextMenuSubTriggerProps = ContextMenuPrimitive.ContextMenuSubTriggerProps &
+	ChildrenProp &
+	ClassProp;
 
 function ContextMenuSubTrigger<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuSubTriggerProps>,
 ) {
-	const [_, rest] = splitProps(props as ContextMenuSubTriggerProps, [
-		"class",
-		"children",
-	]);
+	const [_, rest] = splitProps(props as ContextMenuSubTriggerProps, ["class", "children"]);
 	return (
-		<ContextMenuPrimitive.SubTrigger
-			class={styles["context-menu__sub-trigger"]}
-			{...rest}
-		>
+		<ContextMenuPrimitive.SubTrigger class={styles["context-menu__sub-trigger"]} {...rest}>
 			{props.children}
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -124,8 +97,7 @@ function ContextMenuSubTrigger<T extends ValidComponent = "div">(
 	);
 }
 
-type ContextMenuSubContentProps =
-	ContextMenuPrimitive.ContextMenuSubContentProps & ClassProp;
+type ContextMenuSubContentProps = ContextMenuPrimitive.ContextMenuSubContentProps & ClassProp;
 
 function ContextMenuSubContent<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuSubContentProps>,
@@ -134,27 +106,21 @@ function ContextMenuSubContent<T extends ValidComponent = "div">(
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.SubContent
-				class={clsx(
-					styles["context-menu__sub-content"],
-					"liquid-glass",
-					props.class,
-				)}
+				class={clsx(styles["context-menu__sub-content"], "liquid-glass", props.class)}
 				{...rest}
 			/>
 		</ContextMenuPrimitive.Portal>
 	);
 }
 
-type ContextMenuCheckboxItemProps =
-	ContextMenuPrimitive.ContextMenuCheckboxItemProps & ClassProp & ChildrenProp;
+type ContextMenuCheckboxItemProps = ContextMenuPrimitive.ContextMenuCheckboxItemProps &
+	ClassProp &
+	ChildrenProp;
 
 function ContextMenuCheckboxItem<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuCheckboxItemProps>,
 ) {
-	const [, rest] = splitProps(props as ContextMenuCheckboxItemProps, [
-		"class",
-		"children",
-	]);
+	const [, rest] = splitProps(props as ContextMenuCheckboxItemProps, ["class", "children"]);
 
 	return (
 		<ContextMenuPrimitive.CheckboxItem
@@ -185,8 +151,7 @@ function ContextMenuCheckboxItem<T extends ValidComponent = "div">(
 
 const ContextMenuGroup = ContextMenuPrimitive.Group;
 
-type ContextMenuGroupLabelProps =
-	ContextMenuPrimitive.ContextMenuGroupLabelProps & ClassProp;
+type ContextMenuGroupLabelProps = ContextMenuPrimitive.ContextMenuGroupLabelProps & ClassProp;
 
 function ContextMenuGroupLabel<T extends ValidComponent = "span">(
 	props: PolymorphicProps<T, ContextMenuGroupLabelProps>,
@@ -202,16 +167,14 @@ function ContextMenuGroupLabel<T extends ValidComponent = "span">(
 
 const ContextMenuRadioGroup = ContextMenuPrimitive.RadioGroup;
 
-type ContextMenuRadioItemProps =
-	ContextMenuPrimitive.ContextMenuRadioItemProps & ClassProp & ChildrenProp;
+type ContextMenuRadioItemProps = ContextMenuPrimitive.ContextMenuRadioItemProps &
+	ClassProp &
+	ChildrenProp;
 
 function ContextMenuRadioItem<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuRadioItemProps>,
 ) {
-	const [, rest] = splitProps(props as ContextMenuRadioItemProps, [
-		"class",
-		"children",
-	]);
+	const [, rest] = splitProps(props as ContextMenuRadioItemProps, ["class", "children"]);
 
 	return (
 		<ContextMenuPrimitive.RadioItem
@@ -240,9 +203,21 @@ function ContextMenuRadioItem<T extends ValidComponent = "div">(
 }
 
 export {
-    ContextMenu, ContextMenuCheckboxItem, ContextMenuContent, ContextMenuGroup,
-    ContextMenuGroupLabel, ContextMenuItem,
-    ContextMenuItemLabel, ContextMenuLabel, ContextMenuPortal, ContextMenuRadioGroup,
-    ContextMenuRadioItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger
+	ContextMenu,
+	ContextMenuCheckboxItem,
+	ContextMenuContent,
+	ContextMenuGroup,
+	ContextMenuGroupLabel,
+	ContextMenuItem,
+	ContextMenuItemLabel,
+	ContextMenuLabel,
+	ContextMenuPortal,
+	ContextMenuRadioGroup,
+	ContextMenuRadioItem,
+	ContextMenuSeparator,
+	ContextMenuShortcut,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
+	ContextMenuTrigger,
 };
-

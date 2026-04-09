@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
-    getCanonicalBackStep,
-    getNextInitStep,
-    getPreviousInitStep,
-    INIT_STEPS,
-    isGuestOrDemoAccountType,
-    isSkippableAuthenticatedAccount,
-    normalizeInitStep,
-    shouldRecoverLegacyGuestCompletion,
+	getCanonicalBackStep,
+	getNextInitStep,
+	getPreviousInitStep,
+	INIT_STEPS,
+	isGuestOrDemoAccountType,
+	isSkippableAuthenticatedAccount,
+	normalizeInitStep,
+	shouldRecoverLegacyGuestCompletion,
 } from "./init-flow";
 
 describe("init-flow", () => {
@@ -31,30 +31,16 @@ describe("init-flow", () => {
 	});
 
 	it("routes login back target based on guide visitation", () => {
-		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, false)).toBe(
-			INIT_STEPS.WELCOME,
-		);
-		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, true)).toBe(
-			INIT_STEPS.GUIDE,
-		);
+		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, false)).toBe(INIT_STEPS.WELCOME);
+		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, true)).toBe(INIT_STEPS.GUIDE);
 	});
 
 	it("detects stale guest completion states for recovery", () => {
-		expect(
-			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.WELCOME),
-		).toBe(true);
-		expect(
-			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.GUIDE),
-		).toBe(true);
-		expect(
-			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.LOGIN),
-		).toBe(true);
-		expect(
-			shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.JAVA),
-		).toBe(false);
-		expect(
-			shouldRecoverLegacyGuestCompletion(false, INIT_STEPS.LOGIN),
-		).toBe(false);
+		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.WELCOME)).toBe(true);
+		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.GUIDE)).toBe(true);
+		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.LOGIN)).toBe(true);
+		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.JAVA)).toBe(false);
+		expect(shouldRecoverLegacyGuestCompletion(false, INIT_STEPS.LOGIN)).toBe(false);
 	});
 
 	it("treats guest and demo accounts as non-skippable auth sessions", () => {

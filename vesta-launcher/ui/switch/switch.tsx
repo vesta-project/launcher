@@ -1,8 +1,5 @@
 import type { PolymorphicProps } from "@kobalte/core/polymorphic";
-import type {
-	SwitchControlProps,
-	SwitchThumbProps,
-} from "@kobalte/core/switch";
+import type { SwitchControlProps, SwitchThumbProps } from "@kobalte/core/switch";
 import * as SwitchPrimitive from "@kobalte/core/switch";
 import { cn } from "@utils/ui";
 import type { ParentProps, ValidComponent, VoidProps } from "solid-js";
@@ -32,18 +29,12 @@ type switchControlProps<T extends ValidComponent = "input"> = ParentProps<
 export const SwitchControl = <T extends ValidComponent = "input">(
 	props: PolymorphicProps<T, switchControlProps<T>>,
 ) => {
-	const [local, rest] = splitProps(props as switchControlProps, [
-		"class",
-		"children",
-	]);
+	const [local, rest] = splitProps(props as switchControlProps, ["class", "children"]);
 
 	return (
 		<>
 			<SwitchPrimitive.Input class={styles.switch__input} />
-			<SwitchPrimitive.Control
-				class={cn(styles["switch__control"], local.class)}
-				{...rest}
-			>
+			<SwitchPrimitive.Control class={cn(styles["switch__control"], local.class)} {...rest}>
 				{local.children}
 			</SwitchPrimitive.Control>
 		</>
@@ -59,10 +50,5 @@ export const SwitchThumb = <T extends ValidComponent = "div">(
 ) => {
 	const [local, rest] = splitProps(props as switchThumbProps, ["class"]);
 
-	return (
-		<SwitchPrimitive.Thumb
-			class={cn(styles["switch__thumb"], local.class)}
-			{...rest}
-		/>
-	);
+	return <SwitchPrimitive.Thumb class={cn(styles["switch__thumb"], local.class)} {...rest} />;
 };

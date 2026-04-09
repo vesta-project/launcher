@@ -1,10 +1,6 @@
 export type StyleMode = "glass" | "satin" | "flat" | "bordered" | "solid";
 
-export type GradientHarmony =
-	| "none"
-	| "analogous"
-	| "complementary"
-	| "triadic";
+export type GradientHarmony = "none" | "analogous" | "complementary" | "triadic";
 
 export type ThemeVariableType = "number" | "color" | "boolean" | "select";
 

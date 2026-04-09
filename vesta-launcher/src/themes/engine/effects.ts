@@ -1,16 +1,5 @@
-const BUILTIN_WINDOW_EFFECTS = [
-	"none",
-	"transparent",
-	"vibrancy",
-	"liquid_glass",
-] as const;
-const WINDOWS_WINDOW_EFFECTS = [
-	"none",
-	"transparent",
-	"mica",
-	"acrylic",
-	"blur",
-] as const;
+const BUILTIN_WINDOW_EFFECTS = ["none", "transparent", "vibrancy", "liquid_glass"] as const;
+const WINDOWS_WINDOW_EFFECTS = ["none", "transparent", "mica", "acrylic", "blur"] as const;
 const FALLBACK_WINDOW_EFFECTS = ["none", "transparent"] as const;
 const FALLBACK_WINDOW_EFFECT = "none";
 
@@ -25,15 +14,10 @@ let capabilityCache: WindowEffectCapabilities | null = null;
 let capabilityPending: Promise<WindowEffectCapabilities | null> | null = null;
 
 function hasTauriRuntime(): boolean {
-	return (
-		typeof window !== "undefined" &&
-		Boolean((window as any).__TAURI_INTERNALS__)
-	);
+	return typeof window !== "undefined" && Boolean((window as any).__TAURI_INTERNALS__);
 }
 
-function normalizeCapabilityPayload(
-	payload: WindowEffectCapabilities,
-): WindowEffectCapabilities {
+function normalizeCapabilityPayload(payload: WindowEffectCapabilities): WindowEffectCapabilities {
 	const normalized: string[] = [];
 	for (const effect of payload.supportedEffects || []) {
 		const key = (effect || "").trim().toLowerCase();
@@ -49,9 +33,7 @@ function normalizeCapabilityPayload(
 		os: (payload.os || "").trim().toLowerCase(),
 		osVersion: payload.osVersion ?? null,
 		supportedEffects: normalized,
-		defaultEffect: (payload.defaultEffect || FALLBACK_WINDOW_EFFECT)
-			.trim()
-			.toLowerCase(),
+		defaultEffect: (payload.defaultEffect || FALLBACK_WINDOW_EFFECT).trim().toLowerCase(),
 	};
 }
 
@@ -62,9 +44,7 @@ export function loadWindowEffectCapabilities(): Promise<WindowEffectCapabilities
 
 	capabilityPending = import("@tauri-apps/api/core")
 		.then(async ({ invoke }) => {
-			const payload = await invoke<WindowEffectCapabilities>(
-				"get_window_effect_capabilities",
-			);
+			const payload = await invoke<WindowEffectCapabilities>("get_window_effect_capabilities");
 			capabilityCache = normalizeCapabilityPayload(payload);
 			return capabilityCache;
 		})
@@ -112,10 +92,7 @@ export function getSupportedWindowEffects(osHint?: string): string[] {
 	return [...FALLBACK_WINDOW_EFFECTS];
 }
 
-export function normalizeWindowEffectForCurrentOS(
-	effect?: string,
-	osHint?: string,
-): string {
+export function normalizeWindowEffectForCurrentOS(effect?: string, osHint?: string): string {
 	const requested = (effect || "").trim().toLowerCase();
 	if (!requested) return FALLBACK_WINDOW_EFFECT;
 

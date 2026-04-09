@@ -20,14 +20,7 @@ import {
 	persistentNotificationTrigger,
 	removeAllAlerts,
 } from "@utils/notifications";
-import {
-	createEffect,
-	createResource,
-	createSignal,
-	For,
-	onMount,
-	Show,
-} from "solid-js";
+import { createEffect, createResource, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./sidebar-notifications.module.css";
 
 interface SidebarNotificationProps {
@@ -111,8 +104,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 
 			<Show
 				when={
-					notifications().length > 0 ||
-					(persistentNotifs() && (persistentNotifs()?.length ?? 0) > 0)
+					notifications().length > 0 || (persistentNotifs() && (persistentNotifs()?.length ?? 0) > 0)
 				}
 				fallback={<div>Wooo! No Notifications!</div>}
 			>
@@ -142,11 +134,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 									actions={notification.actions}
 									created_at={notification.created_at}
 									onAction={(actionId, payload) =>
-										invokeNotificationAction(
-											actionId,
-											notification.client_key || undefined,
-											payload,
-										)
+										invokeNotificationAction(actionId, notification.client_key || undefined, payload)
 									}
 									onDismiss={() => deleteNotification(notification.id)}
 								/>
@@ -156,10 +144,7 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 				</div>
 			</Show>
 			<Show
-				when={
-					notifications().length > 0 ||
-					(persistentNotifs()?.some((n) => n.dismissible) ?? false)
-				}
+				when={notifications().length > 0 || (persistentNotifs()?.some((n) => n.dismissible) ?? false)}
 			>
 				<div>
 					<Button

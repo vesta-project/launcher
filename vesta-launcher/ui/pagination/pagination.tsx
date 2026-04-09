@@ -15,12 +15,7 @@ export const Pagination = <T extends ValidComponent = "nav">(
 	props: PolymorphicProps<T, PaginationRootProps<T>>,
 ) => {
 	const [local, others] = splitProps(props as PaginationRootProps, ["class"]);
-	return (
-		<PaginationPrimitive.Root
-			class={cn(styles["pagination-root"], local.class)}
-			{...others}
-		/>
-	);
+	return <PaginationPrimitive.Root class={cn(styles["pagination-root"], local.class)} {...others} />;
 };
 
 type PaginationItemProps<T extends ValidComponent = "button"> =
@@ -51,14 +46,9 @@ type PaginationEllipsisProps<T extends ValidComponent = "div"> =
 export const PaginationEllipsis = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, PaginationEllipsisProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as PaginationEllipsisProps, [
-		"class",
-	]);
+	const [local, others] = splitProps(props as PaginationEllipsisProps, ["class"]);
 	return (
-		<PaginationPrimitive.Ellipsis
-			class={cn(styles["pagination-ellipsis"], local.class)}
-			{...others}
-		>
+		<PaginationPrimitive.Ellipsis class={cn(styles["pagination-ellipsis"], local.class)} {...others}>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				viewBox="0 0 24 24"
@@ -87,10 +77,7 @@ type PaginationPreviousProps<T extends ValidComponent = "button"> =
 export const PaginationPrevious = <T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, PaginationPreviousProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as PaginationPreviousProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(props as PaginationPreviousProps, ["class", "children"]);
 	return (
 		<PaginationPrimitive.Previous
 			class={cn(
@@ -136,10 +123,7 @@ type PaginationNextProps<T extends ValidComponent = "button"> =
 export const PaginationNext = <T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, PaginationNextProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as PaginationNextProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(props as PaginationNextProps, ["class", "children"]);
 	return (
 		<PaginationPrimitive.Next
 			class={cn(

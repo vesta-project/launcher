@@ -22,10 +22,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 				subHeader="Global defaults for each Java version. Instances follow these by default."
 				helpTopic="JAVA_MANAGED"
 			>
-				<div
-					class={styles["section-actions"]}
-					style={{ "margin-bottom": "16px" }}
-				>
+				<div class={styles["section-actions"]} style={{ "margin-bottom": "16px" }}>
 					<LauncherButton
 						onClick={props.refreshJavas}
 						disabled={props.isScanning}
@@ -42,9 +39,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 						<div class={styles["settings-loading-state"]}>
 							<div class={styles["spinner"]}></div>
 							<p>Loading Minecraft version metadata...</p>
-							<span>
-								Your Java requirements will appear once the manifest is ready.
-							</span>
+							<span>Your Java requirements will appear once the manifest is ready.</span>
 						</div>
 					}
 				>
@@ -52,9 +47,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 						<For each={props.requirements}>
 							{(req: any) => {
 								const versionOptions = () =>
-									props.javaOptions.filter(
-										(option) => option.version === req.major_version,
-									);
+									props.javaOptions.filter((option) => option.version === req.major_version);
 
 								return (
 									<div class={styles["java-req-item"]}>
@@ -63,9 +56,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 										</div>
 
 										<div class={styles["java-options-grid"]}>
-											<For each={versionOptions()}>
-												{(option) => <JavaOptionCard option={option} />}
-											</For>
+											<For each={versionOptions()}>{(option) => <JavaOptionCard option={option} />}</For>
 										</div>
 									</div>
 								);
@@ -83,10 +74,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 					label="Use Dedicated GPU"
 					description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
 					headerRight={
-						<Switch
-							checked={props.useDedicatedGpu}
-							onCheckedChange={props.handleGpuToggle}
-						>
+						<Switch checked={props.useDedicatedGpu} onCheckedChange={props.handleGpuToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>

@@ -2,11 +2,7 @@ import { PolymorphicProps } from "@kobalte/core";
 import * as ToastPrimitive from "@kobalte/core/toast";
 import { NotificationItem } from "@ui/notification/notification-item";
 import { ClassProp } from "@ui/props";
-import {
-	NotificationAction,
-	NotificationSeverity,
-	NotificationType,
-} from "@utils/notifications";
+import { NotificationAction, NotificationSeverity, NotificationType } from "@utils/notifications";
 import clsx from "clsx";
 import { splitProps, ValidComponent } from "solid-js";
 import { Portal } from "solid-js/web";
@@ -14,18 +10,13 @@ import styles from "./toast.module.css";
 
 type ToastListProps = ToastPrimitive.ToastListProps & ClassProp;
 
-function Toaster<T extends ValidComponent = "ol">(
-	props: PolymorphicProps<T, ToastListProps>,
-) {
+function Toaster<T extends ValidComponent = "ol">(props: PolymorphicProps<T, ToastListProps>) {
 	const [local, others] = splitProps(props as ToastListProps, ["class"]);
 
 	return (
 		<Portal>
 			<ToastPrimitive.Region limit={5} swipeDirection={"left"}>
-				<ToastPrimitive.List
-					class={clsx(styles["toast__list"], local.class)}
-					{...others}
-				/>
+				<ToastPrimitive.List class={clsx(styles["toast__list"], local.class)} {...others} />
 			</ToastPrimitive.Region>
 		</Portal>
 	);
@@ -33,17 +24,10 @@ function Toaster<T extends ValidComponent = "ol">(
 
 type ToastRootProps = ToastPrimitive.ToastRootProps & ClassProp;
 
-function Toast<T extends ValidComponent = "li">(
-	props: PolymorphicProps<T, ToastRootProps>,
-) {
+function Toast<T extends ValidComponent = "li">(props: PolymorphicProps<T, ToastRootProps>) {
 	const [local, others] = splitProps(props as ToastRootProps, ["class"]);
 
-	return (
-		<ToastPrimitive.Root
-			class={clsx(styles["toast"], local.class)}
-			{...others}
-		/>
-	);
+	return <ToastPrimitive.Root class={clsx(styles["toast"], local.class)} {...others} />;
 }
 
 interface ShowToastProps {

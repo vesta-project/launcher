@@ -251,11 +251,7 @@ export function ImageViewer(props: ImageViewerProps) {
 		};
 	};
 
-	const clampPan = (
-		nextX: number,
-		nextY: number,
-		bounds: { maxPanX: number; maxPanY: number },
-	) => ({
+	const clampPan = (nextX: number, nextY: number, bounds: { maxPanX: number; maxPanY: number }) => ({
 		x: Math.min(bounds.maxPanX, Math.max(-bounds.maxPanX, nextX)),
 		y: Math.min(bounds.maxPanY, Math.max(-bounds.maxPanY, nextY)),
 	});
@@ -304,9 +300,7 @@ export function ImageViewer(props: ImageViewerProps) {
 		}
 
 		const bounds = getPanBounds(container, img);
-		setPanOffset(
-			clampPan(dragStartPan.x + deltaX, dragStartPan.y + deltaY, bounds),
-		);
+		setPanOffset(clampPan(dragStartPan.x + deltaX, dragStartPan.y + deltaY, bounds));
 	};
 
 	const handleImagePointerEnd = (e: PointerEvent) => {
@@ -323,11 +317,7 @@ export function ImageViewer(props: ImageViewerProps) {
 		setIsDraggingImage(false);
 	};
 
-	const normalizeWheelDelta = (
-		delta: number,
-		deltaMode: number,
-		viewportSize: number,
-	) => {
+	const normalizeWheelDelta = (delta: number, deltaMode: number, viewportSize: number) => {
 		let normalized = delta;
 		if (deltaMode === 1) {
 			normalized *= WHEEL_LINE_PX;
@@ -361,23 +351,11 @@ export function ImageViewer(props: ImageViewerProps) {
 
 			const bounds = getPanBounds(container, img);
 
-			const deltaX = normalizeWheelDelta(
-				e.deltaX,
-				e.deltaMode,
-				container.clientWidth,
-			);
-			const deltaY = normalizeWheelDelta(
-				e.deltaY,
-				e.deltaMode,
-				container.clientHeight,
-			);
+			const deltaX = normalizeWheelDelta(e.deltaX, e.deltaMode, container.clientWidth);
+			const deltaY = normalizeWheelDelta(e.deltaY, e.deltaMode, container.clientHeight);
 
 			setPanOffset((prev) => ({
-				...clampPan(
-					prev.x - deltaX * PAN_SENSITIVITY,
-					prev.y - deltaY * PAN_SENSITIVITY,
-					bounds,
-				),
+				...clampPan(prev.x - deltaX * PAN_SENSITIVITY, prev.y - deltaY * PAN_SENSITIVITY, bounds),
 			}));
 			return;
 		}
@@ -387,11 +365,7 @@ export function ImageViewer(props: ImageViewerProps) {
 		}
 
 		const horizontalDelta =
-			Math.abs(e.deltaX) >= Math.abs(e.deltaY)
-				? e.deltaX
-				: e.shiftKey
-					? e.deltaY
-					: 0;
+			Math.abs(e.deltaX) >= Math.abs(e.deltaY) ? e.deltaX : e.shiftKey ? e.deltaY : 0;
 
 		if (Math.abs(horizontalDelta) < WHEEL_NAV_THRESHOLD) {
 			return;
@@ -429,9 +403,7 @@ export function ImageViewer(props: ImageViewerProps) {
 					onFocusOut={handleControlBlur}
 				>
 					<div class={styles.info}>
-						<span class={styles.title}>
-							{currentImage()?.title || props.title || "Image Viewer"}
-						</span>
+						<span class={styles.title}>{currentImage()?.title || props.title || "Image Viewer"}</span>
 						<Show when={currentImage()?.date}>
 							<span class={styles.date}>{currentImage()?.date}</span>
 						</Show>
@@ -546,56 +518,35 @@ export function ImageViewer(props: ImageViewerProps) {
 												<div
 													class={styles.imageContainer}
 													classList={{
-														[styles.zoomed]:
-															isZoomed() && currentIndex() === index(),
-																		[styles.panned]:
-																			isZoomed() &&
-																			currentIndex() === index() &&
-																			(Math.abs(panOffset().x) > 1 || Math.abs(panOffset().y) > 1),
-																		[styles.dragging]:
-																			isZoomed() &&
-																			currentIndex() === index() &&
-																			isDraggingImage(),
+														[styles.zoomed]: isZoomed() && currentIndex() === index(),
+														[styles.panned]:
+															isZoomed() &&
+															currentIndex() === index() &&
+															(Math.abs(panOffset().x) > 1 || Math.abs(panOffset().y) > 1),
+														[styles.dragging]: isZoomed() && currentIndex() === index() && isDraggingImage(),
 													}}
 												>
 													<img
 														src={image.src}
 														alt={image.title}
-																		onPointerDown={(e) => handleImagePointerDown(e, index())}
-																		onPointerMove={(e) => handleImagePointerMove(e, index())}
-																		onPointerUp={handleImagePointerEnd}
-																		onPointerCancel={handleImagePointerEnd}
+														onPointerDown={(e) => handleImagePointerDown(e, index())}
+														onPointerMove={(e) => handleImagePointerMove(e, index())}
+														onPointerUp={handleImagePointerEnd}
+														onPointerCancel={handleImagePointerEnd}
 														onClick={(e) => handleImageClick(e, index())}
 														classList={{
-															[styles.zoomedImg]:
-																isZoomed() && currentIndex() === index(),
+															[styles.zoomedImg]: isZoomed() && currentIndex() === index(),
 														}}
 														style={{
 															"--image-scale": props.scale || 1,
-																"--pan-x":
-																	currentIndex() === index()
-																		? `${panOffset().x}px`
-																		: "0px",
-																"--pan-y":
-																	currentIndex() === index()
-																		? `${panOffset().y}px`
-																		: "0px",
-															"--zoom-x":
-																currentIndex() === index()
-																	? zoomOrigin().x
-																	: DEFAULT_ZOOM_ORIGIN.x,
-															"--zoom-y":
-																currentIndex() === index()
-																	? zoomOrigin().y
-																	: DEFAULT_ZOOM_ORIGIN.y,
-															"image-rendering": props.pixelated
-																? "pixelated"
-																: "auto",
+															"--pan-x": currentIndex() === index() ? `${panOffset().x}px` : "0px",
+															"--pan-y": currentIndex() === index() ? `${panOffset().y}px` : "0px",
+															"--zoom-x": currentIndex() === index() ? zoomOrigin().x : DEFAULT_ZOOM_ORIGIN.x,
+															"--zoom-y": currentIndex() === index() ? zoomOrigin().y : DEFAULT_ZOOM_ORIGIN.y,
+															"image-rendering": props.pixelated ? "pixelated" : "auto",
 														}}
 														draggable={false}
-														onError={() =>
-															currentIndex() === index() && setHasError(true)
-														}
+														onError={() => currentIndex() === index() && setHasError(true)}
 													/>
 												</div>
 											</Show>

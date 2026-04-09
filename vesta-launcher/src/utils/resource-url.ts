@@ -54,13 +54,7 @@ export function parseResourceUrl(url: string): ParsedResourceUrl | null {
 			// URL structure: /<type>/<slug>/[gallery|versions]
 			if (pathParts.length >= 2) {
 				const [type, slug, tab] = pathParts;
-				const validTypes = [
-					"mod",
-					"resourcepack",
-					"shader",
-					"datapack",
-					"modpack",
-				];
+				const validTypes = ["mod", "resourcepack", "shader", "datapack", "modpack"];
 				if (validTypes.includes(type)) {
 					let activeTab: ParsedResourceUrl["activeTab"];
 					if (tab === "gallery") activeTab = "gallery";

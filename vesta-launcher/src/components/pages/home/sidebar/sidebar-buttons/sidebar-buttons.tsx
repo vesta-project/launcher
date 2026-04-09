@@ -2,12 +2,7 @@
 import { Button } from "@kobalte/core/button";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipPlacement,
-	TooltipTrigger,
-} from "@ui/tooltip/tooltip";
+import { Tooltip, TooltipContent, TooltipPlacement, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { type Account, getActiveAccount } from "@utils/auth";
 import { onConfigUpdate } from "@utils/config-sync";
 import clsx from "clsx";
@@ -34,10 +29,7 @@ interface SidebarButtonProps extends ComponentProps<"button"> {
 export function SidebarButton(props: SidebarButtonProps) {
 	const c = children(() => props.children);
 	const [local, others] = splitProps(
-		mergeProps(
-			{ tooltip_placement: "right", tooltip_text: "", tooltip_gutter: 8 },
-			props,
-		),
+		mergeProps({ tooltip_placement: "right", tooltip_text: "", tooltip_gutter: 8 }, props),
 		["tooltip_placement", "tooltip_text", "tooltip_gutter", "class", "onClick"],
 	);
 	return (
@@ -65,11 +57,7 @@ interface SidebarProfileButtonProps extends SidebarButtonProps {
 
 function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	const c = children(() => props.children);
-	const [_, others] = splitProps(props, [
-		"children",
-		"onAccountMenuToggle",
-		"open",
-	]);
+	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle", "open"]);
 
 	const [avatarTimestamp, setAvatarTimestamp] = createSignal(Date.now());
 
@@ -78,16 +66,14 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	// helper may not return the second control tuple reliably across build
 	// configurations. Avoid relying on destructuring the `loading` accessor
 	// and instead check the resource value directly (undefined while loading).
-	const [activeAccount, { refetch }] = createResource<Account | null>(
-		async () => {
-			try {
-				return await getActiveAccount();
-			} catch (e) {
-				console.error("Failed to get active account:", e);
-				return null;
-			}
-		},
-	);
+	const [activeAccount, { refetch }] = createResource<Account | null>(async () => {
+		try {
+			return await getActiveAccount();
+		} catch (e) {
+			console.error("Failed to get active account:", e);
+			return null;
+		}
+	});
 
 	// Listen for config updates to refetch active account
 	createEffect(() => {
@@ -102,35 +88,30 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	// Listen for head updates from backend
 	createEffect(() => {
 		let unlisten: (() => void) | undefined;
-		listen<{ uuid?: string; force?: boolean }>(
-			"core://account-heads-updated",
-			async (event) => {
-				const active = activeAccount();
-				const eventUuid = event.payload?.uuid;
-				// Normalize UUIDs before comparison so dashed/non-dashed variants match
-				const shouldRefresh =
-					!active ||
-					!eventUuid ||
-					eventUuid.replace(/-/g, "") === (active.uuid ?? "").replace(/-/g, "");
+		listen<{ uuid?: string; force?: boolean }>("core://account-heads-updated", async (event) => {
+			const active = activeAccount();
+			const eventUuid = event.payload?.uuid;
+			// Normalize UUIDs before comparison so dashed/non-dashed variants match
+			const shouldRefresh =
+				!active || !eventUuid || eventUuid.replace(/-/g, "") === (active.uuid ?? "").replace(/-/g, "");
 
-				if (!shouldRefresh) return;
+			if (!shouldRefresh) return;
 
-				// When the event carries force=true, trigger a backend head re-download
-				// using the freshly-saved skin URL so the cache file is up-to-date.
-				if (event.payload?.force && active?.uuid) {
-					try {
-						await invoke("get_player_head_path", {
-							playerUuid: active.uuid,
-							forceDownload: true,
-						});
-					} catch (e) {
-						console.error("[Sidebar] Failed to force-refresh player head:", e);
-					}
+			// When the event carries force=true, trigger a backend head re-download
+			// using the freshly-saved skin URL so the cache file is up-to-date.
+			if (event.payload?.force && active?.uuid) {
+				try {
+					await invoke("get_player_head_path", {
+						playerUuid: active.uuid,
+						forceDownload: true,
+					});
+				} catch (e) {
+					console.error("[Sidebar] Failed to force-refresh player head:", e);
 				}
+			}
 
-				setAvatarTimestamp(Date.now());
-			},
-		).then((fn) => {
+			setAvatarTimestamp(Date.now());
+		}).then((fn) => {
 			unlisten = fn;
 		});
 

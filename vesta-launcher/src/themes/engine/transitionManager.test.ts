@@ -31,9 +31,7 @@ describe("transitionManager", () => {
 		});
 
 		expect(root.getAttribute("data-theme-transition")).toBe("preset-switch");
-		expect(root.style.getPropertyValue("--theme-transition-duration")).toBe(
-			"160ms",
-		);
+		expect(root.style.getPropertyValue("--theme-transition-duration")).toBe("160ms");
 
 		vi.advanceTimersByTime(159);
 		expect(root.getAttribute("data-theme-transition")).toBe("preset-switch");
@@ -56,9 +54,7 @@ describe("transitionManager", () => {
 			transitionDurationMs: 100,
 		});
 
-		expect(root.style.getPropertyValue("--theme-transition-duration")).toBe(
-			"100ms",
-		);
+		expect(root.style.getPropertyValue("--theme-transition-duration")).toBe("100ms");
 
 		vi.advanceTimersByTime(120);
 		expect(root.getAttribute("data-theme-transition")).toBe("preset-switch");

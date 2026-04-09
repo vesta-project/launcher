@@ -1,19 +1,13 @@
 import type { ThemeConfig } from "../types";
 import { normalizeWindowEffectForCurrentOS } from "./effects";
 import { themeToCSSVars } from "./themeToCSSVars";
-import {
-    startThemeTransition,
-    type ThemeApplyOptions,
-} from "./transitionManager";
+import { startThemeTransition, type ThemeApplyOptions } from "./transitionManager";
 
 export type { ThemeApplyOptions, ThemeApplyTransition } from "./transitionManager";
 
 const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
 
-function clearStartupFallbackIfActive(
-	root: HTMLElement,
-	style: CSSStyleDeclaration,
-): void {
+function clearStartupFallbackIfActive(root: HTMLElement, style: CSSStyleDeclaration): void {
 	if (root.getAttribute(STARTUP_FALLBACK_ATTR) !== "1") {
 		return;
 	}
@@ -54,10 +48,7 @@ function applyBackgroundState(
 	style.setProperty("--background-color", "var(--app-background-tint)");
 }
 
-export function applyTheme(
-	theme: ThemeConfig,
-	options: ThemeApplyOptions = {},
-): void {
+export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}): void {
 	const root = document.documentElement;
 	const style = root.style;
 
@@ -72,31 +63,19 @@ export function applyTheme(
 	const currentHue = style.getPropertyValue("--color__primary-hue").trim();
 	const currentRotation = style.getPropertyValue("--rotation").trim();
 	const currentSecondaryHue = style.getPropertyValue("--hue-secondary").trim();
-	const currentBackgroundOpacity = style
-		.getPropertyValue("--background-opacity")
-		.trim();
+	const currentBackgroundOpacity = style.getPropertyValue("--background-opacity").trim();
 	const currentOpacity = style.getPropertyValue("--effect-opacity").trim();
 	const currentWindowEffect = root.getAttribute("data-window-effect") || "none";
-	const currentBorderWidth = style
-		.getPropertyValue("--border-width-subtle")
-		.trim();
-	const effectToSet = normalizeWindowEffectForCurrentOS(
-		theme.windowEffect || "none",
-	);
-	const nextThemeVarKeys = Object.keys(vars).filter((key) =>
-		key.startsWith("--theme-var-"),
-	);
+	const currentBorderWidth = style.getPropertyValue("--border-width-subtle").trim();
+	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
+	const nextThemeVarKeys = Object.keys(vars).filter((key) => key.startsWith("--theme-var-"));
 	const previousThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
 		.split(",")
 		.map((key) => key.trim())
 		.filter((key) => key.length > 0);
-	const hasRemovedThemeVars = previousThemeVarKeys.some(
-		(key) => !nextThemeVarKeys.includes(key),
-	);
+	const hasRemovedThemeVars = previousThemeVarKeys.some((key) => !nextThemeVarKeys.includes(key));
 
-	const styleTag = document.getElementById(
-		"theme-custom-css",
-	) as HTMLStyleElement | null;
+	const styleTag = document.getElementById("theme-custom-css") as HTMLStyleElement | null;
 	const currentCustomCss = (styleTag?.textContent || "").trim();
 	const nextCustomCss = (theme.customCss || "").trim();
 	const customCssChanged = currentCustomCss !== nextCustomCss;
@@ -137,10 +116,8 @@ export function applyTheme(
 		currentThemeId === themeId &&
 		currentHue === theme.primaryHue.toString() &&
 		root.getAttribute("data-style") === theme.style &&
-		root.getAttribute("data-gradient") ===
-			(theme.gradientEnabled ? "1" : "0") &&
-		root.getAttribute("data-gradient-type") ===
-			(theme.gradientType || "linear") &&
+		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0") &&
+		root.getAttribute("data-gradient-type") === (theme.gradientType || "linear") &&
 		currentRotation === vars["--rotation"] &&
 		currentSecondaryHue === vars["--hue-secondary"] &&
 		numMatch(currentBackgroundOpacity, vars["--background-opacity"]) &&
@@ -186,9 +163,7 @@ export function applyTheme(
 		root.setAttribute("data-window-effect", effectToSet);
 		if ((window as any).__TAURI_INTERNALS__) {
 			import("@tauri-apps/api/core").then(({ invoke }) => {
-				invoke("set_window_effect", { effect: effectToSet }).catch(
-					console.error,
-				);
+				invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
 			});
 		}
 	}

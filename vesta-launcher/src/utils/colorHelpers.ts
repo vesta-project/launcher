@@ -1,18 +1,11 @@
 import chroma from "chroma-js";
 
-export function generatePalette(
-	baseHexOrHsl: string | { h: number; s: number; l: number },
-) {
+export function generatePalette(baseHexOrHsl: string | { h: number; s: number; l: number }) {
 	let base: chroma.Color;
 	if (typeof baseHexOrHsl === "string") {
 		base = chroma(baseHexOrHsl);
 	} else {
-		base = chroma(
-			baseHexOrHsl.h,
-			baseHexOrHsl.s / 100,
-			baseHexOrHsl.l / 100,
-			"hsl",
-		);
+		base = chroma(baseHexOrHsl.h, baseHexOrHsl.s / 100, baseHexOrHsl.l / 100, "hsl");
 	}
 
 	const hex = base.hex();

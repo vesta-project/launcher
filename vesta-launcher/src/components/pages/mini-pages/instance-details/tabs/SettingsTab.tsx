@@ -1,42 +1,23 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import Button from "@ui/button/button";
 import {
-    ContextMenu,
-    ContextMenuContent,
-    ContextMenuItem,
-    ContextMenuTrigger,
+	ContextMenu,
+	ContextMenuContent,
+	ContextMenuItem,
+	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { areIconsEqual, IconPicker } from "@ui/icon-picker/icon-picker";
 import {
-    NumberField,
-    NumberFieldDecrementTrigger,
-    NumberFieldGroup,
-    NumberFieldIncrementTrigger,
-    NumberFieldInput
+	NumberField,
+	NumberFieldDecrementTrigger,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
 } from "@ui/number-field/number-field";
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "@ui/select/select";
-import {
-    Slider,
-    SliderFill,
-    SliderThumb,
-    SliderTrack,
-} from "@ui/slider/slider";
-import {
-    Switch,
-    SwitchControl,
-    SwitchThumb
-} from "@ui/switch/switch";
-import {
-    TextFieldInput,
-    TextFieldRoot,
-    TextFieldTextArea,
-} from "@ui/text-field/text-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { TextFieldInput, TextFieldRoot, TextFieldTextArea } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { batch, createMemo, Show } from "solid-js";
 import styles from "../instance-details.module.css";
@@ -120,9 +101,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 		const rawMax = p.maxMemory[0] ?? 4096;
 		const boundedMin = Math.max(512, Math.min(rawMin, sliderMaxMemory()));
 		const boundedMax = Math.max(512, Math.min(rawMax, sliderMaxMemory()));
-		return boundedMin <= boundedMax
-			? [boundedMin, boundedMax]
-			: [boundedMax, boundedMin];
+		return boundedMin <= boundedMax ? [boundedMin, boundedMax] : [boundedMax, boundedMin];
 	});
 	const handleMemoryChange = (val: number[]) => {
 		if (!Array.isArray(val) || val.length < 2) return;
@@ -178,8 +157,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							/>
 						</TextFieldRoot>
 						<p class={styles["metadata-description"]}>
-							Choose an icon and a name for this instance. These will be visible
-							in your library.
+							Choose an icon and a name for this instance. These will be visible in your library.
 						</p>
 					</div>
 				</div>
@@ -265,9 +243,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 												<SelectValue<any>>
 													{(state) => (
 														<div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.2;">
-															<span style="font-size: 13px;">
-																{state.selectedOption().label}
-															</span>
+															<span style="font-size: 13px;">{state.selectedOption().label}</span>
 															<span style="font-size: 10px; opacity: 0.5; font-family: var(--font-mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 340px;">
 																{state.selectedOption().description}
 															</span>
@@ -279,19 +255,12 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									</TooltipTrigger>
 									<TooltipContent>
 										<Show
-											when={
-												p
-													.jreOptions()
-													.find((o) => o.value === currentSelection())
-													?.description
-											}
+											when={p.jreOptions().find((o) => o.value === currentSelection())?.description}
 											fallback="No path set"
 										>
 											{(desc) => (
 												<div style="font-family: var(--font-mono); font-size: 11px; max-width: 400px; word-break: break-all;">
-													{desc().startsWith("→ ")
-														? desc().substring(2)
-														: desc()}
+													{desc().startsWith("→ ") ? desc().substring(2) : desc()}
 												</div>
 											)}
 										</Show>
@@ -300,14 +269,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								<ContextMenuContent>
 									<ContextMenuItem
 										onClick={() => {
-											const current = p
-												.jreOptions()
-												.find((o) => o.value === currentSelection());
-											if (
-												current &&
-												current.description &&
-												current.description !== "(not set)"
-											) {
+											const current = p.jreOptions().find((o) => o.value === currentSelection());
+											if (current && current.description && current.description !== "(not set)") {
 												let path = current.description;
 												if (path.startsWith("→ ")) path = path.substring(2);
 												navigator.clipboard.writeText(path);
@@ -369,9 +332,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					description="Custom JVM arguments for this instance."
 					headerRight={
 						<div style="display: flex; align-items: center; gap: 8px;">
-							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-								Use Global
-							</span>
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">Use Global</span>
 							<Switch
 								checked={p.useGlobalJavaArgs}
 								onCheckedChange={(val: boolean) => {
@@ -421,9 +382,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					)}GB)`}
 					headerRight={
 						<div style="display: flex; align-items: center; gap: 8px;">
-							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-								Use Global
-							</span>
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">Use Global</span>
 							<Switch
 								checked={p.useGlobalMemory}
 								onCheckedChange={(val: boolean) => {
@@ -496,9 +455,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					description="Set the initial width and height of the Minecraft window."
 					headerRight={
 						<div style="display: flex; align-items: center; gap: 8px;">
-							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-								Use Global
-							</span>
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">Use Global</span>
 							<Switch
 								checked={p.useGlobalResolution}
 								onCheckedChange={(val: boolean) => {
@@ -594,9 +551,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					description="Custom environment variables for the game process. One per line (e.g. KEY=VALUE)."
 					headerRight={
 						<div style="display: flex; align-items: center; gap: 8px;">
-							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-								Use Global
-							</span>
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">Use Global</span>
 							<Switch
 								checked={p.useGlobalEnvironmentVariables}
 								onCheckedChange={(val: boolean) => {
@@ -617,8 +572,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							when={!p.useGlobalEnvironmentVariables}
 							fallback={
 								<div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
-									Currently using the environment variables defined in global
-									settings.
+									Currently using the environment variables defined in global settings.
 								</div>
 							}
 						>
@@ -667,8 +621,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					when={!p.useGlobalHooks}
 					fallback={
 						<div style="padding: 12px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px; margin-bottom: 12px;">
-							Currently using the pre-launch, wrapper, and post-exit hooks
-							defined in global settings.
+							Currently using the pre-launch, wrapper, and post-exit hooks defined in global settings.
 						</div>
 					}
 				>
@@ -728,10 +681,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
 				</Show>
 			</SettingsCard>
 
-			<div
-				class={styles["settings-actions"]}
-				style="display: flex; gap: 12px; margin-top: 24px;"
-			>
+			<div class={styles["settings-actions"]} style="display: flex; gap: 12px; margin-top: 24px;">
 				<Button onClick={p.handleSave} disabled={p.saving() || p.isInstalling}>
 					{p.saving()
 						? "Saving…"

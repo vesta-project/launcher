@@ -45,8 +45,7 @@ function FileDropPage() {
 		<div class={styles["file-drop-page"]}>
 			<h1>File Drop Test</h1>
 			<p class={styles["file-drop-page__description"]}>
-				Test the file drop functionality by dragging files or folders onto the
-				drop zones below.
+				Test the file drop functionality by dragging files or folders onto the drop zones below.
 			</p>
 
 			<div class={styles["file-drop-page__zones"]}>
@@ -63,9 +62,7 @@ function FileDropPage() {
 						</button>
 					</div>
 					<DropZone onFileDrop={handleSingleFileDrop} accept="files">
-						<div
-							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--single"]}`}
-						>
+						<div class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--single"]}`}>
 							<svg
 								class={styles["file-drop-page__icon"]}
 								xmlns="http://www.w3.org/2000/svg"
@@ -79,19 +76,13 @@ function FileDropPage() {
 								<line x1="12" y1="3" x2="12" y2="15" />
 							</svg>
 							<p>Drop a single file here</p>
-							<p class={styles["file-drop-page__hint"]}>
-								Files only (no folders)
-							</p>
+							<p class={styles["file-drop-page__hint"]}>Files only (no folders)</p>
 						</div>
 					</DropZone>
 					{singleFile() && (
 						<div class={styles["file-drop-page__result"]}>
-							<p class={styles["file-drop-page__result-label"]}>
-								Dropped file:
-							</p>
-							<code class={styles["file-drop-page__path"]}>
-								{singleFile()?.path}
-							</code>
+							<p class={styles["file-drop-page__result-label"]}>Dropped file:</p>
+							<code class={styles["file-drop-page__path"]}>{singleFile()?.path}</code>
 						</div>
 					)}
 				</section>
@@ -109,9 +100,7 @@ function FileDropPage() {
 						</button>
 					</div>
 					<DropZone onFileDrop={handleMultipleFilesDrop} accept="files">
-						<div
-							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--multiple"]}`}
-						>
+						<div class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--multiple"]}`}>
 							<svg
 								class={styles["file-drop-page__icon"]}
 								xmlns="http://www.w3.org/2000/svg"
@@ -126,9 +115,7 @@ function FileDropPage() {
 								<line x1="9" y1="15" x2="15" y2="15" />
 							</svg>
 							<p>Drop multiple files here</p>
-							<p class={styles["file-drop-page__hint"]}>
-								Files only (no folders)
-							</p>
+							<p class={styles["file-drop-page__hint"]}>Files only (no folders)</p>
 						</div>
 					</DropZone>
 					{multipleFiles().length > 0 && (
@@ -138,11 +125,7 @@ function FileDropPage() {
 							</p>
 							<div class={styles["file-drop-page__file-list"]}>
 								<For each={multipleFiles()}>
-									{(file) => (
-										<code class={styles["file-drop-page__path"]}>
-											{file.path}
-										</code>
-									)}
+									{(file) => <code class={styles["file-drop-page__path"]}>{file.path}</code>}
 								</For>
 							</div>
 						</div>
@@ -162,9 +145,7 @@ function FileDropPage() {
 						</button>
 					</div>
 					<DropZone onFileDrop={handleFolderDrop} accept="folders">
-						<div
-							class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--folder"]}`}
-						>
+						<div class={`${styles["file-drop-page__zone"]} ${styles["file-drop-page__zone--folder"]}`}>
 							<svg
 								class={styles["file-drop-page__icon"]}
 								xmlns="http://www.w3.org/2000/svg"
@@ -176,9 +157,7 @@ function FileDropPage() {
 								<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
 							</svg>
 							<p>Drop a folder here</p>
-							<p class={styles["file-drop-page__hint"]}>
-								Folders only (no files)
-							</p>
+							<p class={styles["file-drop-page__hint"]}>Folders only (no files)</p>
 						</div>
 					</DropZone>
 					{folderContents().length > 0 && (
@@ -188,11 +167,7 @@ function FileDropPage() {
 							</p>
 							<div class={styles["file-drop-page__file-list"]}>
 								<For each={folderContents()}>
-									{(file) => (
-										<code class={styles["file-drop-page__path"]}>
-											{file.path}
-										</code>
-									)}
+									{(file) => <code class={styles["file-drop-page__path"]}>{file.path}</code>}
 								</For>
 							</div>
 						</div>

@@ -18,10 +18,9 @@ export const ModdingGuideContent: Component = () => {
 				<div class={styles.visual_text}>
 					<h2 class={styles.section_title}>How Modding Works</h2>
 					<p class={styles.section_subtitle}>
-						Minecraft runs on a software called Java. Since the game wasn't
-						originally designed to be modified, player-made additions (Mods)
-						require a "Modloader" to help the game recognize and run them
-						correctly.
+						Minecraft runs on a software called Java. Since the game wasn't originally designed to be
+						modified, player-made additions (Mods) require a "Modloader" to help the game recognize and
+						run them correctly.
 					</p>
 					<div class={styles.tech_list}>
 						<div class={styles.tech_item}>
@@ -30,9 +29,7 @@ export const ModdingGuideContent: Component = () => {
 						</div>
 						<div class={styles.tech_item}>
 							<span class={styles.tech_dot}></span>
-							<span>
-								Vesta automatically installs the version of Java the game needs
-							</span>
+							<span>Vesta automatically installs the version of Java the game needs</span>
 						</div>
 					</div>
 				</div>
@@ -68,12 +65,7 @@ export const ModdingGuideContent: Component = () => {
 									stroke-dasharray="4"
 									opacity="0.3"
 								/>
-								<path
-									d="M200 150 V180"
-									stroke="var(--primary)"
-									stroke-width="2"
-									opacity="0.5"
-								/>
+								<path d="M200 150 V180" stroke="var(--primary)" stroke-width="2" opacity="0.5" />
 
 								{/* Top Layer: Mods */}
 								<rect
@@ -207,12 +199,8 @@ export const ModdingGuideContent: Component = () => {
 			</section>
 
 			<section class={styles.section}>
-				<h2 class={styles.section_title}>
-					{HELP_CONTENT.MODPACKS_CONCEPT.title}
-				</h2>
-				<p class={styles.section_subtitle}>
-					{HELP_CONTENT.MODPACKS_CONCEPT.description}
-				</p>
+				<h2 class={styles.section_title}>{HELP_CONTENT.MODPACKS_CONCEPT.title}</h2>
+				<p class={styles.section_subtitle}>{HELP_CONTENT.MODPACKS_CONCEPT.description}</p>
 			</section>
 
 			<section class={styles.section}>
@@ -357,12 +345,7 @@ export const ModdingGuideContent: Component = () => {
 								</text>
 
 								{/* Legend/Y-Axis */}
-								<path
-									d="M70 180 V50"
-									stroke="var(--text-secondary)"
-									stroke-width="1"
-									opacity="0.3"
-								/>
+								<path d="M70 180 V50" stroke="var(--text-secondary)" stroke-width="1" opacity="0.3" />
 								<text
 									x="65"
 									y="60"

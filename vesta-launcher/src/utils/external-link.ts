@@ -5,11 +5,7 @@ import { open } from "@tauri-apps/plugin-shell";
  * Whitelist for URLs that don't need a warning.
  * Primarily Microsoft login URLs.
  */
-const WHITELIST_PATTERNS = [
-	"microsoft.com/link",
-	"login.live.com",
-	"login.microsoftonline.com",
-];
+const WHITELIST_PATTERNS = ["microsoft.com/link", "login.live.com", "login.microsoftonline.com"];
 
 /**
  * Checks if a URL is whitelisted (e.g., Microsoft login)

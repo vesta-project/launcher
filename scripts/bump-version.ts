@@ -21,12 +21,7 @@ const filesToUpdate = [
 ];
 
 function getVersion(): string {
-	const tauriConfPath = join(
-		projectRoot,
-		"vesta-launcher",
-		"src-tauri",
-		"tauri.conf.json",
-	);
+	const tauriConfPath = join(projectRoot, "vesta-launcher", "src-tauri", "tauri.conf.json");
 	const content = readFileSync(tauriConfPath, "utf8");
 	return JSON.parse(content).version;
 }
@@ -39,8 +34,7 @@ function parseVersion(v: string) {
 		minor: parseInt(match[2]),
 		patch: parseInt(match[3]),
 		suffix: match[5] || null,
-		preRelease:
-			match[6] !== undefined && match[6] !== null ? parseInt(match[6]) : null,
+		preRelease: match[6] !== undefined && match[6] !== null ? parseInt(match[6]) : null,
 	};
 }
 
@@ -81,19 +75,13 @@ function bumpVersion(newVersion: string) {
 				const json = JSON.parse(content);
 				json.version = newVersion;
 
-				if (
-					file.path.endsWith("tauri.conf.json") &&
-					json.bundle?.windows?.wix
-				) {
+				if (file.path.endsWith("tauri.conf.json") && json.bundle?.windows?.wix) {
 					json.bundle.windows.wix.version = msiVersion;
 				}
 
 				writeFileSync(file.path, JSON.stringify(json, null, "\t") + "\n");
 			} else if (file.type === "toml" && file.regex && file.replace) {
-				const newContent = content.replace(
-					file.regex,
-					file.replace(newVersion),
-				);
+				const newContent = content.replace(file.regex, file.replace(newVersion));
 				writeFileSync(file.path, newContent);
 			}
 

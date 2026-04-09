@@ -1,11 +1,5 @@
 import { getDropZoneManager } from "@utils/file-drop";
-import {
-	children as accessChildren,
-	createEffect,
-	JSX,
-	onCleanup,
-	onMount,
-} from "solid-js";
+import { children as accessChildren, createEffect, JSX, onCleanup, onMount } from "solid-js";
 import styles from "./drop-zone.module.css";
 
 export interface DropZoneProps {
@@ -93,12 +87,7 @@ export function DropZone(props: DropZoneProps) {
 			const paths = manager.getSniffedPaths();
 			const filtered = manager.filterPaths(paths, props);
 
-			console.log(
-				"[DropZone] Files dropped, paths:",
-				paths,
-				"filtered:",
-				filtered,
-			);
+			console.log("[DropZone] Files dropped, paths:", paths, "filtered:", filtered);
 
 			if (filtered.length > 0) {
 				props.onFileDrop(filtered.map((p) => p.path));

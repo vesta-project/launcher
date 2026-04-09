@@ -1,5 +1,5 @@
-import PinOffIcon from "@assets/pin-off.svg";
 import PinIcon from "@assets/pin.svg";
+import PinOffIcon from "@assets/pin-off.svg";
 import PlayIcon from "@assets/play.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import TrashIcon from "@assets/trash.svg";
@@ -9,24 +9,19 @@ import { router } from "@components/page-viewer/page-viewer";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
 import { instancesState } from "@stores/instances";
-import {
-	isPinned as isPinnedInStore,
-	pinning,
-	pinPage,
-	unpinPage,
-} from "@stores/pinning";
+import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
 import {
 	findBestVersion,
-	resources,
 	type InstalledResource,
 	type ResourceVersion,
+	resources,
 } from "@stores/resources";
 import {
 	createColumnHelper,
 	createSolidTable,
 	getCoreRowModel,
 	getFilteredRowModel,
-	getSortedRowModel
+	getSortedRowModel,
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -56,7 +51,7 @@ import {
 	resumeInstanceOperation,
 	unlinkInstance,
 	updateInstance,
-	updateInstanceModpackVersion
+	updateInstanceModpackVersion,
 } from "@utils/instances";
 import {
 	describeSelectionAdjustments,
@@ -76,12 +71,9 @@ import {
 	on,
 	onCleanup,
 	onMount,
-	Show
+	Show,
 } from "solid-js";
-import {
-	handleHardReset,
-	handleUninstall
-} from "~/handlers/instance-handler";
+import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
 import styles from "./instance-details.module.css";
 import type { ModpackVersion } from "./modpack-version-selector";
 import { ConsoleTab } from "./tabs/ConsoleTab";
@@ -92,13 +84,7 @@ import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
 import { SettingsTab } from "./tabs/SettingsTab";
 import { VersioningTab } from "./tabs/VersioningTab";
 
-type TabType =
-	| "home"
-	| "console"
-	| "resources"
-	| "settings"
-	| "versioning"
-	| "screenshots";
+type TabType = "home" | "console" | "resources" | "settings" | "versioning" | "screenshots";
 
 interface InstanceDetailsProps {
 	slug?: string; // Optional - can come from props or router params
@@ -130,9 +116,7 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 
 	const displayChar = createMemo(() => {
 		const match = props.name.match(/[a-zA-Z]/);
-		return match
-			? match[0].toUpperCase()
-			: props.name.charAt(0).toUpperCase() || "?";
+		return match ? match[0].toUpperCase() : props.name.charAt(0).toUpperCase() || "?";
 	});
 
 	createEffect(() => {
@@ -151,17 +135,9 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 	return (
 		<Show
 			when={iconUrl()}
-			fallback={
-				<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>
-			}
+			fallback={<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>}
 		>
-			{(url) => (
-				<img
-					src={url()}
-					alt={props.name || "Resource Icon"}
-					class={styles["res-icon"]}
-				/>
-			)}
+			{(url) => <img src={url()} alt={props.name || "Resource Icon"} class={styles["res-icon"]} />}
 		</Show>
 	);
 };
@@ -204,16 +180,12 @@ export default function InstanceDetails(
 ) {
 	const activeRouter = createMemo(() => props.router || router());
 
-	const isPinned = createMemo(() =>
-		props.slug ? isPinnedInStore("instance", props.slug) : false,
-	);
+	const isPinned = createMemo(() => (props.slug ? isPinnedInStore("instance", props.slug) : false));
 
 	const handlePin = async () => {
 		if (!props.slug) return;
 		if (isPinned()) {
-			const pin = pinning.pins.find(
-				(p) => p.page_type === "instance" && p.target_id === props.slug,
-			);
+			const pin = pinning.pins.find((p) => p.page_type === "instance" && p.target_id === props.slug);
 			if (pin) unpinPage(pin.id);
 		} else {
 			const inst = instance();
@@ -250,8 +222,7 @@ export default function InstanceDetails(
 		console.log("[InstanceDetails] Fetching instance for slug:", s);
 		try {
 			const inst = await getInstanceBySlug(s);
-			if (!inst)
-				console.warn("[InstanceDetails] Backend returned null for slug:", s);
+			if (!inst) console.warn("[InstanceDetails] Backend returned null for slug:", s);
 			return inst;
 		} catch (e) {
 			console.error("[InstanceDetails] Error fetching instance:", e);
@@ -259,65 +230,50 @@ export default function InstanceDetails(
 		}
 	});
 
-	const [
-		installedResources,
-		{ refetch: refetchResources, mutate: mutateResources },
-	] = createResource(instance, async (inst) => {
-		if (!inst) return [];
-		return await resources.getInstalled(inst.id);
+	const [installedResources, { refetch: refetchResources, mutate: mutateResources }] =
+		createResource(instance, async (inst) => {
+			if (!inst) return [];
+			return await resources.getInstalled(inst.id);
+		});
+
+	const [projectRecords] = createResource(installedResources, async (resourcesList) => {
+		if (!resourcesList || resourcesList.length === 0) return {};
+		const refs = resourcesList
+			.filter((r) => r.remote_id && (r.platform === "modrinth" || r.platform === "curseforge"))
+			.map((r) => ({
+				platform: r.platform,
+				id: r.remote_id,
+			}));
+
+		if (refs.length === 0) return {};
+
+		try {
+			const records: any[] = await invoke("get_or_hydrate_resource_projects", {
+				refs,
+				allowNetwork: true,
+				refreshStale: false,
+			});
+			const map: Record<string, any> = {};
+			for (const r of records) {
+				const key = getProjectRecordKey(r.source, r.id);
+				if (key) {
+					map[key] = r;
+				}
+			}
+			return map;
+		} catch (e) {
+			console.error("Failed to fetch project records:", e);
+			return {};
+		}
 	});
 
-	const [projectRecords] = createResource(
-		installedResources,
-		async (resourcesList) => {
-			if (!resourcesList || resourcesList.length === 0) return {};
-			const refs = resourcesList
-				.filter(
-					(r) =>
-						r.remote_id &&
-						(r.platform === "modrinth" || r.platform === "curseforge"),
-				)
-				.map((r) => ({
-					platform: r.platform,
-					id: r.remote_id,
-				}));
-
-			if (refs.length === 0) return {};
-
-			try {
-				const records: any[] = await invoke("get_or_hydrate_resource_projects", {
-					refs,
-					allowNetwork: true,
-					refreshStale: false,
-				});
-				const map: Record<string, any> = {};
-				for (const r of records) {
-					const key = getProjectRecordKey(r.source, r.id);
-					if (key) {
-						map[key] = r;
-					}
-				}
-				return map;
-			} catch (e) {
-				console.error("Failed to fetch project records:", e);
-				return {};
-			}
-		},
-	);
-
-	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<
-		Record<number, number>
-	>({});
+	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<Record<number, number>>({});
 	const [autoResyncInFlight, setAutoResyncInFlight] = createSignal(false);
 
 	const getLinkedResourceRefs = (resourcesList: InstalledResource[] | undefined) => {
 		if (!resourcesList || resourcesList.length === 0) return [];
 		return resourcesList
-			.filter(
-				(r) =>
-					!!r.remote_id &&
-					(r.platform === "modrinth" || r.platform === "curseforge"),
-			)
+			.filter((r) => !!r.remote_id && (r.platform === "modrinth" || r.platform === "curseforge"))
 			.map((r) => ({ platform: r.platform, id: r.remote_id }));
 	};
 
@@ -346,8 +302,7 @@ export default function InstanceDetails(
 			const expectsIcon = !!record.icon_url;
 			const iconMissing =
 				expectsIcon &&
-				(!record.icon_data ||
-					(Array.isArray(record.icon_data) && record.icon_data.length === 0));
+				(!record.icon_data || (Array.isArray(record.icon_data) && record.icon_data.length === 0));
 
 			if (summaryMissing || iconMissing) {
 				holes += 1;
@@ -388,12 +343,8 @@ export default function InstanceDetails(
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
 	const [iconPath, setIconPath] = createSignal(props.initialIconPath || "");
-	const [minMemory, setMinMemory] = createSignal<number[]>([
-		props.initialMinMemory || 2048,
-	]);
-	const [maxMemory, setMaxMemory] = createSignal<number[]>([
-		props.initialMaxMemory || 4096,
-	]);
+	const [minMemory, setMinMemory] = createSignal<number[]>([props.initialMinMemory || 2048]);
+	const [maxMemory, setMaxMemory] = createSignal<number[]>([props.initialMaxMemory || 4096]);
 	const [javaArgs, setJavaArgs] = createSignal(props.initialJavaArgs || "");
 	const [javaPath, setJavaPath] = createSignal(props.initialJavaPath || "");
 	const [isCustomMode, setIsCustomMode] = createSignal(false);
@@ -402,73 +353,43 @@ export default function InstanceDetails(
 	const [useGlobalResolution, setUseGlobalResolution] = createSignal(
 		props.initialUseGlobalResolution ?? true,
 	);
-	const [gameWidth, setGameWidth] = createSignal(
-		props.initialGameWidth || 1280,
-	);
-	const [gameHeight, setGameHeight] = createSignal(
-		props.initialGameHeight || 720,
-	);
-	const [useGlobalMemory, setUseGlobalMemory] = createSignal(
-		props.initialUseGlobalMemory ?? true,
-	);
+	const [gameWidth, setGameWidth] = createSignal(props.initialGameWidth || 1280);
+	const [gameHeight, setGameHeight] = createSignal(props.initialGameHeight || 720);
+	const [useGlobalMemory, setUseGlobalMemory] = createSignal(props.initialUseGlobalMemory ?? true);
 	const [useGlobalJavaArgs, setUseGlobalJavaArgs] = createSignal(
 		props.initialUseGlobalJavaArgs ?? true,
 	);
 	const [useGlobalJavaPath, setUseGlobalJavaPath] = createSignal(
 		props.initialUseGlobalJavaPath ?? true,
 	);
-	const [useGlobalHooks, setUseGlobalHooks] = createSignal(
-		props.initialUseGlobalHooks ?? true,
+	const [useGlobalHooks, setUseGlobalHooks] = createSignal(props.initialUseGlobalHooks ?? true);
+	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] = createSignal(
+		props.initialUseGlobalEnvironmentVariables ?? true,
 	);
-	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] =
-		createSignal(props.initialUseGlobalEnvironmentVariables ?? true);
-	const [preLaunchHook, setPreLaunchHook] = createSignal(
-		props.initialPreLaunchHook || "",
-	);
-	const [postExitHook, setPostExitHook] = createSignal(
-		props.initialPostExitHook || "",
-	);
-	const [wrapperCommand, setWrapperCommand] = createSignal(
-		props.initialWrapperCommand || "",
-	);
+	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialPreLaunchHook || "");
+	const [postExitHook, setPostExitHook] = createSignal(props.initialPostExitHook || "");
+	const [wrapperCommand, setWrapperCommand] = createSignal(props.initialWrapperCommand || "");
 	const [environmentVariables, setEnvironmentVariables] = createSignal(
 		props.initialEnvironmentVariables || "",
 	);
 
 	// Dirty flags for settings
-	const [isNameDirty, setIsNameDirty] = createSignal(
-		props._dirty?.name || false,
-	);
-	const [isIconDirty, setIsIconDirty] = createSignal(
-		props._dirty?.icon || false,
-	);
-	const [isMinMemDirty, setIsMinMemDirty] = createSignal(
-		props._dirty?.minMem || false,
-	);
-	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(
-		props._dirty?.maxMem || false,
-	);
+	const [isNameDirty, setIsNameDirty] = createSignal(props._dirty?.name || false);
+	const [isIconDirty, setIsIconDirty] = createSignal(props._dirty?.icon || false);
+	const [isMinMemDirty, setIsMinMemDirty] = createSignal(props._dirty?.minMem || false);
+	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(props._dirty?.maxMem || false);
 	const [isJvmDirty, setIsJvmDirty] = createSignal(props._dirty?.jvm || false);
-	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(
-		props._dirty?.javaPath || false,
-	);
-	const [isResolutionDirty, setIsResolutionDirty] = createSignal(
-		props._dirty?.resolution || false,
-	);
-	const [isHooksDirty, setIsHooksDirty] = createSignal(
-		props._dirty?.hooks || false,
-	);
+	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(props._dirty?.javaPath || false);
+	const [isResolutionDirty, setIsResolutionDirty] = createSignal(props._dirty?.resolution || false);
+	const [isHooksDirty, setIsHooksDirty] = createSignal(props._dirty?.hooks || false);
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
 
 	const [saving, setSaving] = createSignal(false);
-	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<
-		string[]
-	>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
 	const inst = () => instance();
 	const isLaunchingGlobal = createMemo(
-		() =>
-			(props.slug ? instancesState.launchingIds[props.slug] : false) || false,
+		() => (props.slug ? instancesState.launchingIds[props.slug] : false) || false,
 	);
 	const isRunningGlobal = createMemo(
 		() => (props.slug ? instancesState.runningIds[props.slug] : false) || false,
@@ -559,9 +480,7 @@ export default function InstanceDetails(
 			result = result.filter((icon) => !areIconsEqual(icon, modpackIcon));
 			// Add at the beginning
 			result = [modpackIcon, ...result];
-			console.log(
-				"[InstanceDetails] uploadedIcons - ensured modpack icon is first",
-			);
+			console.log("[InstanceDetails] uploadedIcons - ensured modpack icon is first");
 		}
 
 		console.log(
@@ -616,11 +535,7 @@ export default function InstanceDetails(
 				filtered = filtered.filter((icon) => !areIconsEqual(icon, current));
 				currentIsModpackEquivalent = beforeFilter > filtered.length;
 			}
-			console.log(
-				"[InstanceDetails] createEffect - after filtering:",
-				filtered.length,
-				"icons",
-			);
+			console.log("[InstanceDetails] createEffect - after filtering:", filtered.length, "icons");
 			// Add current icon if it's not a default, not the modpack icon, not equivalent to modpack icon, and not already in the filtered list
 			if (
 				current &&
@@ -630,14 +545,9 @@ export default function InstanceDetails(
 				!filtered.some((icon) => areIconsEqual(icon, current))
 			) {
 				filtered = [current, ...filtered];
-				console.log(
-					"[InstanceDetails] createEffect - added current icon to session",
-				);
+				console.log("[InstanceDetails] createEffect - added current icon to session");
 			}
-			console.log(
-				"[InstanceDetails] createEffect - final session icons:",
-				filtered.length,
-			);
+			console.log("[InstanceDetails] createEffect - final session icons:", filtered.length);
 			return filtered;
 		});
 	});
@@ -761,14 +671,7 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
 		return tab &&
-			[
-				"home",
-				"console",
-				"resources",
-				"screenshots",
-				"settings",
-				"versioning",
-			].includes(tab)
+			["home", "console", "resources", "screenshots", "settings", "versioning"].includes(tab)
 			? tab
 			: "home";
 	});
@@ -799,14 +702,14 @@ export default function InstanceDetails(
 			});
 		},
 	);
-	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(
-		() => invoke("detect_java"),
+	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(() =>
+		invoke("detect_java"),
 	);
-	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(
-		() => invoke("get_managed_javas"),
+	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(() =>
+		invoke("get_managed_javas"),
 	);
-	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(
-		() => invoke("get_global_java_paths"),
+	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(() =>
+		invoke("get_global_java_paths"),
 	);
 
 	const jreOptions = createMemo(() => {
@@ -1005,12 +908,9 @@ export default function InstanceDetails(
 	};
 
 	// Resources Tab State
-	const [resourceTypeFilter, setResourceTypeFilter] =
-		createSignal<string>("All");
+	const [resourceTypeFilter, setResourceTypeFilter] = createSignal<string>("All");
 	const [resourceSearch, setResourceSearch] = createSignal("");
-	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>(
-		{},
-	);
+	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>({});
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
 	const [totalRam, setTotalRam] = createSignal(16384);
 
@@ -1025,9 +925,7 @@ export default function InstanceDetails(
 	const [lastCheckTime, setLastCheckTime] = createSignal<number>(0);
 
 	// Modpack versions for picker
-	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<
-		string | null
-	>(null);
+	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<string | null>(null);
 
 	const [mcVersions] = createResource(getMinecraftVersions);
 	const loadersList = createMemo(() => {
@@ -1045,8 +943,7 @@ export default function InstanceDetails(
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
 	const [selectedLoader, setSelectedLoader] = createSignal("vanilla");
 	const [selectedLoaderVersion, setSelectedLoaderVersion] = createSignal("");
-	const [compatibilityInitialized, setCompatibilityInitialized] =
-		createSignal(false);
+	const [compatibilityInitialized, setCompatibilityInitialized] = createSignal(false);
 
 	const [modpackVersions, { refetch: refetchModpackVersions }] = createResource(
 		() => {
@@ -1060,10 +957,7 @@ export default function InstanceDetails(
 		async (params) => {
 			if (!params.active || !params.id || !params.platform) return [];
 			try {
-				const vs = await resources.getVersions(
-					params.platform as any,
-					params.id,
-				);
+				const vs = await resources.getVersions(params.platform as any, params.id);
 				return vs;
 			} catch (e) {
 				console.error("Failed to fetch modpack versions:", e);
@@ -1119,10 +1013,7 @@ export default function InstanceDetails(
 			selectedVersion &&
 			!loaderInfo.some((loaderVersion) => loaderVersion.version === selectedVersion)
 		) {
-			loaderInfo = [
-				{ version: selectedVersion, stable: true },
-				...loaderInfo,
-			];
+			loaderInfo = [{ version: selectedVersion, stable: true }, ...loaderInfo];
 		}
 
 		return loaderInfo.map((l) => ({
@@ -1151,9 +1042,7 @@ export default function InstanceDetails(
 					setIncludeSnapshots(currentMeta ? !currentMeta.stable : false);
 
 					if (inst.modpackId && !selectedModpackVersionId()) {
-						setSelectedModpackVersionId(
-							inst.modpackVersionId ? String(inst.modpackVersionId) : null,
-						);
+						setSelectedModpackVersionId(inst.modpackVersionId ? String(inst.modpackVersionId) : null);
 					}
 				});
 			}
@@ -1166,19 +1055,11 @@ export default function InstanceDetails(
 		const metadata = mcVersions();
 		const currentVersion = selectedMcVersion();
 
-		if (
-			!inst ||
-			tab !== "versioning" ||
-			inst.modpackId ||
-			!metadata ||
-			!currentVersion
-		) {
+		if (!inst || tab !== "versioning" || inst.modpackId || !metadata || !currentVersion) {
 			return;
 		}
 
-		const selectedMeta = metadata.game_versions.find(
-			(version) => version.id === currentVersion,
-		);
+		const selectedMeta = metadata.game_versions.find((version) => version.id === currentVersion);
 		if (!compatibilityInitialized() && selectedMeta && !selectedMeta.stable) {
 			if (!includeSnapshots()) {
 				setIncludeSnapshots(true);
@@ -1218,9 +1099,7 @@ export default function InstanceDetails(
 			}
 		});
 
-		const notifiableAdjustments = getNotifiableSelectionAdjustments(
-			resolved.adjustments,
-		);
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
@@ -1243,9 +1122,7 @@ export default function InstanceDetails(
 
 		// Try to find a better match if we just have a loose ID
 		const match = vs.find(
-			(v) =>
-				String(v.id) === String(current) ||
-				String(v.version_number) === String(current),
+			(v) => String(v.id) === String(current) || String(v.version_number) === String(current),
 		);
 		if (match && String(match.id) !== current) {
 			setSelectedModpackVersionId(String(match.id));
@@ -1305,10 +1182,7 @@ export default function InstanceDetails(
 		}
 	});
 
-	const handleModpackVersionSelect = (
-		versionId: string,
-		version?: ModpackVersion,
-	) => {
+	const handleModpackVersionSelect = (versionId: string, version?: ModpackVersion) => {
 		setSelectedModpackVersionId(versionId);
 	};
 
@@ -1403,9 +1277,7 @@ export default function InstanceDetails(
 					setSelectedLoaderVersion(nextLoaderVersion);
 				});
 
-				const notifiableAdjustments = getNotifiableSelectionAdjustments(
-					resolved.adjustments,
-				);
+				const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
 
 				if (notifiableAdjustments.length > 0) {
 					showToast({
@@ -1424,8 +1296,7 @@ export default function InstanceDetails(
 				...inst,
 				minecraftVersion: nextMcVersion,
 				modloader: nextLoader === "vanilla" ? null : nextLoader,
-				modloaderVersion:
-					nextLoader === "vanilla" ? null : nextLoaderVersion || null,
+				modloaderVersion: nextLoader === "vanilla" ? null : nextLoaderVersion || null,
 			});
 			await repairInstance(inst.id);
 			await refetch();
@@ -1445,11 +1316,7 @@ export default function InstanceDetails(
 
 			// Then check for updates if needed
 			const now = Date.now();
-			if (
-				!installedResources.loading &&
-				!checkingUpdates() &&
-				now - lastCheckTime() > 5 * 60 * 1000
-			) {
+			if (!installedResources.loading && !checkingUpdates() && now - lastCheckTime() > 5 * 60 * 1000) {
 				checkUpdates();
 			}
 		}
@@ -1486,9 +1353,7 @@ export default function InstanceDetails(
 
 		// If modpack is linked, refresh versions resource
 		if (inst.modpackId) {
-			console.log(
-				`[InstanceDetails] Refreshing modpack versions for ${inst.modpackId}`,
-			);
+			console.log(`[InstanceDetails] Refreshing modpack versions for ${inst.modpackId}`);
 			// Resource handles its own refetching if we just trigger it
 			await refetchModpackVersions();
 		}
@@ -1510,17 +1375,8 @@ export default function InstanceDetails(
 			if (res.is_manual || res.platform === "manual") continue;
 			try {
 				// We ignore cache here because the user explicitly asked to check for updates
-				const versions = await resources.getVersions(
-					res.platform as any,
-					res.remote_id,
-					true,
-				);
-				const best = findBestVersion(
-					versions,
-					inst.minecraftVersion,
-					inst.modloader,
-					res.release_type,
-				);
+				const versions = await resources.getVersions(res.platform as any, res.remote_id, true);
+				const best = findBestVersion(versions, inst.minecraftVersion, inst.modloader, res.release_type);
 
 				if (best) {
 					// Some platforms return versions in slightly different formats (string vs number)
@@ -1537,25 +1393,17 @@ export default function InstanceDetails(
 			}
 		}
 
-		console.log(
-			`[InstanceDetails] Finished check. Found ${Object.keys(newUpdates).length} updates.`,
-		);
+		console.log(`[InstanceDetails] Finished check. Found ${Object.keys(newUpdates).length} updates.`);
 		setUpdates(newUpdates);
 		setCheckingUpdates(false);
 	};
 
-	const handleUpdate = async (
-		resource: InstalledResource,
-		version: ResourceVersion,
-	) => {
+	const handleUpdate = async (resource: InstalledResource, version: ResourceVersion) => {
 		const inst = instance();
 		if (!inst) return;
 
 		try {
-			const project = await resources.getProject(
-				resource.platform as any,
-				resource.remote_id,
-			);
+			const project = await resources.getProject(resource.platform as any, resource.remote_id);
 			await resources.install(project, version, inst.id);
 
 			setUpdates((prev) => {
@@ -1600,9 +1448,7 @@ export default function InstanceDetails(
 			id: "select",
 			size: 64, // Sync with CSS
 			header: ({ table }) => (
-				<div
-					class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}
-				>
+				<div class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}>
 					<Checkbox
 						class={styles["header-checkbox"]}
 						checked={table.getIsAllPageRowsSelected()}
@@ -1613,17 +1459,11 @@ export default function InstanceDetails(
 			),
 			cell: (info) => (
 				<div class={`${styles["col-selection-wrapper"]} v-col-selection`}>
-					<div
-						class={styles["select-icon-container"]}
-						onClick={(e: MouseEvent) => e.stopPropagation()}
-					>
+					<div class={styles["select-icon-container"]} onClick={(e: MouseEvent) => e.stopPropagation()}>
 						<ResourceIcon
 							record={
 								projectRecords()?.[
-									getProjectRecordKey(
-										info.row.original.platform,
-										info.row.original.remote_id,
-									) || ""
+									getProjectRecordKey(info.row.original.platform, info.row.original.remote_id) || ""
 								]
 							}
 							name={info.row.original.display_name}
@@ -1645,9 +1485,7 @@ export default function InstanceDetails(
 				<div class={styles["res-info-cell"]}>
 					<div class={styles["res-title-group"]}>
 						<span class={styles["res-title"]}>{info.getValue()}</span>
-						<span class={styles["res-path"]}>
-							{info.row.original.local_path.split(/[\\/]/).pop()}
-						</span>
+						<span class={styles["res-path"]}>{info.row.original.local_path.split(/[\\/]/).pop()}</span>
 					</div>
 				</div>
 			),
@@ -1705,9 +1543,7 @@ export default function InstanceDetails(
 										<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3" />
 									</svg>
 								</TooltipTrigger>
-								<TooltipContent>
-									Update to {currentUpdate()?.version_number}
-								</TooltipContent>
+								<TooltipContent>Update to {currentUpdate()?.version_number}</TooltipContent>
 							</Tooltip>
 						</Show>
 					</div>
@@ -1728,11 +1564,7 @@ export default function InstanceDetails(
 							const previous = installedResources.latest;
 							// Optimistic update
 							mutateResources((prev) =>
-								prev?.map((r) =>
-									r.id === info.row.original.id
-										? { ...r, is_enabled: enabled }
-										: r,
-								),
+								prev?.map((r) => (r.id === info.row.original.id ? { ...r, is_enabled: enabled } : r)),
 							);
 
 							try {
@@ -1775,9 +1607,7 @@ export default function InstanceDetails(
 							) {
 								const previous = installedResources.latest;
 								// Optimistic remove
-								mutateResources((prev) =>
-									prev?.filter((r) => r.id !== info.row.original.id),
-								);
+								mutateResources((prev) => prev?.filter((r) => r.id !== info.row.original.id));
 
 								try {
 									await invoke("delete_resource", {
@@ -1930,12 +1760,7 @@ export default function InstanceDetails(
 
 		if (isInterrupted()) {
 			const op = inst.lastOperation;
-			const opName =
-				op === "hard-reset"
-					? "Reset"
-					: op === "repair"
-						? "Repair"
-						: "Installation";
+			const opName = op === "hard-reset" ? "Reset" : op === "repair" ? "Repair" : "Installation";
 			return `Resume ${opName}`;
 		}
 
@@ -2111,13 +1936,8 @@ export default function InstanceDetails(
 						fallback={
 							<Show when={!instance.loading}>
 								<div class={styles["instance-error"]}>
-									<p>
-										No instance data available.{" "}
-										{slug() ? `(Slug: ${slug()})` : "No slug provided."}
-									</p>
-									<Button onClick={() => activeRouter()?.navigate("/")}>
-										Back to Home
-									</Button>
+									<p>No instance data available. {slug() ? `(Slug: ${slug()})` : "No slug provided."}</p>
+									<Button onClick={() => activeRouter()?.navigate("/")}>Back to Home</Button>
 								</div>
 							</Show>
 						}
@@ -2131,9 +1951,7 @@ export default function InstanceDetails(
 									<div
 										class={styles["header-background"]}
 										style={{
-											"background-image": (inst().iconPath || "").startsWith(
-												"linear-gradient",
-											)
+											"background-image": (inst().iconPath || "").startsWith("linear-gradient")
 												? inst().iconPath || ""
 												: `url('${resolveResourceUrl(inst().iconPath || DEFAULT_ICONS[0])}')`,
 										}}
@@ -2149,8 +1967,7 @@ export default function InstanceDetails(
 											<div class={styles["header-text"]}>
 												<h1>{inst().name}</h1>
 												<p class={styles["header-meta"]}>
-													{inst().minecraftVersion} •{" "}
-													{inst().modloader || "Vanilla"}
+													{inst().minecraftVersion} • {inst().modloader || "Vanilla"}
 													<Show when={inst().modpackId}>
 														<Badge
 															variant="default"
@@ -2207,18 +2024,11 @@ export default function InstanceDetails(
 												variant="ghost"
 												size="md"
 												onClick={handlePin}
-												title={
-													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
-												}
-												aria-label={
-													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
-												}
+												title={isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}
+												aria-label={isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}
 												class={styles["header-square-button"]}
 											>
-												<Show
-													when={isPinned()}
-													fallback={<PinIcon width="18" height="18" />}
-												>
+												<Show when={isPinned()} fallback={<PinIcon width="18" height="18" />}>
 													<PinOffIcon width="18" height="18" />
 												</Show>
 											</Button>
@@ -2238,10 +2048,7 @@ export default function InstanceDetails(
 													when={busy() || isInstalling()}
 													fallback={
 														<span class={styles["details-play-button-icon"]}>
-															<Show
-																when={isRunning()}
-																fallback={<PlayIcon width="16" height="16" />}
-															>
+															<Show when={isRunning()} fallback={<PlayIcon width="16" height="16" />}>
 																<KillIcon width="14" height="14" />
 															</Show>
 														</span>
@@ -2249,9 +2056,7 @@ export default function InstanceDetails(
 												>
 													<span class={styles["btn-spinner"]} />
 												</Show>
-												<span class={styles["details-play-button-label"]}>
-													{playButtonText()}
-												</span>
+												<span class={styles["details-play-button-label"]}>{playButtonText()}</span>
 											</Button>
 										</div>
 									</div>
@@ -2280,10 +2085,7 @@ export default function InstanceDetails(
 											<Skeleton class={styles["skeleton-console"]} />
 										</Show>
 										<Show when={instance.latest}>
-											<ConsoleTab
-												instanceSlug={slug()}
-												openLogsFolder={openLogsFolder}
-											/>
+											<ConsoleTab instanceSlug={slug()} openLogsFolder={openLogsFolder} />
 										</Show>
 									</Show>
 
@@ -2341,19 +2143,13 @@ export default function InstanceDetails(
 												handleStandardUpdate={handleStandardUpdate}
 												setShowExportDialog={setShowExportDialog}
 												handleDuplicate={async () => {
-													const n = await dialogStore.prompt(
-														"Duplicate Instance",
-														"Enter name for the copy:",
-														{ defaultValue: `${inst().name} (Copy)` },
-													);
+													const n = await dialogStore.prompt("Duplicate Instance", "Enter name for the copy:", {
+														defaultValue: `${inst().name} (Copy)`,
+													});
 													if (n) duplicateInstance(inst().id, n);
 												}}
 												handleHardReset={() => handleHardReset(inst())}
-												handleUninstall={() =>
-													handleUninstall(inst(), () =>
-														activeRouter()?.navigate("/"),
-													)
-												}
+												handleUninstall={() => handleUninstall(inst(), () => activeRouter()?.navigate("/"))}
 												repairInstance={repairInstance}
 												mcVersions={mcVersions}
 											/>
@@ -2378,9 +2174,7 @@ export default function InstanceDetails(
 												setIsIconDirty={setIsIconDirty}
 												uploadedIcons={uploadedIcons}
 												modpackIcon={() => modpackIconBase64() || null}
-												isSuggestedSelected={() =>
-													areIconsEqual(modpackIconBase64(), iconPath())
-												}
+												isSuggestedSelected={() => areIconsEqual(modpackIconBase64(), iconPath())}
 												isInstalling={isInstalling()}
 												jreOptions={jreOptions}
 												javaPath={javaPath()}
@@ -2425,9 +2219,7 @@ export default function InstanceDetails(
 												environmentVariables={environmentVariables()}
 												setEnvironmentVariables={setEnvironmentVariables}
 												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
-												setUseGlobalEnvironmentVariables={
-													setUseGlobalEnvironmentVariables
-												}
+												setUseGlobalEnvironmentVariables={setUseGlobalEnvironmentVariables}
 												setIsEnvDirty={setIsEnvDirty}
 												invoke={invoke}
 												showToast={showToast}
@@ -2450,11 +2242,7 @@ export default function InstanceDetails(
 					if (!i) return;
 					batch(() => {
 						setName(i.name);
-						setIconPath(
-							i.iconPath ||
-								getStableIconId(DEFAULT_ICONS[0]) ||
-								DEFAULT_ICONS[0],
-						);
+						setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
 						setMinMemory([i.minMemory]);
 						setMaxMemory([i.maxMemory]);
 						setUseGlobalMemory(i.useGlobalMemory);

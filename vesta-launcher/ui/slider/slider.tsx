@@ -51,12 +51,7 @@ const SliderTrack = <T extends ValidComponent = "div">(
 ) => {
 	const [local, others] = splitProps(props as SliderTrackProps, ["class"]);
 
-	return (
-		<SliderPrimitive.Track
-			class={clsx(styles["slider__track"], local.class)}
-			{...others}
-		/>
-	);
+	return <SliderPrimitive.Track class={clsx(styles["slider__track"], local.class)} {...others} />;
 };
 
 // Slider Fill
@@ -69,12 +64,7 @@ const SliderFill = <T extends ValidComponent = "div">(
 ) => {
 	const [local, others] = splitProps(props as SliderFillProps, ["class"]);
 
-	return (
-		<SliderPrimitive.Fill
-			class={clsx(styles["slider__fill"], local.class)}
-			{...others}
-		/>
-	);
+	return <SliderPrimitive.Fill class={clsx(styles["slider__fill"], local.class)} {...others} />;
 };
 
 // Slider Thumb
@@ -88,10 +78,7 @@ const SliderThumb = <T extends ValidComponent = "span">(
 	const [local, others] = splitProps(props as SliderThumbProps, ["class"]);
 
 	return (
-		<SliderPrimitive.Thumb
-			class={clsx(styles["slider__thumb"], local.class)}
-			{...others}
-		>
+		<SliderPrimitive.Thumb class={clsx(styles["slider__thumb"], local.class)} {...others}>
 			<SliderPrimitive.Input />
 		</SliderPrimitive.Thumb>
 	);
@@ -107,12 +94,7 @@ const SliderLabel = <T extends ValidComponent = "label">(
 ) => {
 	const [local, others] = splitProps(props as SliderLabelProps, ["class"]);
 
-	return (
-		<SliderPrimitive.Label
-			class={clsx(styles["slider__label"], local.class)}
-			{...others}
-		/>
-	);
+	return <SliderPrimitive.Label class={clsx(styles["slider__label"], local.class)} {...others} />;
 };
 
 // Slider ValueLabel
@@ -133,11 +115,4 @@ const SliderValueLabel = <T extends ValidComponent = "output">(
 	);
 };
 
-export {
-	Slider,
-	SliderFill,
-	SliderLabel,
-	SliderThumb,
-	SliderTrack,
-	SliderValueLabel,
-};
+export { Slider, SliderFill, SliderLabel, SliderThumb, SliderTrack, SliderValueLabel };

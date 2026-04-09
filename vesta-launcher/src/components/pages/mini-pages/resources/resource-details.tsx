@@ -10,8 +10,8 @@ import {
 	findBestVersion,
 	ResourceDependency,
 	ResourceProject,
-	resources,
 	ResourceVersion,
+	resources,
 	SourcePlatform,
 } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
@@ -26,19 +26,8 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "@ui/pagination/pagination";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
-import {
-	Switch,
-	SwitchControl,
-	SwitchLabel,
-	SwitchThumb,
-} from "@ui/switch/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
@@ -62,12 +51,12 @@ import {
 	untrack,
 } from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
+import styles from "./resource-details.module.css";
 import {
 	computeHeaderCollapseProgress,
 	deriveHeaderCompactState,
 	RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX,
 } from "./resource-details-header-progress";
-import styles from "./resource-details.module.css";
 
 // Configure marked for GFM
 marked.setOptions({
@@ -147,9 +136,7 @@ const DependencyItem = (props: {
 	return (
 		<Show
 			when={displayData()}
-			fallback={
-				<div class={`${styles["dependency-item"]} ${styles.skeleton}`} />
-			}
+			fallback={<div class={`${styles["dependency-item"]} ${styles.skeleton}`} />}
 		>
 			<div
 				class={styles["dependency-item"]}
@@ -181,9 +168,7 @@ const DependencyItem = (props: {
 						<span class={styles["dep-name"]}>{displayData()?.name}</span>
 						<Badge
 							variant={
-								props.dependency.dependency_type.toLowerCase() === "required"
-									? "default"
-									: "secondary"
+								props.dependency.dependency_type.toLowerCase() === "required" ? "default" : "secondary"
 							}
 						>
 							{props.dependency.dependency_type}
@@ -192,10 +177,7 @@ const DependencyItem = (props: {
 					<div class={styles["dep-meta"]}>
 						<span class={styles["dep-author"]}>by {displayData()?.author}</span>
 						<Show when={props.dependency.file_name}>
-							<span class={styles["dep-version-tag"]}>
-								{" "}
-								• {props.dependency.file_name}
-							</span>
+							<span class={styles["dep-version-tag"]}> • {props.dependency.file_name}</span>
 						</Show>
 					</div>
 				</div>
@@ -215,9 +197,7 @@ const ResourceDetailsPage: Component<{
 	router?: MiniRouter;
 }> = (props) => {
 	const activeRouter = createMemo(() => props.router || router());
-	const [project, setProject] = createSignal<ResourceProject | undefined>(
-		props.project,
-	);
+	const [project, setProject] = createSignal<ResourceProject | undefined>(props.project);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
 
@@ -225,29 +205,20 @@ const ResourceDetailsPage: Component<{
 	const activeTab = createMemo(() => {
 		const params = activeRouter()?.currentParams.get();
 		return (
-			(params?.activeTab as
-				| "description"
-				| "versions"
-				| "gallery"
-				| "dependencies") || "description"
+			(params?.activeTab as "description" | "versions" | "gallery" | "dependencies") || "description"
 		);
 	});
 
 	const [versionFilter, setVersionFilter] = createSignal("");
 	const [includeUnstable, setIncludeUnstable] = createSignal(false);
-	const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<
-		string | null
-	>(null);
+	const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<string | null>(null);
 	const [versionPage, setVersionPage] = createSignal(1);
 	const versionsPerPage = 15;
-	const [manualVersionId, setManualVersionId] = createSignal<string | null>(
-		null,
-	);
+	const [manualVersionId, setManualVersionId] = createSignal<string | null>(null);
 	const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
 	const [headerCollapseProgress, setHeaderCollapseProgress] = createSignal(0);
 	const [isHeaderCompact, setIsHeaderCompact] = createSignal(false);
-	const [isDesktopHeaderAnimation, setIsDesktopHeaderAnimation] =
-		createSignal(true);
+	const [isDesktopHeaderAnimation, setIsDesktopHeaderAnimation] = createSignal(true);
 	let headerScrollContainerRef: HTMLDivElement | undefined;
 	let headerLayoutRef: HTMLDivElement | undefined;
 	let headerScrollRaf: number | null = null;
@@ -310,18 +281,15 @@ const ResourceDetailsPage: Component<{
 		return resources.state.versions[0] || null;
 	});
 
-	const [subscriptions, { refetch: refetchSubscriptions }] = createResource<
-		any[]
-	>(() => invoke("get_notification_subscriptions"));
+	const [subscriptions, { refetch: refetchSubscriptions }] = createResource<any[]>(() =>
+		invoke("get_notification_subscriptions"),
+	);
 
 	const isFollowing = createMemo(() => {
 		const subs = subscriptions();
 		const p = project();
 		if (!subs || !p) return false;
-		return subs.some(
-			(s) =>
-				s.provider_type === "resource" && s.target_id === p.id && s.enabled,
-		);
+		return subs.some((s) => s.provider_type === "resource" && s.target_id === p.id && s.enabled);
 	});
 
 	const handleFollowToggle = async () => {
@@ -372,8 +340,7 @@ const ResourceDetailsPage: Component<{
 			platform: SourcePlatform | undefined;
 			deps: ResourceDependency[];
 		}) => {
-			if (!platform || deps.length === 0)
-				return new Map<string, ResourceProject>();
+			if (!platform || deps.length === 0) return new Map<string, ResourceProject>();
 			const ids = deps.map((d: ResourceDependency) => d.project_id);
 			try {
 				const projects = await resources.getProjects(platform, ids);
@@ -398,11 +365,7 @@ const ResourceDetailsPage: Component<{
 			<Show when={iconProps.instance && iconProps.instance.id !== null}>
 				<Show
 					when={resolvedUrl()}
-					fallback={
-						<div class={styles["instance-item-icon-placeholder"]}>
-							{displayChar()}
-						</div>
-					}
+					fallback={<div class={styles["instance-item-icon-placeholder"]}>{displayChar()}</div>}
 				>
 					<div
 						class={styles["instance-item-icon"]}
@@ -447,8 +410,7 @@ const ResourceDetailsPage: Component<{
 			const irRemoteId = ir.remote_id.toLowerCase();
 
 			// 1. IDs (direct or peer)
-			if (irRemoteId === mainId || (peerId && irRemoteId === peerId))
-				return true;
+			if (irRemoteId === mainId || (peerId && irRemoteId === peerId)) return true;
 
 			// 2. External IDs
 			for (const id of Object.values(extIds)) {
@@ -456,14 +418,10 @@ const ResourceDetailsPage: Component<{
 			}
 
 			// 3. Hash match
-			if (ir.hash && resources.state.versions.some((v) => v.hash === ir.hash))
-				return true;
+			if (ir.hash && resources.state.versions.some((v) => v.hash === ir.hash)) return true;
 
 			// 4. Name + Type match
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
+			return ir.resource_type === resType && ir.display_name.toLowerCase() === projectName;
 		});
 	});
 
@@ -479,20 +437,15 @@ const ResourceDetailsPage: Component<{
 
 		return resources.state.installedResources.find((ir) => {
 			const irRemoteId = ir.remote_id.toLowerCase();
-			if (irRemoteId === mainId || (peerId && irRemoteId === peerId))
-				return true;
+			if (irRemoteId === mainId || (peerId && irRemoteId === peerId)) return true;
 
 			for (const id of Object.values(extIds)) {
 				if (irRemoteId === id.toLowerCase()) return true;
 			}
 
-			if (ir.hash && resources.state.versions.some((v) => v.hash === ir.hash))
-				return true;
+			if (ir.hash && resources.state.versions.some((v) => v.hash === ir.hash)) return true;
 
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
+			return ir.resource_type === resType && ir.display_name.toLowerCase() === projectName;
 		});
 	});
 
@@ -557,9 +510,7 @@ const ResourceDetailsPage: Component<{
 			(id, prevId) => {
 				if (id && id !== prevId) {
 					// Only clear the tab if it's currently set, to avoid unnecessary router updates
-					const currentTab = untrack(
-						() => activeRouter()?.currentParams.get().activeTab,
-					);
+					const currentTab = untrack(() => activeRouter()?.currentParams.get().activeTab);
 					if (currentTab) {
 						activeRouter()?.removeQuery("activeTab");
 					}
@@ -636,11 +587,7 @@ const ResourceDetailsPage: Component<{
 			};
 		}
 
-		if (
-			selectedInst &&
-			!isModpack() &&
-			compatibilityFilteredVersions().length === 0
-		) {
+		if (selectedInst && !isModpack() && compatibilityFilteredVersions().length === 0) {
 			return {
 				title: "No compatible versions for this instance",
 				description: `No versions support Minecraft ${selectedInst.minecraftVersion} with ${formatLoaderName(selectedInst.modloader)}. Try another instance or adjust your target version.`,
@@ -678,22 +625,16 @@ const ResourceDetailsPage: Component<{
 		return filteredVersions().slice(start, start + versionsPerPage);
 	});
 
-	const totalPages = createMemo(() =>
-		Math.ceil(filteredVersions().length / versionsPerPage),
-	);
+	const totalPages = createMemo(() => Math.ceil(filteredVersions().length / versionsPerPage));
 
-	const compatibleVersionCount = createMemo(() =>
-		compatibilityFilteredVersions().length,
-	);
+	const compatibleVersionCount = createMemo(() => compatibilityFilteredVersions().length);
 
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
 	const [installContext, setInstallContext] = createSignal<{
 		version: ResourceVersion;
 	} | null>(null);
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
-	const [confirmVersionId, setConfirmVersionId] = createSignal<string | null>(
-		null,
-	);
+	const [confirmVersionId, setConfirmVersionId] = createSignal<string | null>(null);
 
 	const getCompatibility = (version: ResourceVersion) => {
 		const instanceId = resources.state.selectedInstanceId;
@@ -744,8 +685,7 @@ const ResourceDetailsPage: Component<{
 		if (!installed || !best) return false;
 
 		// If it's the same file (same hash), then no update is available
-		if (installed.hash && best.hash && installed.hash === best.hash)
-			return false;
+		if (installed.hash && best.hash && installed.hash === best.hash) return false;
 
 		// If platforms match, we can trust the ID check too
 		const p = project();
@@ -810,8 +750,7 @@ const ResourceDetailsPage: Component<{
 			activeRouter()?.updateQuery("activeTab", "versions", true);
 			showToast({
 				title: "Choose version",
-				description:
-					"No automatically compatible version found. Please select one manually.",
+				description: "No automatically compatible version found. Please select one manually.",
 				severity: "info",
 			});
 		}
@@ -834,11 +773,7 @@ const ResourceDetailsPage: Component<{
 				// If we're already on this project, just update the tab
 				const current = project();
 				if (current && current.id === id && current.source === platform) {
-					activeRouter()?.updateQuery(
-						"activeTab",
-						activeTab || "description",
-						true,
-					);
+					activeRouter()?.updateQuery("activeTab", activeTab || "description", true);
 					return;
 				}
 
@@ -930,9 +865,7 @@ const ResourceDetailsPage: Component<{
 
 			// Unify to ID if we resolved a slug
 			if (p && p.id !== id) {
-				console.log(
-					`[ResourceDetails] Unifying project ID from ${id} to ${p.id}`,
-				);
+				console.log(`[ResourceDetails] Unifying project ID from ${id} to ${p.id}`);
 				// Use replace (push=false) to avoid breaking the back button
 				activeRouter()?.updateQuery("projectId", p.id, false);
 			}
@@ -952,8 +885,7 @@ const ResourceDetailsPage: Component<{
 						resource_type: cached.project_type as any,
 						name: cached.name,
 						summary: cached.summary || "",
-						description:
-							cached.description || "No description available (Disconnected).",
+						description: cached.description || "No description available (Disconnected).",
 						icon_url: cached.icon_url,
 						author: cached.author || "Unknown",
 						authors: cached.authors || ["Unknown"],
@@ -969,8 +901,7 @@ const ResourceDetailsPage: Component<{
 					resources.selectProject(fallback);
 					showToast({
 						title: "Offline Mode",
-						description:
-							"Showing cached details. Some functionality may be limited.",
+						description: "Showing cached details. Some functionality may be limited.",
 						severity: "warning",
 					});
 				} else {
@@ -984,10 +915,7 @@ const ResourceDetailsPage: Component<{
 		}
 	}
 
-	const handleInstall = async (
-		version: ResourceVersion,
-		targetInstance?: Instance,
-	) => {
+	const handleInstall = async (version: ResourceVersion, targetInstance?: Instance) => {
 		const p = project();
 
 		if (p?.resource_type === "modpack") {
@@ -1007,8 +935,7 @@ const ResourceDetailsPage: Component<{
 		}
 
 		const instId = targetInstance?.id || resources.state.selectedInstanceId;
-		const inst =
-			targetInstance || instancesState.instances.find((i) => i.id === instId);
+		const inst = targetInstance || instancesState.instances.find((i) => i.id === instId);
 
 		if (!inst && !isModpack()) {
 			setInstallContext({ version });
@@ -1032,9 +959,7 @@ const ResourceDetailsPage: Component<{
 				// Check for cross-loader compatibility warning
 				if (inst) {
 					const instLoader = inst.modloader?.toLowerCase() || "";
-					const hasDirectLoader = version.loaders.some(
-						(l) => l.toLowerCase() === instLoader,
-					);
+					const hasDirectLoader = version.loaders.some((l) => l.toLowerCase() === instLoader);
 
 					if (
 						instLoader === "quilt" &&
@@ -1148,10 +1073,7 @@ const ResourceDetailsPage: Component<{
 				}
 			}
 			// Return adjusted HTML and normalize target attribute
-			const adjusted = doc.body.innerHTML.replace(
-				/target=["']_blank["']/gi,
-				'target="_self"',
-			);
+			const adjusted = doc.body.innerHTML.replace(/target=["']_blank["']/gi, 'target="_self"');
 			return adjusted;
 		} catch {
 			return rawHtml.replace(/target=["']_blank["']/gi, 'target="_self"');
@@ -1170,18 +1092,13 @@ const ResourceDetailsPage: Component<{
 		}
 
 		const maxScroll = Math.max(0, target.scrollHeight - target.clientHeight);
-		const nextProgress = computeHeaderCollapseProgress(
-			target.scrollTop,
-			maxScroll,
-		);
+		const nextProgress = computeHeaderCollapseProgress(target.scrollTop, maxScroll);
 
 		setHeaderCollapseProgress((previous) =>
 			Math.abs(previous - nextProgress) < 0.001 ? previous : nextProgress,
 		);
 
-		setIsHeaderCompact((previous) =>
-			deriveHeaderCompactState(nextProgress, previous),
-		);
+		setIsHeaderCompact((previous) => deriveHeaderCompactState(nextProgress, previous));
 	};
 
 	const scheduleHeaderCollapseUpdate = (target?: HTMLElement | null) => {
@@ -1206,9 +1123,7 @@ const ResourceDetailsPage: Component<{
 	onMount(() => {
 		if (typeof window === "undefined") return;
 
-		const mq = window.matchMedia(
-			`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
-		);
+		const mq = window.matchMedia(`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`);
 
 		const applyLayoutMode = () => {
 			const desktop = !mq.matches;
@@ -1335,22 +1250,18 @@ const ResourceDetailsPage: Component<{
 					>
 						<span class={styles["picker-label"]}>Target Instance:</span>
 						<Select<any>
-							options={[
-								{ id: null, name: "No Instance" },
-								...instancesState.instances,
-							]}
+							options={[{ id: null, name: "No Instance" }, ...instancesState.instances]}
 							value={
-								instancesState.instances.find(
-									(i) => i.id === resources.state.selectedInstanceId,
-								) || { id: null, name: "No Instance" }
+								instancesState.instances.find((i) => i.id === resources.state.selectedInstanceId) || {
+									id: null,
+									name: "No Instance",
+								}
 							}
 							onChange={(v) => {
 								const id = (v as any)?.id ?? null;
 								resources.setInstance(id);
 								if (id) {
-									const inst = instancesState.instances.find(
-										(i) => i.id === id,
-									);
+									const inst = instancesState.instances.find((i) => i.id === id);
 									if (inst) {
 										resources.setGameVersion(inst.minecraftVersion);
 										resources.setLoader(inst.modloader);
@@ -1386,9 +1297,7 @@ const ResourceDetailsPage: Component<{
 													}}
 												>
 													{props.item.rawValue.minecraftVersion}{" "}
-													{props.item.rawValue.modloader
-														? `- ${props.item.rawValue.modloader}`
-														: ""}
+													{props.item.rawValue.modloader ? `- ${props.item.rawValue.modloader}` : ""}
 												</span>
 											</Show>
 										</div>
@@ -1409,9 +1318,7 @@ const ResourceDetailsPage: Component<{
 												}}
 											>
 												<InstanceIcon instance={inst} />
-												<span>
-													{inst ? `${inst.name}` : "Select instance..."}
-												</span>
+												<span>{inst ? `${inst.name}` : "Select instance..."}</span>
 											</div>
 										);
 									}}
@@ -1433,11 +1340,7 @@ const ResourceDetailsPage: Component<{
 											? "none"
 											: "primary"
 							}
-							variant={
-								isProjectInstalled() && !isUpdateAvailable()
-									? "outline"
-									: "solid"
-							}
+							variant={isProjectInstalled() && !isUpdateAvailable() ? "outline" : "solid"}
 							onClick={handleQuickAction}
 							disabled={
 								isProjectInstalling() ||
@@ -1522,10 +1425,7 @@ const ResourceDetailsPage: Component<{
 											</>
 										}
 									>
-										<Show
-											when={hasAnyCompatibleVersion()}
-											fallback="Unsupported"
-										>
+										<Show when={hasAnyCompatibleVersion()} fallback="Unsupported">
 											Check Versions
 										</Show>
 									</Show>
@@ -1542,51 +1442,36 @@ const ResourceDetailsPage: Component<{
 					<Show when={!peerProject()}>
 						<div class={styles["meta-item"]}>
 							<span class={styles["label"]}>Platform</span>
-							<span class={`${styles["value"]} ${styles["capitalize"]}`}>
-								{project()?.source}
-							</span>
+							<span class={`${styles["value"]} ${styles["capitalize"]}`}>{project()?.source}</span>
 						</div>
 					</Show>
 					<Show when={project()?.published_at}>
 						<div class={styles["meta-item"]}>
 							<span class={styles["label"]}>Released</span>
-							<span class={styles["value"]}>
-								{formatDate(project()?.published_at || "")}
-							</span>
+							<span class={styles["value"]}>{formatDate(project()?.published_at || "")}</span>
 						</div>
 					</Show>
-					<Show
-						when={project()?.authors && (project()?.authors?.length ?? 0) > 1}
-					>
+					<Show when={project()?.authors && (project()?.authors?.length ?? 0) > 1}>
 						<div class={styles["meta-item"]}>
 							<span class={styles["label"]}>Authors</span>
-							<span class={styles["value"]}>
-								{project()?.authors?.join(", ")}
-							</span>
+							<span class={styles["value"]}>{project()?.authors?.join(", ")}</span>
 						</div>
 					</Show>
 					<div class={styles["meta-item"]}>
 						<span class={styles["label"]}>Downloads</span>
-						<span class={styles["value"]}>
-							{project()?.download_count.toLocaleString()}
-						</span>
+						<span class={styles["value"]}>{project()?.download_count.toLocaleString()}</span>
 					</div>
 					<div class={styles["meta-item"]}>
 						<span class={styles["label"]}>Type</span>
 						<div class={styles["value-group"]}>
-							<span class={`${styles["value"]} ${styles["capitalize"]}`}>
-								{project()?.resource_type}
-							</span>
+							<span class={`${styles["value"]} ${styles["capitalize"]}`}>{project()?.resource_type}</span>
 							<Show
 								when={
-									project()?.categories?.some(
-										(c) => c.toLowerCase() === "datapack",
-									) && project()?.resource_type !== "datapack"
+									project()?.categories?.some((c) => c.toLowerCase() === "datapack") &&
+									project()?.resource_type !== "datapack"
 								}
 							>
-								<span class={`${styles["value"]} ${styles["capitalize"]}`}>
-									, Datapack
-								</span>
+								<span class={`${styles["value"]} ${styles["capitalize"]}`}>, Datapack</span>
 							</Show>
 						</div>
 					</div>
@@ -1600,26 +1485,18 @@ const ResourceDetailsPage: Component<{
 					<h3 class={styles["sidebar-title"]}>Recent Versions</h3>
 					<button
 						class={styles["view-all-link"]}
-						onClick={() =>
-							activeRouter()?.updateQuery("activeTab", "versions", true)
-						}
+						onClick={() => activeRouter()?.updateQuery("activeTab", "versions", true)}
 					>
 						View All
 					</button>
 				</div>
 				<div class={styles["sidebar-version-list"]}>
-					<Show
-						when={!resources.state.loading}
-						fallback={<div>Loading...</div>}
-					>
+					<Show when={!resources.state.loading} fallback={<div>Loading...</div>}>
 						<For each={resources.state.versions.slice(0, 5)}>
 							{(version) => (
 								<div class={styles["sidebar-version-item"]}>
 									<div class={styles["sidebar-version-top"]}>
-										<span
-											class={styles["version-name"]}
-											title={version.version_number}
-										>
+										<span class={styles["version-name"]} title={version.version_number}>
 											{version.version_number}
 										</span>
 										<div class={styles["version-tags-mini"]}>
@@ -1656,8 +1533,7 @@ const ResourceDetailsPage: Component<{
 												getCompatibility(version).type === "incompatible")
 										}
 										color={(() => {
-											if (isVersionInstalled(version.id, version.hash))
-												return "destructive";
+											if (isVersionInstalled(version.id, version.hash)) return "destructive";
 											const comp = getCompatibility(version);
 											if (comp.type === "warning") return "warning";
 											if (comp.type === "incompatible") return "none";
@@ -1673,15 +1549,11 @@ const ResourceDetailsPage: Component<{
 											) {
 												return comp.reason;
 											}
-											if (isVersionInstalling(version.id))
-												return "Installation in progress";
+											if (isVersionInstalling(version.id)) return "Installation in progress";
 											if (isVersionInstalled(version.id, version.hash))
 												return "Already installed - Click to remove";
-											if (!isModpack() && !instId)
-												return "Select an instance to install";
-											return version.download_url
-												? "Click to install"
-												: "External download required";
+											if (!isModpack() && !instId) return "Select an instance to install";
+											return version.download_url ? "Click to install" : "External download required";
 										})()}
 										onClick={() => {
 											if (isVersionInstalled(version.id, version.hash)) {
@@ -1705,51 +1577,26 @@ const ResourceDetailsPage: Component<{
 													: "outline"
 										}
 									>
-										<Show when={isVersionInstalling(version.id)}>
-											Installing...
-										</Show>
+										<Show when={isVersionInstalling(version.id)}>Installing...</Show>
 										<Show when={!isVersionInstalling(version.id)}>
 											<Show when={isVersionInstalled(version.id, version.hash)}>
-												<Show
-													when={confirmVersionId() === version.id}
-													fallback="Uninstall"
-												>
+												<Show when={confirmVersionId() === version.id} fallback="Uninstall">
 													Confirm?
 												</Show>
 											</Show>
-											<Show
-												when={!isVersionInstalled(version.id, version.hash)}
-											>
-												<Show
-													when={
-														!isModpack() && !resources.state.selectedInstanceId
-													}
-												>
-													Select Instance
-												</Show>
-												<Show
-													when={
-														isModpack() || resources.state.selectedInstanceId
-													}
-												>
+											<Show when={!isVersionInstalled(version.id, version.hash)}>
+												<Show when={!isModpack() && !resources.state.selectedInstanceId}>Select Instance</Show>
+												<Show when={isModpack() || resources.state.selectedInstanceId}>
 													<Show
-														when={
-															getCompatibility(version).type === "incompatible"
-														}
-														fallback={
-															version.download_url ? "Install" : "External"
-														}
+														when={getCompatibility(version).type === "incompatible"}
+														fallback={version.download_url ? "Install" : "External"}
 													>
 														{(() => {
 															const instId = resources.state.selectedInstanceId;
-															const inst = instancesState.instances.find(
-																(i) => i.id === instId,
-															);
+															const inst = instancesState.instances.find((i) => i.id === instId);
 															if (
-																(inst?.modloader?.toLowerCase() === "vanilla" ||
-																	!inst?.modloader) &&
-																(project()?.resource_type === "mod" ||
-																	project()?.resource_type === "shader")
+																(inst?.modloader?.toLowerCase() === "vanilla" || !inst?.modloader) &&
+																(project()?.resource_type === "mod" || project()?.resource_type === "shader")
 															) {
 																return "Unsupported";
 															}
@@ -1787,27 +1634,16 @@ const ResourceDetailsPage: Component<{
 						<h2 class={styles["error-title"]}>Unable to load project</h2>
 						<p class={styles["error-description"]}>{error()}</p>
 						<div class={styles["error-actions"]}>
-							<Button onClick={() => activeRouter()?.reload()}>
-								Try Again
-							</Button>
-							<Button
-								variant="ghost"
-								onClick={() => activeRouter()?.backwards()}
-							>
+							<Button onClick={() => activeRouter()?.reload()}>Try Again</Button>
+							<Button variant="ghost" onClick={() => activeRouter()?.backwards()}>
 								Go Back
 							</Button>
 						</div>
 					</div>
 				}
 			>
-				<Show
-					when={project()}
-					fallback={<div class={styles["error-state"]}>Project not found.</div>}
-				>
-					<div
-						class={styles["resource-details"]}
-						classList={{ [styles["is-reloading"]]: loading() }}
-					>
+				<Show when={project()} fallback={<div class={styles["error-state"]}>Project not found.</div>}>
+					<div class={styles["resource-details"]} classList={{ [styles["is-reloading"]]: loading() }}>
 						<div
 							class={styles["resource-details-left"]}
 							ref={(el) => {
@@ -1836,23 +1672,16 @@ const ResourceDetailsPage: Component<{
 									<div class={styles["project-header-text"]}>
 										<div class={styles["project-title-row"]}>
 											<div class={styles["project-title-group"]}>
-												<h1 class={styles["project-title"]}>
-													{project()?.name}
-												</h1>
+												<h1 class={styles["project-title"]}>{project()?.name}</h1>
 												<span class={styles["compact-author"]}>
 													By{" "}
-													{project()?.authors &&
-													(project()?.authors?.length ?? 0) > 0
+													{project()?.authors && (project()?.authors?.length ?? 0) > 0
 														? project()?.authors?.[0]
 														: project()?.author}
 												</span>
-												<Show
-													when={isProjectInstalled() || isProjectInstalling()}
-												>
+												<Show when={isProjectInstalled() || isProjectInstalling()}>
 													<Badge variant="success">
-														{isProjectInstalling()
-															? "Installing..."
-															: "Installed"}
+														{isProjectInstalling() ? "Installing..." : "Installed"}
 													</Badge>
 												</Show>
 											</div>
@@ -1863,9 +1692,7 @@ const ResourceDetailsPage: Component<{
 													onClick={handleFollowToggle}
 													class={styles["header-web-link"]}
 													tooltip_text={
-														isFollowing()
-															? "Disable update notifications"
-															: "Receive notifications for updates"
+														isFollowing() ? "Disable update notifications" : "Receive notifications for updates"
 													}
 													tooltip_placement="left"
 												>
@@ -1884,16 +1711,12 @@ const ResourceDetailsPage: Component<{
 											<div class={styles["subtitle-left"]}>
 												<p class={styles.author}>
 													By{" "}
-													{project()?.authors &&
-													(project()?.authors?.length ?? 0) > 0
+													{project()?.authors && (project()?.authors?.length ?? 0) > 0
 														? project()?.authors?.[0]
 														: project()?.author}
 												</p>
 												<Show
-													when={
-														project()?.follower_count !== undefined &&
-														project()?.source !== "curseforge"
-													}
+													when={project()?.follower_count !== undefined && project()?.source !== "curseforge"}
 												>
 													<span class={styles["stat-item"]}>
 														<HeartIcon />
@@ -1955,8 +1778,7 @@ const ResourceDetailsPage: Component<{
 														resources.state.availableCategories.length > 0
 															? resources.state.availableCategories.find(
 																	(c) =>
-																		c.name.toLowerCase() ===
-																			cat.toLowerCase() ||
+																		c.name.toLowerCase() === cat.toLowerCase() ||
 																		c.id.toLowerCase() === cat.toLowerCase(),
 																)
 															: null,
@@ -2006,22 +1828,14 @@ const ResourceDetailsPage: Component<{
 									headerLayoutRef = el;
 								}}
 							>
-								<div
-									class={`${styles["resource-details-main"]} ${styles["theme-card"]}`}
-								>
+								<div class={`${styles["resource-details-main"]} ${styles["theme-card"]}`}>
 									<div class={styles["details-tabs"]}>
 										<button
 											class={styles["tab-btn"]}
 											classList={{
 												[styles.active]: activeTab() === "description",
 											}}
-											onClick={() =>
-												activeRouter()?.updateQuery(
-													"activeTab",
-													"description",
-													true,
-												)
-											}
+											onClick={() => activeRouter()?.updateQuery("activeTab", "description", true)}
 										>
 											Description
 										</button>
@@ -2030,13 +1844,7 @@ const ResourceDetailsPage: Component<{
 											classList={{
 												[styles.active]: activeTab() === "versions",
 											}}
-											onClick={() =>
-												activeRouter()?.updateQuery(
-													"activeTab",
-													"versions",
-													true,
-												)
-											}
+											onClick={() => activeRouter()?.updateQuery("activeTab", "versions", true)}
 										>
 											Versions ({resources.state.versions.length})
 										</button>
@@ -2046,16 +1854,9 @@ const ResourceDetailsPage: Component<{
 												classList={{
 													[styles.active]: activeTab() === "dependencies",
 												}}
-												onClick={() =>
-													activeRouter()?.updateQuery(
-														"activeTab",
-														"dependencies",
-														true,
-													)
-												}
+												onClick={() => activeRouter()?.updateQuery("activeTab", "dependencies", true)}
 											>
-												Dependencies (
-												{primaryVersion()?.dependencies?.length || 0})
+												Dependencies ({primaryVersion()?.dependencies?.length || 0})
 											</button>
 										</Show>
 										<Show when={(project()?.gallery?.length ?? 0) > 0}>
@@ -2064,13 +1865,7 @@ const ResourceDetailsPage: Component<{
 												classList={{
 													[styles.active]: activeTab() === "gallery",
 												}}
-												onClick={() =>
-													activeRouter()?.updateQuery(
-														"activeTab",
-														"gallery",
-														true,
-													)
-												}
+												onClick={() => activeRouter()?.updateQuery("activeTab", "gallery", true)}
 											>
 												Gallery ({project()?.gallery?.length})
 											</button>
@@ -2110,10 +1905,7 @@ const ResourceDetailsPage: Component<{
 														if (spoiler instanceof HTMLElement) {
 															// Only toggle if we clicked the spoiler container itself
 															// (which acts as the header button) or if it's currently closed.
-															if (
-																target === spoiler ||
-																!spoiler.classList.contains("is-visible")
-															) {
+															if (target === spoiler || !spoiler.classList.contains("is-visible")) {
 																spoiler.classList.toggle("is-visible");
 															}
 														}
@@ -2135,10 +1927,7 @@ const ResourceDetailsPage: Component<{
 												<div class={styles["gallery-grid"]}>
 													<For each={project()?.gallery}>
 														{(item) => (
-															<div
-																class={styles["gallery-item"]}
-																onClick={() => setSelectedGalleryItem(item)}
-															>
+															<div class={styles["gallery-item"]} onClick={() => setSelectedGalleryItem(item)}>
 																<img src={item} alt="Gallery Item" />
 															</div>
 														)}
@@ -2160,46 +1949,30 @@ const ResourceDetailsPage: Component<{
 															itemComponent={(props) => (
 																<SelectItem item={props.item}>
 																	<div class={styles["version-select-item"]}>
-																		<span class={styles["version-name"]}>
-																			{props.item.rawValue.version_number}
-																		</span>
+																		<span class={styles["version-name"]}>{props.item.rawValue.version_number}</span>
 																		<div class={styles["version-badges"]}>
 																			<Badge
 																				variant={
-																					props.item.rawValue.release_type ===
-																					"release"
+																					props.item.rawValue.release_type === "release"
 																						? "success"
-																						: props.item.rawValue
-																									.release_type === "beta"
+																						: props.item.rawValue.release_type === "beta"
 																							? "warning"
 																							: "error"
 																				}
 																			>
 																				{props.item.rawValue.release_type}
 																			</Badge>
-																			<For
-																				each={props.item.rawValue.loaders.slice(
-																					0,
-																					2,
-																				)}
-																			>
-																				{(loader) => (
-																					<Badge variant="info">{loader}</Badge>
-																				)}
+																			<For each={props.item.rawValue.loaders.slice(0, 2)}>
+																				{(loader) => <Badge variant="info">{loader}</Badge>}
 																			</For>
 																		</div>
 																	</div>
 																</SelectItem>
 															)}
 														>
-															<SelectTrigger
-																class={styles["version-select-trigger"]}
-															>
+															<SelectTrigger class={styles["version-select-trigger"]}>
 																<SelectValue<ResourceVersion>>
-																	{(s) =>
-																		s.selectedOption()?.version_number ||
-																		"Select version..."
-																	}
+																	{(s) => s.selectedOption()?.version_number || "Select version..."}
 																</SelectValue>
 															</SelectTrigger>
 															<SelectContent />
@@ -2207,30 +1980,19 @@ const ResourceDetailsPage: Component<{
 													</div>
 
 													<Show
-														when={
-															(primaryVersion()?.dependencies?.length ?? 0) > 0
-														}
+														when={(primaryVersion()?.dependencies?.length ?? 0) > 0}
 														fallback={
-															<div class={styles["empty-state"]}>
-																No dependencies listed for this version.
-															</div>
+															<div class={styles["empty-state"]}>No dependencies listed for this version.</div>
 														}
 													>
 														<div class={styles["dependency-groups"]}>
 															{(() => {
-																const deps =
-																	primaryVersion()?.dependencies || [];
-																const required = deps.filter(
-																	(d) => d.dependency_type === "required",
-																);
+																const deps = primaryVersion()?.dependencies || [];
+																const required = deps.filter((d) => d.dependency_type === "required");
 																const optional = deps.filter(
-																	(d) =>
-																		d.dependency_type === "optional" ||
-																		d.dependency_type === "embedded",
+																	(d) => d.dependency_type === "optional" || d.dependency_type === "embedded",
 																);
-																const incompatible = deps.filter(
-																	(d) => d.dependency_type === "incompatible",
-																);
+																const incompatible = deps.filter((d) => d.dependency_type === "incompatible");
 
 																const currentProject = project();
 																if (!currentProject) return null;
@@ -2239,11 +2001,7 @@ const ResourceDetailsPage: Component<{
 																	<>
 																		<Show when={required.length > 0}>
 																			<div class={styles["dependency-group"]}>
-																				<h3
-																					class={`${styles["group-title"]} ${styles.required}`}
-																				>
-																					Required
-																				</h3>
+																				<h3 class={`${styles["group-title"]} ${styles.required}`}>Required</h3>
 																				<div class={styles["dependency-list"]}>
 																					<For each={required}>
 																						{(dep) => (
@@ -2251,9 +2009,7 @@ const ResourceDetailsPage: Component<{
 																								router={activeRouter()}
 																								dependency={dep}
 																								platform={currentProject.source}
-																								project={dependencyData()?.get(
-																									dep.project_id,
-																								)}
+																								project={dependencyData()?.get(dep.project_id)}
 																							/>
 																						)}
 																					</For>
@@ -2263,9 +2019,7 @@ const ResourceDetailsPage: Component<{
 
 																		<Show when={optional.length > 0}>
 																			<div class={styles["dependency-group"]}>
-																				<h3
-																					class={`${styles["group-title"]} ${styles.optional}`}
-																				>
+																				<h3 class={`${styles["group-title"]} ${styles.optional}`}>
 																					Optional / Embedded
 																				</h3>
 																				<div class={styles["dependency-list"]}>
@@ -2275,9 +2029,7 @@ const ResourceDetailsPage: Component<{
 																								router={activeRouter()}
 																								dependency={dep}
 																								platform={currentProject.source}
-																								project={dependencyData()?.get(
-																									dep.project_id,
-																								)}
+																								project={dependencyData()?.get(dep.project_id)}
 																							/>
 																						)}
 																					</For>
@@ -2287,11 +2039,7 @@ const ResourceDetailsPage: Component<{
 
 																		<Show when={incompatible.length > 0}>
 																			<div class={styles["dependency-group"]}>
-																				<h3
-																					class={`${styles["group-title"]} ${styles.incompatible}`}
-																				>
-																					Incompatible
-																				</h3>
+																				<h3 class={`${styles["group-title"]} ${styles.incompatible}`}>Incompatible</h3>
 																				<div class={styles["dependency-list"]}>
 																					<For each={incompatible}>
 																						{(dep) => (
@@ -2299,9 +2047,7 @@ const ResourceDetailsPage: Component<{
 																								router={activeRouter()}
 																								dependency={dep}
 																								platform={currentProject.source}
-																								project={dependencyData()?.get(
-																									dep.project_id,
-																								)}
+																								project={dependencyData()?.get(dep.project_id)}
 																							/>
 																						)}
 																					</For>
@@ -2355,8 +2101,7 @@ const ResourceDetailsPage: Component<{
 														<div
 															class={styles["version-compatibility-notice"]}
 															classList={{
-																[styles["version-compatibility-notice--warning"]]:
-																	compatibleVersionCount() === 0,
+																[styles["version-compatibility-notice--warning"]]: compatibleVersionCount() === 0,
 															}}
 														>
 															<div class={styles["version-compatibility-title"]}>
@@ -2369,18 +2114,15 @@ const ResourceDetailsPage: Component<{
 																</Show>
 															</div>
 															<div class={styles["version-compatibility-description"]}>
-																Target: {selectedInstance()?.name} · Minecraft {selectedInstance()?.minecraftVersion} · {formatLoaderName(selectedInstance()?.modloader)}
+																Target: {selectedInstance()?.name} · Minecraft{" "}
+																{selectedInstance()?.minecraftVersion} ·{" "}
+																{formatLoaderName(selectedInstance()?.modloader)}
 															</div>
 														</div>
 													</Show>
 
-													<div
-														class={`${styles["version-list"]} ${styles["full-width"]}`}
-													>
-														<Show
-															when={!resources.state.loading}
-															fallback={<div>Loading versions...</div>}
-														>
+													<div class={`${styles["version-list"]} ${styles["full-width"]}`}>
+														<Show when={!resources.state.loading} fallback={<div>Loading versions...</div>}>
 															<Show
 																when={filteredVersions().length > 0}
 																fallback={
@@ -2397,267 +2139,155 @@ const ResourceDetailsPage: Component<{
 																<For each={paginatedVersions()}>
 																	{(version) => (
 																		<div class={styles["version-item"]}>
-																		<div class={styles["version-main-info"]}>
-																			<span class={styles["version-name"]}>
-																				{version.version_number}
-																			</span>
-																			<span class={styles["version-filename"]}>
-																				{version.file_name}
-																			</span>
-																		</div>
-
-																		<div class={styles["version-loaders-row"]}>
-																			<div class={styles["meta-group"]}>
-																				<span class={styles["meta-label"]}>
-																					Versions
-																				</span>
-																				<VersionTags
-																					versions={version.game_versions}
-																				/>
+																			<div class={styles["version-main-info"]}>
+																				<span class={styles["version-name"]}>{version.version_number}</span>
+																				<span class={styles["version-filename"]}>{version.file_name}</span>
 																			</div>
-																			<div class={styles["meta-group"]}>
-																				<span class={styles["meta-label"]}>
-																					Loaders
-																				</span>
-																				<div class={styles["version-meta"]}>
-																					<For each={version.loaders}>
-																						{(l) => (
-																							<Badge variant="info" round>
-																								{l}
-																							</Badge>
-																						)}
-																					</For>
+
+																			<div class={styles["version-loaders-row"]}>
+																				<div class={styles["meta-group"]}>
+																					<span class={styles["meta-label"]}>Versions</span>
+																					<VersionTags versions={version.game_versions} />
+																				</div>
+																				<div class={styles["meta-group"]}>
+																					<span class={styles["meta-label"]}>Loaders</span>
+																					<div class={styles["version-meta"]}>
+																						<For each={version.loaders}>
+																							{(l) => (
+																								<Badge variant="info" round>
+																									{l}
+																								</Badge>
+																							)}
+																						</For>
+																					</div>
 																				</div>
 																			</div>
-																		</div>
 
-																		<div class={styles["version-actions"]}>
-																			<Badge
-																				variant={
-																					version.release_type === "release"
-																						? "success"
-																						: version.release_type === "beta"
-																							? "warning"
-																							: "error"
-																				}
-																				round
-																			>
-																				{version.release_type}
-																			</Badge>
-																			<Button
-																				size="sm"
-																				disabled={
-																					isVersionInstalling(version.id) ||
-																					(!!resources.state
-																						.selectedInstanceId &&
-																						!isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						) &&
-																						getCompatibility(version).type ===
-																							"incompatible")
-																				}
-																				tooltip_text={(() => {
-																					const instId =
-																						resources.state.selectedInstanceId;
-																					const comp =
-																						getCompatibility(version);
-
-																					if (
-																						instId &&
-																						!isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						) &&
-																						comp.type !== "compatible"
-																					) {
-																						return comp.reason;
+																			<div class={styles["version-actions"]}>
+																				<Badge
+																					variant={
+																						version.release_type === "release"
+																							? "success"
+																							: version.release_type === "beta"
+																								? "warning"
+																								: "error"
 																					}
-																					if (isVersionInstalling(version.id))
-																						return "Installation in progress";
-																					if (
-																						isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)
-																					)
-																						return "Already installed - Click to remove";
-																					if (!isModpack() && !instId)
-																						return "Select an instance to install";
-																					return version.download_url
-																						? "Click to install"
-																						: "External download required";
-																				})()}
-																				onClick={() => {
-																					if (
-																						isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)
-																					) {
+																					round
+																				>
+																					{version.release_type}
+																				</Badge>
+																				<Button
+																					size="sm"
+																					disabled={
+																						isVersionInstalling(version.id) ||
+																						(!!resources.state.selectedInstanceId &&
+																							!isVersionInstalled(version.id, version.hash) &&
+																							getCompatibility(version).type === "incompatible")
+																					}
+																					tooltip_text={(() => {
+																						const instId = resources.state.selectedInstanceId;
+																						const comp = getCompatibility(version);
+
 																						if (
-																							confirmVersionId() !== version.id
+																							instId &&
+																							!isVersionInstalled(version.id, version.hash) &&
+																							comp.type !== "compatible"
 																						) {
-																							setConfirmVersionId(version.id);
-																							setTimeout(
-																								() => setConfirmVersionId(null),
-																								3000,
-																							);
-																							return;
+																							return comp.reason;
 																						}
-																						handleUninstall();
-																						setConfirmVersionId(null);
-																					} else if (
-																						getCompatibility(version).type !==
-																						"incompatible"
-																					) {
-																						handleInstall(version);
-																					}
-																				}}
-																				style={{ width: "100%" }}
-																				variant={
-																					isVersionInstalled(
-																						version.id,
-																						version.hash,
-																					)
-																						? "outline"
-																						: version.download_url
-																							? "solid"
-																							: "outline"
-																				}
-																				color={(() => {
-																					if (
-																						isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)
-																					)
-																						return "destructive";
-																					const comp =
-																						getCompatibility(version);
-																					if (comp.type === "warning")
-																						return "warning";
-																					if (comp.type === "incompatible")
-																						return "none"; // Subdued
-																					return undefined;
-																				})()}
-																			>
-																				<Show
-																					when={isVersionInstalling(version.id)}
-																				>
-																					Installing...
-																				</Show>
-																				<Show
-																					when={
-																						!isVersionInstalling(version.id)
-																					}
-																				>
-																					<Show
-																						when={isVersionInstalled(
-																							version.id,
-																							version.hash,
-																						)}
-																					>
-																						<Show
-																							when={
-																								confirmVersionId() ===
-																								version.id
+																						if (isVersionInstalling(version.id)) return "Installation in progress";
+																						if (isVersionInstalled(version.id, version.hash))
+																							return "Already installed - Click to remove";
+																						if (!isModpack() && !instId) return "Select an instance to install";
+																						return version.download_url
+																							? "Click to install"
+																							: "External download required";
+																					})()}
+																					onClick={() => {
+																						if (isVersionInstalled(version.id, version.hash)) {
+																							if (confirmVersionId() !== version.id) {
+																								setConfirmVersionId(version.id);
+																								setTimeout(() => setConfirmVersionId(null), 3000);
+																								return;
 																							}
-																							fallback="Uninstall"
-																						>
-																							Confirm?
-																						</Show>
-																					</Show>
-																					<Show
-																						when={
-																							!isVersionInstalled(
-																								version.id,
-																								version.hash,
-																							)
+																							handleUninstall();
+																							setConfirmVersionId(null);
+																						} else if (getCompatibility(version).type !== "incompatible") {
+																							handleInstall(version);
 																						}
-																					>
-																						<Show
-																							when={
-																								!isModpack() &&
-																								!resources.state
-																									.selectedInstanceId
-																							}
-																						>
-																							Select Instance
+																					}}
+																					style={{ width: "100%" }}
+																					variant={
+																						isVersionInstalled(version.id, version.hash)
+																							? "outline"
+																							: version.download_url
+																								? "solid"
+																								: "outline"
+																					}
+																					color={(() => {
+																						if (isVersionInstalled(version.id, version.hash)) return "destructive";
+																						const comp = getCompatibility(version);
+																						if (comp.type === "warning") return "warning";
+																						if (comp.type === "incompatible") return "none"; // Subdued
+																						return undefined;
+																					})()}
+																				>
+																					<Show when={isVersionInstalling(version.id)}>Installing...</Show>
+																					<Show when={!isVersionInstalling(version.id)}>
+																						<Show when={isVersionInstalled(version.id, version.hash)}>
+																							<Show when={confirmVersionId() === version.id} fallback="Uninstall">
+																								Confirm?
+																							</Show>
 																						</Show>
-																						<Show
-																							when={
-																								isModpack() ||
-																								resources.state
-																									.selectedInstanceId
-																							}
-																						>
-																							<Show
-																								when={
-																									getCompatibility(version)
-																										.type === "incompatible"
-																								}
-																								fallback={
-																									version.download_url
-																										? "Install"
-																										: "External"
-																								}
-																							>
-																								{(() => {
-																									const instId =
-																										resources.state
-																											.selectedInstanceId;
-																									const inst =
-																										instancesState.instances.find(
-																											(i) => i.id === instId,
-																										);
-																									if (
-																										(inst?.modloader?.toLowerCase() ===
-																											"vanilla" ||
-																											!inst?.modloader) &&
-																										(project()
-																											?.resource_type ===
-																											"mod" ||
-																											project()
-																												?.resource_type ===
-																												"shader")
-																									) {
-																										return "Unsupported";
-																									}
-																									return "Incompatible";
-																								})()}
+																						<Show when={!isVersionInstalled(version.id, version.hash)}>
+																							<Show when={!isModpack() && !resources.state.selectedInstanceId}>
+																								Select Instance
+																							</Show>
+																							<Show when={isModpack() || resources.state.selectedInstanceId}>
+																								<Show
+																									when={getCompatibility(version).type === "incompatible"}
+																									fallback={version.download_url ? "Install" : "External"}
+																								>
+																									{(() => {
+																										const instId = resources.state.selectedInstanceId;
+																										const inst = instancesState.instances.find((i) => i.id === instId);
+																										if (
+																											(inst?.modloader?.toLowerCase() === "vanilla" || !inst?.modloader) &&
+																											(project()?.resource_type === "mod" ||
+																												project()?.resource_type === "shader")
+																										) {
+																											return "Unsupported";
+																										}
+																										return "Incompatible";
+																									})()}
+																								</Show>
 																							</Show>
 																						</Show>
 																					</Show>
-																				</Show>
-																			</Button>
+																				</Button>
+																			</div>
 																		</div>
-																	</div>
-																)}
-															</For>
+																	)}
+																</For>
 
-															<Show when={totalPages() > 1}>
-																<div class={styles["version-pagination"]}>
-																	<Pagination
-																		count={totalPages()}
-																		page={versionPage()}
-																		onPageChange={setVersionPage}
-																		itemComponent={(props) => (
-																			<PaginationItem page={props.page}>
-																				{props.page}
-																			</PaginationItem>
-																		)}
-																		ellipsisComponent={() => (
-																			<PaginationEllipsis />
-																		)}
-																	>
-																		<PaginationPrevious />
-																		<PaginationItems />
-																		<PaginationNext />
-																	</Pagination>
-																</div>
+																<Show when={totalPages() > 1}>
+																	<div class={styles["version-pagination"]}>
+																		<Pagination
+																			count={totalPages()}
+																			page={versionPage()}
+																			onPageChange={setVersionPage}
+																			itemComponent={(props) => (
+																				<PaginationItem page={props.page}>{props.page}</PaginationItem>
+																			)}
+																			ellipsisComponent={() => <PaginationEllipsis />}
+																		>
+																			<PaginationPrevious />
+																			<PaginationItems />
+																			<PaginationNext />
+																		</Pagination>
+																	</div>
+																</Show>
 															</Show>
-														</Show>
 														</Show>
 													</div>
 												</div>
@@ -2687,9 +2317,7 @@ const ResourceDetailsPage: Component<{
 							}}
 						/>
 						<Show when={hoveredLink()}>
-							<div class={styles["link-preview-statusBar"]}>
-								{hoveredLink()}
-							</div>
+							<div class={styles["link-preview-statusBar"]}>{hoveredLink()}</div>
 						</Show>
 
 						<InstanceSelectionDialog

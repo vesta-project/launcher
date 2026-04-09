@@ -24,22 +24,11 @@ const PopoverContent = <T extends ValidComponent = "div">(
 	return (
 		<PopoverPrimitive.Portal>
 			<PopoverPrimitive.Content
-				class={clsx(
-					styles["popover__content"],
-					"liquid-glass",
-					"outline-none",
-					local.class,
-				)}
+				class={clsx(styles["popover__content"], "liquid-glass", "outline-none", local.class)}
 				{...others}
 			/>
 		</PopoverPrimitive.Portal>
 	);
 };
 
-export {
-	Popover,
-	PopoverTrigger,
-	PopoverContent,
-	PopoverAnchor,
-	PopoverCloseButton,
-};
+export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverCloseButton };

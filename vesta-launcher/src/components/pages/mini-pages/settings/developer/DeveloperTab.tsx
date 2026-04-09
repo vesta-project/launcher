@@ -36,10 +36,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					label="Debug Logging"
 					description="Enable verbose logging for troubleshooting"
 					headerRight={
-						<Switch
-							checked={props.debugLogging}
-							onCheckedChange={props.handleDebugToggle}
-						>
+						<Switch checked={props.debugLogging} onCheckedChange={props.handleDebugToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -72,9 +69,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					label="Simulate App Update"
 					description="Trigger a full update flow simulation (Toast -> Progress -> Ready)"
 					headerRight={
-						<LauncherButton onClick={() => simulateUpdateProcess()}>
-							Simulate Full Update
-						</LauncherButton>
+						<LauncherButton onClick={() => simulateUpdateProcess()}>Simulate Full Update</LauncherButton>
 					}
 				/>
 				<SettingsField

@@ -36,9 +36,7 @@ export const BUILTIN_ICON_PREFIX = "builtin:placeholder-";
  * If the path contains "placeholder-imageX", returns "builtin:placeholder-X".
  * Otherwise returns the input as-is.
  */
-export function getStableIconId(
-	path: string | null | undefined,
-): string | null | undefined {
+export function getStableIconId(path: string | null | undefined): string | null | undefined {
 	if (!path) return path;
 	if (path.startsWith(BUILTIN_ICON_PREFIX)) return path;
 
@@ -59,8 +57,7 @@ export function getStableIconId(
  * it returns the corresponding URL from the current DEFAULT_ICONS array.
  */
 export function resolveBuiltinIcon(path: string): string {
-	const match =
-		path.match(/placeholder-image(\d+)/i) || path.match(/placeholder-(\d+)/i);
+	const match = path.match(/placeholder-image(\d+)/i) || path.match(/placeholder-(\d+)/i);
 	if (match && match[1]) {
 		const index = parseInt(match[1]);
 		if (index >= 1 && index <= DEFAULT_ICONS.length) {
@@ -98,13 +95,7 @@ export interface Instance {
 	createdAt: string | null;
 	updatedAt: string | null;
 	// Installation status: optional field for frontend UI to know whether instance is installed/installed/failed
-	installationStatus?:
-		| "pending"
-		| "installing"
-		| "installed"
-		| "failed"
-		| "interrupted"
-		| null;
+	installationStatus?: "pending" | "installing" | "installed" | "failed" | "interrupted" | null;
 	crashed?: boolean;
 	crashDetails?: string | null;
 	modpackId: string | null;
@@ -240,9 +231,7 @@ export async function listInstances(): Promise<Instance[]> {
 }
 
 // Create a new instance (returns the new ID)
-export async function createInstance(
-	data: CreateInstanceData,
-): Promise<number> {
+export async function createInstance(data: CreateInstanceData): Promise<number> {
 	console.log("[createInstance] Called with data:", data);
 	// Build full instance object with defaults
 	const instance: Instance = {
@@ -281,10 +270,7 @@ export async function createInstance(
 		wrapperCommand: null,
 	};
 
-	console.log(
-		"[createInstance] Invoking Tauri command with instance:",
-		instance,
-	);
+	console.log("[createInstance] Invoking Tauri command with instance:", instance);
 	try {
 		const result = await invoke<number>("create_instance", {
 			instanceData: instance,
@@ -317,10 +303,7 @@ export async function unlinkInstance(instance: Instance): Promise<void> {
 }
 
 // Update instance modpack version
-export async function updateInstanceModpackVersion(
-	id: number,
-	versionId: string,
-): Promise<void> {
+export async function updateInstanceModpackVersion(id: number, versionId: string): Promise<void> {
 	await invoke("update_instance_modpack_version", {
 		instanceId: id,
 		versionId,
@@ -328,10 +311,7 @@ export async function updateInstanceModpackVersion(
 }
 
 // Duplicate an instance
-export async function duplicateInstance(
-	id: number,
-	newName?: string,
-): Promise<void> {
+export async function duplicateInstance(id: number, newName?: string): Promise<void> {
 	await invoke("duplicate_instance", {
 		instanceId: id,
 		newName: newName || null,
@@ -349,9 +329,7 @@ export async function resetInstance(id: number): Promise<void> {
 }
 
 // Resume an interrupted operation
-export async function resumeInstanceOperation(
-	instance: Instance,
-): Promise<void> {
+export async function resumeInstanceOperation(instance: Instance): Promise<void> {
 	// Fallback to 'install' if no specific operation is recorded, as it's the
 	// most common initial operation that would need resuming.
 	const operation = instance.lastOperation || "install";
@@ -393,10 +371,7 @@ export async function getInstanceBySlug(slug: string): Promise<Instance> {
 
 // Install an instance (queues installation task)
 export async function installInstance(instance: Instance): Promise<void> {
-	console.log(
-		"[installInstance] Invoking Tauri command with instance:",
-		instance,
-	);
+	console.log("[installInstance] Invoking Tauri command with instance:", instance);
 	try {
 		await invoke("install_instance", { instanceData: instance });
 		console.log("[installInstance] Tauri command completed successfully");
@@ -408,10 +383,7 @@ export async function installInstance(instance: Instance): Promise<void> {
 
 // Launch an instance (placeholder implementation - backend may actually run the game)
 export async function launchInstance(instance: Instance): Promise<void> {
-	console.log(
-		"[launchInstance] Invoking Tauri command to launch instance:",
-		instance,
-	);
+	console.log("[launchInstance] Invoking Tauri command to launch instance:", instance);
 	try {
 		await invoke("launch_instance", { instanceData: instance });
 		console.log("[launchInstance] Launch command completed");
@@ -421,10 +393,7 @@ export async function launchInstance(instance: Instance): Promise<void> {
 	}
 }
 export async function killInstance(instance: Instance): Promise<string> {
-	console.log(
-		"[killInstance] Invoking Tauri command to kill instance:",
-		instance,
-	);
+	console.log("[killInstance] Invoking Tauri command to kill instance:", instance);
 	try {
 		const message = await invoke<string>("kill_instance", { inst: instance });
 		console.log("[killInstance] Kill command completed: ", message);
@@ -465,28 +434,19 @@ let unsubscribeInstanceDeleted: (() => void) | null = null;
 export async function subscribeToInstanceUpdates(callback: () => void) {
 	// Listen for instance updates (DB changes) and instance-installed (installer finished)
 	// Both events should trigger a refetch of the instances list in the UI.
-	unsubscribeInstanceUpdate = await listen<Instance>(
-		"core://instance-updated",
-		() => {
-			callback();
-		},
-	);
+	unsubscribeInstanceUpdate = await listen<Instance>("core://instance-updated", () => {
+		callback();
+	});
 
 	// Also listen for installs completing so new instances appear immediately
-	unsubscribeInstanceInstalled = await listen<{ name: string }>(
-		"core://instance-installed",
-		() => {
-			callback();
-		},
-	);
+	unsubscribeInstanceInstalled = await listen<{ name: string }>("core://instance-installed", () => {
+		callback();
+	});
 
 	// Listen for instance deletion to remove it from UI
-	unsubscribeInstanceDeleted = await listen<{ id: number }>(
-		"core://instance-deleted",
-		() => {
-			callback();
-		},
-	);
+	unsubscribeInstanceDeleted = await listen<{ id: number }>("core://instance-deleted", () => {
+		callback();
+	});
 }
 
 export function unsubscribeFromInstanceUpdates() {
@@ -517,8 +477,7 @@ export function sanitizeInstanceName(name: string): string {
 
 	for (const ch of n) {
 		const code = ch.charCodeAt(0);
-		const isAlphaNum =
-			(code >= 48 && code <= 57) || (code >= 97 && code <= 122);
+		const isAlphaNum = (code >= 48 && code <= 57) || (code >= 97 && code <= 122);
 		if (isAlphaNum) {
 			out += ch;
 			lastWasDash = false;

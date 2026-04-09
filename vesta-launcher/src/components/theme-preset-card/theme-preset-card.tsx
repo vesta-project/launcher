@@ -77,9 +77,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 							<span class={styles["theme-preset-card__source"]}>Imported</span>
 						</div>
 					</Show>
-					<span class={styles["theme-preset-card__name"]}>
-						{props.theme.name}
-					</span>
+					<span class={styles["theme-preset-card__name"]}>{props.theme.name}</span>
 					<span class={styles["theme-preset-card__description"]}>
 						{props.theme.author
 							? `by ${props.theme.author}`

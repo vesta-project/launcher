@@ -79,11 +79,7 @@ export function sanitizeHtml(html: string): string {
 					el.removeAttribute(attrs[i].name);
 				}
 				// Sanitize href/src to prevent executable URIs
-				if (
-					attrName === "href" ||
-					attrName === "src" ||
-					attrName === "xlink:href"
-				) {
+				if (attrName === "href" || attrName === "src" || attrName === "xlink:href") {
 					const value = el.getAttribute(attrs[i].name);
 					const normalized = value?.trim().toLowerCase();
 					if (

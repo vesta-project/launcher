@@ -2,12 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { createStore } from "solid-js/store";
 
-export type DialogSeverity =
-	| "info"
-	| "warning"
-	| "error"
-	| "success"
-	| "question";
+export type DialogSeverity = "info" | "warning" | "error" | "success" | "question";
 
 export interface DialogAction {
 	id: string;
@@ -54,10 +49,8 @@ interface BackendDialogRequest {
 
 const [dialogs, setDialogs] = createStore<DialogInstance[]>([]);
 
-const _pushDialog = (dialog: DialogInstance) =>
-	setDialogs((d) => [...d, dialog]);
-const _removeDialog = (id: string) =>
-	setDialogs((d) => d.filter((item) => item.id !== id));
+const _pushDialog = (dialog: DialogInstance) => setDialogs((d) => [...d, dialog]);
+const _removeDialog = (id: string) => setDialogs((d) => d.filter((item) => item.id !== id));
 
 // Global unlisten function for dialog system to handle HMR cleanup
 let dialogSystemUnlisten: (() => void) | null = null;
@@ -78,9 +71,7 @@ export const dialogStore = {
 	/**
 	 * Shows a generic dialog and returns a promise that resolves with the response.
 	 */
-	show(
-		options: Omit<DialogInstance, "id" | "resolve">,
-	): Promise<DialogResponse> {
+	show(options: Omit<DialogInstance, "id" | "resolve">): Promise<DialogResponse> {
 		return new Promise((resolve) => {
 			const id = Math.random().toString(36).substring(2, 9);
 			const instance: DialogInstance = {
@@ -127,8 +118,7 @@ export const dialogStore = {
 		const result = await dialogStore.show({
 			title,
 			description,
-			severity:
-				options?.severity ?? (options?.isDestructive ? "warning" : "question"),
+			severity: options?.severity ?? (options?.isDestructive ? "warning" : "question"),
 			actions: [
 				{
 					id: "cancel",
@@ -217,40 +207,35 @@ export const dialogStore = {
 export async function initializeDialogSystem(): Promise<void> {
 	// Clean up any existing listener (important for HMR)
 	if (dialogSystemUnlisten) {
-		console.log(
-			"[DialogSystem] Cleaning up existing listener before re-initialization",
-		);
+		console.log("[DialogSystem] Cleaning up existing listener before re-initialization");
 		dialogSystemUnlisten();
 		dialogSystemUnlisten = null;
 	}
 
-	const unlisten = await listen<BackendDialogRequest>(
-		"core://dialog-request",
-		(event) => {
-			const request = event.payload;
+	const unlisten = await listen<BackendDialogRequest>("core://dialog-request", (event) => {
+		const request = event.payload;
 
-			const instance: DialogInstance = {
-				id: request.id,
-				title: request.title,
-				description: request.description,
-				severity: request.severity,
-				actions: request.actions,
-				input: request.input
-					? {
-							placeholder: request.input.placeholder,
-							defaultValue: request.input.default_value,
-							isPassword: request.input.is_password,
-						}
-					: undefined,
-				isBackendGenerated: true,
-				resolve: () => {
-					_removeDialog(request.id);
-				},
-			};
+		const instance: DialogInstance = {
+			id: request.id,
+			title: request.title,
+			description: request.description,
+			severity: request.severity,
+			actions: request.actions,
+			input: request.input
+				? {
+						placeholder: request.input.placeholder,
+						defaultValue: request.input.default_value,
+						isPassword: request.input.is_password,
+					}
+				: undefined,
+			isBackendGenerated: true,
+			resolve: () => {
+				_removeDialog(request.id);
+			},
+		};
 
-			dialogStore._pushDialog(instance);
-		},
-	);
+		dialogStore._pushDialog(instance);
+	});
 
 	// Store the unlisten function globally
 	dialogSystemUnlisten = unlisten;

@@ -46,11 +46,7 @@ export function normalizeUserVariables(
 		if (!userVariables) return undefined;
 		const filtered: Record<string, ThemeVariableValue> = {};
 		for (const [key, value] of Object.entries(userVariables)) {
-			if (
-				typeof value === "number" ||
-				typeof value === "string" ||
-				typeof value === "boolean"
-			) {
+			if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
 				filtered[key] = value;
 			}
 		}
@@ -62,27 +58,23 @@ export function normalizeUserVariables(
 		const candidate = userVariables?.[variable.key];
 
 		if (variable.type === "number") {
-			const value =
-				typeof candidate === "number" ? candidate : variable.default;
+			const value = typeof candidate === "number" ? candidate : variable.default;
 			normalized[variable.key] = clamp(value, variable.min, variable.max);
 			continue;
 		}
 
 		if (variable.type === "color") {
-			normalized[variable.key] =
-				typeof candidate === "string" ? candidate : variable.default;
+			normalized[variable.key] = typeof candidate === "string" ? candidate : variable.default;
 			continue;
 		}
 
 		if (variable.type === "boolean") {
-			normalized[variable.key] =
-				typeof candidate === "boolean" ? candidate : variable.default;
+			normalized[variable.key] = typeof candidate === "boolean" ? candidate : variable.default;
 			continue;
 		}
 
 		if (variable.type === "select") {
-			const selected =
-				typeof candidate === "string" ? candidate : variable.default;
+			const selected = typeof candidate === "string" ? candidate : variable.default;
 			const isAllowed = variable.options.some((opt) => opt.value === selected);
 			normalized[variable.key] = isAllowed ? selected : variable.default;
 		}
@@ -103,15 +95,9 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		name: theme.name || "Custom Theme",
 		libraryId: theme.libraryId,
 		author: theme.author || defaultTheme.author,
-		source:
-			theme.source ||
-			(isBuiltinThemeId(theme.id || "custom") ? "builtin" : "imported"),
+		source: theme.source || (isBuiltinThemeId(theme.id || "custom") ? "builtin" : "imported"),
 		description: theme.description,
-		primaryHue: clamp(
-			getVal(theme.primaryHue, defaultTheme.primaryHue),
-			0,
-			360,
-		),
+		primaryHue: clamp(getVal(theme.primaryHue, defaultTheme.primaryHue), 0, 360),
 		primarySat:
 			theme.primarySat !== undefined && theme.primarySat !== null
 				? clamp(theme.primarySat, 0, 100)
@@ -121,11 +107,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
 		opacity: clamp(getVal(theme.opacity, defaultTheme.opacity ?? 0), 0, 100),
-		borderWidth: clamp(
-			getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1),
-			0,
-			10,
-		),
+		borderWidth: clamp(getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1), 0, 10),
 		style: theme.style || defaultTheme.style,
 		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
@@ -148,8 +130,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 						? "vibrancy"
 						: "none"),
 		),
-		backgroundOpacity:
-			theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
+		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
 		variables: theme.variables,
 		userVariables: normalizeUserVariables(theme.userVariables, theme.variables),
 	};

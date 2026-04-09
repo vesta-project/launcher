@@ -1,10 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import {
-	createDemoInstance,
-	type Instance
-} from "@utils/instances";
+import { createDemoInstance, type Instance } from "@utils/instances";
 import { createStore, reconcile } from "solid-js/store";
 
 export type { Instance };
@@ -108,9 +105,7 @@ function addInstance(newInstance: Instance) {
 
 // Remove instance from store
 function removeInstance(instanceId: number) {
-	setInstancesState("instances", (instances) =>
-		instances.filter((inst) => inst.id !== instanceId),
-	);
+	setInstancesState("instances", (instances) => instances.filter((inst) => inst.id !== instanceId));
 }
 
 // Listen for Tauri events
@@ -141,12 +136,9 @@ export function setupInstanceListeners() {
 		});
 
 		// Listen for launch initiated (this is for UI responsiveness)
-		await listen<{ instance_id: string }>(
-			"core://instance-launch-request",
-			(event) => {
-				setLaunching(event.payload.instance_id, true);
-			},
-		);
+		await listen<{ instance_id: string }>("core://instance-launch-request", (event) => {
+			setLaunching(event.payload.instance_id, true);
+		});
 
 		// Listen for launch events (updates when process successfully started)
 		await listen<{ instance_id: string; pid: number; start_time?: number }>(
@@ -162,34 +154,26 @@ export function setupInstanceListeners() {
 		);
 
 		// Listen for instance exit/crash
-		await listen<{ instance_id: string; crashed: boolean }>(
-			"core://instance-exited",
-			(event) => {
-				const slug = event.payload.instance_id;
-				setLaunching(slug, false);
-				setInstancesState("runningIds", (prev) => {
-					const { [slug]: _removed, ...next } = prev;
-					return next;
-				});
+		await listen<{ instance_id: string; crashed: boolean }>("core://instance-exited", (event) => {
+			const slug = event.payload.instance_id;
+			setLaunching(slug, false);
+			setInstancesState("runningIds", (prev) => {
+				const { [slug]: _removed, ...next } = prev;
+				return next;
+			});
 
-				// Refresh instance metadata if crashed/playtime updated
-				void initializeInstances(true).catch((error) => {
-					console.error("Failed to refresh instances after exit:", error);
-				});
-			},
-		);
+			// Refresh instance metadata if crashed/playtime updated
+			void initializeInstances(true).catch((error) => {
+				console.error("Failed to refresh instances after exit:", error);
+			});
+		});
 
 		// Listen for account changes to re-initialize instances (important for Guest -> Real transition)
 		await listen<any>("config-updated", (event) => {
 			if (event.payload.field === "active_account_uuid") {
-				console.log(
-					"[InstancesStore] Active account changed, re-initializing...",
-				);
+				console.log("[InstancesStore] Active account changed, re-initializing...");
 				void initializeInstances(true).catch((error) => {
-					console.error(
-						"Failed to refresh instances after account change:",
-						error,
-					);
+					console.error("Failed to refresh instances after account change:", error);
 				});
 			}
 		});

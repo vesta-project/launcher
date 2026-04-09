@@ -36,9 +36,7 @@ export const HomeTab = (props: HomeTabProps) => {
 						<CubeIcon />
 					</div>
 					<div class={styles["stat-content"]}>
-						<div class={styles["home-stat-value"]}>
-							{(props.installedResources || []).length}
-						</div>
+						<div class={styles["home-stat-value"]}>{(props.installedResources || []).length}</div>
 						<div class={styles["home-stat-label"]}>Resources</div>
 					</div>
 				</div>
@@ -60,9 +58,7 @@ export const HomeTab = (props: HomeTabProps) => {
 						<GearIcon />
 					</div>
 					<div class={styles["stat-content"]}>
-						<div class={styles["home-stat-value"]}>
-							{inst().installationStatus || "Unknown"}
-						</div>
+						<div class={styles["home-stat-value"]}>{inst().installationStatus || "Unknown"}</div>
 						<div class={styles["home-stat-label"]}>Status</div>
 					</div>
 				</div>
@@ -74,25 +70,19 @@ export const HomeTab = (props: HomeTabProps) => {
 					<div class={styles["details-row"]}>
 						<span class={styles["details-key"]}>Last Played</span>
 						<span class={styles["details-value"]}>
-							{inst().lastPlayed
-								? formatDate(inst().lastPlayed as string)
-								: "Never"}
+							{inst().lastPlayed ? formatDate(inst().lastPlayed as string) : "Never"}
 						</span>
 					</div>
 					<div class={styles["details-row"]}>
 						<span class={styles["details-key"]}>Created</span>
 						<span class={styles["details-value"]}>
-							{inst().createdAt
-								? formatDate(inst().createdAt as string)
-								: "Unknown"}
+							{inst().createdAt ? formatDate(inst().createdAt as string) : "Unknown"}
 						</span>
 					</div>
 					<div class={styles["details-row"]}>
 						<span class={styles["details-key"]}>Updated</span>
 						<span class={styles["details-value"]}>
-							{inst().updatedAt
-								? formatDate(inst().updatedAt as string)
-								: "Unknown"}
+							{inst().updatedAt ? formatDate(inst().updatedAt as string) : "Unknown"}
 						</span>
 					</div>
 				</div>

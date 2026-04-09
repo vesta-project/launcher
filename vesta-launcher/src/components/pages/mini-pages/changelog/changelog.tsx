@@ -21,9 +21,7 @@ export default function ChangelogPage() {
 				if (isManualScroll()) return;
 
 				// Find the version at the top of the viewing area
-				const visibleElements = Array.from(
-					document.querySelectorAll(`[id^="release-"]`),
-				);
+				const visibleElements = Array.from(document.querySelectorAll(`[id^="release-"]`));
 				const containerRect = listRef?.getBoundingClientRect();
 				if (!containerRect) return;
 
@@ -36,9 +34,7 @@ export default function ChangelogPage() {
 				for (const el of visibleElements) {
 					const rect = el.getBoundingClientRect();
 					// We prioritize elements that have passed the trigger point but are still mostly visible
-					const distance = Math.abs(
-						rect.top - (containerRect.top + triggerOffset),
-					);
+					const distance = Math.abs(rect.top - (containerRect.top + triggerOffset));
 
 					if (distance < minDistance) {
 						minDistance = distance;
@@ -95,9 +91,7 @@ export default function ChangelogPage() {
 	const renderMarkdown = (text: string) => {
 		// Use domestic sanitizer for basic XSS protection
 		const parsed = marked.parse(text || "No release notes available.");
-		return typeof parsed === "string"
-			? sanitizeHtml(parsed)
-			: sanitizeHtml(String(parsed));
+		return typeof parsed === "string" ? sanitizeHtml(parsed) : sanitizeHtml(String(parsed));
 	};
 
 	const scrollToRelease = (tag: string) => {
@@ -147,36 +141,26 @@ export default function ChangelogPage() {
 
 				<Show
 					when={!releases.loading}
-					fallback={
-						<div class={styles.loading}>Fetching latest updates...</div>
-					}
+					fallback={<div class={styles.loading}>Fetching latest updates...</div>}
 				>
 					<Show
 						when={!releases.error}
 						fallback={
 							<div class={styles.error}>
-								Failed to load release notes. Please check your internet
-								connection.
+								Failed to load release notes. Please check your internet connection.
 							</div>
 						}
 					>
 						<div class={styles.releaseList}>
 							<For each={releases()}>
 								{(release) => (
-									<div
-										id={`release-${release.tag_name}`}
-										class={styles.releaseCard}
-									>
+									<div id={`release-${release.tag_name}`} class={styles.releaseCard}>
 										<div class={styles.releaseHeader}>
 											<div>
-												<span class={styles.versionTag}>
-													{release.tag_name}
-												</span>
+												<span class={styles.versionTag}>{release.tag_name}</span>
 											</div>
 											<div class={styles.releaseMeta}>
-												<span class={styles.releaseDate}>
-													{formatDate(release.published_at)}
-												</span>
+												<span class={styles.releaseDate}>{formatDate(release.published_at)}</span>
 												<button
 													class={styles.githubLink}
 													onClick={() => openExternal(release.html_url)}
@@ -186,10 +170,7 @@ export default function ChangelogPage() {
 												</button>
 											</div>
 										</div>
-										<div
-											class={styles.releaseBody}
-											innerHTML={renderMarkdown(release.body) as string}
-										/>
+										<div class={styles.releaseBody} innerHTML={renderMarkdown(release.body) as string} />
 									</div>
 								)}
 							</For>

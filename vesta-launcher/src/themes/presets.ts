@@ -13,7 +13,7 @@ export type {
 	ThemeDataPayload,
 	ThemeVariable,
 	ThemeVariableType,
-	ThemeVariableValue
+	ThemeVariableValue,
 } from "./types";
 
 /**
@@ -68,42 +68,23 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 			baseTheme.primaryHue ??
 			180,
 		opacity: getNum(themeData.opacity) ?? baseTheme.opacity ?? 0,
-		borderWidth:
-			themeData.borderWidth ??
-			config.theme_border_width ??
-			baseTheme.borderWidth,
+		borderWidth: themeData.borderWidth ?? config.theme_border_width ?? baseTheme.borderWidth,
 		style: themeData.style ?? config.theme_style ?? baseTheme.style,
 		gradientEnabled:
-			themeData.gradientEnabled ??
-			config.theme_gradient_enabled ??
-			baseTheme.gradientEnabled,
-		rotation:
-			getNum(themeData.rotation) ??
-			getNum(config.theme_gradient_angle) ??
-			baseTheme.rotation,
-		gradientType:
-			themeData.gradientType ??
-			config.theme_gradient_type ??
-			baseTheme.gradientType,
+			themeData.gradientEnabled ?? config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
+		rotation: getNum(themeData.rotation) ?? getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
+		gradientType: themeData.gradientType ?? config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony:
-			themeData.gradientHarmony ??
-			config.theme_gradient_harmony ??
-			baseTheme.gradientHarmony,
+			themeData.gradientHarmony ?? config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
 		customCss:
 			themeData.customCss && themeData.customCss.trim().length > 0
 				? themeData.customCss
-				: config.theme_advanced_overrides &&
-						config.theme_advanced_overrides.trim().length > 0
+				: config.theme_advanced_overrides && config.theme_advanced_overrides.trim().length > 0
 					? config.theme_advanced_overrides
 					: baseTheme.customCss,
-		windowEffect:
-			themeData.windowEffect ??
-			config.theme_window_effect ??
-			baseTheme.windowEffect,
+		windowEffect: themeData.windowEffect ?? config.theme_window_effect ?? baseTheme.windowEffect,
 		backgroundOpacity:
-			themeData.backgroundOpacity ??
-			config.theme_background_opacity ??
-			baseTheme.backgroundOpacity,
+			themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,
 		author: themeData.author ?? baseTheme.author,
 		variables: themeData.variables ?? baseTheme.variables,
 		userVariables: themeData.userVariables,
@@ -113,21 +94,18 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
  * Get a theme by ID
  */
 export function getThemeById(id: string): ThemeConfig | undefined {
-	return (
-		customThemeRegistry.get(id) ||
-		PRESET_THEMES.find((theme) => theme.id === id)
-	);
+	return customThemeRegistry.get(id) || PRESET_THEMES.find((theme) => theme.id === id);
 }
 
 export {
 	applyTheme,
 	type ThemeApplyOptions,
-	type ThemeApplyTransition
+	type ThemeApplyTransition,
 } from "./engine/applier";
 export {
 	getSupportedWindowEffects,
 	loadWindowEffectCapabilities,
-	normalizeWindowEffectForCurrentOS
+	normalizeWindowEffectForCurrentOS,
 } from "./engine/effects";
 // Re-export common engine functions for convenience
 export { parseThemeData, serializeThemeData } from "./engine/parser";
@@ -135,6 +113,5 @@ export { themeToCSSVars } from "./engine/themeToCSSVars";
 export {
 	getDefaultTheme,
 	isBuiltinThemeId,
-	validateTheme
+	validateTheme,
 } from "./engine/validation";
-

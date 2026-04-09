@@ -135,8 +135,7 @@
 	box-shadow: 3px 0 10px hsl(0deg 0% 0% / 40%);
 	transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 	/* Animation: slide out from behind the icon */
-	animation: slideOutBeneath 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)
-		forwards;
+	animation: slideOutBeneath 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
 .action-button-stop {

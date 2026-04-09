@@ -2,11 +2,7 @@ import HelpIcon from "@assets/help.svg";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
 import { WindowControls } from "@tauri-controls-v2/solid";
-import {
-	ACCOUNT_TYPE_GUEST,
-	type Account,
-	getActiveAccount,
-} from "@utils/auth";
+import { ACCOUNT_TYPE_GUEST, type Account, getActiveAccount } from "@utils/auth";
 import { getOsType } from "@utils/os";
 import { createResource, createSignal, Show } from "solid-js";
 import NetworkPill from "./network-pill";
@@ -50,19 +46,11 @@ function TitleBar(props: TitleBarProps) {
 			<WindowControls
 				class={styles["titlebar__window-controls"]}
 				hide={props.pageViewerOpen}
-				platform={
-					props.os === "linux"
-						? "gnome"
-						: props.os === "macos"
-							? "macos"
-							: "windows"
-				}
+				platform={props.os === "linux" ? "gnome" : props.os === "macos" ? "macos" : "windows"}
 			/>
 			<div class={styles["titlebar__grab"]} data-tauri-drag-region={true}>
 				<div data-tauri-drag-region={true} class={styles["titlebar__content"]}>
-					<span data-tauri-drag-region={true}>
-						Vesta Launcher {version() ? `v${version()}` : "..."}
-					</span>
+					<span data-tauri-drag-region={true}>Vesta Launcher {version() ? `v${version()}` : "..."}</span>
 					<Show when={activeAccount()?.account_type === ACCOUNT_TYPE_GUEST}>
 						<div
 							class={styles["guest-pill"]}

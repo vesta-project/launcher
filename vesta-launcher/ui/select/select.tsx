@@ -16,15 +16,9 @@ type SelectTriggerProps<T extends ValidComponent = "button"> =
 const SelectTrigger = <T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, SelectTriggerProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as SelectTriggerProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(props as SelectTriggerProps, ["class", "children"]);
 	return (
-		<SelectPrimitive.Trigger
-			class={clsx(styles["select__trigger"], local.class)}
-			{...others}
-		>
+		<SelectPrimitive.Trigger class={clsx(styles["select__trigger"], local.class)} {...others}>
 			{local.children}
 			<SelectPrimitive.Icon
 				as="svg"
@@ -44,22 +38,17 @@ const SelectTrigger = <T extends ValidComponent = "button">(
 	);
 };
 
-type SelectContentProps<T extends ValidComponent = "div"> =
-	SelectPrimitive.SelectContentProps<T> & ClassProp & ChildrenProp;
+type SelectContentProps<T extends ValidComponent = "div"> = SelectPrimitive.SelectContentProps<T> &
+	ClassProp &
+	ChildrenProp;
 
 const SelectContent = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, SelectContentProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as SelectContentProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(props as SelectContentProps, ["class", "children"]);
 	return (
 		<SelectPrimitive.Portal>
-			<SelectPrimitive.Content
-				class={clsx(styles["select__content"], local.class)}
-				{...others}
-			>
+			<SelectPrimitive.Content class={clsx(styles["select__content"], local.class)} {...others}>
 				<SelectPrimitive.Listbox class={styles["select__listbox"]}>
 					{local.children as any}
 				</SelectPrimitive.Listbox>
@@ -68,21 +57,16 @@ const SelectContent = <T extends ValidComponent = "div">(
 	);
 };
 
-type SelectItemProps<T extends ValidComponent = "li"> =
-	SelectPrimitive.SelectItemProps<T> & ClassProp & ChildrenProp;
+type SelectItemProps<T extends ValidComponent = "li"> = SelectPrimitive.SelectItemProps<T> &
+	ClassProp &
+	ChildrenProp;
 
 const SelectItem = <T extends ValidComponent = "li">(
 	props: PolymorphicProps<T, SelectItemProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as SelectItemProps, [
-		"class",
-		"children",
-	]);
+	const [local, others] = splitProps(props as SelectItemProps, ["class", "children"]);
 	return (
-		<SelectPrimitive.Item
-			class={clsx(styles["select__item"], local.class)}
-			{...others}
-		>
+		<SelectPrimitive.Item class={clsx(styles["select__item"], local.class)} {...others}>
 			<SelectPrimitive.ItemLabel>{local.children}</SelectPrimitive.ItemLabel>
 			<SelectPrimitive.ItemIndicator class={styles["select__item-indicator"]}>
 				<svg
@@ -102,19 +86,14 @@ const SelectItem = <T extends ValidComponent = "li">(
 	);
 };
 
-type SelectLabelProps<T extends ValidComponent = "label"> =
-	SelectPrimitive.SelectLabelProps<T> & ClassProp;
+type SelectLabelProps<T extends ValidComponent = "label"> = SelectPrimitive.SelectLabelProps<T> &
+	ClassProp;
 
 const SelectLabel = <T extends ValidComponent = "label">(
 	props: PolymorphicProps<T, SelectLabelProps<T>>,
 ) => {
 	const [local, others] = splitProps(props as SelectLabelProps, ["class"]);
-	return (
-		<SelectPrimitive.Label
-			class={clsx(styles["select__label"], local.class)}
-			{...others}
-		/>
-	);
+	return <SelectPrimitive.Label class={clsx(styles["select__label"], local.class)} {...others} />;
 };
 
 type SelectDescriptionProps<T extends ValidComponent = "div"> =
@@ -123,9 +102,7 @@ type SelectDescriptionProps<T extends ValidComponent = "div"> =
 const SelectDescription = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, SelectDescriptionProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as SelectDescriptionProps, [
-		"class",
-	]);
+	const [local, others] = splitProps(props as SelectDescriptionProps, ["class"]);
 	return (
 		<SelectPrimitive.Description
 			class={clsx(styles["select__description"], local.class)}
@@ -140,9 +117,7 @@ type SelectErrorMessageProps<T extends ValidComponent = "div"> =
 const SelectErrorMessage = <T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, SelectErrorMessageProps<T>>,
 ) => {
-	const [local, others] = splitProps(props as SelectErrorMessageProps, [
-		"class",
-	]);
+	const [local, others] = splitProps(props as SelectErrorMessageProps, ["class"]);
 	return (
 		<SelectPrimitive.ErrorMessage
 			class={clsx(styles["select__error-message"], local.class)}

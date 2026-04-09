@@ -9,10 +9,7 @@
 .instance-details-sidebar {
 	width: 200px;
 	min-width: 200px;
-	background: hsl(
-		var(--liquid-tint-color) /
-		0.3
-	); /* Much lighter liquid glass background */
+	background: hsl(var(--liquid-tint-color) / 0.3); /* Much lighter liquid glass background */
 	backdrop-filter: var(--liquid-backdrop-filter);
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
@@ -46,10 +43,7 @@
 }
 
 .instance-tabs button:hover {
-	background: hsl(
-		var(--color__primary-hue) 30% 20% /
-		0.4
-	); /* Darker hover with transparency */
+	background: hsl(var(--color__primary-hue) 30% 20% / 0.4); /* Darker hover with transparency */
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
 	color: var(--text-primary);
@@ -326,7 +320,9 @@
 }
 
 .details-play-button {
-	transition: background-color 0.2s ease, transform 0.2s ease;
+	transition:
+		background-color 0.2s ease,
+		transform 0.2s ease;
 }
 
 .details-play-button[data-color="destructive"] {
@@ -620,7 +616,6 @@
 		justify-content: flex-start;
 	}
 }
-
 
 @media (max-width: 800px) {
 	.instance-details-header:not(.shrunk) .details-play-button {
@@ -930,8 +925,7 @@
 
 .console-tool-btn-trash:hover {
 	color: var(--semantic-error) !important;
-	background: color-mix(in srgb, var(--semantic-error) 14%, transparent)
-		!important;
+	background: color-mix(in srgb, var(--semantic-error) 14%, transparent) !important;
 }
 
 .trash-fill-fix {
@@ -1414,10 +1408,7 @@
 .resources-toolbar {
 	display: flex;
 	flex-direction: column;
-	background: hsl(
-		var(--color__primary-hue) 15% 8% /
-		1
-	); /* Solid, no transparency */
+	background: hsl(var(--color__primary-hue) 15% 8% / 1); /* Solid, no transparency */
 	padding: 12px 16px;
 	border-radius: 12px 12px 0 0;
 	border: 1px solid var(--border-subtle);

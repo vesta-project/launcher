@@ -13,8 +13,7 @@ export function hasTauriRuntime(): boolean {
 	const tauriWindow = window as TauriWindow;
 
 	const hasIPC = !!tauriWindow.__TAURI_IPC__;
-	const hasInternalInvoke =
-		typeof tauriWindow.__TAURI_INTERNALS__?.invoke === "function";
+	const hasInternalInvoke = typeof tauriWindow.__TAURI_INTERNALS__?.invoke === "function";
 	const hasPublicInvoke = typeof tauriWindow.__TAURI__?.invoke === "function";
 
 	return hasIPC || hasInternalInvoke || hasPublicInvoke;

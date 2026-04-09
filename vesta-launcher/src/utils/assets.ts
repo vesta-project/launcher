@@ -7,9 +7,7 @@ import { resolveBuiltinIcon } from "./instances";
  * @param path The path or URL to resolve.
  * @returns The resolved URL string ready for use in <img> tags or CSS.
  */
-export function resolveResourceUrl(
-	path: string | null | undefined,
-): string | undefined {
+export function resolveResourceUrl(path: string | null | undefined): string | undefined {
 	if (!path) return undefined;
 
 	// First, try to resolve builtin icons (like "builtin:placeholder-1" or legacy hashed paths)

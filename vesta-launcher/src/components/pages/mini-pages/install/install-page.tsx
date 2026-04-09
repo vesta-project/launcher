@@ -3,32 +3,27 @@ import GlobeIcon from "@assets/earth-globe.svg";
 import SearchIcon from "@assets/search.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { resources, ResourceVersion, SourcePlatform } from "@stores/resources";
+import { ResourceVersion, resources, SourcePlatform } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Badge } from "@ui/badge";
 import { Separator } from "@ui/separator/separator";
 import { showToast } from "@ui/toast/toast";
+import { createInstance, getInstance, type Instance, installInstance } from "@utils/instances";
 import {
-    createInstance,
-    getInstance,
-    installInstance,
-    type Instance,
-} from "@utils/instances";
-import {
-    getModpackInfo,
-    getModpackInfoFromUrl,
-    installModpackFromUrl,
-    installModpackFromZip,
-    ModpackInfo,
+	getModpackInfo,
+	getModpackInfoFromUrl,
+	installModpackFromUrl,
+	installModpackFromZip,
+	ModpackInfo,
 } from "@utils/modpacks";
 import {
-    batch,
-    createEffect,
-    createMemo,
-    createResource,
-    createSignal,
-    onMount,
-    Show,
+	batch,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	onMount,
+	Show,
 } from "solid-js";
 import { InstallForm } from "./components/InstallForm";
 import styles from "./install-page.module.css";
@@ -103,11 +98,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 
 	// The "Original" icon for the picker (persists even if user changes selection)
 	const originalIcon = createMemo(
-		() =>
-			props.originalIcon ||
-			modpackInfo()?.iconUrl ||
-			props.projectIcon ||
-			undefined,
+		() => props.originalIcon || modpackInfo()?.iconUrl || props.projectIcon || undefined,
 	);
 
 	// --- Form Capture ---
@@ -128,8 +119,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 
 	// UI Toggles
 	const [urlInputValue, setUrlInputValue] = createSignal("");
-	const [selectedModpackVersionId, setSelectedModpackVersionId] =
-		createSignal("");
+	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
 
 	// --- Derived UI States ---
 	// These prevent layout flickering between state updates
@@ -138,16 +128,10 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 		const hasSource = !!(modpackUrl() || modpackPath());
 		const hasInfo = !!modpackInfo();
 
-		if (isModpackMode() && hasSource && !hasInfo && !props.projectName)
-			return true;
+		if (isModpackMode() && hasSource && !hasInfo && !props.projectName) return true;
 
 		// If we're loading project versions from the browser and don't have a name yet
-		if (
-			isModpackMode() &&
-			props.projectId &&
-			projectVersions.loading &&
-			!props.projectName
-		)
+		if (isModpackMode() && props.projectId && projectVersions.loading && !props.projectName)
 			return true;
 
 		return false;
@@ -188,8 +172,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 
 				if (initialVer) {
 					const match = vs.find(
-						(v: ResourceVersion) =>
-							v.id === initialVer || v.version_number === initialVer,
+						(v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer,
 					);
 					if (match) {
 						setSelectedModpackVersionId(match.id);
@@ -198,9 +181,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 				}
 
 				if (currentUrl) {
-					const match = vs.find(
-						(v: ResourceVersion) => v.download_url === currentUrl,
-					);
+					const match = vs.find((v: ResourceVersion) => v.download_url === currentUrl);
 					if (match) {
 						setSelectedModpackVersionId(match.id);
 						return vs;
@@ -230,8 +211,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 		if (!versions || versions.length === 0 || !selectedId) return;
 
 		const match = versions.find(
-			(version: ResourceVersion) =>
-				version.id === selectedId || version.version_number === selectedId,
+			(version: ResourceVersion) => version.id === selectedId || version.version_number === selectedId,
 		);
 
 		if (match) {
@@ -283,35 +263,24 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 					// If versions are still loading, wait a bit or try to find them
 					let vs = projectVersions();
 					if (!vs && projectVersions.loading) {
-						console.log(
-							"[InstallPage] Waiting for project versions to settle for fallback...",
-						);
+						console.log("[InstallPage] Waiting for project versions to settle for fallback...");
 						// We don't want to block progress too much, but a small delay help
 					}
 
-					const initialVerId =
-						props.initialVersion || selectedModpackVersionId();
+					const initialVerId = props.initialVersion || selectedModpackVersionId();
 					const selectedVer =
 						vs?.find(
-							(v: ResourceVersion) =>
-								v.id === initialVerId || v.version_number === initialVerId,
+							(v: ResourceVersion) => v.id === initialVerId || v.version_number === initialVerId,
 						) || vs?.[0];
 
 					setModpackInfo({
 						name: props.projectName || "Unknown Modpack",
-						version:
-							selectedVer?.version_number || props.initialVersion || "1.0.0",
+						version: selectedVer?.version_number || props.initialVersion || "1.0.0",
 						author: props.projectAuthor || "",
 						description: null,
 						iconUrl: props.projectIcon || null,
-						minecraftVersion:
-							selectedVer?.game_versions[0] ||
-							props.initialModloaderVersion ||
-							"",
-						modloader:
-							(selectedVer?.loaders[0] as any) ||
-							props.initialModloader ||
-							"vanilla",
+						minecraftVersion: selectedVer?.game_versions[0] || props.initialModloaderVersion || "",
+						modloader: (selectedVer?.loaders[0] as any) || props.initialModloader || "vanilla",
 						modloaderVersion: null,
 						modCount: 0,
 						format: "unknown",
@@ -367,9 +336,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 					console.log(`[Install] Fetching modpack from URL: ${sourceUrl}`);
 					await installModpackFromUrl(sourceUrl, data, fullMetadata);
 				} else if (sourcePath) {
-					console.log(
-						`[Install] Installing modpack from local file: ${sourcePath}`,
-					);
+					console.log(`[Install] Installing modpack from local file: ${sourcePath}`);
 					await installModpackFromZip(sourcePath, data, fullMetadata);
 				}
 			} else {
@@ -424,23 +391,17 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 		// If we have a source, we are locked to its version.
 		if (info && (modpackUrl() || modpackPath())) return [info.minecraftVersion];
 		// If browsing a project, show all its available versions
-		return (
-			projectVersions()?.flatMap((v: ResourceVersion) => v.game_versions) ||
-			undefined
-		);
+		return projectVersions()?.flatMap((v: ResourceVersion) => v.game_versions) || undefined;
 	});
 
 	const supportedModloaders = createMemo(() => {
 		const info = modpackInfo();
-		if (info && (modpackUrl() || modpackPath()))
-			return [info.modloader.toLowerCase()];
+		if (info && (modpackUrl() || modpackPath())) return [info.modloader.toLowerCase()];
 
 		const vs = projectVersions();
 		if (vs && vs.length > 0) {
 			const set = new Set(["vanilla"]);
-			vs.forEach((v: ResourceVersion) =>
-				v.loaders.forEach((l: string) => set.add(l.toLowerCase())),
-			);
+			vs.forEach((v: ResourceVersion) => v.loaders.forEach((l: string) => set.add(l.toLowerCase())));
 			return Array.from(set);
 		}
 		return undefined;
@@ -448,11 +409,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 
 	return (
 		<div class={styles["page-root"]}>
-			<Show
-				when={
-					!(props.projectId || modpackUrl() || modpackPath() || isModpackMode())
-				}
-			>
+			<Show when={!(props.projectId || modpackUrl() || modpackPath() || isModpackMode())}>
 				<header class={styles["install-page-header"]}>
 					<div class={styles["header-text"]}>
 						<h1>{isModpackMode() ? "Install Modpack" : "New Instance"}</h1>
@@ -478,11 +435,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 							clickable={true}
 							variant="surface"
 							onClick={() =>
-								activeRouter()?.updateQuery(
-									"mode",
-									isModpackMode() ? "standard" : "modpack",
-									true,
-								)
+								activeRouter()?.updateQuery("mode", isModpackMode() ? "standard" : "modpack", true)
 							}
 						>
 							{isModpackMode() ? "Standard Instance" : "Install Modpack"}
@@ -493,12 +446,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 
 			<div class={styles["page-wrapper"]}>
 				{/* Context Banner (e.g. "Installing Fabulous Optimized") */}
-				<Show
-					when={
-						(props.projectName || modpackPath() || modpackUrl()) &&
-						!shouldShowOverlay()
-					}
-				>
+				<Show when={(props.projectName || modpackPath() || modpackUrl()) && !shouldShowOverlay()}>
 					<div class={styles["install-resource-context"]}>
 						<button
 							class={styles["back-link"]}
@@ -519,44 +467,27 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 						<Separator orientation="vertical" style={{ height: "24px" }} />
 						<div class={styles["resource-pill"]}>
 							<Show when={props.projectIcon || modpackInfo()?.iconUrl}>
-								<img
-									src={
-										(props.projectIcon || modpackInfo()?.iconUrl) ?? undefined
-									}
-									alt=""
-								/>
+								<img src={(props.projectIcon || modpackInfo()?.iconUrl) ?? undefined} alt="" />
 							</Show>
 							<div class={styles["resource-info"]}>
 								<span class={styles["resource-label"]}>
-									{props.resourceType ||
-										(isModpackMode() ? "Modpack" : "Package")}
+									{props.resourceType || (isModpackMode() ? "Modpack" : "Package")}
 								</span>
 								<div class={styles["resource-name-row"]}>
 									<span
 										class={styles["resource-name"]}
 										classList={{
-											[styles["is-analyzing"]]:
-												!modpackInfo() && !props.projectName,
+											[styles["is-analyzing"]]: !modpackInfo() && !props.projectName,
 										}}
 									>
-										{props.projectName ||
-											modpackInfo()?.name ||
-											"Analyzing modpack details..."}
+										{props.projectName || modpackInfo()?.name || "Analyzing modpack details..."}
 									</span>
-									<Show
-										when={
-											modpackInfo() ||
-											(props.initialVersion && props.initialModloader)
-										}
-									>
+									<Show when={modpackInfo() || (props.initialVersion && props.initialModloader)}>
 										<div class={styles["resource-meta"]}>
 											<span class={styles["meta-tag"]}>
-												{modpackInfo()?.minecraftVersion ||
-													props.initialVersion}
+												{modpackInfo()?.minecraftVersion || props.initialVersion}
 											</span>
-											<span
-												class={`${styles["meta-tag"]} ${styles.capitalize}`}
-											>
+											<span class={`${styles["meta-tag"]} ${styles.capitalize}`}>
 												{modpackInfo()?.modloader || props.initialModloader}
 											</span>
 										</div>
@@ -585,10 +516,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 							</div>
 
 							<div class={styles["modpack-import-container"]}>
-								<div
-									class={styles["modpack-import-card"]}
-									onClick={handleLocalImport}
-								>
+								<div class={styles["modpack-import-card"]} onClick={handleLocalImport}>
 									<div class={styles["card-icon"]}>
 										<CubeIcon />
 									</div>
@@ -614,9 +542,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 								</div>
 								<div
 									class={styles["modpack-import-card"]}
-									onClick={() =>
-										activeRouter()?.updateQuery("source", "url", true)
-									}
+									onClick={() => activeRouter()?.updateQuery("source", "url", true)}
 								>
 									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
 										<GlobeIcon />
@@ -631,9 +557,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 							<div class={styles["import-footer"]}>
 								<button
 									class={styles["switch-mode-button"]}
-									onClick={() =>
-										activeRouter()?.updateQuery("mode", "standard", true)
-									}
+									onClick={() => activeRouter()?.updateQuery("mode", "standard", true)}
 								>
 									Switch to Standard Instance
 								</button>
@@ -647,9 +571,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 										<GlobeIcon />
 									</div>
 									<h3>Enter Download Link</h3>
-									<p>
-										Paste a CurseForge, Modrinth, or direct ZIP/MRPACK link.
-									</p>
+									<p>Paste a CurseForge, Modrinth, or direct ZIP/MRPACK link.</p>
 								</div>
 								<div class={styles["url-input-row"]}>
 									<input
@@ -668,10 +590,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 										Continue
 									</button>
 								</div>
-								<button
-									class={styles["cancel-link"]}
-									onClick={() => activeRouter()?.removeQuery("source")}
-								>
+								<button class={styles["cancel-link"]} onClick={() => activeRouter()?.removeQuery("source")}>
 									Go Back
 								</button>
 							</div>
@@ -686,14 +605,11 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 						<div class={styles["fetching-overlay"]}>
 							<div class={styles.spinner} />
 							<p>
-								{projectVersions.loading
-									? "Loading available versions..."
-									: "Fetching modpack details..."}
+								{projectVersions.loading ? "Loading available versions..." : "Fetching modpack details..."}
 							</p>
 							<Show when={!projectVersions.loading}>
 								<span class={styles["fetching-subtext"]}>
-									This usually takes a few seconds as we verify the pack
-									manifest.
+									This usually takes a few seconds as we verify the pack manifest.
 								</span>
 							</Show>
 						</div>
@@ -704,11 +620,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 				{/* We show the form as soon as we have some basic context, or if we are not in modpack mode. */}
 				<Show
 					when={
-						shouldShowForm() &&
-						(!isModpackMode() ||
-							modpackUrl() ||
-							modpackPath() ||
-							props.projectId)
+						shouldShowForm() && (!isModpackMode() || modpackUrl() || modpackPath() || props.projectId)
 					}
 				>
 					<InstallForm
@@ -726,29 +638,14 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 						// Primary state source for persistence/handoff
 						initialData={(props as any).initialData}
 						// Fallback Mapping (Used for initial route parameters or metadata)
-						initialName={
-							props.initialName || modpackInfo()?.name || props.projectName
-						}
-						initialAuthor={
-							modpackInfo()?.author || props.projectAuthor || undefined
-						}
-						initialIcon={
-							props.initialIcon ||
-							modpackInfo()?.iconUrl ||
-							props.projectIcon ||
-							undefined
-						}
+						initialName={props.initialName || modpackInfo()?.name || props.projectName}
+						initialAuthor={modpackInfo()?.author || props.projectAuthor || undefined}
+						initialIcon={props.initialIcon || modpackInfo()?.iconUrl || props.projectIcon || undefined}
 						originalIcon={originalIcon()}
-						initialVersion={
-							props.initialVersion || modpackInfo()?.minecraftVersion
-						}
-						initialModloader={
-							props.initialModloader || modpackInfo()?.modloader
-						}
+						initialVersion={props.initialVersion || modpackInfo()?.minecraftVersion}
+						initialModloader={props.initialModloader || modpackInfo()?.modloader}
 						initialModloaderVersion={
-							modpackInfo()?.modloaderVersion ||
-							props.initialModloaderVersion ||
-							undefined
+							modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined
 						}
 						initialIncludeSnapshots={props.initialIncludeSnapshots}
 						initialMinMemory={props.initialMinMemory}
@@ -765,10 +662,7 @@ function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
 									setModpackInfo(undefined);
 								});
 							} else if (props.close) props.close();
-							else
-								activeRouter()?.navigate(
-									props.projectName ? "/resources" : "/home",
-								);
+							else activeRouter()?.navigate(props.projectName ? "/resources" : "/home");
 						}}
 						isInstalling={isInstalling()}
 						isFetchingMetadata={isFetchingMetadata() || projectVersions.loading}

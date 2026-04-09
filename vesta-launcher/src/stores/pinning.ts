@@ -82,16 +82,10 @@ export async function reorderPins(pinIds: number[]) {
 }
 
 export function isPinned(type: string, targetId: string) {
-	return pinningState.pins.some(
-		(p) => p.page_type === type && p.target_id === targetId,
-	);
+	return pinningState.pins.some((p) => p.page_type === type && p.target_id === targetId);
 }
 
-export async function updatePinnedMetadata(
-	pinId: number,
-	newLabel?: string,
-	newIconUrl?: string,
-) {
+export async function updatePinnedMetadata(pinId: number, newLabel?: string, newIconUrl?: string) {
 	try {
 		await invoke("update_pinned_metadata", {
 			pinId,
@@ -113,17 +107,12 @@ export async function updatePinnedMetadata(
  * Background sync for pinned resources to ensure they have the latest names and icons.
  */
 export async function refreshPinnedMetadata() {
-	const resourcePins = pinningState.pins.filter(
-		(p) => p.page_type === "resource" && p.platform,
-	);
+	const resourcePins = pinningState.pins.filter((p) => p.page_type === "resource" && p.platform);
 
 	for (const pin of resourcePins) {
 		try {
 			// This will check cache first
-			const project = await resources.getProject(
-				pin.platform as any,
-				pin.target_id,
-			);
+			const project = await resources.getProject(pin.platform as any, pin.target_id);
 			if (!project) continue;
 
 			const needsLabelUpdate = project.name !== pin.label;
@@ -138,10 +127,7 @@ export async function refreshPinnedMetadata() {
 				);
 			}
 		} catch (e) {
-			console.warn(
-				`[Pinning] Failed to refresh metadata for ${pin.target_id}:`,
-				e,
-			);
+			console.warn(`[Pinning] Failed to refresh metadata for ${pin.target_id}:`, e);
 		}
 	}
 }

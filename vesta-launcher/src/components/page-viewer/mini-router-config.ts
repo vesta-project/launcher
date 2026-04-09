@@ -23,22 +23,10 @@ export const miniRouterPaths = {
 	...CreateMiniRouterPath("/file-drop", FileDropPage, "File Drop"),
 	...CreateMiniRouterPath("/login", LoginPage, "Sign In"),
 	...CreateMiniRouterPath("/resources", ResourceBrowser, "Resource Browser"),
-	...CreateMiniRouterPath(
-		"/resource-details",
-		ResourceDetailsPage,
-		"Resource Details",
-	),
-	...CreateMiniRouterPath(
-		"/notification-test",
-		NotificationTestPage,
-		"Notification Test",
-	),
+	...CreateMiniRouterPath("/resource-details", ResourceDetailsPage, "Resource Details"),
+	...CreateMiniRouterPath("/notification-test", NotificationTestPage, "Notification Test"),
 	...CreateMiniRouterPath("/task-test", TaskTestPage, "Task System Test"),
-	...CreateMiniRouterPath(
-		"/debug-test",
-		DebugTestPage,
-		"Debug Interaction Test",
-	),
+	...CreateMiniRouterPath("/debug-test", DebugTestPage, "Debug Interaction Test"),
 };
 
 export const miniRouterInvalidPage = InvalidPage;

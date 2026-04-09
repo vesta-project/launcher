@@ -3,13 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { createStore, reconcile } from "solid-js/store";
 import { Instance } from "./instances";
 
-export type ResourceType =
-	| "mod"
-	| "resourcepack"
-	| "shader"
-	| "datapack"
-	| "modpack"
-	| "world";
+export type ResourceType = "mod" | "resourcepack" | "shader" | "datapack" | "modpack" | "world";
 export type SourcePlatform = "modrinth" | "curseforge";
 // ... (rest of imports)
 
@@ -149,10 +143,7 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 export const resources = {
 	state: resourceStore,
 
-	setRequestInstall: (
-		p: ResourceProject | null,
-		versions: ResourceVersion[] = [],
-	) => {
+	setRequestInstall: (p: ResourceProject | null, versions: ResourceVersion[] = []) => {
 		setResourceStore("requestInstallProject", p);
 		setResourceStore("requestInstallVersions", versions);
 	},
@@ -189,12 +180,9 @@ export const resources = {
 
 	fetchCategories: async () => {
 		try {
-			const categories = await invoke<ResourceCategory[]>(
-				"get_resource_categories",
-				{
-					platform: resourceStore.activeSource,
-				},
-			);
+			const categories = await invoke<ResourceCategory[]>("get_resource_categories", {
+				platform: resourceStore.activeSource,
+			});
 			setResourceStore("availableCategories", categories);
 
 			// Prune categories that no longer exist for this type
@@ -276,21 +264,18 @@ export const resources = {
 		setResourceStore("limit", l);
 		setResourceStore("offset", 0);
 	},
-	toggleSortOrder: () =>
-		setResourceStore("sortOrder", (o) => (o === "asc" ? "desc" : "asc")),
+	toggleSortOrder: () => setResourceStore("sortOrder", (o) => (o === "asc" ? "desc" : "asc")),
 	setViewMode: (m: "grid" | "list") => setResourceStore("viewMode", m),
 	toggleFilters: () => setResourceStore("showFilters", (show) => !show),
 	setOffset: (o: number) => setResourceStore("offset", o),
-	setPage: (p: number) =>
-		setResourceStore("offset", (p - 1) * resourceStore.limit),
+	setPage: (p: number) => setResourceStore("offset", (p - 1) * resourceStore.limit),
 
 	toggleSelection: (id: string) => setResourceStore("selection", id, (s) => !s),
 	batchSetSelection: (selection: Record<string, boolean>) => {
 		setResourceStore("selection", reconcile(selection));
 	},
 	clearSelection: () => setResourceStore("selection", reconcile({})),
-	setSorting: (sorting: { id: string; desc: boolean }[]) =>
-		setResourceStore("sorting", sorting),
+	setSorting: (sorting: { id: string; desc: boolean }[]) => setResourceStore("sorting", sorting),
 
 	// Legacy helper if needed elsewhere
 	setBatchSelected: (ids: string[], selected: boolean) => {
@@ -308,8 +293,7 @@ export const resources = {
 			gameVersion: null,
 			loader: null,
 			offset: 0,
-			sortBy:
-				resourceStore.activeSource === "modrinth" ? "relevance" : "featured",
+			sortBy: resourceStore.activeSource === "modrinth" ? "relevance" : "featured",
 			sortOrder: "desc",
 		});
 		resources.search();
@@ -322,11 +306,7 @@ export const resources = {
 			try {
 				// Fetch versions - use ignoreCache: true to ensure we get the expanded (>50) list
 				// if we previously only cached 50.
-				const versions = await resources.getVersions(
-					project.source,
-					project.id,
-					true,
-				);
+				const versions = await resources.getVersions(project.source, project.id, true);
 				setResourceStore("versions", versions);
 			} catch (e) {
 				console.error("Failed to fetch versions:", e);
@@ -351,10 +331,7 @@ export const resources = {
 					limit: resourceStore.limit,
 					game_version: resourceStore.gameVersion,
 					loader: resourceStore.loader,
-					categories:
-						resourceStore.categories.length > 0
-							? resourceStore.categories
-							: null,
+					categories: resourceStore.categories.length > 0 ? resourceStore.categories : null,
 					sort_by: resourceStore.sortBy,
 					sort_order: resourceStore.sortOrder,
 				},
@@ -385,11 +362,7 @@ export const resources = {
 		});
 	},
 
-	getVersions: async (
-		platform: SourcePlatform,
-		projectId: string,
-		ignoreCache: boolean = false,
-	) => {
+	getVersions: async (platform: SourcePlatform, projectId: string, ignoreCache: boolean = false) => {
 		return await invoke<ResourceVersion[]>("get_resource_versions", {
 			platform,
 			projectId,
@@ -404,9 +377,7 @@ export const resources = {
 	) => {
 		const isModpack = project.resource_type === "modpack";
 		const instanceId =
-			targetInstanceId !== undefined
-				? targetInstanceId
-				: resourceStore.selectedInstanceId;
+			targetInstanceId !== undefined ? targetInstanceId : resourceStore.selectedInstanceId;
 
 		if (!instanceId && !isModpack) return;
 
@@ -445,12 +416,8 @@ export const resources = {
 			return result;
 		} catch (e) {
 			// Remove from installing list ONLY on error
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== version.id),
-			);
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== project.id),
-			);
+			setResourceStore("installingVersionIds", (ids) => ids.filter((id) => id !== version.id));
+			setResourceStore("installingProjectIds", (ids) => ids.filter((id) => id !== project.id));
 			throw e;
 		}
 	},
@@ -462,10 +429,7 @@ export const resources = {
 	},
 
 	fetchInstalled: async (instanceId: number) => {
-		const results = await invoke<InstalledResource[]>(
-			"get_installed_resources",
-			{ instanceId },
-		);
+		const results = await invoke<InstalledResource[]>("get_installed_resources", { instanceId });
 		setResourceStore("installedResources", results);
 
 		// Clear any installing IDs that are now in the results.
@@ -514,20 +478,13 @@ if (typeof window !== "undefined") {
 			const projectId = parts[2];
 			const versionId = parts[3];
 
-			setResourceStore("installingProjectIds", (ids) =>
-				ids.filter((id) => id !== projectId),
-			);
-			setResourceStore("installingVersionIds", (ids) =>
-				ids.filter((id) => id !== versionId),
-			);
+			setResourceStore("installingProjectIds", (ids) => ids.filter((id) => id !== projectId));
+			setResourceStore("installingVersionIds", (ids) => ids.filter((id) => id !== versionId));
 		}
 	});
 }
 
-export function isGameVersionCompatible(
-	supported: string[],
-	target: string,
-): boolean {
+export function isGameVersionCompatible(supported: string[], target: string): boolean {
 	// Normalize versions to handle 1.21 vs 1.21.0 consistently
 	// We normalize both to X.Y for comparison, but we must be careful with patches.
 	const normalize = (v: string) => (v.endsWith(".0") ? v.slice(0, -2) : v);
@@ -575,25 +532,15 @@ export function findBestVersion(
 				: ["release", "beta", "alpha"];
 
 	const compatible = versions.filter((v) => {
-		const matchesVersion = isGameVersionCompatible(
-			v.game_versions,
-			gameVersion,
-		);
+		const matchesVersion = isGameVersionCompatible(v.game_versions, gameVersion);
 
 		// Loader logic
 		const normalizedLoaders = v.loaders.map((l) => l.toLowerCase());
 		let matchesLoader = false;
 
-		if (
-			resourceType === "shader" ||
-			resourceType === "resourcepack" ||
-			resourceType === "datapack"
-		) {
+		if (resourceType === "shader" || resourceType === "resourcepack" || resourceType === "datapack") {
 			matchesLoader = true;
-			if (
-				resourceType === "shader" &&
-				(instLoader === "" || instLoader === "vanilla")
-			) {
+			if (resourceType === "shader" && (instLoader === "" || instLoader === "vanilla")) {
 				matchesLoader = false;
 			}
 		} else {
@@ -602,9 +549,7 @@ export function findBestVersion(
 				if (resourceType === "mod") {
 					matchesLoader = false;
 				} else {
-					matchesLoader =
-						normalizedLoaders.length === 0 ||
-						normalizedLoaders.includes("minecraft");
+					matchesLoader = normalizedLoaders.length === 0 || normalizedLoaders.includes("minecraft");
 				}
 			} else {
 				matchesLoader = normalizedLoaders.some((l) => l === instLoader);

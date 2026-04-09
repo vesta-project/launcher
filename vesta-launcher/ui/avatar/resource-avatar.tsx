@@ -2,13 +2,13 @@ import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { resolveResourceUrl } from "@utils/assets";
 import {
-    Component,
-    createEffect,
-    createMemo,
-    createResource,
-    createSignal,
-    onCleanup,
-    Show
+	Component,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	onCleanup,
+	Show,
 } from "solid-js";
 import styles from "./avatar.module.css";
 
@@ -52,33 +52,30 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 		let unlisten: (() => void) | undefined;
 		let cancelled = false;
 
-		listen<{ uuid?: string; force?: boolean }>(
-			"core://account-heads-updated",
-			async (event) => {
-				const targetUuid = event.payload?.uuid;
-				// Normalize UUIDs before comparison so dashed/non-dashed variants match
-				const shouldRefresh =
-					!targetUuid ||
-					!props.playerUuid ||
-					targetUuid.replace(/-/g, "") === props.playerUuid.replace(/-/g, "");
+		listen<{ uuid?: string; force?: boolean }>("core://account-heads-updated", async (event) => {
+			const targetUuid = event.payload?.uuid;
+			// Normalize UUIDs before comparison so dashed/non-dashed variants match
+			const shouldRefresh =
+				!targetUuid ||
+				!props.playerUuid ||
+				targetUuid.replace(/-/g, "") === props.playerUuid.replace(/-/g, "");
 
-				if (!shouldRefresh) return;
+			if (!shouldRefresh) return;
 
-				// Pre-download the fresh head so the file cache is up-to-date before re-render
-				if (event.payload?.force && props.playerUuid) {
-					try {
-						await invoke("get_player_head_path", {
-							playerUuid: props.playerUuid,
-							forceDownload: true,
-						});
-					} catch {
-						// fall through to cached head
-					}
+			// Pre-download the fresh head so the file cache is up-to-date before re-render
+			if (event.payload?.force && props.playerUuid) {
+				try {
+					await invoke("get_player_head_path", {
+						playerUuid: props.playerUuid,
+						forceDownload: true,
+					});
+				} catch {
+					// fall through to cached head
 				}
+			}
 
-				setAvatarTimestamp(Date.now());
-			},
-		).then((fn) => {
+			setAvatarTimestamp(Date.now());
+		}).then((fn) => {
 			if (cancelled) {
 				fn();
 			} else {
@@ -109,20 +106,14 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 	const resolvedUrl = createMemo(() => {
 		if (blobUrl()) return blobUrl();
 		if (playerHeadPath()) return playerHeadPath();
-		if (
-			typeof props.icon === "string" &&
-			!props.icon.startsWith("linear-gradient")
-		) {
+		if (typeof props.icon === "string" && !props.icon.startsWith("linear-gradient")) {
 			return resolveResourceUrl(props.icon);
 		}
 		return null;
 	});
 
 	const backgroundStyle = createMemo(() => {
-		if (
-			typeof props.icon === "string" &&
-			props.icon.startsWith("linear-gradient")
-		) {
+		if (typeof props.icon === "string" && props.icon.startsWith("linear-gradient")) {
 			return { background: props.icon };
 		}
 		return {};
@@ -155,19 +146,11 @@ export const ResourceAvatar: Component<ResourceAvatarProps> = (props) => {
 				when={resolvedUrl()}
 				fallback={
 					<Show when={!backgroundStyle().background}>
-						<span class={styles["resource-avatar-fallback"]}>
-							{displayChar()}
-						</span>
+						<span class={styles["resource-avatar-fallback"]}>{displayChar()}</span>
 					</Show>
 				}
 			>
-				{(url) => (
-					<img
-						src={url()}
-						alt={props.name}
-						class={styles["resource-avatar-image"]}
-					/>
-				)}
+				{(url) => <img src={url()} alt={props.name} class={styles["resource-avatar-image"]} />}
 			</Show>
 		</div>
 	);

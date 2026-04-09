@@ -153,9 +153,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										<line x1="6" y1="6" x2="18" y2="18" />
 									</svg>
 								</button>
-								<span class={styles["selection-count"]}>
-									{selectionCount()} resources selected
-								</span>
+								<span class={styles["selection-count"]}>{selectionCount()} resources selected</span>
 							</div>
 							<div class={styles["selection-actions"]}>
 								<Button
@@ -198,11 +196,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			</div>
 
 			<div class={styles["installed-resources-list"]}>
-				<Show
-					when={
-						props.installedResources.loading && !props.installedResources.latest
-					}
-				>
+				<Show when={props.installedResources.loading && !props.installedResources.latest}>
 					<Skeleton class={styles["skeleton-resources"]} />
 				</Show>
 				<Show when={props.installedResources.latest}>
@@ -221,24 +215,17 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 												{(header) => (
 													<th
 														style={{
-															width:
-																header.getSize() !== 150
-																	? `${header.getSize()}px`
-																	: undefined,
+															width: header.getSize() !== 150 ? `${header.getSize()}px` : undefined,
 														}}
 													>
 														<Show when={!header.isPlaceholder}>
 															<div
 																classList={{
-																	[styles["can-sort"]]:
-																		header.column.getCanSort(),
+																	[styles["can-sort"]]: header.column.getCanSort(),
 																}}
 																onClick={header.column.getToggleSortingHandler()}
 															>
-																{flexRender(
-																	header.column.columnDef.header,
-																	header.getContext(),
-																)}
+																{flexRender(header.column.columnDef.header, header.getContext())}
 															</div>
 														</Show>
 													</th>
@@ -259,14 +246,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 											}}
 										>
 											<For each={row.getVisibleCells()}>
-												{(cell) => (
-													<td>
-														{flexRender(
-															cell.column.columnDef.cell,
-															cell.getContext(),
-														)}
-													</td>
-												)}
+												{(cell) => <td>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>}
 											</For>
 										</tr>
 									)}

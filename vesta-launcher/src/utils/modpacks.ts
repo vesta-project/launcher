@@ -154,9 +154,7 @@ export async function installModpackFromUrl(
 	});
 }
 
-export async function listExportCandidates(
-	instanceId: number,
-): Promise<ExportCandidate[]> {
+export async function listExportCandidates(instanceId: number): Promise<ExportCandidate[]> {
 	return await invoke("list_export_candidates", { instanceId });
 }
 

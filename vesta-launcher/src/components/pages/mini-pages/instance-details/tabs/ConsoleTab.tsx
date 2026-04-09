@@ -10,15 +10,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { TextField } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import clsx from "clsx";
-import {
-	createEffect,
-	createMemo,
-	createSignal,
-	For,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
 import styles from "../instance-details.module.css";
 
 const ArrowUpIcon = (props: { class?: string }) => (
@@ -153,12 +145,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 								? `Viewing Historical Log: ${consoleStore.state.currentLogPath.split(/[/\\]/).pop()}`
 								: "Viewing Historical Logs"}
 					</span>
-					<Show
-						when={
-							!consoleStore.state.isLive &&
-							instancesState.runningIds[props.instanceSlug]
-						}
-					>
+					<Show when={!consoleStore.state.isLive && instancesState.runningIds[props.instanceSlug]}>
 						<Tooltip placement="top">
 							<TooltipTrigger>
 								<Button
@@ -233,10 +220,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									as={Button}
 									variant="ghost"
 									size="md"
-									class={clsx(
-										styles["console-tool-btn"],
-										historyOpen() && styles["active"],
-									)}
+									class={clsx(styles["console-tool-btn"], historyOpen() && styles["active"])}
 								>
 									<HistoryIcon />
 								</PopoverTrigger>
@@ -244,9 +228,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							<TooltipContent>Log History</TooltipContent>
 						</Tooltip>
 						<PopoverContent class={styles["console-history-popover"]}>
-							<div class={styles["history-popover-header"]}>
-								Select Log File
-							</div>
+							<div class={styles["history-popover-header"]}>Select Log File</div>
 							<div class={styles["history-popover-list"]}>
 								<For each={consoleStore.state.history}>
 									{(file) => (
@@ -257,14 +239,11 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 											}}
 											class={clsx(
 												styles["history-item"],
-												consoleStore.state.currentLogPath === file.path &&
-													styles["active"],
+												consoleStore.state.currentLogPath === file.path && styles["active"],
 											)}
 										>
 											<span class={styles["history-name"]}>{file.name}</span>
-											<span class={styles["history-meta"]}>
-												{(file.size / 1024).toFixed(1)} KB
-											</span>
+											<span class={styles["history-meta"]}>{(file.size / 1024).toFixed(1)} KB</span>
 										</button>
 									)}
 								</For>
@@ -278,10 +257,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							variant="ghost"
 							size="md"
 							onClick={() => consoleStore.clear()}
-							class={clsx(
-								styles["console-tool-btn"],
-								styles["console-tool-btn-trash"],
-							)}
+							class={clsx(styles["console-tool-btn"], styles["console-tool-btn-trash"])}
 						>
 							<TrashIcon />
 						</TooltipTrigger>
@@ -297,8 +273,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 							onClick={() => consoleStore.toggleFilterLevel(level)}
 							class={clsx(
 								styles["filter-tag"],
-								consoleStore.state.filterLevels.includes(level) &&
-									styles["active"],
+								consoleStore.state.filterLevels.includes(level) && styles["active"],
 							)}
 							style={{ "--level-color": getLevelColor(level) }}
 						>
@@ -339,15 +314,10 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 										<div class={styles["console-gutter"]}>{line.id}</div>
 										<div class={styles["console-line-content"]}>
 											<Show when={line.timestamp}>
-												<span class={styles["log-time"]}>
-													[{line.timestamp}]
-												</span>
+												<span class={styles["log-time"]}>[{line.timestamp}]</span>
 											</Show>
 											<Show when={line.level !== "UNKNOWN"}>
-												<span
-													class={styles["log-level"]}
-													style={{ color: getLevelColor(line.level) }}
-												>
+												<span class={styles["log-level"]} style={{ color: getLevelColor(line.level) }}>
 													[{line.thread}/{line.level}]:
 												</span>
 											</Show>
@@ -375,9 +345,7 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 									</Show>
 								</Button>
 							</TooltipTrigger>
-							<TooltipContent>
-								{atBottom() ? "Jump to Top" : "Jump to Bottom"}
-							</TooltipContent>
+							<TooltipContent>{atBottom() ? "Jump to Top" : "Jump to Bottom"}</TooltipContent>
 						</Tooltip>
 					</div>
 				</Show>

@@ -60,10 +60,7 @@ export function initTheme(): Promise<Record<string, any> | null> {
 			console.info("Initial theme applied from config");
 			return config;
 		} catch (error) {
-			console.warn(
-				"Failed to load theme config — preserving existing theme:",
-				error,
-			);
+			console.warn("Failed to load theme config — preserving existing theme:", error);
 			applyStartupFallbackTheme();
 			// Even if it fails, we mark it as ready so the app can continue
 			setIsThemeReady(true);

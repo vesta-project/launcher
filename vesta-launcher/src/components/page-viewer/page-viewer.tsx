@@ -1,19 +1,9 @@
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import {
-	miniRouterInvalidPage,
-	miniRouterPaths,
-} from "@components/page-viewer/mini-router-config";
+import { miniRouterInvalidPage, miniRouterPaths } from "@components/page-viewer/mini-router-config";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 
 import { invoke } from "@tauri-apps/api/core";
-import {
-	createMemo,
-	createRoot,
-	createSignal,
-	onCleanup,
-	onMount,
-	Show,
-} from "solid-js";
+import { createMemo, createRoot, createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./page-viewer.module.css";
 
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
@@ -27,10 +17,7 @@ const [router, setRouter] = createRoot(() =>
 	),
 );
 
-function PageViewer(props: {
-	open?: boolean;
-	viewChanged?: (value: boolean) => void;
-}) {
+function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => void }) {
 	const mini_router = router();
 
 	const onPopOut = () => {
@@ -45,13 +32,8 @@ function PageViewer(props: {
 			if (!rec) return {};
 			return Object.fromEntries(
 				Object.entries(rec)
-					.filter(
-						([k]) => k !== "router" && k !== "close" && k !== "setRefetch",
-					)
-					.map(([k, v]) => [
-						k,
-						typeof v === "object" ? JSON.stringify(v) : String(v),
-					]),
+					.filter(([k]) => k !== "router" && k !== "close" && k !== "setRefetch")
+					.map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]),
 			);
 		};
 

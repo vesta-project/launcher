@@ -9,11 +9,7 @@ const skinDir =
 		: skinDirEnv && skinDirEnv.trim().length > 0
 			? path.resolve(skinDirEnv)
 			: "";
-if (
-	!skinDir ||
-	!fs.existsSync(skinDir) ||
-	!fs.statSync(skinDir).isDirectory()
-) {
+if (!skinDir || !fs.existsSync(skinDir) || !fs.statSync(skinDir).isDirectory()) {
 	throw new Error(
 		"A valid skin directory must be provided as the first CLI argument or via the SKIN_DIR environment variable.",
 	);

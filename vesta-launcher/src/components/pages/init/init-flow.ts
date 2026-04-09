@@ -45,10 +45,7 @@ export function getPreviousInitStep(step: InitStep): InitStep {
 	return (step - 1) as InitStep;
 }
 
-export function getCanonicalBackStep(
-	step: InitStep,
-	guideVisited: boolean,
-): InitStep {
+export function getCanonicalBackStep(step: InitStep, guideVisited: boolean): InitStep {
 	if (step === INIT_STEPS.LOGIN) {
 		return guideVisited ? INIT_STEPS.GUIDE : INIT_STEPS.WELCOME;
 	}
@@ -76,9 +73,7 @@ interface InitAccountLike {
 	account_type?: string | null;
 }
 
-export function isGuestOrDemoAccountType(
-	accountType?: string | null,
-): boolean {
+export function isGuestOrDemoAccountType(accountType?: string | null): boolean {
 	const normalizedType = String(accountType || "")
 		.trim()
 		.toLowerCase();

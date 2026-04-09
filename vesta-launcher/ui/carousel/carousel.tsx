@@ -36,9 +36,7 @@ type CarouselContextProps = {
 	canScrollNext: Accessor<boolean>;
 } & CarouselProps;
 
-const CarouselContext = createContext<Accessor<CarouselContextProps> | null>(
-	null,
-);
+const CarouselContext = createContext<Accessor<CarouselContextProps> | null>(null);
 
 const useCarousel = () => {
 	const context = useContext(CarouselContext);
@@ -50,9 +48,7 @@ const useCarousel = () => {
 	return context();
 };
 
-const Carousel: Component<CarouselProps & ComponentProps<"div">> = (
-	rawProps,
-) => {
+const Carousel: Component<CarouselProps & ComponentProps<"div">> = (rawProps) => {
 	const props = mergeProps<(CarouselProps & ComponentProps<"div">)[]>(
 		{ orientation: "horizontal" },
 		rawProps,
@@ -128,9 +124,7 @@ const Carousel: Component<CarouselProps & ComponentProps<"div">> = (
 				carouselRef,
 				api,
 				opts: local.opts,
-				orientation:
-					local.orientation ||
-					(local.opts?.axis === "y" ? "vertical" : "horizontal"),
+				orientation: local.orientation || (local.opts?.axis === "y" ? "vertical" : "horizontal"),
 				scrollPrev,
 				scrollNext,
 				canScrollPrev,
@@ -196,10 +190,7 @@ const CarouselItem: Component<ComponentProps<"div">> = (props) => {
 type CarouselButtonProps = VoidProps<ButtonProps>;
 
 const CarouselPrevious: Component<CarouselButtonProps> = (rawProps) => {
-	const props = mergeProps<CarouselButtonProps[]>(
-		{ variant: "outline", size: "icon" },
-		rawProps,
-	);
+	const props = mergeProps<CarouselButtonProps[]>({ variant: "outline", size: "icon" }, rawProps);
 	const [local, others] = splitProps(props, ["class", "variant", "size"]);
 	const { orientation, scrollPrev, canScrollPrev } = useCarousel();
 
@@ -238,10 +229,7 @@ const CarouselPrevious: Component<CarouselButtonProps> = (rawProps) => {
 };
 
 const CarouselNext: Component<CarouselButtonProps> = (rawProps) => {
-	const props = mergeProps<CarouselButtonProps[]>(
-		{ variant: "outline", size: "icon" },
-		rawProps,
-	);
+	const props = mergeProps<CarouselButtonProps[]>({ variant: "outline", size: "icon" }, rawProps);
 	const [local, others] = splitProps(props, ["class", "variant", "size"]);
 	const { orientation, scrollNext, canScrollNext } = useCarousel();
 
@@ -279,10 +267,4 @@ const CarouselNext: Component<CarouselButtonProps> = (rawProps) => {
 	);
 };
 
-export {
-	Carousel,
-	CarouselContent,
-	CarouselItem,
-	CarouselNext,
-	CarouselPrevious,
-};
+export { Carousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious };

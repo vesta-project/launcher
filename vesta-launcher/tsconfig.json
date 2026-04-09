@@ -10,11 +10,7 @@
 		"jsxImportSource": "solid-js",
 		"skipLibCheck": true,
 		"ignoreDeprecations": "5.0",
-		"types": [
-			"solid-js",
-			"vite-plugin-solid-svg/types-component-solid",
-			"vite/client"
-		],
+		"types": ["solid-js", "vite-plugin-solid-svg/types-component-solid", "vite/client"],
 		"noEmit": true,
 		"isolatedModules": true,
 		"paths": {

@@ -68,9 +68,7 @@ export const Progress = <T extends ValidComponent = "div">(
 	const normalizedCurrent = hasStepInfo
 		? Math.min(local.current_step as number, local.total_steps as number)
 		: null;
-	const stepText = hasStepInfo
-		? `${normalizedCurrent}/${local.total_steps}`
-		: null;
+	const stepText = hasStepInfo ? `${normalizedCurrent}/${local.total_steps}` : null;
 
 	return (
 		<ProgressPrimitive.Root
@@ -83,10 +81,7 @@ export const Progress = <T extends ValidComponent = "div">(
 		>
 			{local.children}
 			<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-				<ProgressPrimitive.Track
-					class={styles["progress__track"]}
-					style={{ flex: 1 }}
-				>
+				<ProgressPrimitive.Track class={styles["progress__track"]} style={{ flex: 1 }}>
 					<ProgressPrimitive.Fill
 						class={clsx(
 							styles["progress__fill"],
@@ -94,11 +89,7 @@ export const Progress = <T extends ValidComponent = "div">(
 						)}
 					/>
 				</ProgressPrimitive.Track>
-				{hasStepInfo && (
-					<div class={styles["progress__steps"]}>
-						{stepText}
-					</div>
-				)}
+				{hasStepInfo && <div class={styles["progress__steps"]}>{stepText}</div>}
 			</div>
 		</ProgressPrimitive.Root>
 	);

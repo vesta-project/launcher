@@ -6,11 +6,7 @@ import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate } from "@solidjs/router";
-import {
-	cleanupDialogSystem,
-	dialogStore,
-	initializeDialogSystem,
-} from "@stores/dialog-store";
+import { cleanupDialogSystem, dialogStore, initializeDialogSystem } from "@stores/dialog-store";
 import { setupInstanceListeners } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
@@ -25,10 +21,7 @@ import {
 	unsubscribeFromConfigUpdates,
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
-import {
-	cleanupFileDropSystem,
-	getDropZoneManager,
-} from "@utils/file-drop";
+import { cleanupFileDropSystem, getDropZoneManager } from "@utils/file-drop";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
@@ -38,9 +31,7 @@ import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
 import { lazy, onCleanup, onMount } from "solid-js";
 
-const StandalonePageViewer = lazy(
-	() => import("@components/page-viewer/standalone-page-viewer"),
-);
+const StandalonePageViewer = lazy(() => import("@components/page-viewer/standalone-page-viewer"));
 
 export interface ExitCheckResponse {
 	can_exit: boolean;
@@ -52,10 +43,7 @@ export interface ExitCheckResponse {
  * Handles deep-link URLs like vesta://install?projectId=X&platform=Y
  * Parses the URL via Rust backend and navigates if initialized and authenticated
  */
-export async function handleDeepLink(
-	url: string,
-	navigate: ReturnType<typeof useNavigate>,
-) {
+export async function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
 	try {
 		if (hasTauriRuntime()) {
 			try {
@@ -69,8 +57,7 @@ export async function handleDeepLink(
 		if (!config || !config.setup_completed) {
 			showToast({
 				title: "Setup Required",
-				description:
-					"Please complete the onboarding process before using 'Open in Vesta'.",
+				description: "Please complete the onboarding process before using 'Open in Vesta'.",
 				severity: "error",
 				duration: 5000,
 			});
@@ -79,15 +66,10 @@ export async function handleDeepLink(
 
 		// 2. Check if authenticated
 		const account = await getActiveAccount();
-		if (
-			!account ||
-			account.account_type === ACCOUNT_TYPE_GUEST ||
-			account.is_expired
-		) {
+		if (!account || account.account_type === ACCOUNT_TYPE_GUEST || account.is_expired) {
 			showToast({
 				title: "Authentication Required",
-				description:
-					"Please sign in to a valid account to use 'Open in Vesta'.",
+				description: "Please sign in to a valid account to use 'Open in Vesta'.",
 				severity: "error",
 				duration: 5000,
 			});
@@ -129,8 +111,7 @@ export async function handleDeepLink(
 			// If router isn't ready, show error - no standalone fallback
 			showToast({
 				title: "App Not Ready",
-				description:
-					"Please wait for the app to fully load before using 'Open in Vesta'.",
+				description: "Please wait for the app to fully load before using 'Open in Vesta'.",
 				severity: "error",
 				duration: 5000,
 			});
@@ -291,9 +272,7 @@ function Root(props: ChildrenProp) {
 						checkForAppUpdates(true);
 					}
 				})
-				.catch((error) =>
-					console.error("Failed to read startup config:", error),
-				);
+				.catch((error) => console.error("Failed to read startup config:", error));
 		}
 
 		// Initialize update listener and set OS attribute on root for global CSS
@@ -416,14 +395,8 @@ function Root(props: ChildrenProp) {
 				invoke("get_db_status")
 					.then((status: any) => {
 						console.group("Database Diagnostic Report");
-						console.log(
-							"Vesta DB Tables:",
-							status.vesta?.tables || "NOT FOUND",
-						);
-						console.log(
-							"Config DB Tables:",
-							status.config?.tables || "NOT FOUND",
-						);
+						console.log("Vesta DB Tables:", status.vesta?.tables || "NOT FOUND");
+						console.log("Config DB Tables:", status.config?.tables || "NOT FOUND");
 						console.groupEnd();
 					})
 					.catch((err) => {
@@ -450,13 +423,12 @@ function Root(props: ChildrenProp) {
 
 					if (arg === "--launch-instance" && args[i + 1]) {
 						const slug = args[i + 1];
-						const { instancesState, setLaunching, initializeInstances } =
-							await import("@stores/instances");
+						const { instancesState, setLaunching, initializeInstances } = await import(
+							"@stores/instances"
+						);
 						await initializeInstances();
 						const inst = instancesState.instances.find(
-							(inst) =>
-								(inst as any).slug === slug ||
-								inst.name.toLowerCase().replace(/ /g, "-") === slug,
+							(inst) => (inst as any).slug === slug || inst.name.toLowerCase().replace(/ /g, "-") === slug,
 						);
 						if (inst) {
 							setLaunching(slug, true);
@@ -465,18 +437,14 @@ function Root(props: ChildrenProp) {
 						i++;
 					} else if (arg === "--open-instance" && args[i + 1]) {
 						const slug = args[i + 1];
-						const { setPageViewerOpen, router } = await import(
-							"@components/page-viewer/page-viewer"
-						);
+						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
 						router()?.navigate("/instance", { slug });
 						setPageViewerOpen(true);
 						i++;
 					} else if (arg === "--open-resource" && args[i + 2]) {
 						const platform = args[i + 1];
 						const id = args[i + 2];
-						const { setPageViewerOpen, router } = await import(
-							"@components/page-viewer/page-viewer"
-						);
+						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
 						router()?.navigate("/resource-details", {
 							platform,
 							projectId: id,

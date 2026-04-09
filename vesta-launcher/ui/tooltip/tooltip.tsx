@@ -5,18 +5,13 @@ import { children, splitProps, ValidComponent } from "solid-js";
 import styles from "./tooltip.module.css";
 
 type BasePlacement = "top" | "bottom" | "left" | "right";
-type Placement =
-	| BasePlacement
-	| `${BasePlacement}-start`
-	| `${BasePlacement}-end`;
+type Placement = BasePlacement | `${BasePlacement}-start` | `${BasePlacement}-end`;
 
 function Tooltip(props: TooltipPrimitive.TooltipRootProps) {
 	return <TooltipPrimitive.Root gutter={4} closeDelay={100} {...props} />;
 }
 
-function TooltipContent(
-	props: TooltipPrimitive.TooltipContentProps & ClassProp & ChildrenProp,
-) {
+function TooltipContent(props: TooltipPrimitive.TooltipContentProps & ClassProp & ChildrenProp) {
 	const [_, others] = splitProps(props, ["class", "children"]);
 	const c = children(() => props.children);
 	return (
@@ -30,9 +25,4 @@ function TooltipContent(
 
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
-export {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-	type Placement as TooltipPlacement,
-};
+export { Tooltip, TooltipContent, TooltipTrigger, type Placement as TooltipPlacement };

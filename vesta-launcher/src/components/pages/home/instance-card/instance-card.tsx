@@ -38,14 +38,7 @@ import {
 	resumeInstanceOperation,
 	sanitizeInstanceName,
 } from "@utils/instances";
-import {
-	createSignal,
-	Match,
-	onCleanup,
-	onMount,
-	Show,
-	Switch,
-} from "solid-js";
+import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import {
 	handleDuplicate,
 	handleHardReset,
@@ -123,9 +116,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						instance_id?: string;
 						pid?: number;
 					};
-					const id =
-						payload.instance_id ||
-						(payload.name ? sanitizeInstanceName(payload.name) : null);
+					const id = payload.instance_id || (payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
 					if (id === instanceSlug) clearLaunchingState();
@@ -138,9 +129,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						name?: string;
 						instance_id?: string;
 					};
-					const id =
-						payload.instance_id ||
-						(payload.name ? sanitizeInstanceName(payload.name) : null);
+					const id = payload.instance_id || (payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
 					if (id === instanceSlug) clearLaunchingState();
@@ -160,9 +149,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						pid?: number;
 						crashed?: boolean;
 					};
-					const id =
-						payload.instance_id ||
-						(payload.name ? sanitizeInstanceName(payload.name) : null);
+					const id = payload.instance_id || (payload.name ? sanitizeInstanceName(payload.name) : null);
 					if (!id) return;
 
 					if (id === instanceSlug) clearLaunchingState();
@@ -209,8 +196,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	// Installation status checks
 	const isInstalling = () => props.instance.installationStatus === "installing";
-	const isInterrupted = () =>
-		props.instance.installationStatus === "interrupted";
+	const isInterrupted = () => props.instance.installationStatus === "interrupted";
 	const isInstalled = () => props.instance.installationStatus === "installed";
 	const isFailed = () =>
 		props.instance.installationStatus === "failed" ||
@@ -225,8 +211,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		return "Installation failed";
 	};
 
-	const needsInstallation = () =>
-		!props.instance.installationStatus || isFailed();
+	const needsInstallation = () => !props.instance.installationStatus || isFailed();
 
 	// Can only launch if installed and not busy/installing/running
 	const _canLaunch = () =>
@@ -383,12 +368,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 					</Match>
 					<Match when={isFailed()}>
-						<div
-							class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}
-						>
-							<ErrorIcon
-								style={{ width: "24px", height: "24px", color: "#ff5252" }}
-							/>
+						<div class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}>
+							<ErrorIcon style={{ width: "24px", height: "24px", color: "#ff5252" }} />
 							<h1
 								style={{
 									margin: "4px 0 0",
@@ -500,15 +481,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 										<Match when={props.instance.modloader === "quilt"}>
 											<QuiltLogo />
 										</Match>
-										<Match
-											when={
-												props.instance.modloader &&
-												props.instance.modloader !== "vanilla"
-											}
-										>
-											<p style={{ "text-transform": "capitalize" }}>
-												{props.instance.modloader}
-											</p>
+										<Match when={props.instance.modloader && props.instance.modloader !== "vanilla"}>
+											<p style={{ "text-transform": "capitalize" }}>{props.instance.modloader}</p>
 										</Match>
 									</Switch>
 								</div>
@@ -532,9 +506,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						>
 							{isRunning() ? "Stop" : "Play"}
 						</span>
-						<ContextMenuShortcut>
-							{isRunning() ? "Ctrl-K" : "Ctrl-P"}
-						</ContextMenuShortcut>
+						<ContextMenuShortcut>{isRunning() ? "Ctrl-K" : "Ctrl-P"}</ContextMenuShortcut>
 					</ContextMenuItem>
 
 					<ContextMenuItem
@@ -554,9 +526,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 						Duplicate
 					</ContextMenuItem>
 
-					<ContextMenuItem onSelect={() => setShowExportDialog(true)}>
-						Export Instance
-					</ContextMenuItem>
+					<ContextMenuItem onSelect={() => setShowExportDialog(true)}>Export Instance</ContextMenuItem>
 
 					<ContextMenuItem
 						onSelect={() => {

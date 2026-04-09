@@ -5,64 +5,56 @@ import { invoke } from "@tauri-apps/api/core";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import Button from "@ui/button/button";
 import {
-    Combobox,
-    ComboboxContent,
-    ComboboxControl,
-    ComboboxInput,
-    ComboboxItem,
-    ComboboxTrigger
+	Combobox,
+	ComboboxContent,
+	ComboboxControl,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxTrigger,
 } from "@ui/combobox/combobox";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import { Separator } from "@ui/separator/separator";
-import {
-    Slider,
-    SliderThumb,
-    SliderTrack
-} from "@ui/slider/slider";
+import { Slider, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { TextFieldInput, TextFieldLabel, TextFieldRoot } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { openExternal as openUrl } from "@utils/external-link";
 import {
-    createInstance,
-    DEFAULT_ICONS,
-    getMinecraftVersions,
-    getStableIconId,
-    installInstance,
-    isDefaultIcon,
-    type CreateInstanceData,
-    type Instance,
-    type PistonMetadata,
+	type CreateInstanceData,
+	createInstance,
+	DEFAULT_ICONS,
+	getMinecraftVersions,
+	getStableIconId,
+	type Instance,
+	installInstance,
+	isDefaultIcon,
+	type PistonMetadata,
 } from "@utils/instances";
 import { startAppTutorial } from "@utils/tutorial";
 import {
-    describeSelectionAdjustments,
-    getAllModloaders,
-    getLoaderVersionsForGameVersion,
-    getModloaderDisplayName,
-    getModloadersForGameVersion,
-    getNotifiableSelectionAdjustments,
-    resolveCompatibleVersionSelection,
+	describeSelectionAdjustments,
+	getAllModloaders,
+	getLoaderVersionsForGameVersion,
+	getModloaderDisplayName,
+	getModloadersForGameVersion,
+	getNotifiableSelectionAdjustments,
+	resolveCompatibleVersionSelection,
 } from "@utils/version-selection";
 import {
-    batch,
-    createEffect,
-    createMemo,
-    createResource,
-    createSignal,
-    For,
-    onCleanup,
-    onMount,
-    Show,
+	batch,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
 } from "solid-js";
+import { applyTheme, getThemeById, PRESET_THEMES } from "../../../themes/presets";
 import {
-    applyTheme,
-    getThemeById,
-    PRESET_THEMES
-} from "../../../themes/presets";
-import {
-    currentThemeConfig,
-    saveThemeUpdate as persistThemeUpdate,
+	currentThemeConfig,
+	saveThemeUpdate as persistThemeUpdate,
 } from "../../../utils/config-sync";
 import { ThemePresetCard } from "../../theme-preset-card/theme-preset-card";
 import { ModdingGuideContent } from "../mini-pages/modding-guide/guide";
@@ -111,8 +103,7 @@ function InitFirstPage(props: InitPagesProps) {
 						"font-weight": "800",
 						"letter-spacing": "-2px",
 						margin: 0,
-						background:
-							"linear-gradient(135deg, white 0%, rgba(255,255,255,0.6) 100%)",
+						background: "linear-gradient(135deg, white 0%, rgba(255,255,255,0.6) 100%)",
 						"-webkit-background-clip": "text",
 						"-webkit-text-fill-color": "transparent",
 					}}
@@ -168,9 +159,8 @@ function InitFirstPage(props: InitPagesProps) {
 						margin: 0,
 					}}
 				>
-					Vesta is designed to be the most capable, yet simplest way to play
-					Minecraft. We've handled the technical hurdles so you can get straight
-					to the game.
+					Vesta is designed to be the most capable, yet simplest way to play Minecraft. We've handled the
+					technical hurdles so you can get straight to the game.
 				</p>
 			</div>
 			<div
@@ -198,16 +188,13 @@ function InitFirstPage(props: InitPagesProps) {
 					}}
 					disabled={networkStore.isOffline()}
 				>
-					{networkStore.isOffline()
-						? "Internet connection required"
-						: "Start Setup"}
+					{networkStore.isOffline() ? "Internet connection required" : "Start Setup"}
 				</Button>
 				<Show when={networkStore.isOffline()}>
 					<p style="color: #ff5555; font-size: 13px; font-weight: 600; margin-top: 8px; text-align: center; max-width: 300px; line-height: 1.4;">
 						No internet connection detected. <br />
 						<span style="font-weight: 400; opacity: 0.8; font-size: 11px;">
-							You'll need a connection to sign in with Microsoft and download
-							the initial game components.
+							You'll need a connection to sign in with Microsoft and download the initial game components.
 						</span>
 					</p>
 				</Show>
@@ -230,11 +217,7 @@ function InitGuidePage(props: InitPagesProps) {
 				class={styles["init-page__top"]}
 				style={{ "text-align": "left", "margin-bottom": "12px", width: "100%" }}
 			>
-				<h1
-					style={
-						"font-size: 28px; font-weight: 800; color: var(--primary); text-align: left;"
-					}
-				>
+				<h1 style={"font-size: 28px; font-weight: 800; color: var(--primary); text-align: left;"}>
 					Modding Knowledge Base
 				</h1>
 				<p style={"opacity: 0.7; text-align: left;"}>
@@ -450,9 +433,7 @@ function InitDataStoragePage(props: InitPagesProps) {
 									right: "8px",
 									"font-size": "10px",
 									opacity: copied() ? 1 : 0.4,
-									background: copied()
-										? "var(--primary)"
-										: "var(--surface-overlay)",
+									background: copied() ? "var(--primary)" : "var(--surface-overlay)",
 									color: copied() ? "white" : "var(--text-primary)",
 									padding: "2px 8px",
 									"border-radius": "4px",
@@ -477,8 +458,8 @@ function InitDataStoragePage(props: InitPagesProps) {
 							color: "var(--text-primary)",
 						}}
 					>
-						This is where your games, worlds, and settings will be located. We
-						recommend a location with plenty of free space.
+						This is where your games, worlds, and settings will be located. We recommend a location with
+						plenty of free space.
 					</p>
 				</div>
 			</div>
@@ -488,19 +469,11 @@ function InitDataStoragePage(props: InitPagesProps) {
 				style={{ display: "flex", gap: "12px", "justify-content": "center" }}
 			>
 				<Show when={!props.hasInstalledInstance}>
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={() => void props.goBack()}
-					>
+					<Button variant="ghost" size="sm" onClick={() => void props.goBack()}>
 						Back
 					</Button>
 				</Show>
-				<Button
-					color="primary"
-					style={{ "min-width": "180px" }}
-					onClick={handleNext}
-				>
+				<Button color="primary" style={{ "min-width": "180px" }} onClick={handleNext}>
 					Next Step
 				</Button>
 			</div>
@@ -511,15 +484,11 @@ function InitDataStoragePage(props: InitPagesProps) {
 function InitInstallationPage(props: InitPagesProps) {
 	const [instanceName, setInstanceName] = createSignal("My First Instance");
 	const [selectedVersion, setSelectedVersion] = createSignal<string>("");
-	const [selectedModloader, setSelectedModloader] =
-		createSignal<string>("vanilla");
-	const [selectedModloaderVersion, setSelectedModloaderVersion] =
-		createSignal<string>("");
+	const [selectedModloader, setSelectedModloader] = createSignal<string>("vanilla");
+	const [selectedModloaderVersion, setSelectedModloaderVersion] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [isInstalling, setIsInstalling] = createSignal(false);
-	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<
-		string[]
-	>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
 	// Create uploadedIcons array that includes all custom icons seen this session
 	const uploadedIcons = createMemo(() => {
@@ -586,8 +555,7 @@ function InitInstallationPage(props: InitPagesProps) {
 		return getLoaderVersionsForGameVersion(meta, version, loader);
 	});
 
-	const [compatibilityInitialized, setCompatibilityInitialized] =
-		createSignal(false);
+	const [compatibilityInitialized, setCompatibilityInitialized] = createSignal(false);
 
 	createEffect(() => {
 		const meta = metadata();
@@ -626,9 +594,7 @@ function InitInstallationPage(props: InitPagesProps) {
 			}
 		});
 
-		const notifiableAdjustments = getNotifiableSelectionAdjustments(
-			resolved.adjustments,
-		);
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
@@ -656,10 +622,7 @@ function InitInstallationPage(props: InitPagesProps) {
 				name,
 				minecraftVersion: version,
 				iconPath: iconPath() || undefined,
-				modloader:
-					(selectedModloader() === "vanilla"
-						? undefined
-						: selectedModloader()) || undefined,
+				modloader: (selectedModloader() === "vanilla" ? undefined : selectedModloader()) || undefined,
 				modloaderVersion: selectedModloaderVersion() || undefined,
 				minMemory: 2048,
 				maxMemory: 4096,
@@ -671,9 +634,7 @@ function InitInstallationPage(props: InitPagesProps) {
 				id: instanceId,
 				name,
 				minecraftVersion: version,
-				modloader:
-					(selectedModloader() === "vanilla" ? null : selectedModloader()) ||
-					null,
+				modloader: (selectedModloader() === "vanilla" ? null : selectedModloader()) || null,
 				modloaderVersion: selectedModloaderVersion() || null,
 				javaPath: null,
 				javaArgs: null,
@@ -729,12 +690,8 @@ function InitInstallationPage(props: InitPagesProps) {
 	return (
 		<>
 			<div class={styles["init-page__top"]} style={{ "text-align": "left" }}>
-				<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>
-					Create Your First Instance
-				</h1>
-				<p style={"font-size: 14px; opacity: 0.6"}>
-					Let's get you ready for your first game session.
-				</p>
+				<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>Create Your First Instance</h1>
+				<p style={"font-size: 14px; opacity: 0.6"}>Let's get you ready for your first game session.</p>
 			</div>
 
 			<div
@@ -750,16 +707,10 @@ function InitInstallationPage(props: InitPagesProps) {
 					padding: "16px",
 				}}
 			>
-				<div
-					style={{ display: "flex", gap: "20px", "align-items": "flex-start" }}
-				>
+				<div style={{ display: "flex", gap: "20px", "align-items": "flex-start" }}>
 					<div style={{ flex: "0 0 auto" }}>
 						<IconPicker
-							value={
-								iconPath() ||
-								getStableIconId(DEFAULT_ICONS[0]) ||
-								DEFAULT_ICONS[0]
-							}
+							value={iconPath() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]}
 							onSelect={setIconPath}
 							uploadedIcons={uploadedIcons()}
 							showHint={true}
@@ -774,14 +725,10 @@ function InitInstallationPage(props: InitPagesProps) {
 						}}
 					>
 						<TextFieldRoot>
-							<TextFieldLabel class={styles["init-form-label"]}>
-								Instance Name
-							</TextFieldLabel>
+							<TextFieldLabel class={styles["init-form-label"]}>Instance Name</TextFieldLabel>
 							<TextFieldInput
 								value={instanceName()}
-								onInput={(e) =>
-									setInstanceName((e.currentTarget as HTMLInputElement).value)
-								}
+								onInput={(e) => setInstanceName((e.currentTarget as HTMLInputElement).value)}
 								placeholder="Enter instance name..."
 								style={{ background: "var(--surface-sunken)" }}
 							/>
@@ -799,9 +746,7 @@ function InitInstallationPage(props: InitPagesProps) {
 
 						<div style={{ display: "flex", gap: "15px" }}>
 							<div class={styles["init-form-field"]} style={{ flex: 1 }}>
-								<label class={styles["init-form-label"]}>
-									Minecraft Version
-								</label>
+								<label class={styles["init-form-label"]}>Minecraft Version</label>
 								<Combobox
 									options={
 										metadata()
@@ -810,9 +755,7 @@ function InitInstallationPage(props: InitPagesProps) {
 													v.stable &&
 													(selectedModloader() === "vanilla" ||
 														Object.keys(v.loaders).some(
-															(l) =>
-																l.toLowerCase() ===
-																selectedModloader().toLowerCase(),
+															(l) => l.toLowerCase() === selectedModloader().toLowerCase(),
 														)),
 											)
 											.map((v) => v.id) || []
@@ -821,9 +764,7 @@ function InitInstallationPage(props: InitPagesProps) {
 									onChange={setSelectedVersion}
 									placeholder="Select version..."
 									itemComponent={(itemProps) => (
-										<ComboboxItem item={itemProps.item}>
-											{itemProps.item.rawValue}
-										</ComboboxItem>
+										<ComboboxItem item={itemProps.item}>{itemProps.item.rawValue}</ComboboxItem>
 									)}
 								>
 									<ComboboxControl
@@ -837,16 +778,9 @@ function InitInstallationPage(props: InitPagesProps) {
 								</Combobox>
 							</div>
 
-							<Show
-								when={
-									selectedModloader() !== "vanilla" &&
-									availableLoaderVersions().length > 0
-								}
-							>
+							<Show when={selectedModloader() !== "vanilla" && availableLoaderVersions().length > 0}>
 								<div class={styles["init-form-field"]} style={{ flex: 1 }}>
-									<label class={styles["init-form-label"]}>
-										{selectedModloader()} Version
-									</label>
+									<label class={styles["init-form-label"]}>{selectedModloader()} Version</label>
 									<Combobox
 										options={availableLoaderVersions().map((v) => v.version)}
 										value={selectedModloaderVersion()}
@@ -912,9 +846,8 @@ function InitInstallationPage(props: InitPagesProps) {
 						"line-height": "1.5",
 					}}
 				>
-					<strong>Note:</strong> This version will use the default Java and
-					screen settings you chose earlier. You can change these anytime in the
-					settings.
+					<strong>Note:</strong> This version will use the default Java and screen settings you chose
+					earlier. You can change these anytime in the settings.
 				</div>
 			</div>
 
@@ -1020,11 +953,7 @@ function InitFinishedPage(props: InitPagesProps) {
 			</div>
 			<div class={styles["init-page__bottom"]}>
 				<Show when={!props.hasInstalledInstance}>
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={() => void props.goBack()}
-					>
+					<Button variant="ghost" size="sm" onClick={() => void props.goBack()}>
 						Back
 					</Button>
 				</Show>
@@ -1047,9 +976,7 @@ function InitLoginPage(props: InitPagesProps) {
 	let timer: any = null;
 
 	onMount(async () => {
-		const { getActiveAccount, listenToAuthEvents } = await import(
-			"@utils/auth"
-		);
+		const { getActiveAccount, listenToAuthEvents } = await import("@utils/auth");
 
 		const acc = await getActiveAccount();
 		setHasAccount(!!acc);
@@ -1176,18 +1103,14 @@ function InitLoginPage(props: InitPagesProps) {
 
 	return (
 		<>
-			<div
-				class={styles["init-page__top"]}
-				style={{ "text-align": "center", "margin-bottom": "3vh" }}
-			>
+			<div class={styles["init-page__top"]} style={{ "text-align": "center", "margin-bottom": "3vh" }}>
 				<h1
 					style={{
 						"font-size": "clamp(28px, 4vh, 36px)",
 						"font-weight": "800",
 						"letter-spacing": "-1.5px",
 						margin: 0,
-						background:
-							"linear-gradient(135deg, white 0%, rgba(255,255,255,0.7) 100%)",
+						background: "linear-gradient(135deg, white 0%, rgba(255,255,255,0.7) 100%)",
 						"-webkit-background-clip": "text",
 						"-webkit-text-fill-color": "transparent",
 					}}
@@ -1233,16 +1156,11 @@ function InitLoginPage(props: InitPagesProps) {
 
 										<Button
 											onClick={handleLogin}
-											style={
-												"width: 240px; height: 48px; font-weight: 600; font-size: 16px;"
-											}
+											style={"width: 240px; height: 48px; font-weight: 600; font-size: 16px;"}
 											disabled={isStartingAuth()}
 											variant="ghost"
 										>
-											<Show
-												when={isStartingAuth()}
-												fallback={"Login with Microsoft"}
-											>
+											<Show when={isStartingAuth()} fallback={"Login with Microsoft"}>
 												<div
 													style={{
 														display: "flex",
@@ -1284,8 +1202,8 @@ function InitLoginPage(props: InitPagesProps) {
 									No internet connection detected.
 								</p>
 								<p style="color: rgba(255,255,255,0.4); text-align: center; font-size: 11px; max-width: 280px; margin: 0 auto 16px; line-height: 1.4;">
-									A connection is required to safely authenticate your account
-									with Microsoft's secure login services.
+									A connection is required to safely authenticate your account with Microsoft's secure login
+									services.
 								</p>
 							</Show>
 
@@ -1303,14 +1221,11 @@ function InitLoginPage(props: InitPagesProps) {
 										e.currentTarget.style.color = "rgba(255,255,255,0.5)";
 									}}
 								>
-									{hasAccount() && props.isLoginOnly
-										? "Back to Launcher"
-										: "Continue as Guest"}
+									{hasAccount() && props.isLoginOnly ? "Back to Launcher" : "Continue as Guest"}
 								</button>
 								<Show when={networkStore.isOffline()}>
 									<p style="color: rgba(255,255,255,0.4); text-align: center; font-size: 11px; max-width: 240px; margin: 12px auto 0; line-height: 1.4;">
-										Guest profiles are restricted to browsing and cannot launch
-										Minecraft.
+										Guest profiles are restricted to browsing and cannot launch Minecraft.
 									</p>
 								</Show>
 							</div>
@@ -1328,10 +1243,7 @@ function InitLoginPage(props: InitPagesProps) {
 					</Show>
 
 					<Show when={isAuthenticating()}>
-						<div
-							class={styles["login-page__auth-box"]}
-							style={{ padding: "24px 32px" }}
-						>
+						<div class={styles["login-page__auth-box"]} style={{ padding: "24px 32px" }}>
 							<div
 								style={{
 									display: "flex",
@@ -1356,8 +1268,7 @@ function InitLoginPage(props: InitPagesProps) {
 												"margin-top": "4px",
 											}}
 										>
-											Enter the security code on the right to connect your
-											account.
+											Enter the security code on the right to connect your account.
 										</p>
 									</div>
 
@@ -1369,18 +1280,10 @@ function InitLoginPage(props: InitPagesProps) {
 											"margin-top": "20px",
 										}}
 									>
-										<Button
-											color="primary"
-											onClick={openUrlAction}
-											style={{ width: "100%" }}
-										>
+										<Button color="primary" onClick={openUrlAction} style={{ width: "100%" }}>
 											Open Browser
 										</Button>
-										<Button
-											variant="ghost"
-											onClick={handleCancel}
-											style={{ width: "100%" }}
-										>
+										<Button variant="ghost" onClick={handleCancel} style={{ width: "100%" }}>
 											Cancel
 										</Button>
 									</div>
@@ -1434,12 +1337,7 @@ function InitLoginPage(props: InitPagesProps) {
 												: `Expires in ${Math.floor(timeLeft() / 60)}:${(timeLeft() % 60).toString().padStart(2, "0")}`}
 										</p>
 										<Show when={timeLeft() <= 0}>
-											<Button
-												onClick={handleLogin}
-												size="sm"
-												variant="shadow"
-												style={{ "margin-top": "8px" }}
-											>
+											<Button onClick={handleLogin} size="sm" variant="shadow" style={{ "margin-top": "8px" }}>
 												Get New Code
 											</Button>
 										</Show>
@@ -1461,9 +1359,7 @@ function InitLoginPage(props: InitPagesProps) {
 								}}
 							>
 								<div class={styles["spinner--small"]}></div>
-								<span style={{ "font-size": "13px" }}>
-									Waiting for Microsoft authentication...
-								</span>
+								<span style={{ "font-size": "13px" }}>Waiting for Microsoft authentication...</span>
 							</div>
 						</div>
 					</Show>
@@ -1471,18 +1367,8 @@ function InitLoginPage(props: InitPagesProps) {
 			</div>
 
 			<div class={styles["init-page__bottom"]}>
-				<Show
-					when={
-						!props.isLoginOnly &&
-						!isAuthenticating() &&
-						!props.hasInstalledInstance
-					}
-				>
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={() => void props.goBack()}
-					>
+				<Show when={!props.isLoginOnly && !isAuthenticating() && !props.hasInstalledInstance}>
+					<Button variant="ghost" size="sm" onClick={() => void props.goBack()}>
 						Go Back
 					</Button>
 				</Show>
@@ -1492,15 +1378,11 @@ function InitLoginPage(props: InitPagesProps) {
 }
 
 function InitJavaPage(props: InitPagesProps) {
-	const [requirements, { refetch: refetchReqs }] = createResource<
-		JavaRequirement[]
-	>(() => invoke("get_required_java_versions"));
-	const [detected] = createResource<DetectedJava[]>(() =>
-		invoke("detect_java"),
+	const [requirements, { refetch: refetchReqs }] = createResource<JavaRequirement[]>(() =>
+		invoke("get_required_java_versions"),
 	);
-	const [managed] = createResource<DetectedJava[]>(() =>
-		invoke("get_managed_javas"),
-	);
+	const [detected] = createResource<DetectedJava[]>(() => invoke("detect_java"));
+	const [managed] = createResource<DetectedJava[]>(() => invoke("get_managed_javas"));
 	const [selections, setSelections] = createSignal<Record<number, string>>({});
 	const [verifying, setVerifying] = createSignal<Record<number, boolean>>({});
 	const [errors, setErrors] = createSignal<Record<number, string>>({});
@@ -1511,10 +1393,7 @@ function InitJavaPage(props: InitPagesProps) {
 		const err = requirements.error;
 		const data = requirements();
 
-		if (
-			err === "MANIFEST_NOT_READY" ||
-			(!requirements.loading && data && data.length === 0)
-		) {
+		if (err === "MANIFEST_NOT_READY" || (!requirements.loading && data && data.length === 0)) {
 			const timer = setTimeout(() => {
 				refetchReqs();
 			}, 2000);
@@ -1593,21 +1472,19 @@ function InitJavaPage(props: InitPagesProps) {
 			const currentSelections = selections();
 
 			// Start all submissions and configuration updates in parallel
-			const tasks = Object.entries(currentSelections).map(
-				([versionStr, path]) => {
-					const version = parseInt(versionStr);
-					if (path === "managed") {
-						// This submits the task to the background manager and returns immediately
-						return invoke("download_managed_java", { version });
-					} else {
-						return invoke("set_global_java_path", {
-							version,
-							pathStr: path,
-							managed: false,
-						});
-					}
-				},
-			);
+			const tasks = Object.entries(currentSelections).map(([versionStr, path]) => {
+				const version = parseInt(versionStr);
+				if (path === "managed") {
+					// This submits the task to the background manager and returns immediately
+					return invoke("download_managed_java", { version });
+				} else {
+					return invoke("set_global_java_path", {
+						version,
+						pathStr: path,
+						managed: false,
+					});
+				}
+			});
 
 			await Promise.all(tasks);
 
@@ -1629,11 +1506,7 @@ function InitJavaPage(props: InitPagesProps) {
 	return (
 		<>
 			<Show
-				when={
-					!requirements.loading &&
-					requirements() &&
-					(requirements()?.length ?? 0) > 0
-				}
+				when={!requirements.loading && requirements() && (requirements()?.length ?? 0) > 0}
 				fallback={
 					<div
 						style={{
@@ -1651,15 +1524,9 @@ function InitJavaPage(props: InitPagesProps) {
 						<div>
 							<h2 style={{ "margin-bottom": "8px" }}>Fetching Requirements</h2>
 							<p style={{ opacity: 0.6, "font-size": "14px" }}>
-								Syncing with Minecraft's metadata servers to determine the best
-								environment for you...
+								Syncing with Minecraft's metadata servers to determine the best environment for you...
 							</p>
-							<Show
-								when={
-									requirements.error &&
-									requirements.error !== "MANIFEST_NOT_READY"
-								}
-							>
+							<Show when={requirements.error && requirements.error !== "MANIFEST_NOT_READY"}>
 								<p
 									style={{
 										color: "#ff5555",
@@ -1682,10 +1549,7 @@ function InitJavaPage(props: InitPagesProps) {
 					</div>
 				}
 			>
-				<div
-					class={styles["init-page__top"]}
-					style={{ "text-align": "left", "margin-bottom": "8px" }}
-				>
+				<div class={styles["init-page__top"]} style={{ "text-align": "left", "margin-bottom": "8px" }}>
 					<div
 						style={{
 							display: "flex",
@@ -1700,9 +1564,8 @@ function InitJavaPage(props: InitPagesProps) {
 								<HelpTrigger topic="JAVA_MANAGED" />
 							</h1>
 							<p style={"font-size: 14px; opacity: 0.7; max-width: 500px;"}>
-								Minecraft needs a software called <strong>Java</strong> to run.
-								Different versions of the game require different versions of
-								Java.
+								Minecraft needs a software called <strong>Java</strong> to run. Different versions of the
+								game require different versions of Java.
 							</p>
 						</div>
 						<Button variant="ghost" size="sm" onClick={handleSelectManagedAll}>
@@ -1726,8 +1589,8 @@ function InitJavaPage(props: InitPagesProps) {
 								"line-height": "1.4",
 							}}
 						>
-							<strong>Tip:</strong> You can use Vesta's <strong>Managed</strong>{" "}
-							runtimes (recommended) or your own <strong>System</strong> paths.
+							<strong>Tip:</strong> You can use Vesta's <strong>Managed</strong> runtimes (recommended) or
+							your own <strong>System</strong> paths.
 						</p>
 					</div>
 				</div>
@@ -1757,9 +1620,7 @@ function InitJavaPage(props: InitPagesProps) {
 									"box-shadow": selections()[req.major_version]
 										? "0 8px 30px -10px rgba(255,255,255,0.15)"
 										: "none",
-									transform: selections()[req.major_version]
-										? "translateY(-2px)"
-										: "none",
+									transform: selections()[req.major_version] ? "translateY(-2px)" : "none",
 								}}
 							>
 								<div
@@ -1796,16 +1657,8 @@ function InitJavaPage(props: InitPagesProps) {
 										<Button
 											onClick={() => handleSelectManaged(req.major_version)}
 											size="sm"
-											color={
-												selections()[req.major_version] === "managed"
-													? "primary"
-													: "none"
-											}
-											variant={
-												selections()[req.major_version] === "managed"
-													? "solid"
-													: "ghost"
-											}
+											color={selections()[req.major_version] === "managed" ? "primary" : "none"}
+											variant={selections()[req.major_version] === "managed" ? "solid" : "ghost"}
 											style={{ transition: "all 0.2s ease" }}
 										>
 											{selections()[req.major_version] === "managed"
@@ -1836,16 +1689,10 @@ function InitJavaPage(props: InitPagesProps) {
 											gap: "8px",
 										}}
 									>
-										<For
-											each={detected()?.filter(
-												(d) => d.major_version === req.major_version,
-											)}
-										>
+										<For each={detected()?.filter((d) => d.major_version === req.major_version)}>
 											{(det) => (
 												<div
-													onClick={() =>
-														handleSelect(req.major_version, det.path)
-													}
+													onClick={() => handleSelect(req.major_version, det.path)}
 													style={{
 														padding: "12px 16px",
 														background:
@@ -1872,10 +1719,7 @@ function InitJavaPage(props: InitPagesProps) {
 															"white-space": "nowrap",
 															"max-width": "75%",
 															"font-family": "monospace",
-															opacity:
-																selections()[req.major_version] === det.path
-																	? 1
-																	: 0.6,
+															opacity: selections()[req.major_version] === det.path ? 1 : 0.6,
 														}}
 													>
 														{det.path}
@@ -1890,19 +1734,14 @@ function InitJavaPage(props: InitPagesProps) {
 														<span style={{ "font-size": "10px", opacity: 0.4 }}>
 															{det.is_64bit ? "64-bit" : "32-bit"}
 														</span>
-														<Show
-															when={
-																selections()[req.major_version] === det.path
-															}
-														>
+														<Show when={selections()[req.major_version] === det.path}>
 															<div
 																style={{
 																	width: "6px",
 																	height: "6px",
 																	background: "white",
 																	"border-radius": "50%",
-																	"box-shadow":
-																		"0 0 10px rgba(255, 255, 255, 0.5)",
+																	"box-shadow": "0 0 10px rgba(255, 255, 255, 0.5)",
 																}}
 															/>
 														</Show>
@@ -1910,13 +1749,7 @@ function InitJavaPage(props: InitPagesProps) {
 												</div>
 											)}
 										</For>
-										<Show
-											when={
-												!detected()?.some(
-													(d) => d.major_version === req.major_version,
-												)
-											}
-										>
+										<Show when={!detected()?.some((d) => d.major_version === req.major_version)}>
 											<p
 												style={{
 													"font-size": "12px",
@@ -1973,9 +1806,7 @@ function InitJavaPage(props: InitPagesProps) {
 										}}
 									>
 										<div class={styles["spinner--small"]} />
-										<p style={{ "font-size": "12px" }}>
-											Verifying selection...
-										</p>
+										<p style={{ "font-size": "12px" }}>Verifying selection...</p>
 									</div>
 								</Show>
 							</div>
@@ -1992,12 +1823,7 @@ function InitJavaPage(props: InitPagesProps) {
 					}}
 				>
 					<Show when={!props.hasInstalledInstance}>
-						<Button
-							variant="ghost"
-							onClick={() => void props.goBack()}
-							disabled={isApplying()}
-							size="sm"
-						>
+						<Button variant="ghost" onClick={() => void props.goBack()} disabled={isApplying()} size="sm">
 							Back
 						</Button>
 					</Show>
@@ -2017,13 +1843,9 @@ function InitJavaPage(props: InitPagesProps) {
 }
 
 function InitAppearancePage(props: InitPagesProps) {
-	const [themeId, setThemeId] = createSignal<string>(
-		currentThemeConfig.theme_id ?? "vesta",
-	);
+	const [themeId, setThemeId] = createSignal<string>(currentThemeConfig.theme_id ?? "vesta");
 	const [backgroundHue, setBackgroundHue] = createSignal(
-		currentThemeConfig.theme_primary_hue ??
-			currentThemeConfig.background_hue ??
-			180,
+		currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 180,
 	);
 	const [explicitThemeSelected, setExplicitThemeSelected] = createSignal(false);
 	const [isPersistingTheme, setIsPersistingTheme] = createSignal(false);
@@ -2032,10 +1854,7 @@ function InitAppearancePage(props: InitPagesProps) {
 		try {
 			const config = await invoke<any>("get_config");
 			if (config.theme_id) setThemeId(config.theme_id);
-			if (
-				config.theme_primary_hue !== null &&
-				config.theme_primary_hue !== undefined
-			)
+			if (config.theme_primary_hue !== null && config.theme_primary_hue !== undefined)
 				setBackgroundHue(config.theme_primary_hue);
 			setExplicitThemeSelected(false);
 		} catch (e) {
@@ -2048,22 +1867,22 @@ function InitAppearancePage(props: InitPagesProps) {
 		if (theme) {
 			setIsPersistingTheme(true);
 			setThemeId(id);
-			const newHue =
-				theme.allowHueChange === false
-					? (theme.primaryHue ?? 180)
-					: backgroundHue();
+			const newHue = theme.allowHueChange === false ? (theme.primaryHue ?? 180) : backgroundHue();
 
 			if (theme.primaryHue !== undefined && theme.allowHueChange === false) {
 				setBackgroundHue(newHue);
 			}
 
 			// Apply theme visually for immediate feedback
-			applyTheme({
-				...theme,
-				primaryHue: newHue,
-			}, {
-				transition: "preset-switch",
-			});
+			applyTheme(
+				{
+					...theme,
+					primaryHue: newHue,
+				},
+				{
+					transition: "preset-switch",
+				},
+			);
 
 			try {
 				// Save to backend using centralized persistence system
@@ -2114,20 +1933,12 @@ function InitAppearancePage(props: InitPagesProps) {
 
 	return (
 		<>
-			<div
-				class={styles["init-page__top"]}
-				style={{ "margin-bottom": "16px", "text-align": "left" }}
-			>
-				<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>
-					Choose Your Style
-				</h1>
+			<div class={styles["init-page__top"]} style={{ "margin-bottom": "16px", "text-align": "left" }}>
+				<h1 style={"font-size: 24px; font-weight: 800; opacity: 0.9"}>Choose Your Style</h1>
 				<p style={"font-size: 14px; opacity: 0.6"}>
-					Pick a starting look for Vesta. You can always change this later in
-					settings.
+					Pick a starting look for Vesta. You can always change this later in settings.
 				</p>
-				<p style={"font-size: 12px; opacity: 0.55; margin-top: 4px;"}>
-					Select a theme to continue.
-				</p>
+				<p style={"font-size: 12px; opacity: 0.55; margin-top: 4px;"}>Select a theme to continue.</p>
 			</div>
 			<div
 				class={styles["init-page__middle"]}
@@ -2183,12 +1994,8 @@ function InitAppearancePage(props: InitPagesProps) {
 									"margin-bottom": "12px",
 								}}
 							>
-								<label style={{ "font-size": "14px", "font-weight": "600" }}>
-									Customize Primary Hue
-								</label>
-								<div style={{ "font-family": "monospace", opacity: 0.6 }}>
-									{backgroundHue()}°
-								</div>
+								<label style={{ "font-size": "14px", "font-weight": "600" }}>Customize Primary Hue</label>
+								<div style={{ "font-family": "monospace", opacity: 0.6 }}>{backgroundHue()}°</div>
 							</div>
 							<SliderTrack
 								style={{
@@ -2213,11 +2020,7 @@ function InitAppearancePage(props: InitPagesProps) {
 				}}
 			>
 				<Show when={!props.hasInstalledInstance}>
-					<Button
-						variant="ghost"
-						size="sm"
-						onClick={() => void props.goBack()}
-					>
+					<Button variant="ghost" size="sm" onClick={() => void props.goBack()}>
 						Back
 					</Button>
 				</Show>
@@ -2235,9 +2038,12 @@ function InitAppearancePage(props: InitPagesProps) {
 }
 
 export {
-    InitAppearancePage, InitDataStoragePage, InitFinishedPage,
-    InitFirstPage,
-    InitGuidePage, InitInstallationPage, InitJavaPage,
-    InitLoginPage
+	InitAppearancePage,
+	InitDataStoragePage,
+	InitFinishedPage,
+	InitFirstPage,
+	InitGuidePage,
+	InitInstallationPage,
+	InitJavaPage,
+	InitLoginPage,
 };
-

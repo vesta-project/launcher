@@ -8,9 +8,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
 		"--color__primary-hue": theme.primaryHue.toString(),
 		"--background-opacity":
-			theme.backgroundOpacity !== undefined
-				? (theme.backgroundOpacity / 100).toFixed(2)
-				: "0.25",
+			theme.backgroundOpacity !== undefined ? (theme.backgroundOpacity / 100).toFixed(2) : "0.25",
 		"--rotation": `${theme.rotation ?? 135}deg`,
 		"--gradient-type": theme.gradientType || "linear",
 		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
@@ -117,8 +115,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	// Apply custom theme variables
 	if (theme.userVariables) {
 		for (const [key, val] of Object.entries(theme.userVariables)) {
-			vars[`--theme-var-${key}`] =
-				typeof val === "boolean" ? (val ? "1" : "0") : String(val);
+			vars[`--theme-var-${key}`] = typeof val === "boolean" ? (val ? "1" : "0") : String(val);
 		}
 	}
 
@@ -127,12 +124,7 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		for (const v of theme.variables) {
 			const key = `--theme-var-${v.key}`;
 			if (!vars[key]) {
-				vars[key] =
-					typeof v.default === "boolean"
-						? v.default
-							? "1"
-							: "0"
-						: String(v.default);
+				vars[key] = typeof v.default === "boolean" ? (v.default ? "1" : "0") : String(v.default);
 			}
 		}
 	}

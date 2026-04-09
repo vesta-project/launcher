@@ -5,12 +5,7 @@ import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { type Instance, instancesState } from "@stores/instances";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
-import {
-	findBestVersion,
-	ResourceProject,
-	ResourceVersion,
-	resources,
-} from "@stores/resources";
+import { findBestVersion, ResourceProject, ResourceVersion, resources } from "@stores/resources";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import {
@@ -29,21 +24,11 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "@ui/pagination/pagination";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { TextField } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
-import {
-	DEFAULT_ICONS,
-	getMinecraftVersions,
-	isDefaultIcon,
-} from "@utils/instances";
+import { DEFAULT_ICONS, getMinecraftVersions, isDefaultIcon } from "@utils/instances";
 import { parseResourceUrl } from "@utils/resource-url";
 import { sanitizeSvg } from "@utils/security";
 import {
@@ -167,9 +152,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 		if (resources.state.selectedInstanceId === null) {
 			return { id: "none", name: "No Instance" } as any;
 		}
-		return instancesState.instances.find(
-			(i) => i.id === resources.state.selectedInstanceId,
-		);
+		return instancesState.instances.find((i) => i.id === resources.state.selectedInstanceId);
 	});
 
 	const isModpack = () => resources.state.resourceType === "modpack";
@@ -187,11 +170,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 			<Show when={props.instance && props.instance.id !== null}>
 				<Show
 					when={resolvedUrl()}
-					fallback={
-						<div class={styles["instance-item-icon-placeholder"]}>
-							{displayChar()}
-						</div>
-					}
+					fallback={<div class={styles["instance-item-icon-placeholder"]}>{displayChar()}</div>}
 				>
 					<div
 						class={styles["instance-item-icon"]}
@@ -214,16 +193,11 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 		<div
 			class={styles["instance-selector-wrapper"]}
 			classList={{ [styles.disabled]: isModpack() }}
-			title={
-				isModpack() ? "Instance selection is disabled for modpacks" : undefined
-			}
+			title={isModpack() ? "Instance selection is disabled for modpacks" : undefined}
 		>
 			<Select<any>
 				disabled={isModpack()}
-				options={[
-					{ id: "none", name: "No Instance" } as any,
-					...instancesState.instances,
-				]}
+				options={[{ id: "none", name: "No Instance" } as any, ...instancesState.instances]}
 				value={selectedInstance()}
 				onChange={(instance: any) => {
 					batch(() => {
@@ -252,10 +226,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 
 						// Sync with router
 						activeRouter()?.updateQuery("selectedInstanceId", id);
-						activeRouter()?.updateQuery(
-							"gameVersion",
-							resources.state.gameVersion,
-						);
+						activeRouter()?.updateQuery("gameVersion", resources.state.gameVersion);
 						activeRouter()?.updateQuery("loader", resources.state.loader);
 					});
 				}}
@@ -265,9 +236,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 					<SelectItem item={props.item} class={styles["instance-select-item"]}>
 						<div class={styles["instance-item-content"]}>
 							<InstanceIcon instance={props.item.rawValue} />
-							<span class={styles["instance-item-name"]}>
-								{props.item.rawValue.name}
-							</span>
+							<span class={styles["instance-item-name"]}>{props.item.rawValue.name}</span>
 						</div>
 					</SelectItem>
 				)}
@@ -277,9 +246,7 @@ const InstanceSelector: Component<{ router?: MiniRouter }> = (p) => {
 						<InstanceIcon instance={selectedInstance()} />
 						<div class={styles["instance-trigger-info"]}>
 							<span class={styles["instance-trigger-label"]}>Instance</span>
-							<SelectValue<any>>
-								{(s) => s.selectedOption()?.name ?? "No Instance"}
-							</SelectValue>
+							<SelectValue<any>>{(s) => s.selectedOption()?.name ?? "No Instance"}</SelectValue>
 						</div>
 					</div>
 				</SelectTrigger>
@@ -312,9 +279,7 @@ const ResourceCard: Component<{
 			// 2. Hash match
 			if (ir.hash && props.project.source !== ir.platform) {
 				// If we have versions in state for this project, check if any match the hash
-				const versions = resources.state.versions.filter(
-					(v) => v.project_id === props.project.id,
-				);
+				const versions = resources.state.versions.filter((v) => v.project_id === props.project.id);
 				if (versions.some((v) => v.hash === ir.hash)) return true;
 			}
 
@@ -324,10 +289,7 @@ const ResourceCard: Component<{
 			}
 
 			// 3. Name + Type match (Heuristic)
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
+			return ir.resource_type === resType && ir.display_name.toLowerCase() === projectName;
 		});
 	});
 
@@ -346,10 +308,7 @@ const ResourceCard: Component<{
 			for (const id of Object.values(extIds)) {
 				if (irRemoteId === id.toLowerCase()) return true;
 			}
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
+			return ir.resource_type === resType && ir.display_name.toLowerCase() === projectName;
 		});
 	});
 
@@ -359,8 +318,9 @@ const ResourceCard: Component<{
 
 	const [localInstalling, setLocalInstalling] = createSignal(false);
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
-	const [latestCompatibleVersion, setLatestCompatibleVersion] =
-		createSignal<ResourceVersion | null>(null);
+	const [latestCompatibleVersion, setLatestCompatibleVersion] = createSignal<ResourceVersion | null>(
+		null,
+	);
 	const installing = () => localInstalling() || isInstallingProject();
 
 	const isUpdateAvailable = createMemo(() => {
@@ -369,12 +329,9 @@ const ResourceCard: Component<{
 		if (!installed || !latest) return false;
 
 		// Check hash first
-		if (installed.hash && latest.hash && installed.hash === latest.hash)
-			return false;
+		if (installed.hash && latest.hash && installed.hash === latest.hash) return false;
 
-		if (
-			installed.platform.toLowerCase() === props.project.source.toLowerCase()
-		) {
+		if (installed.platform.toLowerCase() === props.project.source.toLowerCase()) {
 			return installed.remote_version_id !== latest.id;
 		}
 		return installed.current_version !== latest.version_number;
@@ -387,10 +344,7 @@ const ResourceCard: Component<{
 			const inst = instancesState.instances.find((i) => i.id === instanceId);
 			if (inst) {
 				try {
-					const versions = await resources.getVersions(
-						project.source,
-						project.id,
-					);
+					const versions = await resources.getVersions(project.source, project.id);
 					const best = findBestVersion(
 						versions,
 						inst.minecraftVersion,
@@ -430,11 +384,7 @@ const ResourceCard: Component<{
 		}
 
 		// Shaders, Resource Packs, and Data Packs are generally compatible across loaders
-		if (
-			resType === "shader" ||
-			resType === "resourcepack" ||
-			resType === "datapack"
-		)
+		if (resType === "shader" || resType === "resourcepack" || resType === "datapack")
 			return { type: "compatible" as const };
 
 		// Mod compatibility check based on categories/loaders
@@ -447,8 +397,7 @@ const ResourceCard: Component<{
 		const hasNeoForge = categories.includes("neoforge");
 
 		// If it specifies no loaders, we assume it's ambiguous
-		if (!hasFabric && !hasForge && !hasQuilt && !hasNeoForge)
-			return { type: "compatible" as const };
+		if (!hasFabric && !hasForge && !hasQuilt && !hasNeoForge) return { type: "compatible" as const };
 
 		if (instLoader === "fabric") {
 			if (hasFabric) return { type: "compatible" as const };
@@ -588,10 +537,7 @@ const ResourceCard: Component<{
 		if (!instanceId) {
 			setLocalInstalling(true);
 			try {
-				const versions = await resources.getVersions(
-					props.project.source,
-					props.project.id,
-				);
+				const versions = await resources.getVersions(props.project.source, props.project.id);
 				resources.setRequestInstall(props.project, versions);
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
@@ -607,10 +553,7 @@ const ResourceCard: Component<{
 
 		setLocalInstalling(true);
 		try {
-			const versions = await resources.getVersions(
-				props.project.source,
-				props.project.id,
-			);
+			const versions = await resources.getVersions(props.project.source, props.project.id);
 			const best = findBestVersion(
 				versions,
 				instance.minecraftVersion,
@@ -620,9 +563,7 @@ const ResourceCard: Component<{
 			);
 			if (best) {
 				const instLoader = instance.modloader?.toLowerCase() || "";
-				const hasDirectLoader = best.loaders.some(
-					(l) => l.toLowerCase() === instLoader,
-				);
+				const hasDirectLoader = best.loaders.some((l) => l.toLowerCase() === instLoader);
 
 				if (
 					instLoader === "quilt" &&
@@ -674,9 +615,7 @@ const ResourceCard: Component<{
 							{(() => {
 								const name = props.project.name || "?";
 								const match = name.match(/[a-zA-Z]/);
-								return match
-									? match[0].toUpperCase()
-									: name.charAt(0).toUpperCase();
+								return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 							})()}
 						</div>
 					}
@@ -688,9 +627,7 @@ const ResourceCard: Component<{
 				<div class={styles["resource-card-header"]}>
 					<div class={styles["resource-card-title-group"]}>
 						<h3 class={styles["resource-card-title"]}>{props.project.name}</h3>
-						<span class={styles["resource-card-author"]}>
-							by {props.project.author}
-						</span>
+						<span class={styles["resource-card-author"]}>by {props.project.author}</span>
 					</div>
 				</div>
 				<p class={styles["resource-card-summary"]}>{props.project.summary}</p>
@@ -698,15 +635,9 @@ const ResourceCard: Component<{
 					<span class={styles["resource-card-downloads"]}>
 						{props.project.download_count.toLocaleString()} downloads
 					</span>
-					<Show
-						when={
-							props.project.source === "modrinth" &&
-							(props.project.follower_count || 0) > 0
-						}
-					>
+					<Show when={props.project.source === "modrinth" && (props.project.follower_count || 0) > 0}>
 						<span class={styles["resource-card-followers"]}>
-							<HeartIcon />{" "}
-							{(props.project.follower_count || 0).toLocaleString()}
+							<HeartIcon /> {(props.project.follower_count || 0).toLocaleString()}
 						</span>
 					</Show>
 					<Show when={props.project.published_at}>
@@ -715,9 +646,7 @@ const ResourceCard: Component<{
 						</span>
 					</Show>
 				</div>
-				<Show
-					when={props.project.categories && props.project.categories.length > 0}
-				>
+				<Show when={props.project.categories && props.project.categories.length > 0}>
 					<div class={styles["resource-card-tags"]}>
 						<For each={props.project.categories.slice(0, 4)}>
 							{(tag) => {
@@ -726,8 +655,7 @@ const ResourceCard: Component<{
 									resources.state.availableCategories.length > 0
 										? resources.state.availableCategories.find(
 												(c) =>
-													c.name.toLowerCase() === tag.toLowerCase() ||
-													c.id.toLowerCase() === tag.toLowerCase(),
+													c.name.toLowerCase() === tag.toLowerCase() || c.id.toLowerCase() === tag.toLowerCase(),
 											)
 										: null,
 								);
@@ -740,9 +668,7 @@ const ResourceCard: Component<{
 										class={styles["resource-tag"]}
 										active={
 											resources.state.availableCategories.length > 0
-												? resources.state.categories.includes(
-														(categoryObj()?.id || tag).toLowerCase(),
-													)
+												? resources.state.categories.includes((categoryObj()?.id || tag).toLowerCase())
 												: false
 										}
 										onClick={(e) => {
@@ -759,9 +685,7 @@ const ResourceCard: Component<{
 							}}
 						</For>
 						<Show when={props.project.categories.length > 4}>
-							<span class={styles["resource-tag-more"]}>
-								+{props.project.categories.length - 4}
-							</span>
+							<span class={styles["resource-tag-more"]}>+{props.project.categories.length - 4}</span>
 						</Show>
 					</div>
 				</Show>
@@ -769,10 +693,7 @@ const ResourceCard: Component<{
 			<div class={styles["resource-card-actions"]}>
 				<Button
 					onClick={handleQuickInstall}
-					disabled={
-						installing() ||
-						(compatibility().type === "incompatible" && !isInstalled())
-					}
+					disabled={installing() || (compatibility().type === "incompatible" && !isInstalled())}
 					size="sm"
 					variant={isInstalled() && !isUpdateAvailable() ? "outline" : "solid"}
 					color={
@@ -800,10 +721,7 @@ const ResourceCard: Component<{
 						</Show>
 					</Show>
 					<Show when={!installing() && !isInstalled()}>
-						<Show
-							when={compatibility().type === "incompatible"}
-							fallback="Install"
-						>
+						<Show when={compatibility().type === "incompatible"} fallback="Install">
 							Unsupported
 						</Show>
 					</Show>
@@ -830,9 +748,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 				// Expand if group itself is active or any items are active
 				const id = group.id || group.name;
 				const groupIsActive = group.id && activeCats.includes(group.id);
-				const itemIsActive = group.items.some((item) =>
-					activeCats.includes(item.id),
-				);
+				const itemIsActive = group.items.some((item) => activeCats.includes(item.id));
 
 				if ((groupIsActive || itemIsActive) && id) {
 					if (!next.has(id)) {
@@ -860,9 +776,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 
 		// If metadata is available, use it as the primary source
 		if (meta && meta.game_versions) {
-			const releases = meta.game_versions
-				.filter((v) => v.version_type === "release")
-				.map((v) => v.id);
+			const releases = meta.game_versions.filter((v) => v.version_type === "release").map((v) => v.id);
 
 			// Build the list: "All versions" first, then all releases from metadata
 			const merged = ["All versions", ...releases];
@@ -939,11 +853,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 								icon: c.icon_url,
 								displayIndex: c.display_index ?? 0,
 							}))
-							.sort(
-								(a, b) =>
-									a.displayIndex - b.displayIndex ||
-									a.name.localeCompare(b.name),
-							),
+							.sort((a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name)),
 					});
 				} else {
 					generalGroup.items.push({
@@ -955,14 +865,10 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 				}
 			}
 
-			result.sort(
-				(a, b) =>
-					a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
-			);
+			result.sort((a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name));
 			if (generalGroup.items.length > 0) {
 				generalGroup.items.sort(
-					(a, b) =>
-						a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
+					(a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
 				);
 				result.unshift(generalGroup); // General at the very top
 			}
@@ -994,26 +900,19 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 	});
 
 	const shouldShowLoader = () =>
-		resources.state.resourceType === "mod" ||
-		resources.state.resourceType === "modpack";
+		resources.state.resourceType === "mod" || resources.state.resourceType === "modpack";
 	const shouldShowGameVersion = () => true;
 
 	return (
 		<div class={styles["filters-panel"]}>
 			<div class={styles["filters-header"]}>
 				<h3>Filters</h3>
-				<Button
-					size="sm"
-					variant="ghost"
-					onClick={() => resources.resetFilters()}
-				>
+				<Button size="sm" variant="ghost" onClick={() => resources.resetFilters()}>
 					Reset
 				</Button>
 			</div>
 
-			<div
-				class={`${styles["filter-section"]} ${styles["mobile-only-instance"]}`}
-			>
+			<div class={`${styles["filter-section"]} ${styles["mobile-only-instance"]}`}>
 				<label class={styles["filter-label"]}>Target Instance</label>
 				<InstanceSelector router={activeRouter()} />
 			</div>
@@ -1021,34 +920,17 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 			<div class={styles["filter-section"]}>
 				<label class={styles["filter-label"]}>Resource Type</label>
 				<div class={styles["filter-options"]}>
-					<For
-						each={
-							[
-								"mod",
-								"resourcepack",
-								"shader",
-								"datapack",
-								"modpack",
-								"world",
-							] as const
-						}
-					>
+					<For each={["mod", "resourcepack", "shader", "datapack", "modpack", "world"] as const}>
 						{(type) => (
 							<button
 								class={styles["filter-option"]}
 								classList={{
 									[styles.active]: resources.state.resourceType === type,
-									[styles.disabled]:
-										type === "world" &&
-										resources.state.activeSource === "modrinth",
+									[styles.disabled]: type === "world" && resources.state.activeSource === "modrinth",
 								}}
-								disabled={
-									type === "world" &&
-									resources.state.activeSource === "modrinth"
-								}
+								disabled={type === "world" && resources.state.activeSource === "modrinth"}
 								title={
-									type === "world" &&
-									resources.state.activeSource === "modrinth"
+									type === "world" && resources.state.activeSource === "modrinth"
 										? "Modrinth does not support worlds"
 										: undefined
 								}
@@ -1082,9 +964,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 							});
 						}}
 						itemComponent={(props) => (
-							<ComboboxItem item={props.item}>
-								{String(props.item.rawValue)}
-							</ComboboxItem>
+							<ComboboxItem item={props.item}>{String(props.item.rawValue)}</ComboboxItem>
 						)}
 					>
 						<ComboboxControl class={styles["filter-combobox"]}>
@@ -1101,10 +981,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 					<label class={styles["filter-label"]}>Mod Loader</label>
 					<Select
 						options={["All Loaders", ...LOADERS]}
-						value={
-							LOADERS.find((l) => l.toLowerCase() === resources.state.loader) ||
-							"All Loaders"
-						}
+						value={LOADERS.find((l) => l.toLowerCase() === resources.state.loader) || "All Loaders"}
 						onChange={(v: string | null) => {
 							batch(() => {
 								const val = v === "All Loaders" || !v ? null : v.toLowerCase();
@@ -1114,15 +991,11 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 							});
 						}}
 						itemComponent={(props) => (
-							<SelectItem item={props.item}>
-								{String(props.item.rawValue)}
-							</SelectItem>
+							<SelectItem item={props.item}>{String(props.item.rawValue)}</SelectItem>
 						)}
 					>
 						<SelectTrigger class={styles["filter-select"]}>
-							<SelectValue<string>>
-								{(s) => String(s.selectedOption() || "All Loaders")}
-							</SelectValue>
+							<SelectValue<string>>{(s) => String(s.selectedOption() || "All Loaders")}</SelectValue>
 						</SelectTrigger>
 						<SelectContent />
 					</Select>
@@ -1147,8 +1020,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 												classList={{
 													[styles.clickable]: group.id !== undefined,
 													[styles.active]:
-														group.id !== undefined &&
-														resources.state.categories.includes(group.id),
+														group.id !== undefined && resources.state.categories.includes(group.id),
 												}}
 												onClick={() => {
 													const groupId = group.id;
@@ -1156,10 +1028,7 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 														batch(() => {
 															resources.toggleCategory(groupId);
 															resources.setOffset(0);
-															activeRouter()?.updateQuery(
-																"categories",
-																resources.state.categories,
-															);
+															activeRouter()?.updateQuery("categories", resources.state.categories);
 														});
 													}
 												}}
@@ -1185,23 +1054,15 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 												</Show>
 												<span>{group.name}</span>
 											</div>
-											<Show
-												when={
-													group.items.length > 0 &&
-													resources.state.activeSource === "curseforge"
-												}
-											>
+											<Show when={group.items.length > 0 && resources.state.activeSource === "curseforge"}>
 												<button
 													class={styles["expand-toggle"]}
 													classList={{
-														[styles.expanded]:
-															resources.state.expandedCategoryGroups.includes(
-																group.id || group.name,
-															),
+														[styles.expanded]: resources.state.expandedCategoryGroups.includes(
+															group.id || group.name,
+														),
 													}}
-													onClick={(e) =>
-														toggleGroupExpand(group.id || group.name, e)
-													}
+													onClick={(e) => toggleGroupExpand(group.id || group.name, e)}
 												>
 													<svg
 														xmlns="http://www.w3.org/2000/svg"
@@ -1222,9 +1083,8 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 									</Show>
 									<Show
 										when={
-											resources.state.expandedCategoryGroups.includes(
-												group.id || group.name,
-											) || resources.state.activeSource !== "curseforge"
+											resources.state.expandedCategoryGroups.includes(group.id || group.name) ||
+											resources.state.activeSource !== "curseforge"
 										}
 									>
 										<div class={styles["category-grid"]}>
@@ -1252,17 +1112,11 @@ const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
 																		/>
 																	}
 																>
-																	<img
-																		src={cat.icon || ""}
-																		class={styles["category-tag-icon-img"]}
-																		alt={cat.name}
-																	/>
+																	<img src={cat.icon || ""} class={styles["category-tag-icon-img"]} alt={cat.name} />
 																</Show>
 															</div>
 														</Show>
-														<span class={styles["category-tag-text"]}>
-															{cat.name}
-														</span>
+														<span class={styles["category-tag-text"]}>{cat.name}</span>
 													</Badge>
 												)}
 											</For>
@@ -1304,9 +1158,7 @@ const ResourceBrowser: Component<{
 	let isInitializedFromProps = false;
 
 	const currentSortOptions = createMemo(
-		() =>
-			SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] ||
-			[],
+		() => SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] || [],
 	);
 
 	createEffect(() => {
@@ -1327,9 +1179,7 @@ const ResourceBrowser: Component<{
 		try {
 			// Use existing versions if available, else fetch
 			const finalVersions =
-				versions.length > 0
-					? versions
-					: await resources.getVersions(project.source, project.id);
+				versions.length > 0 ? versions : await resources.getVersions(project.source, project.id);
 			const best = findBestVersion(
 				finalVersions,
 				instance.minecraftVersion,
@@ -1392,15 +1242,11 @@ const ResourceBrowser: Component<{
 				isInitializedFromProps = true;
 			}
 			if (props.gameVersion !== undefined) {
-				resources.setGameVersion(
-					props.gameVersion === "All versions" ? null : props.gameVersion,
-				);
+				resources.setGameVersion(props.gameVersion === "All versions" ? null : props.gameVersion);
 				isInitializedFromProps = true;
 			}
 			if (props.loader !== undefined) {
-				resources.setLoader(
-					props.loader === "All Loaders" ? null : props.loader,
-				);
+				resources.setLoader(props.loader === "All Loaders" ? null : props.loader);
 				isInitializedFromProps = true;
 			}
 			if (props.activeSource !== undefined) {
@@ -1415,10 +1261,7 @@ const ResourceBrowser: Component<{
 				resources.setSortOrder(props.sortOrder as any);
 				isInitializedFromProps = true;
 			}
-			if (
-				props.showFilters !== undefined &&
-				props.showFilters !== resources.state.showFilters
-			) {
+			if (props.showFilters !== undefined && props.showFilters !== resources.state.showFilters) {
 				resources.toggleFilters();
 				isInitializedFromProps = true;
 			}
@@ -1428,9 +1271,7 @@ const ResourceBrowser: Component<{
 			}
 			if (props.selectedInstanceId !== undefined) {
 				resources.setInstance(
-					props.selectedInstanceId
-						? parseInt(props.selectedInstanceId as any)
-						: null,
+					props.selectedInstanceId ? parseInt(props.selectedInstanceId as any) : null,
 				);
 				isInitializedFromProps = true;
 			}
@@ -1598,10 +1439,8 @@ const ResourceBrowser: Component<{
 		});
 	});
 
-	const currentPage = () =>
-		Math.floor(resources.state.offset / resources.state.limit) + 1;
-	const totalPages = () =>
-		Math.ceil(resources.state.totalHits / resources.state.limit);
+	const currentPage = () => Math.floor(resources.state.offset / resources.state.limit) + 1;
+	const totalPages = () => Math.ceil(resources.state.totalHits / resources.state.limit);
 
 	return (
 		<div class={styles["resource-browser"]}>
@@ -1620,22 +1459,14 @@ const ResourceBrowser: Component<{
 							variant="ghost"
 							icon_only
 							onClick={resources.toggleFilters}
-							title={
-								resources.state.showFilters ? "Hide Filters" : "Show Filters"
-							}
+							title={resources.state.showFilters ? "Hide Filters" : "Show Filters"}
 							class={styles["filter-toggle-btn"]}
 						>
-							<Show
-								when={resources.state.showFilters}
-								fallback={<PanelOpenIcon />}
-							>
+							<Show when={resources.state.showFilters} fallback={<PanelOpenIcon />}>
 								<PanelCloseIcon />
 							</Show>
 						</Button>
-						<div
-							class={styles["search-container"]}
-							classList={{ [styles.expanded]: isSearchExpanded() }}
-						>
+						<div class={styles["search-container"]} classList={{ [styles.expanded]: isSearchExpanded() }}>
 							<Button
 								size="sm"
 								variant="ghost"
@@ -1657,9 +1488,9 @@ const ResourceBrowser: Component<{
 								<TextField
 									placeholder="Search resources..."
 									value={resources.state.query}
-									onInput={(
-										e: InputEvent & { currentTarget: HTMLInputElement },
-									) => handleSearchInput(e.currentTarget.value)}
+									onInput={(e: InputEvent & { currentTarget: HTMLInputElement }) =>
+										handleSearchInput(e.currentTarget.value)
+									}
 									class={styles["toolbar-search-field"]}
 									onFocus={() => setIsSearchExpanded(true)}
 									onBlur={() => {
@@ -1694,8 +1525,7 @@ const ResourceBrowser: Component<{
 							<button
 								class={styles["source-btn"]}
 								classList={{
-									[styles.active]:
-										resources.state.activeSource === "curseforge",
+									[styles.active]: resources.state.activeSource === "curseforge",
 								}}
 								onClick={() => {
 									batch(() => {
@@ -1740,12 +1570,8 @@ const ResourceBrowser: Component<{
 								{" • "}
 								{resources.state.categories
 									.map((catId) => {
-										const cat = resources.state.availableCategories.find(
-											(c) => c.id === catId,
-										);
-										return cat
-											? cat.name
-											: catId.charAt(0).toUpperCase() + catId.slice(1);
+										const cat = resources.state.availableCategories.find((c) => c.id === catId);
+										return cat ? cat.name : catId.charAt(0).toUpperCase() + catId.slice(1);
 									})
 									.join(", ")}
 							</Show>
@@ -1758,11 +1584,7 @@ const ResourceBrowser: Component<{
 								options={[20, 50, 100]}
 								value={resources.state.limit}
 								onChange={(v: number | null) => resources.setLimit(v || 20)}
-								itemComponent={(props) => (
-									<SelectItem item={props.item}>
-										{props.item.rawValue}
-									</SelectItem>
-								)}
+								itemComponent={(props) => <SelectItem item={props.item}>{props.item.rawValue}</SelectItem>}
 							>
 								<SelectTrigger class={styles["limit-select-trigger"]}>
 									<SelectValue<number>>{(s) => s.selectedOption()}</SelectValue>
@@ -1778,9 +1600,8 @@ const ResourceBrowser: Component<{
 								optionValue="value"
 								optionTextValue="label"
 								value={
-									currentSortOptions().find(
-										(o) => o.value === resources.state.sortBy,
-									) || currentSortOptions()[0]
+									currentSortOptions().find((o) => o.value === resources.state.sortBy) ||
+									currentSortOptions()[0]
 								}
 								onChange={(val) => {
 									if (!val) return;
@@ -1792,15 +1613,11 @@ const ResourceBrowser: Component<{
 									});
 								}}
 								itemComponent={(props) => (
-									<SelectItem item={props.item}>
-										{props.item.rawValue.label}
-									</SelectItem>
+									<SelectItem item={props.item}>{props.item.rawValue.label}</SelectItem>
 								)}
 							>
 								<SelectTrigger class={styles["sort-select-trigger"]}>
-									<SelectValue<any>>
-										{(s) => s.selectedOption()?.label || "Sort By..."}
-									</SelectValue>
+									<SelectValue<any>>{(s) => s.selectedOption()?.label || "Sort By..."}</SelectValue>
 								</SelectTrigger>
 								<SelectContent />
 							</Select>
@@ -1812,11 +1629,7 @@ const ResourceBrowser: Component<{
 									resources.toggleSortOrder();
 									resources.setOffset(0);
 								}}
-								title={
-									resources.state.sortOrder === "asc"
-										? "Ascending"
-										: "Descending"
-								}
+								title={resources.state.sortOrder === "asc" ? "Ascending" : "Descending"}
 							>
 								{resources.state.sortOrder === "asc" ? "↑" : "↓"}
 							</button>
@@ -1840,17 +1653,13 @@ const ResourceBrowser: Component<{
 								<div class={styles["empty-state"]}>
 									<h3>No resources found</h3>
 									<p>Try adjusting your search query or filters.</p>
-									<Button onClick={() => resources.resetFilters()}>
-										Clear All Filters
-									</Button>
+									<Button onClick={() => resources.resetFilters()}>Clear All Filters</Button>
 								</div>
 							}
 						>
 							<div
 								class={
-									resources.state.viewMode === "grid"
-										? styles["resource-grid"]
-										: styles["resource-list"]
+									resources.state.viewMode === "grid" ? styles["resource-grid"] : styles["resource-list"]
 								}
 							>
 								<For each={resources.state.results}>
@@ -1872,26 +1681,15 @@ const ResourceBrowser: Component<{
 										onPageChange={resources.setPage}
 										class={styles.pagination}
 										itemComponent={(props) => (
-											<PaginationItem
-												page={props.page}
-												class={styles["pagination-item"]}
-											>
+											<PaginationItem page={props.page} class={styles["pagination-item"]}>
 												{props.page}
 											</PaginationItem>
 										)}
-										ellipsisComponent={() => (
-											<PaginationEllipsis
-												class={styles["pagination-ellipsis"]}
-											/>
-										)}
+										ellipsisComponent={() => <PaginationEllipsis class={styles["pagination-ellipsis"]} />}
 									>
-										<PaginationPrevious class={styles["pagination-prev"]}>
-											Prev
-										</PaginationPrevious>
+										<PaginationPrevious class={styles["pagination-prev"]}>Prev</PaginationPrevious>
 										<PaginationItems />
-										<PaginationNext class={styles["pagination-next"]}>
-											Next
-										</PaginationNext>
+										<PaginationNext class={styles["pagination-next"]}>Next</PaginationNext>
 									</Pagination>
 								</div>
 							</Show>

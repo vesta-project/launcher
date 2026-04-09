@@ -24,17 +24,14 @@ interface AccountPopoverProps {
 }
 
 export function AccountPopover(props: AccountPopoverProps) {
-	const [accounts, { refetch: refetchAccounts }] =
-		createResource<Account[]>(getAccounts);
-	const [activeAccount, { refetch: refetchActive }] = createResource(
-		async () => {
-			try {
-				return await invoke<Account | null>("get_active_account");
-			} catch {
-				return null;
-			}
-		},
-	);
+	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
+	const [activeAccount, { refetch: refetchActive }] = createResource(async () => {
+		try {
+			return await invoke<Account | null>("get_active_account");
+		} catch {
+			return null;
+		}
+	});
 
 	// Listen for config updates to refetch active account
 	createEffect(() => {
@@ -109,14 +106,9 @@ export function AccountPopover(props: AccountPopoverProps) {
 					<>
 						<div class={styles["active-account-section"]}>
 							<div class={styles["active-info"]}>
-								<div class={styles["active-username"]}>
-									{account().username}
-								</div>
+								<div class={styles["active-username"]}>{account().username}</div>
 								<Tooltip placement="right">
-									<TooltipTrigger
-										class={styles["active-uuid-container"]}
-										onClick={copyUuid}
-									>
+									<TooltipTrigger class={styles["active-uuid-container"]} onClick={copyUuid}>
 										<span class={styles["active-uuid"]}>{account().uuid}</span>
 									</TooltipTrigger>
 									<TooltipContent>Click to copy UUID</TooltipContent>
@@ -126,17 +118,10 @@ export function AccountPopover(props: AccountPopoverProps) {
 
 						<div class={styles["actions-section"]}>
 							<div class={styles["actions-row"]}>
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={openSettings}
-									class={styles["action-btn"]}
-								>
+								<Button variant="ghost" size="sm" onClick={openSettings} class={styles["action-btn"]}>
 									Edit Skin
 								</Button>
-								<Show
-									when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}
-								>
+								<Show when={activeAccount()?.account_type !== ACCOUNT_TYPE_GUEST}>
 									<Button
 										variant="ghost"
 										size="sm"
@@ -162,24 +147,17 @@ export function AccountPopover(props: AccountPopoverProps) {
 					<div class={styles["section-title"]}>Other Accounts</div>
 				</div>
 				<div class={styles["account-list"]}>
-					<For
-						each={accounts()?.filter((a) => a.uuid !== activeAccount()?.uuid)}
-					>
+					<For each={accounts()?.filter((a) => a.uuid !== activeAccount()?.uuid)}>
 						{(account) => (
 							<Tooltip placement="right" gutter={4}>
-								<TooltipTrigger
-									class={styles["account-item"]}
-									onClick={() => handleSwitchAccount(account)}
-								>
+								<TooltipTrigger class={styles["account-item"]} onClick={() => handleSwitchAccount(account)}>
 									<ResourceAvatar
 										name={account.username}
 										playerUuid={account.uuid}
 										size={24}
 										shape="square"
 									/>
-									<div class={styles["account-item-name"]}>
-										{account.username}
-									</div>
+									<div class={styles["account-item-name"]}>{account.username}</div>
 									<Show when={account.is_expired}>
 										<div class={styles["expired-badge"]}>Expired</div>
 									</Show>

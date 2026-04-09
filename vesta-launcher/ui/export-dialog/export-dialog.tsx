@@ -12,13 +12,7 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import {
 	TextFieldInput,
 	TextFieldLabel,
@@ -27,11 +21,7 @@ import {
 } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
-import {
-	ExportCandidate,
-	exportInstanceToModpack,
-	listExportCandidates,
-} from "@utils/modpacks";
+import { ExportCandidate, exportInstanceToModpack, listExportCandidates } from "@utils/modpacks";
 import {
 	createEffect,
 	createMemo,
@@ -244,9 +234,7 @@ export function ExportDialog(props: ExportDialogProps) {
 			}
 
 			const allFiles = candidates() || [];
-			const selectedCandidates = allFiles.filter((c) =>
-				selections().has(c.path),
-			);
+			const selectedCandidates = allFiles.filter((c) => selections().has(c.path));
 
 			// Close dialog immediately after submission
 			props.onClose();
@@ -366,9 +354,7 @@ export function ExportDialog(props: ExportDialogProps) {
 				</div>
 
 				<Show when={hasChildren() && expandedState()}>
-					<For each={p.item.children}>
-						{(child) => <TreeRow item={child} depth={p.depth + 1} />}
-					</For>
+					<For each={p.item.children}>{(child) => <TreeRow item={child} depth={p.depth + 1} />}</For>
 				</Show>
 			</>
 		);
@@ -484,9 +470,7 @@ export function ExportDialog(props: ExportDialogProps) {
 								</div>
 							</Show>
 
-							<For each={tree()}>
-								{(item) => <TreeRow item={item} depth={0} />}
-							</For>
+							<For each={tree()}>{(item) => <TreeRow item={item} depth={0} />}</For>
 						</div>
 					</Show>
 
@@ -536,24 +520,19 @@ export function ExportDialog(props: ExportDialogProps) {
 										onChange={setExportFormat}
 										itemComponent={(props) => (
 											<SelectItem item={props.item}>
-												{props.item.rawValue.charAt(0).toUpperCase() +
-													props.item.rawValue.slice(1)}
+												{props.item.rawValue.charAt(0).toUpperCase() + props.item.rawValue.slice(1)}
 											</SelectItem>
 										)}
 									>
 										<SelectTrigger>
-											<SelectValue<string>>
-												{(s) => s.selectedOption()}
-											</SelectValue>
+											<SelectValue<string>>{(s) => s.selectedOption()}</SelectValue>
 										</SelectTrigger>
 										<SelectContent />
 									</Select>
 								</TextFieldRoot>
 							</div>
 
-							<TextFieldRoot
-								style={{ flex: 1, display: "flex", "flex-direction": "column" }}
-							>
+							<TextFieldRoot style={{ flex: 1, display: "flex", "flex-direction": "column" }}>
 								<TextFieldLabel>Description</TextFieldLabel>
 								<TextFieldTextArea
 									value={description()}
@@ -580,9 +559,7 @@ export function ExportDialog(props: ExportDialogProps) {
 										gap: "8px",
 									}}
 								>
-									<span style={{ "font-weight": "inherit" }}>
-										Select Files to Include
-									</span>
+									<span style={{ "font-weight": "inherit" }}>Select Files to Include</span>
 									<span
 										style={{
 											opacity: 0.5,

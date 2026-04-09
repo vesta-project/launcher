@@ -92,10 +92,7 @@ function LoginPage(_props: LoginPageProps) {
 					<Show when={errorMessage()}>
 						<p class={styles["login-page__error"]}>{errorMessage()}</p>
 					</Show>
-					<LauncherButton
-						onClick={handleLogin}
-						class={styles["login-page__button"]}
-					>
+					<LauncherButton onClick={handleLogin} class={styles["login-page__button"]}>
 						Sign in with Microsoft
 					</LauncherButton>
 				</Show>
@@ -107,18 +104,12 @@ function LoginPage(_props: LoginPageProps) {
 						</p>
 						<div class={styles["login-page__code-container"]}>
 							<code class={styles["login-page__code"]}>{authCode()}</code>
-							<LauncherButton
-								onClick={copyCode}
-								class={styles["login-page__copy-button"]}
-							>
+							<LauncherButton onClick={copyCode} class={styles["login-page__copy-button"]}>
 								{copied() ? "Copied!" : "Copy"}
 							</LauncherButton>
 						</div>
 						<div class={styles["login-page__button-group"]}>
-							<LauncherButton
-								onClick={openUrl}
-								class={styles["login-page__button"]}
-							>
+							<LauncherButton onClick={openUrl} class={styles["login-page__button"]}>
 								Open Sign-in Page
 							</LauncherButton>
 							<LauncherButton

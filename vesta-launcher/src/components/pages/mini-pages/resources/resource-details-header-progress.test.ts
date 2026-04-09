@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-    computeHeaderCollapseProgress,
-    deriveHeaderCompactState,
-    HEADER_COLLAPSE_RANGE_PX,
+	computeHeaderCollapseProgress,
+	deriveHeaderCompactState,
+	HEADER_COLLAPSE_RANGE_PX,
 } from "./resource-details-header-progress";
 
 describe("computeHeaderCollapseProgress", () => {

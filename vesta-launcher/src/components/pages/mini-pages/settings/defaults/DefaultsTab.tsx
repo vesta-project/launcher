@@ -8,17 +8,8 @@ import {
 	NumberFieldLabel,
 } from "@ui/number-field/number-field";
 import { Separator } from "@ui/separator/separator";
-import {
-	Slider,
-	SliderFill,
-	SliderThumb,
-	SliderTrack,
-} from "@ui/slider/slider";
-import {
-	TextFieldInput,
-	TextFieldRoot,
-	TextFieldTextArea,
-} from "@ui/text-field/text-field";
+import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
+import { TextFieldInput, TextFieldRoot, TextFieldTextArea } from "@ui/text-field/text-field";
 import { Component } from "solid-js";
 import styles from "../settings-page.module.css";
 
@@ -34,10 +25,7 @@ export const InstanceDefaultsTab: Component<{
 
 	return (
 		<div class={styles["settings-tab-content"]}>
-			<SettingsCard
-				header="Resolution Defaults"
-				subHeader="Default window size for new instances."
-			>
+			<SettingsCard header="Resolution Defaults" subHeader="Default window size for new instances.">
 				<SettingsField
 					label="Game Window"
 					description="Initial width and height for the game window."
@@ -54,9 +42,7 @@ export const InstanceDefaultsTab: Component<{
 								class={styles["res-number-field"]}
 								style={{ flex: 1 }}
 								value={props.config.default_width}
-								onRawValueChange={(val) =>
-									props.updateConfig("default_width", val)
-								}
+								onRawValueChange={(val) => props.updateConfig("default_width", val)}
 								minValue={0}
 							>
 								<NumberFieldLabel
@@ -79,9 +65,7 @@ export const InstanceDefaultsTab: Component<{
 								class={styles["res-number-field"]}
 								style={{ flex: 1 }}
 								value={props.config.default_height}
-								onRawValueChange={(val) =>
-									props.updateConfig("default_height", val)
-								}
+								onRawValueChange={(val) => props.updateConfig("default_height", val)}
 								minValue={0}
 							>
 								<NumberFieldLabel
@@ -104,10 +88,7 @@ export const InstanceDefaultsTab: Component<{
 				/>
 			</SettingsCard>
 
-			<SettingsCard
-				header="Memory Allocation"
-				subHeader="Default memory settings for new instances."
-			>
+			<SettingsCard header="Memory Allocation" subHeader="Default memory settings for new instances.">
 				<SettingsField
 					label="Allocation Range"
 					description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(
@@ -117,10 +98,7 @@ export const InstanceDefaultsTab: Component<{
 						<>
 							<div style={{ "margin-bottom": "32px", "margin-top": "12px" }}>
 								<Slider
-									value={[
-										props.config.default_min_memory || 2048,
-										props.config.default_max_memory || 4096,
-									]}
+									value={[props.config.default_min_memory || 2048, props.config.default_max_memory || 4096]}
 									onChange={handleMemoryChange}
 									minValue={512}
 									maxValue={props.totalRam || 16384}
@@ -179,10 +157,7 @@ export const InstanceDefaultsTab: Component<{
 					<TextFieldTextArea
 						value={props.config.default_java_args || ""}
 						onInput={(e) =>
-							props.updateConfig(
-								"default_java_args",
-								(e.currentTarget as HTMLTextAreaElement).value,
-							)
+							props.updateConfig("default_java_args", (e.currentTarget as HTMLTextAreaElement).value)
 						}
 						placeholder="-Xmx4G -XX:+UseG1GC ..."
 						style={{ "min-height": "100px" }}
@@ -217,9 +192,7 @@ export const InstanceDefaultsTab: Component<{
 				header="Lifecycle Hooks"
 				subHeader="Commands to run at different stages of the instance lifecycle."
 			>
-				<div
-					style={{ display: "flex", "flex-direction": "column", gap: "16px" }}
-				>
+				<div style={{ display: "flex", "flex-direction": "column", gap: "16px" }}>
 					<SettingsField
 						label="Pre-launch Command"
 						description="Runs before the game starts."
@@ -228,10 +201,7 @@ export const InstanceDefaultsTab: Component<{
 								<TextFieldInput
 									value={props.config.default_pre_launch_hook || ""}
 									onInput={(e) =>
-										props.updateConfig(
-											"default_pre_launch_hook",
-											(e.currentTarget as HTMLInputElement).value,
-										)
+										props.updateConfig("default_pre_launch_hook", (e.currentTarget as HTMLInputElement).value)
 									}
 									placeholder="e.g. echo 'Starting...' > start.log"
 								/>
@@ -247,10 +217,7 @@ export const InstanceDefaultsTab: Component<{
 								<TextFieldInput
 									value={props.config.default_wrapper_command || ""}
 									onInput={(e) =>
-										props.updateConfig(
-											"default_wrapper_command",
-											(e.currentTarget as HTMLInputElement).value,
-										)
+										props.updateConfig("default_wrapper_command", (e.currentTarget as HTMLInputElement).value)
 									}
 									placeholder="e.g. mangohud"
 								/>
@@ -266,10 +233,7 @@ export const InstanceDefaultsTab: Component<{
 								<TextFieldInput
 									value={props.config.default_post_exit_hook || ""}
 									onInput={(e) =>
-										props.updateConfig(
-											"default_post_exit_hook",
-											(e.currentTarget as HTMLInputElement).value,
-										)
+										props.updateConfig("default_post_exit_hook", (e.currentTarget as HTMLInputElement).value)
 									}
 									placeholder="e.g. echo 'Finished' >> start.log"
 								/>

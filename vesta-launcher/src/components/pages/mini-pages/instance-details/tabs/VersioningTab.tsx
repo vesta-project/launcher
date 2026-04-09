@@ -11,12 +11,7 @@ import {
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import {
-	Switch,
-	SwitchControl,
-	SwitchLabel,
-	SwitchThumb,
-} from "@ui/switch/switch";
+import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
 import { Show } from "solid-js";
 import styles from "../instance-details.module.css";
 import { ModpackVersionSelector } from "../modpack-version-selector";
@@ -58,9 +53,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 	const inst = () => props.instance;
 	const selectedMcOption = () => {
 		return (
-			props
-				.searchableMcVersions()
-				.find((version) => version.id === props.selectedMcVersion()) || null
+			props.searchableMcVersions().find((version) => version.id === props.selectedMcVersion()) || null
 		);
 	};
 	const selectedLoaderVersionOption = () => {
@@ -73,8 +66,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 
 	const hasPendingEngineChanges = () => {
 		const instanceLoader = (inst().modloader || "vanilla").toLowerCase();
-		const instanceLoaderVersion =
-			instanceLoader === "vanilla" ? "" : inst().modloaderVersion || "";
+		const instanceLoaderVersion = instanceLoader === "vanilla" ? "" : inst().modloaderVersion || "";
 		const selectedLoader = props.selectedLoader().toLowerCase();
 		const selectedLoaderVersion =
 			selectedLoader === "vanilla" ? "" : props.selectedLoaderVersion() || "";
@@ -135,10 +127,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 								</Button>
 							</div>
 							<p class={styles["modpack-hero-subtitle"]}>
-								{inst().modpackPlatform === "modrinth"
-									? "Modrinth"
-									: "CurseForge"}{" "}
-								• {inst().minecraftVersion}
+								{inst().modpackPlatform === "modrinth" ? "Modrinth" : "CurseForge"} •{" "}
+								{inst().minecraftVersion}
 							</p>
 						</div>
 					</div>
@@ -146,9 +136,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					<ModpackVersionSelector
 						versions={props.modpackVersions()}
 						loading={props.modpackVersions.loading}
-						currentVersionId={
-							inst().modpackVersionId ? String(inst().modpackVersionId) : null
-						}
+						currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
 						onVersionSelect={props.handleModpackVersionSelect}
 						onUpdate={props.rolloutModpackUpdate}
 						disabled={props.busy || props.isInstalling || props.isGuest}
@@ -191,18 +179,10 @@ export const VersioningTab = (props: VersioningTabProps) => {
 									disabled={props.isGuest}
 									class={styles["version-snapshot-switch"]}
 								>
-									<SwitchControl
-										class={styles["version-snapshot-switch__control"]}
-									>
-										<SwitchThumb
-											class={styles["version-snapshot-switch__thumb"]}
-										/>
+									<SwitchControl class={styles["version-snapshot-switch__control"]}>
+										<SwitchThumb class={styles["version-snapshot-switch__thumb"]} />
 									</SwitchControl>
-									<SwitchLabel
-										class={styles["version-snapshot-switch__label"]}
-									>
-										Show Snapshots
-									</SwitchLabel>
+									<SwitchLabel class={styles["version-snapshot-switch__label"]}>Show Snapshots</SwitchLabel>
 								</Switch>
 							}
 							body={
@@ -213,13 +193,9 @@ export const VersioningTab = (props: VersioningTabProps) => {
 									optionTextValue="searchString"
 									value={selectedMcOption()}
 									disabled={props.isGuest}
-									onChange={(version) =>
-										version?.id && props.setSelectedMcVersion(version.id)
-									}
+									onChange={(version) => version?.id && props.setSelectedMcVersion(version.id)}
 									placeholder="Select version..."
-									itemComponent={(p) => (
-										<ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>
-									)}
+									itemComponent={(p) => <ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>}
 								>
 									<ComboboxControl aria-label="Version Picker">
 										<ComboboxInput as="input" />
@@ -230,12 +206,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							}
 						/>
 
-						<Show
-							when={
-								props.selectedLoader() &&
-								props.selectedLoader().toLowerCase() !== "vanilla"
-							}
-						>
+						<Show when={props.selectedLoader() && props.selectedLoader().toLowerCase() !== "vanilla"}>
 							<SettingsField
 								label="Loader Version"
 								description="Specific version of the selected modloader."
@@ -252,8 +223,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 											value={selectedLoaderVersionOption()}
 											disabled={props.isGuest}
 											onChange={(loaderVersion) =>
-												loaderVersion?.id &&
-												props.setSelectedLoaderVersion(loaderVersion.id)
+												loaderVersion?.id && props.setSelectedLoaderVersion(loaderVersion.id)
 											}
 											placeholder="Select loader version..."
 											itemComponent={(p) => (
@@ -353,9 +323,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					label="Hard Reset"
 					description={
 						<span>
-							Reinstalls the game from scratch. This{" "}
-							<strong>permanently deletes</strong> your worlds, configs, and
-							screenshots!
+							Reinstalls the game from scratch. This <strong>permanently deletes</strong> your worlds,
+							configs, and screenshots!
 						</span>
 					}
 					actionLabel="Reset"
@@ -366,8 +335,8 @@ export const VersioningTab = (props: VersioningTabProps) => {
 					label="Uninstall Instance"
 					description={
 						<span>
-							Remove this instance and all its files from your computer. This
-							action is <strong>permanent and irreversible</strong>.
+							Remove this instance and all its files from your computer. This action is{" "}
+							<strong>permanent and irreversible</strong>.
 						</span>
 					}
 					actionLabel="Uninstall"
