@@ -48,6 +48,11 @@
 }
 
 .resource-details-header {
+	--header-collapse-progress: 0;
+	--header-padding-y: calc(20px - (8px * var(--header-collapse-progress)));
+	--project-icon-size: calc(64px - (20px * var(--header-collapse-progress)));
+	--project-title-size: calc(28px - (10px * var(--header-collapse-progress)));
+	--meta-visibility: calc(1 - var(--header-collapse-progress));
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
@@ -62,66 +67,63 @@
 	box-sizing: border-box;
 	border-radius: 12px;
 	border: var(--border-width-subtle) solid var(--border-subtle);
-	padding: 20px;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	padding: var(--header-padding-y) 20px;
+	transition:
+		padding 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	will-change: padding, box-shadow;
+}
+
+.resource-details-header.is-floating {
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .resource-details-header.compact {
-	padding: 12px 20px;
 	border-radius: 12px;
-	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
 	background: var(--surface-raised);
 }
 
 .compact-author {
-	opacity: 0;
-	max-width: 0;
+	opacity: var(--header-collapse-progress);
+	max-width: calc(300px * var(--header-collapse-progress));
 	overflow: hidden;
 	white-space: nowrap;
 	color: var(--text-secondary);
 	font-size: 14px;
-	margin-left: 0;
+	margin-left: calc(8px * var(--header-collapse-progress));
 	font-weight: 500;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition:
+		opacity 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+		max-width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		margin-left 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 	display: inline-block;
 	vertical-align: middle;
-}
-
-.resource-details-header.compact .compact-author {
-	opacity: 1;
-	max-width: 300px;
-	margin-left: 8px;
-}
-
-.resource-details-header.compact .project-icon {
-	width: 44px;
-	height: 44px;
-}
-
-.resource-details-header.compact .project-header-info h1 {
-	font-size: 18px;
 }
 
 .project-header-info {
 	display: flex;
 	align-items: center;
 	gap: 20px;
-	transition: all 0.2s ease;
 }
 
 .project-icon {
-	width: 64px;
-	height: 64px;
+	width: var(--project-icon-size);
+	height: var(--project-icon-size);
 	border-radius: 12px;
 	object-fit: cover;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition:
+		width 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		height 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .project-header-info h1 {
 	margin: 0;
-	font-size: 28px;
+	font-size: var(--project-title-size);
 	font-weight: 800;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition: font-size 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .project-title-group {
@@ -158,17 +160,19 @@
 	justify-content: space-between;
 	align-items: center;
 	width: 100%;
-	margin-top: 4px;
-	opacity: 1;
-	max-height: 50px;
+	margin-top: calc(4px * var(--meta-visibility));
+	opacity: var(--meta-visibility);
+	max-height: calc(var(--meta-visibility) * 50px);
+	transform: translateY(calc(-6px * var(--header-collapse-progress)));
 	overflow: hidden;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition:
+		opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		max-height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		margin-top 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .resource-details-header.compact .project-subtitle-row {
-	opacity: 0;
-	max-height: 0;
-	margin-top: 0;
 	pointer-events: none;
 }
 
@@ -292,17 +296,19 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	margin-top: 10px;
-	opacity: 1;
-	max-height: 50px;
+	margin-top: calc(10px * var(--meta-visibility));
+	opacity: var(--meta-visibility);
+	max-height: calc(var(--meta-visibility) * 50px);
+	transform: translateY(calc(-8px * var(--header-collapse-progress)));
 	overflow: hidden;
-	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transition:
+		opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		max-height 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		margin-top 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+		transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .resource-details-header.compact .project-categories {
-	opacity: 0;
-	max-height: 0;
-	margin-top: 0;
 	pointer-events: none;
 }
 
@@ -439,6 +445,13 @@
 	.resource-details-header {
 		position: relative;
 		margin-bottom: 0px;
+		--header-collapse-progress: 0;
+		box-shadow: none;
+	}
+
+	.resource-details-header.is-floating,
+	.resource-details-header.compact {
+		box-shadow: none;
 	}
 }
 

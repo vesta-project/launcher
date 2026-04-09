@@ -7,37 +7,37 @@ import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import {
-    findBestVersion,
-    ResourceDependency,
-    ResourceProject,
-    resources,
-    ResourceVersion,
-    SourcePlatform,
+	findBestVersion,
+	ResourceDependency,
+	ResourceProject,
+	resources,
+	ResourceVersion,
+	SourcePlatform,
 } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import {
-    Pagination,
-    PaginationEllipsis,
-    PaginationItem,
-    PaginationItems,
-    PaginationNext,
-    PaginationPrevious,
+	Pagination,
+	PaginationEllipsis,
+	PaginationItem,
+	PaginationItems,
+	PaginationNext,
+	PaginationPrevious,
 } from "@ui/pagination/pagination";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
 } from "@ui/select/select";
 import {
-    Switch,
-    SwitchControl,
-    SwitchLabel,
-    SwitchThumb,
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
 } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
@@ -49,19 +49,24 @@ import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import { getCompatibilityForInstance } from "@utils/resources";
 import { marked } from "marked";
 import {
-    Component,
-    createEffect,
-    createMemo,
-    createResource,
-    createSignal,
-    For,
-    on,
-    onCleanup,
-    onMount,
-    Show,
-    untrack,
+	Component,
+	createEffect,
+	createMemo,
+	createResource,
+	createSignal,
+	For,
+	on,
+	onCleanup,
+	onMount,
+	Show,
+	untrack,
 } from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
+import {
+	computeHeaderCollapseProgress,
+	deriveHeaderCompactState,
+	RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX,
+} from "./resource-details-header-progress";
 import styles from "./resource-details.module.css";
 
 // Configure marked for GFM
@@ -239,6 +244,14 @@ const ResourceDetailsPage: Component<{
 		null,
 	);
 	const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
+	const [headerCollapseProgress, setHeaderCollapseProgress] = createSignal(0);
+	const [isHeaderCompact, setIsHeaderCompact] = createSignal(false);
+	const [isDesktopHeaderAnimation, setIsDesktopHeaderAnimation] =
+		createSignal(true);
+	let headerScrollContainerRef: HTMLDivElement | undefined;
+	let headerLayoutRef: HTMLDivElement | undefined;
+	let headerScrollRaf: number | null = null;
+	let headerMeasureRaf: number | null = null;
 
 	// Register refetch so the navbar reload button works
 	onMount(() => {
@@ -1145,16 +1158,120 @@ const ResourceDetailsPage: Component<{
 		}
 	});
 
-	const [isHeaderCompact, setIsHeaderCompact] = createSignal(false);
+	const resetHeaderCollapse = () => {
+		setHeaderCollapseProgress(0);
+		setIsHeaderCompact(false);
+	};
+
+	const runHeaderCollapseUpdate = (target: HTMLElement) => {
+		if (!isDesktopHeaderAnimation()) {
+			resetHeaderCollapse();
+			return;
+		}
+
+		const maxScroll = Math.max(0, target.scrollHeight - target.clientHeight);
+		const nextProgress = computeHeaderCollapseProgress(
+			target.scrollTop,
+			maxScroll,
+		);
+
+		setHeaderCollapseProgress((previous) =>
+			Math.abs(previous - nextProgress) < 0.001 ? previous : nextProgress,
+		);
+
+		setIsHeaderCompact((previous) =>
+			deriveHeaderCompactState(nextProgress, previous),
+		);
+	};
+
+	const scheduleHeaderCollapseUpdate = (target?: HTMLElement | null) => {
+		const element = target || headerScrollContainerRef;
+		if (!element) return;
+
+		if (headerScrollRaf !== null) {
+			cancelAnimationFrame(headerScrollRaf);
+		}
+
+		headerScrollRaf = requestAnimationFrame(() => {
+			headerScrollRaf = null;
+			runHeaderCollapseUpdate(element);
+		});
+	};
 
 	const handleScroll = (e: Event) => {
-		const target = e.target as HTMLElement;
-		if (target.scrollTop > 0) {
-			setIsHeaderCompact(true);
-		} else {
-			setIsHeaderCompact(false);
-		}
+		if (!isDesktopHeaderAnimation()) return;
+		scheduleHeaderCollapseUpdate(e.currentTarget as HTMLElement);
 	};
+
+	onMount(() => {
+		if (typeof window === "undefined") return;
+
+		const mq = window.matchMedia(
+			`(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
+		);
+
+		const applyLayoutMode = () => {
+			const desktop = !mq.matches;
+			setIsDesktopHeaderAnimation(desktop);
+
+			if (!desktop) {
+				resetHeaderCollapse();
+				return;
+			}
+
+			scheduleHeaderCollapseUpdate();
+		};
+
+		const handleViewportChange = () => {
+			if (headerMeasureRaf !== null) {
+				cancelAnimationFrame(headerMeasureRaf);
+			}
+
+			headerMeasureRaf = requestAnimationFrame(() => {
+				headerMeasureRaf = null;
+				applyLayoutMode();
+			});
+		};
+
+		applyLayoutMode();
+
+		mq.addEventListener("change", handleViewportChange);
+
+		const resizeObserver =
+			typeof ResizeObserver !== "undefined"
+				? new ResizeObserver(() => {
+						scheduleHeaderCollapseUpdate();
+					})
+				: null;
+
+		if (resizeObserver) {
+			if (headerScrollContainerRef) resizeObserver.observe(headerScrollContainerRef);
+			if (headerLayoutRef) resizeObserver.observe(headerLayoutRef);
+		}
+
+		onCleanup(() => {
+			mq.removeEventListener("change", handleViewportChange);
+
+			resizeObserver?.disconnect();
+
+			if (headerScrollRaf !== null) {
+				cancelAnimationFrame(headerScrollRaf);
+			}
+
+			if (headerMeasureRaf !== null) {
+				cancelAnimationFrame(headerMeasureRaf);
+			}
+		});
+	});
+
+	createEffect(
+		on(
+			() => [activeTab(), project()?.id, loading()] as const,
+			() => {
+				scheduleHeaderCollapseUpdate();
+			},
+		),
+	);
 
 	const sidebarContent = () => (
 		<div class={styles["sidebar-scrollable-area"]}>
@@ -1693,11 +1810,20 @@ const ResourceDetailsPage: Component<{
 					>
 						<div
 							class={styles["resource-details-left"]}
+							ref={(el) => {
+								headerScrollContainerRef = el;
+							}}
 							onScroll={handleScroll}
 						>
 							<div
 								class={`${styles["resource-details-header"]} ${styles["theme-card"]}`}
-								classList={{ [styles.compact]: isHeaderCompact() }}
+								classList={{
+									[styles.compact]: isHeaderCompact(),
+									[styles["is-floating"]]: headerCollapseProgress() > 0.01,
+								}}
+								style={{
+									"--header-collapse-progress": `${headerCollapseProgress()}`,
+								}}
 							>
 								<div class={styles["project-header-info"]}>
 									<Show when={project()?.icon_url}>
@@ -1874,7 +2000,12 @@ const ResourceDetailsPage: Component<{
 								</div>
 							</div>
 
-							<div class={styles["resource-details-layout"]}>
+							<div
+								class={styles["resource-details-layout"]}
+								ref={(el) => {
+									headerLayoutRef = el;
+								}}
+							>
 								<div
 									class={`${styles["resource-details-main"]} ${styles["theme-card"]}`}
 								>
