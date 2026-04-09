@@ -363,7 +363,7 @@ pub async fn create_instance(
     let app_config_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
-    // Use custom directory if set, otherwise default to %APPDATA%/.VestaLauncher/instances
+    // Use custom directory if set, otherwise default to the app config directory's instances folder
     let instances_root = if let Some(ref dir) = config.default_game_dir {
         if !dir.is_empty() && dir != "/" {
             std::path::PathBuf::from(dir)
@@ -674,7 +674,7 @@ pub async fn update_instance(
         let app_config_dir = crate::utils::db_manager::get_app_config_dir()
             .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
-        // Use custom directory if set, otherwise default to %APPDATA%/.VestaLauncher/instances
+        // Use custom directory if set, otherwise default to the app config directory's instances folder
         let instances_root = if let Some(ref dir) = config.default_game_dir {
             if !dir.is_empty() && dir != "/" {
                 std::path::PathBuf::from(dir)

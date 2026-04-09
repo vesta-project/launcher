@@ -42,7 +42,7 @@ fn main() {
         }
     }
 
-    // Configure logging with 30-day retention in %appdata%/.VestaLauncher/logs/
+    // Configure logging with 30-day retention in the platform-specific launcher config directory
     let log_plugin = tauri_plugin_log::Builder::new()
         .targets([
             tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),

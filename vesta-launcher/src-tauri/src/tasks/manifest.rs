@@ -78,7 +78,7 @@ impl Task for GenerateManifestTask {
                 force_refresh
             );
 
-            // Resolve AppData folder: %APPDATA%/.VestaLauncher
+            // Resolve launcher app-data folder (platform-specific)
             log::info!("Resolving config directory...");
             let config_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| {
                 log::error!("Failed to get app config dir: {}", e);

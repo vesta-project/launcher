@@ -14,11 +14,12 @@ Principles
 Top-level layout conventions
 
 - Config / app data (per-user):
-  - Windows: `%APPDATA%\\VestaLauncher` (example: `C:\\Users\\You\\AppData\\Roaming\\VestaLauncher`).
+  - Windows: `%APPDATA%\\.VestaLauncher` (example: `C:\\Users\\You\\AppData\\Roaming\\.VestaLauncher`).
   - macOS: `~/Library/Application Support/VestaLauncher`.
-  - Linux: `$XDG_CONFIG_HOME/vesta-launcher` or `~/.config/vesta-launcher`.
+  - Linux: `$XDG_CONFIG_HOME/VestaLauncher` or `~/.config/VestaLauncher`.
+  - Legacy migration: on macOS/Linux, migrate legacy `~/.VestaLauncher` or `~/.config/.VestaLauncher` style folders to `VestaLauncher` when detected.
 - Cache / downloads (per-user):
-  - Use `cache/` under the app data folder: e.g., `%APPDATA%\\VestaLauncher\\cache`.
+  - Use `cache/` under the app data folder: e.g., `%APPDATA%\\.VestaLauncher\\cache`.
   - Subfolders: `cache/downloads`, `cache/installers`, `cache/processed`.
 - Logs:
   - Use `logs/` under app data. Rotate using date-stamped files: `YYYY-MM-DD_HHMMSS.log`.
