@@ -234,7 +234,7 @@ const ResourceDetailsPage: Component<{
 	});
 
 	const [versionFilter, setVersionFilter] = createSignal("");
-	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
+	const [includeUnstable, setIncludeUnstable] = createSignal(false);
 	const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<
 		string | null
 	>(null);
@@ -564,7 +564,7 @@ const ResourceDetailsPage: Component<{
 						activeRouter()?.removeQuery("activeTab");
 					}
 					setVersionFilter("");
-					setIncludeSnapshots(false);
+					setIncludeUnstable(false);
 					setVersionPage(1);
 					setSelectedGalleryItem(null);
 				}
@@ -600,7 +600,7 @@ const ResourceDetailsPage: Component<{
 		});
 	});
 
-	const hasCompatibleSnapshotVersions = createMemo(() =>
+	const hasCompatibleUnstableVersions = createMemo(() =>
 		compatibilityFilteredVersions().some((v) => v.release_type !== "release"),
 	);
 
@@ -608,7 +608,7 @@ const ResourceDetailsPage: Component<{
 		const query = versionFilter().trim().toLowerCase();
 		let list = compatibilityFilteredVersions();
 
-		if (!includeSnapshots()) {
+		if (!includeUnstable()) {
 			list = list.filter((v) => v.release_type === "release");
 		}
 
@@ -654,11 +654,11 @@ const ResourceDetailsPage: Component<{
 			};
 		}
 
-		if (!includeSnapshots() && hasCompatibleSnapshotVersions()) {
+		if (!includeUnstable() && hasCompatibleUnstableVersions()) {
 			return {
-				title: "Only snapshot versions are available",
+				title: "Only unstable versions are available",
 				description:
-					"Enable Include Snapshots to show beta and alpha builds for this selection.",
+					"Enable Include Unstable Versions to show beta and alpha builds for this selection.",
 			};
 		}
 
@@ -2331,9 +2331,9 @@ const ResourceDetailsPage: Component<{
 														/>
 														<div class={styles["version-filter-toggles"]}>
 															<Switch
-																checked={includeSnapshots()}
+																checked={includeUnstable()}
 																onCheckedChange={(checked: boolean) => {
-																	setIncludeSnapshots(checked);
+																	setIncludeUnstable(checked);
 																	setVersionPage(1);
 																}}
 																class={styles["version-switch"]}
@@ -2342,7 +2342,7 @@ const ResourceDetailsPage: Component<{
 																	<SwitchThumb class={styles["version-switch__thumb"]} />
 																</SwitchControl>
 																<SwitchLabel class={styles["version-switch__label"]}>
-																	Include Snapshots
+																	Include Unstable Versions
 																</SwitchLabel>
 															</Switch>
 															<span class={styles["version-filter-count"]}>
