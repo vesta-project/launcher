@@ -1,5 +1,7 @@
 import PinOffIcon from "@assets/pin-off.svg";
 import PinIcon from "@assets/pin.svg";
+import PlayIcon from "@assets/play.svg";
+import KillIcon from "@assets/rounded-square.svg";
 import TrashIcon from "@assets/trash.svg";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { MiniRouter } from "@components/page-viewer/mini-router";
@@ -2047,15 +2049,6 @@ export default function InstanceDetails(
 		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
 	};
 
-	const [isScrolled, setIsScrolled] = createSignal(false);
-
-	const handleScroll = (e: Event) => {
-		const target = e.currentTarget as HTMLElement;
-		// Detect exactly when the toolbar hits the top (approx 115-120px)
-		// depending on header shrunk height (80) + padding (24) + margin (16)
-		setIsScrolled(target.scrollTop > 115);
-	};
-
 	return (
 		<div class={styles["instance-details-page"]}>
 			<aside class={styles["instance-details-sidebar"]}>
@@ -2099,7 +2092,7 @@ export default function InstanceDetails(
 				</nav>
 			</aside>
 
-			<main class={styles["instance-details-content"]} onScroll={handleScroll}>
+			<main class={styles["instance-details-content"]}>
 				<div class={styles["content-wrapper"]}>
 					<Show when={instance.loading && !instance.latest}>
 						<div class={styles["instance-loading"]}>
@@ -2192,6 +2185,7 @@ export default function InstanceDetails(
 												size="md"
 												onClick={openInstanceFolder}
 												title="Open Folder"
+												aria-label="Open Folder"
 												class={styles["header-square-button"]}
 											>
 												<svg
@@ -2216,6 +2210,9 @@ export default function InstanceDetails(
 												title={
 													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
 												}
+												aria-label={
+													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
+												}
 												class={styles["header-square-button"]}
 											>
 												<Show
@@ -2230,17 +2227,31 @@ export default function InstanceDetails(
 												onClick={isRunning() ? handleKill : handlePlay}
 												disabled={busy() || isInstalling()}
 												color={isRunning() ? "destructive" : "primary"}
+												data-color={isRunning() ? "destructive" : "primary"}
 												variant="solid"
 												size="lg"
+												title={playButtonText()}
+												aria-label={playButtonText()}
 												class={styles["details-play-button"]}
 											>
-												<Show when={busy()}>
+												<Show
+													when={busy() || isInstalling()}
+													fallback={
+														<span class={styles["details-play-button-icon"]}>
+															<Show
+																when={isRunning()}
+																fallback={<PlayIcon width="16" height="16" />}
+															>
+																<KillIcon width="14" height="14" />
+															</Show>
+														</span>
+													}
+												>
 													<span class={styles["btn-spinner"]} />
 												</Show>
-												<Show when={isInstalling() && !busy()}>
-													<span class={styles["btn-spinner"]} />
-												</Show>
-												{playButtonText()}
+												<span class={styles["details-play-button-label"]}>
+													{playButtonText()}
+												</span>
 											</Button>
 										</div>
 									</div>
@@ -2279,7 +2290,6 @@ export default function InstanceDetails(
 									<Show when={activeTab() === "resources"}>
 										<ResourcesTab
 											instance={inst()}
-											isScrolled={isScrolled()}
 											resourceTypeFilter={resourceTypeFilter()}
 											resourceSearch={resourceSearch()}
 											setResourceSearch={setResourceSearch}

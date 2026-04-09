@@ -9,7 +9,6 @@ import styles from "../instance-details.module.css";
 
 interface ResourcesTabProps {
 	instance: any;
-	isScrolled: boolean;
 	resourceTypeFilter: string;
 	setResourceTypeFilter: (type: string) => void;
 	table: any;
@@ -33,10 +32,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 	return (
 		<section class={styles["tab-resources"]}>
-			<div
-				class={styles["resources-toolbar"]}
-				classList={{ [styles["is-stuck"]]: props.isScrolled }}
-			>
+			<div class={styles["resources-toolbar"]}>
 				<div class={styles["toolbar-search-filter"]}>
 					<div class={styles["filter-group"]}>
 						<For

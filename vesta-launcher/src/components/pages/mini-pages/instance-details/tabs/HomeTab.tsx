@@ -95,12 +95,6 @@ export const HomeTab = (props: HomeTabProps) => {
 								: "Unknown"}
 						</span>
 					</div>
-					<div class={styles["details-row"]}>
-						<span class={styles["details-key"]}>Runtime</span>
-						<span class={styles["details-value"]}>
-							{props.isRunning ? "Running" : "Stopped"}
-						</span>
-					</div>
 				</div>
 			</div>
 		</section>
