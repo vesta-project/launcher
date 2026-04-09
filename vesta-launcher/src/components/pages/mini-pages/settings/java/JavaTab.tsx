@@ -82,8 +82,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 				<SettingsField
 					label="Use Dedicated GPU"
 					description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
-					layout="inline"
-					control={
+					headerRight={
 						<Switch
 							checked={props.useDedicatedGpu}
 							onCheckedChange={props.handleGpuToggle}

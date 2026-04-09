@@ -168,72 +168,67 @@ export const VersioningTab = (props: VersioningTabProps) => {
 						<SettingsField
 							label="Modloader"
 							description="Choose between Vanilla, Forge, Fabric, or others."
-							layout="stack"
-						>
-							<ModloaderSwitcher
-								options={modloaderSwitcherOptions()}
-								value={props.selectedLoader()}
-								onChange={(nextLoader) => {
-									props.setSelectedLoader(nextLoader);
-									props.setSelectedLoaderVersion("");
-								}}
-								disabled={props.isGuest}
-							/>
-						</SettingsField>
+							body={
+								<ModloaderSwitcher
+									options={modloaderSwitcherOptions()}
+									value={props.selectedLoader()}
+									onChange={(nextLoader) => {
+										props.setSelectedLoader(nextLoader);
+										props.setSelectedLoaderVersion("");
+									}}
+									disabled={props.isGuest}
+								/>
+							}
+						/>
 
 						<SettingsField
 							label="Minecraft Version"
 							description="The base version of the game to run."
-							layout="stack"
-						>
-							<div class={styles["versioning-version-row"]}>
-								<div class={styles["versioning-version-input"]}>
-									<Combobox<any>
-										options={props.searchableMcVersions()}
-										optionValue="id"
-										optionLabel="id"
-										optionTextValue="searchString"
-										value={selectedMcOption()}
-										disabled={props.isGuest}
-										onChange={(version) =>
-											version?.id && props.setSelectedMcVersion(version.id)
-										}
-										placeholder="Select version..."
-										itemComponent={(p) => (
-											<ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>
-										)}
+							headerRight={
+								<Switch
+									checked={props.includeSnapshots()}
+									onCheckedChange={props.setIncludeSnapshots}
+									disabled={props.isGuest}
+									class={styles["version-snapshot-switch"]}
+								>
+									<SwitchControl
+										class={styles["version-snapshot-switch__control"]}
 									>
-										<ComboboxControl aria-label="Version Picker" style="width: 100%;">
-											<ComboboxInput as="input" />
-											<ComboboxTrigger />
-										</ComboboxControl>
-										<ComboboxContent />
-									</Combobox>
-								</div>
-
-								<div class={styles["version-toggle-row"]}>
-									<Switch
-										checked={props.includeSnapshots()}
-										onCheckedChange={props.setIncludeSnapshots}
-										disabled={props.isGuest}
-										class={styles["version-snapshot-switch"]}
+										<SwitchThumb
+											class={styles["version-snapshot-switch__thumb"]}
+										/>
+									</SwitchControl>
+									<SwitchLabel
+										class={styles["version-snapshot-switch__label"]}
 									>
-										<SwitchControl
-											class={styles["version-snapshot-switch__control"]}
-										>
-											<SwitchThumb
-												class={styles["version-snapshot-switch__thumb"]}
-											/>
-										</SwitchControl>
-										<SwitchLabel
-											class={styles["version-snapshot-switch__label"]}
-										>
-											Show Snapshots
-										</SwitchLabel>
-									</Switch>
-								</div>
-							</div>
-						</SettingsField>
+										Show Snapshots
+									</SwitchLabel>
+								</Switch>
+							}
+							body={
+								<Combobox<any>
+									options={props.searchableMcVersions()}
+									optionValue="id"
+									optionLabel="id"
+									optionTextValue="searchString"
+									value={selectedMcOption()}
+									disabled={props.isGuest}
+									onChange={(version) =>
+										version?.id && props.setSelectedMcVersion(version.id)
+									}
+									placeholder="Select version..."
+									itemComponent={(p) => (
+										<ComboboxItem item={p.item}>{p.item.rawValue.id}</ComboboxItem>
+									)}
+								>
+									<ComboboxControl aria-label="Version Picker">
+										<ComboboxInput as="input" />
+										<ComboboxTrigger />
+									</ComboboxControl>
+									<ComboboxContent />
+								</Combobox>
+							}
+						/>
 
 						<Show
 							when={
@@ -244,64 +239,61 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							<SettingsField
 								label="Loader Version"
 								description="Specific version of the selected modloader."
-								layout="stack"
-							>
-								<Show
-									when={!props.mcVersions.loading}
-									fallback={<Skeleton class={styles["skeleton-picker"]} />}
-								>
-									<Combobox<any>
-										options={props.searchableLoaderVersions()}
-										optionValue="id"
-										optionLabel="id"
-										optionTextValue="searchString"
-										value={selectedLoaderVersionOption()}
-										disabled={props.isGuest}
-										onChange={(loaderVersion) =>
-											loaderVersion?.id &&
-											props.setSelectedLoaderVersion(loaderVersion.id)
-										}
-										placeholder="Select loader version..."
-										itemComponent={(p) => (
-											<ComboboxItem item={p.item}>
-												<div
-													style={{
-														display: "flex",
-														"justify-content": "space-between",
-														width: "100%",
-														"align-items": "center",
-														gap: "12px",
-													}}
-												>
-													<span>{p.item.rawValue.id}</span>
-													<Show when={!p.item.rawValue.stable}>
-														<span
-															style={{
-																"font-size": "10px",
-																background: "var(--surface-raised)",
-																padding: "2px 6px",
-																"border-radius": "4px",
-																opacity: 0.6,
-															}}
-														>
-															Experimental
-														</span>
-													</Show>
-												</div>
-											</ComboboxItem>
-										)}
+								body={
+									<Show
+										when={!props.mcVersions.loading}
+										fallback={<Skeleton class={styles["skeleton-picker"]} />}
 									>
-										<ComboboxControl
-											aria-label="Loader Version Selection"
-											style="width: 100%;"
+										<Combobox<any>
+											options={props.searchableLoaderVersions()}
+											optionValue="id"
+											optionLabel="id"
+											optionTextValue="searchString"
+											value={selectedLoaderVersionOption()}
+											disabled={props.isGuest}
+											onChange={(loaderVersion) =>
+												loaderVersion?.id &&
+												props.setSelectedLoaderVersion(loaderVersion.id)
+											}
+											placeholder="Select loader version..."
+											itemComponent={(p) => (
+												<ComboboxItem item={p.item}>
+													<div
+														style={{
+															display: "flex",
+															"justify-content": "space-between",
+															width: "100%",
+															"align-items": "center",
+															gap: "12px",
+														}}
+													>
+														<span>{p.item.rawValue.id}</span>
+														<Show when={!p.item.rawValue.stable}>
+															<span
+																style={{
+																	"font-size": "10px",
+																	background: "var(--surface-raised)",
+																	padding: "2px 6px",
+																	"border-radius": "4px",
+																	opacity: 0.6,
+																}}
+															>
+																Experimental
+															</span>
+														</Show>
+													</div>
+												</ComboboxItem>
+											)}
 										>
-											<ComboboxInput as="input" />
-											<ComboboxTrigger />
-										</ComboboxControl>
-										<ComboboxContent />
-									</Combobox>
-								</Show>
-							</SettingsField>
+											<ComboboxControl aria-label="Loader Version Selection">
+												<ComboboxInput as="input" />
+												<ComboboxTrigger />
+											</ComboboxControl>
+											<ComboboxContent />
+										</Combobox>
+									</Show>
+								}
+							/>
 						</Show>
 
 						<Show when={hasPendingEngineChanges()}>

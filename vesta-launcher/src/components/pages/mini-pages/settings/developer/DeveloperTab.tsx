@@ -18,7 +18,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 				<SettingsField
 					label="Debug Logging"
 					description="Enable verbose logging for troubleshooting"
-					control={
+					headerRight={
 						<Switch
 							checked={props.debugLogging}
 							onCheckedChange={props.handleDebugToggle}
@@ -32,7 +32,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 				<SettingsField
 					label="Reset Notifications"
 					description="Force-reset seen items and clear notification history"
-					control={
+					headerRight={
 						<LauncherButton
 							type="destructive"
 							onClick={async () => {
@@ -54,7 +54,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 				<SettingsField
 					label="Simulate App Update"
 					description="Trigger a full update flow simulation (Toast -> Progress -> Ready)"
-					control={
+					headerRight={
 						<LauncherButton onClick={() => simulateUpdateProcess()}>
 							Simulate Full Update
 						</LauncherButton>
@@ -63,7 +63,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 				<SettingsField
 					label="Simulate Discovery"
 					description="Trigger only the 'Update Available' notification (Native Notification)"
-					control={
+					headerRight={
 						<LauncherButton
 							onClick={async () => {
 								const actions = [
@@ -96,7 +96,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 				<SettingsField
 					label="Add Demo Account"
 					description="Add a temporary demo account that is removed on restart"
-					control={
+					headerRight={
 						<LauncherButton
 							onClick={async () => {
 								await invoke("start_demo_session");

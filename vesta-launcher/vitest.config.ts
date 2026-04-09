@@ -3,7 +3,7 @@ import solidPlugin from "vite-plugin-solid";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
-	plugins: [solidPlugin()],
+	plugins: [solidPlugin({ hot: false })],
 	test: {
 		environment: "jsdom",
 		globals: true,
@@ -23,6 +23,10 @@ export default defineConfig({
 			{
 				find: "@utils",
 				replacement: path.resolve(__dirname, "src/utils"),
+			},
+			{
+				find: "@stores",
+				replacement: path.resolve(__dirname, "src/stores"),
 			},
 			{
 				find: "~",

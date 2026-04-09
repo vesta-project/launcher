@@ -82,30 +82,11 @@
 
 .settings-field {
 	display: flex;
-	gap: 1rem;
+	flex-direction: column;
+	gap: 10px;
 	padding: 10px 0;
 	width: 100%;
 	box-sizing: border-box;
-	align-items: center;
-}
-
-/* Inline layout (Switch, Button) - Row on desktop */
-.settings-field--inline {
-	flex-direction: row !important;
-	justify-content: space-between;
-	flex-wrap: nowrap;
-	align-items: center;
-}
-
-.settings-field--inline .settings-field-info {
-	justify-content: center;
-}
-
-/* Stack layout (Slider, ToggleGroup) - Always stacked, full width below */
-.settings-field--stack {
-	flex-direction: column !important;
-	align-items: stretch;
-	gap: 1rem;
 }
 
 .settings-field--disabled {
@@ -113,18 +94,18 @@
 	pointer-events: none;
 }
 
-.settings-field-content-wrapper.disabled {
+.disabled {
 	opacity: 0.6;
 	pointer-events: none;
 }
 
-.settings-field--stack .settings-field-control {
+.settings-field-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 1rem;
 	width: 100%;
-	justify-content: flex-start;
-}
-
-.settings-field--stack .settings-field-control > * {
-	width: 100%; /* Ensure children like sliders and toggle groups fill the width */
+	min-width: 0;
 }
 
 .settings-field-info {
@@ -159,44 +140,47 @@
 	text-align: left;
 }
 
-.settings-field-control {
+.settings-field-header-right {
 	display: flex;
 	align-items: center;
 	justify-content: flex-end;
-	flex-shrink: 0;
-}
-
-.settings-field-content-wrapper {
-	display: inline-flex;
-	align-items: center;
-	justify-content: flex-end;
 	gap: 8px;
-	min-height: 32px;
+	flex-shrink: 0;
+	min-width: 0;
 }
 
-.settings-field--stack .settings-field-content-wrapper {
+.settings-field-header-right > * {
+	min-width: 0;
+}
+
+.settings-field-body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
 	width: 100%;
-	justify-content: flex-start;
 	align-items: stretch;
-	min-height: 0;
+	min-width: 0;
+	--combobox-control-width: 100%;
+}
+
+.settings-field-body > * {
+	width: 100%;
+	min-width: 0;
 }
 
 @media (max-width: 800px) {
 	.settings-field {
-		flex-direction: column !important;
-		align-items: stretch;
-		gap: 1.25rem;
+		gap: 12px;
 	}
 
-	.settings-field--inline .settings-field-control {
-		/* Switch/Button sticks to the right in the stacked view */
-		align-self: flex-end;
-		width: auto;
+	.settings-field-header {
+		align-items: flex-start;
+		flex-wrap: wrap;
+		row-gap: 8px;
 	}
 
-	.settings-field--stack .settings-field-control {
-		/* Sliders/ToggleGroups remain full width */
-		width: 100%;
+	.settings-field-header-right {
+		margin-left: auto;
 	}
 
 	.settings-field-label-wrapper {

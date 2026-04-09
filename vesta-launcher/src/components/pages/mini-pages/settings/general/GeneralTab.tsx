@@ -1,11 +1,11 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import { invoke } from "@tauri-apps/api/core";
 import {
-	NumberField,
-	NumberFieldDecrementTrigger,
-	NumberFieldGroup,
-	NumberFieldIncrementTrigger,
-	NumberFieldInput,
+    NumberField,
+    NumberFieldDecrementTrigger,
+    NumberFieldGroup,
+    NumberFieldIncrementTrigger,
+    NumberFieldInput,
 } from "@ui/number-field/number-field";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
@@ -32,8 +32,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 				<SettingsField
 					label="Reduced Motion"
 					description="Disable UI animations for a faster and cleaner experience."
-					layout="inline"
-					control={
+					headerRight={
 						<Switch
 							checked={props.reducedMotion}
 							onCheckedChange={props.handleReducedMotionToggle}
@@ -50,8 +49,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 				<SettingsField
 					label="Discord Rich Presence"
 					description="Show your current game and status on Discord."
-					layout="inline"
-					control={
+					headerRight={
 						<Switch
 							checked={props.discordPresenceEnabled}
 							onCheckedChange={props.handleDiscordToggle}
@@ -68,8 +66,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 				<SettingsField
 					label="Automatically Install Dependencies"
 					description="Automatically download and install required mods and engines when adding a new resource."
-					layout="inline"
-					control={
+					headerRight={
 						<Switch
 							checked={props.autoInstallDependencies}
 							onCheckedChange={props.handleAutoInstallDepsToggle}
@@ -83,8 +80,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 				<SettingsField
 					label="Parallel Download Threads"
 					description="Number of simultaneous downloads when installing resources."
-					layout="inline"
-					control={
+					headerRight={
 						<NumberField
 							value={props.maxDownloadThreads}
 							onRawValueChange={async (val) => {

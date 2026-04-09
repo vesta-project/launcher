@@ -32,6 +32,35 @@ function MyComponent(props) {
 }
 ```
 
+### SettingsField Slot Pattern
+
+Use `SettingsField` as a two-region layout instead of inline/stack mode switching:
+
+- `headerRight`: Compact controls shown to the right of label and description.
+- `body`: Full-width content rendered below the header row.
+
+Guidelines:
+
+- Put switches, small buttons, and compact toggles in `headerRight`.
+- Put sliders, comboboxes, text areas, and conditional blocks in `body`.
+- Prefer `body` over local width wrappers. Full-width behavior is provided by the field layout.
+- Legacy `layout`/`control` props are compatibility-only and should not be used for new code.
+
+Example:
+
+```tsx
+<SettingsField
+  label="Allocation Range"
+  description="Configure instance memory usage"
+  headerRight={<Switch checked={useGlobal()} onCheckedChange={setUseGlobal} />}
+  body={
+    <Show when={!useGlobal()} fallback={<div>Using global allocation.</div>}>
+      <MemorySlider />
+    </Show>
+  }
+/>
+```
+
 ### Control Flow
 
 Use SolidJS control flow components instead of JavaScript operators:

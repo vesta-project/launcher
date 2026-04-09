@@ -2129,37 +2129,6 @@
 	opacity: 0.72;
 }
 
-.versioning-version-row {
-  display: flex;
-  gap: 16px;
-  align-items: center;
-  flex-wrap: nowrap;
-}
-
-.versioning-version-input {
-  flex: 1;
-  min-width: 200px;
-}
-
-.version-toggle-row {
-  display: flex;
-  align-items: center;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-@media (max-width: 580px) {
-  .versioning-version-row {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-
-  .version-toggle-row {
-    justify-content: flex-start;
-    padding-left: 4px;
-  }
-}
 .version-snapshot-switch {
 	display: inline-flex;
 	align-items: center;

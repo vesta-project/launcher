@@ -9,14 +9,22 @@ export interface SettingsFieldProps {
 	description?: string | JSX.Element;
 	helpTopic?: string;
 
+	/** Right-side content rendered in the field header. */
+	headerRight?: JSX.Element;
+
+	/** Full-width content rendered below the field header. */
+	body?: JSX.Element;
+
 	/**
-	 * Layout style:
-	 * - 'inline': Control on the right (desktop) or stacked right (mobile)
-	 * - 'stack': Control full width below the text (always)
+	 * Legacy layout style retained for compatibility.
+	 * @deprecated Prefer using `headerRight` and `body`.
 	 */
 	layout?: "inline" | "stack";
 
-	/** Manual control Element (Switch, Slider, etc.) */
+	/**
+	 * Legacy control element retained for compatibility.
+	 * @deprecated Prefer using `headerRight` and `body`.
+	 */
 	control?: JSX.Element;
 
 	/** If providing a simple action button instead of a control */
@@ -29,7 +37,24 @@ export interface SettingsFieldProps {
 }
 
 export const SettingsField: Component<SettingsFieldProps> = (props) => {
-	const layout = () => props.layout || "inline";
+	const resolvedBody = () => {
+		if (props.body !== undefined) return props.body;
+		if (props.children !== undefined) return props.children;
+		if (props.layout === "stack" && props.control !== undefined) {
+			return props.control;
+		}
+
+		return undefined;
+	};
+
+	const resolvedHeaderRight = () => {
+		if (props.headerRight !== undefined) return props.headerRight;
+		if (props.layout !== "stack" && props.control !== undefined) {
+			return props.control;
+		}
+
+		return undefined;
+	};
 
 	const handleAction = async () => {
 		if (!props.onAction) return;
@@ -45,21 +70,36 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 		await props.onAction();
 	};
 
-	return (
-		<>
-			<div
-				class={styles["settings-field"]}
-				classList={{
-					[styles["settings-field--inline"]]: layout() === "inline",
-					[styles["settings-field--stack"]]: layout() === "stack",
-					[styles["settings-field--disabled"]]: props.disabled,
-				}}
+	const resolvedAction = () => {
+		if (!props.actionLabel) return undefined;
+
+		return (
+			<LauncherButton
+				color={props.destructive ? "destructive" : "secondary"}
+				variant={props.destructive ? "outline" : "solid"}
+				onClick={handleAction}
+				disabled={props.disabled}
 			>
+				{props.actionLabel}
+			</LauncherButton>
+		);
+	};
+
+	const headerContent = () => resolvedHeaderRight() ?? resolvedAction();
+
+	return (
+		<div
+			class={styles["settings-field"]}
+			classList={{
+				[styles["settings-field--disabled"]]: props.disabled,
+			}}
+		>
+			<div class={styles["settings-field-header"]}>
 				<div class={styles["settings-field-info"]}>
 					<div class={styles["settings-field-label-wrapper"]}>
 						<span class={styles["settings-field-label"]}>{props.label}</span>
 						<Show when={props.helpTopic}>
-							<HelpTrigger topic={props.helpTopic??""} />
+							<HelpTrigger topic={props.helpTopic ?? ""} />
 						</Show>
 					</div>
 					<Show when={props.description}>
@@ -68,31 +108,23 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 						</div>
 					</Show>
 				</div>
-				<div class={styles["settings-field-control"]}>
-					<Show
-						when={props.control || props.children}
-						fallback={
-							<Show when={props.actionLabel}>
-								<LauncherButton
-									color={props.destructive ? "destructive" : "secondary"}
-									variant={props.destructive ? "outline" : "solid"}
-									onClick={handleAction}
-									disabled={props.disabled}
-								>
-									{props.actionLabel}
-								</LauncherButton>
-							</Show>
-						}
+				<Show when={headerContent()}>
+					<div
+						class={styles["settings-field-header-right"]}
+						classList={{ [styles.disabled]: props.disabled }}
 					>
-						<div
-							class={styles["settings-field-content-wrapper"]}
-							classList={{ [styles.disabled]: props.disabled }}
-						>
-							{props.control || props.children}
-						</div>
-					</Show>
-				</div>
+						{headerContent()}
+					</div>
+				</Show>
 			</div>
-		</>
+			<Show when={resolvedBody()}>
+				<div
+					class={styles["settings-field-body"]}
+					classList={{ [styles.disabled]: props.disabled }}
+				>
+					{resolvedBody()}
+				</div>
+			</Show>
+		</div>
 	);
 };

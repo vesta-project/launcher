@@ -19,7 +19,7 @@ import {
 	TextFieldRoot,
 	TextFieldTextArea,
 } from "@ui/text-field/text-field";
-import { Component, createSignal } from "solid-js";
+import { Component } from "solid-js";
 import styles from "../settings-page.module.css";
 
 export const InstanceDefaultsTab: Component<{
@@ -41,67 +41,67 @@ export const InstanceDefaultsTab: Component<{
 				<SettingsField
 					label="Game Window"
 					description="Initial width and height for the game window."
-					layout="stack"
-				>
-					<div
-						style={{
-							display: "flex",
-							gap: "16px",
-							"align-items": "flex-end",
-							"max-width": "400px",
-						}}
-					>
-						<NumberField
-							class={styles["res-number-field"]}
-							style={{ flex: 1 }}
-							value={props.config.default_width}
-							onRawValueChange={(val) =>
-								props.updateConfig("default_width", val)
-							}
-							minValue={0}
+					body={
+						<div
+							style={{
+								display: "flex",
+								gap: "16px",
+								"align-items": "flex-end",
+								"max-width": "400px",
+							}}
 						>
-							<NumberFieldLabel
-								style={{
-									"font-size": "12px",
-									"margin-bottom": "4px",
-									opacity: 0.6,
-								}}
+							<NumberField
+								class={styles["res-number-field"]}
+								style={{ flex: 1 }}
+								value={props.config.default_width}
+								onRawValueChange={(val) =>
+									props.updateConfig("default_width", val)
+								}
+								minValue={0}
 							>
-								Width
-							</NumberFieldLabel>
-							<NumberFieldGroup>
-								<NumberFieldInput placeholder="Width" />
-								<NumberFieldIncrementTrigger />
-								<NumberFieldDecrementTrigger />
-							</NumberFieldGroup>
-						</NumberField>
-						<span style={{ opacity: 0.5, "margin-bottom": "12px" }}>×</span>
-						<NumberField
-							class={styles["res-number-field"]}
-							style={{ flex: 1 }}
-							value={props.config.default_height}
-							onRawValueChange={(val) =>
-								props.updateConfig("default_height", val)
-							}
-							minValue={0}
-						>
-							<NumberFieldLabel
-								style={{
-									"font-size": "12px",
-									"margin-bottom": "4px",
-									opacity: 0.6,
-								}}
+								<NumberFieldLabel
+									style={{
+										"font-size": "12px",
+										"margin-bottom": "4px",
+										opacity: 0.6,
+									}}
+								>
+									Width
+								</NumberFieldLabel>
+								<NumberFieldGroup>
+									<NumberFieldInput placeholder="Width" />
+									<NumberFieldIncrementTrigger />
+									<NumberFieldDecrementTrigger />
+								</NumberFieldGroup>
+							</NumberField>
+							<span style={{ opacity: 0.5, "margin-bottom": "12px" }}>×</span>
+							<NumberField
+								class={styles["res-number-field"]}
+								style={{ flex: 1 }}
+								value={props.config.default_height}
+								onRawValueChange={(val) =>
+									props.updateConfig("default_height", val)
+								}
+								minValue={0}
 							>
-								Height
-							</NumberFieldLabel>
-							<NumberFieldGroup>
-								<NumberFieldInput placeholder="Height" />
-								<NumberFieldIncrementTrigger />
-								<NumberFieldDecrementTrigger />
-							</NumberFieldGroup>
-						</NumberField>
-					</div>
-				</SettingsField>
+								<NumberFieldLabel
+									style={{
+										"font-size": "12px",
+										"margin-bottom": "4px",
+										opacity: 0.6,
+									}}
+								>
+									Height
+								</NumberFieldLabel>
+								<NumberFieldGroup>
+									<NumberFieldInput placeholder="Height" />
+									<NumberFieldIncrementTrigger />
+									<NumberFieldDecrementTrigger />
+								</NumberFieldGroup>
+							</NumberField>
+						</div>
+					}
+				/>
 			</SettingsCard>
 
 			<SettingsCard
@@ -113,60 +113,62 @@ export const InstanceDefaultsTab: Component<{
 					description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(
 						(props.totalRam || 16384) / 1024,
 					)}GB)`}
-					layout="stack"
-				>
-					<div style={{ "margin-bottom": "32px", "margin-top": "12px" }}>
-						<Slider
-							value={[
-								props.config.default_min_memory || 2048,
-								props.config.default_max_memory || 4096,
-							]}
-							onChange={handleMemoryChange}
-							minValue={512}
-							maxValue={props.totalRam || 16384}
-							step={512}
-						>
+					body={
+						<>
+							<div style={{ "margin-bottom": "32px", "margin-top": "12px" }}>
+								<Slider
+									value={[
+										props.config.default_min_memory || 2048,
+										props.config.default_max_memory || 4096,
+									]}
+									onChange={handleMemoryChange}
+									minValue={512}
+									maxValue={props.totalRam || 16384}
+									step={512}
+								>
+									<div
+										style={{
+											display: "flex",
+											"justify-content": "space-between",
+											"margin-bottom": "8px",
+										}}
+									>
+										<div style={{ "font-size": "13px", "font-weight": "600" }}>
+											{(props.config.default_min_memory || 2048) >= 1024
+												? `${((props.config.default_min_memory || 2048) / 1024).toFixed(1)}GB`
+												: `${props.config.default_min_memory || 2048}MB`}
+											{" — "}
+											{(props.config.default_max_memory || 4096) >= 1024
+												? `${((props.config.default_max_memory || 4096) / 1024).toFixed(1)}GB`
+												: `${props.config.default_max_memory || 4096}MB`}
+										</div>
+									</div>
+									<SliderTrack>
+										<SliderFill />
+										<SliderThumb />
+										<SliderThumb />
+									</SliderTrack>
+								</Slider>
+							</div>
 							<div
 								style={{
-									display: "flex",
-									"justify-content": "space-between",
-									"margin-bottom": "8px",
+									display: "grid",
+									"grid-template-columns": "1fr 1fr",
+									gap: "16px",
+									opacity: "0.8",
+									"font-size": "13px",
 								}}
 							>
-								<div style={{ "font-size": "13px", "font-weight": "600" }}>
-									{(props.config.default_min_memory || 2048) >= 1024
-										? `${((props.config.default_min_memory || 2048) / 1024).toFixed(1)}GB`
-										: `${props.config.default_min_memory || 2048}MB`}
-									{" — "}
-									{(props.config.default_max_memory || 4096) >= 1024
-										? `${((props.config.default_max_memory || 4096) / 1024).toFixed(1)}GB`
-										: `${props.config.default_max_memory || 4096}MB`}
+								<div>
+									<strong>Min (-Xms):</strong> {props.config.default_min_memory} MB
+								</div>
+								<div>
+									<strong>Max (-Xmx):</strong> {props.config.default_max_memory} MB
 								</div>
 							</div>
-							<SliderTrack>
-								<SliderFill />
-								<SliderThumb />
-								<SliderThumb />
-							</SliderTrack>
-						</Slider>
-					</div>
-					<div
-						style={{
-							display: "grid",
-							"grid-template-columns": "1fr 1fr",
-							gap: "16px",
-							opacity: "0.8",
-							"font-size": "13px",
-						}}
-					>
-						<div>
-							<strong>Min (-Xms):</strong> {props.config.default_min_memory} MB
-						</div>
-						<div>
-							<strong>Max (-Xmx):</strong> {props.config.default_max_memory} MB
-						</div>
-					</div>
-				</SettingsField>
+						</>
+					}
+				/>
 			</SettingsCard>
 
 			<SettingsCard
@@ -221,59 +223,59 @@ export const InstanceDefaultsTab: Component<{
 					<SettingsField
 						label="Pre-launch Command"
 						description="Runs before the game starts."
-						layout="stack"
-					>
-						<TextFieldRoot>
-							<TextFieldInput
-								value={props.config.default_pre_launch_hook || ""}
-								onInput={(e) =>
-									props.updateConfig(
-										"default_pre_launch_hook",
-										(e.currentTarget as HTMLInputElement).value,
-									)
-								}
-								placeholder="e.g. echo 'Starting...' > start.log"
-							/>
-						</TextFieldRoot>
-					</SettingsField>
+						body={
+							<TextFieldRoot>
+								<TextFieldInput
+									value={props.config.default_pre_launch_hook || ""}
+									onInput={(e) =>
+										props.updateConfig(
+											"default_pre_launch_hook",
+											(e.currentTarget as HTMLInputElement).value,
+										)
+									}
+									placeholder="e.g. echo 'Starting...' > start.log"
+								/>
+							</TextFieldRoot>
+						}
+					/>
 					<Separator />
 					<SettingsField
 						label="Wrapper Command"
 						description="Wraps the Java process (e.g. mangohud, optirun)."
-						layout="stack"
-					>
-						<TextFieldRoot>
-							<TextFieldInput
-								value={props.config.default_wrapper_command || ""}
-								onInput={(e) =>
-									props.updateConfig(
-										"default_wrapper_command",
-										(e.currentTarget as HTMLInputElement).value,
-									)
-								}
-								placeholder="e.g. mangohud"
-							/>
-						</TextFieldRoot>
-					</SettingsField>
+						body={
+							<TextFieldRoot>
+								<TextFieldInput
+									value={props.config.default_wrapper_command || ""}
+									onInput={(e) =>
+										props.updateConfig(
+											"default_wrapper_command",
+											(e.currentTarget as HTMLInputElement).value,
+										)
+									}
+									placeholder="e.g. mangohud"
+								/>
+							</TextFieldRoot>
+						}
+					/>
 					<Separator />
 					<SettingsField
 						label="Post-exit Command"
 						description="Runs after the game process terminates."
-						layout="stack"
-					>
-						<TextFieldRoot>
-							<TextFieldInput
-								value={props.config.default_post_exit_hook || ""}
-								onInput={(e) =>
-									props.updateConfig(
-										"default_post_exit_hook",
-										(e.currentTarget as HTMLInputElement).value,
-									)
-								}
-								placeholder="e.g. echo 'Finished' >> start.log"
-							/>
-						</TextFieldRoot>
-					</SettingsField>
+						body={
+							<TextFieldRoot>
+								<TextFieldInput
+									value={props.config.default_post_exit_hook || ""}
+									onInput={(e) =>
+										props.updateConfig(
+											"default_post_exit_hook",
+											(e.currentTarget as HTMLInputElement).value,
+										)
+									}
+									placeholder="e.g. echo 'Finished' >> start.log"
+								/>
+							</TextFieldRoot>
+						}
+					/>
 				</div>
 			</SettingsCard>
 		</div>

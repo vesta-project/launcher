@@ -24,7 +24,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				<SettingsField
 					label="Documentation"
 					description="Technical overview of modding frameworks, runtime environments, and configuration."
-					control={
+					headerRight={
 						<LauncherButton onClick={() => props.navigate("/modding-guide")}>
 							View Docs
 						</LauncherButton>
@@ -36,7 +36,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				<SettingsField
 					label="Platform Walkthrough"
 					description="Initiate the interactive walkthrough to familiarize yourself with Vesta's interface."
-					control={
+					headerRight={
 						<LauncherButton
 							onClick={() => {
 								props.close?.();
@@ -75,7 +75,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				<SettingsField
 					label="Automatic Updates"
 					description="Download and install updates automatically in the background"
-					control={
+					headerRight={
 						<Switch
 							checked={props.autoUpdateEnabled}
 							onCheckedChange={props.handleAutoUpdateToggle}
@@ -89,7 +89,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				<SettingsField
 					label="Check on Startup"
 					description="Check for new versions when the launcher starts"
-					control={
+					headerRight={
 						<Switch
 							checked={props.startupCheckUpdates}
 							onCheckedChange={props.handleStartupCheckToggle}
@@ -102,7 +102,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 				/>
 				<SettingsField
 					label="Update Check"
-					control={
+					headerRight={
 						<LauncherButton onClick={() => checkForAppUpdates()}>
 							Check Now
 						</LauncherButton>

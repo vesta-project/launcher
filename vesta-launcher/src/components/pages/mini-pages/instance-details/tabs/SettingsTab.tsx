@@ -1,41 +1,41 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import Button from "@ui/button/button";
 import {
-	ContextMenu,
-	ContextMenuContent,
-	ContextMenuItem,
-	ContextMenuTrigger,
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { areIconsEqual, IconPicker } from "@ui/icon-picker/icon-picker";
 import {
-	NumberField,
-	NumberFieldDecrementTrigger,
-	NumberFieldGroup,
-	NumberFieldIncrementTrigger,
-	NumberFieldInput
+    NumberField,
+    NumberFieldDecrementTrigger,
+    NumberFieldGroup,
+    NumberFieldIncrementTrigger,
+    NumberFieldInput
 } from "@ui/number-field/number-field";
 import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
 } from "@ui/select/select";
 import {
-	Slider,
-	SliderFill,
-	SliderThumb,
-	SliderTrack,
+    Slider,
+    SliderFill,
+    SliderThumb,
+    SliderTrack,
 } from "@ui/slider/slider";
 import {
-	Switch,
-	SwitchControl,
-	SwitchThumb
+    Switch,
+    SwitchControl,
+    SwitchThumb
 } from "@ui/switch/switch";
 import {
-	TextFieldInput,
-	TextFieldRoot,
-	TextFieldTextArea,
+    TextFieldInput,
+    TextFieldRoot,
+    TextFieldTextArea,
 } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { batch, createMemo, Show } from "solid-js";
@@ -190,7 +190,6 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					label="Java Executable"
 					description="The Java runtime used to launch this instance."
 					helpTopic="JAVA_MANAGED"
-					layout="stack"
 				>
 					<div style="display: flex; flex-direction: column; gap: 8px;">
 						<Select<any>
@@ -368,12 +367,10 @@ export const SettingsTab = (p: SettingsTabProps) => {
 				<SettingsField
 					label="Java Arguments"
 					description="Custom JVM arguments for this instance."
-					layout="stack"
-				>
-					<div style="display: flex; flex-direction: column; gap: 8px;">
-						<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
-								Use Global Java Arguments
+					headerRight={
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
+								Use Global
 							</span>
 							<Switch
 								checked={p.useGlobalJavaArgs}
@@ -389,7 +386,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</SwitchControl>
 							</Switch>
 						</div>
-
+					}
+					body={
 						<Show
 							when={!p.useGlobalJavaArgs}
 							fallback={
@@ -411,8 +409,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								/>
 							</TextFieldRoot>
 						</Show>
-					</div>
-				</SettingsField>
+					}
+				/>
 			</SettingsCard>
 
 			<SettingsCard header="Memory Management">
@@ -421,12 +419,10 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(
 						p.totalRam / 1024,
 					)}GB)`}
-					layout="stack"
-				>
-					<div style="display: flex; flex-direction: column; gap: 8px;">
-						<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
-								Use Global Memory Allocation
+					headerRight={
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
+								Use Global
 							</span>
 							<Switch
 								checked={p.useGlobalMemory}
@@ -443,7 +439,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</SwitchControl>
 							</Switch>
 						</div>
-
+					}
+					body={
 						<Show
 							when={!p.useGlobalMemory}
 							fallback={
@@ -452,55 +449,55 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</div>
 							}
 						>
-							<div style="margin-bottom: 32px; margin-top: 12px;">
-								<Slider
-									value={memoryRange()}
-									onChange={handleMemoryChange}
-									minValue={512}
-									maxValue={sliderMaxMemory()}
-									step={512}
-								>
-									<div class={styles["slider__header"]}>
-										<div class={styles["slider__value-label"]}>
-											{p.minMemory[0] >= 1024
-												? `${(p.minMemory[0] / 1024).toFixed(1)}GB`
-												: `${p.minMemory[0]}MB`}
-											{" — "}
-											{p.maxMemory[0] >= 1024
-												? `${(p.maxMemory[0] / 1024).toFixed(1)}GB`
-												: `${p.maxMemory[0]}MB`}
+							<>
+								<div style="margin-bottom: 32px; margin-top: 12px;">
+									<Slider
+										value={memoryRange()}
+										onChange={handleMemoryChange}
+										minValue={512}
+										maxValue={sliderMaxMemory()}
+										step={512}
+									>
+										<div class={styles["slider__header"]}>
+											<div class={styles["slider__value-label"]}>
+												{p.minMemory[0] >= 1024
+													? `${(p.minMemory[0] / 1024).toFixed(1)}GB`
+													: `${p.minMemory[0]}MB`}
+												{" — "}
+												{p.maxMemory[0] >= 1024
+													? `${(p.maxMemory[0] / 1024).toFixed(1)}GB`
+													: `${p.maxMemory[0]}MB`}
+											</div>
 										</div>
+										<SliderTrack>
+											<SliderFill />
+											<SliderThumb />
+											<SliderThumb />
+										</SliderTrack>
+									</Slider>
+								</div>
+								<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; opacity: 0.8; font-size: 13px;">
+									<div>
+										<strong>Min (-Xms):</strong> {p.minMemory[0]} MB
 									</div>
-									<SliderTrack>
-										<SliderFill />
-										<SliderThumb />
-										<SliderThumb />
-									</SliderTrack>
-								</Slider>
-							</div>
-							<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; opacity: 0.8; font-size: 13px;">
-								<div>
-									<strong>Min (-Xms):</strong> {p.minMemory[0]} MB
+									<div>
+										<strong>Max (-Xmx):</strong> {p.maxMemory[0]} MB
+									</div>
 								</div>
-								<div>
-									<strong>Max (-Xmx):</strong> {p.maxMemory[0]} MB
-								</div>
-							</div>
+							</>
 						</Show>
-					</div>
-				</SettingsField>
+					}
+				/>
 			</SettingsCard>
 
 			<SettingsCard header="Resolution">
 				<SettingsField
 					label="Game Window"
 					description="Set the initial width and height of the Minecraft window."
-					layout="stack"
-				>
-					<div style="display: flex; flex-direction: column; gap: 8px;">
-						<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
-								Use Global Resolution
+					headerRight={
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
+								Use Global
 							</span>
 							<Switch
 								checked={p.useGlobalResolution}
@@ -516,7 +513,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</SwitchControl>
 							</Switch>
 						</div>
-
+					}
+					body={
 						<Show
 							when={!p.useGlobalResolution}
 							fallback={
@@ -586,20 +584,18 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</NumberField>
 							</div>
 						</Show>
-					</div>
-				</SettingsField>
+					}
+				/>
 			</SettingsCard>
 
 			<SettingsCard header="Environment Variables">
 				<SettingsField
 					label="Variables"
 					description="Custom environment variables for the game process. One per line (e.g. KEY=VALUE)."
-					layout="stack"
-				>
-					<div style="display: flex; flex-direction: column; gap: 8px;">
-						<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px;">
-							<span style="font-size: 13px; font-weight: 500; color: var(--text-secondary);">
-								Use Global Environment Variables
+					headerRight={
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
+								Use Global
 							</span>
 							<Switch
 								checked={p.useGlobalEnvironmentVariables}
@@ -615,7 +611,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</SwitchControl>
 							</Switch>
 						</div>
-
+					}
+					body={
 						<Show
 							when={!p.useGlobalEnvironmentVariables}
 							fallback={
@@ -637,8 +634,8 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								/>
 							</TextFieldRoot>
 						</Show>
-					</div>
-				</SettingsField>
+					}
+				/>
 			</SettingsCard>
 
 			<SettingsCard header="Life-cycle Hooks">
@@ -678,56 +675,56 @@ export const SettingsTab = (p: SettingsTabProps) => {
 					<SettingsField
 						label="Pre-launch Hook"
 						description="Command to run before the game starts. (e.g. a script to sync worlds)"
-						layout="stack"
-					>
-						<TextFieldRoot>
-							<TextFieldInput
-								value={p.preLaunchHook}
-								onInput={(e: any) => {
-									p.setPreLaunchHook(e.currentTarget.value);
-									p.setIsHooksDirty(true);
-								}}
-								placeholder="e.g. C:\scripts\pre-launch.bat"
-								style="font-family: var(--font-mono); font-size: 12px;"
-							/>
-						</TextFieldRoot>
-					</SettingsField>
+						body={
+							<TextFieldRoot>
+								<TextFieldInput
+									value={p.preLaunchHook}
+									onInput={(e: any) => {
+										p.setPreLaunchHook(e.currentTarget.value);
+										p.setIsHooksDirty(true);
+									}}
+									placeholder="e.g. C:\scripts\pre-launch.bat"
+									style="font-family: var(--font-mono); font-size: 12px;"
+								/>
+							</TextFieldRoot>
+						}
+					/>
 
 					<SettingsField
 						label="Wrapper Command"
 						description="Execute the game through a wrapper (e.g. mangohud, optirun, or a debugger)."
-						layout="stack"
-					>
-						<TextFieldRoot>
-							<TextFieldInput
-								value={p.wrapperCommand}
-								onInput={(e: any) => {
-									p.setWrapperCommand(e.currentTarget.value);
-									p.setIsHooksDirty(true);
-								}}
-								placeholder="e.g. mangohud --dlsym"
-								style="font-family: var(--font-mono); font-size: 12px;"
-							/>
-						</TextFieldRoot>
-					</SettingsField>
+						body={
+							<TextFieldRoot>
+								<TextFieldInput
+									value={p.wrapperCommand}
+									onInput={(e: any) => {
+										p.setWrapperCommand(e.currentTarget.value);
+										p.setIsHooksDirty(true);
+									}}
+									placeholder="e.g. mangohud --dlsym"
+									style="font-family: var(--font-mono); font-size: 12px;"
+								/>
+							</TextFieldRoot>
+						}
+					/>
 
 					<SettingsField
 						label="Post-exit Hook"
 						description="Command to run after the game closes."
-						layout="stack"
-					>
-						<TextFieldRoot>
-							<TextFieldInput
-								value={p.postExitHook}
-								onInput={(e: any) => {
-									p.setPostExitHook(e.currentTarget.value);
-									p.setIsHooksDirty(true);
-								}}
-								placeholder="e.g. powershell -File C:\scripts\cleanup.ps1"
-								style="font-family: var(--font-mono); font-size: 12px;"
-							/>
-						</TextFieldRoot>
-					</SettingsField>
+						body={
+							<TextFieldRoot>
+								<TextFieldInput
+									value={p.postExitHook}
+									onInput={(e: any) => {
+										p.setPostExitHook(e.currentTarget.value);
+										p.setIsHooksDirty(true);
+									}}
+									placeholder="e.g. powershell -File C:\scripts\cleanup.ps1"
+									style="font-family: var(--font-mono); font-size: 12px;"
+								/>
+							</TextFieldRoot>
+						}
+					/>
 				</Show>
 			</SettingsCard>
 
