@@ -105,6 +105,40 @@ pub fn open_app_config_dir() -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn open_app_runtime_storage_dir(app_handle: tauri::AppHandle) -> Result<(), String> {
+    let cache_dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("Failed to resolve app cache directory: {}", e))?;
+
+    std::fs::create_dir_all(&cache_dir)
+        .map_err(|e| format!("Failed to create cache directory: {} (path: {:?})", e, cache_dir))?;
+
+    let mut dir_to_open = cache_dir.clone();
+
+    if let Ok(log_dir) = app_handle.path().app_log_dir() {
+        if let Err(e) = std::fs::create_dir_all(&log_dir) {
+            log::warn!(
+                "Failed to create log directory before opening runtime storage: {} (path: {:?})",
+                e,
+                log_dir
+            );
+        }
+
+        if let (Some(cache_parent), Some(log_parent)) = (cache_dir.parent(), log_dir.parent()) {
+            if cache_parent == log_parent {
+                dir_to_open = cache_parent.to_path_buf();
+            }
+        }
+    }
+
+    open::that(&dir_to_open)
+        .map_err(|e| format!("Failed to open runtime storage directory: {} (path: {:?})", e, dir_to_open))?;
+
+    Ok(())
+}
+
+#[tauri::command]
 pub fn open_instance_folder(instance_id_slug: String) -> Result<(), String> {
     use crate::schema::instance::dsl::*;
     use crate::utils::db::get_vesta_conn;

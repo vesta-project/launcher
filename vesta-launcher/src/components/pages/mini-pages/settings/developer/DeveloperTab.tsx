@@ -9,11 +9,28 @@ import styles from "../settings-page.module.css";
 interface DeveloperSettingsTabProps {
 	debugLogging: boolean;
 	handleDebugToggle: (checked: boolean) => void;
+	handleOpenAppSettingsLocation: () => void;
+	handleOpenRuntimeStorageLocation: () => void;
 }
 
 export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 	return (
 		<div class={styles["settings-tab-content"]}>
+			<SettingsCard header="Data Paths">
+				<SettingsField
+					label="Open App Settings Location"
+					description="Open the directory where Vesta stores app configuration and data files."
+					actionLabel="Open Folder"
+					onAction={props.handleOpenAppSettingsLocation}
+				/>
+				<SettingsField
+					label="Open Runtime Storage Location"
+					description="Open the Local AppData-style folder where runtime cache data (player heads, account capes, etc.) is stored."
+					actionLabel="Open Folder"
+					onAction={props.handleOpenRuntimeStorageLocation}
+				/>
+			</SettingsCard>
+
 			<SettingsCard header="Debug Settings">
 				<SettingsField
 					label="Debug Logging"
