@@ -1,15 +1,13 @@
 <p align="center">
   <img src="vesta-launcher/public/vesta.png" alt="Vesta Launcher" width="400" />
 </p>
-
-<h3 align="center">Vesta Launcher</h3>
-
 <p align="center">
   A modern desktop Minecraft launcher that supports multiple mod loaders including Fabric, Forge, NeoForge, and Quilt. Easily manage instances, install mods, and launch Minecraft with a clean, intuitive interface.
 </p>
 
 ---
 
+<img width="1202" height="701" alt="image" src="https://github.com/user-attachments/assets/958f5a36-b1e2-49ca-8cbe-ab0107729f6b" />
 
 ### Installation
 
