@@ -43,11 +43,13 @@ function TitleBar(props: TitleBarProps) {
 				[props.class ?? ""]: !!props.class,
 			}}
 		>
-			<WindowControls
+			<Show when={props.os !== "macos"}>
+				<WindowControls
 				class={styles["titlebar__window-controls"]}
 				hide={props.pageViewerOpen}
 				platform={props.os === "linux" ? "gnome" : props.os === "macos" ? "macos" : "windows"}
 			/>
+			</Show>
 			<div class={styles["titlebar__grab"]} data-tauri-drag-region={true}>
 				<div data-tauri-drag-region={true} class={styles["titlebar__content"]}>
 					<span data-tauri-drag-region={true}>Vesta Launcher {version() ? `v${version()}` : "..."}</span>

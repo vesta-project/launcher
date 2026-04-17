@@ -57,6 +57,8 @@
 .page-viewer-controls-wrapper--mac {
 	padding-right: 12px;
 	margin-left: -8px;
+	width: 86px; /* Add width for traffic lights */
+	flex-shrink: 0;
 }
 
 .page-viewer-window-controls-wrapper button {

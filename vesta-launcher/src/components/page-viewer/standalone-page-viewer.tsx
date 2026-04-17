@@ -32,6 +32,9 @@ function StandalonePageViewer() {
 	};
 
 	onMount(() => {
+		// Ensure window is focused when the standalone app mounts
+		getCurrentWindow().setFocus().catch(console.error);
+
 		const initialPath = (searchParams.path as string) || "/config";
 		console.log("[Standalone] Initial currentPath from URL:", initialPath);
 
@@ -171,13 +174,15 @@ function StandalonePageViewer() {
 					os={osType()}
 					onClose={() => getCurrentWindow().close()}
 					windowControls={
-						<WindowControls
-							class={
-								styles["standalone-page-viewer__controls"] +
-								styles[`standalone-page-viewer__controls--${osType() ?? "windows"}`]
-							}
-							platform={osType() === "linux" ? "gnome" : osType() === "macos" ? "macos" : "windows"}
-						/>
+						<Show when={osType() !== "macos"}>
+							<WindowControls
+								class={
+									styles["standalone-page-viewer__controls"] +
+									styles[`standalone-page-viewer__controls--${osType() ?? "windows"}`]
+								}
+								platform={osType() === "linux" ? "gnome" : osType() === "macos" ? "macos" : "windows"}
+							/>
+						</Show>
 					}
 				/>
 			)}

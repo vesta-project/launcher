@@ -31,7 +31,9 @@ function applyBackgroundState(
 		style.removeProperty("--background-image");
 	} else {
 		root.setAttribute("data-gradient", "0");
-		style.setProperty("--background-image", "none");
+		// When gradient is disabled, we style it as a "solid gradient" using a single color.
+		// This keeps the property active while visually appearing as a solid background.
+		style.setProperty("--background-image", "linear-gradient(var(--app-background-tint), var(--app-background-tint))");
 	}
 
 	if (isWindowEffectEnabled) {

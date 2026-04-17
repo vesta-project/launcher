@@ -14,10 +14,15 @@ if (!root) {
 }
 
 if ((window as any).__TAURI_INTERNALS__) {
-	void import("@tauri-apps/api/core")
-		.then(({ invoke }) => invoke("show_window_from_tray"))
+	void import("@tauri-apps/api/window")
+		.then(({ getCurrentWindow }) => {
+			const label = getCurrentWindow().label;
+			if (label === "main") {
+				return import("@tauri-apps/api/core").then(({ invoke }) => invoke("show_window_from_tray"));
+			}
+		})
 		.catch((error) => {
-			console.warn("Failed to show startup window:", error);
+			console.warn("Failed to check window label or show startup window:", error);
 		});
 }
 

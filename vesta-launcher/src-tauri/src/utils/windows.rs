@@ -41,7 +41,7 @@ pub async fn launch_window(
         "linux"
     };
 
-    let win_builder = tauri::WebviewWindowBuilder::new(
+    let mut win_builder = tauri::WebviewWindowBuilder::new(
         &app_handle,
         format!("page-viewer-{}", &window_id),
         tauri::WebviewUrl::App(url.into()),
@@ -54,9 +54,20 @@ pub async fn launch_window(
     .transparent(true)
     .decorations(false);
 
+    // Apply the macOS-specific title bar style
+    #[cfg(target_os = "macos")]
+    {
+        win_builder = win_builder
+            .decorations(true)
+            .hidden_title(true)
+            .title_bar_style(tauri::TitleBarStyle::Overlay);
+    }
+
     *window_id += 1;
 
     let win = win_builder.build()?;
+
+    let _ = win.set_focus();
 
     let effect = crate::utils::config::get_app_config()
         .unwrap_or_default()

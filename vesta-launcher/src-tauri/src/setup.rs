@@ -739,7 +739,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         "linux"
     };
 
-    let win_builder = tauri::WebviewWindowBuilder::new(
+    let mut win_builder = tauri::WebviewWindowBuilder::new(
         app,
         "main",
         tauri::WebviewUrl::App("index.html".into()),
@@ -795,6 +795,14 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     //         })
     //         .build(app)?;
     // }
+
+    // Apply the macOS-specific title bar style
+    #[cfg(target_os = "macos")]
+    let mut win_builder = win_builder;
+
+    {
+    win_builder = win_builder.decorations(true).hidden_title(true).title_bar_style(tauri::TitleBarStyle::Overlay);
+    }
 
     #[cfg(target_os = "windows")]
     let win_builder = win_builder;
