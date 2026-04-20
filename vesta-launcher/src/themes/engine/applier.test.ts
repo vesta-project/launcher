@@ -38,7 +38,7 @@ describe("applyTheme background and effect behavior", () => {
 		root.setAttribute("data-os", "windows");
 	});
 
-	it("keeps transparent app background when effect is enabled and gradient is disabled", () => {
+	it("keeps opacity-controlled solid overlay when effect is enabled and gradient is disabled", () => {
 		const root = document.documentElement;
 		applyTheme(
 			createTheme({
@@ -49,9 +49,9 @@ describe("applyTheme background and effect behavior", () => {
 
 		expect(root.getAttribute("data-window-effect")).toBe("transparent");
 		expect(root.getAttribute("data-gradient")).toBe("0");
-		expect(root.style.getPropertyValue("--background-image").trim()).toBe(
-			"linear-gradient(var(--app-background-tint), var(--app-background-tint))",
-		);
+		const bgImage = root.style.getPropertyValue("--background-image").trim();
+		expect(bgImage).toContain("var(--background-opacity)");
+		expect(bgImage).not.toContain("var(--app-background-tint)");
 		expect(root.style.getPropertyValue("--background-color").trim()).toBe("");
 	});
 

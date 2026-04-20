@@ -430,7 +430,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 							<Tooltip placement="top">
 								<TooltipTrigger>
 									<button
-										class={`${styles["play-button"]} ${
+										class={`grain-overlay ${styles["play-button"]} ${
 											isInstalling() || launching()
 												? styles["installing"]
 												: isInterrupted()

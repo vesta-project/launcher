@@ -48,6 +48,7 @@ import {
 	normalizeWindowEffectForCurrentOS,
 	PRESET_THEMES,
 	parseThemeData,
+	normalizeStyleMode,
 	removeCustomTheme,
 	type StyleMode,
 	setCustomThemes,
@@ -199,11 +200,20 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		debouncedPersistence.cancel();
 	});
 
+	const initialThemeData = parseThemeData(currentThemeConfig.theme_data);
+	const initialTheme = getThemeById(currentThemeConfig.theme_id || "vesta");
+
 	const [backgroundHue, setBackgroundHue] = createSignal(
 		currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 180,
 	);
 	const [opacity, setOpacity] = createSignal<number>(
 		getThemeById(currentThemeConfig.theme_id || "vesta")?.opacity ?? 0,
+	);
+	const [styleMode, setStyleMode] = createSignal<StyleMode>(
+		initialThemeData.style ?? currentThemeConfig.theme_style ?? initialTheme?.style ?? "glass",
+	);
+	const [grainStrength, setGrainStrength] = createSignal<number>(
+		initialThemeData.grainStrength ?? initialTheme?.grainStrength ?? 40,
 	);
 	const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(
 		currentThemeConfig.theme_gradient_enabled ?? true,
@@ -235,7 +245,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		getSupportedWindowEffects(),
 	);
 	const [userVariables, setUserVariables] = createStore<Record<string, ThemeVariableValue>>(
-		untrack(() => parseThemeData(currentThemeConfig.theme_data).userVariables || {}),
+		untrack(() => initialThemeData.userVariables || {}),
 	);
 	const userVariablesSnapshot = createMemo<Record<string, ThemeVariableValue>>(() => {
 		const snapshot: Record<string, ThemeVariableValue> = {};
@@ -265,6 +275,16 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const canChangeHue = () => {
 		const id = themeId();
 		return id ? (getThemeById(id)?.allowHueChange ?? false) : false;
+	};
+
+	const canChangeStyle = () => {
+		const id = themeId();
+		return id ? (getThemeById(id)?.allowStyleChange ?? false) : false;
+	};
+
+	const canChangeBorder = () => {
+		const id = themeId();
+		return id ? (getThemeById(id)?.allowBorderChange ?? false) : false;
 	};
 
 	const showAdvancedControls = () => {
@@ -567,7 +587,13 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					setBackgroundHue(config.background_hue);
 
 				if (config.theme_id) {
-					setOpacity(getThemeById(config.theme_id)?.opacity ?? 0);
+					const selectedTheme = getThemeById(config.theme_id);
+					setOpacity(selectedTheme?.opacity ?? 0);
+					setStyleMode(selectedTheme?.style ?? "glass");
+					setGrainStrength(selectedTheme?.grainStrength ?? 40);
+				}
+				if (config.theme_style) {
+					setStyleMode(normalizeStyleMode(config.theme_style) ?? "glass");
 				}
 				if (config.theme_gradient_enabled !== null && config.theme_gradient_enabled !== undefined)
 					setGradientEnabled(config.theme_gradient_enabled);
@@ -590,6 +616,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 					if (themeData.primaryHue !== undefined) setBackgroundHue(themeData.primaryHue);
 					if (themeData.opacity !== undefined) setOpacity(themeData.opacity);
+					if (themeData.style) setStyleMode(themeData.style);
+					if (themeData.grainStrength !== undefined) setGrainStrength(themeData.grainStrength);
 					if (themeData.gradientEnabled !== undefined) setGradientEnabled(themeData.gradientEnabled);
 					if (themeData.rotation !== undefined) setRotation(themeData.rotation);
 					if (themeData.gradientType) setGradientType(themeData.gradientType as "linear" | "radial");
@@ -612,8 +640,20 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "use_dedicated_gpu") setUseDedicatedGpu(value ?? true);
 				if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
-				if (field === "theme_id" && value) setThemeId(value);
+				if (field === "theme_id" && value) {
+					const previousThemeId = untrack(themeId);
+					if (previousThemeId !== value) {
+						setThemeId(value);
+						const selectedTheme = getThemeById(value);
+						if (selectedTheme) {
+							setStyleMode(selectedTheme.style ?? "glass");
+							setGrainStrength(selectedTheme.grainStrength ?? 40);
+						}
+					}
+				}
 				if (field === "theme_primary_hue" && value !== null) setBackgroundHue(value);
+				if (field === "theme_style" && value)
+					setStyleMode(normalizeStyleMode(value) ?? untrack(styleMode));
 				if (field === "theme_gradient_enabled" && value !== null) setGradientEnabled(value);
 				if (field === "theme_gradient_angle" && value !== null) setRotation(value);
 				if (field === "theme_gradient_type" && value) setGradientType(value as "linear" | "radial");
@@ -632,6 +672,15 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 							setBackgroundHue(themeData.primaryHue);
 						if (themeData.opacity !== undefined && themeData.opacity !== untrack(opacity))
 							setOpacity(themeData.opacity);
+						if (themeData.style && themeData.style !== untrack(styleMode)) {
+							setStyleMode(themeData.style);
+						}
+						if (
+							themeData.grainStrength !== undefined &&
+							themeData.grainStrength !== untrack(grainStrength)
+						) {
+							setGrainStrength(themeData.grainStrength);
+						}
 						if (
 							themeData.gradientEnabled !== undefined &&
 							themeData.gradientEnabled !== untrack(gradientEnabled)
@@ -691,6 +740,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			batch(() => {
 				setThemeId(id);
 				setOpacity(theme.opacity ?? 0);
+				setStyleMode(theme.style ?? "glass");
+				setGrainStrength(theme.grainStrength ?? 40);
 				setGradientEnabled(theme.gradientEnabled);
 				setRotation(theme.rotation || 135);
 				setGradientType(theme.gradientType || "linear");
@@ -724,6 +775,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				source: theme.source,
 				primaryHue: finalHue,
 				opacity: theme.opacity,
+				grainStrength: theme.grainStrength,
 				style: theme.style,
 				gradientEnabled: theme.gradientEnabled,
 				rotation: theme.rotation,
@@ -733,6 +785,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				backgroundOpacity: theme.backgroundOpacity,
 				windowEffect: normalizedEffect,
 				customCss: theme.customCss,
+				allowHueChange: theme.allowHueChange,
+				allowStyleChange: theme.allowStyleChange,
+				allowBorderChange: theme.allowBorderChange,
 				variables: theme.variables,
 				userVariables:
 					theme.variables?.reduce<Record<string, ThemeVariableValue>>((acc, variable) => {
@@ -751,9 +806,19 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		saveThemeUpdate({ primaryHue: newHue }, live);
 	};
 
-	const _handleStyleModeChange = (mode: ThemeConfig["style"]) => {
-		setOpacity(parseInt(mode || "0") || 0);
+	const handleStyleModeChange = (mode: StyleMode) => {
+		if (mode === styleMode()) return;
+
+		setStyleMode(mode);
 		saveThemeUpdate({ style: mode });
+	};
+
+	const handleGrainStrengthChange = (values: number[], live = false) => {
+		const next = Math.max(0, Math.min(100, Math.round(values[0])));
+		if (next === grainStrength()) return;
+
+		setGrainStrength(next);
+		saveThemeUpdate({ grainStrength: next }, live);
 	};
 
 	const handleOpacityChange = (val: number[], live = false) => {
@@ -776,7 +841,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	};
 
 	const handleBorderThicknessChange = (values: number[], live = false) => {
-		const newThickness = Math.max(0, Math.min(8, Math.round(values[0])));
+		const newThickness = Math.max(0, Math.min(6, Math.round(values[0] * 2) / 2));
 		if (newThickness === borderThickness()) return;
 
 		batch(() => {
@@ -934,7 +999,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		const activeOpacity = overrides.opacity ?? opacity();
 		const activeThemeId = overrides.id ?? themeId();
 		const currentTheme = getThemeById(activeThemeId);
-		const activeStyle = overrides.style ?? currentTheme?.style ?? "glass";
+		const activeStyle = overrides.style ?? styleMode() ?? currentTheme?.style ?? "glass";
+		const activeGrainStrength = overrides.grainStrength ?? grainStrength();
 		const activeGradient = overrides.gradientEnabled ?? gradientEnabled();
 		const activeRotation = overrides.rotation ?? rotation();
 		const activeGType = overrides.gradientType ?? gradientType();
@@ -952,6 +1018,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			description: overrides.description ?? currentTheme?.description,
 			primaryHue: activeHue,
 			opacity: activeOpacity,
+			grainStrength: activeGrainStrength,
 			style: activeStyle,
 			gradientEnabled: activeGradient,
 			rotation: activeRotation,
@@ -961,6 +1028,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			backgroundOpacity: activeBgOp,
 			windowEffect: activeWEffect,
 			customCss: overrides.customCss ?? currentTheme?.customCss,
+			allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
+			allowStyleChange: overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
+			allowBorderChange: overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
 			variables: overrides.variables ?? currentTheme?.variables,
 			userVariables: activeUserVars,
 		};
@@ -972,6 +1042,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				id: activeThemeId,
 				primaryHue: activeHue,
 				opacity: activeOpacity,
+				grainStrength: activeGrainStrength,
 				style: activeStyle,
 				gradientEnabled: activeGradient,
 				rotation: activeRotation,
@@ -980,6 +1051,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				borderWidth: activeBWidth,
 				backgroundOpacity: activeBgOp,
 				windowEffect: activeWEffect,
+				allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
+				allowStyleChange: overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
+				allowBorderChange: overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
 				userVariables: activeUserVars,
 			}),
 			{ transition: applyTransition },
@@ -1023,6 +1097,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				...currentTheme,
 				primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
 				opacity: opacity() ?? currentTheme.opacity ?? 0,
+				style: styleMode() ?? currentTheme.style,
+				grainStrength: grainStrength() ?? currentTheme.grainStrength,
 				gradientEnabled: (gradientEnabled() ?? currentTheme.gradientEnabled) as boolean,
 				rotation: (rotation() ?? currentTheme.rotation) as number,
 				gradientType: (gradientType() ?? currentTheme.gradientType) as "linear" | "radial",
@@ -1051,12 +1127,16 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				source: "builtin",
 				primaryHue: 220,
 				opacity: 0,
+				grainStrength: 40,
 				style: "glass",
 				gradientEnabled: true,
 				rotation: 135,
 				gradientType: "linear",
 				gradientHarmony: "none",
 				borderWidth: 1,
+				allowHueChange: true,
+				allowStyleChange: true,
+				allowBorderChange: true,
 			});
 
 		const migratedEffect = normalizeWindowEffectForCurrentOS(
@@ -1067,6 +1147,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			setThemeId("custom");
 			setBackgroundHue(fromTheme.primaryHue ?? customTheme.primaryHue);
 			setOpacity(fromTheme.opacity ?? customTheme.opacity ?? 0);
+			setStyleMode(fromTheme.style ?? customTheme.style ?? "glass");
+			setGrainStrength(fromTheme.grainStrength ?? customTheme.grainStrength ?? 40);
 			setGradientEnabled(fromTheme.gradientEnabled ?? customTheme.gradientEnabled);
 			setRotation(fromTheme.rotation ?? customTheme.rotation ?? 135);
 			setGradientType(fromTheme.gradientType ?? customTheme.gradientType ?? "linear");
@@ -1084,6 +1166,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			source: "builtin",
 			primaryHue: fromTheme.primaryHue ?? customTheme.primaryHue,
 			opacity: fromTheme.opacity ?? customTheme.opacity,
+			grainStrength: fromTheme.grainStrength ?? customTheme.grainStrength,
 			style: fromTheme.style ?? customTheme.style,
 			gradientEnabled: fromTheme.gradientEnabled ?? customTheme.gradientEnabled,
 			rotation: fromTheme.rotation ?? customTheme.rotation,
@@ -1238,6 +1321,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setThemeId(importedTheme.id);
 				setBackgroundHue(importedTheme.primaryHue);
 				setOpacity(importedTheme.opacity ?? 0);
+				setStyleMode(importedTheme.style ?? "glass");
+				setGrainStrength(importedTheme.grainStrength ?? 40);
 				setGradientEnabled(importedTheme.gradientEnabled);
 				setRotation(importedTheme.rotation ?? 135);
 				setGradientType(importedTheme.gradientType ?? "linear");
@@ -1252,6 +1337,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				id: importedTheme.id,
 				primaryHue: importedTheme.primaryHue,
 				opacity: importedTheme.opacity,
+				grainStrength: importedTheme.grainStrength,
 				style: importedTheme.style,
 				gradientEnabled: importedTheme.gradientEnabled,
 				rotation: importedTheme.rotation,
@@ -1261,6 +1347,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				backgroundOpacity: importedTheme.backgroundOpacity,
 				windowEffect: normalizeWindowEffectForCurrentOS(importedTheme.windowEffect),
 				customCss: importedTheme.customCss,
+				allowHueChange: importedTheme.allowHueChange,
+				allowStyleChange: importedTheme.allowStyleChange,
+				allowBorderChange: importedTheme.allowBorderChange,
 				variables: importedTheme.variables,
 				userVariables: importedTheme.userVariables || {},
 			});
@@ -1359,11 +1448,17 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								canExportTheme={themeId() === "custom"}
 								handlePresetSelect={handlePresetSelect}
 								canChangeHue={canChangeHue()}
+								canChangeStyle={canChangeStyle()}
+								canChangeBorder={canChangeBorder()}
 								showAdvancedControls={showAdvancedControls()}
 								backgroundHue={backgroundHue()}
 								handleHueChange={handleHueChange}
+								styleMode={styleMode()}
+								handleStyleChange={handleStyleModeChange}
 								opacity={opacity()}
 								handleOpacityChange={handleOpacityChange}
+								grainStrength={grainStrength()}
+								handleGrainStrengthChange={handleGrainStrengthChange}
 								gradientEnabled={gradientEnabled()}
 								handleGradientToggle={handleGradientToggle}
 								gradientType={gradientType()}

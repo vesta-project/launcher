@@ -1,21 +1,32 @@
 .sidebar-button {
-	position: relative;
-	height: 40px;
-	width: 40px;
-	border-radius: 3px;
+    position: relative;
+    height: 40px;
+    width: 40px;
+    border-radius: 6px;
+    
+    transition: box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+        background-color 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+        transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+    cursor: pointer;
 
-	&:hover {
-		box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+    & > svg {
+        transition: transform 0.3s ease;
+    }
 
-		& > svg {
-			transform: scale(108%);
-		}
-	}
+    &:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 0 1px rgba(0, 0, 0, 0.1);
+        background-color: rgba(0, 0, 0, 0.03);
 
-	&:active {
-		transform: scale(95%);
-		transition-duration: 50ms;
-	}
+        & > svg {
+            transform: scale(1.08);
+        }
+    }
+
+    &:active {
+        transform: scale(0.95);
+        transition-duration: 0.3s; 
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    }
 }
 
 .sidebar-profile-button {

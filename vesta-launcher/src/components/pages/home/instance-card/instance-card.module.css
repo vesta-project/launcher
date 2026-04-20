@@ -140,6 +140,7 @@
 }
 
 .play-button {
+	--liquid-noise-opacity-multiplier: 0.72;
 	height: 36px;
 	width: 36px;
 	border: var(--border-width-subtle) solid var(--border-subtle);
@@ -157,9 +158,16 @@
 		0 2px 4px -1px hsl(0 0% 0% / 0.06);
 	flex-shrink: 0; /* Prevent shrinking in flex containers */
 	position: relative; /* Ensure stable positioning */
+	overflow: clip;
 	opacity: 0;
 	transform: scale(0.9);
 	pointer-events: none;
+}
+
+@supports not (overflow: clip) {
+	.play-button {
+		overflow: hidden;
+	}
 }
 
 .play-button svg {
@@ -168,6 +176,8 @@
 	height: 14px;
 	transition: transform 0.2s ease;
 	display: block;
+	position: relative;
+	z-index: 1;
 }
 
 .instance-card:hover .play-button {
@@ -236,19 +246,6 @@
 	transform: none;
 }
 
-/* Reduced Effects Support */
-:root[data-bordered="true"] .play-button {
-	backdrop-filter: none !important;
-	background: var(--surface-base);
-	border: var(--border-width-subtle) solid var(--border-subtle);
-	box-shadow: none;
-}
-
-:root[data-bordered="true"] .play-button:hover {
-	background: var(--surface-raised);
-	box-shadow: none;
-}
-
 /* Flat mode uses solid surface with stronger borders */
 :root[data-style="flat"] .play-button {
 	backdrop-filter: none;
@@ -265,26 +262,9 @@
 	border: none;
 }
 
-/* Satin mode uses subtle border */
-:root[data-style="satin"] .play-button {
+/* Frosted mode uses a visible edge to reinforce diffusion */
+:root[data-style="frosted"] .play-button {
 	border: var(--border-width-subtle) solid var(--border-glass);
-}
-
-/* Solid mode uses primary color for the play button to make it pop against the dark background */
-:root[data-style="solid"] .play-button {
-	backdrop-filter: none;
-	background: var(--accent-primary);
-	border: none;
-	box-shadow: 0 4px 12px hsl(var(--color__primary-hue) 70% 20% / 0.4);
-}
-
-:root[data-style="solid"] .play-button svg {
-	fill: var(--text-on-primary);
-}
-
-:root[data-style="solid"] .play-button:hover {
-	background: var(--accent-primary-hover);
-	box-shadow: 0 6px 16px hsl(var(--color__primary-hue) 70% 20% / 0.6);
 }
 
 .instance-card-centered {

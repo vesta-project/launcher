@@ -1,8 +1,8 @@
 .settings-card {
 	padding: 16px;
-	background: var(--bg-surface);
-	backdrop-filter: blur(12px);
-	-webkit-backdrop-filter: blur(12px);
+	background: var(--surface-base);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	border-radius: 12px;
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	flex-shrink: 0;
@@ -32,7 +32,7 @@
 
 .settings-card--bordered {
 	background: hsla(220, 10%, 10%, 0.3);
-	border: 1px solid hsla(var(--color__primary-hue), 100%, 50%, 0.3);
+	border: var(--border-width-subtle) solid hsla(var(--color__primary-hue), 100%, 50%, 0.3);
 	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 

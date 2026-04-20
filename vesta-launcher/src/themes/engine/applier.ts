@@ -25,15 +25,24 @@ function applyBackgroundState(
 	style: CSSStyleDeclaration,
 ): void {
 	const isWindowEffectEnabled = effectToSet !== "none" && effectToSet !== "";
+	const solidOverlayWithOpacity =
+		"linear-gradient(hsl(var(--color__primary-hue) 12% var(--lightness-surface-base) / var(--background-opacity)), hsl(var(--color__primary-hue) 12% var(--lightness-surface-base) / var(--background-opacity)))";
 
 	if (theme.gradientEnabled) {
 		root.setAttribute("data-gradient", "1");
 		style.removeProperty("--background-image");
 	} else {
 		root.setAttribute("data-gradient", "0");
-		// When gradient is disabled, we style it as a "solid gradient" using a single color.
-		// This keeps the property active while visually appearing as a solid background.
-		style.setProperty("--background-image", "linear-gradient(var(--app-background-tint), var(--app-background-tint))");
+		if (isWindowEffectEnabled) {
+			// Keep opacity control active even without gradient when native effects are enabled.
+			style.setProperty("--background-image", solidOverlayWithOpacity);
+		} else {
+			// Keep a solid fill available when there is no native window effect.
+			style.setProperty(
+				"--background-image",
+				"linear-gradient(var(--app-background-tint), var(--app-background-tint))",
+			);
+		}
 	}
 
 	if (isWindowEffectEnabled) {
@@ -70,6 +79,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	const currentWindowEffect = root.getAttribute("data-window-effect") || "none";
 	const currentBorderWidth = style.getPropertyValue("--border-width-subtle").trim();
 	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
+	const styleMode = theme.style ?? "glass";
 	const nextThemeVarKeys = Object.keys(vars).filter((key) => key.startsWith("--theme-var-"));
 	const previousThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
 		.split(",")
@@ -117,7 +127,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 		!isFirstApply &&
 		currentThemeId === themeId &&
 		currentHue === theme.primaryHue.toString() &&
-		root.getAttribute("data-style") === theme.style &&
+		root.getAttribute("data-style") === styleMode &&
 		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0") &&
 		root.getAttribute("data-gradient-type") === (theme.gradientType || "linear") &&
 		currentRotation === vars["--rotation"] &&
@@ -171,7 +181,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	}
 
 	// Apply style mode attribute
-	root.setAttribute("data-style", theme.style ?? "solid");
+	root.setAttribute("data-style", styleMode);
 	root.setAttribute("data-gradient-type", theme.gradientType || "linear");
 
 	// Apply color scheme attribute (forces dark/light mode regardless of system)
@@ -181,17 +191,6 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 		root.removeAttribute("data-theme");
 	}
 
-	// Apply bordered mode (removes blur/transparency, stronger borders)
-	if (theme.style === "bordered") {
-		root.setAttribute("data-bordered", "true");
-	} else {
-		root.removeAttribute("data-bordered");
-	}
-
-	// Apply solid mode (100% opacity, no blur)
-	if (theme.style === "solid") {
-		root.setAttribute("data-solid", "true");
-	} else {
-		root.removeAttribute("data-solid");
-	}
+	root.removeAttribute("data-bordered");
+	root.removeAttribute("data-solid");
 }

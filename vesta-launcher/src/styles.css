@@ -1,3 +1,10 @@
+html,
+body {
+	margin: 0;
+	width: 100%;
+	height: 100%;
+}
+
 :root {
 	/* =============================================================================
 	   THEME SYSTEM - LAYER 1: BASE TOKENS (Primitives)
@@ -25,7 +32,7 @@
 	--lightness-text-tertiary: 50%;
 	--lightness-border: 30%;
 
-	/* Style Mode (Set by theme template: glass/satin/flat) */
+	/* Style Mode (Set by theme template: glass/frosted/flat) */
 	--effect-blur: 16px;
 	--effect-opacity: 0.8;
 	--effect-shadow-depth: 24px;
@@ -38,6 +45,7 @@
 	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
 	--rotation: 135deg;
 	--background-opacity: 0.25;
+	--window-surface-radius: 0px;
 
 	/* =============================================================================
 	   THEME SYSTEM - LAYER 2: SEMANTIC TOKENS (Abstract Intent)
@@ -227,15 +235,20 @@
 	   LIQUID GLASS SYSTEM (Updated to use new tokens)
 	   ============================================================================= */
 
-	--liquid-inner-shadow-blur: 10px;
-	--liquid-inner-shadow-spread: -20px;
+	--liquid-inner-shadow-blur: 5px;
+	--liquid-inner-shadow-spread: -10px;
 	--liquid-inner-shadow-color: var(--effect-glow);
 	--liquid-tint-saturation: 30%;
 	--liquid-tint-lightness: 15%;
 	--liquid-tint-opacity: var(--effect-opacity);
 	--liquid-frost-blur: var(--effect-blur);
-	--liquid-noise-frequency: 2;
-	--liquid-noise-strength: 40;
+	--liquid-border-color: var(--border-subtle);
+	--liquid-overlay-inset: var(--border-width-subtle);
+	--liquid-backdrop-filter-subtle: blur(8px) saturate(1.08);
+	--liquid-noise-opacity: 0.246;
+	--liquid-noise-size: 172px 172px;
+	--liquid-noise-opacity-multiplier: 1;
+	--liquid-noise-texture: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 128 128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.78' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)' opacity='0.75'/%3E%3C/svg%3E");
 	--liquid-outer-shadow-blur: 24px;
 
 	/* Computed Liquid Glass Properties */
@@ -274,11 +287,23 @@
 	--kb-menu-content-transform-origin: top center;
 }
 
-:root[data-os="macos"] body #app,
-:root[data-os="macos"] body #startup-loader {
-	/* Windows without decorations dont have a border radius on macos */
-	border-radius: 12px !important;
-	overflow: hidden;
+:root[data-os="macos"] {
+	--window-surface-radius: 12px;
+}
+
+body #app,
+body #startup-loader {
+	border-radius: var(--window-surface-radius) !important;
+	clip-path: inset(0 round var(--window-surface-radius));
+	isolation: isolate;
+	overflow: clip;
+}
+
+@supports not (overflow: clip) {
+	body #app,
+	body #startup-loader {
+		overflow: hidden;
+	}
 }
 
 /* Radial Gradient Override */
@@ -298,29 +323,25 @@
 	/* Ensure we have a solid base color under the transparent gradient */
 	background-color: var(--background-color);
 	background-image: var(--background-image);
-	background-attachment: fixed;
+	background-attachment: scroll;
 	background-size: cover;
 	opacity: 1;
 	transition: opacity var(--theme-transition-duration, 140ms) cubic-bezier(0.4, 0, 0.2, 1);
 	min-width: 450px;
-	overflow: hidden;
+	overflow: clip;
 }
 
 :root[data-theme-transition="preset-switch"] #app {
 	opacity: 0.94;
 }
 
-/* macOS-specific: avoid fixed background attachment, which is expensive while dragging */
-:root[data-os="macos"] #app {
-	background-attachment: scroll;
-}
-
 body {
 	position: fixed;
+	inset: 0;
 	width: 100%;
 	height: 100%;
 	background: transparent;
-	overflow: hidden;
+	overflow: clip;
 }
 
 :root:not([data-window-effect]) body,
@@ -489,24 +510,14 @@ body {
 		box-shadow: hsl(0deg 0% 0% / 0.12) 4px 4px 8px;
 	}
 }
-#app
-	> div
-	> header
-	> div._page-viewer-navbar-right_12sex_28
-	> div
-	> div
-	> button:nth-child(1)
-	> svg
-	> path
-	/* Dark mode hover for standalone controls */
-	:root:not([data-theme="light"])
-	.standalone-page-viewer__controls
-	button:hover {
+
+/* Dark mode hover for standalone controls */
+:root:not([data-theme="light"]) .standalone-page-viewer__controls button:hover {
 	background: hsla(0, 0%, 50%, 0.15);
 }
 
-/* Light mode + Flat/Bordered style: fully opaque surfaces with hue tint */
-:root[data-theme="light"]:is([data-style="flat"], [data-bordered="true"]) {
+/* Light mode + Flat style: fully opaque surfaces with hue tint */
+:root[data-theme="light"][data-style="flat"] {
 	--surface-base: hsl(var(--color__primary-hue) 25% 80%);
 	--surface-raised: hsl(var(--color__primary-hue) 30% 85%);
 	--surface-overlay: hsl(var(--color__primary-hue) 35% 90%);
@@ -514,7 +525,7 @@ body {
 }
 
 @media (prefers-color-scheme: light) {
-	:root:is([data-style="flat"], [data-bordered="true"]):not([data-theme="dark"]) {
+	:root[data-style="flat"]:not([data-theme="dark"]) {
 		/* Override surfaces to be fully opaque with light hue tint */
 		--surface-base: hsl(var(--color__primary-hue) 25% 80%);
 		--surface-raised: hsl(var(--color__primary-hue) 30% 85%);
@@ -588,22 +599,50 @@ button {
 	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
 	box-shadow: var(--liquid-box-shadow);
 	isolation: isolate;
-	border: var(--border-width-subtle, 1px) solid transparent;
+	border: var(--border-width-subtle, 1px) solid var(--liquid-border-color, var(--border-subtle));
 	position: relative;
+	--liquid-noise-inset: var(--liquid-overlay-inset, var(--border-width-subtle, 1px));
+	overflow: clip;
+}
+
+.grain-overlay {
+	position: relative;
+	isolation: isolate;
+	--liquid-noise-inset: 0;
+	overflow: clip;
+}
+
+.liquid-glass::before,
+.grain-overlay::before {
+	content: "";
+	position: absolute;
+	inset: var(--liquid-noise-inset, 0);
+	border-radius: inherit;
+	pointer-events: none;
+	z-index: 0;
+	opacity: calc(var(--liquid-noise-opacity, 0) * var(--liquid-noise-opacity-multiplier, 1));
+	background-image: var(--liquid-noise-texture);
+	background-size: var(--liquid-noise-size, 172px 172px);
+	background-repeat: repeat;
+	background-position: center;
+	transform: translateZ(0);
+}
+
+@supports not (overflow: clip) {
+	#app,
+	body,
+	.liquid-glass,
+	.grain-overlay {
+		overflow: hidden;
+	}
 }
 
 /* Ensure content inside glass doesn't inherit backdrop blur */
 .liquid-glass > * {
+	position: relative;
+	z-index: 1;
 	backdrop-filter: none !important;
 	-webkit-backdrop-filter: none !important;
-}
-
-/* Bordered Style Override */
-:root[data-bordered="true"] .liquid-glass {
-	backdrop-filter: none;
-	-webkit-backdrop-filter: none;
-	filter: none;
-	border: var(--border-width-subtle) solid var(--border-strong);
 }
 
 /* Tutorial/Driver.js Theming */

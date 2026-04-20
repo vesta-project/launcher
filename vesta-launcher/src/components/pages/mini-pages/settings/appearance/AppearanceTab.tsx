@@ -7,6 +7,7 @@ import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import {
 	type GradientHarmony,
 	isBuiltinThemeId,
+	type StyleMode,
 	type ThemeConfig,
 	type ThemeVariableValue,
 } from "../../../../../themes/presets";
@@ -104,11 +105,17 @@ export interface AppearanceSettingsTabProps {
 	canExportTheme: boolean;
 	handlePresetSelect: (id: string) => void;
 	canChangeHue: boolean;
+	canChangeStyle: boolean;
+	canChangeBorder: boolean;
 	showAdvancedControls: boolean;
 	backgroundHue: number;
 	handleHueChange: (val: number[], live?: boolean) => void;
+	styleMode: StyleMode;
+	handleStyleChange: (mode: StyleMode) => void;
 	opacity: number;
 	handleOpacityChange: (val: number[], live?: boolean) => void;
+	grainStrength: number;
+	handleGrainStrengthChange: (val: number[], live?: boolean) => void;
 	gradientEnabled: boolean;
 	handleGradientToggle: (checked: boolean) => void;
 	gradientType: "linear" | "radial";
@@ -382,9 +389,28 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 
 			<Show when={props.showAdvancedControls}>
 				<SettingsCard header="Advanced Style" subHeader="Fine-tune the visual style and effects.">
+					<Show when={props.canChangeStyle}>
+						<SettingsField
+							label="Material Style"
+							description="Glass keeps depth, Frosted obscures behind-content, Flat removes translucency."
+							headerRight={
+								<ToggleGroup
+									value={props.styleMode}
+									onChange={(val) => {
+										if (val) props.handleStyleChange(val as StyleMode);
+									}}
+								>
+									<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
+									<ToggleGroupItem value="frosted">Frosted</ToggleGroupItem>
+									<ToggleGroupItem value="flat">Flat</ToggleGroupItem>
+								</ToggleGroup>
+							}
+						/>
+					</Show>
+
 					<SettingsField
 						label="Layout Translucency"
-						description="Adjust transparency and blur effects of panels such as the sidebar and cards (0 = translucent, 100 = solid)"
+						description="Adjust panel transparency and blur intensity (0 = translucent, 100 = opaque)."
 						body={
 							<Slider
 								value={[props.opacity]}
@@ -404,6 +430,31 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 							</Slider>
 						}
 					/>
+
+					<Show when={props.styleMode !== "flat"}>
+						<SettingsField
+							label="Material Grain"
+							description="Change the intensity of the material texture overlay. Only applies to Glass and Frosted styles."
+							body={
+								<Slider
+									value={[props.grainStrength]}
+									onInput={(val: any) => props.handleGrainStrengthChange(val, true)}
+									onChange={(val) => props.handleGrainStrengthChange(val, false)}
+									minValue={0}
+									maxValue={100}
+									step={1}
+								>
+									<div class={styles["slider__header"]}>
+										<div class={styles["slider__value-label"]}>{props.grainStrength}%</div>
+									</div>
+									<SliderTrack>
+										<SliderFill />
+										<SliderThumb />
+									</SliderTrack>
+								</Slider>
+							}
+						/>
+					</Show>
 
 					<SettingsField
 						label="Background Gradient"
@@ -480,38 +531,34 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						/>
 					</Show>
 
-					<SettingsField
-						label="Border Sharpness"
-						description="Thickness of system borders and separator lines"
-						body={
-							<Slider
-								value={[props.borderThickness ?? 1]}
-								onInput={(val: any) => props.handleBorderThicknessChange(val, true)}
-								onChange={(val) => props.handleBorderThicknessChange(val, false)}
-								minValue={0}
-								maxValue={2}
-								step={0.5}
-							>
-								<div class={styles["slider__header"]}>
-									<div class={styles["slider__value-label"]}>
-										{props.borderThickness === 0
-											? "None"
-											: props.borderThickness === 0.5
-												? "Razor"
-												: props.borderThickness === 1
-													? "Thin"
-													: props.borderThickness === 1.5
-														? "Normal"
-														: "Thick"}
+					<Show when={props.canChangeBorder}>
+						<SettingsField
+							label="Border Sharpness"
+							description="Thickness of system borders and separator lines (0-6px)"
+							body={
+								<Slider
+									value={[props.borderThickness ?? 1]}
+									onInput={(val: any) => props.handleBorderThicknessChange(val, true)}
+									onChange={(val) => props.handleBorderThicknessChange(val, false)}
+									minValue={0}
+									maxValue={6}
+									step={0.5}
+								>
+									<div class={styles["slider__header"]}>
+										<div class={styles["slider__value-label"]}>
+											{props.borderThickness === 0
+												? "None"
+												: `${(props.borderThickness ?? 1).toString()}px`}
+										</div>
 									</div>
-								</div>
-								<SliderTrack>
-									<SliderFill />
-									<SliderThumb />
-								</SliderTrack>
-							</Slider>
-						}
-					/>
+									<SliderTrack>
+										<SliderFill />
+										<SliderThumb />
+									</SliderTrack>
+								</Slider>
+							}
+						/>
+					</Show>
 				</SettingsCard>
 
 				<For each={props.themeVariables}>

@@ -17,6 +17,8 @@ interface ThemePresetCardProps {
  * This gives users a visual preview before selecting
  */
 export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
+	const previewStyle = () => props.theme.style ?? "glass";
+
 	return (
 		<div
 			class={styles["theme-preset-card-wrapper"]}
@@ -32,11 +34,11 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 					[styles["theme-preset-card--list"]]: props.viewMode === "list",
 				}}
 				onClick={props.onClick}
-				data-preview-style={props.theme.style}
+				data-preview-style={previewStyle()}
 				data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
 				style={{
 					"--preview-hue": props.theme.primaryHue,
-					"--preview-style": props.theme.style,
+					"--preview-style": previewStyle(),
 					"--preview-gradient": props.theme.gradientEnabled ? "1" : "0",
 					"--preview-angle": props.theme.rotation ?? 135,
 				}}
@@ -81,7 +83,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 					<span class={styles["theme-preset-card__description"]}>
 						{props.theme.author
 							? `by ${props.theme.author}`
-							: props.theme.description || props.theme.style}
+							: props.theme.description || previewStyle()}
 					</span>
 				</div>
 			</button>

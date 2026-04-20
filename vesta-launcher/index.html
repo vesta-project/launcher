@@ -26,9 +26,12 @@
         height: 100%;
       }
 
-      :root[data-os="macos"] #startup-loader {
-        border-radius: 12px;
-        overflow: hidden;
+      :root {
+        --window-surface-radius: 0px;
+      }
+
+      :root[data-os="macos"] {
+        --window-surface-radius: 12px;
       }
 
       #startup-loader {
@@ -43,6 +46,16 @@
         background: #141414;
         color: rgba(255, 255, 255, 0.78);
         font: 500 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        border-radius: var(--window-surface-radius);
+        clip-path: inset(0 round var(--window-surface-radius));
+        isolation: isolate;
+        overflow: clip;
+      }
+
+      @supports not (overflow: clip) {
+        #startup-loader {
+          overflow: hidden;
+        }
       }
 
       #startup-loader .startup-loader-spinner {

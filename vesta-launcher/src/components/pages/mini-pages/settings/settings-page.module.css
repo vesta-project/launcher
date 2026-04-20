@@ -356,7 +356,7 @@
 
 .java-option-card.active {
 	border-color: var(--accent-primary);
-	border-width: 2px;
+	border-width: var(--border-width-strong);
 	background: var(--surface-raised);
 }
 

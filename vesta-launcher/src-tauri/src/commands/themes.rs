@@ -43,7 +43,11 @@ pub struct ThemeFileTheme {
     pub primary_sat: Option<i32>,
     pub primary_light: Option<i32>,
     pub opacity: i32,
+    pub grain_strength: Option<i32>,
     pub style: String,
+    pub allow_hue_change: Option<bool>,
+    pub allow_style_change: Option<bool>,
+    pub allow_border_change: Option<bool>,
     pub gradient_enabled: bool,
     pub rotation: Option<i32>,
     pub gradient_type: Option<String>,
@@ -68,7 +72,11 @@ pub struct ThemeLibraryTheme {
     pub primary_sat: Option<i32>,
     pub primary_light: Option<i32>,
     pub opacity: i32,
+    pub grain_strength: Option<i32>,
     pub style: String,
+    pub allow_hue_change: Option<bool>,
+    pub allow_style_change: Option<bool>,
+    pub allow_border_change: Option<bool>,
     pub gradient_enabled: bool,
     pub rotation: Option<i32>,
     pub gradient_type: Option<String>,
@@ -269,6 +277,24 @@ fn normalize_window_effect_for_platform(effect: Option<String>) -> (Option<Strin
     (Some(effect), coerced)
 }
 
+fn normalize_style_mode(raw_style: Option<String>) -> (String, bool) {
+    let normalized = raw_style
+        .as_deref()
+        .unwrap_or("glass")
+        .trim()
+        .to_ascii_lowercase();
+
+    let mapped = match normalized.as_str() {
+        "glass" => "glass",
+        "frosted" | "satin" => "frosted",
+        "flat" | "solid" | "bordered" => "flat",
+        _ => "glass",
+    }
+    .to_string();
+
+    (mapped.clone(), mapped != normalized)
+}
+
 fn normalize_import_payload(source: Value) -> Result<(ThemeLibraryTheme, Vec<String>), String> {
     let source_obj = source
         .as_object()
@@ -288,8 +314,18 @@ fn normalize_import_payload(source: Value) -> Result<(ThemeLibraryTheme, Vec<Str
     let primary_sat = get_i32(&source_value, &["primary_sat", "primarySat"]).map(|v| clamp(v, 0, 100));
     let primary_light = get_i32(&source_value, &["primary_light", "primaryLight"]).map(|v| clamp(v, 0, 100));
     let opacity = clamp(get_i32(&source_value, &["opacity"]).unwrap_or(0), 0, 100);
+    let grain_strength = get_i32(&source_value, &["grain_strength", "grainStrength"]).map(|v| clamp(v, 0, 100));
 
-    let style = get_string(&source_value, &["style"]).unwrap_or_else(|| "glass".to_string());
+    let (style, style_was_normalized) = normalize_style_mode(get_string(&source_value, &["style"]));
+    if style_was_normalized {
+        warnings.push("Imported style used a deprecated value and was migrated to the current style set.".to_string());
+    }
+
+    // Imported themes are locked by default unless explicitly unlocked in metadata.
+    let allow_hue_change = Some(get_bool(&source_value, &["allow_hue_change", "allowHueChange"]).unwrap_or(false));
+    let allow_style_change = Some(get_bool(&source_value, &["allow_style_change", "allowStyleChange"]).unwrap_or(false));
+    let allow_border_change = Some(get_bool(&source_value, &["allow_border_change", "allowBorderChange"]).unwrap_or(false));
+
     let gradient_enabled = get_bool(&source_value, &["gradient_enabled", "gradientEnabled"]).unwrap_or(true);
     let rotation = get_i32(&source_value, &["rotation"]).map(|v| clamp(v, 0, 360));
     let gradient_type = get_string(&source_value, &["gradient_type", "gradientType"]);
@@ -322,7 +358,11 @@ fn normalize_import_payload(source: Value) -> Result<(ThemeLibraryTheme, Vec<Str
             primary_sat,
             primary_light,
             opacity,
+            grain_strength,
             style,
+            allow_hue_change,
+            allow_style_change,
+            allow_border_change,
             gradient_enabled,
             rotation,
             gradient_type,
@@ -409,13 +449,26 @@ pub async fn list_saved_themes() -> Result<Vec<ThemeLibraryEntry>, String> {
 
     let mut out = Vec::new();
     for row in rows {
-        let data = match serde_json::from_str::<ThemeLibraryTheme>(&row.theme_data) {
+        let mut data = match serde_json::from_str::<ThemeLibraryTheme>(&row.theme_data) {
             Ok(data) => data,
             Err(e) => {
                 log::warn!("Skipping malformed saved theme '{}': {}", row.id, e);
                 continue;
             }
         };
+
+        let (normalized_style, _) = normalize_style_mode(Some(data.style.clone()));
+        data.style = normalized_style;
+        data.grain_strength = data.grain_strength.map(|v| clamp(v, 0, 100));
+        if data.allow_hue_change.is_none() {
+            data.allow_hue_change = Some(false);
+        }
+        if data.allow_style_change.is_none() {
+            data.allow_style_change = Some(false);
+        }
+        if data.allow_border_change.is_none() {
+            data.allow_border_change = Some(false);
+        }
 
         out.push(ThemeLibraryEntry {
             id: row.id,
@@ -518,7 +571,11 @@ pub async fn export_theme(
         primary_sat: get_i32(&theme_blob, &["primarySat", "primary_sat"]).or(config.theme_primary_sat),
         primary_light: get_i32(&theme_blob, &["primaryLight", "primary_light"]).or(config.theme_primary_light),
         opacity: clamp(get_i32(&theme_blob, &["opacity"]).unwrap_or(0), 0, 100),
-        style: get_string(&theme_blob, &["style"]).unwrap_or(config_theme_style),
+        grain_strength: get_i32(&theme_blob, &["grainStrength", "grain_strength"]).map(|v| clamp(v, 0, 100)),
+        style: normalize_style_mode(get_string(&theme_blob, &["style"]).or(Some(config_theme_style))).0,
+        allow_hue_change: get_bool(&theme_blob, &["allowHueChange", "allow_hue_change"]),
+        allow_style_change: get_bool(&theme_blob, &["allowStyleChange", "allow_style_change"]),
+        allow_border_change: get_bool(&theme_blob, &["allowBorderChange", "allow_border_change"]),
         gradient_enabled: get_bool(&theme_blob, &["gradientEnabled", "gradient_enabled"]).unwrap_or(config.theme_gradient_enabled),
         rotation: get_i32(&theme_blob, &["rotation"]).or(config.theme_gradient_angle),
         gradient_type: get_string(&theme_blob, &["gradientType", "gradient_type"]).or(config_gradient_type),

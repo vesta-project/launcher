@@ -1,6 +1,9 @@
 .popover__content {
 	/* Layout & Animation only - Visuals handled by .liquid-glass utility */
 	border-radius: 6px;
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	--liquid-border-color: var(--border-subtle);
+	--liquid-overlay-inset: var(--border-width-subtle);
 	padding: 12px;
 	transform-origin: var(--kb-popover-content-transform-origin);
 	animation: contentHide 250ms ease-in forwards;

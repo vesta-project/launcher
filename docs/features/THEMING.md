@@ -60,7 +60,7 @@ Optional advanced saturation override.
 - `theme_primary_light`
 Optional advanced lightness override.
 - `theme_style`
-`glass`, `satin`, `flat`, `bordered`, `solid`.
+`glass`, `frosted`, `flat`.
 - `theme_gradient_enabled`
 Enable gradient background path.
 - `theme_gradient_angle`
@@ -87,6 +87,8 @@ Supported keys include:
 - identity: `id`, `name`, `author`, `description`
 - color/effect: `primaryHue`, `primarySat`, `primaryLight`, `opacity`, `borderWidth`, `backgroundOpacity`
 - style/gradient: `style`, `gradientEnabled`, `rotation`, `gradientType`, `gradientHarmony`, `windowEffect`
+- material detail: `grainStrength`
+- editability metadata: `allowHueChange`, `allowStyleChange`, `allowBorderChange`
 - css: `customCss`
 - variable definitions: `variables`
 - variable values: `userVariables`
@@ -143,6 +145,20 @@ Presets can lock or allow controls via:
 - `--effect-blur`
 - `--liquid-frost-blur`
 - `--liquid-backdrop-filter`
+- `--liquid-backdrop-filter-subtle`
+
+### Material grain controls
+
+- `--liquid-noise-opacity`
+- `--liquid-noise-size`
+
+Deprecated grain variables were removed from runtime output:
+
+- `--grain-strength`
+- `--liquid-noise-strength`
+- `--liquid-noise-frequency`
+- `--liquid-noise-contrast`
+- `--liquid-noise-blend-mode`
 
 ### Border controls
 
@@ -256,8 +272,6 @@ Theme application sets or updates:
 - `data-style`
 - `data-gradient-type`
 - `data-theme` (when color scheme is forced)
-- `data-bordered` (for bordered mode)
-- `data-solid` (for solid mode)
 
 ## Notes for Component Authors
 

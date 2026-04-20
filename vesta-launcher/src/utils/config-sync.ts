@@ -8,6 +8,7 @@ import {
 	applyTheme,
 	configToTheme,
 	getThemeById,
+	normalizeStyleMode,
 	PRESET_THEMES,
 	parseThemeData,
 	serializeThemeData,
@@ -209,6 +210,7 @@ export async function saveThemeUpdate(
 		primarySat: number;
 		primaryLight: number;
 		opacity: number;
+		grainStrength: number;
 		style: string;
 		gradientEnabled: boolean;
 		rotation: number;
@@ -218,6 +220,9 @@ export async function saveThemeUpdate(
 		backgroundOpacity: number;
 		windowEffect: string;
 		customCss: string;
+		allowHueChange: boolean;
+		allowStyleChange: boolean;
+		allowBorderChange: boolean;
 		variables: unknown;
 		userVariables: Record<string, ThemeVariableValue>;
 		themeId: string;
@@ -249,11 +254,13 @@ export async function saveThemeUpdate(
 		theme.primaryHue ??
 		180;
 	const activeStyle =
-		overrides.style ??
+		normalizeStyleMode(overrides.style) ??
 		carriedThemeData.style ??
-		(sameThemeAsStore ? currentThemeConfig.theme_style : undefined) ??
+		normalizeStyleMode(sameThemeAsStore ? currentThemeConfig.theme_style : undefined) ??
 		theme.style ??
 		"glass";
+	const activeGrainStrength =
+		overrides.grainStrength ?? carriedThemeData.grainStrength ?? theme.grainStrength ?? 40;
 	const activeGradientEnabled =
 		overrides.gradientEnabled ??
 		carriedThemeData.gradientEnabled ??
@@ -296,6 +303,12 @@ export async function saveThemeUpdate(
 		(sameThemeAsStore ? currentThemeConfig.theme_window_effect : undefined) ??
 		theme.windowEffect;
 	const activeCustomCss = overrides.customCss ?? carriedThemeData.customCss ?? theme.customCss;
+	const activeAllowHueChange =
+		overrides.allowHueChange ?? carriedThemeData.allowHueChange ?? theme.allowHueChange;
+	const activeAllowStyleChange =
+		overrides.allowStyleChange ?? carriedThemeData.allowStyleChange ?? theme.allowStyleChange;
+	const activeAllowBorderChange =
+		overrides.allowBorderChange ?? carriedThemeData.allowBorderChange ?? theme.allowBorderChange;
 
 	const themeData = serializeThemeData({
 		id: tid,
@@ -314,6 +327,7 @@ export async function saveThemeUpdate(
 			(sameThemeAsStore ? currentThemeConfig.theme_primary_light : undefined) ??
 			theme.primaryLight,
 		opacity: overrides.opacity ?? carriedThemeData.opacity ?? theme.opacity,
+		grainStrength: activeGrainStrength,
 		style: activeStyle as any,
 		gradientEnabled: activeGradientEnabled,
 		rotation: activeRotation,
@@ -323,6 +337,9 @@ export async function saveThemeUpdate(
 		backgroundOpacity: activeBackgroundOpacity,
 		windowEffect: activeWindowEffect,
 		customCss: activeCustomCss,
+		allowHueChange: activeAllowHueChange,
+		allowStyleChange: activeAllowStyleChange,
+		allowBorderChange: activeAllowBorderChange,
 		variables: activeVariables,
 		userVariables: updatedUserVariables,
 	});

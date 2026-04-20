@@ -70,37 +70,68 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	vars["--accent-low"] = accentPalette.low;
 	vars["--text-on-accent"] = accentPalette.textOnPrimary;
 
-	// Skip default glass calculation for specific styles that handle it via custom CSS or fixed modes (like Midnight/Old School)
-	if (theme.style !== "solid" && theme.style !== "bordered") {
-		const opacityValue = theme.opacity ?? 0;
-		// Map opacity 0 -> 100 to blur and alpha
-		const effectOpacity = 0.5 + (opacityValue / 100) * 0.5;
-		const blurPx = 20 - (opacityValue / 100) * 20;
+	const style = theme.style ?? "glass";
+	const opacityValue = theme.opacity ?? 0;
 
-		vars["--effect-opacity"] = effectOpacity.toString();
-		vars["--effect-blur"] = `${blurPx}px`;
-		vars["--liquid-frost-blur"] = `${blurPx * 0.8}px`;
-
-		if (blurPx > 0) {
-			vars["--liquid-backdrop-filter"] =
-				`blur(${blurPx}px) saturate(${1.5 - (opacityValue / 100) * 0.5})`;
-		} else {
-			vars["--liquid-backdrop-filter"] = "none";
-		}
-	} else {
-		// Reset to standard solid/opaque values for Solid and Bordered styles
+	if (style === "flat") {
 		vars["--effect-opacity"] = "1.0";
 		vars["--effect-blur"] = "0px";
 		vars["--liquid-frost-blur"] = "0px";
 		vars["--liquid-backdrop-filter"] = "none";
+		vars["--liquid-backdrop-filter-subtle"] = "none";
+	} else if (style === "frosted") {
+		// Frosted should stay diffused, but still reveal the root gradient behind major panels.
+		const effectOpacity = 0.64 + (opacityValue / 100) * 0.24;
+		const blurPx = 22 - (opacityValue / 100) * 12;
+		const subtleBlurPx = blurPx * 0.56;
+
+		vars["--effect-opacity"] = effectOpacity.toFixed(3);
+		vars["--effect-blur"] = `${blurPx.toFixed(2)}px`;
+		vars["--liquid-frost-blur"] = `${(blurPx * 1.04).toFixed(2)}px`;
+		vars["--liquid-backdrop-filter"] =
+			`blur(${blurPx.toFixed(2)}px) saturate(${(1.09 - (opacityValue / 100) * 0.14).toFixed(3)})`;
+		vars["--liquid-backdrop-filter-subtle"] =
+			`blur(${subtleBlurPx.toFixed(2)}px) saturate(${(1.05 - (opacityValue / 100) * 0.08).toFixed(3)})`;
+	} else {
+		const effectOpacity = 0.5 + (opacityValue / 100) * 0.5;
+		const blurPx = 24 - (opacityValue / 100) * 18;
+		const subtleBlurPx = blurPx * 0.52;
+
+		vars["--effect-opacity"] = effectOpacity.toFixed(3);
+		vars["--effect-blur"] = `${blurPx.toFixed(2)}px`;
+		vars["--liquid-frost-blur"] = `${(blurPx * 0.8).toFixed(2)}px`;
+		vars["--liquid-backdrop-filter"] =
+			`blur(${blurPx.toFixed(2)}px) saturate(${(1.45 - (opacityValue / 100) * 0.45).toFixed(3)})`;
+		vars["--liquid-backdrop-filter-subtle"] =
+			`blur(${subtleBlurPx.toFixed(2)}px) saturate(${(1.22 - (opacityValue / 100) * 0.32).toFixed(3)})`;
 	}
+
+	const defaultGrain = style === "frosted" ? 62 : style === "glass" ? 34 : 0;
+	const grainStrength = Math.max(0, Math.min(100, theme.grainStrength ?? defaultGrain));
+	const normalizedGrain = grainStrength / 100;
+	const grainOpacity =
+		style === "flat"
+			? 0
+			: style === "frosted"
+				? Math.min(1, 0.03 + Math.pow(normalizedGrain, 4.5) * 0.97)
+				: Math.min(1, 0.02 + Math.pow(normalizedGrain, 5) * 0.98);
+	const grainTileSize =
+		style === "flat"
+			? 196
+			: style === "frosted"
+				? 176 - normalizedGrain * 52
+				: 188 - normalizedGrain * 56;
+
+	vars["--liquid-noise-opacity"] = `${grainOpacity.toFixed(3)}`;
+	vars["--liquid-noise-size"] = `${grainTileSize.toFixed(0)}px ${grainTileSize.toFixed(0)}px`;
 
 	// Border width scaling
 	const bdWidth = theme.borderWidth ?? 1;
-	vars["--border-width-subtle"] = `${bdWidth}px`;
-	vars["--border-width-strong"] = `${bdWidth + 1}px`;
-	vars["--border-width-divider"] = `${Math.max(1, bdWidth)}px`;
-	vars["--button-border-width"] = `${Math.max(1, bdWidth)}px`;
+	const clampedBorderWidth = Math.max(0, Math.min(6, bdWidth));
+	vars["--border-width-subtle"] = `${clampedBorderWidth}px`;
+	vars["--border-width-strong"] = `${Math.min(6, clampedBorderWidth + 1)}px`;
+	vars["--border-width-divider"] = `${Math.max(1, clampedBorderWidth)}px`;
+	vars["--button-border-width"] = `${Math.max(1, clampedBorderWidth)}px`;
 
 	// Gradient on/off background switching is handled in applyTheme() to avoid stale inline states.
 

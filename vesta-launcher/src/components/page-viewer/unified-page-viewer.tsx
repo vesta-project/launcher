@@ -104,7 +104,10 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 
 	return (
 		<div class={styles["unified-page-viewer-root"]} data-os={props.os}>
-			<header class={styles["page-viewer-navbar"]} data-tauri-drag-region={props.showWindowControls}>
+			<header
+				class={`${styles["page-viewer-navbar"]} grain-overlay`}
+				data-tauri-drag-region={props.showWindowControls}
+			>
 				<Show when={isMac()}>
 					<div
 						class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}

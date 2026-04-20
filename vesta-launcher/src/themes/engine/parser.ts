@@ -7,6 +7,25 @@ import type {
 	ThemeVariableValue,
 } from "../types";
 
+// This function is used to migrate old theme formats
+export function normalizeStyleMode(value: unknown): StyleMode | undefined {
+	if (typeof value !== "string") return undefined;
+
+	switch (value.trim().toLowerCase()) {
+		case "glass":
+			return "glass";
+		case "frosted":
+		case "satin":
+			return "frosted";
+		case "flat":
+		case "solid":
+		case "bordered":
+			return "flat";
+		default:
+			return undefined;
+	}
+}
+
 export function isObjectLike(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -152,7 +171,8 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.primarySat = getNumber(source.primarySat ?? source.primary_sat);
 	out.primaryLight = getNumber(source.primaryLight ?? source.primary_light);
 	out.opacity = getNumber(source.opacity);
-	out.style = getString(source.style) as StyleMode | undefined;
+	out.grainStrength = getNumber(source.grainStrength ?? source.grain_strength);
+	out.style = normalizeStyleMode(source.style);
 	out.gradientEnabled = getBoolean(source.gradientEnabled ?? source.gradient_enabled);
 	out.rotation = getNumber(source.rotation);
 	out.gradientType = getString(source.gradientType ?? source.gradient_type) as
@@ -166,6 +186,9 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.backgroundOpacity = getNumber(source.backgroundOpacity ?? source.background_opacity);
 	out.windowEffect = getString(source.windowEffect ?? source.window_effect);
 	out.customCss = getString(source.customCss ?? source.custom_css);
+	out.allowHueChange = getBoolean(source.allowHueChange ?? source.allow_hue_change);
+	out.allowStyleChange = getBoolean(source.allowStyleChange ?? source.allow_style_change);
+	out.allowBorderChange = getBoolean(source.allowBorderChange ?? source.allow_border_change);
 	out.variables = parseVariableDefinitions(source.variables ?? source.params);
 	out.userVariables = parseUserVariables(
 		source.userVariables ?? source.user_variables ?? source.userParams ?? source.user_params,

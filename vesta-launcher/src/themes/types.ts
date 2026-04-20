@@ -1,4 +1,6 @@
-export type StyleMode = "glass" | "satin" | "flat" | "bordered" | "solid";
+export type StyleMode = "glass" | "frosted" | "flat";
+
+export type LegacyStyleMode = "satin" | "bordered" | "solid";
 
 export type GradientHarmony = "none" | "analogous" | "complementary" | "triadic";
 
@@ -57,6 +59,7 @@ export interface ThemeConfig {
 	primarySat?: number;
 	primaryLight?: number;
 	opacity: number;
+	grainStrength?: number;
 	borderWidth?: number;
 	style?: StyleMode;
 	colorScheme?: "light" | "dark";
@@ -103,6 +106,7 @@ export interface ThemeDataPayload {
 	primarySat?: number;
 	primaryLight?: number;
 	opacity?: number;
+	grainStrength?: number;
 	style?: StyleMode;
 	gradientEnabled?: boolean;
 	rotation?: number;
@@ -112,6 +116,9 @@ export interface ThemeDataPayload {
 	backgroundOpacity?: number;
 	windowEffect?: string;
 	customCss?: string;
+	allowHueChange?: boolean;
+	allowStyleChange?: boolean;
+	allowBorderChange?: boolean;
 	variables?: ThemeVariable[];
 	userVariables?: Record<string, ThemeVariableValue>;
 }

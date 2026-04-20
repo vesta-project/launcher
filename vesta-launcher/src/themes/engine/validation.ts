@@ -1,6 +1,7 @@
 import { PRESET_THEMES } from "../presets/builtin";
 import type { ThemeConfig, ThemeVariable, ThemeVariableValue } from "../types";
 import { getCurrentOsHint, normalizeWindowEffectForCurrentOS } from "./effects";
+import { normalizeStyleMode } from "./parser";
 import { clamp } from "./utils";
 
 /**
@@ -85,19 +86,33 @@ export function normalizeUserVariables(
 
 export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 	const defaultTheme = getDefaultTheme();
+	const resolvedId = theme.id || "custom";
+	const presetFallback = PRESET_THEMES.find((candidate) => candidate.id === resolvedId);
+	const fallbackTheme = presetFallback ?? defaultTheme;
+	const source: ThemeConfig["source"] =
+		theme.source || (isBuiltinThemeId(resolvedId) ? "builtin" : "imported");
+
+	const resolveEditability = (
+		candidate: boolean | undefined,
+		fallback: boolean | undefined,
+	): boolean | undefined => {
+		if (candidate !== undefined) return candidate;
+		if (source === "imported") return false;
+		return fallback;
+	};
 
 	// Helper to handle null/undefined from backend
 	const getVal = <T>(val: T | null | undefined, fallback: T): T =>
 		val !== null && val !== undefined ? val : fallback;
 
 	return {
-		id: theme.id || "custom",
+		id: resolvedId,
 		name: theme.name || "Custom Theme",
 		libraryId: theme.libraryId,
-		author: theme.author || defaultTheme.author,
-		source: theme.source || (isBuiltinThemeId(theme.id || "custom") ? "builtin" : "imported"),
+		author: theme.author || fallbackTheme.author,
+		source,
 		description: theme.description,
-		primaryHue: clamp(getVal(theme.primaryHue, defaultTheme.primaryHue), 0, 360),
+		primaryHue: clamp(getVal(theme.primaryHue, fallbackTheme.primaryHue), 0, 360),
 		primarySat:
 			theme.primarySat !== undefined && theme.primarySat !== null
 				? clamp(theme.primarySat, 0, 100)
@@ -106,22 +121,23 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 			theme.primaryLight !== undefined && theme.primaryLight !== null
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
-		opacity: clamp(getVal(theme.opacity, defaultTheme.opacity ?? 0), 0, 100),
-		borderWidth: clamp(getVal(theme.borderWidth, defaultTheme.borderWidth ?? 1), 0, 10),
-		style: theme.style || defaultTheme.style,
-		colorScheme: theme.colorScheme || defaultTheme.colorScheme,
-		gradientEnabled: theme.gradientEnabled ?? defaultTheme.gradientEnabled,
+		opacity: clamp(getVal(theme.opacity, fallbackTheme.opacity ?? 0), 0, 100),
+		grainStrength: clamp(getVal(theme.grainStrength, fallbackTheme.grainStrength ?? 40), 0, 100),
+		borderWidth: clamp(getVal(theme.borderWidth, fallbackTheme.borderWidth ?? 1), 0, 6),
+		style: normalizeStyleMode(theme.style) || fallbackTheme.style,
+		colorScheme: theme.colorScheme || fallbackTheme.colorScheme,
+		gradientEnabled: theme.gradientEnabled ?? fallbackTheme.gradientEnabled,
 		rotation:
 			theme.rotation !== undefined && theme.rotation !== null
 				? clamp(theme.rotation, 0, 360)
 				: undefined,
-		gradientType: theme.gradientType || "linear",
-		gradientHarmony: theme.gradientHarmony || "none",
+		gradientType: theme.gradientType || fallbackTheme.gradientType || "linear",
+		gradientHarmony: theme.gradientHarmony || fallbackTheme.gradientHarmony || "none",
 		thumbnail: theme.thumbnail,
 		customCss: theme.customCss ? sanitizeCustomCss(theme.customCss) : undefined,
-		allowHueChange: theme.allowHueChange,
-		allowStyleChange: theme.allowStyleChange,
-		allowBorderChange: theme.allowBorderChange,
+		allowHueChange: resolveEditability(theme.allowHueChange, fallbackTheme.allowHueChange),
+		allowStyleChange: resolveEditability(theme.allowStyleChange, fallbackTheme.allowStyleChange),
+		allowBorderChange: resolveEditability(theme.allowBorderChange, fallbackTheme.allowBorderChange),
 		windowEffect: normalizeWindowEffectForCurrentOS(
 			theme.windowEffect ||
 				(getCurrentOsHint() === "windows"

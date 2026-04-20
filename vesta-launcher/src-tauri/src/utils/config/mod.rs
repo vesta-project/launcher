@@ -126,7 +126,7 @@ pub struct AppConfig {
     pub theme_primary_hue: i32, // User-customized primary hue
     pub theme_primary_sat: Option<i32>, // Advanced mode: primary saturation
     pub theme_primary_light: Option<i32>, // Advanced mode: primary lightness
-    pub theme_style: String, // "glass", "satin", "flat", "bordered"
+    pub theme_style: String, // "glass", "frosted", "flat"
     pub theme_gradient_enabled: bool, // Enable background gradient
     pub theme_gradient_angle: Option<i32>, // Gradient angle in degrees
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
@@ -305,7 +305,7 @@ impl Default for AppConfig {
             theme_background_opacity: None,
             theme_gradient_type: None, // theme_gradient_type - let preset decide
             theme_border_width: None,                     // theme_border_width - let preset decide
-            theme_data: Some("{\"id\":\"vesta\",\"name\":\"Vesta\",\"description\":\"Signature teal to purple to orange gradient\",\"primaryHue\":180,\"opacity\":0,\"borderWidth\":1,\"style\":\"glass\",\"gradientEnabled\":true,\"rotation\":180,\"gradientType\":\"linear\",\"gradientHarmony\":\"triadic\",\"customCss\":\":root {\\n\\t\\t\\t\\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\\n\\t\\t\\t}\"}".to_string()),
+            theme_data: Some("{\"id\":\"vesta\",\"name\":\"Vesta\",\"description\":\"Signature teal to purple to orange gradient\",\"primaryHue\":180,\"opacity\":0,\"grainStrength\":30,\"borderWidth\":1,\"style\":\"glass\",\"gradientEnabled\":true,\"rotation\":180,\"gradientType\":\"linear\",\"gradientHarmony\":\"triadic\",\"allowHueChange\":false,\"allowStyleChange\":false,\"allowBorderChange\":false,\"customCss\":\":root {\\n\\t\\t\\t\\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\\n\\t\\t\\t}\"}".to_string()),
 
             setup_completed: false,
             setup_step: 0,
@@ -343,6 +343,27 @@ fn theme_name_from_id(theme_id: &str) -> String {
     .to_string()
 }
 
+fn normalize_style_mode(raw_style: &str) -> String {
+    match raw_style.trim().to_ascii_lowercase().as_str() {
+        "glass" => "glass".to_string(),
+        "frosted" | "satin" => "frosted".to_string(),
+        "flat" | "solid" | "bordered" => "flat".to_string(),
+        _ => "glass".to_string(),
+    }
+}
+
+fn normalize_payload_style(payload: &mut Value) {
+    if let Some(obj) = payload.as_object_mut() {
+        let normalized_style = obj
+            .get("style")
+            .and_then(|v| v.as_str())
+            .map(normalize_style_mode)
+            .unwrap_or_else(|| "glass".to_string());
+
+        obj.insert("style".to_string(), Value::String(normalized_style));
+    }
+}
+
 fn preset_theme_payload(theme_id: &str) -> Value {
     let normalized = theme_id.trim().to_lowercase();
 
@@ -353,12 +374,16 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "description": "Signature teal to purple to orange gradient",
             "primaryHue": 180,
             "opacity": 0,
+            "grainStrength": 30,
             "borderWidth": 1,
             "style": "glass",
             "gradientEnabled": true,
             "rotation": 180,
             "gradientType": "linear",
             "gradientHarmony": "triadic",
+            "allowHueChange": false,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
             "customCss": ":root {\n\t\t\t\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\n\t\t\t}",
@@ -368,11 +393,15 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Solar",
             "primaryHue": 40,
             "opacity": 50,
+            "grainStrength": 65,
             "borderWidth": 1,
-            "style": "satin",
+            "style": "frosted",
             "gradientEnabled": false,
             "gradientType": "linear",
             "gradientHarmony": "none",
+            "allowHueChange": false,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -381,12 +410,16 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Neon",
             "primaryHue": 300,
             "opacity": 0,
+            "grainStrength": 25,
             "borderWidth": 1,
             "style": "glass",
             "gradientEnabled": true,
             "rotation": 135,
             "gradientType": "linear",
             "gradientHarmony": "complementary",
+            "allowHueChange": false,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -395,11 +428,15 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Classic",
             "primaryHue": 210,
             "opacity": 100,
+            "grainStrength": 0,
             "borderWidth": 1,
             "style": "flat",
             "gradientEnabled": false,
             "gradientType": "linear",
             "gradientHarmony": "none",
+            "allowHueChange": true,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -408,12 +445,16 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Forest",
             "primaryHue": 140,
             "opacity": 50,
+            "grainStrength": 58,
             "borderWidth": 1,
-            "style": "satin",
+            "style": "frosted",
             "gradientEnabled": true,
             "rotation": 90,
             "gradientType": "linear",
             "gradientHarmony": "analogous",
+            "allowHueChange": false,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -422,12 +463,16 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Sunset",
             "primaryHue": 270,
             "opacity": 0,
+            "grainStrength": 26,
             "borderWidth": 1,
             "style": "glass",
             "gradientEnabled": true,
             "rotation": 180,
             "gradientType": "linear",
             "gradientHarmony": "triadic",
+            "allowHueChange": false,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -437,12 +482,16 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "author": "Vesta Team",
             "primaryHue": 200,
             "opacity": 20,
+            "grainStrength": 44,
             "borderWidth": 1,
             "style": "glass",
             "gradientEnabled": true,
             "rotation": 45,
             "gradientType": "linear",
             "gradientHarmony": "triadic",
+            "allowHueChange": true,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -451,11 +500,15 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Midnight",
             "primaryHue": 240,
             "opacity": 100,
+            "grainStrength": 0,
             "borderWidth": 0,
-            "style": "solid",
+            "style": "flat",
             "gradientEnabled": false,
             "gradientType": "linear",
             "gradientHarmony": "none",
+            "allowHueChange": true,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -464,11 +517,15 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Old School",
             "primaryHue": 210,
             "opacity": 100,
+            "grainStrength": 0,
             "borderWidth": 2,
-            "style": "bordered",
+            "style": "flat",
             "gradientEnabled": false,
             "gradientType": "linear",
             "gradientHarmony": "none",
+            "allowHueChange": true,
+            "allowStyleChange": false,
+            "allowBorderChange": false,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -477,12 +534,16 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": "Custom",
             "primaryHue": 220,
             "opacity": 0,
+            "grainStrength": 40,
             "borderWidth": 1,
             "style": "glass",
             "gradientEnabled": true,
             "rotation": 135,
             "gradientType": "linear",
             "gradientHarmony": "none",
+            "allowHueChange": true,
+            "allowStyleChange": true,
+            "allowBorderChange": true,
             "backgroundOpacity": 25,
             "windowEffect": "none",
         }),
@@ -491,6 +552,7 @@ fn preset_theme_payload(theme_id: &str) -> Value {
             "name": theme_name_from_id(theme_id),
             "primaryHue": 180,
             "opacity": 0,
+            "grainStrength": 40,
             "borderWidth": 1,
             "style": "glass",
             "gradientEnabled": true,
@@ -523,7 +585,10 @@ fn payload_from_scalar_fields(config: &AppConfig) -> Value {
             "primaryHue".to_string(),
             Value::Number(config.theme_primary_hue.into()),
         );
-        obj.insert("style".to_string(), Value::String(config.theme_style.clone()));
+        obj.insert(
+            "style".to_string(),
+            Value::String(normalize_style_mode(&config.theme_style)),
+        );
         obj.insert(
             "gradientEnabled".to_string(),
             Value::Bool(config.theme_gradient_enabled),
@@ -600,8 +665,9 @@ fn apply_payload_to_scalar_fields(config: &mut AppConfig, payload: &Value) -> bo
     }
 
     if let Some(v) = obj.get("style").and_then(|v| v.as_str()) {
-        if config.theme_style != v {
-            config.theme_style = v.to_string();
+        let normalized = normalize_style_mode(v);
+        if config.theme_style != normalized {
+            config.theme_style = normalized;
             changed = true;
         }
     }
@@ -714,9 +780,14 @@ fn build_canonical_theme_payload(config: &AppConfig) -> Value {
 
             let mut canonical = preset_theme_payload(&id_from_payload);
             merge_theme_payload(&mut canonical, existing);
+            normalize_payload_style(&mut canonical);
             canonical
         }
-        None => payload_from_scalar_fields(config),
+        None => {
+            let mut canonical = payload_from_scalar_fields(config);
+            normalize_payload_style(&mut canonical);
+            canonical
+        }
     }
 }
 

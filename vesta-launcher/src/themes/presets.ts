@@ -1,6 +1,6 @@
 export { PRESET_THEMES } from "./presets/builtin";
 
-import { parseThemeData } from "./engine/parser";
+import { normalizeStyleMode, parseThemeData } from "./engine/parser";
 import { getDefaultTheme, validateTheme } from "./engine/validation";
 import { PRESET_THEMES } from "./presets/builtin";
 import type { AppThemeConfig, ThemeConfig } from "./types";
@@ -68,8 +68,10 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 			baseTheme.primaryHue ??
 			180,
 		opacity: getNum(themeData.opacity) ?? baseTheme.opacity ?? 0,
+		grainStrength: getNum(themeData.grainStrength) ?? baseTheme.grainStrength,
 		borderWidth: themeData.borderWidth ?? config.theme_border_width ?? baseTheme.borderWidth,
-		style: themeData.style ?? config.theme_style ?? baseTheme.style,
+		style:
+			themeData.style ?? normalizeStyleMode(config.theme_style) ?? normalizeStyleMode(baseTheme.style),
 		gradientEnabled:
 			themeData.gradientEnabled ?? config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
 		rotation: getNum(themeData.rotation) ?? getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
@@ -86,6 +88,9 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 		backgroundOpacity:
 			themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,
 		author: themeData.author ?? baseTheme.author,
+		allowHueChange: themeData.allowHueChange ?? baseTheme.allowHueChange,
+		allowStyleChange: themeData.allowStyleChange ?? baseTheme.allowStyleChange,
+		allowBorderChange: themeData.allowBorderChange ?? baseTheme.allowBorderChange,
 		variables: themeData.variables ?? baseTheme.variables,
 		userVariables: themeData.userVariables,
 	});
@@ -108,7 +113,7 @@ export {
 	normalizeWindowEffectForCurrentOS,
 } from "./engine/effects";
 // Re-export common engine functions for convenience
-export { parseThemeData, serializeThemeData } from "./engine/parser";
+export { normalizeStyleMode, parseThemeData, serializeThemeData } from "./engine/parser";
 export { themeToCSSVars } from "./engine/themeToCSSVars";
 export {
 	getDefaultTheme,
