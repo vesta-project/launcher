@@ -798,14 +798,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Apply the macOS-specific title bar style
     #[cfg(target_os = "macos")]
-    let mut win_builder = win_builder;
-
-    {
-    win_builder = win_builder.decorations(true).hidden_title(true).title_bar_style(tauri::TitleBarStyle::Overlay);
-    }
-
-    #[cfg(target_os = "windows")]
-    let win_builder = win_builder;
+    let win_builder = win_builder
+        .decorations(true)
+        .hidden_title(true)
+        .title_bar_style(tauri::TitleBarStyle::Overlay);
 
     let _main_win = win_builder.build()?;
 
