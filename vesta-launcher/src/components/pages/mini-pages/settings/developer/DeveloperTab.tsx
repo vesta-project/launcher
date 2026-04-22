@@ -124,6 +124,47 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					}
 				/>
 			</SettingsCard>
+
+			<SettingsCard header="Sentry Testing">
+				<SettingsField
+					label="Test Error Capture"
+					description="Trigger an error to verify Sentry monitoring is working correctly"
+					headerRight={
+						<LauncherButton
+							type="destructive"
+							onClick={() => {
+								throw new Error(
+									"Test Sentry Error - Frontend Exception. Check Sentry dashboard to verify capture.",
+								);
+							}}
+						>
+							Trigger Test Error
+						</LauncherButton>
+					}
+				/>
+				<SettingsField
+					label="Test Backend Panic"
+					description="Trigger a panic on the backend to test backend Sentry capture"
+					headerRight={
+						<LauncherButton
+							type="destructive"
+							onClick={async () => {
+								try {
+									await invoke("trigger_test_panic");
+								} catch (e) {
+									showToast({
+										title: "Panic Triggered",
+										description: "Backend panic was captured. Check Sentry dashboard.",
+										severity: "info",
+									});
+								}
+							}}
+						>
+							Trigger Backend Panic
+						</LauncherButton>
+					}
+				/>
+			</SettingsCard>
 		</div>
 	);
 }

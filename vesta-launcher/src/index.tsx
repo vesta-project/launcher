@@ -1,6 +1,7 @@
 /* @refresh reload */
 
 import { applyStartupRouteTarget, bootstrapStartup } from "@utils/startup-bootstrap";
+import { initSentryMonitoring } from "@utils/sentry";
 import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";
@@ -12,6 +13,8 @@ const root = document.getElementById("app");
 if (!root) {
 	throw new Error("Root element not found");
 }
+
+initSentryMonitoring();
 
 if ((window as any).__TAURI_INTERNALS__) {
 	void import("@tauri-apps/api/window")

@@ -9,6 +9,7 @@ pub mod models;
 mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
+mod sentry_init;
 mod setup;
 mod tasks;
 pub mod utils;
@@ -23,11 +24,14 @@ use utils::config::{
 #[allow(unused_imports)]
 use utils::windows::launch_window;
 
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-
 fn main() {
+    // Initialize Sentry first
+    let sentry_client = sentry_init::init_sentry();
+
     std::panic::set_hook(Box::new(|e| {
-        println!("Vesta Launcher closed unexpectedly: {e:?}");
+        let message = format!("Vesta Launcher closed unexpectedly: {e:?}");
+        eprintln!("{message}");
+        sentry::capture_message(&message, sentry::Level::Fatal);
     }));
 
     // Early check for debug logging setting
@@ -55,9 +59,12 @@ fn main() {
         .max_file_size(10_000_000) // 10MB per file
         .build();
 
+    #[cfg(not(target_os = "ios"))]
+    let _sentry_minidump_guard = tauri_plugin_sentry::minidump::init(&sentry_client);
+
     tauri::Builder::default()
+        .plugin(tauri_plugin_sentry::init(&sentry_client))
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(setup::init)
         .manage(utils::dialog_manager::DialogManager::new())
         .plugin(log_plugin)
@@ -88,6 +95,7 @@ fn main() {
             commands::app::get_cache_size,
             commands::app::open_logs_folder,
             commands::app::open_instance_folder,
+            commands::app::trigger_test_panic,
             commands::screenshots::get_screenshots,
             commands::screenshots::delete_screenshot,
             commands::screenshots::copy_screenshot_to_clipboard,
