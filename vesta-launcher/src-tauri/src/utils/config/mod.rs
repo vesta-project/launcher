@@ -141,6 +141,7 @@ pub struct AppConfig {
 
     // Graphics settings
     pub use_dedicated_gpu: bool,
+    pub telemetry_enabled: bool,
 
     // Discord integration
     pub discord_presence_enabled: bool,
@@ -198,6 +199,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         i32, // setup_step
         bool, // tutorial_completed
         bool, // use_dedicated_gpu
+        bool, // telemetry_enabled
         bool, // discord_presence_enabled
         bool, // auto_install_dependencies
         i32, // default_width
@@ -250,19 +252,20 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             setup_step: row.32,
             tutorial_completed: row.33,
             use_dedicated_gpu: row.34,
-            discord_presence_enabled: row.35,
-            auto_install_dependencies: row.36,
-            default_width: row.37,
-            default_height: row.38,
-            default_java_args: row.39,
-            default_environment_variables: row.40,
-            default_pre_launch_hook: row.41,
-            default_wrapper_command: row.42,
-            default_post_exit_hook: row.43,
-            default_min_memory: row.44,
-            theme_window_effect: row.45,
-            theme_background_opacity: row.46,
-            theme_data: row.47,
+            telemetry_enabled: row.35,
+            discord_presence_enabled: row.36,
+            auto_install_dependencies: row.37,
+            default_width: row.38,
+            default_height: row.39,
+            default_java_args: row.40,
+            default_environment_variables: row.41,
+            default_pre_launch_hook: row.42,
+            default_wrapper_command: row.43,
+            default_post_exit_hook: row.44,
+            default_min_memory: row.45,
+            theme_window_effect: row.46,
+            theme_background_opacity: row.47,
+            theme_data: row.48,
         })
     }
 }
@@ -312,6 +315,7 @@ impl Default for AppConfig {
             tutorial_completed: false,
 
             use_dedicated_gpu: true,
+            telemetry_enabled: true,
             discord_presence_enabled: true,
             auto_install_dependencies: true,
             default_width: 854,

@@ -25,26 +25,34 @@ use utils::config::{
 use utils::windows::launch_window;
 
 fn main() {
-    // Initialize Sentry first
-    let sentry_client = sentry_init::init_sentry();
-
-    std::panic::set_hook(Box::new(|e| {
-        let message = format!("Vesta Launcher closed unexpectedly: {e:?}");
-        eprintln!("{message}");
-        sentry::capture_message(&message, sentry::Level::Fatal);
-    }));
-
-    // Early check for debug logging setting
+    // Early checks for debug logging and telemetry settings.
     let mut log_level = log::LevelFilter::Info;
+    let mut telemetry_enabled = true;
     if let Ok(config_dir) = utils::db_manager::get_app_config_dir() {
-        // Try to init pool early to check setting. setup::init will safely re-init or handle it.
+        // Try to init pool early to check settings. setup::init will safely re-init or handle it.
         let _ = utils::db::init_config_pool(config_dir);
         if let Ok(config) = utils::config::get_app_config() {
             if config.debug_logging {
                 log_level = log::LevelFilter::Debug;
             }
+            telemetry_enabled = config.telemetry_enabled;
         }
     }
+
+    let sentry_client = if telemetry_enabled {
+        Some(sentry_init::init_sentry())
+    } else {
+        log::info!("Telemetry disabled by user config. Skipping Sentry initialization.");
+        None
+    };
+
+    std::panic::set_hook(Box::new(move |e| {
+        let message = format!("Vesta Launcher closed unexpectedly: {e:?}");
+        eprintln!("{message}");
+        if telemetry_enabled {
+            sentry::capture_message(&message, sentry::Level::Fatal);
+        }
+    }));
 
     // Configure logging with 30-day retention in the platform-specific launcher config directory
     let log_plugin = tauri_plugin_log::Builder::new()
@@ -60,10 +68,20 @@ fn main() {
         .build();
 
     #[cfg(not(target_os = "ios"))]
-    let _sentry_minidump_guard = tauri_plugin_sentry::minidump::init(&sentry_client);
+    let _sentry_minidump_guard = if sentry_client.is_some() {
+        sentry::Hub::current()
+            .client()
+            .map(|client| tauri_plugin_sentry::minidump::init(client.as_ref()))
+    } else {
+        None
+    };
 
-    tauri::Builder::default()
-        .plugin(tauri_plugin_sentry::init(&sentry_client))
+    let mut builder = tauri::Builder::default();
+    if let Some(sentry_client) = sentry_client.as_ref() {
+        builder = builder.plugin(tauri_plugin_sentry::init(sentry_client));
+    }
+
+    builder
         .plugin(tauri_plugin_fs::init())
         .setup(setup::init)
         .manage(utils::dialog_manager::DialogManager::new())

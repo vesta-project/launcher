@@ -14,7 +14,7 @@ if (!root) {
 	throw new Error("Root element not found");
 }
 
-initSentryMonitoring();
+void initSentryMonitoring();
 
 if ((window as any).__TAURI_INTERNALS__) {
 	void import("@tauri-apps/api/window")

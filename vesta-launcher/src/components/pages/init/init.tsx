@@ -12,10 +12,12 @@ import {
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
+import { Switch as ToggleSwitch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { Toaster } from "@ui/toast/toast";
+import { openExternal as openUrl } from "@utils/external-link";
 import { useOs } from "@utils/os";
 import { consumeInitBootstrapState } from "@utils/startup-bootstrap";
-import { createSignal, Match, onCleanup, onMount, Switch } from "solid-js";
+import { createSignal, Match, onCleanup, onMount, Show, Switch as MatchSwitch } from "solid-js";
 import styles from "./init.module.css";
 import {
 	getCanonicalBackStep,
@@ -30,6 +32,7 @@ import {
 
 type NavigationDirection = "forward" | "backward" | "direct";
 type AtmosphereState = "active" | "fading" | "off";
+const PRIVACY_POLICY_URL = "https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
 
 function isValidAtmosphereState(value: unknown): value is AtmosphereState {
 	return value === "active" || value === "fading" || value === "off";
@@ -71,6 +74,7 @@ function InitPage() {
 	const [guideVisited, setGuideVisited] = createSignal(startupState?.guideVisited ?? false);
 	const [hasInstalledInstance, setHasInstalledInstance] = createSignal(false);
 	const [isLoginOnly, setIsLoginOnly] = createSignal(startupState?.loginOnly ?? false);
+	const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
 	const [onboardingAtmosphereState, setOnboardingAtmosphereState] = createSignal<AtmosphereState>(
 		startupState?.atmosphereState ?? "active",
 	);
@@ -118,6 +122,18 @@ function InitPage() {
 		}
 
 		await invoke("set_setup_step", { step });
+	};
+
+	const persistTelemetryPreference = async (enabled: boolean) => {
+		setTelemetryEnabled(enabled);
+		try {
+			await invoke("update_config_field", {
+				field: "telemetry_enabled",
+				value: enabled,
+			});
+		} catch (error) {
+			console.error("Failed to persist telemetry preference:", error);
+		}
 	};
 
 	const applyStep = async (
@@ -244,6 +260,15 @@ function InitPage() {
 	};
 
 	onMount(() => {
+		void (async () => {
+			try {
+				const config = await invoke<any>("get_config");
+				setTelemetryEnabled(config.telemetry_enabled ?? true);
+			} catch (error) {
+				console.error("Failed to load telemetry preference:", error);
+			}
+		})();
+
 		if (startupState) {
 			// Safe short-circuit: bootstrap already resolved and validated init state.
 			return;
@@ -342,7 +367,7 @@ function InitPage() {
 		>
 			<TitleBar os={os()} />
 			<div class={styles["init-page__wrapper"]}>
-				<Switch>
+				<MatchSwitch>
 					<Match when={initStep() === INIT_STEPS.WELCOME}>
 						<InitFirstPage initStep={initStep()} goToStep={goToStep} goNext={goNext} goBack={goBack} />
 					</Match>
@@ -409,12 +434,58 @@ function InitPage() {
 							goBack={goBack}
 							navigate={navigate}
 							hasInstalledInstance={hasInstalledInstance()}
+							telemetryEnabled={telemetryEnabled()}
+							onTelemetryPersist={persistTelemetryPreference}
 						/>
 					</Match>
-				</Switch>
+				</MatchSwitch>
 				<Toaster />
 				{/*{initStep()}*/}
 			</div>
+			<Show when={initStep() === INIT_STEPS.WELCOME}>
+				<div
+					style={{
+						position: "absolute",
+						left: "14px",
+						bottom: "10px",
+						display: "flex",
+						"align-items": "center",
+						gap: "10px",
+						"max-width": "460px",
+						"z-index": 20,
+					}}
+				>
+					<ToggleSwitch
+						checked={telemetryEnabled()}
+						onCheckedChange={(checked: boolean) => void persistTelemetryPreference(checked)}
+					>
+						<SwitchControl>
+							<SwitchThumb />
+						</SwitchControl>
+					</ToggleSwitch>
+					<p
+						style={{
+							margin: 0,
+							"font-size": "12px",
+							"line-height": "1.35",
+							color: "var(--text-primary)",
+							"text-shadow": "0 1px 1px rgba(0, 0, 0, 0.55)",
+						}}
+					>
+						Share crash and error reports (enabled by default).{" "}
+						<a
+							href={PRIVACY_POLICY_URL}
+							style={{ color: "var(--text-primary)", "text-decoration": "underline" }}
+							onClick={(event) => {
+								event.preventDefault();
+								void openUrl(PRIVACY_POLICY_URL);
+							}}
+						>
+							Privacy Policy
+						</a>
+					</p>
+				</div>
+			</Show>
 			<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
 		</div>
 	);
