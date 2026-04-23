@@ -122,6 +122,7 @@ export interface AppConfig {
 	default_post_exit_hook: string | null;
 	default_min_memory: number;
 	default_max_memory: number;
+	default_launcher_action_on_launch: "stay-open" | "minimize" | "hide-to-tray" | "quit";
 
 	[key: string]: any;
 }
@@ -177,6 +178,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
 	const [autoInstallDependencies, setAutoInstallDependencies] = createSignal(true);
 	const [maxDownloadThreads, setMaxDownloadThreads] = createSignal(4);
+	const [showTrayIcon, setShowTrayIcon] = createSignal(true);
+	const [closeToTray, setCloseToTray] = createSignal(false);
 	const [instanceDefaults, setInstanceDefaults] = createSignal<Partial<AppConfig>>({});
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
 	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
@@ -569,6 +572,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
 				setMaxDownloadThreads(config.max_download_threads ?? 4);
+				setShowTrayIcon(config.show_tray_icon ?? true);
+				setCloseToTray(config.minimize_to_tray ?? false);
 
 				setInstanceDefaults({
 					default_width: config.default_width,
@@ -580,6 +585,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					default_post_exit_hook: config.default_post_exit_hook,
 					default_min_memory: config.default_min_memory,
 					default_max_memory: config.default_max_memory,
+					default_launcher_action_on_launch:
+						config.default_launcher_action_on_launch ?? "stay-open",
 				});
 
 				// Load theme configuration
@@ -644,6 +651,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "telemetry_enabled") setTelemetryEnabled(value ?? true);
 				if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
+				if (field === "show_tray_icon") setShowTrayIcon(value ?? true);
+				if (field === "minimize_to_tray") setCloseToTray(value ?? false);
 				if (field === "theme_id" && value) {
 					const previousThemeId = untrack(themeId);
 					if (previousThemeId !== value) {
@@ -959,7 +968,21 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
-	const handleTelemetryToggle = async (checked: boolean) => {
+	const handleShowTrayIconToggle = async (checked: boolean) => {
+		setShowTrayIcon(checked);
+		if (hasTauriRuntime()) {
+			await invoke("set_tray_icon_visibility", { visible: checked });
+		}
+	};
+
+	const handleCloseToTrayToggle = async (checked: boolean) => {
+		setCloseToTray(checked);
+		if (hasTauriRuntime()) {
+			await invoke("set_minimize_to_tray", { enabled: checked });
+		}
+	};
+  
+  const handleTelemetryToggle = async (checked: boolean) => {
 		setTelemetryEnabled(checked);
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {
@@ -1458,6 +1481,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleOpenAppData={handleOpenAppData}
 								cacheSizeValue={cacheSizeValue() || "0 bytes"}
 								handleClearCache={handleClearCache}
+								showTrayIcon={showTrayIcon()}
+								handleShowTrayIconToggle={handleShowTrayIconToggle}
+								closeToTray={closeToTray()}
+								handleCloseToTrayToggle={handleCloseToTrayToggle}
 							/>
 						</Suspense>
 					</TabsContent>

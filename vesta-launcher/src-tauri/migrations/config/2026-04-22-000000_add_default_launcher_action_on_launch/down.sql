@@ -1,0 +1,2 @@
+ALTER TABLE app_config
+DROP COLUMN default_launcher_action_on_launch;

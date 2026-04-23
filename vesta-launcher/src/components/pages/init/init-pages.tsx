@@ -663,6 +663,8 @@ function InitInstallationPage(props: InitPagesProps) {
 				useGlobalHooks: true,
 				useGlobalEnvironmentVariables: true,
 				useGlobalGameDir: true,
+				useGlobalLauncherAction: true,
+				launcherActionOnLaunch: null,
 				environmentVariables: null,
 				preLaunchHook: null,
 				postExitHook: null,

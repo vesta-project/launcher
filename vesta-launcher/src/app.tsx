@@ -332,9 +332,12 @@ function Root(props: ChildrenProp) {
 				}
 			} catch (e) {
 				console.error("Failed to perform exit check:", e);
-				// Fallback to exit if check fails? maybe safer to stay open or exit?
-				// User explicitly asked for exit, so let's try to exit if check itself fails.
-				await invoke("exit_app");
+				showToast({
+					title: "Unable to confirm safe exit",
+					description:
+						"Vesta couldn't validate running tasks right now, so the launcher will stay open.",
+					severity: "warning",
+				});
 			}
 		}).then((u) => {
 			unlistenExit = u;

@@ -2,7 +2,7 @@
 
 ## Overview
 
-Vesta Launcher includes system tray functionality to allow the application to run in the background and provide quick access to common actions. The tray icon enables minimizing to tray behavior and window restoration.
+Vesta Launcher uses a Tauri v2 tray integration to keep the app available in the background, expose window controls, and support launch-time behavior automation.
 
 ## Features
 
@@ -13,12 +13,20 @@ Vesta Launcher includes system tray functionality to allow the application to ru
 - **Purpose**: Controls whether the system tray icon is displayed
 - **API**: `set_tray_icon_visibility()` command
 
-### Minimize to Tray
+### Close Button Hides To Tray
 
 - **Configuration**: `minimize_to_tray` boolean in app config
 - **Default Value**: `false`
-- **Purpose**: When enabled, minimizing the main window hides it to the system tray instead of the taskbar
+- **Purpose**: When enabled, clicking the main window close button hides the launcher to tray instead of triggering exit flow
 - **API**: `set_minimize_to_tray()` command
+
+### Launcher Action On Game Launch
+
+- **Configuration**: `default_launcher_action_on_launch` in app config
+- **Default Value**: `stay-open`
+- **Allowed Values**: `stay-open`, `minimize`, `hide-to-tray`, `quit`
+- **Per-instance Override**: `use_global_launcher_action` + `launcher_action_on_launch`
+- **Quit Semantics**: routes through guarded exit flow (`core://exit-requested` + `exit_check`)
 
 ### Window Restoration
 
@@ -58,25 +66,22 @@ pub struct TraySettings {
 
 ## Implementation Status
 
-**Current State**: The tray configuration and API commands are fully implemented. However, the actual tray icon creation in `setup.rs` is commented out and needs to be enabled.
+**Current State**: Implemented.
 
-**Blocked Features**:
-- Tray icon display
-- Tray menu with actions
-- Minimize-to-tray window event handling
+- Tray is created at startup with stable id and menu actions (`Show`, `Hide`, `Quit`).
+- Tray visibility is driven by persisted `show_tray_icon` and can be toggled at runtime.
+- Main-window close behavior checks `minimize_to_tray` before deciding to hide or request guarded exit.
+- If `minimize_to_tray` is enabled while `show_tray_icon` is disabled, close-to-tray temporarily shows the tray icon for restoration; normal visibility is restored when the main window is shown again.
+- Launch-time action policy is resolved from instance override (if enabled) or global default.
 
 ## Future Enhancements
 
-### Planned Features
+### Platform Caveats
 
-- **Tray Icon Setup**: Enable the commented tray icon builder in setup.rs
-- **Tray Menu**: Context menu with options like:
-  - Show/Hide window
-  - Launch favorite instances
-  - Check for updates
-  - Exit application
-- **Platform-Specific Behavior**: Different tray implementations for Windows, macOS, and Linux
-- **Notifications**: Tray icon updates for background events (downloads complete, etc.)
+- **Linux**: menu-first behavior is required; tray click interactions are not relied on.
+- **Linux Runtime Dependencies**: appindicator/ayatana-appindicator and GTK dependencies may be required by distro.
+- **Windows**: tray title/tooltips may have platform limitations depending on shell behavior.
+- **macOS**: use menu-bar-friendly tray icon assets for best readability.
 
 ### Technical Requirements
 

@@ -112,6 +112,8 @@ export interface Instance {
 	useGlobalHooks: boolean;
 	useGlobalEnvironmentVariables: boolean;
 	useGlobalGameDir: boolean;
+	useGlobalLauncherAction: boolean;
+	launcherActionOnLaunch: "stay-open" | "minimize" | "hide-to-tray" | "quit" | null;
 	gameWidth: number;
 	gameHeight: number;
 	environmentVariables: string | null;
@@ -218,6 +220,8 @@ export function createDemoInstance(): Instance {
 		useGlobalHooks: false,
 		useGlobalEnvironmentVariables: false,
 		useGlobalGameDir: false,
+		useGlobalLauncherAction: true,
+		launcherActionOnLaunch: null,
 		environmentVariables: null,
 		preLaunchHook: null,
 		postExitHook: null,
@@ -264,6 +268,8 @@ export async function createInstance(data: CreateInstanceData): Promise<number> 
 		useGlobalHooks: true,
 		useGlobalEnvironmentVariables: true,
 		useGlobalGameDir: true,
+		useGlobalLauncherAction: true,
+		launcherActionOnLaunch: null,
 		environmentVariables: null,
 		preLaunchHook: null,
 		postExitHook: null,

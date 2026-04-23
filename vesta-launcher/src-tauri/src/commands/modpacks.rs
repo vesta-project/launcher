@@ -1056,6 +1056,8 @@ async fn prepare_instance(
         use_global_hooks: instance_data.use_global_hooks,
         use_global_environment_variables: instance_data.use_global_environment_variables,
         use_global_game_dir: instance_data.use_global_game_dir,
+        use_global_launcher_action: instance_data.use_global_launcher_action,
+        launcher_action_on_launch: instance_data.launcher_action_on_launch.clone(),
         environment_variables: instance_data.environment_variables.clone(),
         pre_launch_hook: instance_data.pre_launch_hook.clone(),
         wrapper_command: instance_data.wrapper_command.clone(),

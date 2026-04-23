@@ -48,6 +48,7 @@ diesel::table! {
         default_wrapper_command -> Nullable<Text>,
         default_post_exit_hook -> Nullable<Text>,
         default_min_memory -> Integer,
+        default_launcher_action_on_launch -> Text,
         theme_window_effect -> Nullable<Text>,
         theme_background_opacity -> Nullable<Integer>,
         theme_data -> Nullable<Text>,

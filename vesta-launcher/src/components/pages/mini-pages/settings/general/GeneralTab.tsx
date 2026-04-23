@@ -25,6 +25,10 @@ interface GeneralSettingsTabProps {
 	handleOpenAppData: () => void;
 	cacheSizeValue: string;
 	handleClearCache: () => void;
+	showTrayIcon: boolean;
+	handleShowTrayIconToggle: (checked: boolean) => void;
+	closeToTray: boolean;
+	handleCloseToTrayToggle: (checked: boolean) => void;
 }
 
 export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
@@ -51,7 +55,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Error Telemetry"
 					description={
 						<>
-							Send crash and error diagnostics to help improve reliability. Enabled by default (opt-out).
+							Send crash and error diagnostics to help improve reliability.
 							{" "}
 							<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
 								Privacy Policy
@@ -134,6 +138,31 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					description={`Stored data: ${props.cacheSizeValue || "..."}. Clear metadata and temporary files to fix sync issues.`}
 					actionLabel="Clear Now"
 					onAction={props.handleClearCache}
+				/>
+			</SettingsCard>
+
+			<SettingsCard header="System Tray">
+				<SettingsField
+					label="Show Tray Icon"
+					description="Display the launcher icon in the system tray."
+					headerRight={
+						<Switch checked={props.showTrayIcon} onCheckedChange={props.handleShowTrayIconToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					}
+				/>
+				<SettingsField
+					label="Close Button Hides To Tray"
+					description="When enabled, clicking the window close button hides the launcher to tray instead of requesting app exit."
+					headerRight={
+						<Switch checked={props.closeToTray} onCheckedChange={props.handleCloseToTrayToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					}
 				/>
 			</SettingsCard>
 

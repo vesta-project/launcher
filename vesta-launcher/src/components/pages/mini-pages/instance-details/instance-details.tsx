@@ -104,6 +104,8 @@ interface InstanceDetailsProps {
 	initialUseGlobalJavaPath?: boolean;
 	initialUseGlobalHooks?: boolean;
 	initialUseGlobalEnvironmentVariables?: boolean;
+	initialUseGlobalLauncherAction?: boolean;
+	initialLauncherActionOnLaunch?: string;
 	initialPreLaunchHook?: string;
 	initialPostExitHook?: string;
 	initialWrapperCommand?: string;
@@ -366,6 +368,22 @@ export default function InstanceDetails(
 	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] = createSignal(
 		props.initialUseGlobalEnvironmentVariables ?? true,
 	);
+	const [useGlobalLauncherAction, setUseGlobalLauncherAction] = createSignal(
+		props.initialUseGlobalLauncherAction ?? true,
+	);
+	const [launcherActionOnLaunch, setLauncherActionOnLaunch] = createSignal<
+		"stay-open" | "minimize" | "hide-to-tray" | "quit"
+	>(
+		(["stay-open", "minimize", "hide-to-tray", "quit"].includes(
+			props.initialLauncherActionOnLaunch || "",
+		)
+			? (props.initialLauncherActionOnLaunch as
+					| "stay-open"
+					| "minimize"
+					| "hide-to-tray"
+					| "quit")
+			: "stay-open"),
+	);
 	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialPreLaunchHook || "");
 	const [postExitHook, setPostExitHook] = createSignal(props.initialPostExitHook || "");
 	const [wrapperCommand, setWrapperCommand] = createSignal(props.initialWrapperCommand || "");
@@ -383,6 +401,7 @@ export default function InstanceDetails(
 	const [isResolutionDirty, setIsResolutionDirty] = createSignal(props._dirty?.resolution || false);
 	const [isHooksDirty, setIsHooksDirty] = createSignal(props._dirty?.hooks || false);
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
+	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(props._dirty?.launchAction || false);
 
 	const [saving, setSaving] = createSignal(false);
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
@@ -405,7 +424,8 @@ export default function InstanceDetails(
 			isJavaPathDirty() ||
 			isResolutionDirty() ||
 			isHooksDirty() ||
-			isEnvDirty()
+			isEnvDirty() ||
+			isLaunchActionDirty()
 		);
 	});
 
@@ -634,6 +654,8 @@ export default function InstanceDetails(
 				initialUseGlobalJavaPath: useGlobalJavaPath(),
 				initialUseGlobalHooks: useGlobalHooks(),
 				initialUseGlobalEnvironmentVariables: useGlobalEnvironmentVariables(),
+				initialUseGlobalLauncherAction: useGlobalLauncherAction(),
+				initialLauncherActionOnLaunch: launcherActionOnLaunch(),
 				initialPreLaunchHook: preLaunchHook(),
 				initialPostExitHook: postExitHook(),
 				initialWrapperCommand: wrapperCommand(),
@@ -648,6 +670,7 @@ export default function InstanceDetails(
 					resolution: isResolutionDirty(),
 					hooks: isHooksDirty(),
 					env: isEnvDirty(),
+					launchAction: isLaunchActionDirty(),
 				},
 			};
 		});
@@ -1177,6 +1200,10 @@ export default function InstanceDetails(
 				if (!isEnvDirty()) {
 					setUseGlobalEnvironmentVariables(inst.useGlobalEnvironmentVariables);
 					setEnvironmentVariables(inst.environmentVariables || "");
+				}
+				if (!isLaunchActionDirty()) {
+					setUseGlobalLauncherAction(inst.useGlobalLauncherAction);
+					setLauncherActionOnLaunch(inst.launcherActionOnLaunch || "stay-open");
 				}
 			});
 		}
@@ -1823,6 +1850,10 @@ export default function InstanceDetails(
 			fresh.useGlobalJavaPath = useGlobalJavaPath();
 			fresh.useGlobalHooks = useGlobalHooks();
 			fresh.useGlobalEnvironmentVariables = useGlobalEnvironmentVariables();
+			fresh.useGlobalLauncherAction = useGlobalLauncherAction();
+			fresh.launcherActionOnLaunch = useGlobalLauncherAction()
+				? null
+				: launcherActionOnLaunch();
 			fresh.preLaunchHook = preLaunchHook() || null;
 			fresh.postExitHook = postExitHook() || null;
 			fresh.wrapperCommand = wrapperCommand() || null;
@@ -1842,6 +1873,7 @@ export default function InstanceDetails(
 				setIsResolutionDirty(false);
 				setIsHooksDirty(false);
 				setIsEnvDirty(false);
+				setIsLaunchActionDirty(false);
 			});
 			await refetch();
 		} catch (e) {
@@ -2221,6 +2253,11 @@ export default function InstanceDetails(
 												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
 												setUseGlobalEnvironmentVariables={setUseGlobalEnvironmentVariables}
 												setIsEnvDirty={setIsEnvDirty}
+												useGlobalLauncherAction={useGlobalLauncherAction()}
+												setUseGlobalLauncherAction={setUseGlobalLauncherAction}
+												launcherActionOnLaunch={launcherActionOnLaunch()}
+												setLauncherActionOnLaunch={setLauncherActionOnLaunch}
+												setIsLaunchActionDirty={setIsLaunchActionDirty}
 												invoke={invoke}
 												showToast={showToast}
 											/>
@@ -2259,6 +2296,8 @@ export default function InstanceDetails(
 						setUseGlobalHooks(i.useGlobalHooks);
 						setEnvironmentVariables(i.environmentVariables || "");
 						setUseGlobalEnvironmentVariables(i.useGlobalEnvironmentVariables);
+						setUseGlobalLauncherAction(i.useGlobalLauncherAction);
+						setLauncherActionOnLaunch(i.launcherActionOnLaunch || "stay-open");
 						setIsNameDirty(false);
 						setIsIconDirty(false);
 						setIsMinMemDirty(false);
@@ -2268,6 +2307,7 @@ export default function InstanceDetails(
 						setIsResolutionDirty(false);
 						setIsHooksDirty(false);
 						setIsEnvDirty(false);
+						setIsLaunchActionDirty(false);
 					});
 				}}
 				cancelText="Reset"
