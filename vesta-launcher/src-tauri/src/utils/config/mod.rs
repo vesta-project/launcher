@@ -115,6 +115,7 @@ pub struct AppConfig {
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
     pub reduced_motion: bool,
+    // Legacy fallback for initial window bootstrap sizing. Window-state plugin now owns runtime restore.
     pub last_window_width: i32,
     pub last_window_height: i32,
     pub debug_logging: bool,

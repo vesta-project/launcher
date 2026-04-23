@@ -343,4 +343,4 @@ function CreateMiniRouterPath(
 	return { [path]: { name, element, props } };
 }
 
-export { MiniRouter, CreateMiniRouterPath };
+export { CreateMiniRouterPath, MiniRouter };

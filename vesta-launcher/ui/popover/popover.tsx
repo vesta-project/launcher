@@ -31,4 +31,4 @@ const PopoverContent = <T extends ValidComponent = "div">(
 	);
 };
 
-export { Popover, PopoverTrigger, PopoverContent, PopoverAnchor, PopoverCloseButton };
+export { Popover, PopoverAnchor, PopoverCloseButton, PopoverContent, PopoverTrigger };

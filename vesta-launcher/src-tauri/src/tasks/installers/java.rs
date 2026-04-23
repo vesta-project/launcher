@@ -76,7 +76,7 @@ impl Task for DownloadJavaTask {
                 .do_update()
                 .set((
                     path.eq(&new_entry.path),
-                    is_managed.eq(new_entry.is_managed)
+                    is_managed.eq(new_entry.is_managed),
                 ))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;
@@ -121,9 +121,7 @@ impl ProgressReporter for TaskProgressReporter {
     }
 
     fn set_step_count(&self, current: u32, total: Option<u32>) {
-        let known_percent = self
-            .last_percent
-            .load(std::sync::atomic::Ordering::Relaxed);
+        let known_percent = self.last_percent.load(std::sync::atomic::Ordering::Relaxed);
         self.ctx.update_progress(
             if known_percent >= 0 {
                 known_percent
@@ -135,10 +133,7 @@ impl ProgressReporter for TaskProgressReporter {
         );
 
         if let Some(ref channel) = self.ctx.progress_channel {
-            let _ = channel.send(ProgressUpdate::StepCount {
-                current,
-                total,
-            });
+            let _ = channel.send(ProgressUpdate::StepCount { current, total });
         }
     }
 
@@ -155,7 +150,8 @@ impl ProgressReporter for TaskProgressReporter {
             log::info!("Java installation finished successfully (internal done called)");
             // self.ctx.update_full(100, "Java setup complete".to_string(), None, None);
         } else {
-            self.ctx.update_description(message.unwrap_or("Java download failed").to_string());
+            self.ctx
+                .update_description(message.unwrap_or("Java download failed").to_string());
         }
     }
 

@@ -151,7 +151,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 							onClick={async () => {
 								try {
 									await invoke("trigger_test_panic");
-								} catch (e) {
+								} catch (_e) {
 									showToast({
 										title: "Panic Triggered",
 										description: "Backend panic was captured. Check Sentry dashboard.",

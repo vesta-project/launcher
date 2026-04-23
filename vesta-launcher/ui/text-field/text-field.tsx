@@ -92,10 +92,10 @@ export function TextField(props: TextFieldProps) {
 }
 
 export {
-	TextFieldRoot,
-	TextFieldInput,
-	TextFieldTextArea,
-	TextFieldLabel,
 	TextFieldDescription,
 	TextFieldErrorMessage,
+	TextFieldInput,
+	TextFieldLabel,
+	TextFieldRoot,
+	TextFieldTextArea,
 };

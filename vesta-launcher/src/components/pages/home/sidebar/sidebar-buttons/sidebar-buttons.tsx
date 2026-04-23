@@ -188,4 +188,4 @@ function SidebarPageButton(props: SidebarPageButtonProps) {
 	);
 }
 
-export { SidebarProfileButton, SidebarActionButton, SidebarPageButton };
+export { SidebarActionButton, SidebarPageButton, SidebarProfileButton };

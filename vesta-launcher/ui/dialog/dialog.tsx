@@ -125,11 +125,11 @@ const DialogDescription = <T extends ValidComponent = "p">(
 
 export {
 	Dialog,
-	DialogTrigger,
 	DialogContent,
-	DialogOverlay,
-	DialogHeader,
-	DialogFooter,
-	DialogTitle,
 	DialogDescription,
+	DialogFooter,
+	DialogHeader,
+	DialogOverlay,
+	DialogTitle,
+	DialogTrigger,
 };

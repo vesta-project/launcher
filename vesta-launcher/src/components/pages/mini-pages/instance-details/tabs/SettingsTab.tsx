@@ -639,12 +639,14 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								optionTextValue="label"
 								value={{
 									label:
-										({
-											"stay-open": "Stay Open",
-											minimize: "Minimize Window",
-											"hide-to-tray": "Hide To Tray",
-											quit: "Request Quit",
-										} as Record<string, string>)[p.launcherActionOnLaunch] || "Stay Open",
+										(
+											{
+												"stay-open": "Stay Open",
+												minimize: "Minimize Window",
+												"hide-to-tray": "Hide To Tray",
+												quit: "Request Quit",
+											} as Record<string, string>
+										)[p.launcherActionOnLaunch] || "Stay Open",
 									value: p.launcherActionOnLaunch,
 								}}
 								onChange={(option: any) => {

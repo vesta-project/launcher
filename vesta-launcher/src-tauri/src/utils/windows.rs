@@ -93,7 +93,10 @@ pub fn ensure_main_window_visible(app: &tauri::AppHandle) -> Result<(), String> 
         // Closing with "minimize to tray" may force-show the tray for discoverability.
         // Once the main window is visible again, restore the persisted tray preference.
         if let Err(e) = crate::commands::app::sync_tray_visibility_with_config(app) {
-            log::warn!("Failed to sync tray visibility after showing main window: {}", e);
+            log::warn!(
+                "Failed to sync tray visibility after showing main window: {}",
+                e
+            );
         }
 
         Ok(())

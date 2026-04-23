@@ -59,6 +59,7 @@ const [, { refetch: refetchSize }] = cacheSize;
 
 // System memory
 const [systemMemorySignal, setSystemMemory] = createSignal<number>(16384);
+
 export { systemMemorySignal as systemMemory };
 
 /**

@@ -419,10 +419,7 @@ impl ProgressReporter for TauriProgressReporter {
         );
 
         if let Some(ref channel) = self.ctx.progress_channel {
-            let _ = channel.send(ProgressUpdate::StepCount {
-                current,
-                total,
-            });
+            let _ = channel.send(ProgressUpdate::StepCount { current, total });
         }
 
         log::debug!("Installation step count: {}/{:?}", current, total);
@@ -480,7 +477,8 @@ impl ProgressReporter for TauriProgressReporter {
         };
 
         if success {
-            self.ctx.update_full(100, message_str, current_step, total_steps);
+            self.ctx
+                .update_full(100, message_str, current_step, total_steps);
             log::info!("Installation completed successfully");
         } else {
             // Handle error case - usually via a separate notification or status

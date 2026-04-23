@@ -63,15 +63,9 @@ pub enum ProgressUpdate {
         severity: Option<NotificationSeverity>,
     },
     /// Start a new step with an optional count of sub-steps
-    Step {
-        name: String,
-        total: Option<u32>,
-    },
+    Step { name: String, total: Option<u32> },
     /// Update the current step count against a total
-    StepCount {
-        current: u32,
-        total: Option<u32>,
-    },
+    StepCount { current: u32, total: Option<u32> },
     /// Mark the task as finished
     Finished {
         success: bool,

@@ -18,9 +18,7 @@ use tokio::sync::oneshot;
 
 use crate::models::account::{Account, NewAccount};
 use crate::schema::account::dsl::*; // Bring table and column names into scope for queries
-use crate::utils::config::{
-    canonical_theme_data_for_theme_id, get_app_config, update_app_config,
-};
+use crate::utils::config::{canonical_theme_data_for_theme_id, get_app_config, update_app_config};
 use crate::utils::db::get_vesta_conn;
 
 pub const ACCOUNT_TYPE_GUEST: &str = "Guest";
@@ -298,7 +296,7 @@ pub async fn start_demo_session(app_handle: AppHandle) -> Result<(), String> {
                 _ => "classic".to_string(),
             };
             log::info!(
-                "[auth] Assigned random default skin to demo account: {:?}", 
+                "[auth] Assigned random default skin to demo account: {:?}",
                 random_skin.name
             );
         }
@@ -787,31 +785,32 @@ pub async fn refresh_account_tokens(
     let ms_access_token = token_response.access_token().secret().clone();
     let ms_refresh_token = token_response.refresh_token().map(|r| r.secret().clone());
 
-    let minecraft_response =
-        match piston_lib::auth::exchange_for_minecraft_token(&ms_access_token).await {
-            Ok(resp) => resp,
-            Err(e) => {
-                    log::error!(
-                        "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
-                        target_uuid,
-                        e
-                    );
+    let minecraft_response = match piston_lib::auth::exchange_for_minecraft_token(&ms_access_token)
+        .await
+    {
+        Ok(resp) => resp,
+        Err(e) => {
+            log::error!(
+                "[auth] Failed to exchange MS token for Minecraft token for {}: {}",
+                target_uuid,
+                e
+            );
 
-                    // Provide a more actionable error for the UI/logs. Common causes:
-                    // - The Microsoft account does not have an Xbox Live profile.
-                    // - The account does not own Minecraft (no entitlement).
-                    // - The Microsoft token lacks required scopes or is invalid.
-                    log::warn!(
+            // Provide a more actionable error for the UI/logs. Common causes:
+            // - The Microsoft account does not have an Xbox Live profile.
+            // - The account does not own Minecraft (no entitlement).
+            // - The Microsoft token lacks required scopes or is invalid.
+            log::warn!(
                         "[auth] Exchange failure may indicate missing Xbox Live profile or missing Minecraft ownership for account {}",
                         target_uuid
                     );
 
-                    return Err(format!(
+            return Err(format!(
                         "Failed to exchange for Minecraft token: {}. This often means the Microsoft account lacks an Xbox Live profile or Minecraft ownership — try re-authenticating with an account that owns Minecraft.",
                         e
                     ));
-                }
-        };
+        }
+    };
 
     let mc_access_token = minecraft_response.access_token().clone().into_inner();
     let expires_in_secs = {
@@ -900,9 +899,10 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
         );
     }
 
-    let next_theme_data = target_account.theme_data.clone().unwrap_or_else(|| {
-        canonical_theme_data_for_theme_id(next_theme_id.as_str())
-    });
+    let next_theme_data = target_account
+        .theme_data
+        .clone()
+        .unwrap_or_else(|| canonical_theme_data_for_theme_id(next_theme_id.as_str()));
     if config.theme_data.as_deref() != Some(next_theme_data.as_str()) {
         config.theme_data = Some(next_theme_data.clone());
         updates.insert(
@@ -952,7 +952,9 @@ pub fn set_active_account(app_handle: AppHandle, target_uuid: String) -> Result<
 
     // Sync profile data on account change to ensure skins/capes stay up to date
     if let Some(task_manager) = app_handle.try_state::<crate::tasks::manager::TaskManager>() {
-        let _ = task_manager.submit(Box::new(crate::tasks::sync_profiles::SyncAccountProfilesTask::new()));
+        let _ = task_manager.submit(Box::new(
+            crate::tasks::sync_profiles::SyncAccountProfilesTask::new(),
+        ));
     }
 
     Ok(())
@@ -1030,7 +1032,10 @@ pub async fn get_account_profile(
 
             // Helpful debug info without leaking tokens
             if account_model.refresh_token.is_some() {
-                log::debug!("Account {} has a refresh token available", account_model.uuid);
+                log::debug!(
+                    "Account {} has a refresh token available",
+                    account_model.uuid
+                );
             } else {
                 log::debug!("Account {} has no refresh token", account_model.uuid);
             }

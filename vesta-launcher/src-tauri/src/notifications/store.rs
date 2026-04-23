@@ -20,7 +20,7 @@ impl NotificationStore {
             description: db_model.description,
             severity: NotificationSeverity::from(db_model.severity),
             notification_type: match db_model.notification_type.as_str() {
-                // "task" is legacy and mapped to Progress for backward compatibility with 
+                // "task" is legacy and mapped to Progress for backward compatibility with
                 // in-flight or older persisted notifications from previous versions.
                 "progress" | "task" => NotificationType::Progress,
                 "patient" => NotificationType::Patient,

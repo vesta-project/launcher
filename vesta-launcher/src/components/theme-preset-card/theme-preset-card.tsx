@@ -81,9 +81,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 					</Show>
 					<span class={styles["theme-preset-card__name"]}>{props.theme.name}</span>
 					<span class={styles["theme-preset-card__description"]}>
-						{props.theme.author
-							? `by ${props.theme.author}`
-							: props.theme.description || previewStyle()}
+						{props.theme.author ? `by ${props.theme.author}` : props.theme.description || previewStyle()}
 					</span>
 				</div>
 			</button>

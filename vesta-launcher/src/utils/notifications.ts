@@ -572,6 +572,7 @@ function unsubscribeFromBackendNotifications() {
 }
 
 export {
+	type BackendNotification,
 	cleanupNotifications,
 	clearAllDismissibleNotifications,
 	closeAlert,
@@ -581,6 +582,11 @@ export {
 	invokeNotificationAction,
 	listNotifications,
 	markNotificationRead,
+	type Notification,
+	type NotificationAction,
+	type NotificationActionType,
+	type NotificationSeverity,
+	type NotificationType,
 	notifications,
 	persistentNotificationTrigger,
 	removeAllAlerts,
@@ -588,10 +594,4 @@ export {
 	subscribeToBackendNotifications,
 	unsubscribeFromBackendNotifications,
 	updateNotificationProgress,
-	type BackendNotification,
-	type Notification,
-	type NotificationAction,
-	type NotificationActionType,
-	type NotificationSeverity,
-	type NotificationType,
 };

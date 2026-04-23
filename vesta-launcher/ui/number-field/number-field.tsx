@@ -161,11 +161,11 @@ const NumberFieldErrorMessage = <T extends ValidComponent = "div">(
 
 export {
 	NumberField,
-	NumberFieldGroup,
-	NumberFieldLabel,
-	NumberFieldInput,
-	NumberFieldIncrementTrigger,
 	NumberFieldDecrementTrigger,
 	NumberFieldDescription,
 	NumberFieldErrorMessage,
+	NumberFieldGroup,
+	NumberFieldIncrementTrigger,
+	NumberFieldInput,
+	NumberFieldLabel,
 };

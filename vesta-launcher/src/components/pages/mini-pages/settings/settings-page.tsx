@@ -13,7 +13,10 @@ import {
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { disable as disableAutostart, enable as enableAutostart } from "@tauri-apps/plugin-autostart";
+import {
+	disable as disableAutostart,
+	enable as enableAutostart,
+} from "@tauri-apps/plugin-autostart";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from "@ui/tabs/tabs";
@@ -46,10 +49,10 @@ import {
 	getThemeById,
 	isBuiltinThemeId,
 	loadWindowEffectCapabilities,
+	normalizeStyleMode,
 	normalizeWindowEffectForCurrentOS,
 	PRESET_THEMES,
 	parseThemeData,
-	normalizeStyleMode,
 	removeCustomTheme,
 	type StyleMode,
 	setCustomThemes,
@@ -589,8 +592,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 					default_post_exit_hook: config.default_post_exit_hook,
 					default_min_memory: config.default_min_memory,
 					default_max_memory: config.default_max_memory,
-					default_launcher_action_on_launch:
-						config.default_launcher_action_on_launch ?? "stay-open",
+					default_launcher_action_on_launch: config.default_launcher_action_on_launch ?? "stay-open",
 				});
 
 				// Load theme configuration
@@ -1001,8 +1003,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			}
 		}
 	};
-  
-  const handleTelemetryToggle = async (checked: boolean) => {
+
+	const handleTelemetryToggle = async (checked: boolean) => {
 		setTelemetryEnabled(checked);
 		if (hasTauriRuntime()) {
 			await invoke("update_config_field", {

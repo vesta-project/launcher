@@ -5,8 +5,7 @@ use serde::{Deserialize, Serialize};
 /// Microsoft account for authentication
 ///
 /// Stores OAuth tokens and user information for Microsoft authentication.
-#[derive(Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone)]
-#[derive(Queryable)]
+#[derive(Selectable, Insertable, AsChangeset, Serialize, Deserialize, Debug, Clone, Queryable)]
 #[diesel(table_name = account)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Account {

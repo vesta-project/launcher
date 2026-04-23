@@ -1,5 +1,7 @@
 use crate::models::java::GlobalJavaPath;
-use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version, path as path_col, is_managed as is_managed_col};
+use crate::schema::config::global_java_paths::dsl::{
+    global_java_paths, is_managed as is_managed_col, major_version, path as path_col,
+};
 use crate::tasks::installers::java::DownloadJavaTask;
 use crate::tasks::manager::TaskManager;
 use crate::utils::config::{update_config_field, update_config_fields};
@@ -36,27 +38,26 @@ pub async fn get_required_java_versions(
     let mut requirements = Vec::new();
 
     if let Some(meta) = metadata {
-        let latest_required_major = crate::utils::java::resolve_required_java_from_manifest(
-            &meta,
-            &meta.latest.release,
-        )
-        .or_else(|_| {
-            crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.snapshot)
-        })
-        .ok()
-        .or_else(|| {
-            meta.required_java_major_versions
-                .first()
-                .copied()
-                .map(crate::utils::java::preferred_java_major)
-        });
+        let latest_required_major =
+            crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.release)
+                .or_else(|_| {
+                    crate::utils::java::resolve_required_java_from_manifest(
+                        &meta,
+                        &meta.latest.snapshot,
+                    )
+                })
+                .ok()
+                .or_else(|| {
+                    meta.required_java_major_versions
+                        .first()
+                        .copied()
+                        .map(crate::utils::java::preferred_java_major)
+                });
 
         let latest_required_major = match latest_required_major {
             Some(v) => v,
             None => {
-                log::warn!(
-                    "Manifest does not contain Java runtime majors; forcing refresh"
-                );
+                log::warn!("Manifest does not contain Java runtime majors; forcing refresh");
                 let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
                 return Err("MANIFEST_NOT_READY".to_string());
             }
@@ -72,12 +73,12 @@ pub async fn get_required_java_versions(
         versions.dedup();
 
         if versions.is_empty() {
-            let set: std::collections::BTreeSet<u32> =
-                meta.java_major_version_by_game_version
-                    .values()
-                    .copied()
-                    .map(crate::utils::java::preferred_java_major)
-                    .collect();
+            let set: std::collections::BTreeSet<u32> = meta
+                .java_major_version_by_game_version
+                .values()
+                .copied()
+                .map(crate::utils::java::preferred_java_major)
+                .collect();
             versions = set.into_iter().rev().collect();
         }
 
@@ -224,7 +225,7 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
                 .do_update()
                 .set((
                     path_col.eq(&new_entry.path),
-                    is_managed_col.eq(new_entry.is_managed)
+                    is_managed_col.eq(new_entry.is_managed),
                 ))
                 .execute(&mut conn)
                 .map_err(|e| e.to_string())?;

@@ -7,8 +7,8 @@ import {
 	NumberFieldInput,
 	NumberFieldLabel,
 } from "@ui/number-field/number-field";
-import { Separator } from "@ui/separator/separator";
 import { Select, SelectContent, SelectTrigger, SelectValue } from "@ui/select/select";
+import { Separator } from "@ui/separator/separator";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { TextFieldInput, TextFieldRoot, TextFieldTextArea } from "@ui/text-field/text-field";
 import { Component } from "solid-js";
@@ -150,10 +150,7 @@ export const InstanceDefaultsTab: Component<{
 				/>
 			</SettingsCard>
 
-			<SettingsCard
-				header="Launcher Behavior"
-				subHeader="Default launcher action when a game starts."
-			>
+			<SettingsCard header="Launcher Behavior" subHeader="Default launcher action when a game starts.">
 				<SettingsField
 					label="Launcher Behavior After Launch"
 					description="Choose what the launcher does once a game starts."
@@ -168,13 +165,14 @@ export const InstanceDefaultsTab: Component<{
 							optionValue="value"
 							optionTextValue="label"
 							value={{
-								label:
-									({
+								label: (
+									{
 										"stay-open": "Stay Open",
 										minimize: "Minimize Window",
 										"hide-to-tray": "Hide To Tray",
 										quit: "Request Quit",
-									} as any)[props.config.default_launcher_action_on_launch || "stay-open"],
+									} as any
+								)[props.config.default_launcher_action_on_launch || "stay-open"],
 								value: props.config.default_launcher_action_on_launch || "stay-open",
 							}}
 							onChange={(option: any) =>

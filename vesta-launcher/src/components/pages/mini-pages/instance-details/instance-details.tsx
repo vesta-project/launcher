@@ -374,15 +374,11 @@ export default function InstanceDetails(
 	const [launcherActionOnLaunch, setLauncherActionOnLaunch] = createSignal<
 		"stay-open" | "minimize" | "hide-to-tray" | "quit"
 	>(
-		(["stay-open", "minimize", "hide-to-tray", "quit"].includes(
+		["stay-open", "minimize", "hide-to-tray", "quit"].includes(
 			props.initialLauncherActionOnLaunch || "",
 		)
-			? (props.initialLauncherActionOnLaunch as
-					| "stay-open"
-					| "minimize"
-					| "hide-to-tray"
-					| "quit")
-			: "stay-open"),
+			? (props.initialLauncherActionOnLaunch as "stay-open" | "minimize" | "hide-to-tray" | "quit")
+			: "stay-open",
 	);
 	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialPreLaunchHook || "");
 	const [postExitHook, setPostExitHook] = createSignal(props.initialPostExitHook || "");
@@ -401,7 +397,9 @@ export default function InstanceDetails(
 	const [isResolutionDirty, setIsResolutionDirty] = createSignal(props._dirty?.resolution || false);
 	const [isHooksDirty, setIsHooksDirty] = createSignal(props._dirty?.hooks || false);
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
-	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(props._dirty?.launchAction || false);
+	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(
+		props._dirty?.launchAction || false,
+	);
 
 	const [saving, setSaving] = createSignal(false);
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
@@ -1851,9 +1849,7 @@ export default function InstanceDetails(
 			fresh.useGlobalHooks = useGlobalHooks();
 			fresh.useGlobalEnvironmentVariables = useGlobalEnvironmentVariables();
 			fresh.useGlobalLauncherAction = useGlobalLauncherAction();
-			fresh.launcherActionOnLaunch = useGlobalLauncherAction()
-				? null
-				: launcherActionOnLaunch();
+			fresh.launcherActionOnLaunch = useGlobalLauncherAction() ? null : launcherActionOnLaunch();
 			fresh.preLaunchHook = preLaunchHook() || null;
 			fresh.postExitHook = postExitHook() || null;
 			fresh.wrapperCommand = wrapperCommand() || null;

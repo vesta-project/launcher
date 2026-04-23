@@ -1,7 +1,7 @@
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceType, ResourceVersion, SearchQuery, SearchResponse,
-    SourcePlatform, ResourceProjectRef,
+    ResourceCategory, ResourceProject, ResourceProjectRef, ResourceType, ResourceVersion,
+    SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;

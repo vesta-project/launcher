@@ -93,4 +93,4 @@ function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => v
 	);
 }
 
-export { PageViewer, router, setRouter, pageViewerOpen, setPageViewerOpen };
+export { PageViewer, pageViewerOpen, router, setPageViewerOpen, setRouter };

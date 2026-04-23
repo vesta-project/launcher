@@ -1,7 +1,7 @@
 use crate::models::{NewSavedTheme, SavedTheme};
 use crate::schema::saved_themes::dsl::{
-    id as saved_theme_id, name as saved_theme_name, saved_themes,
-    theme_data as saved_theme_data, updated_at as saved_theme_updated_at,
+    id as saved_theme_id, name as saved_theme_name, saved_themes, theme_data as saved_theme_data,
+    updated_at as saved_theme_updated_at,
 };
 use crate::utils::config::get_app_config;
 use crate::utils::db::get_vesta_conn;
@@ -130,11 +130,12 @@ fn get_i32(obj: &Value, keys: &[&str]) -> Option<i32> {
 fn get_bool(obj: &Value, keys: &[&str]) -> Option<bool> {
     get_value(obj, keys).and_then(|v| {
         v.as_bool().or_else(|| {
-            v.as_str().and_then(|s| match s.to_ascii_lowercase().as_str() {
-                "true" | "1" => Some(true),
-                "false" | "0" => Some(false),
-                _ => None,
-            })
+            v.as_str()
+                .and_then(|s| match s.to_ascii_lowercase().as_str() {
+                    "true" | "1" => Some(true),
+                    "false" | "0" => Some(false),
+                    _ => None,
+                })
         })
     })
 }
@@ -305,37 +306,62 @@ fn normalize_import_payload(source: Value) -> Result<(ThemeLibraryTheme, Vec<Str
     let name = get_string(&source_value, &["name"]).unwrap_or_else(|| "Imported Theme".to_string());
     let author = get_string(&source_value, &["author"]).unwrap_or_else(|| "Unknown".to_string());
     let mut warnings = Vec::new();
-    let (id, id_was_reserved) = normalize_import_id(get_string(&source_value, &["id"]), &author, &name);
+    let (id, id_was_reserved) =
+        normalize_import_id(get_string(&source_value, &["id"]), &author, &name);
     if id_was_reserved {
-        warnings.push("Imported theme used a reserved built-in id and was renamed to avoid conflicts.".to_string());
+        warnings.push(
+            "Imported theme used a reserved built-in id and was renamed to avoid conflicts."
+                .to_string(),
+        );
     }
 
-    let primary_hue = clamp(get_i32(&source_value, &["primary_hue", "primaryHue"]).unwrap_or(180), 0, 360);
-    let primary_sat = get_i32(&source_value, &["primary_sat", "primarySat"]).map(|v| clamp(v, 0, 100));
-    let primary_light = get_i32(&source_value, &["primary_light", "primaryLight"]).map(|v| clamp(v, 0, 100));
+    let primary_hue = clamp(
+        get_i32(&source_value, &["primary_hue", "primaryHue"]).unwrap_or(180),
+        0,
+        360,
+    );
+    let primary_sat =
+        get_i32(&source_value, &["primary_sat", "primarySat"]).map(|v| clamp(v, 0, 100));
+    let primary_light =
+        get_i32(&source_value, &["primary_light", "primaryLight"]).map(|v| clamp(v, 0, 100));
     let opacity = clamp(get_i32(&source_value, &["opacity"]).unwrap_or(0), 0, 100);
-    let grain_strength = get_i32(&source_value, &["grain_strength", "grainStrength"]).map(|v| clamp(v, 0, 100));
+    let grain_strength =
+        get_i32(&source_value, &["grain_strength", "grainStrength"]).map(|v| clamp(v, 0, 100));
 
     let (style, style_was_normalized) = normalize_style_mode(get_string(&source_value, &["style"]));
     if style_was_normalized {
-        warnings.push("Imported style used a deprecated value and was migrated to the current style set.".to_string());
+        warnings.push(
+            "Imported style used a deprecated value and was migrated to the current style set."
+                .to_string(),
+        );
     }
 
     // Imported themes are locked by default unless explicitly unlocked in metadata.
-    let allow_hue_change = Some(get_bool(&source_value, &["allow_hue_change", "allowHueChange"]).unwrap_or(false));
-    let allow_style_change = Some(get_bool(&source_value, &["allow_style_change", "allowStyleChange"]).unwrap_or(false));
-    let allow_border_change = Some(get_bool(&source_value, &["allow_border_change", "allowBorderChange"]).unwrap_or(false));
+    let allow_hue_change =
+        Some(get_bool(&source_value, &["allow_hue_change", "allowHueChange"]).unwrap_or(false));
+    let allow_style_change =
+        Some(get_bool(&source_value, &["allow_style_change", "allowStyleChange"]).unwrap_or(false));
+    let allow_border_change = Some(
+        get_bool(&source_value, &["allow_border_change", "allowBorderChange"]).unwrap_or(false),
+    );
 
-    let gradient_enabled = get_bool(&source_value, &["gradient_enabled", "gradientEnabled"]).unwrap_or(true);
+    let gradient_enabled =
+        get_bool(&source_value, &["gradient_enabled", "gradientEnabled"]).unwrap_or(true);
     let rotation = get_i32(&source_value, &["rotation"]).map(|v| clamp(v, 0, 360));
     let gradient_type = get_string(&source_value, &["gradient_type", "gradientType"]);
     let gradient_harmony = get_string(&source_value, &["gradient_harmony", "gradientHarmony"]);
-    let border_width = get_i32(&source_value, &["border_width", "borderWidth"]).map(|v| clamp(v, 0, 8));
-    let background_opacity = get_i32(&source_value, &["background_opacity", "backgroundOpacity"]).map(|v| clamp(v, 0, 100));
-    let (window_effect, window_effect_was_coerced) =
-        normalize_window_effect_for_platform(get_string(&source_value, &["window_effect", "windowEffect"]));
+    let border_width =
+        get_i32(&source_value, &["border_width", "borderWidth"]).map(|v| clamp(v, 0, 8));
+    let background_opacity = get_i32(&source_value, &["background_opacity", "backgroundOpacity"])
+        .map(|v| clamp(v, 0, 100));
+    let (window_effect, window_effect_was_coerced) = normalize_window_effect_for_platform(
+        get_string(&source_value, &["window_effect", "windowEffect"]),
+    );
     if window_effect_was_coerced {
-        warnings.push("Imported window effect is not supported on this platform and was set to 'none'.".to_string());
+        warnings.push(
+            "Imported window effect is not supported on this platform and was set to 'none'."
+                .to_string(),
+        );
     }
 
     let (custom_css, css_was_blocked) =
@@ -346,7 +372,15 @@ fn normalize_import_payload(source: Value) -> Result<(ThemeLibraryTheme, Vec<Str
     }
 
     let variables = get_json(&source_value, &["variables", "params"]);
-    let user_variables = get_json(&source_value, &["user_variables", "userVariables", "user_params", "userParams"]);
+    let user_variables = get_json(
+        &source_value,
+        &[
+            "user_variables",
+            "userVariables",
+            "user_params",
+            "userParams",
+        ],
+    );
 
     Ok((
         ThemeLibraryTheme {
@@ -397,14 +431,16 @@ fn extract_theme_payload(raw: Value) -> Result<Value, String> {
 }
 
 fn parse_theme_data_blob(theme_data_raw: &str) -> Value {
-    serde_json::from_str::<Value>(theme_data_raw).unwrap_or_else(|_| Value::Object(Default::default()))
+    serde_json::from_str::<Value>(theme_data_raw)
+        .unwrap_or_else(|_| Value::Object(Default::default()))
 }
 
 fn save_to_library(entry: ThemeLibraryTheme) -> Result<ThemeLibraryEntry, String> {
     let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
     let now = Utc::now().to_rfc3339();
 
-    let serialized = serde_json::to_string(&entry).map_err(|e| format!("Failed to serialize theme data: {}", e))?;
+    let serialized = serde_json::to_string(&entry)
+        .map_err(|e| format!("Failed to serialize theme data: {}", e))?;
     let new_entry = NewSavedTheme {
         id: entry.id.clone(),
         name: entry.name.clone(),
@@ -534,9 +570,9 @@ pub async fn export_theme(
         .map(parse_theme_data_blob)
         .unwrap_or_else(|| Value::Object(Default::default()));
 
-    let (sanitized_css, _css_blocked) = sanitize_custom_css(custom_css.or_else(|| {
-        get_string(&theme_blob, &["customCss", "custom_css"])
-    }));
+    let (sanitized_css, _css_blocked) = sanitize_custom_css(
+        custom_css.or_else(|| get_string(&theme_blob, &["customCss", "custom_css"])),
+    );
 
     let normalized_name = {
         let trimmed = custom_name.trim();
@@ -564,29 +600,51 @@ pub async fn export_theme(
         author: normalized_author,
         description: get_string(&theme_blob, &["description"]),
         primary_hue: clamp(
-            get_i32(&theme_blob, &["primaryHue", "primary_hue"]).unwrap_or(config.theme_primary_hue),
+            get_i32(&theme_blob, &["primaryHue", "primary_hue"])
+                .unwrap_or(config.theme_primary_hue),
             0,
             360,
         ),
-        primary_sat: get_i32(&theme_blob, &["primarySat", "primary_sat"]).or(config.theme_primary_sat),
-        primary_light: get_i32(&theme_blob, &["primaryLight", "primary_light"]).or(config.theme_primary_light),
+        primary_sat: get_i32(&theme_blob, &["primarySat", "primary_sat"])
+            .or(config.theme_primary_sat),
+        primary_light: get_i32(&theme_blob, &["primaryLight", "primary_light"])
+            .or(config.theme_primary_light),
         opacity: clamp(get_i32(&theme_blob, &["opacity"]).unwrap_or(0), 0, 100),
-        grain_strength: get_i32(&theme_blob, &["grainStrength", "grain_strength"]).map(|v| clamp(v, 0, 100)),
-        style: normalize_style_mode(get_string(&theme_blob, &["style"]).or(Some(config_theme_style))).0,
+        grain_strength: get_i32(&theme_blob, &["grainStrength", "grain_strength"])
+            .map(|v| clamp(v, 0, 100)),
+        style: normalize_style_mode(
+            get_string(&theme_blob, &["style"]).or(Some(config_theme_style)),
+        )
+        .0,
         allow_hue_change: get_bool(&theme_blob, &["allowHueChange", "allow_hue_change"]),
         allow_style_change: get_bool(&theme_blob, &["allowStyleChange", "allow_style_change"]),
         allow_border_change: get_bool(&theme_blob, &["allowBorderChange", "allow_border_change"]),
-        gradient_enabled: get_bool(&theme_blob, &["gradientEnabled", "gradient_enabled"]).unwrap_or(config.theme_gradient_enabled),
+        gradient_enabled: get_bool(&theme_blob, &["gradientEnabled", "gradient_enabled"])
+            .unwrap_or(config.theme_gradient_enabled),
         rotation: get_i32(&theme_blob, &["rotation"]).or(config.theme_gradient_angle),
-        gradient_type: get_string(&theme_blob, &["gradientType", "gradient_type"]).or(config_gradient_type),
-        gradient_harmony: get_string(&theme_blob, &["gradientHarmony", "gradient_harmony"]).or(config_gradient_harmony),
-        border_width: get_i32(&theme_blob, &["borderWidth", "border_width"]).or(config.theme_border_width),
-        background_opacity: get_i32(&theme_blob, &["backgroundOpacity", "background_opacity"]).or(config.theme_background_opacity),
-        window_effect: get_string(&theme_blob, &["windowEffect", "window_effect"]).or(config_window_effect),
+        gradient_type: get_string(&theme_blob, &["gradientType", "gradient_type"])
+            .or(config_gradient_type),
+        gradient_harmony: get_string(&theme_blob, &["gradientHarmony", "gradient_harmony"])
+            .or(config_gradient_harmony),
+        border_width: get_i32(&theme_blob, &["borderWidth", "border_width"])
+            .or(config.theme_border_width),
+        background_opacity: get_i32(&theme_blob, &["backgroundOpacity", "background_opacity"])
+            .or(config.theme_background_opacity),
+        window_effect: get_string(&theme_blob, &["windowEffect", "window_effect"])
+            .or(config_window_effect),
         custom_css: sanitized_css,
         variables: get_json(&theme_blob, &["variables", "params"]),
         user_variables: get_json(&theme_blob, &["userVariables", "user_variables"]),
-        user_params: get_json(&theme_blob, &["userVariables", "user_variables", "userParams", "user_params", "params"]),
+        user_params: get_json(
+            &theme_blob,
+            &[
+                "userVariables",
+                "user_variables",
+                "userParams",
+                "user_params",
+                "params",
+            ],
+        ),
     };
 
     let exported = ExportedThemeFile {
@@ -598,8 +656,7 @@ pub async fn export_theme(
     let json = serde_json::to_string_pretty(&exported)
         .map_err(|e| format!("Failed to serialize theme: {}", e))?;
 
-    fs::write(save_path, json)
-        .map_err(|e| format!("Failed to write theme file: {}", e))?;
+    fs::write(save_path, json).map_err(|e| format!("Failed to write theme file: {}", e))?;
 
     Ok(())
 }

@@ -546,9 +546,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 								>
 									<div class={styles["slider__header"]}>
 										<div class={styles["slider__value-label"]}>
-											{props.borderThickness === 0
-												? "None"
-												: `${(props.borderThickness ?? 1).toString()}px`}
+											{props.borderThickness === 0 ? "None" : `${(props.borderThickness ?? 1).toString()}px`}
 										</div>
 									</div>
 									<SliderTrack>

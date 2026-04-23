@@ -143,12 +143,7 @@ impl Task for GenerateManifestTask {
                 metadata.last_updated
             );
 
-            let _ = ctx.update_full(
-                100,
-                "Manifest ready".to_string(),
-                Some(5),
-                Some(5),
-            );
+            let _ = ctx.update_full(100, "Manifest ready".to_string(), Some(5), Some(5));
 
             // Update in-memory cache for fast subsequent access
             if let Some(cache) = app.try_state::<MetadataCache>() {

@@ -160,7 +160,8 @@ pub async fn get_or_cache_cape_bytes(
         return Ok(None);
     }
 
-    if let Some(bytes) = read_cached_cape_bytes(app_handle, account_uuid, cape_id, cape_url).await? {
+    if let Some(bytes) = read_cached_cape_bytes(app_handle, account_uuid, cape_id, cape_url).await?
+    {
         return Ok(Some(bytes));
     }
 

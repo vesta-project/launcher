@@ -27,9 +27,7 @@
 	height: 32px;
 	padding: 0 8px;
 	background: hsl(
-		var(--color__primary-hue)
-		18%
-		var(--lightness-surface-overlay) /
+		var(--color__primary-hue) 18% var(--lightness-surface-overlay) /
 		calc(var(--effect-opacity, 0.8) * 0.82)
 	);
 	backdrop-filter: var(--liquid-backdrop-filter-subtle, var(--liquid-backdrop-filter));

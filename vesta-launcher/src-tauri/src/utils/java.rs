@@ -1,8 +1,8 @@
 use crate::utils::db_manager::get_app_config_dir;
 use crate::{metadata_cache::MetadataCache, tasks::manifest::GenerateManifestTask};
+use piston_lib::game::installer::core::jre_manager;
 use piston_lib::game::java_policy::LEGACY_JAVA_MAJOR;
 use piston_lib::game::metadata::PistonMetadata;
-use piston_lib::game::installer::core::jre_manager;
 use std::path::PathBuf;
 use tauri::Manager;
 
@@ -155,7 +155,10 @@ pub async fn load_manifest_for_java_resolution(
         Err(e) => {
             log::warn!("Failed to load cached metadata from disk: {}", e);
             if let Err(err) = queue_manifest_generation(app_handle, false).await {
-                log::warn!("Failed to queue manifest generation after cache error: {}", err);
+                log::warn!(
+                    "Failed to queue manifest generation after cache error: {}",
+                    err
+                );
             }
             Ok(None)
         }
@@ -189,7 +192,9 @@ pub async fn resolve_required_java_major(
 
         if !metadata.required_java_major_versions.contains(&preferred) {
             metadata.required_java_major_versions.push(preferred);
-            metadata.required_java_major_versions.sort_unstable_by(|a, b| b.cmp(a));
+            metadata
+                .required_java_major_versions
+                .sort_unstable_by(|a, b| b.cmp(a));
             metadata.required_java_major_versions.dedup();
         }
 

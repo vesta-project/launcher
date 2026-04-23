@@ -955,9 +955,11 @@ async fn prepare_instance(
 
     // If no Java path provided, try to find a recommended one from global config
     if current_java_path.is_none() {
-        let recommended_major =
-            crate::utils::java::resolve_required_java_major(app_handle, &instance_data.minecraft_version)
-                .await;
+        let recommended_major = crate::utils::java::resolve_required_java_major(
+            app_handle,
+            &instance_data.minecraft_version,
+        )
+        .await;
 
         match recommended_major {
             Ok(recommended_major) => {

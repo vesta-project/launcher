@@ -25,4 +25,4 @@ function TooltipContent(props: TooltipPrimitive.TooltipContentProps & ClassProp 
 
 const TooltipTrigger = TooltipPrimitive.Trigger;
 
-export { Tooltip, TooltipContent, TooltipTrigger, type Placement as TooltipPlacement };
+export { type Placement as TooltipPlacement, Tooltip, TooltipContent, TooltipTrigger };

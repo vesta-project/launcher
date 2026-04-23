@@ -12,12 +12,12 @@ import {
 } from "@components/pages/init/init-pages";
 import { useNavigate } from "@solidjs/router";
 import { invoke } from "@tauri-apps/api/core";
-import { Switch as ToggleSwitch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { SwitchControl, SwitchThumb, Switch as ToggleSwitch } from "@ui/switch/switch";
 import { Toaster } from "@ui/toast/toast";
 import { openExternal as openUrl } from "@utils/external-link";
 import { useOs } from "@utils/os";
 import { consumeInitBootstrapState } from "@utils/startup-bootstrap";
-import { createSignal, Match, onCleanup, onMount, Show, Switch as MatchSwitch } from "solid-js";
+import { createSignal, Match, Switch as MatchSwitch, onCleanup, onMount, Show } from "solid-js";
 import styles from "./init.module.css";
 import {
 	getCanonicalBackStep,
@@ -32,7 +32,8 @@ import {
 
 type NavigationDirection = "forward" | "backward" | "direct";
 type AtmosphereState = "active" | "fading" | "off";
-const PRIVACY_POLICY_URL = "https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
+const PRIVACY_POLICY_URL =
+	"https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
 
 function isValidAtmosphereState(value: unknown): value is AtmosphereState {
 	return value === "active" || value === "fading" || value === "off";

@@ -137,13 +137,13 @@ function ComboboxContent<T extends ValidComponent = "div">(
 
 export {
 	Combobox,
-	ComboboxItem,
-	ComboboxItemLabel,
-	ComboboxItemIndicator,
-	ComboboxSection,
-	ComboboxControl,
-	ComboboxTrigger,
-	ComboboxInput,
-	ComboboxHiddenSelect,
 	ComboboxContent,
+	ComboboxControl,
+	ComboboxHiddenSelect,
+	ComboboxInput,
+	ComboboxItem,
+	ComboboxItemIndicator,
+	ComboboxItemLabel,
+	ComboboxSection,
+	ComboboxTrigger,
 };

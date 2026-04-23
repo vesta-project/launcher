@@ -1,9 +1,9 @@
-use crate::utils::db_manager::get_app_config_dir;
-use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
-use tauri::Manager;
+use crate::utils::db_manager::get_app_config_dir;
+use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
 use tauri::Emitter;
+use tauri::Manager;
 
 #[tauri::command]
 pub async fn test_blocking_dialog(
@@ -112,8 +112,12 @@ pub fn open_app_runtime_storage_dir(app_handle: tauri::AppHandle) -> Result<(), 
         .app_cache_dir()
         .map_err(|e| format!("Failed to resolve app cache directory: {}", e))?;
 
-    std::fs::create_dir_all(&cache_dir)
-        .map_err(|e| format!("Failed to create cache directory: {} (path: {:?})", e, cache_dir))?;
+    std::fs::create_dir_all(&cache_dir).map_err(|e| {
+        format!(
+            "Failed to create cache directory: {} (path: {:?})",
+            e, cache_dir
+        )
+    })?;
 
     let mut dir_to_open = cache_dir.clone();
 
@@ -133,8 +137,12 @@ pub fn open_app_runtime_storage_dir(app_handle: tauri::AppHandle) -> Result<(), 
         }
     }
 
-    open::that(&dir_to_open)
-        .map_err(|e| format!("Failed to open runtime storage directory: {} (path: {:?})", e, dir_to_open))?;
+    open::that(&dir_to_open).map_err(|e| {
+        format!(
+            "Failed to open runtime storage directory: {} (path: {:?})",
+            e, dir_to_open
+        )
+    })?;
 
     Ok(())
 }
@@ -456,8 +464,7 @@ pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), St
         .map_err(|e| format!("Failed to get config for tray visibility sync: {}", e))?;
 
     if let Some(tray) = app.tray_by_id("main-tray") {
-        tray
-            .set_visible(config.show_tray_icon)
+        tray.set_visible(config.show_tray_icon)
             .map_err(|e| format!("Failed to sync tray icon visibility: {}", e))?;
     }
 
@@ -553,7 +560,6 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
     }
 }
 
-
 #[tauri::command]
 pub fn get_window_effect_capabilities() -> crate::utils::window_effects::WindowEffectCapabilities {
     crate::utils::window_effects::get_window_effect_capabilities()
@@ -572,7 +578,10 @@ fn notify_unsupported_window_effect(
         .unwrap_or_default();
 
     let _ = manager.create(CreateNotificationInput {
-        client_key: Some(format!("window_effect_unsupported_{}_{}", os, requested_effect)),
+        client_key: Some(format!(
+            "window_effect_unsupported_{}_{}",
+            os, requested_effect
+        )),
         title: Some("Window effect unavailable on this OS".to_string()),
         description: Some(format!(
             "The '{}' window effect is not supported on {}{}. Falling back to '{}'.",
@@ -656,12 +665,19 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
             log::warn!("Failed to clear liquid_glass window effect: {}", err);
         }
 
-        let radius = if active_effect.as_str() == "liquid_glass" { 16.0 } else { 10.0 };
+        let radius = if active_effect.as_str() == "liquid_glass" {
+            16.0
+        } else {
+            10.0
+        };
 
         let apply_result = match active_effect.as_str() {
-            "vibrancy" => {
-                apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(radius))
-            }
+            "vibrancy" => apply_vibrancy(
+                &window,
+                NSVisualEffectMaterial::HudWindow,
+                None,
+                Some(radius),
+            ),
             "liquid_glass" => {
                 apply_liquid_glass(&window, NSGlassEffectViewStyle::Clear, None, Some(radius))
             }
@@ -677,7 +693,7 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
             return Err(message);
         }
     }
-    
+
     Ok(())
 }
 

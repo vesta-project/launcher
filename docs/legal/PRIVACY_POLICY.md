@@ -7,7 +7,7 @@ Last updated: 2026-04-23
 Vesta Launcher collects limited diagnostics to help us detect crashes, investigate bugs, and improve stability.
 These diagnostics are processed through Sentry.
 
-Telemetry is enabled by default during onboarding (opt-out), and you can disable it at any time in Settings.
+Telemetry is enabled by default during onboarding, and you can disable it at any time in Settings.
 
 ## What We Collect
 

@@ -24,7 +24,11 @@ pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
             .and_then(parse_windows_version)
             .or_else(detect_windows_version_from_cmd);
 
-        let mut effects = vec!["none".to_string(), "transparent".to_string(), "blur".to_string()];
+        let mut effects = vec![
+            "none".to_string(),
+            "transparent".to_string(),
+            "blur".to_string(),
+        ];
 
         if let Some(version) = parsed {
             if version.major >= 10 {
@@ -55,9 +59,7 @@ pub fn get_window_effect_capabilities() -> WindowEffectCapabilities {
     #[cfg(target_os = "macos")]
     {
         let raw_version = sysinfo::System::os_version().or_else(macos_version_from_sw_vers);
-        let major = raw_version
-            .as_deref()
-            .and_then(parse_macos_major);
+        let major = raw_version.as_deref().and_then(parse_macos_major);
 
         let mut effects = vec![
             "none".to_string(),

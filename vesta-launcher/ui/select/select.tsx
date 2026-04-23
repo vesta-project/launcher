@@ -128,12 +128,12 @@ const SelectErrorMessage = <T extends ValidComponent = "div">(
 
 export {
 	Select,
-	SelectValue,
-	SelectHiddenSelect,
-	SelectTrigger,
 	SelectContent,
-	SelectItem,
-	SelectLabel,
 	SelectDescription,
 	SelectErrorMessage,
+	SelectHiddenSelect,
+	SelectItem,
+	SelectLabel,
+	SelectTrigger,
+	SelectValue,
 };

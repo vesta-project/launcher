@@ -33,7 +33,10 @@ impl LauncherActionOnLaunch {
     }
 }
 
-fn resolve_launcher_action(inst: &Instance, app_config: &crate::utils::config::AppConfig) -> LauncherActionOnLaunch {
+fn resolve_launcher_action(
+    inst: &Instance,
+    app_config: &crate::utils::config::AppConfig,
+) -> LauncherActionOnLaunch {
     if !inst.use_global_launcher_action {
         if let Some(local_value) = inst.launcher_action_on_launch.as_deref() {
             return LauncherActionOnLaunch::from_config_value(local_value);
@@ -365,7 +368,9 @@ pub fn list_instances() -> Result<Vec<Instance>, String> {
     // Guest/Demo Mode check: If active account is Guest or Demo, we hide real instances
     // to provide a clean slate without destroying user data.
     if let Ok(Some(active_acc)) = crate::auth::get_active_account() {
-        if active_acc.account_type == ACCOUNT_TYPE_GUEST || active_acc.account_type == ACCOUNT_TYPE_DEMO {
+        if active_acc.account_type == ACCOUNT_TYPE_GUEST
+            || active_acc.account_type == ACCOUNT_TYPE_DEMO
+        {
             return Ok(vec![]);
         }
     }
@@ -1644,7 +1649,8 @@ pub async fn is_instance_running(instance_data: Instance) -> Result<bool, String
 pub async fn get_minecraft_versions(
     app_handle: tauri::AppHandle,
 ) -> Result<piston_lib::game::metadata::PistonMetadata, String> {
-    if let Some(metadata) = crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?
+    if let Some(metadata) =
+        crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?
     {
         return Ok(metadata);
     }
@@ -1987,8 +1993,8 @@ async fn resolve_java_path_for_version(
     app_handle: &tauri::AppHandle,
     mc_version: &str,
 ) -> Result<String, String> {
-    let required_major = crate::utils::java::resolve_required_java_major(app_handle, mc_version)
-        .await?;
+    let required_major =
+        crate::utils::java::resolve_required_java_major(app_handle, mc_version).await?;
 
     let global_path = (|| -> Option<String> {
         use crate::schema::config::global_java_paths::dsl::*;

@@ -1,5 +1,5 @@
-pub mod config;
 pub mod cape_cache;
+pub mod config;
 pub mod crash_parser;
 pub mod dialog_manager;
 pub mod hash;

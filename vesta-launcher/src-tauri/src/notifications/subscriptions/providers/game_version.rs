@@ -1,8 +1,10 @@
+use crate::models::NotificationSubscription;
+use crate::notifications::subscriptions::{
+    AvailableNotificationSource, NotificationUpdateItem, SubscriptionProvider,
+};
+use crate::utils::version_tracking::VersionTrackingRepository;
 use anyhow::Result;
 use async_trait::async_trait;
-use crate::models::NotificationSubscription;
-use crate::notifications::subscriptions::{NotificationUpdateItem, SubscriptionProvider, AvailableNotificationSource};
-use crate::utils::version_tracking::VersionTrackingRepository;
 
 pub struct GameVersionProvider;
 
@@ -23,25 +25,32 @@ impl SubscriptionProvider for GameVersionProvider {
         }]
     }
 
-    async fn check(&self, _app_handle: &tauri::AppHandle, _sub: &NotificationSubscription) -> Result<Vec<NotificationUpdateItem>> {
+    async fn check(
+        &self,
+        _app_handle: &tauri::AppHandle,
+        _sub: &NotificationSubscription,
+    ) -> Result<Vec<NotificationUpdateItem>> {
         // Ensure defaults are initialized
         if let Err(e) = VersionTrackingRepository::initialize_defaults() {
             log::error!("Failed to initialize version tracking defaults: {}", e);
         }
-        
+
         let latest = piston_lib::game::metadata::fetch_latest_versions()
             .await
             .map_err(|e| anyhow::anyhow!("Failed to fetch latest versions: {}", e))?;
-        
+
         let mut items = Vec::new();
-        
+
         // Release check
         let latest_release = &latest.release;
         if VersionTrackingRepository::is_version_newer("minecraft_release", latest_release)? {
             items.push(NotificationUpdateItem {
                 id: format!("minecraft_release_{}", latest_release),
                 title: "New Minecraft Release Available".to_string(),
-                description: Some(format!("Minecraft {} is now available for download!", latest_release)),
+                description: Some(format!(
+                    "Minecraft {} is now available for download!",
+                    latest_release
+                )),
                 link: None,
                 metadata: serde_json::json!({
                     "version": latest_release,
@@ -53,14 +62,17 @@ impl SubscriptionProvider for GameVersionProvider {
             // Mark notified so we don't spam if polling runs again before user marks seen
             let _ = VersionTrackingRepository::mark_notified("minecraft_release", latest_release);
         }
-        
+
         // Snapshot check
         let latest_snapshot = &latest.snapshot;
         if VersionTrackingRepository::is_version_newer("minecraft_snapshot", latest_snapshot)? {
             items.push(NotificationUpdateItem {
                 id: format!("minecraft_snapshot_{}", latest_snapshot),
                 title: "New Minecraft Snapshot Available".to_string(),
-                description: Some(format!("Minecraft snapshot {} is now available for testing!", latest_snapshot)),
+                description: Some(format!(
+                    "Minecraft snapshot {} is now available for testing!",
+                    latest_snapshot
+                )),
                 link: None,
                 metadata: serde_json::json!({
                     "version": latest_snapshot,
@@ -71,7 +83,7 @@ impl SubscriptionProvider for GameVersionProvider {
             });
             let _ = VersionTrackingRepository::mark_notified("minecraft_snapshot", latest_snapshot);
         }
-        
+
         Ok(items)
     }
 }

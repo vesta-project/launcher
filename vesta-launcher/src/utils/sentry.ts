@@ -34,7 +34,8 @@ export async function initSentryMonitoring() {
 	Sentry.init({
 		...defaultOptions,
 		release: import.meta.env.VITE_APP_RELEASE || undefined,
-		environment: import.meta.env.VITE_SENTRY_ENVIRONMENT || (import.meta.env.DEV ? "development" : "production"),
+		environment:
+			import.meta.env.VITE_SENTRY_ENVIRONMENT || (import.meta.env.DEV ? "development" : "production"),
 	});
 
 	Sentry.setTag("app_layer", "frontend");

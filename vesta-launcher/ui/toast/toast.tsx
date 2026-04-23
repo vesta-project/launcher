@@ -123,4 +123,4 @@ function tryRemoveToast(id: number) {
 
 const clearToasts = ToastPrimitive.toaster.clear;
 
-export { Toaster, Toast, showToast, updateToast, tryRemoveToast, clearToasts };
+export { clearToasts, showToast, Toast, Toaster, tryRemoveToast, updateToast };

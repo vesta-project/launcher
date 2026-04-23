@@ -7,9 +7,9 @@ use tokio::sync::Mutex;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency,
-    ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
-    SearchQuery, SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceProject,
+    ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion, SearchQuery,
+    SearchResponse, SourcePlatform,
 };
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
@@ -658,7 +658,10 @@ impl ResourceManager {
 
         if allow_network {
             for project_ref in refs_to_hydrate {
-                if let Err(e) = self.get_project(project_ref.platform, &project_ref.id).await {
+                if let Err(e) = self
+                    .get_project(project_ref.platform, &project_ref.id)
+                    .await
+                {
                     log::warn!(
                         "[ResourceManager] Failed to hydrate project {}/{}: {}",
                         format!("{:?}", project_ref.platform).to_lowercase(),

@@ -38,7 +38,12 @@ impl TaskContext {
         let _ = manager.upsert_description(&self.notification_id, &description);
     }
 
-    pub fn update_progress(&self, progress: i32, current_step: Option<i32>, total_steps: Option<i32>) {
+    pub fn update_progress(
+        &self,
+        progress: i32,
+        current_step: Option<i32>,
+        total_steps: Option<i32>,
+    ) {
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
             let _ = channel.send(ProgressUpdate::Progress {
@@ -80,7 +85,13 @@ impl TaskContext {
         );
     }
 
-    pub fn update_full(&self, progress: i32, description: String, current_step: Option<i32>, total_steps: Option<i32>) {
+    pub fn update_full(
+        &self,
+        progress: i32,
+        description: String,
+        current_step: Option<i32>,
+        total_steps: Option<i32>,
+    ) {
         // 1. Update the channel if available
         if let Some(ref channel) = self.progress_channel {
             let _ = channel.send(ProgressUpdate::Progress {
@@ -244,11 +255,7 @@ impl TaskManager {
                 };
 
                 let task_total_steps = task.total_steps();
-                let initial_current_step = if task_total_steps > 0 {
-                    Some(0)
-                } else {
-                    None
-                };
+                let initial_current_step = if task_total_steps > 0 { Some(0) } else { None };
                 let initial_total_steps = if task_total_steps > 0 {
                     Some(task_total_steps)
                 } else {
@@ -517,10 +524,14 @@ impl TaskManager {
             "[TaskManager::submit] Submitting task '{}' to channel",
             task_name
         );
-        match self.sender.send(QueuedTask {
-            task,
-            progress_channel,
-        }).await {
+        match self
+            .sender
+            .send(QueuedTask {
+                task,
+                progress_channel,
+            })
+            .await
+        {
             Ok(_) => {
                 log::info!(
                     "[TaskManager::submit] Task '{}' successfully sent to worker queue",
@@ -696,8 +707,10 @@ impl Task for TestTask {
                     description: Some("Task is running...".to_string()),
                     severity: Some("info".to_string()),
                     notification_type: Some(NotificationType::Progress),
-                    dismissible: Some(false),                    persist: Some(true),
-                    silent: Some(false),                    actions: Some(
+                    dismissible: Some(false),
+                    persist: Some(true),
+                    silent: Some(false),
+                    actions: Some(
                         serde_json::to_string(&vec![
                             NotificationAction {
                                 action_id: "cancel_task".to_string(),

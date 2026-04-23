@@ -34,7 +34,8 @@ interface GeneralSettingsTabProps {
 }
 
 export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
-	const privacyPolicyUrl = "https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
+	const privacyPolicyUrl =
+		"https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
 
 	return (
 		<div class={styles["settings-tab-content"]}>
@@ -57,8 +58,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Error Telemetry"
 					description={
 						<>
-							Send crash and error diagnostics to help improve reliability.
-							{" "}
+							Send crash and error diagnostics to help improve reliability.{" "}
 							<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
 								Privacy Policy
 							</a>

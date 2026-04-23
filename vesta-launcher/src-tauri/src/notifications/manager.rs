@@ -146,7 +146,9 @@ impl ActionHandler for InstallUpdateHandler {
         _client_key: Option<String>,
         _payload: Option<serde_json::Value>,
     ) -> Result<()> {
-        log::info!("[InstallUpdateHandler] Action invoked! Emitting core://install-app-update event...");
+        log::info!(
+            "[InstallUpdateHandler] Action invoked! Emitting core://install-app-update event..."
+        );
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
             if let Err(e) = handle.emit("core://install-app-update", ()) {
@@ -281,7 +283,11 @@ impl ActionHandler for NavigateHandler {
         payload: Option<serde_json::Value>,
     ) -> Result<()> {
         let path = payload
-            .and_then(|p| p.get("path").and_then(|u| u.as_str()).map(|s| s.to_string()))
+            .and_then(|p| {
+                p.get("path")
+                    .and_then(|u| u.as_str())
+                    .map(|s| s.to_string())
+            })
             .ok_or_else(|| anyhow::anyhow!("Missing path in navigate action payload"))?;
 
         let handle = app_handle.clone();
@@ -686,7 +692,7 @@ impl NotificationManager {
                     notification.id = Some(id);
                     // Preserve creation time
                     notification.created_at = existing.created_at;
-                    
+
                     // If the existing one was persistent and the new one is not, we might want to delete it or just skip the update.
                     // For now, we update it and keep the ID.
                     NotificationStore::update(id, &notification)?;
@@ -822,9 +828,7 @@ impl NotificationManager {
             // Use database field as single source of truth
             let show_flag = notification.show_on_completion.unwrap_or(false);
 
-            if progress >= 100
-                && notification.notification_type == NotificationType::Progress
-            {
+            if progress >= 100 && notification.notification_type == NotificationType::Progress {
                 if show_flag && (!description.is_empty() || progress > 100) {
                     notification.notification_type = NotificationType::Patient;
                     notification.dismissible = true;
