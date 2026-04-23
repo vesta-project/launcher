@@ -10,7 +10,7 @@
 	display: flex;
 	align-items: center;
 	gap: 24px;
-	box-shadow: var(--effect-shadow);
+	box-shadow: var(--elevation-strong);
 	z-index: 1000;
 	animation: slide-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 	backdrop-filter: var(--liquid-backdrop-filter);

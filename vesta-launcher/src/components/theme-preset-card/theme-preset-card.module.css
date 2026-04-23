@@ -19,7 +19,7 @@
 	&:hover {
 		border-color: var(--border-strong);
 		transform: translateY(-2px);
-		box-shadow: var(--effect-shadow);
+		box-shadow: var(--elevation-medium);
 	}
 
 	&:focus-visible {

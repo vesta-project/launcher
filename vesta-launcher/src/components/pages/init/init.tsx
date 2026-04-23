@@ -457,6 +457,7 @@ function InitPage() {
 					}}
 				>
 					<ToggleSwitch
+						class={styles["telemetry-toggle"]}
 						checked={telemetryEnabled()}
 						onCheckedChange={(checked: boolean) => void persistTelemetryPreference(checked)}
 					>

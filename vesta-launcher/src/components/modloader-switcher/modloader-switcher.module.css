@@ -6,10 +6,10 @@
 	width: fit-content;
 	padding: 4px;
 	border-radius: 12px;
-	background: hsl(var(--color__primary-hue) 12% 12% / 0.4);
+	background: var(--surface-overlay);
 	backdrop-filter: blur(8px);
 	border: 1px solid var(--border-subtle);
-	box-shadow: inset 0 1px 0 hsl(var(--color__primary-hue) 70% 95% / 0.05);
+	box-shadow: var(--elevation-soft);
 }
 
 .modloader-switcher__item {
@@ -35,16 +35,12 @@
 }
 
 .modloader-switcher__item[data-pressed] {
-	background: linear-gradient(
-		135deg,
-		hsl(var(--color__primary-hue) 70% 56% / 0.95),
-		hsl(var(--color__primary-hue) 74% 48% / 0.95)
-	);
-	color: white;
-	border-color: hsl(var(--color__primary-hue) 70% 66% / 0.4);
+	background: linear-gradient(135deg, var(--accent-primary), var(--interactive-hover));
+	color: var(--text-on-accent);
+	border-color: color-mix(in srgb, var(--accent-primary) 70%, var(--border-subtle));
 	box-shadow:
-		0 0 0 1px hsl(var(--color__primary-hue) 70% 70% / 0.2),
-		0 6px 16px hsl(var(--color__primary-hue) 70% 20% / 0.28);
+		0 0 0 1px color-mix(in srgb, var(--accent-primary) 35%, transparent),
+		var(--elevation-medium);
 }
 
 .modloader-switcher__item--unsupported {

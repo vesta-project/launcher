@@ -369,7 +369,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 					</Match>
 					<Match when={isFailed()}>
 						<div class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}>
-							<ErrorIcon style={{ width: "24px", height: "24px", color: "#ff5252" }} />
+							<ErrorIcon
+								style={{ width: "24px", height: "24px", color: "var(--semantic-error)" }}
+							/>
 							<h1
 								style={{
 									margin: "4px 0 0",
@@ -386,7 +388,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 									margin: "4px 8px 0",
 									padding: 0,
 									"font-size": "10px",
-									color: "rgba(255, 255, 255, 0.6)",
+									color: "var(--text-on-accent)",
+									opacity: 0.8,
 									"text-align": "center",
 									"line-height": "1.2",
 								}}

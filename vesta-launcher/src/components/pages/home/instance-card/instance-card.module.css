@@ -1,4 +1,13 @@
 .instance-card {
+	--instance-card-overlay-top: hsl(0 0% 0% / 0.42);
+	--instance-card-overlay-bottom-strong: hsl(0 0% 0% / 0.58);
+	--instance-card-overlay-bottom-soft: hsl(0 0% 0% / 0.24);
+	--instance-card-centered-overlay: hsl(0 0% 0% / 0.4);
+	--instance-card-text-main: hsl(0 0% 98%);
+	--instance-card-text-muted: hsl(0 0% 92% / 0.8);
+	--instance-card-play-surface: hsl(0 0% 100% / 0.1);
+	--instance-card-play-surface-hover: hsl(0 0% 100% / 0.2);
+	--instance-card-play-surface-active: hsl(0 0% 100% / 0.14);
 	padding: 16px;
 	font-weight: bold;
 	font-size: var(--font-small);
@@ -30,7 +39,7 @@
 		box-shadow 0.15s ease,
 		transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
 	will-change: transform, box-shadow;
-	color: white;
+	color: var(--instance-card-text-main);
 	text-shadow:
 		0 1px 4px hsl(0 0% 0% / 0.7),
 		0 2px 8px hsl(0 0% 0% / 0.5);
@@ -71,7 +80,7 @@
 	display: flex;
 	justify-content: flex-end; /* play button should sit at right edge now that indicators are absolute */
 	align-items: center; /* Center items vertically to prevent jumpy layout when button appears */
-	background: linear-gradient(to bottom, hsl(0 0% 0% / 0.4) 0%, transparent 100%);
+	background: linear-gradient(to bottom, var(--instance-card-overlay-top) 0%, transparent 100%);
 	padding: 16px;
 	margin: -16px -16px 0 -16px;
 	border-radius: 6px 6px 0 0;
@@ -87,8 +96,8 @@
 	gap: 4px;
 	background: linear-gradient(
 		to top,
-		hsl(0 0% 0% / 0.56) 0%,
-		hsl(0 0% 0% / 0.22) 52%,
+		var(--instance-card-overlay-bottom-strong) 0%,
+		var(--instance-card-overlay-bottom-soft) 52%,
 		transparent 100%
 	);
 	padding: 24px 16px 16px 16px;
@@ -104,7 +113,7 @@
 
 	& p {
 		font-size: var(--font-xxsmall);
-		color: hsla(0 0% 80% / 0.7);
+		color: var(--instance-card-text-muted);
 	}
 
 	& h1 {
@@ -128,10 +137,12 @@
 			display: flex;
 			gap: 4px;
 			align-items: center;
+			color: var(--instance-card-text-muted);
 
 			& svg {
 				display: block;
-				fill: var(--icon-secondary);
+				fill: currentColor;
+				stroke: currentColor;
 				width: 12px;
 				height: 12px;
 			}
@@ -146,7 +157,7 @@
 	border: var(--border-width-subtle) solid var(--border-subtle);
 	border-radius: 8px;
 	padding: 0; /* Remove padding to ensure SVG sizing is precise */
-	background: hsl(0 0% 100% / 0.1);
+	background: var(--instance-card-play-surface);
 	backdrop-filter: var(--liquid-backdrop-filter);
 	display: flex;
 	align-items: center;
@@ -171,7 +182,7 @@
 }
 
 .play-button svg {
-	fill: white;
+	fill: var(--instance-card-text-main);
 	width: 14px; /* Smaller icon */
 	height: 14px;
 	transition: transform 0.2s ease;
@@ -187,7 +198,7 @@
 }
 
 .play-button:hover {
-	background: hsl(0 0% 100% / 0.2);
+	background: var(--instance-card-play-surface-hover);
 	transform: translateY(-2px) scale(1.05) !important; /* Override the card-hover scale */
 	box-shadow:
 		0 10px 15px -3px hsl(0 0% 0% / 0.2),
@@ -200,7 +211,7 @@
 
 .play-button:active {
 	transform: translateY(0) scale(0.95);
-	background: hsl(0 0% 100% / 0.1);
+	background: var(--instance-card-play-surface-active);
 	backdrop-filter: var(--liquid-backdrop-filter);
 }
 
@@ -278,7 +289,7 @@
 	justify-content: center;
 	align-items: center;
 	gap: 4px;
-	background: hsl(0 0% 0% / 0.4);
+	background: var(--instance-card-centered-overlay);
 	border-radius: 6px;
 	z-index: 10;
 }
@@ -287,9 +298,35 @@
 	width: clamp(12px, 8%, 20px);
 	height: clamp(12px, 8%, 20px);
 	border: 2px solid transparent;
-	border-top-color: white;
+	border-top-color: var(--instance-card-text-main);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
+}
+
+:root[data-theme="light"] .instance-card {
+	--instance-card-overlay-top: hsl(var(--color__primary-hue) 20% 26% / 0.18);
+	--instance-card-overlay-bottom-strong: hsl(var(--color__primary-hue) 24% 20% / 0.34);
+	--instance-card-overlay-bottom-soft: hsl(var(--color__primary-hue) 20% 30% / 0.12);
+	--instance-card-centered-overlay: hsl(var(--color__primary-hue) 16% 22% / 0.3);
+	--instance-card-text-main: hsl(var(--color__primary-hue) 5% 95%);
+	--instance-card-text-muted: hsl(var(--color__primary-hue) 6% 92% / 0.8);
+	--instance-card-play-surface: hsl(var(--color__primary-hue) 14% 22% / 0.42);
+	--instance-card-play-surface-hover: hsl(var(--color__primary-hue) 16% 24% / 0.52);
+	--instance-card-play-surface-active: hsl(var(--color__primary-hue) 16% 20% / 0.46);
+}
+
+@media (prefers-color-scheme: light) {
+	:root:not([data-theme="dark"]) .instance-card {
+		--instance-card-overlay-top: hsl(var(--color__primary-hue) 20% 26% / 0.18);
+		--instance-card-overlay-bottom-strong: hsl(var(--color__primary-hue) 24% 20% / 0.34);
+		--instance-card-overlay-bottom-soft: hsl(var(--color__primary-hue) 20% 30% / 0.12);
+		--instance-card-centered-overlay: hsl(var(--color__primary-hue) 16% 22% / 0.3);
+		--instance-card-text-main: hsl(var(--color__primary-hue) 5% 95%);
+		--instance-card-text-muted: hsl(var(--color__primary-hue) 6% 92% / 0.8);
+		--instance-card-play-surface: hsl(var(--color__primary-hue) 14% 22% / 0.42);
+		--instance-card-play-surface-hover: hsl(var(--color__primary-hue) 16% 24% / 0.52);
+		--instance-card-play-surface-active: hsl(var(--color__primary-hue) 16% 20% / 0.46);
+	}
 }
 
 @keyframes spin {

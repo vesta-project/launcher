@@ -31,8 +31,8 @@
 	height: 24px;
 	flex-shrink: 0;
 	border-radius: 9999px;
-	border: var(--border-width-subtle) solid var(--border-subtle);
-	background-color: var(--surface-sunken);
+	border: var(--border-width-subtle) solid var(--switch-track-border);
+	background-color: var(--switch-track-off);
 	cursor: pointer;
 	transition: background-color 150ms ease-in-out;
 	pointer-events: auto; /* ensure control receives pointer events */
@@ -40,8 +40,8 @@
 }
 
 .switch__control[data-checked] {
-	background-color: var(--accent-primary);
-	border-color: var(--accent-primary);
+	background-color: var(--switch-track-on);
+	border-color: var(--switch-track-on);
 }
 
 .switch__control[data-disabled] {
@@ -53,9 +53,9 @@
 	display: block;
 	width: 18px;
 	height: 18px;
-	background-color: white;
+	background-color: var(--switch-thumb);
 	border-radius: 9999px;
-	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.2);
+	box-shadow: var(--switch-thumb-shadow);
 	transform: translateX(2px);
 	transition: transform 180ms ease-in-out;
 	pointer-events: none;
@@ -64,6 +64,7 @@
 
 .switch__thumb[data-checked] {
 	transform: translateX(22px);
+	background-color: var(--switch-thumb-on);
 }
 
 .switch__label {
@@ -84,10 +85,10 @@
 
 /* Optional: Add hover state for non-disabled switches */
 .switch__control:not([data-disabled]):hover {
-	background-color: var(--surface-raised);
+	background-color: var(--switch-track-off-hover);
 }
 
 .switch__control[data-checked]:not([data-disabled]):hover {
-	background-color: var(--accent-primary-hover);
-	border-color: var(--accent-primary-hover);
+	background-color: var(--switch-track-on-hover);
+	border-color: var(--switch-track-on-hover);
 }

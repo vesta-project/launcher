@@ -35,8 +35,6 @@ body {
 	/* Style Mode (Set by theme template: glass/frosted/flat) */
 	--effect-blur: 16px;
 	--effect-opacity: 0.8;
-	--effect-shadow-depth: 24px;
-	--effect-glow-opacity: 0.7;
 
 	/* Animation Tokens */
 	--animate-spin-duration: 1s;
@@ -155,9 +153,10 @@ body {
 	--semantic-info: hsl(var(--hue-info) 70% 50%);
 	--semantic-info-bg: hsl(var(--hue-info) 70% 50% / 0.15);
 
-	/* Effects */
-	--effect-shadow: 0 6px var(--effect-shadow-depth) hsl(0 0% 0% / 0.2);
-	--effect-glow: hsl(var(--color__primary-hue) 60% 80% / var(--effect-glow-opacity));
+	/* Elevation */
+	--elevation-soft: 0 2px 10px hsl(0 0% 0% / 0.18);
+	--elevation-medium: 0 6px 20px hsl(0 0% 0% / 0.22);
+	--elevation-strong: 0 12px 32px hsl(0 0% 0% / 0.3);
 
 	/* Blur Variables - Inherited by children */
 	--blur-base: var(--effect-blur);
@@ -177,7 +176,17 @@ body {
 	/* Cards */
 	--card-background: var(--surface-raised);
 	--card-border: var(--border-subtle);
-	--card-hover-shadow: 0 8px 24px hsl(0 0% 0% / 0.18);
+	--card-hover-shadow: var(--elevation-medium);
+
+	/* Switch */
+	--switch-track-off: var(--surface-sunken);
+	--switch-track-off-hover: var(--surface-raised);
+	--switch-track-on: var(--interactive-base);
+	--switch-track-on-hover: var(--interactive-hover);
+	--switch-track-border: var(--border-subtle);
+	--switch-thumb: var(--surface-overlay);
+	--switch-thumb-on: var(--text-on-accent);
+	--switch-thumb-shadow: 0 2px 4px hsl(0 0% 0% / 0.22);
 
 	/* Scrollbar */
 	--scrollbar-track: hsl(var(--hue-secondary) 20% var(--lightness-border) / 0.2);
@@ -237,7 +246,7 @@ body {
 
 	--liquid-inner-shadow-blur: 5px;
 	--liquid-inner-shadow-spread: -10px;
-	--liquid-inner-shadow-color: var(--effect-glow);
+	--liquid-inner-shadow-color: color-mix(in srgb, var(--primary-low) 65%, transparent);
 	--liquid-tint-saturation: 30%;
 	--liquid-tint-lightness: 15%;
 	--liquid-tint-opacity: var(--effect-opacity);
@@ -258,7 +267,7 @@ body {
 	);
 	--liquid-backdrop-filter: blur(var(--liquid-frost-blur));
 	--liquid-box-shadow:
-		0 6px var(--liquid-outer-shadow-blur) rgba(0, 0, 0, 0.2),
+		var(--elevation-medium),
 		inset 0 0 var(--liquid-inner-shadow-blur) var(--liquid-inner-shadow-spread)
 		var(--liquid-inner-shadow-color);
 
@@ -410,8 +419,10 @@ body {
 	--scrollbar-thumb: hsl(var(--color__primary-hue) 40% 50%);
 	--scrollbar-thumb-border: hsl(var(--color__primary-hue) 45% 45%);
 
-	/* Adjust shadows for light mode */
-	--effect-shadow: 0 4px var(--effect-shadow-depth) hsl(0 0% 0% / 0.12);
+	/* Adjust elevation for light mode */
+	--elevation-soft: 0 1px 6px hsl(0 0% 0% / 0.12);
+	--elevation-medium: 0 4px 16px hsl(0 0% 0% / 0.14);
+	--elevation-strong: 0 10px 28px hsl(0 0% 0% / 0.2);
 	--dialog-overlay-bg: hsl(0 0% 0% / 0.35);
 
 	/* Liquid glass adjustments for light mode */
@@ -487,7 +498,9 @@ body {
 		--scrollbar-thumb-border: hsl(var(--color__primary-hue) 45% 45%);
 
 		/* Adjust shadows for light mode */
-		--effect-shadow: 0 4px var(--effect-shadow-depth) hsl(0 0% 0% / 0.12);
+		--elevation-soft: 0 1px 6px hsl(0 0% 0% / 0.12);
+		--elevation-medium: 0 4px 16px hsl(0 0% 0% / 0.14);
+		--elevation-strong: 0 10px 28px hsl(0 0% 0% / 0.2);
 		--dialog-overlay-bg: hsl(0 0% 0% / 0.35);
 
 		/* Liquid glass adjustments for light mode */

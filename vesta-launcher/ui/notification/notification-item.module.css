@@ -3,7 +3,7 @@
 	border-radius: 12px;
 	background: linear-gradient(145deg, var(--surface-raised), var(--surface-base));
 	border: var(--border-width-subtle) solid var(--border-subtle);
-	box-shadow: var(--effect-shadow-sm);
+	box-shadow: var(--elevation-soft);
 	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 	position: relative;
 	overflow: hidden;
@@ -16,7 +16,7 @@
 	margin-bottom: 8px;
 	background: var(--surface-overlay);
 	border-color: var(--border-strong);
-	box-shadow: var(--effect-shadow);
+	box-shadow: var(--elevation-medium);
 	backdrop-filter: blur(var(--blur-overlay));
 	-webkit-backdrop-filter: blur(var(--blur-overlay));
 	min-width: 300px;

@@ -94,7 +94,7 @@
 	background-color: var(--bg-glass);
 	backdrop-filter: var(--glass-blur);
 	border: var(--border-width-strong) solid var(--border-subtle);
-	box-shadow: var(--effect-shadow);
+	box-shadow: var(--elevation-strong);
 	padding: 32px;
 	color: var(--text-primary);
 }
@@ -346,4 +346,21 @@
 .init-icon-container:hover .init-icon-hint {
 	opacity: 1;
 	background: var(--primary);
+}
+
+.telemetry-toggle :global(.switch__control) {
+	border: none;
+	background: hsl(var(--color__primary-hue) 10% 24% / 0.78);
+}
+
+.telemetry-toggle :global(.switch__control[data-checked]) {
+	background: var(--accent-primary);
+}
+
+.telemetry-toggle :global(.switch__control:not([data-disabled]):hover) {
+	background: hsl(var(--color__primary-hue) 12% 30% / 0.84);
+}
+
+.telemetry-toggle :global(.switch__control[data-checked]:not([data-disabled]):hover) {
+	background: var(--accent-primary-hover);
 }

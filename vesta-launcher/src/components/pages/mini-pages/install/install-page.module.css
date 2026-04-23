@@ -31,7 +31,7 @@
 	background: var(--bg-surface);
 	border-radius: 16px;
 	border: 1px solid var(--border-subtle);
-	box-shadow: var(--effect-shadow-sm);
+	box-shadow: var(--elevation-soft);
 	margin-bottom: 8px;
 }
 
@@ -265,7 +265,7 @@
 	-webkit-backdrop-filter: var(--glass-blur);
 	border-radius: 12px;
 	border: var(--border-width-subtle) solid var(--border-subtle);
-	box-shadow: var(--effect-shadow-low);
+	box-shadow: var(--elevation-soft);
 	transition: box-shadow 0.2s ease;
 }
 
@@ -772,7 +772,7 @@
 	width: 100%;
 	max-width: 600px;
 	transition: all 0.3s ease;
-	box-shadow: var(--effect-shadow-lg);
+	box-shadow: var(--elevation-strong);
 	animation: slide-up 0.4s cubic-bezier(0.4, 0, 0.2, 1);
 }
 

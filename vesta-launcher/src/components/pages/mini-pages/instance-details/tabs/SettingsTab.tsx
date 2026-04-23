@@ -92,12 +92,24 @@ interface SettingsTabProps {
 }
 
 export const SettingsTab = (p: SettingsTabProps) => {
+	const launchBehaviorOptions: { label: string; value: string }[] = [
+		{ label: "Stay Open", value: "stay-open" },
+		{ label: "Minimize Window", value: "minimize" },
+		{ label: "Hide To Tray", value: "hide-to-tray" },
+		{ label: "Request Quit", value: "quit" },
+	];
+
 	const currentSelection = createMemo(() => {
 		if (p.useGlobalJavaPath) return "__default__";
 		if (p.isCustomMode) return "__custom__";
 		if (!p.javaPath) return "__default__";
 		return p.javaPath;
 	});
+	const selectedLaunchBehavior = createMemo(
+		() =>
+			launchBehaviorOptions.find((option) => option.value === p.launcherActionOnLaunch) ||
+			launchBehaviorOptions[0],
+	);
 
 	// Memory Multi-Thumb Logic
 	const sliderMaxMemory = createMemo(() => Math.max(512, p.totalRam || 512));
@@ -628,31 +640,19 @@ export const SettingsTab = (p: SettingsTabProps) => {
 								</div>
 							}
 						>
+							{/* SelectContent needs itemComponent to render options; derive value from the same options list to avoid object mismatch bugs. */}
 							<Select
-								options={[
-									{ label: "Stay Open", value: "stay-open" },
-									{ label: "Minimize Window", value: "minimize" },
-									{ label: "Hide To Tray", value: "hide-to-tray" },
-									{ label: "Request Quit", value: "quit" },
-								]}
+								options={launchBehaviorOptions}
 								optionValue="value"
 								optionTextValue="label"
-								value={{
-									label:
-										(
-											{
-												"stay-open": "Stay Open",
-												minimize: "Minimize Window",
-												"hide-to-tray": "Hide To Tray",
-												quit: "Request Quit",
-											} as Record<string, string>
-										)[p.launcherActionOnLaunch] || "Stay Open",
-									value: p.launcherActionOnLaunch,
-								}}
+								value={selectedLaunchBehavior()}
 								onChange={(option: any) => {
 									p.setLauncherActionOnLaunch(option.value);
 									p.setIsLaunchActionDirty(true);
 								}}
+								itemComponent={(props) => (
+									<SelectItem item={props.item}>{props.item.rawValue.label}</SelectItem>
+								)}
 							>
 								<SelectTrigger>
 									<SelectValue<any>>{(state) => state.selectedOption().label}</SelectValue>

@@ -159,7 +159,7 @@ export const PRESET_THEMES: ThemeConfig[] = [
 
 	//             --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
 	//             --effect-blur: var(--glass-blur-radius);
-	//             --effect-shadow: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
+	//             --elevation-strong: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
 	//             --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
 	//             --background-opacity: 0.15;
 	//         }
@@ -213,8 +213,9 @@ export const PRESET_THEMES: ThemeConfig[] = [
 
             /* Midnight-optimized shadows */
             --liquid-box-shadow: 0 4px 12px hsl(0 0% 0% / 0.8);
-            --effect-shadow: 0 12px 40px rgba(0, 0, 0, 0.9);
-            --effect-shadow-depth: 2px;
+            --elevation-soft: 0 2px 8px rgba(0, 0, 0, 0.75);
+            --elevation-medium: 0 8px 24px rgba(0, 0, 0, 0.85);
+            --elevation-strong: 0 12px 40px rgba(0, 0, 0, 0.9);
         }
 
             /* Specific Midnight styling for containers */
