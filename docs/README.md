@@ -54,6 +54,9 @@ Check this index for ongoing documentation work and areas needing contribution.
 ## 📝 Project
 - [Project Requirements](project/PROJECT_REQUIREMENTS.md) — Scope and goals.
 
+## 🔒 Legal
+- [Privacy Policy](legal/PRIVACY_POLICY.md) — Telemetry collection and opt-out controls.
+
 ## 🔬 Schemas & Examples
 - [Cache and Mirror Systems](schemas/CACHE_MIRRORS.md) — Caching architecture and mirror configuration.
 - [Configuration and Cache Schemas](schemas/cache_index_schemas.md)

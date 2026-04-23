@@ -16,6 +16,8 @@ interface GeneralSettingsTabProps {
 	handleReducedMotionToggle: (checked: boolean) => void;
 	discordPresenceEnabled: boolean;
 	handleDiscordToggle: (checked: boolean) => void;
+	telemetryEnabled: boolean;
+	handleTelemetryToggle: (checked: boolean) => void;
 	autoInstallDependencies: boolean;
 	handleAutoInstallDepsToggle: (checked: boolean) => void;
 	maxDownloadThreads: number;
@@ -30,6 +32,8 @@ interface GeneralSettingsTabProps {
 }
 
 export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
+	const privacyPolicyUrl = "https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
+
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<SettingsCard header="Accessibility">
@@ -47,6 +51,25 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 			</SettingsCard>
 
 			<SettingsCard header="Privacy & Integration">
+				<SettingsField
+					label="Error Telemetry"
+					description={
+						<>
+							Send crash and error diagnostics to help improve reliability. Enabled by default (opt-out).
+							{" "}
+							<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
+								Privacy Policy
+							</a>
+						</>
+					}
+					headerRight={
+						<Switch checked={props.telemetryEnabled} onCheckedChange={props.handleTelemetryToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					}
+				/>
 				<SettingsField
 					label="Discord Rich Presence"
 					description="Show your current game and status on Discord."

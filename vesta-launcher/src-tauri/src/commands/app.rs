@@ -680,3 +680,8 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
     
     Ok(())
 }
+
+#[tauri::command]
+pub fn trigger_test_panic() -> Result<(), String> {
+    panic!("Test Sentry Backend Panic - Triggered by developer test button. Check Sentry dashboard to verify capture.");
+}
