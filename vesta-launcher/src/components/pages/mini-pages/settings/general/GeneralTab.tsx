@@ -29,6 +29,8 @@ interface GeneralSettingsTabProps {
 	handleShowTrayIconToggle: (checked: boolean) => void;
 	closeToTray: boolean;
 	handleCloseToTrayToggle: (checked: boolean) => void;
+	autostartEnabled: boolean;
+	handleAutostartToggle: (checked: boolean) => void;
 }
 
 export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
@@ -142,6 +144,17 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 			</SettingsCard>
 
 			<SettingsCard header="System Tray">
+				<SettingsField
+					label="Launch On System Startup"
+					description="Start Vesta Launcher automatically when you sign in."
+					headerRight={
+						<Switch checked={props.autostartEnabled} onCheckedChange={props.handleAutostartToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					}
+				/>
 				<SettingsField
 					label="Show Tray Icon"
 					description="Display the launcher icon in the system tray."

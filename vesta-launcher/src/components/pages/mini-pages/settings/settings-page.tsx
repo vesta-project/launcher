@@ -13,6 +13,7 @@ import {
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { disable as disableAutostart, enable as enableAutostart } from "@tauri-apps/plugin-autostart";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from "@ui/tabs/tabs";
@@ -79,6 +80,7 @@ export interface AppConfig {
 	auto_update_enabled: boolean;
 	notification_enabled: boolean;
 	startup_check_updates: boolean;
+	autostart_enabled: boolean;
 	show_tray_icon: boolean;
 	minimize_to_tray: boolean;
 	reduced_motion: boolean;
@@ -178,6 +180,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
 	const [autoInstallDependencies, setAutoInstallDependencies] = createSignal(true);
 	const [maxDownloadThreads, setMaxDownloadThreads] = createSignal(4);
+	const [autostartEnabled, setAutostartEnabled] = createSignal(false);
 	const [showTrayIcon, setShowTrayIcon] = createSignal(true);
 	const [closeToTray, setCloseToTray] = createSignal(false);
 	const [instanceDefaults, setInstanceDefaults] = createSignal<Partial<AppConfig>>({});
@@ -572,6 +575,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
 				setMaxDownloadThreads(config.max_download_threads ?? 4);
+				setAutostartEnabled(config.autostart_enabled ?? false);
 				setShowTrayIcon(config.show_tray_icon ?? true);
 				setCloseToTray(config.minimize_to_tray ?? false);
 
@@ -651,6 +655,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "telemetry_enabled") setTelemetryEnabled(value ?? true);
 				if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
+				if (field === "autostart_enabled") setAutostartEnabled(value ?? false);
 				if (field === "show_tray_icon") setShowTrayIcon(value ?? true);
 				if (field === "minimize_to_tray") setCloseToTray(value ?? false);
 				if (field === "theme_id" && value) {
@@ -979,6 +984,21 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		setCloseToTray(checked);
 		if (hasTauriRuntime()) {
 			await invoke("set_minimize_to_tray", { enabled: checked });
+		}
+	};
+
+	const handleAutostartToggle = async (checked: boolean) => {
+		setAutostartEnabled(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "autostart_enabled",
+				value: checked,
+			});
+			if (checked) {
+				await enableAutostart();
+			} else {
+				await disableAutostart();
+			}
 		}
 	};
   
@@ -1481,6 +1501,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleOpenAppData={handleOpenAppData}
 								cacheSizeValue={cacheSizeValue() || "0 bytes"}
 								handleClearCache={handleClearCache}
+								autostartEnabled={autostartEnabled()}
+								handleAutostartToggle={handleAutostartToggle}
 								showTrayIcon={showTrayIcon()}
 								handleShowTrayIconToggle={handleShowTrayIconToggle}
 								closeToTray={closeToTray()}

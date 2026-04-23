@@ -1,0 +1,2 @@
+ALTER TABLE app_config
+ADD COLUMN autostart_enabled BOOLEAN NOT NULL DEFAULT 0;

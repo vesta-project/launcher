@@ -111,6 +111,7 @@ pub struct AppConfig {
     pub auto_update_enabled: bool,
     pub notification_enabled: bool,
     pub startup_check_updates: bool,
+    pub autostart_enabled: bool,
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
     pub reduced_motion: bool,
@@ -178,6 +179,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         bool, // auto_update_enabled
         bool, // notification_enabled
         bool, // startup_check_updates
+        bool, // autostart_enabled
         bool, // show_tray_icon
         bool, // minimize_to_tray
         bool, // reduced_motion
@@ -233,55 +235,56 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             auto_update_enabled: row.8,
             notification_enabled: row.9,
             startup_check_updates: row.10,
-            show_tray_icon: row.11,
-            minimize_to_tray: row.12,
-            reduced_motion: row.13,
-            last_window_width: row.14,
-            last_window_height: row.15,
-            debug_logging: row.16,
-            notification_retention_days: row.17,
-            active_account_uuid: row.18,
+            autostart_enabled: row.11,
+            show_tray_icon: row.12,
+            minimize_to_tray: row.13,
+            reduced_motion: row.14,
+            last_window_width: row.15,
+            last_window_height: row.16,
+            debug_logging: row.17,
+            notification_retention_days: row.18,
+            active_account_uuid: row.19,
 
             // Theme fields
-            theme_id: row.19,
-            theme_mode: row.20,
-            theme_primary_hue: row.21,
-            theme_primary_sat: row.22,
-            theme_primary_light: row.23,
-            theme_style: row.24,
-            theme_gradient_enabled: row.25,
-            theme_gradient_angle: row.26,
-            theme_gradient_harmony: row.27,
-            theme_advanced_overrides: row.28,
-            theme_gradient_type: row.29,
-            theme_border_width: row.30,
+            theme_id: row.20,
+            theme_mode: row.21,
+            theme_primary_hue: row.22,
+            theme_primary_sat: row.23,
+            theme_primary_light: row.24,
+            theme_style: row.25,
+            theme_gradient_enabled: row.26,
+            theme_gradient_angle: row.27,
+            theme_gradient_harmony: row.28,
+            theme_advanced_overrides: row.29,
+            theme_gradient_type: row.30,
+            theme_border_width: row.31,
 
             // Onboarding fields
-            setup_completed: row.31,
-            setup_step: row.32,
-            tutorial_completed: row.33,
+            setup_completed: row.32,
+            setup_step: row.33,
+            tutorial_completed: row.34,
 
             // Integration and runtime toggles
-            use_dedicated_gpu: row.34,
-            telemetry_enabled: row.35,
-            discord_presence_enabled: row.36,
-            auto_install_dependencies: row.37,
+            use_dedicated_gpu: row.35,
+            telemetry_enabled: row.36,
+            discord_presence_enabled: row.37,
+            auto_install_dependencies: row.38,
 
             // Instance defaults
-            default_width: row.38,
-            default_height: row.39,
-            default_java_args: row.40,
-            default_environment_variables: row.41,
-            default_pre_launch_hook: row.42,
-            default_wrapper_command: row.43,
-            default_post_exit_hook: row.44,
-            default_min_memory: row.45,
-            default_launcher_action_on_launch: row.46,
+            default_width: row.39,
+            default_height: row.40,
+            default_java_args: row.41,
+            default_environment_variables: row.42,
+            default_pre_launch_hook: row.43,
+            default_wrapper_command: row.44,
+            default_post_exit_hook: row.45,
+            default_min_memory: row.46,
+            default_launcher_action_on_launch: row.47,
 
             // Theme extras
-            theme_window_effect: row.47,
-            theme_background_opacity: row.48,
-            theme_data: row.49,
+            theme_window_effect: row.48,
+            theme_background_opacity: row.49,
+            theme_data: row.50,
         })
     }
 }
@@ -300,6 +303,7 @@ impl Default for AppConfig {
             auto_update_enabled: true,
             notification_enabled: true,
             startup_check_updates: true,
+            autostart_enabled: false,
             show_tray_icon: true,
             minimize_to_tray: false,
             reduced_motion: false,

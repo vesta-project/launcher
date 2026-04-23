@@ -13,6 +13,7 @@ diesel::table! {
         auto_update_enabled -> Bool,
         notification_enabled -> Bool,
         startup_check_updates -> Bool,
+        autostart_enabled -> Bool,
         show_tray_icon -> Bool,
         minimize_to_tray -> Bool,
         reduced_motion -> Bool,

@@ -199,6 +199,32 @@ fn setup_tray(app: &tauri::AppHandle, show_tray_icon: bool) -> Result<(), Box<dy
     Ok(())
 }
 
+#[cfg(desktop)]
+fn sync_autostart_with_config(app: &tauri::AppHandle, should_enable: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+
+    let autostart_manager = app.autolaunch();
+    let is_enabled = autostart_manager
+        .is_enabled()
+        .map_err(|e| format!("Failed to get autostart status: {}", e))?;
+
+    if should_enable == is_enabled {
+        return Ok(());
+    }
+
+    if should_enable {
+        autostart_manager
+            .enable()
+            .map_err(|e| format!("Failed to enable autostart: {}", e))?;
+    } else {
+        autostart_manager
+            .disable()
+            .map_err(|e| format!("Failed to disable autostart: {}", e))?;
+    }
+
+    Ok(())
+}
+
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Get app data directory
     let app_data_dir = get_app_config_dir()?;
@@ -804,6 +830,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .decorations(false);
         
     let config = get_app_config()?;
+    #[cfg(desktop)]
+    if let Err(e) = sync_autostart_with_config(app.handle(), config.autostart_enabled) {
+        log::warn!("Failed to sync autostart state with config: {}", e);
+    }
+
     if let Err(e) = setup_tray(app.handle(), config.show_tray_icon) {
         log::warn!("Failed to initialize tray: {}", e);
     }

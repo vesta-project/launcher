@@ -83,6 +83,10 @@ fn main() {
 
     builder
         .plugin(tauri_plugin_fs::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .setup(setup::init)
         .manage(utils::dialog_manager::DialogManager::new())
         .plugin(log_plugin)
