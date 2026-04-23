@@ -89,6 +89,13 @@ pub fn ensure_main_window_visible(app: &tauri::AppHandle) -> Result<(), String> 
         window
             .set_focus()
             .map_err(|e| format!("Failed to focus window: {}", e))?;
+
+        // Closing with "minimize to tray" may force-show the tray for discoverability.
+        // Once the main window is visible again, restore the persisted tray preference.
+        if let Err(e) = crate::commands::app::sync_tray_visibility_with_config(app) {
+            log::warn!("Failed to sync tray visibility after showing main window: {}", e);
+        }
+
         Ok(())
     } else {
         Err("Main window not found".to_string())

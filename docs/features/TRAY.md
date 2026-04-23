@@ -70,7 +70,8 @@ pub struct TraySettings {
 
 - Tray is created at startup with stable id and menu actions (`Show`, `Hide`, `Quit`).
 - Tray visibility is driven by persisted `show_tray_icon` and can be toggled at runtime.
-- Main-window close behavior checks `minimize_to_tray` and `show_tray_icon` before deciding to hide or request guarded exit.
+- Main-window close behavior checks `minimize_to_tray` before deciding to hide or request guarded exit.
+- If `minimize_to_tray` is enabled while `show_tray_icon` is disabled, close-to-tray temporarily shows the tray icon for restoration; normal visibility is restored when the main window is shown again.
 - Launch-time action policy is resolved from instance override (if enabled) or global default.
 
 ## Future Enhancements

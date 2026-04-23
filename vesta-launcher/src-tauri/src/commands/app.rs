@@ -451,6 +451,19 @@ pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), String> {
+    let config = crate::utils::config::get_app_config()
+        .map_err(|e| format!("Failed to get config for tray visibility sync: {}", e))?;
+
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        tray
+            .set_visible(config.show_tray_icon)
+            .map_err(|e| format!("Failed to sync tray icon visibility: {}", e))?;
+    }
+
+    Ok(())
+}
+
 pub fn request_guarded_exit(app_handle: &tauri::AppHandle, source: &str) -> Result<(), String> {
     log::info!("Requesting guarded exit from source: {}", source);
     let _ = crate::utils::windows::ensure_main_window_visible(app_handle);

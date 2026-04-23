@@ -243,14 +243,16 @@ fn main() {
                         api.prevent_close();
                         match crate::utils::config::get_app_config() {
                             Ok(config) if config.minimize_to_tray => {
-                                // If close-to-tray is enabled, force tray visibility for discoverability
-                                // even when the persistent tray toggle is currently off.
-                                if let Some(tray) = window.app_handle().tray_by_id("main-tray") {
-                                    let _ = tray.set_visible(true);
+                                // If close-to-tray is enabled but the persistent tray setting is off,
+                                // temporarily expose the tray so users can restore the app.
+                                if !config.show_tray_icon {
+                                    if let Some(tray) = window.app_handle().tray_by_id("main-tray") {
+                                        let _ = tray.set_visible(true);
+                                    }
                                 }
                                 log::info!(
-                                    "Close requested: hiding to tray (show_tray_icon setting: {})",
-                                    config.show_tray_icon
+                                    "Close requested: hiding to tray (minimize_to_tray enabled, show_tray_icon: {})",
+                                    config.show_tray_icon,
                                 );
                                 let _ = window.hide();
                             }

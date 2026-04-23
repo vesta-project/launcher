@@ -8,8 +8,10 @@ This guide documents the current Tauri v2 tray implementation and launcher behav
 - Tray menu provides `Show`, `Hide`, and `Quit`.
 - `Quit` does not immediately terminate the process; it emits `core://exit-requested` and follows guarded exit checks.
 - Main-window close (`X`) is intercepted:
-  - if `minimize_to_tray` and `show_tray_icon` are true, the window is hidden,
+  - if `minimize_to_tray` is true, the window is hidden,
   - otherwise guarded exit flow is requested.
+- When `minimize_to_tray` is true but `show_tray_icon` is false, the tray icon is shown temporarily while hidden so the app can be restored.
+- Once the main window is shown again, tray visibility is re-synced to persisted `show_tray_icon`.
 
 ## Launch Action Policy
 

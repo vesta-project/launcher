@@ -807,6 +807,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = setup_tray(app.handle(), config.show_tray_icon) {
         log::warn!("Failed to initialize tray: {}", e);
     }
+    if let Err(e) = crate::commands::app::sync_tray_visibility_with_config(app.handle()) {
+        log::warn!(
+            "Failed to sync tray visibility with persisted config at startup: {}",
+            e
+        );
+    }
 
     // Apply the macOS-specific title bar style
     #[cfg(target_os = "macos")]
