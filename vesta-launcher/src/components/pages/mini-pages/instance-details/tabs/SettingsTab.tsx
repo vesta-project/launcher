@@ -78,6 +78,11 @@ interface SettingsTabProps {
 	useGlobalEnvironmentVariables: boolean;
 	setUseGlobalEnvironmentVariables: (v: boolean) => void;
 	setIsEnvDirty: (v: boolean) => void;
+	useGlobalLauncherAction: boolean;
+	setUseGlobalLauncherAction: (v: boolean) => void;
+	launcherActionOnLaunch: string;
+	setLauncherActionOnLaunch: (v: string) => void;
+	setIsLaunchActionDirty: (v: boolean) => void;
 
 	handleSave: () => void;
 	saving: () => boolean;
@@ -587,6 +592,71 @@ export const SettingsTab = (p: SettingsTabProps) => {
 									style="min-height: 80px; font-family: var(--font-mono); font-size: 12px; padding: 10px;"
 								/>
 							</TextFieldRoot>
+						</Show>
+					}
+				/>
+			</SettingsCard>
+
+			<SettingsCard header="Launcher Action On Game Launch">
+				<SettingsField
+					label="Behavior After Launch"
+					description="Set how the launcher should behave after this instance starts."
+					headerRight={
+						<div style="display: flex; align-items: center; gap: 8px;">
+							<span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">Use Global</span>
+							<Switch
+								checked={p.useGlobalLauncherAction}
+								onCheckedChange={(val: boolean) => {
+									batch(() => {
+										p.setUseGlobalLauncherAction(val);
+										p.setIsLaunchActionDirty(true);
+									});
+								}}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						</div>
+					}
+					body={
+						<Show
+							when={!p.useGlobalLauncherAction}
+							fallback={
+								<div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
+									Currently using the launcher action defined in global defaults.
+								</div>
+							}
+						>
+							<Select
+								options={[
+									{ label: "Stay Open", value: "stay-open" },
+									{ label: "Minimize Window", value: "minimize" },
+									{ label: "Hide To Tray", value: "hide-to-tray" },
+									{ label: "Request Quit", value: "quit" },
+								]}
+								optionValue="value"
+								optionTextValue="label"
+								value={{
+									label:
+										({
+											"stay-open": "Stay Open",
+											minimize: "Minimize Window",
+											"hide-to-tray": "Hide To Tray",
+											quit: "Request Quit",
+										} as Record<string, string>)[p.launcherActionOnLaunch] || "Stay Open",
+									value: p.launcherActionOnLaunch,
+								}}
+								onChange={(option: any) => {
+									p.setLauncherActionOnLaunch(option.value);
+									p.setIsLaunchActionDirty(true);
+								}}
+							>
+								<SelectTrigger>
+									<SelectValue<any>>{(state) => state.selectedOption().label}</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
 						</Show>
 					}
 				/>
