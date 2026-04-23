@@ -9,6 +9,7 @@ pub mod models;
 mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
+mod sentry_init;
 mod setup;
 mod tasks;
 pub mod utils;
@@ -23,24 +24,35 @@ use utils::config::{
 #[allow(unused_imports)]
 use utils::windows::launch_window;
 
-// Learn more about Tauri commands at https://tauri.app/v1/guides/features/command
-
 fn main() {
-    std::panic::set_hook(Box::new(|e| {
-        println!("Vesta Launcher closed unexpectedly: {e:?}");
-    }));
-
-    // Early check for debug logging setting
+    // Early checks for debug logging and telemetry settings.
     let mut log_level = log::LevelFilter::Info;
+    let mut telemetry_enabled = true;
     if let Ok(config_dir) = utils::db_manager::get_app_config_dir() {
-        // Try to init pool early to check setting. setup::init will safely re-init or handle it.
+        // Try to init pool early to check settings. setup::init will safely re-init or handle it.
         let _ = utils::db::init_config_pool(config_dir);
         if let Ok(config) = utils::config::get_app_config() {
             if config.debug_logging {
                 log_level = log::LevelFilter::Debug;
             }
+            telemetry_enabled = config.telemetry_enabled;
         }
     }
+
+    let sentry_client = if telemetry_enabled {
+        Some(sentry_init::init_sentry())
+    } else {
+        log::info!("Telemetry disabled by user config. Skipping Sentry initialization.");
+        None
+    };
+
+    std::panic::set_hook(Box::new(move |e| {
+        let message = format!("Vesta Launcher closed unexpectedly: {e:?}");
+        eprintln!("{message}");
+        if telemetry_enabled {
+            sentry::capture_message(&message, sentry::Level::Fatal);
+        }
+    }));
 
     // Configure logging with 30-day retention in the platform-specific launcher config directory
     let log_plugin = tauri_plugin_log::Builder::new()
@@ -55,9 +67,22 @@ fn main() {
         .max_file_size(10_000_000) // 10MB per file
         .build();
 
-    tauri::Builder::default()
+    #[cfg(not(target_os = "ios"))]
+    let _sentry_minidump_guard = if sentry_client.is_some() {
+        sentry::Hub::current()
+            .client()
+            .map(|client| tauri_plugin_sentry::minidump::init(client.as_ref()))
+    } else {
+        None
+    };
+
+    let mut builder = tauri::Builder::default();
+    if let Some(sentry_client) = sentry_client.as_ref() {
+        builder = builder.plugin(tauri_plugin_sentry::init(sentry_client));
+    }
+
+    builder
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(setup::init)
         .manage(utils::dialog_manager::DialogManager::new())
         .plugin(log_plugin)
@@ -88,6 +113,7 @@ fn main() {
             commands::app::get_cache_size,
             commands::app::open_logs_folder,
             commands::app::open_instance_folder,
+            commands::app::trigger_test_panic,
             commands::screenshots::get_screenshots,
             commands::screenshots::delete_screenshot,
             commands::screenshots::copy_screenshot_to_clipboard,

@@ -83,6 +83,8 @@ interface InitPagesProps {
 	isLoginOnly?: boolean;
 	hasInstalledInstance?: boolean;
 	onInstanceInstalled?: () => void;
+	telemetryEnabled?: boolean;
+	onTelemetryPersist?: (enabled: boolean) => Promise<void>;
 }
 
 function InitFirstPage(props: InitPagesProps) {
@@ -876,6 +878,9 @@ function InitInstallationPage(props: InitPagesProps) {
 function InitFinishedPage(props: InitPagesProps) {
 	const handleFinish = async (target: string = "/home") => {
 		try {
+			if (props.onTelemetryPersist) {
+				await props.onTelemetryPersist(props.telemetryEnabled ?? true);
+			}
 			await invoke("complete_onboarding");
 			props.navigate?.(target, { replace: true });
 
