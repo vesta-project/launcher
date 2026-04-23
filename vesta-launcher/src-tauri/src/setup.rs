@@ -9,6 +9,8 @@ use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -151,6 +153,50 @@ fn store_crash_details_setup(
         "Instance {} not found in database",
         instance_id_slug
     ))
+}
+
+fn setup_tray(app: &tauri::AppHandle, show_tray_icon: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let show_i = MenuItem::with_id(app, "tray_show", "Show", true, None::<&str>)?;
+    let hide_i = MenuItem::with_id(app, "tray_hide", "Hide", true, None::<&str>)?;
+    let quit_i = MenuItem::with_id(app, "tray_quit", "Quit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
+
+    TrayIconBuilder::with_id("main-tray")
+        .icon(app.default_window_icon().unwrap().clone())
+        .menu(&menu)
+        .show_menu_on_left_click(cfg!(target_os = "linux"))
+        .on_menu_event(|app, event| match event.id.as_ref() {
+            "tray_show" => {
+                let _ = crate::utils::windows::ensure_main_window_visible(app);
+            }
+            "tray_hide" => {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
+            "tray_quit" => {
+                let _ = crate::commands::app::request_guarded_exit(app, "tray-menu");
+            }
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            #[cfg(any(target_os = "windows", target_os = "macos"))]
+            if let tauri::tray::TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                let _ = crate::utils::windows::ensure_main_window_visible(tray.app_handle());
+            }
+        })
+        .build(app)?;
+
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        let _ = tray.set_visible(show_tray_icon);
+    }
+
+    Ok(())
 }
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
@@ -757,44 +803,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .transparent(true)
             .decorations(false);
         
-    // // Setup system tray icon and menu (conditional based on config)
-    // let config = get_app_config()?;
-    // if config.show_tray_icon {
-    //     let show_i = MenuItem::with_id(app, "show", "Show Window", true, None::<&str>)?;
-    //     let hide_i = MenuItem::with_id(app, "hide", "Hide Window", true, None::<&str>)?;
-    //     let quit_i = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    //     let menu = Menu::with_items(app, &[&show_i, &hide_i, &quit_i])?;
-
-    //     // Load tray icon
-    //     let icon_path = app.path().resource_dir()?.join("icons").join("32x32.png");
-    //     let icon_data = std::fs::read(&icon_path)
-    //         .map_err(|e| format!("Failed to read tray icon: {}", e))?;
-    //     let icon = tauri::image::Image::new_owned(icon_data, 32, 32);
-
-    //     let _tray = TrayIconBuilder::new()
-    //         .icon(icon)
-    //         .menu(&menu)
-    //         .on_menu_event(|app, event| match event.id.as_ref() {
-    //             "show" => {
-    //                 if let Some(window) = app.get_webview_window("main") {
-    //                     let _ = window.show();
-    //                     let _ = window.set_focus();
-    //                 }
-    //             }
-    //             "hide" => {
-    //                 if let Some(window) = app.get_webview_window("main") {
-    //                     let _ = window.hide();
-    //                 }
-    //             }
-    //             "quit" => {
-    //                 app.exit(0);
-    //             }
-    //             _ => {
-    //                 println!("menu item {:?} not handled", event.id);
-    //             }
-    //         })
-    //         .build(app)?;
-    // }
+    let config = get_app_config()?;
+    if let Err(e) = setup_tray(app.handle(), config.show_tray_icon) {
+        log::warn!("Failed to initialize tray: {}", e);
+    }
 
     // Apply the macOS-specific title bar style
     #[cfg(target_os = "macos")]

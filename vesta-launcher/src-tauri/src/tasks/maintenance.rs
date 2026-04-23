@@ -132,6 +132,8 @@ impl Task for CloneInstanceTask {
                 use_global_hooks: source.use_global_hooks,
                 use_global_environment_variables: source.use_global_environment_variables,
                 use_global_game_dir: source.use_global_game_dir,
+                use_global_launcher_action: source.use_global_launcher_action,
+                launcher_action_on_launch: source.launcher_action_on_launch.clone(),
                 environment_variables: source.environment_variables.clone(),
                 pre_launch_hook: source.pre_launch_hook.clone(),
                 wrapper_command: source.wrapper_command.clone(),

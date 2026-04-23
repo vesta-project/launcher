@@ -14,6 +14,69 @@ use std::sync::Arc;
 use std::time::UNIX_EPOCH;
 use tauri::{Manager, State};
 
+#[derive(Debug, Clone, Copy)]
+enum LauncherActionOnLaunch {
+    StayOpen,
+    Minimize,
+    HideToTray,
+    Quit,
+}
+
+impl LauncherActionOnLaunch {
+    fn from_config_value(value: &str) -> Self {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "minimize" => Self::Minimize,
+            "hide-to-tray" => Self::HideToTray,
+            "quit" => Self::Quit,
+            _ => Self::StayOpen,
+        }
+    }
+}
+
+fn resolve_launcher_action(inst: &Instance, app_config: &crate::utils::config::AppConfig) -> LauncherActionOnLaunch {
+    if !inst.use_global_launcher_action {
+        if let Some(local_value) = inst.launcher_action_on_launch.as_deref() {
+            return LauncherActionOnLaunch::from_config_value(local_value);
+        }
+    }
+
+    LauncherActionOnLaunch::from_config_value(&app_config.default_launcher_action_on_launch)
+}
+
+fn apply_launcher_action_after_launch(
+    app_handle: &tauri::AppHandle,
+    resolved_action: LauncherActionOnLaunch,
+    tray_visible: bool,
+) {
+    let Some(main_window) = app_handle.get_webview_window("main") else {
+        log::warn!("Launcher action skipped: main window not found");
+        return;
+    };
+
+    match resolved_action {
+        LauncherActionOnLaunch::StayOpen => {
+            log::info!("Launcher action on launch resolved to stay-open");
+        }
+        LauncherActionOnLaunch::Minimize => {
+            log::info!("Launcher action on launch resolved to minimize");
+            let _ = main_window.minimize();
+        }
+        LauncherActionOnLaunch::HideToTray => {
+            log::info!("Launcher action on launch resolved to hide-to-tray");
+            if tray_visible {
+                let _ = main_window.hide();
+            } else {
+                log::info!("Tray hidden/unavailable, falling back to minimize");
+                let _ = main_window.minimize();
+            }
+        }
+        LauncherActionOnLaunch::Quit => {
+            log::info!("Launcher action on launch resolved to quit (guarded exit)");
+            let _ = crate::commands::app::request_guarded_exit(app_handle, "launch-action-quit");
+        }
+    }
+}
+
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
@@ -511,6 +574,8 @@ pub async fn create_instance(
         use_global_hooks: inst.use_global_hooks,
         use_global_environment_variables: inst.use_global_environment_variables,
         use_global_game_dir: inst.use_global_game_dir,
+        use_global_launcher_action: inst.use_global_launcher_action,
+        launcher_action_on_launch: inst.launcher_action_on_launch,
         environment_variables: inst.environment_variables,
         pre_launch_hook: inst.pre_launch_hook,
         wrapper_command: inst.wrapper_command,
@@ -829,6 +894,8 @@ pub async fn update_instance(
             use_global_hooks.eq(final_instance.use_global_hooks),
             use_global_environment_variables.eq(final_instance.use_global_environment_variables),
             use_global_game_dir.eq(final_instance.use_global_game_dir),
+            use_global_launcher_action.eq(final_instance.use_global_launcher_action),
+            launcher_action_on_launch.eq(&final_instance.launcher_action_on_launch),
             environment_variables.eq(&final_instance.environment_variables),
             pre_launch_hook.eq(&final_instance.pre_launch_hook),
             wrapper_command.eq(&final_instance.wrapper_command),
@@ -997,6 +1064,8 @@ pub async fn launch_instance(
 
     // Load app configuration for defaults
     let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+    let resolved_launcher_action = resolve_launcher_action(&instance_data, &app_config);
+    let tray_visible = app_config.show_tray_icon;
 
     // Get app config directory
     let data_dir = crate::utils::db_manager::get_app_config_dir()
@@ -1411,6 +1480,8 @@ pub async fn launch_instance(
                     "start_time": std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
                 }),
             );
+
+            apply_launcher_action_after_launch(&app_handle, resolved_launcher_action, tray_visible);
 
             // Update Discord activity
             if let Some(dm) = app_handle.try_state::<DiscordManager>() {

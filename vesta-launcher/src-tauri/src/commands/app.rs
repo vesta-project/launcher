@@ -3,6 +3,7 @@ use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, D
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use tauri::Manager;
+use tauri::Emitter;
 
 #[tauri::command]
 pub async fn test_blocking_dialog(
@@ -412,17 +413,24 @@ pub fn get_tray_settings() -> Result<TraySettings, String> {
     Ok(TraySettings {
         show_tray_icon: config.show_tray_icon,
         minimize_to_tray: config.minimize_to_tray,
+        default_launcher_action_on_launch: config.default_launcher_action_on_launch,
     })
 }
 
 #[tauri::command]
 pub fn set_tray_icon_visibility(app: tauri::AppHandle, visible: bool) -> Result<(), String> {
     crate::utils::config::update_config_field(
-        app,
+        app.clone(),
         "show_tray_icon".to_string(),
         serde_json::json!(visible),
     )
     .map_err(|e| format!("Failed to update tray icon visibility: {}", e))?;
+
+    if let Some(tray) = app.tray_by_id("main-tray") {
+        tray.set_visible(visible)
+            .map_err(|e| format!("Failed to apply tray icon visibility: {}", e))?;
+    }
+
     Ok(())
 }
 
@@ -443,10 +451,19 @@ pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+pub fn request_guarded_exit(app_handle: &tauri::AppHandle, source: &str) -> Result<(), String> {
+    log::info!("Requesting guarded exit from source: {}", source);
+    let _ = crate::utils::windows::ensure_main_window_visible(app_handle);
+    app_handle
+        .emit("core://exit-requested", ())
+        .map_err(|e| format!("Failed to emit guarded exit request: {}", e))
+}
+
 #[derive(serde::Serialize)]
 pub struct TraySettings {
     pub show_tray_icon: bool,
     pub minimize_to_tray: bool,
+    pub default_launcher_action_on_launch: String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]

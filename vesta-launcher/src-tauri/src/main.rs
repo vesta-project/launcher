@@ -241,10 +241,38 @@ fn main() {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     if window.label() == "main" {
                         api.prevent_close();
-                        let _ = window.emit("core://exit-requested", ());
+                        match crate::utils::config::get_app_config() {
+                            Ok(config) if config.minimize_to_tray => {
+                                // If close-to-tray is enabled, force tray visibility for discoverability
+                                // even when the persistent tray toggle is currently off.
+                                if let Some(tray) = window.app_handle().tray_by_id("main-tray") {
+                                    let _ = tray.set_visible(true);
+                                }
+                                log::info!(
+                                    "Close requested: hiding to tray (show_tray_icon setting: {})",
+                                    config.show_tray_icon
+                                );
+                                let _ = window.hide();
+                            }
+                            Ok(_) => {
+                                let _ = crate::commands::app::request_guarded_exit(
+                                    &window.app_handle(),
+                                    "window-close",
+                                );
+                            }
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to read config for close behavior (falling back to guarded exit): {}",
+                                    e
+                                );
+                                let _ = crate::commands::app::request_guarded_exit(
+                                    &window.app_handle(),
+                                    "window-close-config-error",
+                                );
+                            }
+                        }
                     }
                 }
-                // TODO: Add minimize-to-tray functionality when WindowEvent::Minimized is available
                 _ => {}
             }
         })
