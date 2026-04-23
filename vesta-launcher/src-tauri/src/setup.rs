@@ -811,7 +811,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         "linux"
     };
 
-    let mut win_builder = tauri::WebviewWindowBuilder::new(
+    let win_builder = tauri::WebviewWindowBuilder::new(
         app,
         "main",
         tauri::WebviewUrl::App("index.html".into()),
@@ -830,6 +830,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .decorations(false);
         
     let config = get_app_config()?;
+    // Legacy bridge: use persisted config size as bootstrap defaults until window-state restore applies.
+    let win_builder = win_builder.inner_size(
+        config.last_window_width as f64,
+        config.last_window_height as f64,
+    );
     #[cfg(desktop)]
     if let Err(e) = sync_autostart_with_config(app.handle(), config.autostart_enabled) {
         log::warn!("Failed to sync autostart state with config: {}", e);
@@ -859,7 +864,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         let fallback_window = _main_win.clone();
         tauri::async_runtime::spawn(async move {
             tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-            if matches!(fallback_window.is_visible(), Ok(false)) {
+            let is_visible = fallback_window.is_visible().unwrap_or(false);
+            let is_minimized = fallback_window.is_minimized().unwrap_or(false);
+            if !is_visible && !is_minimized {
                 log::warn!("Main window still hidden after startup timeout; forcing show fallback");
                 let _ = fallback_window.show();
             }
