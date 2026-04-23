@@ -94,6 +94,8 @@ diesel::table! {
         use_global_hooks -> Bool,
         use_global_environment_variables -> Bool,
         use_global_game_dir -> Bool,
+        use_global_launcher_action -> Bool,
+        launcher_action_on_launch -> Nullable<Text>,
         environment_variables -> Nullable<Text>,
         pre_launch_hook -> Nullable<Text>,
         wrapper_command -> Nullable<Text>,

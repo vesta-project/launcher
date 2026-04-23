@@ -156,6 +156,7 @@ pub struct AppConfig {
     pub default_wrapper_command: Option<String>,
     pub default_post_exit_hook: Option<String>,
     pub default_min_memory: i32,
+    pub default_launcher_action_on_launch: String,
     pub theme_window_effect: Option<String>,
     pub theme_background_opacity: Option<i32>,
     pub theme_data: Option<String>,
@@ -208,6 +209,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         Option<String>, // default_wrapper_command
         Option<String>, // default_post_exit_hook
         i32, // default_min_memory
+        String, // default_launcher_action_on_launch
         Option<String>, // theme_window_effect
         Option<i32>, // theme_background_opacity
         Option<String>, // theme_data
@@ -260,9 +262,10 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             default_wrapper_command: row.42,
             default_post_exit_hook: row.43,
             default_min_memory: row.44,
-            theme_window_effect: row.45,
-            theme_background_opacity: row.46,
-            theme_data: row.47,
+            default_launcher_action_on_launch: row.45,
+            theme_window_effect: row.46,
+            theme_background_opacity: row.47,
+            theme_data: row.48,
         })
     }
 }
@@ -322,6 +325,7 @@ impl Default for AppConfig {
             default_wrapper_command: None,
             default_post_exit_hook: None,
             default_min_memory: 2048,
+            default_launcher_action_on_launch: "stay-open".to_string(),
         }
     }
 }
