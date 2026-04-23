@@ -55,7 +55,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Error Telemetry"
 					description={
 						<>
-							Send crash and error diagnostics to help improve reliability. Enabled by default (opt-out).
+							Send crash and error diagnostics to help improve reliability.
 							{" "}
 							<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
 								Privacy Policy

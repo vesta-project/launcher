@@ -164,6 +164,8 @@ pub struct AppConfig {
 }
 
 impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite> for AppConfig {
+    // NOTE: Keep this tuple in exact app_config column order from schema/config.rs.
+    // When adding a field, update schema order + Row tuple + build assignments together.
     type Row = (
         i32, // id
         i32, // background_hue
@@ -219,6 +221,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
         Ok(AppConfig {
+            // Core fields
             id: row.0,
             background_hue: row.1,
             theme: row.2,
@@ -238,6 +241,8 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             debug_logging: row.16,
             notification_retention_days: row.17,
             active_account_uuid: row.18,
+
+            // Theme fields
             theme_id: row.19,
             theme_mode: row.20,
             theme_primary_hue: row.21,
@@ -250,24 +255,19 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             theme_advanced_overrides: row.28,
             theme_gradient_type: row.29,
             theme_border_width: row.30,
+
+            // Onboarding fields
             setup_completed: row.31,
             setup_step: row.32,
             tutorial_completed: row.33,
+
+            // Integration and runtime toggles
             use_dedicated_gpu: row.34,
-            discord_presence_enabled: row.35,
-            auto_install_dependencies: row.36,
-            default_width: row.37,
-            default_height: row.38,
-            default_java_args: row.39,
-            default_environment_variables: row.40,
-            default_pre_launch_hook: row.41,
-            default_wrapper_command: row.42,
-            default_post_exit_hook: row.43,
-            default_min_memory: row.44,
-            default_launcher_action_on_launch: row.45,
             telemetry_enabled: row.35,
             discord_presence_enabled: row.36,
             auto_install_dependencies: row.37,
+
+            // Instance defaults
             default_width: row.38,
             default_height: row.39,
             default_java_args: row.40,
@@ -276,9 +276,12 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             default_wrapper_command: row.43,
             default_post_exit_hook: row.44,
             default_min_memory: row.45,
-            theme_window_effect: row.46,
-            theme_background_opacity: row.47,
-            theme_data: row.48,
+            default_launcher_action_on_launch: row.46,
+
+            // Theme extras
+            theme_window_effect: row.47,
+            theme_background_opacity: row.48,
+            theme_data: row.49,
         })
     }
 }

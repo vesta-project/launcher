@@ -1005,9 +1005,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			onAction: (actionId) => {
 				if (actionId === "restart_app" && hasTauriRuntime()) {
 					void invoke("restart_app");
-      }
-    },
-  });
+				}
+			},
+		});
+	};
 
 	const updateDefaultField = async (field: string, value: any) => {
 		setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
