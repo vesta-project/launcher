@@ -108,6 +108,7 @@ export interface AppConfig {
 	setup_step: number;
 	tutorial_completed: boolean;
 	use_dedicated_gpu: boolean;
+	telemetry_enabled: boolean;
 	discord_presence_enabled: boolean;
 	auto_install_dependencies: boolean;
 
@@ -172,6 +173,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
 	const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 	const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
+	const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
 	const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
 	const [autoInstallDependencies, setAutoInstallDependencies] = createSignal(true);
 	const [maxDownloadThreads, setMaxDownloadThreads] = createSignal(4);
@@ -563,6 +565,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				setAutoUpdateEnabled(config.auto_update_enabled ?? true);
 				setStartupCheckUpdates(config.startup_check_updates ?? true);
 				setUseDedicatedGpu(config.use_dedicated_gpu ?? true);
+				setTelemetryEnabled(config.telemetry_enabled ?? true);
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
 				setMaxDownloadThreads(config.max_download_threads ?? 4);
@@ -638,6 +641,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				if (field === "auto_update_enabled") setAutoUpdateEnabled(value);
 				if (field === "startup_check_updates") setStartupCheckUpdates(value);
 				if (field === "use_dedicated_gpu") setUseDedicatedGpu(value ?? true);
+				if (field === "telemetry_enabled") setTelemetryEnabled(value ?? true);
 				if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
 				if (field === "reduced_motion") setReducedMotion(value ?? false);
 				if (field === "theme_id" && value) {
@@ -953,6 +957,34 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				value: checked,
 			});
 		}
+	};
+
+	const handleTelemetryToggle = async (checked: boolean) => {
+		setTelemetryEnabled(checked);
+		if (hasTauriRuntime()) {
+			await invoke("update_config_field", {
+				field: "telemetry_enabled",
+				value: checked,
+			});
+		}
+
+		showToast({
+			title: "Telemetry Preference Updated",
+			description: "Restart Vesta Launcher to apply telemetry changes to backend crash reporting.",
+			severity: "info",
+			actions: [
+				{
+					id: "restart_app",
+					label: "Restart Now",
+					type: "primary",
+				},
+			],
+			onAction: (actionId) => {
+				if (actionId === "restart_app" && hasTauriRuntime()) {
+					void invoke("restart_app");
+				}
+			},
+		});
 	};
 
 	const updateDefaultField = async (field: string, value: any) => {
@@ -1417,6 +1449,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleReducedMotionToggle={handleReducedMotionToggle}
 								discordPresenceEnabled={discordPresenceEnabled()}
 								handleDiscordToggle={handleDiscordToggle}
+								telemetryEnabled={telemetryEnabled()}
+								handleTelemetryToggle={handleTelemetryToggle}
 								autoInstallDependencies={autoInstallDependencies()}
 								handleAutoInstallDepsToggle={handleAutoInstallDepsToggle}
 								maxDownloadThreads={maxDownloadThreads()}
