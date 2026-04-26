@@ -271,7 +271,6 @@ export const VersioningTab = (props: VersioningTabProps) => {
 								<Button
 									onClick={props.handleStandardUpdate}
 									disabled={props.busy || props.isInstalling || props.isGuest}
-									color="primary"
 									variant="shadow"
 								>
 									Switch Engine
