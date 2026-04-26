@@ -67,9 +67,9 @@ impl ExternalLauncherProvider for ATLauncherProvider {
                 minecraft_version: Some(parsed.id),
                 modloader: parsed.launcher.loader_version.as_ref().map(|l| l.r#type.clone()),
                 modloader_version: parsed.launcher.loader_version.map(|l| l.version),
-                modpack_platform: Some("modrinth".to_string()),
-                modpack_id: parsed.launcher.modrinth_project.map(|p| p.id),
-                modpack_version_id: parsed.launcher.modrinth_version.map(|v| v.id),
+                modpack_platform: None,
+                modpack_id: None,
+                modpack_version_id: None,
                 ..Default::default()
             });
         }
