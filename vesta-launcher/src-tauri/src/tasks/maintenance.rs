@@ -8,6 +8,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use futures::future::BoxFuture;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 use walkdir::WalkDir;
 
 pub struct CloneInstanceTask {
@@ -282,6 +283,118 @@ impl Task for RepairInstanceTask {
             install_task.set_update_notification_title(false);
             install_task.run(ctx).await?;
 
+            Ok(())
+        })
+    }
+}
+
+pub struct DeleteInstanceTask {
+    instance_id: i32,
+}
+
+impl DeleteInstanceTask {
+    pub fn new(instance_id: i32) -> Self {
+        Self { instance_id }
+    }
+}
+
+impl Task for DeleteInstanceTask {
+    fn name(&self) -> String {
+        "Deleting Instance".to_string()
+    }
+
+    fn id(&self) -> Option<String> {
+        Some(format!("delete_instance_{}", self.instance_id))
+    }
+
+    fn cancellable(&self) -> bool {
+        false
+    }
+
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
+    fn starting_description(&self) -> String {
+        "Preparing uninstall...".to_string()
+    }
+
+    fn completion_description(&self) -> String {
+        "Instance deleted".to_string()
+    }
+
+    fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
+        let instance_id = self.instance_id;
+
+        Box::pin(async move {
+            log::info!(
+                "[delete_instance_task] start instance_id={}",
+                instance_id
+            );
+            ctx.update_full(5, "Stopping watcher...".to_string(), Some(1), Some(5));
+            let watcher = ctx.app_handle.state::<crate::resources::watcher::ResourceWatcher>();
+            if let Err(e) = tokio::time::timeout(
+                tokio::time::Duration::from_secs(5),
+                watcher.unwatch_instance(instance_id),
+            )
+            .await
+            {
+                log::warn!(
+                    "[delete_instance_task] unwatch timeout instance_id={} error={}",
+                    instance_id,
+                    e
+                );
+            }
+
+            ctx.update_full(25, "Removing database references...".to_string(), Some(2), Some(5));
+            let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+            use crate::schema::instance::dsl::*;
+
+            let inst = instance
+                .find(instance_id)
+                .first::<Instance>(&mut conn)
+                .map_err(|e| format!("Instance not found: {}", e))?;
+            let slug_val = inst.slug();
+            let game_dir = inst.game_directory.clone();
+
+            let _ = diesel::delete(
+                crate::schema::installed_resource::dsl::installed_resource.filter(
+                    crate::schema::installed_resource::dsl::instance_id.eq(instance_id),
+                ),
+            )
+            .execute(&mut conn);
+
+            ctx.update_full(50, "Deleting instance record...".to_string(), Some(3), Some(5));
+            diesel::delete(instance.find(instance_id))
+                .execute(&mut conn)
+                .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
+
+            if let Some(gd) = game_dir {
+                ctx.update_full(75, "Removing instance files...".to_string(), Some(4), Some(5));
+                let gd_path = std::path::PathBuf::from(gd);
+                if gd_path.exists() {
+                    if let Err(e) = std::fs::remove_dir_all(&gd_path) {
+                        log::error!(
+                            "[delete_instance_task] failed to remove dir instance_id={} path={:?} error={}",
+                            instance_id,
+                            gd_path,
+                            e
+                        );
+                    }
+                }
+            }
+
+            ctx.update_full(95, "Finalizing...".to_string(), Some(5), Some(5));
+            use tauri::Emitter;
+            let _ = ctx.app_handle.emit(
+                "core://instance-deleted",
+                serde_json::json!({ "id": instance_id }),
+            );
+            log::info!(
+                "[delete_instance_task] completed instance_id={} slug={}",
+                instance_id,
+                slug_val
+            );
             Ok(())
         })
     }
