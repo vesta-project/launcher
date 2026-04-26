@@ -108,6 +108,20 @@ function removeInstance(instanceId: number) {
 	setInstancesState("instances", (instances) => instances.filter((inst) => inst.id !== instanceId));
 }
 
+export function removeInstanceOptimistic(instanceId: number): Instance | null {
+	const snapshot = instancesState.instances.find((inst) => inst.id === instanceId) ?? null;
+	removeInstance(instanceId);
+	return snapshot;
+}
+
+export function restoreInstanceOptimistic(instanceSnapshot: Instance | null) {
+	if (!instanceSnapshot) return;
+	const exists = instancesState.instances.some((inst) => inst.id === instanceSnapshot.id);
+	if (!exists) {
+		setInstancesState("instances", (instances) => [instanceSnapshot, ...instances]);
+	}
+}
+
 // Listen for Tauri events
 let setupPromise: Promise<void> | null = null;
 
@@ -127,6 +141,11 @@ export function setupInstanceListeners() {
 
 		// Listen for instance deletion
 		await listen<{ id: number }>("core://instance-deleted", (event) => {
+			removeInstance(event.payload.id);
+		});
+
+		// Optimistic deletion signal (task queued)
+		await listen<{ id: number }>("core://instance-delete-queued", (event) => {
 			removeInstance(event.payload.id);
 		});
 

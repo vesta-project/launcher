@@ -1,0 +1,101 @@
+import { resources, type ResourceVersion, type SourcePlatform } from "@stores/resources";
+import { batch, createEffect, createResource, type Accessor } from "solid-js";
+import { showToast } from "@ui/toast/toast";
+
+interface UseProjectVersionsParams {
+	isModpackMode: Accessor<boolean>;
+	modpackPath: Accessor<string>;
+	modpackUrl: Accessor<string>;
+	modpackInfo: Accessor<{ modpackId?: string; modpackPlatform?: string } | undefined>;
+	projectId?: string;
+	platform?: string;
+	initialVersion?: string;
+	selectedModpackVersionId: Accessor<string>;
+	setSelectedModpackVersionId: (id: string) => void;
+	setModpackUrl: (url: string) => void;
+}
+
+export function useProjectVersions(params: UseProjectVersionsParams) {
+	const [projectVersions] = createResource(
+		() => {
+			if (params.modpackPath()) return null;
+
+			const pId = params.projectId || params.modpackInfo()?.modpackId;
+			const pPlatform = params.platform || params.modpackInfo()?.modpackPlatform;
+			if (pId && pPlatform) return { id: pId, platform: pPlatform };
+			return null;
+		},
+		async ({ id, platform }: { id: string; platform: string }) => {
+			try {
+				const vs = await resources.getVersions(platform as SourcePlatform, id);
+				const currentUrl = params.modpackUrl();
+				const info = params.modpackInfo();
+				const initialVer = params.initialVersion || (info as { modpackVersionId?: string } | undefined)?.modpackVersionId;
+
+				if (initialVer) {
+					const match = vs.find((v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer);
+					if (match) {
+						params.setSelectedModpackVersionId(match.id);
+						return vs;
+					}
+				}
+
+				if (currentUrl) {
+					const match = vs.find((v: ResourceVersion) => v.download_url === currentUrl);
+					if (match) {
+						params.setSelectedModpackVersionId(match.id);
+						return vs;
+					}
+				}
+
+				if (vs.length > 0 && params.isModpackMode()) {
+					const target = vs[0];
+					batch(() => {
+						params.setSelectedModpackVersionId(target.id);
+						params.setModpackUrl(target.download_url);
+					});
+				}
+				return vs;
+			} catch (error) {
+				console.error("[InstallPage] Version fetch failed:", error);
+				return [];
+			}
+		},
+	);
+
+	createEffect(() => {
+		const versions = projectVersions();
+		const selectedId = params.selectedModpackVersionId();
+		if (!versions || versions.length === 0 || !selectedId) return;
+
+		const match = versions.find(
+			(version: ResourceVersion) => version.id === selectedId || version.version_number === selectedId,
+		);
+		if (match) {
+			if (match.id !== selectedId) params.setSelectedModpackVersionId(match.id);
+			return;
+		}
+
+		const fallback = versions[0];
+		batch(() => {
+			params.setSelectedModpackVersionId(fallback.id);
+			params.setModpackUrl(fallback.download_url);
+		});
+		showToast({
+			title: "Version Updated",
+			description:
+				"The selected modpack version is no longer available. Switched to the latest available version.",
+			severity: "info",
+		});
+	});
+
+	const handleModpackVersionChange = (versionId: string) => {
+		const versions = projectVersions();
+		const target = versions?.find((v: ResourceVersion) => v.id === versionId);
+		if (!target) return;
+		params.setSelectedModpackVersionId(versionId);
+		params.setModpackUrl(target.download_url);
+	};
+
+	return { projectVersions, handleModpackVersionChange };
+}

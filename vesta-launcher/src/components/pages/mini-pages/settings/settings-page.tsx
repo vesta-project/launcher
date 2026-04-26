@@ -1509,6 +1509,12 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleShowTrayIconToggle={handleShowTrayIconToggle}
 								closeToTray={closeToTray()}
 								handleCloseToTrayToggle={handleCloseToTrayToggle}
+								navigateToImporter={() =>
+									activeRouter()?.navigate("/install", {
+										mode: "modpack",
+										source: "launcher",
+									})
+								}
 							/>
 						</Suspense>
 					</TabsContent>
