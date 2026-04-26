@@ -46,7 +46,7 @@ impl ResourceWatcher {
         Self {
             app_handle,
             watchers: Arc::new(Mutex::new(HashMap::new())),
-            scan_limiter: Arc::new(Semaphore::new(4)),
+            scan_limiter: Arc::new(Semaphore::new(6)),
             in_flight_scans: Arc::new(Mutex::new(HashSet::new())),
         }
     }
@@ -75,10 +75,11 @@ impl ResourceWatcher {
         game_dir: String,
         initial_scan: bool,
     ) -> anyhow::Result<()> {
-        let mut watchers = self.watchers.lock().await;
-
-        if watchers.contains_key(&db_id) {
-            return Ok(());
+        {
+            let watchers = self.watchers.lock().await;
+            if watchers.contains_key(&db_id) {
+                return Ok(());
+            }
         }
 
         let game_path = PathBuf::from(&game_dir);
@@ -89,24 +90,14 @@ impl ResourceWatcher {
         let scan_limiter = self.scan_limiter.clone();
         let in_flight_scans = self.in_flight_scans.clone();
 
-        // Initial scan
-        if initial_scan {
-            for folder in folders_to_watch {
-                let path = game_path.join(folder);
-                if path.exists() {
-                    self.scan_folder(db_id, &path).await?;
-                    // Cleanup any resources in database that no longer exist on disk
-                    let _ = self.cleanup_missing_resources(db_id, &path).await;
-                }
-            }
-        }
-
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
         let mut watcher = notify::RecommendedWatcher::new(
             move |res: notify::Result<Event>| {
                 if let Ok(event) = res {
-                    let _ = tx.blocking_send(event);
+                    if tx.try_send(event).is_err() {
+                        log::debug!("[ResourceWatcher] Event queue full, dropping event");
+                    }
                 }
             },
             Config::default(),
@@ -118,6 +109,15 @@ impl ResourceWatcher {
                 watcher.watch(&path, RecursiveMode::NonRecursive)?;
                 log::info!("[ResourceWatcher] Watching: {:?}", path);
             }
+        }
+
+        {
+            let mut watchers = self.watchers.lock().await;
+            // Double-check after watcher creation to avoid duplicate registration races.
+            if watchers.contains_key(&db_id) {
+                return Ok(());
+            }
+            watchers.insert(db_id, watcher);
         }
 
         // Handle events in a separate task
@@ -148,7 +148,18 @@ impl ResourceWatcher {
             }
         });
 
-        watchers.insert(db_id, watcher);
+        // Initial scan after watcher registration so worker tasks don't block on is_watched checks.
+        if initial_scan {
+            for folder in folders_to_watch {
+                let path = game_path.join(folder);
+                if path.exists() {
+                    self.scan_folder(db_id, &path).await?;
+                    // Cleanup any resources in database that no longer exist on disk
+                    let _ = self.cleanup_missing_resources(db_id, &path).await;
+                }
+            }
+        }
+
         Ok(())
     }
 
@@ -175,7 +186,6 @@ impl ResourceWatcher {
         progress_tx: Option<&tokio::sync::mpsc::UnboundedSender<ScanProgressSnapshot>>,
     ) -> Result<ScanSummary> {
         log::info!("[ResourceWatcher] Scanning folder: {:?}", folder_path);
-        let watchers_ptr = self.watchers.clone();
         let scan_limiter = self.scan_limiter.clone();
         let in_flight_scans = self.in_flight_scans.clone();
         let mut join_set = tokio::task::JoinSet::new();
@@ -205,7 +215,6 @@ impl ResourceWatcher {
         }
         for path in candidates {
                 let app = self.app_handle.clone();
-                let watchers_spawn = watchers_ptr.clone();
                 let limiter_spawn = scan_limiter.clone();
                 let in_flight_spawn = in_flight_scans.clone();
 
@@ -236,29 +245,17 @@ impl ResourceWatcher {
                         clear_in_flight(&in_flight_spawn, db_id, &path).await;
                         return;
                     }
-                    // Check if still watched
-                    let is_watched = {
-                        let w = watchers_spawn.lock().await;
-                        w.contains_key(&db_id)
-                    };
-                    if is_watched {
-                        // Pass metadata for skip check
-                        if let Err(e) = identify_and_link_resource(
-                            &app,
-                            db_id,
-                            &path,
-                            watchers_spawn,
-                            Some((file_size, file_mtime)),
-                        )
-                        .await
-                        {
-                            if !e.to_string().contains("FOREIGN KEY") {
-                                log::error!(
-                                    "[ResourceWatcher] Failed to identify {:?}: {}",
-                                    path,
-                                    e
-                                );
-                            }
+                    // Pass metadata for skip check
+                    if let Err(e) =
+                        identify_and_link_resource(&app, db_id, &path, Some((file_size, file_mtime)))
+                            .await
+                    {
+                        if !e.to_string().contains("FOREIGN KEY") {
+                            log::error!(
+                                "[ResourceWatcher] Failed to identify {:?}: {}",
+                                path,
+                                e
+                            );
                         }
                     }
                     clear_in_flight(&in_flight_spawn, db_id, &path).await;
@@ -416,7 +413,6 @@ async fn handle_event(
                                 &app_clone,
                                 db_id,
                                 &path,
-                                watchers_clone,
                                 Some((file_size, file_mtime)),
                             )
                             .await
@@ -493,17 +489,8 @@ async fn identify_and_link_resource(
     app: &AppHandle,
     instance_db_id: i32,
     path: &Path,
-    watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
     metadata: Option<(i64, i64)>,
 ) -> Result<()> {
-    // Check if still watched before doing heavy work
-    {
-        let w = watchers.lock().await;
-        if !w.contains_key(&instance_db_id) {
-            return Ok(());
-        }
-    }
-
     if !path.exists() {
         return Ok(());
     }
@@ -546,7 +533,8 @@ async fn identify_and_link_resource(
                     && res.file_mtime == file_mtime
                     && res.is_enabled == is_enabled
                 {
-                    if res.platform != "modpack" || !res.remote_id.is_empty() {
+                    let unresolved_manual = res.platform == "manual" && res.remote_id.is_empty();
+                    if (!unresolved_manual) && (res.platform != "modpack" || !res.remote_id.is_empty()) {
                         log::debug!(
                             "[ResourceWatcher] Metadata match for {}, skipping scan",
                             path_str
@@ -765,17 +753,33 @@ pub async fn link_manual_resource_to_db(
             "[ResourceWatcher] Updating existing record for manual resource: {}",
             res.display_name
         );
-        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
-            .set((
-                ir_dsl::is_enabled.eq(is_enabled),
-                ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
-                ir_dsl::hash.eq(hash),
-                ir_dsl::file_size.eq(file_size_val),
-                ir_dsl::file_mtime.eq(file_mtime_val),
-                ir_dsl::resource_type.eq(inferred_type),
-                ir_dsl::platform.eq(platform),
-            ))
-            .execute(&mut conn)?;
+        let has_canonical_link = !res.remote_id.is_empty()
+            && (res.platform == "curseforge" || res.platform == "modrinth");
+        if has_canonical_link {
+            // Preserve canonical linkage data when transient states (e.g. offline) force manual linking path.
+            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
+                .set((
+                    ir_dsl::is_enabled.eq(is_enabled),
+                    ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
+                    ir_dsl::hash.eq(hash),
+                    ir_dsl::file_size.eq(file_size_val),
+                    ir_dsl::file_mtime.eq(file_mtime_val),
+                    ir_dsl::resource_type.eq(inferred_type),
+                ))
+                .execute(&mut conn)?;
+        } else {
+            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
+                .set((
+                    ir_dsl::is_enabled.eq(is_enabled),
+                    ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
+                    ir_dsl::hash.eq(hash),
+                    ir_dsl::file_size.eq(file_size_val),
+                    ir_dsl::file_mtime.eq(file_mtime_val),
+                    ir_dsl::resource_type.eq(inferred_type),
+                    ir_dsl::platform.eq(platform),
+                ))
+                .execute(&mut conn)?;
+        }
         return Ok(());
     }
 
