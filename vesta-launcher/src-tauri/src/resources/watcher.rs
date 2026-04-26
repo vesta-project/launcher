@@ -6,17 +6,39 @@ use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_sha1};
 use crate::utils::instance_helpers::normalize_path;
 use anyhow::Result;
 use notify::{Config, Event, RecursiveMode, Watcher};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, Semaphore};
+use tokio::time::Duration;
 use walkdir::WalkDir;
+
+#[derive(Debug, Clone, Default)]
+pub struct ScanSummary {
+    pub total: usize,
+    pub processed: usize,
+    pub skipped: usize,
+    pub failed: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ScanProgressSnapshot {
+    pub folder: String,
+    pub total: usize,
+    pub processed: usize,
+    pub skipped: usize,
+    pub failed: usize,
+}
 
 pub struct ResourceWatcher {
     app_handle: AppHandle,
     // Map of db_id -> watcher
     watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
+    // Bounds identification/hash/link fan-out to prevent resource spikes.
+    scan_limiter: Arc<Semaphore>,
+    // De-duplicate in-flight scans for identical instance/path keys.
+    in_flight_scans: Arc<Mutex<HashSet<String>>>,
 }
 
 impl ResourceWatcher {
@@ -24,6 +46,8 @@ impl ResourceWatcher {
         Self {
             app_handle,
             watchers: Arc::new(Mutex::new(HashMap::new())),
+            scan_limiter: Arc::new(Semaphore::new(4)),
+            in_flight_scans: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 
@@ -33,6 +57,23 @@ impl ResourceWatcher {
         _slug: String,
         db_id: i32,
         game_dir: String,
+    ) -> anyhow::Result<()> {
+        self.watch_instance_internal(db_id, game_dir, true).await
+    }
+
+    pub async fn watch_instance_without_scan(
+        &self,
+        db_id: i32,
+        game_dir: String,
+    ) -> anyhow::Result<()> {
+        self.watch_instance_internal(db_id, game_dir, false).await
+    }
+
+    async fn watch_instance_internal(
+        &self,
+        db_id: i32,
+        game_dir: String,
+        initial_scan: bool,
     ) -> anyhow::Result<()> {
         let mut watchers = self.watchers.lock().await;
 
@@ -45,14 +86,18 @@ impl ResourceWatcher {
 
         let app_handle = self.app_handle.clone();
         let watchers_ptr = self.watchers.clone();
+        let scan_limiter = self.scan_limiter.clone();
+        let in_flight_scans = self.in_flight_scans.clone();
 
         // Initial scan
-        for folder in folders_to_watch {
-            let path = game_path.join(folder);
-            if path.exists() {
-                self.scan_folder(db_id, &path).await?;
-                // Cleanup any resources in database that no longer exist on disk
-                let _ = self.cleanup_missing_resources(db_id, &path).await;
+        if initial_scan {
+            for folder in folders_to_watch {
+                let path = game_path.join(folder);
+                if path.exists() {
+                    self.scan_folder(db_id, &path).await?;
+                    // Cleanup any resources in database that no longer exist on disk
+                    let _ = self.cleanup_missing_resources(db_id, &path).await;
+                }
             }
         }
 
@@ -84,7 +129,15 @@ impl ResourceWatcher {
                     w.contains_key(&db_id)
                 };
                 if is_watched {
-                    handle_event(&app_handle, db_id, event, watchers_ptr.clone()).await;
+                    handle_event(
+                        &app_handle,
+                        db_id,
+                        event,
+                        watchers_ptr.clone(),
+                        scan_limiter.clone(),
+                        in_flight_scans.clone(),
+                    )
+                    .await;
                 } else {
                     log::debug!(
                         "[ResourceWatcher] Dropping event for db_id {} as it is no longer watched",
@@ -109,17 +162,52 @@ impl ResourceWatcher {
     }
 
     async fn scan_folder(&self, db_id: i32, folder_path: &Path) -> Result<()> {
+        let _ = self
+            .scan_folder_with_progress(db_id, folder_path, None)
+            .await?;
+        Ok(())
+    }
+
+    async fn scan_folder_with_progress(
+        &self,
+        db_id: i32,
+        folder_path: &Path,
+        progress_tx: Option<&tokio::sync::mpsc::UnboundedSender<ScanProgressSnapshot>>,
+    ) -> Result<ScanSummary> {
         log::info!("[ResourceWatcher] Scanning folder: {:?}", folder_path);
         let watchers_ptr = self.watchers.clone();
-        for entry in WalkDir::new(folder_path)
+        let scan_limiter = self.scan_limiter.clone();
+        let in_flight_scans = self.in_flight_scans.clone();
+        let mut join_set = tokio::task::JoinSet::new();
+        let mut summary = ScanSummary::default();
+        let folder_name = folder_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        let candidates: Vec<PathBuf> = WalkDir::new(folder_path)
             .max_depth(1)
             .into_iter()
             .filter_map(|e| e.ok())
-        {
-            if entry.file_type().is_file() && is_resource_file(entry.path()) {
-                let path = entry.path().to_path_buf();
+            .filter(|entry| entry.file_type().is_file() && is_resource_file(entry.path()))
+            .map(|entry| entry.path().to_path_buf())
+            .collect();
+        summary.total = candidates.len();
+        if let Some(tx) = progress_tx {
+            let _ = tx.send(ScanProgressSnapshot {
+                folder: folder_name.clone(),
+                total: summary.total,
+                processed: 0,
+                skipped: 0,
+                failed: 0,
+            });
+        }
+        for path in candidates {
                 let app = self.app_handle.clone();
                 let watchers_spawn = watchers_ptr.clone();
+                let limiter_spawn = scan_limiter.clone();
+                let in_flight_spawn = in_flight_scans.clone();
 
                 // Get metadata for quick check
                 let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&path) {
@@ -135,7 +223,19 @@ impl ResourceWatcher {
                     (0, 0)
                 };
 
-                tauri::async_runtime::spawn(async move {
+                if !mark_in_flight(&in_flight_scans, db_id, &path).await {
+                    summary.skipped += 1;
+                    continue;
+                }
+                join_set.spawn(async move {
+                    let _permit = limiter_spawn
+                        .acquire_owned()
+                        .await
+                        .map_err(|e| anyhow::anyhow!("Scan limiter closed: {e}"));
+                    if _permit.is_err() {
+                        clear_in_flight(&in_flight_spawn, db_id, &path).await;
+                        return;
+                    }
                     // Check if still watched
                     let is_watched = {
                         let w = watchers_spawn.lock().await;
@@ -161,10 +261,30 @@ impl ResourceWatcher {
                             }
                         }
                     }
+                    clear_in_flight(&in_flight_spawn, db_id, &path).await;
+                });
+        }
+        while let Some(joined) = join_set.join_next().await {
+            match joined {
+                Err(e) => {
+                    log::warn!("[ResourceWatcher] scan worker join error: {e}");
+                    summary.failed += 1;
+                }
+                Ok(()) => {
+                    summary.processed += 1;
+                }
+            }
+            if let Some(tx) = progress_tx {
+                let _ = tx.send(ScanProgressSnapshot {
+                    folder: folder_name.clone(),
+                    total: summary.total,
+                    processed: summary.processed,
+                    skipped: summary.skipped,
+                    failed: summary.failed,
                 });
             }
         }
-        Ok(())
+        Ok(summary)
     }
 
     async fn cleanup_missing_resources(&self, db_id: i32, folder_path: &Path) -> Result<()> {
@@ -207,17 +327,34 @@ impl ResourceWatcher {
     }
 
     pub async fn refresh_instance(&self, db_id: i32, game_dir: String) -> anyhow::Result<()> {
+        let _ = self.refresh_instance_with_progress(db_id, game_dir, None).await?;
+        Ok(())
+    }
+
+    pub async fn refresh_instance_with_progress(
+        &self,
+        db_id: i32,
+        game_dir: String,
+        progress_tx: Option<tokio::sync::mpsc::UnboundedSender<ScanProgressSnapshot>>,
+    ) -> anyhow::Result<ScanSummary> {
         let game_path = PathBuf::from(&game_dir);
         let folders_to_watch = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
+        let mut summary = ScanSummary::default();
 
         for folder in folders_to_watch {
             let path = game_path.join(folder);
             if path.exists() {
-                self.scan_folder(db_id, &path).await?;
+                let folder_summary = self
+                    .scan_folder_with_progress(db_id, &path, progress_tx.as_ref())
+                    .await?;
+                summary.total += folder_summary.total;
+                summary.processed += folder_summary.processed;
+                summary.skipped += folder_summary.skipped;
+                summary.failed += folder_summary.failed;
                 let _ = self.cleanup_missing_resources(db_id, &path).await;
             }
         }
-        Ok(())
+        Ok(summary)
     }
 }
 
@@ -226,6 +363,8 @@ async fn handle_event(
     db_id: i32,
     event: Event,
     watchers: Arc<Mutex<HashMap<i32, notify::RecommendedWatcher>>>,
+    scan_limiter: Arc<Semaphore>,
+    in_flight_scans: Arc<Mutex<HashSet<String>>>,
 ) {
     use notify::EventKind;
 
@@ -240,6 +379,8 @@ async fn handle_event(
                     );
                     let app_clone = app.clone();
                     let watchers_clone = watchers.clone();
+                    let limiter_clone = scan_limiter.clone();
+                    let in_flight_clone = in_flight_scans.clone();
 
                     let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&path) {
                         (
@@ -254,7 +395,18 @@ async fn handle_event(
                         (0, 0)
                     };
 
+                    if !mark_in_flight(&in_flight_scans, db_id, &path).await {
+                        continue;
+                    }
                     tauri::async_runtime::spawn(async move {
+                        let _permit = limiter_clone
+                            .acquire_owned()
+                            .await
+                            .map_err(|e| anyhow::anyhow!("Scan limiter closed: {e}"));
+                        if _permit.is_err() {
+                            clear_in_flight(&in_flight_clone, db_id, &path).await;
+                            return;
+                        }
                         let is_watched = {
                             let w = watchers_clone.lock().await;
                             w.contains_key(&db_id)
@@ -278,6 +430,7 @@ async fn handle_event(
                                 }
                             }
                         }
+                        clear_in_flight(&in_flight_clone, db_id, &path).await;
                     });
                 }
             }
@@ -308,6 +461,20 @@ async fn handle_event(
         }
         _ => {}
     }
+}
+
+fn in_flight_key(db_id: i32, path: &Path) -> String {
+    format!("{db_id}:{}", normalize_path(path))
+}
+
+async fn mark_in_flight(in_flight: &Arc<Mutex<HashSet<String>>>, db_id: i32, path: &Path) -> bool {
+    let mut lock = in_flight.lock().await;
+    lock.insert(in_flight_key(db_id, path))
+}
+
+async fn clear_in_flight(in_flight: &Arc<Mutex<HashSet<String>>>, db_id: i32, path: &Path) {
+    let mut lock = in_flight.lock().await;
+    lock.remove(&in_flight_key(db_id, path));
 }
 
 fn is_resource_file(path: &Path) -> bool {
@@ -471,9 +638,11 @@ async fn identify_and_link_resource(
     for platform in search_order {
         match platform {
             SourcePlatform::Modrinth => {
-                if let Ok((project, version)) = resource_manager
-                    .get_by_hash(SourcePlatform::Modrinth, &hash)
-                    .await
+                if let Ok(Ok((project, version))) = tokio::time::timeout(
+                    Duration::from_secs(12),
+                    resource_manager.get_by_hash(SourcePlatform::Modrinth, &hash),
+                )
+                .await
                 {
                     log::info!(
                         "[ResourceWatcher] Found Modrinth resource: {} ({})",
@@ -496,9 +665,11 @@ async fn identify_and_link_resource(
             }
             SourcePlatform::CurseForge => {
                 if let Ok(fp) = calculate_curseforge_fingerprint(path) {
-                    if let Ok((project, version)) = resource_manager
-                        .get_by_hash(SourcePlatform::CurseForge, &fp.to_string())
-                        .await
+                    if let Ok(Ok((project, version))) = tokio::time::timeout(
+                        Duration::from_secs(12),
+                        resource_manager.get_by_hash(SourcePlatform::CurseForge, &fp.to_string()),
+                    )
+                    .await
                     {
                         log::info!(
                             "[ResourceWatcher] Found CurseForge resource: {} ({})",
