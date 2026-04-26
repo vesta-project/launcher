@@ -1297,6 +1297,13 @@ pub async fn launch_instance(
                 .unwrap_or(false)
         };
         if recently_attempted {
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    instance_data.id,
+                    "installed",
+                );
+            }
             return Err(format!(
                 "Launch blocked: runtime files are still missing/corrupt (missing={}, mismatched={}). Auto-repair was already attempted recently; run Repair to view detailed errors.",
                 preflight_report.missing_count(),
@@ -1327,6 +1334,13 @@ pub async fn launch_instance(
         piston_lib::game::installer::install_instance(verify_spec, silent_reporter)
             .await
             .map_err(|e| {
+                if instance_data.id > 0 {
+                    let _ = crate::commands::instances::update_installation_status(
+                        &app_handle,
+                        instance_data.id,
+                        "installed",
+                    );
+                }
                 format!(
                     "Launch auto-repair failed (missing={}, mismatched={}): {}",
                     preflight_report.missing_count(),
@@ -1346,8 +1360,24 @@ pub async fn launch_instance(
                 concurrency: 8,
             },
         )
-        .map_err(|e| format!("Post-repair verification failed: {}", e))?;
+        .map_err(|e| {
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    instance_data.id,
+                    "installed",
+                );
+            }
+            format!("Post-repair verification failed: {}", e)
+        })?;
         if !post_repair.ready {
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    instance_data.id,
+                    "installed",
+                );
+            }
             return Err(format!(
                 "Launch blocked after auto-repair: runtime files still missing/corrupt (missing={}, mismatched={}).",
                 post_repair.missing_count(),
