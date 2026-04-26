@@ -117,7 +117,7 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 			});
 			showToast({
 				title: "Import Queued",
-				description: "The launcher instance import task is now running in the background.",
+				description: "The import task is queued and will start when a worker is available.",
 				severity: "success",
 			});
 			// Give the user a moment to see confirmation before the view closes.
