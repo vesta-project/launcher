@@ -326,7 +326,7 @@ impl Task for ImportExternalInstanceTask {
             crate::commands::instances::update_installation_status(
                 &app_handle,
                 instance_id,
-                "installed",
+                "verifying-runtime",
             )?;
             log::info!(
                 "[external_import] finalize-status-update-done instance_id={}",
@@ -334,7 +334,7 @@ impl Task for ImportExternalInstanceTask {
             );
             ctx.update_full(
                 92,
-                "Finalizing import... (instance marked installed)".to_string(),
+                "Finalizing import... (runtime verification queued)".to_string(),
                 Some(3),
                 Some(3),
             );

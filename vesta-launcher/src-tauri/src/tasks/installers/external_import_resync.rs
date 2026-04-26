@@ -3,6 +3,7 @@ use crate::schema::instance::dsl::instance;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
+use piston_lib::game::installer::types::{InstallSpec, ModloaderType, SilentProgressReporter};
 use std::collections::HashSet;
 use std::path::PathBuf;
 use tauri::Manager;
@@ -156,13 +157,92 @@ impl Task for ImportResourceResyncTask {
                 refresh_summary.failed
             );
 
+            ctx.update_description(
+                "Verifying imported runtime artifacts (manifests/libraries/assets)...".to_string(),
+            );
+            let app_config_dir = crate::utils::db_manager::get_app_config_dir()
+                .map_err(|e| format!("Failed to resolve app config dir: {}", e))?;
+            let data_dir = if app_config_dir.join("data").exists() {
+                app_config_dir.join("data")
+            } else {
+                app_config_dir
+            };
+            let verify_spec = InstallSpec {
+                version_id: target_instance.minecraft_version.clone(),
+                modloader: parse_modloader(
+                    target_instance
+                        .modloader
+                        .as_deref()
+                        .unwrap_or("vanilla"),
+                ),
+                modloader_version: target_instance.modloader_version.clone(),
+                data_dir,
+                game_dir: PathBuf::from(&target_dir),
+                java_path: target_instance.java_path.as_ref().map(PathBuf::from),
+                dry_run: false,
+                concurrency: 8,
+            };
+
+            let verify_report = piston_lib::game::installer::verify_instance(&verify_spec)
+                .map_err(|e| format!("Runtime verify preflight failed: {}", e))?;
+            log::info!(
+                "[external_import_resync] runtime-verify-preflight instance_id={} ready={} checked={} missing={} mismatch={}",
+                instance_id,
+                verify_report.ready,
+                verify_report.checked,
+                verify_report.missing_count(),
+                verify_report.mismatch_count()
+            );
+            if !verify_report.ready {
+                for issue in &verify_report.issues {
+                    log::debug!(
+                        "[external_import_resync] runtime-verify-issue-preflight instance_id={} kind={:?} class={} path={} detail={}",
+                        instance_id,
+                        issue.kind,
+                        issue.artifact_class,
+                        issue.path,
+                        issue.detail
+                    );
+                }
+                ctx.update_description(
+                    "Repairing missing runtime artifacts for imported instance...".to_string(),
+                );
+                let silent_reporter: std::sync::Arc<dyn piston_lib::game::installer::types::ProgressReporter> =
+                    std::sync::Arc::new(SilentProgressReporter);
+                piston_lib::game::installer::install_instance(verify_spec, silent_reporter)
+                    .await
+                    .map_err(|e| format!("Imported runtime repair failed: {}", e))?;
+            }
+
             if *ctx.cancel_rx.borrow() {
                 return Err("Resync cancelled".to_string());
             }
 
+            crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_id,
+                "installed",
+            )
+            .map_err(|e| format!("Failed to set imported instance as installed: {}", e))?;
+            log::info!(
+                "[external_import_resync] finalize-status instance_id={} status=installed",
+                instance_id
+            );
+
             ctx.update_progress(100, None, None);
             Ok(())
         })
+    }
+}
+
+fn parse_modloader(modloader: &str) -> Option<ModloaderType> {
+    match modloader.to_ascii_lowercase().as_str() {
+        "vanilla" => None,
+        "fabric" => Some(ModloaderType::Fabric),
+        "quilt" => Some(ModloaderType::Quilt),
+        "forge" => Some(ModloaderType::Forge),
+        "neoforge" => Some(ModloaderType::NeoForge),
+        _ => None,
     }
 }
 

@@ -5,6 +5,7 @@ pub mod modloaders;
 pub mod transaction;
 pub mod types;
 pub mod vanilla;
+pub mod verifier;
 
 #[cfg(test)]
 mod tests;
@@ -23,6 +24,7 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use transaction::InstallTransaction;
+use verifier::verify_instance_readiness;
 
 tokio::task_local! {
     static INSTALL_SCOPE: InstallScope;
@@ -124,6 +126,32 @@ pub async fn install_instance(
         }
     }
 
+    reporter.start_step("Verifying local runtime artifacts", None);
+    let preflight = verify_instance_readiness(&spec)?;
+    log::info!(
+        "[installer] verify-summary stage=preflight ready={} checked={} missing={} mismatch={}",
+        preflight.ready,
+        preflight.checked,
+        preflight.missing_count(),
+        preflight.mismatch_count()
+    );
+    if !preflight.ready {
+        for issue in &preflight.issues {
+            log::debug!(
+                "[installer] verify-issue stage=preflight kind={:?} class={} path={} detail={}",
+                issue.kind,
+                issue.artifact_class,
+                issue.path,
+                issue.detail
+            );
+        }
+    } else if !spec.dry_run {
+        reporter.set_message("Runtime already valid. Skipping repair downloads.");
+        reporter.set_percent(100);
+        reporter.done(true, Some("Installation verification complete"));
+        return Ok(());
+    }
+
     // Load cache + transaction state
     let cache = Arc::new(Mutex::new(ArtifactCache::load_with_labels(
         spec.data_dir(),
@@ -199,6 +227,32 @@ pub async fn install_instance(
         return Err(err);
     }
 
+    let postflight = verify_instance_readiness(&spec)?;
+    log::info!(
+        "[installer] verify-summary stage=postflight ready={} checked={} missing={} mismatch={}",
+        postflight.ready,
+        postflight.checked,
+        postflight.missing_count(),
+        postflight.mismatch_count()
+    );
+    if !postflight.ready {
+        for issue in &postflight.issues {
+            log::debug!(
+                "[installer] verify-issue stage=postflight kind={:?} class={} path={} detail={}",
+                issue.kind,
+                issue.artifact_class,
+                issue.path,
+                issue.detail
+            );
+        }
+        reporter.done(false, Some("Installation verification failed"));
+        return Err(anyhow::anyhow!(
+            "Post-install verification failed: {} missing, {} mismatched artifacts",
+            postflight.missing_count(),
+            postflight.mismatch_count()
+        ));
+    }
+
     reporter.done(true, Some("Installation complete"));
     log::info!("Installation completed successfully: {}", spec.version_id);
 
@@ -229,4 +283,8 @@ fn collect_version_artifacts(
         );
     }
     Ok(artifacts)
+}
+
+pub fn verify_instance(spec: &InstallSpec) -> Result<types::VerificationResult> {
+    verify_instance_readiness(spec)
 }

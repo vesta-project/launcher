@@ -10,10 +10,19 @@ use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
+use lazy_static::lazy_static;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Instant;
 use std::time::UNIX_EPOCH;
 use tauri::{Manager, State};
+use walkdir::WalkDir;
+
+lazy_static! {
+    static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> = Mutex::new(HashMap::new());
+}
 
 #[derive(Debug, Clone, Copy)]
 enum LauncherActionOnLaunch {
@@ -84,6 +93,54 @@ fn apply_launcher_action_after_launch(
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
+}
+
+fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(), String> {
+    let has_modpack_link = inst.modpack_platform.is_some()
+        || inst.modpack_id.is_some()
+        || inst.modpack_version_id.is_some();
+    let game_path = std::path::Path::new(game_dir);
+    let has_manifest = game_path.join(".vesta").join("modpack_manifest.json").is_file();
+
+    if !(has_modpack_link || has_manifest) {
+        return Ok(());
+    }
+
+    let critical_dirs = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
+    let mut discovered_files = 0usize;
+    for dir_name in critical_dirs {
+        let dir = game_path.join(dir_name);
+        if !dir.exists() {
+            continue;
+        }
+        for entry in WalkDir::new(&dir)
+            .max_depth(3)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if entry.file_type().is_file() {
+                discovered_files += 1;
+                break;
+            }
+        }
+    }
+
+    log::info!(
+        "[launch_instance] modpack-resource-check instance={} linked={} manifest={} discovered_files={}",
+        inst.slug(),
+        has_modpack_link,
+        has_manifest,
+        discovered_files
+    );
+
+    if discovered_files == 0 {
+        return Err(
+            "Modpack-linked instance has no modpack-managed resource files (mods/resourcepacks/shaderpacks/datapacks). Run Repair to restore missing files."
+                .to_string(),
+        );
+    }
+
+    Ok(())
 }
 
 /// Update playtime for an instance in the database
@@ -1143,6 +1200,8 @@ pub async fn launch_instance(
         })
     };
 
+    verify_modpack_resource_presence(&instance_data, &game_dir)?;
+
     // Resolve settings (Resolution, Memory, Java Args)
     let res_width = if instance_data.use_global_resolution {
         app_config.default_width
@@ -1195,6 +1254,114 @@ pub async fn launch_instance(
         .modloader
         .as_ref()
         .and_then(|m| m.parse::<piston_lib::game::ModloaderType>().ok());
+
+    // Fast launch preflight: verify runtime artifacts before spawning JVM.
+    let verify_spec = piston_lib::game::installer::types::InstallSpec {
+        version_id: instance_data.minecraft_version.clone(),
+        modloader: modloader_type.clone(),
+        modloader_version: instance_data.modloader_version.clone(),
+        data_dir: spec_data_dir.clone(),
+        game_dir: std::path::PathBuf::from(&game_dir),
+        java_path: Some(std::path::PathBuf::from(&java_path_str)),
+        dry_run: false,
+        concurrency: 8,
+    };
+    let preflight_report = piston_lib::game::installer::verify_instance(&verify_spec)
+        .map_err(|e| format!("Launch preflight verification failed: {}", e))?;
+    log::info!(
+        "[launch_instance] verify-summary ready={} checked={} missing={} mismatch={}",
+        preflight_report.ready,
+        preflight_report.checked,
+        preflight_report.missing_count(),
+        preflight_report.mismatch_count()
+    );
+    if !preflight_report.ready {
+        for issue in &preflight_report.issues {
+            log::debug!(
+                "[launch_instance] verify-issue kind={:?} class={} path={} detail={}",
+                issue.kind,
+                issue.artifact_class,
+                issue.path,
+                issue.detail
+            );
+        }
+
+        let now = Instant::now();
+        let recently_attempted = {
+            let guard = LAUNCH_AUTO_REPAIR_GUARD
+                .lock()
+                .map_err(|_| "Failed to lock launch auto-repair guard".to_string())?;
+            guard
+                .get(&instance_id)
+                .map(|t| now.duration_since(*t) < std::time::Duration::from_secs(90))
+                .unwrap_or(false)
+        };
+        if recently_attempted {
+            return Err(format!(
+                "Launch blocked: runtime files are still missing/corrupt (missing={}, mismatched={}). Auto-repair was already attempted recently; run Repair to view detailed errors.",
+                preflight_report.missing_count(),
+                preflight_report.mismatch_count()
+            ));
+        }
+        {
+            let mut guard = LAUNCH_AUTO_REPAIR_GUARD
+                .lock()
+                .map_err(|_| "Failed to lock launch auto-repair guard".to_string())?;
+            guard.insert(instance_id.clone(), now);
+        }
+
+        log::info!(
+            "[launch_instance] runtime gaps detected, running one-shot auto-repair instance={}",
+            instance_id
+        );
+        if instance_data.id > 0 {
+            let _ = crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_data.id,
+                "launch-preflight-repair",
+            );
+        }
+        let silent_reporter: std::sync::Arc<
+            dyn piston_lib::game::installer::types::ProgressReporter,
+        > = std::sync::Arc::new(piston_lib::game::installer::types::SilentProgressReporter);
+        piston_lib::game::installer::install_instance(verify_spec, silent_reporter)
+            .await
+            .map_err(|e| {
+                format!(
+                    "Launch auto-repair failed (missing={}, mismatched={}): {}",
+                    preflight_report.missing_count(),
+                    preflight_report.mismatch_count(),
+                    e
+                )
+            })?;
+        let post_repair = piston_lib::game::installer::verify_instance(
+            &piston_lib::game::installer::types::InstallSpec {
+                version_id: instance_data.minecraft_version.clone(),
+                modloader: modloader_type.clone(),
+                modloader_version: instance_data.modloader_version.clone(),
+                data_dir: spec_data_dir.clone(),
+                game_dir: std::path::PathBuf::from(&game_dir),
+                java_path: Some(std::path::PathBuf::from(&java_path_str)),
+                dry_run: false,
+                concurrency: 8,
+            },
+        )
+        .map_err(|e| format!("Post-repair verification failed: {}", e))?;
+        if !post_repair.ready {
+            return Err(format!(
+                "Launch blocked after auto-repair: runtime files still missing/corrupt (missing={}, mismatched={}).",
+                post_repair.missing_count(),
+                post_repair.mismatch_count()
+            ));
+        }
+        if instance_data.id > 0 {
+            let _ = crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_data.id,
+                "installed",
+            );
+        }
+    }
 
     // Attempt to read the current active account
     let mut active_account = match crate::auth::get_active_account() {
@@ -1331,7 +1498,7 @@ pub async fn launch_instance(
     let spec = piston_lib::game::launcher::LaunchSpec {
         instance_id: instance_id.clone(),
         version_id: instance_data.minecraft_version.clone(),
-        modloader: modloader_type,
+        modloader: modloader_type.clone(),
         modloader_version: instance_data.modloader_version.clone(),
         data_dir: spec_data_dir.clone(),
         game_dir: std::path::PathBuf::from(&game_dir),
