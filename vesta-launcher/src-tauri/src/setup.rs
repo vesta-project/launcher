@@ -371,6 +371,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 let display_op = match raw_op {
                     "hard-reset" => "hard reset",
                     "repair" => "repair",
+                    "external-import" => "import migration",
                     _ => "installation",
                 };
                 let description = format!(
@@ -453,6 +454,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
+    app.manage(crate::launcher_import::ImportManager::new());
 
     // Check for launcher updates/changelog on startup
     {
@@ -533,14 +535,48 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             if let Ok(mut conn) = get_vesta_conn() {
                 if let Ok(instances_list) = instance.load::<Instance>(&mut conn) {
                     if let Some(watcher) = handle.try_state::<ResourceWatcher>() {
+                        let startup_scan_limiter = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
+                        let mut startup_scan_tasks = tokio::task::JoinSet::new();
                         for inst in instances_list {
                             if let Some(game_dir) = &inst.game_directory {
-                                log::info!("[Setup] Starting watcher for instance: {}", inst.name);
+                                log::info!("[Setup] Attaching watcher for instance: {}", inst.name);
                                 let _ = watcher
-                                    .watch_instance(inst.slug(), inst.id, game_dir.clone())
+                                    .watch_instance_without_scan(inst.id, game_dir.clone())
                                     .await;
+                                let handle_for_task = handle.clone();
+                                let game_dir_clone = game_dir.clone();
+                                let instance_id = inst.id;
+                                let instance_name = inst.name.clone();
+                                let limiter = startup_scan_limiter.clone();
+                                startup_scan_tasks.spawn(async move {
+                                    let Ok(_permit) = limiter.acquire_owned().await else {
+                                        return;
+                                    };
+                                    let Some(watcher_clone) = handle_for_task.try_state::<ResourceWatcher>() else {
+                                        return;
+                                    };
+                                    log::info!(
+                                        "[Setup] Background startup resync start for instance: {}",
+                                        instance_name
+                                    );
+                                    if let Err(err) =
+                                        watcher_clone.refresh_instance(instance_id, game_dir_clone).await
+                                    {
+                                        log::warn!(
+                                            "[Setup] Background startup resync failed for instance {}: {}",
+                                            instance_name,
+                                            err
+                                        );
+                                    } else {
+                                        log::info!(
+                                            "[Setup] Background startup resync done for instance: {}",
+                                            instance_name
+                                        );
+                                    }
+                                });
                             }
                         }
+                        while startup_scan_tasks.join_next().await.is_some() {}
                     }
                 }
             }

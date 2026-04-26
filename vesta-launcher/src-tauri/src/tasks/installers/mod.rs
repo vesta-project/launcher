@@ -1,3 +1,5 @@
+pub mod external_import;
+pub mod external_import_resync;
 pub mod java;
 pub mod modpack;
 

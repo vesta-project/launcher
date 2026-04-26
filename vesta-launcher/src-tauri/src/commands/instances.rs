@@ -3,6 +3,7 @@ use crate::discord::DiscordManager;
 use crate::models::instance::{Instance, NewInstance};
 use crate::resources::ResourceWatcher;
 use crate::schema::instance::dsl::*;
+use crate::tasks::installers::external_import::ImportExternalInstanceTask;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::maintenance::{CloneInstanceTask, RepairInstanceTask, ResetInstanceTask};
 use crate::tasks::manager::TaskManager;
@@ -244,6 +245,48 @@ pub async fn install_instance(
     instance_data: Instance,
     dry_run: Option<bool>,
 ) -> Result<(), String> {
+    // If this instance originated from launcher import, reinstall should reuse
+    // the same import migration path instead of normal modpack install flow.
+    if instance_data.last_operation.as_deref() == Some("external-import") {
+        let source_game_directory = instance_data
+            .import_source_game_directory
+            .clone()
+            .ok_or_else(|| {
+                "Cannot reinstall imported instance: missing source game directory".to_string()
+            })?;
+        if !std::path::Path::new(&source_game_directory).exists() {
+            return Err(format!(
+                "Cannot reinstall imported instance: source directory does not exist ({})",
+                source_game_directory
+            ));
+        }
+
+        log::info!(
+            "[install_instance] rerouting to external import reinstall for instance_id={} source={}",
+            instance_data.id,
+            source_game_directory
+        );
+        if instance_data.id > 0 {
+            let _ = crate::commands::instances::update_instance_operation(
+                &app_handle,
+                instance_data.id,
+                "external-import",
+            );
+            let _ = crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_data.id,
+                "installing",
+            );
+        }
+        let task = ImportExternalInstanceTask::new(
+            instance_data.id,
+            instance_data.name.clone(),
+            source_game_directory,
+        );
+        task_manager.submit(Box::new(task)).await?;
+        return Ok(());
+    }
+
     // Check if we are in guest mode
     let active_account = match crate::auth::get_active_account() {
         Ok(a) => a,
@@ -423,6 +466,7 @@ pub async fn create_instance(
 
     // Make a mutable copy so we can set defaults (game_directory) before inserting
     let mut inst = instance_data;
+    let skip_initial_watch = inst.installation_status.as_deref() == Some("skip-initial-watch");
 
     // Get app config to check for custom instances directory
     let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
@@ -571,7 +615,10 @@ pub async fn create_instance(
         modpack_platform: inst.modpack_platform,
         modpack_icon_url: inst.modpack_icon_url,
         icon_data: inst.icon_data,
-        last_operation: None,
+        last_operation: inst.last_operation,
+        import_source_game_directory: inst.import_source_game_directory,
+        import_launcher_kind: inst.import_launcher_kind,
+        import_instance_path: inst.import_instance_path,
         use_global_resolution: inst.use_global_resolution,
         use_global_memory: inst.use_global_memory,
         use_global_java_args: inst.use_global_java_args,
@@ -618,17 +665,25 @@ pub async fn create_instance(
         "installing",
     );
 
-    // Start watching the new instance's folders for mods/packs
-    log::info!(
-        "[create_instance] Initializing resource watcher for instance: {} ({})",
-        slug,
-        inserted_id
-    );
-    if let Err(e) = resource_watcher
-        .watch_instance(slug.clone(), inserted_id, gd)
-        .await
-    {
-        log::error!("[create_instance] Failed to start resource watcher: {}", e);
+    // Start watching the new instance's folders for mods/packs unless caller requested deferred watch.
+    if skip_initial_watch {
+        log::info!(
+            "[create_instance] Skipping initial resource watcher for instance: {} ({})",
+            slug,
+            inserted_id
+        );
+    } else {
+        log::info!(
+            "[create_instance] Initializing resource watcher for instance: {} ({})",
+            slug,
+            inserted_id
+        );
+        if let Err(e) = resource_watcher
+            .watch_instance(slug.clone(), inserted_id, gd)
+            .await
+        {
+            log::error!("[create_instance] Failed to start resource watcher: {}", e);
+        }
     }
 
     log::info!(
@@ -930,56 +985,17 @@ pub async fn delete_instance(
     app_handle: tauri::AppHandle,
     instance_id: i32,
     task_manager: tauri::State<'_, TaskManager>,
-    resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
+    _resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
 ) -> Result<(), String> {
-    log::info!("Deleting instance ID: {}", instance_id);
-
-    // 0. Cancel any active tasks (install/download) for this instance
+    log::info!("[delete_instance] enqueue instance_id={}", instance_id);
     task_manager.cancel_instance_tasks(instance_id);
+    let task = crate::tasks::maintenance::DeleteInstanceTask::new(instance_id);
+    task_manager.submit(Box::new(task)).await?;
 
-    let mut conn =
-        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
-
-    // 1. Fetch instance to get slug and directory before deleting
-    let inst = instance
-        .find(instance_id)
-        .first::<Instance>(&mut conn)
-        .map_err(|e| format!("Instance not found: {}", e))?;
-
-    let slug_val = inst.slug();
-    let game_dir = inst.game_directory.clone();
-
-    // 2. Unwatch from resource watcher
-    if let Err(e) = resource_watcher.unwatch_instance(instance_id).await {
-        log::error!("Failed to unwatch instance {}: {}", instance_id, e);
-    }
-
-    // 3. Delete from database
-    diesel::delete(instance.find(instance_id))
-        .execute(&mut conn)
-        .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
-
-    // 4. Clean up files on disk (optional but recommended since user asked)
-    if let Some(gd) = game_dir {
-        let gd_path = std::path::PathBuf::from(gd);
-        if gd_path.exists() {
-            log::info!("Removing instance directory: {:?}", gd_path);
-            if let Err(e) = std::fs::remove_dir_all(&gd_path) {
-                log::error!(
-                    "Failed to delete instance directory at {:?}: {}",
-                    gd_path,
-                    e
-                );
-            }
-        }
-    }
-
-    log::info!("Deleted instance ID: {} (slug: {})", instance_id, slug_val);
-
-    // Notify frontend
+    // Signal UI for optimistic removal immediately.
     use tauri::Emitter;
     let _ = app_handle.emit(
-        "core://instance-deleted",
+        "core://instance-delete-queued",
         serde_json::json!({ "id": instance_id }),
     );
     Ok(())
@@ -1960,6 +1976,36 @@ pub async fn resume_instance_operation(
     match op {
         "repair" => repair_instance(app_handle, task_manager, instance_id).await,
         "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
+        "external-import" => {
+            let source_game_directory = inst
+                .import_source_game_directory
+                .clone()
+                .ok_or_else(|| "Cannot resume external import: missing source directory".to_string())?;
+            if !std::path::Path::new(&source_game_directory).exists() {
+                return Err(format!(
+                    "Cannot resume external import: source directory does not exist ({})",
+                    source_game_directory
+                ));
+            }
+
+            crate::commands::instances::update_instance_operation(
+                &app_handle,
+                instance_id,
+                "external-import",
+            )?;
+            crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_id,
+                "installing",
+            )?;
+
+            let task = ImportExternalInstanceTask::new(
+                instance_id,
+                inst.name.clone(),
+                source_game_directory,
+            );
+            task_manager.submit(Box::new(task)).await
+        }
         "install" | _ => install_instance(app_handle, task_manager, inst, None).await,
     }
 }

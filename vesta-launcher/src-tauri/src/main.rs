@@ -4,6 +4,7 @@
 pub mod auth;
 mod commands;
 pub mod discord;
+mod launcher_import;
 mod metadata_cache;
 pub mod models;
 mod notifications;
@@ -265,6 +266,9 @@ fn main() {
             commands::resources::sync_instance_resources,
             commands::resources::get_installed_resources,
             commands::resources::check_resource_updates,
+            commands::launcher_imports::detect_external_launchers,
+            commands::launcher_imports::list_external_instances,
+            commands::launcher_imports::import_external_instance,
             utils::dialog_manager::submit_dialog_response,
         ])
         .on_window_event(|window, event| {
