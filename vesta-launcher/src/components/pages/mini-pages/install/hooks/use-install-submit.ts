@@ -1,7 +1,7 @@
-import { createInstance, getInstance, installInstance, type Instance } from "@utils/instances";
-import { installModpackFromUrl, installModpackFromZip } from "@utils/modpacks";
 import { showToast } from "@ui/toast/toast";
-import { createSignal, type Accessor } from "solid-js";
+import { createInstance, getInstance, type Instance, installInstance } from "@utils/instances";
+import { installModpackFromUrl, installModpackFromZip } from "@utils/modpacks";
+import { type Accessor, createSignal } from "solid-js";
 
 interface UseInstallSubmitParams {
 	close?: () => void;

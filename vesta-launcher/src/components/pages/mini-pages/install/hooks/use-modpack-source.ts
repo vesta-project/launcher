@@ -1,8 +1,8 @@
+import type { ResourceVersion } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
 import { getModpackInfo, getModpackInfoFromUrl, type ModpackInfo } from "@utils/modpacks";
-import { batch, createEffect, createMemo, createSignal, type Accessor } from "solid-js";
-import type { ResourceVersion } from "@stores/resources";
+import { type Accessor, batch, createEffect, createMemo, createSignal } from "solid-js";
 
 interface UseModpackSourceParams {
 	projectId?: string;

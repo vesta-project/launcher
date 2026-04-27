@@ -1,6 +1,6 @@
-import { resources, type ResourceVersion, type SourcePlatform } from "@stores/resources";
-import { batch, createEffect, createResource, type Accessor } from "solid-js";
+import { type ResourceVersion, resources, type SourcePlatform } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
+import { type Accessor, batch, createEffect, createResource } from "solid-js";
 
 const PROJECT_VERSIONS_TIMEOUT_MS = 20_000;
 
@@ -60,7 +60,9 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 					(info as { modpackVersionId?: string } | undefined)?.modpackVersionId;
 
 				if (initialVer) {
-					const match = vs.find((v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer);
+					const match = vs.find(
+						(v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer,
+					);
 					if (match) {
 						params.setSelectedModpackVersionId(match.id);
 						return vs;
@@ -87,7 +89,8 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 				console.error("[InstallPage] Version fetch failed:", error);
 				showToast({
 					title: "Version Sync Failed",
-					description: "Could not load modpack versions right now. You can still continue and retry shortly.",
+					description:
+						"Could not load modpack versions right now. You can still continue and retry shortly.",
 					severity: "warning",
 				});
 				return [];

@@ -1,7 +1,7 @@
-import { router } from "@components/page-viewer/page-viewer";
-import { createMemo, type Accessor } from "solid-js";
 import type { MiniRouter } from "@components/page-viewer/mini-router";
+import { router } from "@components/page-viewer/page-viewer";
 import type { LauncherKind } from "@utils/launcher-imports";
+import { type Accessor, createMemo } from "solid-js";
 
 export type InstallStep =
 	| "sourceSelect"
@@ -59,7 +59,9 @@ export function useInstallRouteState(params: UseInstallRouteStateParams) {
 		return "form";
 	});
 
-	const dispatch = (event: "toggleMode" | "showUrl" | "showLauncher" | "clearSource" | "clearLauncher") => {
+	const dispatch = (
+		event: "toggleMode" | "showUrl" | "showLauncher" | "clearSource" | "clearLauncher",
+	) => {
 		switch (event) {
 			case "toggleMode":
 				activeRouter()?.updateQuery("mode", isModpackMode() ? "standard" : "modpack", true);

@@ -1,6 +1,6 @@
 import { For } from "solid-js";
-import type { LauncherOption } from "../types";
 import styles from "../install-page.module.css";
+import type { LauncherOption } from "../types";
 
 interface LauncherMenuGridProps {
 	launchers: LauncherOption[];

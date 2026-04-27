@@ -1,8 +1,8 @@
 import LauncherButton from "@ui/button/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
-import { Show } from "solid-js";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import type { ExternalInstanceCandidate } from "@utils/launcher-imports";
+import { Show } from "solid-js";
 import styles from "../install-page.module.css";
 
 interface LauncherDetailsPanelProps {
@@ -85,11 +85,15 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 			? `${instance.resourcepacksCount}`
 			: null;
 		if (resourcepacksCount) details.push({ label: "Resourcepacks", value: resourcepacksCount });
-		const shaderpacksCount = hasNumber(instance.shaderpacksCount) ? `${instance.shaderpacksCount}` : null;
+		const shaderpacksCount = hasNumber(instance.shaderpacksCount)
+			? `${instance.shaderpacksCount}`
+			: null;
 		if (shaderpacksCount) details.push({ label: "Shaderpacks", value: shaderpacksCount });
 		const worldsCount = hasNumber(instance.worldsCount) ? `${instance.worldsCount}` : null;
 		if (worldsCount) details.push({ label: "Worlds", value: worldsCount });
-		const screenshotsCount = hasNumber(instance.screenshotsCount) ? `${instance.screenshotsCount}` : null;
+		const screenshotsCount = hasNumber(instance.screenshotsCount)
+			? `${instance.screenshotsCount}`
+			: null;
 		if (screenshotsCount) details.push({ label: "Screenshots", value: screenshotsCount });
 		const lastPlayed = formatUnixTime(instance.lastPlayedAtUnixMs);
 		if (lastPlayed) details.push({ label: "Last Played", value: lastPlayed });
@@ -129,15 +133,15 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 				</div>
 
 				<Show when={props.instances.length > 0}>
-					<div class={`${styles["launcher-instance-select"]} ${styles["launcher-instance-select--compact"]}`}>
+					<div
+						class={`${styles["launcher-instance-select"]} ${styles["launcher-instance-select--compact"]}`}
+					>
 						<Select
 							value={props.selectedInstancePath}
 							onChange={(value) => props.onSelectInstance(String(value))}
 							options={props.instances.map((item) => item.instancePath)}
 							itemComponent={(selectProps) => (
-								<SelectItem item={selectProps.item}>
-									{instanceLabel(selectProps.item.rawValue)}
-								</SelectItem>
+								<SelectItem item={selectProps.item}>{instanceLabel(selectProps.item.rawValue)}</SelectItem>
 							)}
 						>
 							<SelectTrigger>
@@ -163,7 +167,9 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 					)}
 				</Show>
 				<Show when={props.hasScanned && props.instances.length === 0}>
-					<p class={styles["fetching-subtext"]}>No instances found for the selected launcher and path.</p>
+					<p class={styles["fetching-subtext"]}>
+						No instances found for the selected launcher and path.
+					</p>
 				</Show>
 				<div class={styles["url-input-row"]}>
 					<LauncherButton

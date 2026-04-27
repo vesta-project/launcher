@@ -1,7 +1,7 @@
 import CubeIcon from "@assets/cube.svg";
+import CurseForgeIcon from "@assets/curseforge.svg";
 import GlobeIcon from "@assets/earth-globe.svg";
 import PrismLauncherIcon from "@assets/prism-launcher.svg";
-import CurseForgeIcon from "@assets/curseforge.svg";
 import SearchIcon from "@assets/search.svg";
 import { JSX } from "solid-js";
 import styles from "../install-page.module.css";

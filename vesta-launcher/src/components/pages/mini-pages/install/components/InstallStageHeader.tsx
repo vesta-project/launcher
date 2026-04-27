@@ -1,4 +1,4 @@
-import { Show, type JSX } from "solid-js";
+import { type JSX, Show } from "solid-js";
 import styles from "../install-page.module.css";
 
 interface InstallStageHeaderProps {

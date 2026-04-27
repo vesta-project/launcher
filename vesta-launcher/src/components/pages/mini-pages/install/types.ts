@@ -1,6 +1,6 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
-import type { ExternalInstanceCandidate, LauncherKind } from "@utils/launcher-imports";
 import type { Instance } from "@utils/instances";
+import type { ExternalInstanceCandidate, LauncherKind } from "@utils/launcher-imports";
 import type { JSX } from "solid-js";
 
 export interface InstallPageProps {

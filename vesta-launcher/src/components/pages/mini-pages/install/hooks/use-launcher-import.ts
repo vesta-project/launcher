@@ -1,14 +1,14 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
 import {
-	detectExternalLaunchers,
-	importExternalInstance,
-	listExternalInstances,
 	type DetectedLauncher,
+	detectExternalLaunchers,
 	type ExternalInstanceCandidate,
+	importExternalInstance,
 	type LauncherKind,
+	listExternalInstances,
 } from "@utils/launcher-imports";
-import { createEffect, createSignal, type Accessor } from "solid-js";
+import { type Accessor, createEffect, createSignal } from "solid-js";
 import { launcherLabelMap } from "../config/launcher-options";
 
 interface UseLauncherImportParams {
@@ -90,7 +90,11 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 			);
 			if (response !== null) {
 				const selectedIndex = Number.parseInt(response, 10);
-				if (Number.isFinite(selectedIndex) && selectedIndex >= 1 && selectedIndex <= uniqueRoots.length) {
+				if (
+					Number.isFinite(selectedIndex) &&
+					selectedIndex >= 1 &&
+					selectedIndex <= uniqueRoots.length
+				) {
 					preferredPath = uniqueRoots[selectedIndex - 1];
 				}
 			}
@@ -112,7 +116,8 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 			await importExternalInstance({
 				launcher: activeLauncherKind(),
 				instancePath: selectedInstancePath(),
-				selectedInstance: launcherInstances().find((item) => item.instancePath === selectedInstancePath()) ?? null,
+				selectedInstance:
+					launcherInstances().find((item) => item.instancePath === selectedInstancePath()) ?? null,
 				basePathOverride: launcherBasePath().trim() || null,
 			});
 			showToast({

@@ -882,7 +882,10 @@
 
 .launcher-card--modrinth .card-icon,
 .launcher-card--curseforge .card-icon {
-	transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+	transition:
+		transform 0.2s ease,
+		background-color 0.2s ease,
+		color 0.2s ease;
 }
 
 .launcher-card--modrinth .card-icon svg,
