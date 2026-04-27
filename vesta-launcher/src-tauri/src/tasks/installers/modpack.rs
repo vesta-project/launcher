@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::RwLock;
+use std::collections::HashMap;
 
 use crate::models::instance::Instance;
 use crate::models::SourcePlatform;
@@ -29,6 +30,39 @@ pub struct InstallModpackTask {
 
 struct PistonModpackResolver {
     app_handle: tauri::AppHandle,
+    cf_cache: Arc<RwLock<HashMap<String, CachedCurseForgeResolution>>>,
+}
+
+#[derive(Clone)]
+struct CachedCurseForgeResolution {
+    project: crate::models::resource::ResourceProject,
+    version: crate::models::resource::ResourceVersion,
+    url: String,
+    filename: String,
+    subfolder: String,
+    sha1: Option<String>,
+}
+
+impl PistonModpackResolver {
+    fn key_for(project_id: Option<u32>, file_id: u32, hash: Option<&str>) -> String {
+        if let Some(pid) = project_id {
+            format!("pid:{}:fid:{}", pid, file_id)
+        } else if let Some(h) = hash {
+            format!("hash:{}:fid:{}", h, file_id)
+        } else {
+            format!("fid:{}", file_id)
+        }
+    }
+
+    async fn get_cached(
+        &self,
+        project_id: Option<u32>,
+        file_id: u32,
+        hash: Option<&str>,
+    ) -> Option<CachedCurseForgeResolution> {
+        let key = Self::key_for(project_id, file_id, hash);
+        self.cf_cache.read().await.get(&key).cloned()
+    }
 }
 
 impl ModpackResolver for PistonModpackResolver {
@@ -39,8 +73,18 @@ impl ModpackResolver for PistonModpackResolver {
         hash: Option<String>,
     ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedCF>> {
         let handle = self.app_handle.clone();
+        let cf_cache = self.cf_cache.clone();
         Box::pin(async move {
             let rm = handle.state::<ResourceManager>();
+            let cache_key = PistonModpackResolver::key_for(project_id, file_id, hash.as_deref());
+            if let Some(cached) = cf_cache.read().await.get(&cache_key).cloned() {
+                return Ok(ModpackResolvedCF {
+                    url: cached.url,
+                    filename: cached.filename,
+                    subfolder: cached.subfolder,
+                    sha1: cached.sha1,
+                });
+            }
 
             // If we have a hash, we can try to find the project_id via fingerprint API first
             let mut resolved_pid_str = project_id.map(|id| id.to_string());
@@ -97,12 +141,26 @@ impl ModpackResolver for PistonModpackResolver {
                 subfolder
             );
 
-            Ok(ModpackResolvedCF {
-                url: version.download_url,
-                filename: version.file_name,
-                subfolder,
-                sha1: Some(version.hash),
-            })
+            let resolved = ModpackResolvedCF {
+                url: version.download_url.clone(),
+                filename: version.file_name.clone(),
+                subfolder: subfolder.clone(),
+                sha1: Some(version.hash.clone()),
+            };
+
+            cf_cache.write().await.insert(
+                cache_key,
+                CachedCurseForgeResolution {
+                    project,
+                    version,
+                    url: resolved.url.clone(),
+                    filename: resolved.filename.clone(),
+                    subfolder: resolved.subfolder.clone(),
+                    sha1: resolved.sha1.clone(),
+                },
+            );
+
+            Ok(resolved)
         })
     }
 }
@@ -225,6 +283,7 @@ impl Task for InstallModpackTask {
 
             let resolver = Arc::new(PistonModpackResolver {
                 app_handle: app_handle.clone(),
+                cf_cache: Arc::new(RwLock::new(HashMap::new())),
             });
 
             let java_path = instance.java_path.as_ref().map(PathBuf::from);
@@ -235,7 +294,7 @@ impl Task for InstallModpackTask {
                 &game_dir,
                 &data_dir,
                 reporter,
-                Some(resolver),
+                Some(resolver.clone()),
                 java_path,
             )
             .await
@@ -302,13 +361,7 @@ impl Task for InstallModpackTask {
             // Emit update event
             use tauri::Emitter;
             let _ = app_handle.emit("core://instance-updated", final_instance.clone());
-            let _ = app_handle.emit(
-                "core://instance-installed",
-                serde_json::json!({
-                    "name": final_instance.name,
-                    "instance_id": final_instance.slug()
-                }),
-            );
+            let _ = app_handle.emit("core://instance-installed", final_instance.clone());
 
             // POST-INSTALL: Link resources to database automatically
             // This prevents the ResourceWatcher from needing to hit the network for every mod
@@ -318,6 +371,7 @@ impl Task for InstallModpackTask {
             let instance_id = instance.id;
             let game_dir_clone = game_dir.clone();
             let app_handle_clone = app_handle.clone();
+            let resolver_for_linking = resolver.clone();
 
             tauri::async_runtime::spawn(async move {
                 let rm = app_handle_clone.state::<ResourceManager>();
@@ -413,73 +467,77 @@ impl Task for InstallModpackTask {
                             hash,
                             ..
                         } => {
-                            // Resolver might have already cached this, or we fetch it now
-                            // Typically CurseForge mods from modpacks end up in "mods/" with the filename from the API
-                            // We need both project and version to link
-                            let pid_str = project_id.map(|id| id.to_string()).unwrap_or_default();
-                            let fid_str = file_id.to_string();
+                            // Reuse resolver cache from install phase to avoid repetitive API calls.
+                            let cached = resolver_for_linking
+                                .get_cached(project_id, file_id, hash.as_deref())
+                                .await;
 
-                            if let Ok(version) = rm
-                                .get_version(
-                                    crate::models::SourcePlatform::CurseForge,
-                                    &pid_str,
-                                    &fid_str,
-                                )
-                                .await
-                            {
-                                // We might need the project info too
-                                if let Ok(project) = rm
+                            let (project, version, subfolder) = if let Some(c) = cached {
+                                (c.project, c.version, c.subfolder)
+                            } else {
+                                let pid_str = project_id.map(|id| id.to_string()).unwrap_or_default();
+                                let fid_str = file_id.to_string();
+                                let version = match rm
+                                    .get_version(
+                                        crate::models::SourcePlatform::CurseForge,
+                                        &pid_str,
+                                        &fid_str,
+                                    )
+                                    .await
+                                {
+                                    Ok(v) => v,
+                                    Err(_) => continue,
+                                };
+                                let project = match rm
                                     .get_project(
                                         crate::models::SourcePlatform::CurseForge,
                                         &version.project_id,
                                     )
                                     .await
                                 {
-                                    let subfolder = match project.resource_type {
-                                        crate::models::resource::ResourceType::Mod => "mods",
-                                        crate::models::resource::ResourceType::ResourcePack => {
-                                            "resourcepacks"
-                                        }
-                                        crate::models::resource::ResourceType::Shader => {
-                                            "shaderpacks"
-                                        }
-                                        crate::models::resource::ResourceType::DataPack => {
-                                            "datapacks"
-                                        }
-                                        crate::models::resource::ResourceType::World => "saves",
-                                        _ => "mods",
-                                    };
-                                    let local_path =
-                                        game_dir_clone.join(subfolder).join(&version.file_name);
-                                    if local_path.exists() {
-                                        let meta = if let Ok(m) = std::fs::metadata(&local_path) {
-                                            (
-                                                m.len() as i64,
-                                                m.modified()
-                                                    .ok()
-                                                    .and_then(|t| {
-                                                        t.duration_since(std::time::UNIX_EPOCH).ok()
-                                                    })
-                                                    .map(|d| d.as_secs() as i64)
-                                                    .unwrap_or(0),
-                                            )
-                                        } else {
-                                            (0, 0)
-                                        };
-
-                                        let _ = crate::resources::watcher::link_resource_to_db(
-                                            &app_handle_clone,
-                                            instance_id,
-                                            &local_path,
-                                            project,
-                                            version,
-                                            crate::models::SourcePlatform::CurseForge,
-                                            hash,
-                                            meta,
-                                        )
-                                        .await;
-                                    }
+                                    Ok(p) => p,
+                                    Err(_) => continue,
+                                };
+                                let subfolder = match project.resource_type {
+                                    crate::models::resource::ResourceType::Mod => "mods",
+                                    crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
+                                    crate::models::resource::ResourceType::Shader => "shaderpacks",
+                                    crate::models::resource::ResourceType::DataPack => "datapacks",
+                                    crate::models::resource::ResourceType::World => "saves",
+                                    _ => "mods",
                                 }
+                                .to_string();
+                                (project, version, subfolder)
+                            };
+
+                            let local_path = game_dir_clone.join(subfolder).join(&version.file_name);
+                            if local_path.exists() {
+                                let meta = if let Ok(m) = std::fs::metadata(&local_path) {
+                                    (
+                                        m.len() as i64,
+                                        m.modified()
+                                            .ok()
+                                            .and_then(|t| {
+                                                t.duration_since(std::time::UNIX_EPOCH).ok()
+                                            })
+                                            .map(|d| d.as_secs() as i64)
+                                            .unwrap_or(0),
+                                    )
+                                } else {
+                                    (0, 0)
+                                };
+
+                                let _ = crate::resources::watcher::link_resource_to_db(
+                                    &app_handle_clone,
+                                    instance_id,
+                                    &local_path,
+                                    project,
+                                    version,
+                                    crate::models::SourcePlatform::CurseForge,
+                                    hash,
+                                    meta,
+                                )
+                                .await;
                             }
                         }
                     }
