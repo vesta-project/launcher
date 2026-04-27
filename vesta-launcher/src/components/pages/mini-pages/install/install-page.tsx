@@ -26,6 +26,21 @@ function InstallPage(props: InstallPageRouteProps) {
 	const [formState, setFormState] = createSignal<Partial<Instance>>({});
 	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
 	const routeParams = createMemo(() => (props.router || router())?.currentParams.get() || {});
+	const effectiveIsModpack = createMemo(() => {
+		const routeFlag = routeParams().isModpack as boolean | string | undefined;
+		if (String(routeFlag) === "true" || routeFlag === true) return true;
+		if (String(routeFlag) === "false" || routeFlag === false) return false;
+		return String(props.isModpack) === "true" || props.isModpack === true;
+	});
+	const effectiveResourceType = createMemo(
+		() => (routeParams().resourceType as string | undefined) || props.resourceType,
+	);
+	const effectiveModpackUrl = createMemo(
+		() => (routeParams().modpackUrl as string | undefined) || props.modpackUrl,
+	);
+	const effectiveModpackPath = createMemo(
+		() => (routeParams().modpackPath as string | undefined) || props.modpackPath,
+	);
 	const effectiveProjectId = createMemo(() => (routeParams().projectId as string | undefined) || props.projectId);
 	const effectivePlatform = createMemo(() => (routeParams().platform as string | undefined) || props.platform);
 	const effectiveInitialVersion = createMemo(
@@ -42,21 +57,21 @@ function InstallPage(props: InstallPageRouteProps) {
 		initialModloader: props.initialModloader,
 		initialModloaderVersion: props.initialModloaderVersion,
 		originalIcon: props.originalIcon,
-		modpackUrl: props.modpackUrl,
-		modpackPath: props.modpackPath,
+		modpackUrl: effectiveModpackUrl(),
+		modpackPath: effectiveModpackPath(),
 		selectedModpackVersionId,
 	});
 
 	let installStateAccessor: () => boolean = () => false;
 	const routeState = useInstallRouteState({
-		isModpackFlag: props.isModpack,
-		resourceType: props.resourceType,
-		modpackUrl: props.modpackUrl,
-		modpackPath: props.modpackPath,
+		isModpackFlag: effectiveIsModpack(),
+		resourceType: effectiveResourceType(),
+		modpackUrl: effectiveModpackUrl(),
+		modpackPath: effectiveModpackPath(),
 		activeRouterProp: props.router,
 		isFetchingMetadata: source.isFetchingMetadata,
 		hasSource: () => !!(source.modpackUrl() || source.modpackPath()),
-		hasProjectContext: () => !!props.projectId,
+		hasProjectContext: () => !!effectiveProjectId(),
 		isInstalling: () => installStateAccessor(),
 	});
 
@@ -171,10 +186,10 @@ function InstallPage(props: InstallPageRouteProps) {
 		</Show>
 		<div class={styles["page-wrapper"]}>
 			<Show when={(props.projectName || source.modpackPath() || source.modpackUrl()) && !shouldShowOverlay()}>
-				<InstallContextBanner title={props.projectName || source.modpackInfo()?.name || "Analyzing modpack details..."} label={props.resourceType || (routeState.isModpackMode() ? "Modpack" : "Package")} iconUrl={props.projectIcon || source.modpackInfo()?.iconUrl} minecraftVersion={source.modpackInfo()?.minecraftVersion || props.initialVersion} modloader={source.modpackInfo()?.modloader || props.initialModloader} analyzing={!source.modpackInfo() && !props.projectName} backLabel={props.projectId ? "Back to Browser" : "Back to Source"} onBack={() => props.projectId ? routeState.activeRouter()?.backwards() : source.resetSource()} />
+				<InstallContextBanner title={props.projectName || source.modpackInfo()?.name || "Analyzing modpack details..."} label={effectiveResourceType() || (routeState.isModpackMode() ? "Modpack" : "Package")} iconUrl={props.projectIcon || source.modpackInfo()?.iconUrl} minecraftVersion={source.modpackInfo()?.minecraftVersion || props.initialVersion} modloader={source.modpackInfo()?.modloader || props.initialModloader} analyzing={!source.modpackInfo() && !props.projectName} backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"} onBack={() => effectiveProjectId() ? routeState.activeRouter()?.backwards() : source.resetSource()} />
 			</Show>
 
-			<Show when={routeState.isModpackMode() && routeState.step() !== "form" && routeState.step() !== "submitting" && !props.projectId}>
+			<Show when={routeState.isModpackMode() && routeState.step() !== "form" && routeState.step() !== "submitting" && !effectiveProjectId()}>
 				<div class={styles["import-selection-wrapper"]}>
 					<Show when={routeState.step() === "sourceSelect"}>
 						<SourceOptionsGrid onLocalImport={source.handleLocalImport} onExplore={() => { resources.setType("modpack"); routeState.activeRouter()?.navigate("/resources"); }} onUrl={() => routeState.dispatch("showUrl")} onLauncher={() => routeState.dispatch("showLauncher")} />
@@ -193,7 +208,7 @@ function InstallPage(props: InstallPageRouteProps) {
 
 			<FetchingOverlay isVisible={shouldShowOverlay()} title={projectVersions.loading ? "Loading available versions..." : "Fetching modpack details..."} message={projectVersions.loading ? undefined : "This usually takes a few seconds as we verify the pack manifest."} />
 
-			<Show when={shouldShowForm() && (!routeState.isModpackMode() || source.modpackUrl() || source.modpackPath() || props.projectId)}>
+			<Show when={shouldShowForm() && (!routeState.isModpackMode() || source.modpackUrl() || source.modpackPath() || effectiveProjectId())}>
 				<InstallForm
 					isModpack={routeState.isModpackMode()}
 					isLocalImport={!!source.modpackPath()}
@@ -204,8 +219,8 @@ function InstallPage(props: InstallPageRouteProps) {
 					supportedMcVersions={capabilities.supportedMcVersions()}
 					supportedModloaders={capabilities.supportedModloaders()}
 					onStateChange={setFormState}
-					projectId={props.projectId}
-					platform={props.platform}
+					projectId={effectiveProjectId()}
+					platform={effectivePlatform()}
 					initialData={(props as any).initialData}
 					initialName={props.initialName || source.modpackInfo()?.name || props.projectName}
 					initialAuthor={source.modpackInfo()?.author || props.projectAuthor || undefined}
