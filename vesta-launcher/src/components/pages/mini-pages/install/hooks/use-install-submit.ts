@@ -42,6 +42,7 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 		} catch (error) {
 			console.error("[Install] ERROR:", error);
 			showToast({ title: "Failed", description: String(error), severity: "error" });
+		} finally {
 			setIsInstalling(false);
 		}
 	};

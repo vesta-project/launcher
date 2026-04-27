@@ -26,6 +26,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 	const [modpackPath, setModpackPath] = createSignal(params.modpackPath || "");
 	const [modpackInfo, setModpackInfo] = createSignal<ModpackInfo | undefined>();
 	const [urlInputValue, setUrlInputValue] = createSignal("");
+	let latestRequestId = 0;
 
 	const originalIcon = createMemo(
 		() => params.originalIcon || modpackInfo()?.iconUrl || params.projectIcon || undefined,
@@ -35,18 +36,24 @@ export function useModpackSource(params: UseModpackSourceParams) {
 		const url = modpackUrl();
 		const path = modpackPath();
 		if (!url && !path) {
+			latestRequestId += 1;
+			setIsFetchingMetadata(false);
 			setModpackInfo(undefined);
 			return;
 		}
 
 		const fetchDetails = async () => {
+			const requestId = latestRequestId + 1;
+			latestRequestId = requestId;
 			setIsFetchingMetadata(true);
 			try {
 				const info = url
 					? await getModpackInfoFromUrl(url, params.projectId, params.platform)
 					: await getModpackInfo(path, params.projectId, params.platform);
+				if (latestRequestId !== requestId) return;
 				setModpackInfo(info);
 			} catch (error) {
+				if (latestRequestId !== requestId) return;
 				console.error("[InstallPage] Metadata fetch error:", error);
 				if (params.projectId || params.projectName) {
 					const versions = params.projectVersions?.();
@@ -80,6 +87,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 					});
 				}
 			} finally {
+				if (latestRequestId !== requestId) return;
 				setIsFetchingMetadata(false);
 			}
 		};
@@ -113,6 +121,8 @@ export function useModpackSource(params: UseModpackSourceParams) {
 
 	const resetSource = () => {
 		batch(() => {
+			latestRequestId += 1;
+			setIsFetchingMetadata(false);
 			setModpackUrl("");
 			setModpackPath("");
 			setModpackInfo(undefined);

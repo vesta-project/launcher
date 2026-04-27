@@ -25,14 +25,20 @@ import type { InstallPageRouteProps } from "./types";
 function InstallPage(props: InstallPageRouteProps) {
 	const [formState, setFormState] = createSignal<Partial<Instance>>({});
 	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
+	const routeParams = createMemo(() => (props.router || router())?.currentParams.get() || {});
+	const effectiveProjectId = createMemo(() => (routeParams().projectId as string | undefined) || props.projectId);
+	const effectivePlatform = createMemo(() => (routeParams().platform as string | undefined) || props.platform);
+	const effectiveInitialVersion = createMemo(
+		() => (routeParams().initialVersion as string | undefined) || props.initialVersion,
+	);
 
 	const source = useModpackSource({
-		projectId: props.projectId,
-		platform: props.platform,
+		projectId: effectiveProjectId(),
+		platform: effectivePlatform(),
 		projectName: props.projectName,
 		projectIcon: props.projectIcon,
 		projectAuthor: props.projectAuthor,
-		initialVersion: props.initialVersion,
+		initialVersion: effectiveInitialVersion(),
 		initialModloader: props.initialModloader,
 		initialModloaderVersion: props.initialModloaderVersion,
 		originalIcon: props.originalIcon,
@@ -69,9 +75,9 @@ function InstallPage(props: InstallPageRouteProps) {
 		modpackPath: source.modpackPath,
 		modpackUrl: source.modpackUrl,
 		modpackInfo: source.modpackInfo as any,
-		projectId: props.projectId,
-		platform: props.platform,
-		initialVersion: props.initialVersion,
+		projectId: effectiveProjectId,
+		platform: effectivePlatform,
+		initialVersion: effectiveInitialVersion,
 		selectedModpackVersionId,
 		setSelectedModpackVersionId,
 		setModpackUrl: source.setModpackUrl,
@@ -91,6 +97,7 @@ function InstallPage(props: InstallPageRouteProps) {
 	});
 
 	onMount(() => {
+		console.log("[InstallPage] Mounted with props:", props, "route params:", routeParams());
 		routeState.activeRouter()?.registerStateProvider("/install", () => ({
 			...props,
 			modpackUrl: source.modpackUrl(),

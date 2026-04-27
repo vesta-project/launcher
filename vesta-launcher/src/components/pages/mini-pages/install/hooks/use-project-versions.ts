@@ -2,14 +2,35 @@ import { resources, type ResourceVersion, type SourcePlatform } from "@stores/re
 import { batch, createEffect, createResource, type Accessor } from "solid-js";
 import { showToast } from "@ui/toast/toast";
 
+const PROJECT_VERSIONS_TIMEOUT_MS = 20_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new Error(`${operation} timed out after ${Math.round(timeoutMs / 1000)}s`));
+		}, timeoutMs);
+
+		void promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 interface UseProjectVersionsParams {
 	isModpackMode: Accessor<boolean>;
 	modpackPath: Accessor<string>;
 	modpackUrl: Accessor<string>;
 	modpackInfo: Accessor<{ modpackId?: string; modpackPlatform?: string } | undefined>;
-	projectId?: string;
-	platform?: string;
-	initialVersion?: string;
+	projectId?: Accessor<string | undefined>;
+	platform?: Accessor<string | undefined>;
+	initialVersion?: Accessor<string | undefined>;
 	selectedModpackVersionId: Accessor<string>;
 	setSelectedModpackVersionId: (id: string) => void;
 	setModpackUrl: (url: string) => void;
@@ -20,17 +41,23 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 		() => {
 			if (params.modpackPath()) return null;
 
-			const pId = params.projectId || params.modpackInfo()?.modpackId;
-			const pPlatform = params.platform || params.modpackInfo()?.modpackPlatform;
+			const pId = params.projectId?.() || params.modpackInfo()?.modpackId;
+			const pPlatform = params.platform?.() || params.modpackInfo()?.modpackPlatform;
 			if (pId && pPlatform) return { id: pId, platform: pPlatform };
 			return null;
 		},
 		async ({ id, platform }: { id: string; platform: string }) => {
 			try {
-				const vs = await resources.getVersions(platform as SourcePlatform, id);
+				const vs = await withTimeout(
+					resources.getVersions(platform as SourcePlatform, id),
+					PROJECT_VERSIONS_TIMEOUT_MS,
+					"Project versions lookup",
+				);
 				const currentUrl = params.modpackUrl();
 				const info = params.modpackInfo();
-				const initialVer = params.initialVersion || (info as { modpackVersionId?: string } | undefined)?.modpackVersionId;
+				const initialVer =
+					params.initialVersion?.() ||
+					(info as { modpackVersionId?: string } | undefined)?.modpackVersionId;
 
 				if (initialVer) {
 					const match = vs.find((v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer);
@@ -58,6 +85,11 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 				return vs;
 			} catch (error) {
 				console.error("[InstallPage] Version fetch failed:", error);
+				showToast({
+					title: "Version Sync Failed",
+					description: "Could not load modpack versions right now. You can still continue and retry shortly.",
+					severity: "warning",
+				});
 				return [];
 			}
 		},
