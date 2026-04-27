@@ -134,6 +134,35 @@ fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(
     );
 
     if discovered_files == 0 {
+        // Fallback: if resources are already indexed in DB for this instance,
+        // do not hard-block launch due to path-layout drift.
+        if inst.id > 0 {
+            use crate::schema::installed_resource::dsl as ir_dsl;
+            if let Ok(mut conn) = get_vesta_conn() {
+                let indexed_count = ir_dsl::installed_resource
+                    .filter(ir_dsl::instance_id.eq(inst.id))
+                    .filter(
+                        ir_dsl::resource_type
+                            .eq("mod")
+                            .or(ir_dsl::resource_type.eq("resourcepack"))
+                            .or(ir_dsl::resource_type.eq("shader"))
+                            .or(ir_dsl::resource_type.eq("datapack")),
+                    )
+                    .count()
+                    .get_result::<i64>(&mut conn)
+                    .unwrap_or(0);
+                if indexed_count > 0 {
+                    log::warn!(
+                        "[launch_instance] modpack-resource-check bypassed: no files found at {} but {} indexed resources exist in DB for instance={}",
+                        game_dir,
+                        indexed_count,
+                        inst.slug()
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
         return Err(
             "Modpack-linked instance has no modpack-managed resource files (mods/resourcepacks/shaderpacks/datapacks). Run Repair to restore missing files."
                 .to_string(),
@@ -1176,7 +1205,29 @@ pub async fn launch_instance(
     };
 
     // Determine game directory
-    let game_dir = if instance_data.use_global_game_dir {
+    // Prefer persisted per-instance game_directory whenever it exists.
+    // This avoids false path recomputation when global directory settings change.
+    let game_dir = if let Some(stored) = instance_data.game_directory.clone() {
+        if !stored.is_empty() && std::path::Path::new(&stored).exists() {
+            stored
+        } else if instance_data.use_global_game_dir {
+            let instances_root = if let Some(ref dir) = app_config.default_game_dir {
+                if !dir.is_empty() && dir != "/" {
+                    std::path::PathBuf::from(dir)
+                } else {
+                    data_dir.join("instances")
+                }
+            } else {
+                data_dir.join("instances")
+            };
+            instances_root
+                .join(&instance_id)
+                .to_string_lossy()
+                .to_string()
+        } else {
+            stored
+        }
+    } else if instance_data.use_global_game_dir {
         let instances_root = if let Some(ref dir) = app_config.default_game_dir {
             if !dir.is_empty() && dir != "/" {
                 std::path::PathBuf::from(dir)
@@ -1191,13 +1242,11 @@ pub async fn launch_instance(
             .to_string_lossy()
             .to_string()
     } else {
-        instance_data.game_directory.clone().unwrap_or_else(|| {
-            data_dir
-                .join("instances")
-                .join(&instance_id)
-                .to_string_lossy()
-                .to_string()
-        })
+        data_dir
+            .join("instances")
+            .join(&instance_id)
+            .to_string_lossy()
+            .to_string()
     };
 
     verify_modpack_resource_presence(&instance_data, &game_dir)?;
