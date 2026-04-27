@@ -407,7 +407,7 @@ pub async fn launch_game(
     // If it's already there, we SHOULD NOT add the vanilla/installed JAR manually 
     // to avoid "ResolutionException: Module ... reads more than one module" errors.
     let installed_id = spec.installed_version_id();
-    let already_has_game_jar = installed_id.contains("forge-loader") || libraries_for_classpath.iter().any(|lib| {
+    let already_has_game_jar = libraries_for_classpath.iter().any(|lib| {
         let name = lib.name.to_lowercase();
         // Modern Forge (1.13+) uses net.minecraftforge:forge:...:client
         // NeoForge uses net.neoforged:neoforge

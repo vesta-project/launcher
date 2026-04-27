@@ -576,10 +576,20 @@ fn process_forge_versions(
 
         for forge_version in matching_versions {
             // Extract a candidate loader version.
-            // - If the maven version contains a dash (Forge style), take the last segment
-            // - Otherwise (NeoForge style) take the whole string
-            // Use nexus semantics: split on '-' and take the last segment
-            let l_version = forge_version.split('-').last().unwrap().to_string();
+            // Correct logic to extract forge version:
+            // Remove the `<mc_version>-` prefix.
+            let rest = if let Some(stripped) = forge_version.strip_prefix(&format!("{}-", version.id)) {
+                stripped
+            } else {
+                continue;
+            };
+            
+            // Remove the `-<mc_version>` suffix if it exists.
+            let l_version = if let Some(stripped) = rest.strip_suffix(&format!("-{}", version.id)) {
+                stripped.to_string()
+            } else {
+                rest.to_string()
+            };
 
             // Check blacklist
             if super::blacklist::is_blacklisted(loader_type, &version.id, &l_version) {
