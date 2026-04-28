@@ -68,7 +68,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 						author: params.projectAuthor || "",
 						description: null,
 						iconUrl: params.projectIcon || null,
-						minecraftVersion: selectedVer?.game_versions[0] || params.initialModloaderVersion || "",
+						minecraftVersion: selectedVer?.game_versions[0] || "",
 						modloader: (selectedVer?.loaders[0] as any) || params.initialModloader || "vanilla",
 						modloaderVersion: null,
 						modCount: 0,

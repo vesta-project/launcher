@@ -252,15 +252,27 @@ impl Task for InstallInstanceTask {
                         }
                     }
 
-                    // Emit installed event for frontend
+                    // Emit installed event for frontend with a full instance payload.
                     use tauri::Emitter;
-                    let _ = app_handle.emit(
-                        "core://instance-installed",
-                        serde_json::json!({
-                            "name": instance.name,
-                            "instance_id": instance.slug()
-                        }),
-                    );
+                    match crate::commands::instances::get_instance(instance.id) {
+                        Ok(updated_instance) => {
+                            let _ = app_handle.emit("core://instance-installed", updated_instance);
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "[InstallTask] Failed to fetch full installed instance payload (id={}): {}",
+                                instance.id,
+                                e
+                            );
+                            let _ = app_handle.emit(
+                                "core://instance-installed",
+                                serde_json::json!({
+                                    "name": instance.name,
+                                    "instance_id": instance.slug()
+                                }),
+                            );
+                        }
+                    }
 
                     Ok(())
                 }

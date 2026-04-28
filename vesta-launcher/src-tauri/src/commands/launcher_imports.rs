@@ -33,7 +33,7 @@ pub fn detect_external_launchers(
 }
 
 #[tauri::command]
-pub fn list_external_instances(
+pub async fn list_external_instances(
     import_manager: State<'_, ImportManager>,
     launcher: crate::launcher_import::types::LauncherKind,
     base_path_override: Option<String>,
@@ -43,9 +43,17 @@ pub fn list_external_instances(
         launcher,
         base_path_override.as_deref().unwrap_or("")
     );
-    import_manager
-        .list_instances(&launcher, base_path_override.as_deref())
-        .map_err(|e| e.to_string())
+    let manager = import_manager.inner().clone();
+    let launcher_kind = launcher;
+    let base_override = base_path_override;
+
+    tauri::async_runtime::spawn_blocking(move || {
+        manager
+            .list_instances(&launcher_kind, base_override.as_deref())
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Failed to list external instances: {}", e))?
 }
 
 #[tauri::command]

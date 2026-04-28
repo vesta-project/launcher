@@ -349,7 +349,7 @@ impl Task for DeleteInstanceTask {
                 );
             }
 
-            ctx.update_full(25, "Removing database references...".to_string(), Some(2), Some(5));
+            ctx.update_full(25, "Resolving instance details...".to_string(), Some(2), Some(5));
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl::*;
 
@@ -360,32 +360,33 @@ impl Task for DeleteInstanceTask {
             let slug_val = inst.slug();
             let game_dir = inst.game_directory.clone();
 
-            let _ = diesel::delete(
-                crate::schema::installed_resource::dsl::installed_resource.filter(
-                    crate::schema::installed_resource::dsl::instance_id.eq(instance_id),
-                ),
-            )
-            .execute(&mut conn);
-
-            ctx.update_full(50, "Deleting instance record...".to_string(), Some(3), Some(5));
-            diesel::delete(instance.find(instance_id))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
-
             if let Some(gd) = game_dir {
-                ctx.update_full(75, "Removing instance files...".to_string(), Some(4), Some(5));
+                ctx.update_full(55, "Removing instance files...".to_string(), Some(3), Some(5));
                 let gd_path = std::path::PathBuf::from(gd);
                 if gd_path.exists() {
-                    if let Err(e) = std::fs::remove_dir_all(&gd_path) {
-                        log::error!(
-                            "[delete_instance_task] failed to remove dir instance_id={} path={:?} error={}",
-                            instance_id,
-                            gd_path,
+                    std::fs::remove_dir_all(&gd_path).map_err(|e| {
+                        format!(
+                            "Failed to remove instance files at '{}': {}",
+                            gd_path.display(),
                             e
-                        );
-                    }
+                        )
+                    })?;
                 }
             }
+
+            ctx.update_full(80, "Removing database references...".to_string(), Some(4), Some(5));
+            conn.transaction::<_, diesel::result::Error, _>(|conn| {
+                diesel::delete(
+                    crate::schema::installed_resource::dsl::installed_resource.filter(
+                        crate::schema::installed_resource::dsl::instance_id.eq(instance_id),
+                    ),
+                )
+                .execute(conn)?;
+
+                diesel::delete(instance.find(instance_id)).execute(conn)?;
+                Ok(())
+            })
+            .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
 
             ctx.update_full(95, "Finalizing...".to_string(), Some(5), Some(5));
             use tauri::Emitter;

@@ -388,7 +388,7 @@ fn copy_dir_recursive(
     }
     std::fs::create_dir_all(target)?;
 
-    for entry in WalkDir::new(source) {
+    for entry in WalkDir::new(source).follow_links(false) {
         if cancel_flag.load(Ordering::Relaxed) {
             return Err(anyhow::anyhow!("Cancelled"));
         }
@@ -402,6 +402,14 @@ fn copy_dir_recursive(
         let dst_path: PathBuf = target.join(relative);
         if entry.file_type().is_dir() {
             std::fs::create_dir_all(&dst_path)?;
+            continue;
+        }
+        if entry.file_type().is_symlink() {
+            log::warn!(
+                "[external_import] skipping symlink during copy source={} relative={}",
+                source.display(),
+                relative.display()
+            );
             continue;
         }
 
