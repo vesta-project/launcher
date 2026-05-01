@@ -98,13 +98,20 @@ pub async fn import_external_instance(
             .ok_or_else(|| "Instance not found for selected launcher/path".to_string())?
     };
 
+    let minecraft_version = selected
+        .minecraft_version
+        .ok_or_else(|| {
+            format!(
+                "Unable to determine the Minecraft version for '{}'. Please rescan the launcher or select an instance with a detected version.",
+                selected.name
+            )
+        })?;
+
     let mut instance = Instance::default();
     instance.name = request
         .instance_name_override
         .unwrap_or_else(|| selected.name.clone());
-    instance.minecraft_version = selected
-        .minecraft_version
-        .unwrap_or_else(|| "1.21.1".to_string());
+    instance.minecraft_version = minecraft_version;
     instance.modloader = selected.modloader;
     instance.modloader_version = selected.modloader_version;
     instance.icon_path = selected.icon_path;

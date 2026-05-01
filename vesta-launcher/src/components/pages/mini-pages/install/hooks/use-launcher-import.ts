@@ -1,5 +1,6 @@
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
+import { dialogStore } from "@stores/dialog-store";
 import {
 	type DetectedLauncher,
 	detectExternalLaunchers,
@@ -84,9 +85,13 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 
 		if (uniqueRoots.length > 1) {
 			const optionsText = uniqueRoots.map((path, index) => `${index + 1}. ${path}`).join("\n");
-			const response = window.prompt(
-				`Multiple ${launcherLabelMap.get(launcher) ?? "launcher"} data roots were detected.\nChoose a path number:\n\n${optionsText}`,
-				"1",
+			const response = await dialogStore.prompt(
+				`Select ${launcherLabelMap.get(launcher) ?? "launcher"} data root`,
+				`Multiple data roots were detected. Choose the one you want to use:\n\n${optionsText}`,
+				{
+					defaultValue: "1",
+					placeholder: "Enter path number (1-" + uniqueRoots.length + ")",
+				},
 			);
 			if (response !== null) {
 				const selectedIndex = Number.parseInt(response, 10);

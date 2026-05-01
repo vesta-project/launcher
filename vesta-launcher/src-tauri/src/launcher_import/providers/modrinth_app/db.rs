@@ -100,30 +100,24 @@ pub fn extract_modrinth_resource_hints(
         .unwrap_or_default()
         .to_string();
 
-    let queries = vec![
-        format!(
-            "SELECT project_id AS project_id, version_id AS version_id, file_name AS file_name \
-             FROM profile_files WHERE profile_path = '{}' OR profile_id = '{}'",
-            escape_sql_string(&profile_path),
-            escape_sql_string(&profile_id)
-        ),
-        format!(
-            "SELECT modrinth_project_id AS project_id, modrinth_version_id AS version_id, file_name AS file_name \
-             FROM profile_files WHERE profile_path = '{}' OR profile_id = '{}'",
-            escape_sql_string(&profile_path),
-            escape_sql_string(&profile_id)
-        ),
-        format!(
-            "SELECT project_id AS project_id, version_id AS version_id, path AS file_name \
-             FROM installed WHERE profile_path = '{}' OR profile_id = '{}'",
-            escape_sql_string(&profile_path),
-            escape_sql_string(&profile_id)
-        ),
+    let query_results = vec![
+        sql_query("SELECT project_id AS project_id, version_id AS version_id, file_name AS file_name FROM profile_files WHERE profile_path = ? OR profile_id = ?")
+            .bind::<diesel::sql_types::Text, _>(profile_path.clone())
+            .bind::<diesel::sql_types::Text, _>(profile_id.clone())
+            .load::<ModrinthHintRow>(&mut connection),
+        sql_query("SELECT modrinth_project_id AS project_id, modrinth_version_id AS version_id, file_name AS file_name FROM profile_files WHERE profile_path = ? OR profile_id = ?")
+            .bind::<diesel::sql_types::Text, _>(profile_path.clone())
+            .bind::<diesel::sql_types::Text, _>(profile_id.clone())
+            .load::<ModrinthHintRow>(&mut connection),
+        sql_query("SELECT project_id AS project_id, version_id AS version_id, path AS file_name FROM installed WHERE profile_path = ? OR profile_id = ?")
+            .bind::<diesel::sql_types::Text, _>(profile_path.clone())
+            .bind::<diesel::sql_types::Text, _>(profile_id.clone())
+            .load::<ModrinthHintRow>(&mut connection),
     ];
 
     let mut hints = Vec::new();
-    for q in queries {
-        if let Ok(rows) = sql_query(q).load::<ModrinthHintRow>(&mut connection) {
+    for result in query_results {
+        if let Ok(rows) = result {
             for row in rows {
                 let Some(project_id) = row.project_id.filter(|s| !s.trim().is_empty()) else {
                     continue;
@@ -149,8 +143,4 @@ pub fn extract_modrinth_resource_hints(
         }
     }
     hints
-}
-
-fn escape_sql_string(input: &str) -> String {
-    input.replace('\'', "''")
 }

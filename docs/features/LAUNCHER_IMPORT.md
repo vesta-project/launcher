@@ -80,21 +80,27 @@ Import request shape:
 1. UI calls `detect_external_launchers`.
 2. UI chooses launcher + path and calls `list_external_instances`.
 3. UI selects an instance and calls `import_external_instance`.
-4. Backend creates a Vesta instance row.
+4. Backend creates a Vesta instance row with initial installation status.
 5. Backend queues `ImportExternalInstanceTask`.
 6. Task:
    - temporarily un-watches target instance
    - recursively copies external files into target game dir in a blocking worker thread
    - reports copy progress and supports cancellation during copy
-   - re-attaches watcher first, then runs explicit resync with progress callbacks
+   - re-attaches watcher first
+   - marks installation status as `verifying-runtime`
+7. Task completes (providing immediate feedback to user).
+8. A background `ImportResourceResyncTask` is queued as a follow-up:
+   - runs explicit resync with progress callbacks
    - emits periodic heartbeat status during long resync operations
-   - marks installation status `installed`
+   - marks installation status `installed` when complete
 
 Completion semantics:
 
-- The import task only completes after resync has completed.
-- `installation_status=installed` is set only after resync completion.
-- This is intentional to preserve correctness over early completion.
+- The import task completes immediately after successfully copying files and queuing the resource resync task.
+- A follow-up `ImportResourceResyncTask` is queued as a background task to handle resource identification and linking.
+- `installation_status=installed` is set only after the background resync task completes.
+- This design provides immediate feedback to the user while preserving correctness: resources are fully scanned and linked after resync finishes, not during the initial import.
+- The instance becomes fully "installed" when the resync task completes, not when the import task completes.
 
 ## Watcher Strategy
 

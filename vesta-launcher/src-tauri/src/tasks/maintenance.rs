@@ -217,8 +217,14 @@ impl Task for ResetInstanceTask {
                 ctx.update_description("Wiping instance directory...".to_string());
                 let gd_path = PathBuf::from(gd);
                 if gd_path.exists() {
-                    let _ = std::fs::remove_dir_all(&gd_path);
-                    let _ = std::fs::create_dir_all(&gd_path);
+                    let gd_path_clone = gd_path.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let _ = std::fs::remove_dir_all(&gd_path_clone);
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to remove instance directory: {}", e))?;
+                    std::fs::create_dir_all(&gd_path)
+                        .map_err(|e| format!("Failed to recreate instance directory: {}", e))?;
                 }
             }
 
@@ -364,7 +370,13 @@ impl Task for DeleteInstanceTask {
                 ctx.update_full(55, "Removing instance files...".to_string(), Some(3), Some(5));
                 let gd_path = std::path::PathBuf::from(gd);
                 if gd_path.exists() {
-                    std::fs::remove_dir_all(&gd_path).map_err(|e| {
+                    tokio::task::spawn_blocking({
+                        let path = gd_path.clone();
+                        move || std::fs::remove_dir_all(&path)
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to await instance removal task: {}", e))?
+                    .map_err(|e| {
                         format!(
                             "Failed to remove instance files at '{}': {}",
                             gd_path.display(),

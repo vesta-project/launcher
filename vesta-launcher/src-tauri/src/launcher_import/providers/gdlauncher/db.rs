@@ -28,24 +28,20 @@ pub fn extract_gdlauncher_resource_hints(
         .to_string();
     let instance_path_str = instance_path.to_string_lossy().to_string();
 
-    let queries = vec![
-        format!(
-            "SELECT project_id AS project_id, file_id AS version_id, platform AS platform, file_name AS file_name \
-             FROM installed_mods WHERE instance_id = '{}' OR instance_path = '{}'",
-            escape_sql_string(&instance_key),
-            escape_sql_string(&instance_path_str)
-        ),
-        format!(
-            "SELECT project_id AS project_id, version_id AS version_id, source AS platform, path AS file_name \
-             FROM instance_mods WHERE instance_id = '{}' OR instance_path = '{}'",
-            escape_sql_string(&instance_key),
-            escape_sql_string(&instance_path_str)
-        ),
+    let query_results = vec![
+        sql_query("SELECT project_id AS project_id, file_id AS version_id, platform AS platform, file_name AS file_name FROM installed_mods WHERE instance_id = ? OR instance_path = ?")
+            .bind::<diesel::sql_types::Text, _>(instance_key.clone())
+            .bind::<diesel::sql_types::Text, _>(instance_path_str.clone())
+            .load::<GDHintRow>(&mut conn),
+        sql_query("SELECT project_id AS project_id, version_id AS version_id, source AS platform, path AS file_name FROM instance_mods WHERE instance_id = ? OR instance_path = ?")
+            .bind::<diesel::sql_types::Text, _>(instance_key.clone())
+            .bind::<diesel::sql_types::Text, _>(instance_path_str.clone())
+            .load::<GDHintRow>(&mut conn),
     ];
 
     let mut out = Vec::new();
-    for q in queries {
-        if let Ok(rows) = sql_query(q).load::<GDHintRow>(&mut conn) {
+    for result in query_results {
+        if let Ok(rows) = result {
             for row in rows {
                 let Some(project_id) = row.project_id.filter(|s| !s.trim().is_empty()) else {
                     continue;
@@ -80,6 +76,4 @@ pub fn extract_gdlauncher_resource_hints(
     out
 }
 
-fn escape_sql_string(input: &str) -> String {
-    input.replace('\'', "''")
-}
+

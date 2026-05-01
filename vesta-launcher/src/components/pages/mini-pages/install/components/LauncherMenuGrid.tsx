@@ -13,9 +13,10 @@ export function LauncherMenuGrid(props: LauncherMenuGridProps) {
 			<div class={`${styles["modpack-import-container"]} ${styles["launcher-menu-grid"]}`}>
 				<For each={props.launchers}>
 					{(launcher) => (
-						<div
+						<button
 							class={`${styles["modpack-import-card"]} ${styles[`launcher-card--${launcher.tone}`]}`}
 							onClick={() => props.onSelect(launcher.kind)}
+							type="button"
 						>
 							{launcher.icon && (
 								<div
@@ -28,7 +29,7 @@ export function LauncherMenuGrid(props: LauncherMenuGridProps) {
 							<div class={styles["card-content"]}>
 								<div class={styles.title}>{launcher.label}</div>
 							</div>
-						</div>
+						</button>
 					)}
 				</For>
 			</div>

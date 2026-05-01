@@ -17,7 +17,7 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 	return (
 		<div class={styles["import-stage-surface"]}>
 			<div class={styles["modpack-import-container"]}>
-				<div class={styles["modpack-import-card"]} onClick={props.onLocalImport}>
+				<button class={styles["modpack-import-card"]} onClick={props.onLocalImport} type="button">
 					<div class={styles["card-icon"]}>
 						<CubeIcon />
 					</div>
@@ -25,8 +25,8 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 						<div class={styles.title}>Local File</div>
 						<div class={styles.description}>Upload .zip or .mrpack</div>
 					</div>
-				</div>
-				<div class={styles["modpack-import-card"]} onClick={props.onExplore}>
+				</button>
+				<button class={styles["modpack-import-card"]} onClick={props.onExplore} type="button">
 					<div class={styles["card-icon"]}>
 						<SearchIcon />
 					</div>
@@ -34,8 +34,8 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 						<div class={styles.title}>Explore</div>
 						<div class={styles.description}>Browse Modrinth & CF</div>
 					</div>
-				</div>
-				<div class={styles["modpack-import-card"]} onClick={props.onUrl}>
+				</button>
+				<button class={styles["modpack-import-card"]} onClick={props.onUrl} type="button">
 					<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
 						<GlobeIcon />
 					</div>
@@ -43,8 +43,8 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 						<div class={styles.title}>From URL</div>
 						<div class={styles.description}>Direct download link</div>
 					</div>
-				</div>
-				<div class={styles["modpack-import-card"]} onClick={props.onLauncher}>
+				</button>
+				<button class={styles["modpack-import-card"]} onClick={props.onLauncher} type="button">
 					<div class={`${styles["card-icon"]} ${styles["import-launcher-icon-stack"]}`}>
 						<PrismLauncherIcon class={styles["stack-icon"]} />
 						<CurseForgeIcon class={styles["stack-icon"]} />
@@ -53,7 +53,7 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 						<div class={styles.title}>Import Launcher</div>
 						<div class={styles.description}>Choose launcher, then scan instances</div>
 					</div>
-				</div>
+				</button>
 			</div>
 		</div>
 	);
