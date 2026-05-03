@@ -24,6 +24,9 @@ export interface DialogInstance {
 	severity: DialogSeverity;
 	actions: DialogAction[];
 	input?: DialogInputConfig;
+	selectOptions?: string[];
+	defaultSelectOption?: string;
+	selectedSelectValue?: string;
 	resolve: (response: DialogResponse) => void;
 	isBackendGenerated?: boolean;
 }
@@ -173,6 +176,49 @@ export const dialogStore = {
 			return result.input_value ?? "";
 		}
 		return null;
+	},
+
+	/**
+	 * Shows a select dialog for choosing from options. Returns the selected value or null if cancelled.
+	 */
+	async select<T extends string>(
+		title: string,
+		description: string,
+		options: T[],
+		defaultOption?: T,
+	): Promise<T | null> {
+		return new Promise((resolve) => {
+			const id = Math.random().toString(36).substring(2, 9);
+			const instance: DialogInstance = {
+				id,
+				title,
+				description,
+				severity: "question",
+				actions: [
+					{ id: "cancel", label: "Cancel", variant: "ghost" },
+					{
+						id: "confirm",
+						label: "Select",
+						color: "primary",
+						variant: "solid",
+					},
+				],
+				resolve: (response) => {
+					_removeDialog(id);
+					if (response.action_id === "confirm") {
+						resolve((response.input_value as T) ?? null);
+					} else {
+						resolve(null);
+					}
+				},
+			};
+
+			// Store options in the dialog instance for the UI to access
+			(instance as any).selectOptions = options;
+			(instance as any).defaultSelectOption = defaultOption;
+
+			_pushDialog(instance);
+		});
 	},
 
 	/**

@@ -9,6 +9,7 @@ import {
 	DialogTitle,
 } from "@ui/dialog/dialog";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Component, createSignal, For, Show } from "solid-js";
 
 export const DialogRoot: Component = () => {
@@ -19,9 +20,13 @@ export const DialogRoot: Component = () => {
 
 const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) => {
 	const [inputValue, setInputValue] = createSignal(props.dialog.input?.defaultValue ?? "");
+	const [selectValue, setSelectValue] = createSignal(
+		props.dialog.defaultSelectOption ?? props.dialog.selectOptions?.[0] ?? "",
+	);
 
 	const handleAction = (actionId: string) => {
-		dialogStore.submit(props.dialog.id, actionId, props.dialog.input ? inputValue() : undefined);
+		const submitValue = props.dialog.selectOptions ? selectValue() : inputValue();
+		dialogStore.submit(props.dialog.id, actionId, submitValue);
 	};
 
 	const isNonDismissible = () => props.dialog.isBackendGenerated;
@@ -47,7 +52,7 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) =
 					</Show>
 				</DialogHeader>
 
-				<Show when={props.dialog.input}>
+				<Show when={props.dialog.input && !props.dialog.selectOptions}>
 					<div style={{ margin: "1rem 0" }}>
 						<TextFieldRoot value={inputValue()} onChange={setInputValue}>
 							<TextFieldInput
@@ -62,6 +67,24 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) =
 								}}
 							/>
 						</TextFieldRoot>
+					</div>
+				</Show>
+
+				<Show when={props.dialog.selectOptions && props.dialog.selectOptions.length > 0}>
+					<div style={{ margin: "1rem 0" }}>
+						<Select
+							value={selectValue()}
+							onChange={(value) => setSelectValue(String(value))}
+							options={props.dialog.selectOptions!}
+							itemComponent={(selectProps) => (
+								<SelectItem item={selectProps.item}>{selectProps.item.rawValue}</SelectItem>
+							)}
+						>
+							<SelectTrigger autofocus>
+								<SelectValue<string>>{(state) => state.selectedOption() || ""}</SelectValue>
+							</SelectTrigger>
+							<SelectContent />
+						</Select>
 					</div>
 				</Show>
 
