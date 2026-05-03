@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use base64::{Engine as _, engine::general_purpose};
 
+use crate::launcher_import::root_normalization::strip_known_suffixes;
 use crate::launcher_import::providers::prism_multimc_cfg::parse_ini_field;
 use crate::launcher_import::types::ExternalInstanceCandidate;
 
@@ -9,10 +10,8 @@ pub(super) fn infer_launcher_root(base_path: &Path, instances_root: &Path) -> Pa
     if instances_root != base_path {
         return base_path.to_path_buf();
     }
-    if base_path.file_name().and_then(|s| s.to_str()) == Some("instances") {
-        return base_path.parent().unwrap_or(base_path).to_path_buf();
-    }
-    base_path.to_path_buf()
+
+    strip_known_suffixes(base_path, &["instances", "data", "java", "contents"])
 }
 
 pub(super) fn enrich_managed_pack_from_cfg(instance: &mut ExternalInstanceCandidate) {

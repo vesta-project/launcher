@@ -11,7 +11,7 @@ mod types;
 
 pub use helpers::extract_atlauncher_resource_hints;
 
-use helpers::{encode_png_as_data_url, extract_instance_link};
+use helpers::{encode_png_as_data_url, extract_instance_link, resolve_instances_root, resolve_launcher_root};
 use types::{ATInstance, ATLauncherSourceLink};
 
 pub struct ATLauncherProvider;
@@ -31,14 +31,17 @@ impl ExternalLauncherProvider for ATLauncherProvider {
 
     fn list_instances(&self, base_path: &Path) -> Result<Vec<ExternalInstanceCandidate>> {
         let mut instances = Vec::new();
-        if !base_path.exists() {
+        let launcher_root = resolve_launcher_root(base_path);
+        let instances_root = resolve_instances_root(&launcher_root);
+
+        if !launcher_root.exists() {
             log::warn!("[ATLauncher] base_path does not exist: {}", base_path.display());
             return Ok(instances);
         }
 
-        log::debug!("[ATLauncher] scanning instances at: {}", base_path.display());
+        log::debug!("[ATLauncher] scanning instances at: {}", instances_root.display());
 
-        for entry in std::fs::read_dir(base_path)? {
+        for entry in std::fs::read_dir(instances_root)? {
             let entry = entry?;
             let path = entry.path();
             if !path.is_dir() {

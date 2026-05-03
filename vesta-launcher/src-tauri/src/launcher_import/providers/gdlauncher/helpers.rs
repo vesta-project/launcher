@@ -3,15 +3,26 @@ use std::path::{Path, PathBuf};
 use base64::{Engine as _, engine::general_purpose};
 use serde_json::Value;
 
+use crate::launcher_import::root_normalization::strip_known_suffixes;
 use crate::launcher_import::types::ExternalInstanceCandidate;
 
 use super::types::GDCarbonInstance;
 
-pub(super) fn resolve_instances_root(base_path: &Path) -> PathBuf {
-    if base_path.join("instances").is_dir() {
-        return base_path.join("instances");
-    }
-    base_path.to_path_buf()
+pub(super) fn resolve_launcher_root(base_path: &Path) -> PathBuf {
+    strip_known_suffixes(base_path, &["instances", "data"])
+}
+
+pub(super) fn resolve_instances_root(launcher_root: &Path) -> PathBuf {
+    let candidates = [
+        launcher_root.join("data/instances"),
+        launcher_root.join("instances"),
+        launcher_root.to_path_buf(),
+    ];
+
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.is_dir())
+        .unwrap_or_else(|| launcher_root.to_path_buf())
 }
 
 pub(super) fn parse_carbon_instance(

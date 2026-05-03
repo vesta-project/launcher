@@ -12,7 +12,7 @@ mod types;
 
 pub use db::extract_gdlauncher_resource_hints;
 
-use helpers::{parse_carbon_instance, resolve_instances_root};
+use helpers::{parse_carbon_instance, resolve_instances_root, resolve_launcher_root};
 use types::GDLegacyConfig;
 
 pub struct GDLauncherProvider;
@@ -36,7 +36,8 @@ impl ExternalLauncherProvider for GDLauncherProvider {
             return Ok(instances);
         }
 
-        let instances_root = resolve_instances_root(base_path);
+        let launcher_root = resolve_launcher_root(base_path);
+        let instances_root = resolve_instances_root(&launcher_root);
         if !instances_root.exists() || !instances_root.is_dir() {
             return Ok(instances);
         }

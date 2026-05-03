@@ -1,6 +1,8 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use base64::{Engine as _, engine::general_purpose};
+
+use crate::launcher_import::root_normalization::strip_known_suffixes;
 
 use super::types::{ATInstance, ATLauncherData, ATLauncherSourceLink, ATResourceHint};
 
@@ -15,6 +17,24 @@ pub(super) fn encode_png_as_data_url(path: &Path) -> Option<String> {
 
 pub(super) fn extract_instance_link(instance: &ATInstance) -> Option<ATLauncherSourceLink> {
     extract_launcher_link(&instance.launcher)
+}
+
+pub fn resolve_launcher_root(base_path: &Path) -> PathBuf {
+    strip_known_suffixes(base_path, &["instances", "data", "java", "contents"])
+}
+
+pub fn resolve_instances_root(launcher_root: &Path) -> PathBuf {
+    let candidates = [
+        launcher_root.join("Contents/Java/instances"),
+        launcher_root.join("Data/instances"),
+        launcher_root.join("instances"),
+        launcher_root.to_path_buf(),
+    ];
+
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.is_dir())
+        .unwrap_or_else(|| launcher_root.to_path_buf())
 }
 
 pub fn extract_atlauncher_resource_hints(instance_root: &Path) -> Vec<ATResourceHint> {
@@ -87,7 +107,10 @@ pub(super) fn extract_launcher_link(launcher: &ATLauncherData) -> Option<ATLaunc
 
 #[cfg(test)]
 mod tests {
-    use super::{extract_atlauncher_resource_hints, extract_instance_link, extract_launcher_link};
+    use super::{
+        extract_atlauncher_resource_hints, extract_instance_link, extract_launcher_link,
+        resolve_instances_root,
+    };
     use crate::launcher_import::providers::atlauncher::types::{
         ATInstance, ATLauncherData, ATLauncherSourceLink, ATPackProject, ATPackVersion,
     };
@@ -130,6 +153,17 @@ mod tests {
         let mut file = NamedTempFile::new().expect("temp file");
         write!(file, "{content}").expect("write temp file");
         file
+    }
+
+    #[test]
+    fn resolves_nested_atlauncher_instance_roots_before_parent_directory() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let launcher_root = temp_dir.path().join("ATLauncher");
+        let nested_instances = launcher_root.join("Data/instances");
+        std::fs::create_dir_all(&nested_instances).expect("create nested instances");
+
+        let resolved = resolve_instances_root(&launcher_root);
+        assert_eq!(resolved, nested_instances);
     }
 
     #[test]

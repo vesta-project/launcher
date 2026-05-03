@@ -117,10 +117,17 @@ fn component_version(components: &[Value], uid: &str) -> Option<String> {
 }
 
 pub fn resolve_instances_root(base_path: &Path) -> PathBuf {
-    if base_path.join("instances").is_dir() {
-        return base_path.join("instances");
-    }
-    base_path.to_path_buf()
+    let candidates = [
+        base_path.join("instances"),
+        base_path.join("Data/instances"),
+        base_path.join("Java/instances"),
+        base_path.to_path_buf(),
+    ];
+
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.is_dir())
+        .unwrap_or_else(|| base_path.to_path_buf())
 }
 
 pub fn parse_ini_field(raw: &str, key: &str) -> Option<String> {

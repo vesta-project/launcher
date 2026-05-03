@@ -8,12 +8,17 @@ use crate::launcher_import::types::ExternalInstanceCandidate;
 use super::types::{InstalledModpack, MinecraftGameInstance, MinecraftInstance};
 
 pub(super) fn resolve_scan_roots(base_path: &Path) -> Vec<PathBuf> {
-    vec![
-        base_path.to_path_buf(),
-        base_path.join("agent/GameInstances"),
-        base_path.join("minecraft/Instances"),
-        base_path.join("Instances"),
-    ]
+    let direct_data_file = base_path.join("MinecraftGameInstance.json");
+    if direct_data_file.is_file() {
+        return vec![base_path.to_path_buf()];
+    }
+
+    let agent_game_instances = base_path.join("agent/GameInstances");
+    if agent_game_instances.is_dir() {
+        return vec![agent_game_instances];
+    }
+
+    Vec::new()
 }
 
 pub(super) fn collect_instances_from_root(
@@ -312,5 +317,35 @@ fn normalize_value(value: Option<&Value>) -> Option<String> {
         Some(Value::String(s)) => Some(s.to_string()),
         Some(Value::Number(n)) => Some(n.to_string()),
         _ => None,
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_scan_roots;
+    use std::fs;
+
+    #[test]
+    fn resolve_scan_roots_prefers_game_instances_data_folder() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let launcher_root = temp_dir.path().join("CurseForge");
+        let game_instances = launcher_root.join("agent/GameInstances");
+        fs::create_dir_all(&game_instances).expect("create game instances root");
+        fs::write(game_instances.join("MinecraftGameInstance.json"), b"{}").expect("write data file");
+
+        let roots = resolve_scan_roots(&launcher_root);
+        assert_eq!(roots, vec![game_instances]);
+    }
+
+    #[test]
+    fn resolve_scan_roots_accepts_direct_data_folder() {
+        let temp_dir = tempfile::tempdir().expect("tempdir");
+        let data_root = temp_dir.path().join("GameInstances");
+        fs::create_dir_all(&data_root).expect("create direct root");
+        fs::write(data_root.join("MinecraftGameInstance.json"), b"{}").expect("write data file");
+
+        let roots = resolve_scan_roots(&data_root);
+        assert_eq!(roots, vec![data_root]);
     }
 }
