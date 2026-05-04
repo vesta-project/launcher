@@ -1,15 +1,16 @@
 import CubeIcon from "@assets/cube.svg";
 import CurseForgeIcon from "@assets/curseforge.svg";
 import GlobeIcon from "@assets/earth-globe.svg";
+import PlusIcon from "@assets/plus.svg";
 import PrismLauncherIcon from "@assets/prism-launcher.svg";
 import SearchIcon from "@assets/search.svg";
 import { JSX } from "solid-js";
 import styles from "../install-page.module.css";
 
 interface SourceOptionsGridProps {
+	onStandard: () => void;
 	onLocalImport: () => void;
 	onExplore: () => void;
-	onUrl: () => void;
 	onLauncher: () => void;
 }
 
@@ -17,6 +18,15 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 	return (
 		<div class={styles["import-stage-surface"]}>
 			<div class={styles["modpack-import-container"]}>
+				<button class={styles["modpack-import-card"]} onClick={props.onStandard} type="button">
+					<div class={styles["card-icon"]}>
+						<PlusIcon />
+					</div>
+					<div class={styles["card-content"]}>
+						<div class={styles.title}>Blank Instance</div>
+						<div class={styles.description}>Pure vanilla or custom</div>
+					</div>
+				</button>
 				<button class={styles["modpack-import-card"]} onClick={props.onLocalImport} type="button">
 					<div class={styles["card-icon"]}>
 						<CubeIcon />
@@ -35,15 +45,6 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 						<div class={styles.description}>Browse Modrinth & CF</div>
 					</div>
 				</button>
-				<button class={styles["modpack-import-card"]} onClick={props.onUrl} type="button">
-					<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
-						<GlobeIcon />
-					</div>
-					<div class={styles["card-content"]}>
-						<div class={styles.title}>From URL</div>
-						<div class={styles.description}>Direct download link</div>
-					</div>
-				</button>
 				<button class={styles["modpack-import-card"]} onClick={props.onLauncher} type="button">
 					<div class={`${styles["card-icon"]} ${styles["import-launcher-icon-stack"]}`}>
 						<PrismLauncherIcon class={styles["stack-icon"]} />
@@ -51,7 +52,7 @@ export function SourceOptionsGrid(props: SourceOptionsGridProps): JSX.Element {
 					</div>
 					<div class={styles["card-content"]}>
 						<div class={styles.title}>Import Launcher</div>
-						<div class={styles.description}>Choose launcher, then scan instances</div>
+						<div class={styles.description}>Prism, CF, GD, etc.</div>
 					</div>
 				</button>
 			</div>

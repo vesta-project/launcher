@@ -23,8 +23,6 @@ export interface InstallPageProps {
 	initialMinMemory?: number;
 	initialMaxMemory?: number;
 	initialJvmArgs?: string;
-	initialResW?: string;
-	initialResH?: string;
 	initialIncludeSnapshots?: boolean;
 }
 

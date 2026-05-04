@@ -150,86 +150,73 @@
 	overflow: hidden;
 }
 
-.install-form__sections {
-	display: grid;
-	grid-template-columns: 1.25fr 1fr;
-	gap: 0;
-	width: 100%;
+/* The area that actually scrolls. Takes full width so scrollbar is at the edge. */
+.install-scroll-area {
 	flex: 1;
-	min-height: 0;
+	width: 100%;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+/* The centered container for content */
+.install-grid {
+	margin: 0 auto;
+	padding: 32px 40px;
 	box-sizing: border-box;
+	display: grid;
+	gap: 32px;
+	width: 100%;
 }
 
-.install-form__main {
-	display: flex;
-	flex-direction: column;
-	gap: 20px;
-	min-width: 0;
-	overflow-y: auto;
-	padding: 24px;
-	padding-bottom: 32px;
+/* Modifier: single column mode (standard instance) */
+.install-grid--single {
+	max-width: 720px;
+	grid-template-columns: 1fr;
 }
 
-.install-form__side {
+/* Modifier: two column mode (modpack with side info) */
+.install-grid--with-side {
+	max-width: 1040px;
+	grid-template-columns: 1fr 340px;
+}
+
+.install-main-column {
 	display: flex;
 	flex-direction: column;
-	gap: 20px;
+	gap: 24px;
 	min-width: 0;
-	overflow-y: auto;
-	padding: 24px;
-	padding-bottom: 32px;
-	border-left: 1px solid var(--border-subtle);
+}
+
+.install-side-column {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	min-width: 0;
 }
 
 @media (max-width: 900px) {
-	.install-form__sections {
+	.install-grid {
+		padding: 24px 20px;
+	}
+	
+	.install-grid--with-side {
 		grid-template-columns: 1fr;
-		overflow-y: auto;
-	}
-
-	.install-form__main,
-	.install-form__side {
-		overflow-y: visible !important;
-		height: auto;
-		padding: 24px;
-	}
-
-	.install-form__main {
-		padding-bottom: 12px;
-	}
-
-	.install-form__side {
-		border-left: none;
-		border-top: none;
-		padding-top: 12px;
 	}
 }
 
 /* Custom Scrollbar for independent columns and mobile container */
-.install-form__sections::-webkit-scrollbar,
-.install-form__main::-webkit-scrollbar,
-.install-form__side::-webkit-scrollbar {
-	width: 4px;
+.install-scroll-area::-webkit-scrollbar {
+	width: 8px;
 }
 
-.install-form__sections::-webkit-scrollbar-thumb,
-.install-form__main::-webkit-scrollbar-thumb,
-.install-form__side::-webkit-scrollbar-thumb {
+.install-scroll-area::-webkit-scrollbar-thumb {
 	background: var(--border-subtle);
 	border-radius: 10px;
-}
-
-.install-form__sections::-webkit-scrollbar-track,
-.install-form__main::-webkit-scrollbar-track,
-.install-form__side::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-/* Make install/log column scrollbars show pointer on the thumb for clarity */
-.install-form__sections::-webkit-scrollbar-thumb,
-.install-form__main::-webkit-scrollbar-thumb,
-.install-form__side::-webkit-scrollbar-thumb {
 	cursor: default;
+}
+
+.install-scroll-area::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 /* If a logs container exists within the install flow, ensure its scrollbar uses pointer */
@@ -393,24 +380,36 @@
 	font-weight: 700;
 	color: var(--text-secondary);
 	cursor: pointer;
-	padding: 6px 10px;
-	margin-top: 4px;
+	padding: 10px 14px;
+	margin-top: 12px;
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	justify-content: space-between;
+	gap: 10px;
 	user-select: none;
-	background: var(--surface-medium);
-	border-radius: 6px;
+	background: var(--surface-low);
+	border-radius: 10px;
 	border: 1px solid var(--border-subtle);
-	width: fit-content;
-	transition: all 0.2s ease;
+	width: 100%;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
 }
 
 .advanced-toggle:hover {
 	color: var(--text-main);
-	background: var(--bg-hover);
-	border-color: var(--border-medium);
+	background: var(--bg-surface-hover);
+	border-color: var(--primary-low);
 }
+
+.advanced-toggle .arrow {
+	width: 12px;
+	height: 12px;
+	opacity: 0.7;
+	transition: transform 0.3s ease;
+}
+
+
 
 .advanced-fields-box {
 	display: flex;
@@ -1671,4 +1670,238 @@
 
 .modloader-pill--unsupported:hover {
 	opacity: 0.7;
+}
+
+.source-footer {
+	margin-top: 40px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	width: 100%;
+}
+
+.url-toggle {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	font-size: 14px;
+	font-weight: 600;
+	text-decoration: underline;
+	cursor: pointer;
+	opacity: 0.7;
+	transition: opacity 0.2s;
+}
+
+.url-toggle:hover {
+	opacity: 1;
+	color: var(--primary);
+}
+
+.url-input-box {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	background: var(--surface-raised);
+	padding: 12px 16px;
+	border-radius: 12px;
+	border: 1px solid var(--border-subtle);
+	width: 100%;
+	max-width: 600px;
+	animation: slide-up 0.3s ease-out;
+}
+
+.url-input-box input {
+	flex: 1;
+	background: transparent;
+	border: none;
+	outline: none;
+	color: var(--text-primary);
+	font-size: 14px;
+}
+
+@keyframes slide-up {
+	from {
+		opacity: 0;
+		transform: translateY(10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+
+/* RESTORED OLD SOURCE SELECTION STYLES */
+.import-stage-surface {
+	width: 100%;
+}
+
+.import-selection-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	width: 100%;
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 24px;
+	box-sizing: border-box;
+}
+
+.modpack-import-container {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(clamp(180px, 25vw, 280px), 1fr));
+	gap: 16px;
+	width: 100%;
+	justify-content: center;
+}
+
+.modpack-import-card {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	padding: clamp(16px, 2.5vw, 32px) clamp(12px, 2vw, 24px);
+	background: var(--surface-raised);
+	border: 1px solid var(--border-subtle);
+	border-radius: 16px;
+	cursor: pointer;
+	transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	text-align: center;
+	gap: clamp(8px, 1.5vw, 16px);
+	min-height: clamp(120px, 15vw, 160px);
+	user-select: none;
+	box-shadow: var(--elevation-soft);
+}
+
+.modpack-import-card:hover {
+	background: var(--bg-surface-hover);
+	transform: translateY(-4px);
+	border-color: var(--primary);
+	box-shadow: var(--elevation-medium);
+}
+
+.modpack-import-card .card-icon {
+	width: clamp(48px, 6vw, 64px);
+	height: clamp(48px, 6vw, 64px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--primary);
+	transition: all 0.3s ease;
+	background: var(--surface-low);
+	border-radius: clamp(10px, 1.5vw, 14px);
+	padding: clamp(10px, 1.5vw, 14px);
+	border: 1px solid var(--border-subtle);
+}
+
+.modpack-import-card .card-icon svg {
+	width: 100%;
+	height: 100%;
+}
+
+.modpack-import-card .card-icon.is-stroke svg * {
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+}
+
+.modpack-import-card .title {
+	font-weight: 800;
+	font-size: clamp(15px, 1.8vw, 18px);
+	color: var(--text-primary);
+	letter-spacing: -0.01em;
+}
+
+.modpack-import-card .description {
+	font-size: clamp(11px, 1.3vw, 13px);
+	color: var(--text-secondary);
+	line-height: 1.4;
+	opacity: 0.8;
+}
+
+.url-input-container {
+	width: 100%;
+	max-width: 600px;
+	margin: 20px auto;
+	padding: 24px;
+	background: var(--surface-raised);
+	border: 1px solid var(--border-subtle);
+	border-radius: 16px;
+	box-shadow: var(--elevation-soft);
+	animation: slide-up 0.3s ease-out;
+}
+
+.url-input-row {
+	display: flex;
+	gap: 12px;
+	width: 100%;
+}
+
+.url-input-row input {
+	flex: 1;
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	border-radius: 12px;
+	padding: 12px 18px;
+	color: var(--text-primary);
+	font-size: 14px;
+	outline: none;
+	transition: all 0.2s ease;
+}
+
+.url-input-row input:focus {
+	border-color: var(--primary);
+	box-shadow: 0 0 0 3px var(--primary-low);
+}
+
+.import-button {
+	background: var(--primary);
+	color: white;
+	border: none;
+	border-radius: 12px;
+	padding: 0 24px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.import-button:hover:not(:disabled) {
+	background: var(--primary-high);
+	transform: translateY(-1px);
+}
+
+.import-launcher-icon-stack {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 4px;
+	padding: 8px !important;
+}
+
+.import-launcher-icon-stack .stack-icon {
+	width: 20px;
+	height: 20px;
+}
+
+.launcher-menu-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(clamp(140px, 18vw, 200px), 1fr));
+	gap: 12px;
+	width: 100%;
+}
+
+.import-selection-wrapper {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	width: 100%;
+	max-width: 1100px;
+	margin: 0 auto;
+	padding: 24px 24px 64px 24px;
+	box-sizing: border-box;
+}
+
+.page-bottom-spacer {
+	height: 32px;
+	width: 100%;
+	flex-shrink: 0;
 }

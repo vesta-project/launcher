@@ -163,7 +163,7 @@ function Sidebar(props: SidebarProps) {
 						<SidebarActionButton
 							id={"sidebar-new"}
 							tooltip_text={"New Instance"}
-							onClick={() => openPage("/install")}
+							onClick={() => openPage("/install/source")}
 						>
 							<PlusIcon />
 						</SidebarActionButton>
