@@ -134,8 +134,8 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 
 	return (
 		<div
-			class={`${styles["url-input-container"]} ${styles["url-input-container--launcher"]} ${
-				hasDetails() ? styles["url-input-container--with-side"] : ""
+			class={`${styles["import-panel-grid"]} ${
+				hasDetails() ? styles["import-panel-grid--with-side"] : ""
 			}`}
 		>
 			{/* ---------- LEFT COLUMN: controls ---------- */}
@@ -203,82 +203,80 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 
 			{/* ---------- RIGHT COLUMN: instance details ---------- */}
 			<Show when={hasDetails()}>
-				<div class={styles["import-panel-side"]}>
-					<div class={styles["import-details-card"]}>
-						{/* Name header */}
-						<div class={styles["import-details-name"]}>{getInstance()?.name}</div>
+				<div class={styles["import-details-card"]}>
+					{/* Name header */}
+					<div class={styles["import-details-name"]}>{getInstance()?.name}</div>
 
-						{/* Badge row: MC version, modloader, source with brand icon */}
-						<div class={styles["import-details-badges"]}>
-							<Show when={minecraftVersion()}>
-								<span class={styles["import-badge"]}>MC {minecraftVersion()}</span>
-							</Show>
-							<Show when={modloader()}>
-								<span class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}>
-									{modloader()}
-								</span>
-							</Show>
-							<Show when={sourceInfo()}>
-								<span class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}>
-									{(() => {
-										const si = sourceInfo();
-										if (si?.icon) {
-											const Icon = si.icon;
-											return (
-												<>
-													<Icon class={styles["import-brand-icon"]} />
-													{si.label}
-												</>
-											);
-										}
-										return si?.label;
-									})()}
-								</span>
-							</Show>
-						</div>
-
-						{/* Stat pills (no icons, just numbers) */}
-						<Show when={pills().length > 0}>
-							<div class={styles["import-stat-row"]}>
-								<For each={pills()}>
-									{(pill) => (
-										<div class={styles["import-stat-pill"]}>
-											<span class={styles["import-stat-value"]}>{pill.value}</span>
-											<span class={styles["import-stat-label"]}>{pill.label}</span>
-										</div>
-									)}
-								</For>
-							</div>
+					{/* Badge row: MC version, modloader, source with brand icon */}
+					<div class={styles["import-details-badges"]}>
+						<Show when={minecraftVersion()}>
+							<span class={styles["import-badge"]}>MC {minecraftVersion()}</span>
 						</Show>
-
-						{/* Meta rows */}
-						<Show when={metaRows().length > 0}>
-							<div class={styles["import-meta-list"]}>
-								<For each={metaRows()}>
-									{(row) => (
-										<div class={styles["import-meta-row"]}>
-											<span class={styles["import-meta-label"]}>{row.label}</span>
-											<span class={styles["import-meta-value"]}>{row.value}</span>
-										</div>
-									)}
-								</For>
-							</div>
+						<Show when={modloader()}>
+							<span class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}>
+								{modloader()}
+							</span>
 						</Show>
-
-						{/* Clickable game directory */}
-						<Show when={gameDirPath()}>
-							<button
-								class={styles["import-path-button"]}
-								onClick={handleOpenFolder}
-								title="Open game directory in file manager"
-								type="button"
-							>
-								<FolderIcon class={styles["import-path-icon"]} />
-								<span class={styles["import-path-text"]}>{gameDirPath()}</span>
-								<span class={styles["import-path-hint"]}>Open</span>
-							</button>
+						<Show when={sourceInfo()}>
+							<span class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}>
+								{(() => {
+									const si = sourceInfo();
+									if (si?.icon) {
+										const Icon = si.icon;
+										return (
+											<>
+												<Icon class={styles["import-brand-icon"]} />
+												{si.label}
+											</>
+										);
+									}
+									return si?.label;
+								})()}
+							</span>
 						</Show>
 					</div>
+
+					{/* Stat pills (no icons, just numbers) */}
+					<Show when={pills().length > 0}>
+						<div class={styles["import-stat-row"]}>
+							<For each={pills()}>
+								{(pill) => (
+									<div class={styles["import-stat-pill"]}>
+										<span class={styles["import-stat-value"]}>{pill.value}</span>
+										<span class={styles["import-stat-label"]}>{pill.label}</span>
+									</div>
+								)}
+							</For>
+						</div>
+					</Show>
+
+					{/* Meta rows */}
+					<Show when={metaRows().length > 0}>
+						<div class={styles["import-meta-list"]}>
+							<For each={metaRows()}>
+								{(row) => (
+									<div class={styles["import-meta-row"]}>
+										<span class={styles["import-meta-label"]}>{row.label}</span>
+										<span class={styles["import-meta-value"]}>{row.value}</span>
+									</div>
+								)}
+							</For>
+						</div>
+					</Show>
+
+					{/* Clickable game directory */}
+					<Show when={gameDirPath()}>
+						<button
+							class={styles["import-path-button"]}
+							onClick={handleOpenFolder}
+							title="Open game directory in file manager"
+							type="button"
+						>
+							<FolderIcon class={styles["import-path-icon"]} />
+							<span class={styles["import-path-text"]}>{gameDirPath()}</span>
+							<span class={styles["import-path-hint"]}>Open</span>
+						</button>
+					</Show>
 				</div>
 			</Show>
 		</div>
