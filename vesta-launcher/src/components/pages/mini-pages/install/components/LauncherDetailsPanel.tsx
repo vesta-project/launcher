@@ -6,7 +6,7 @@ import LauncherButton from "@ui/button/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import type { ExternalInstanceCandidate } from "@utils/launcher-imports";
-import { type Component, For, Show } from "solid-js";
+import { type Component, createSignal, For, Show } from "solid-js";
 import styles from "../install-page.module.css";
 
 interface LauncherDetailsPanelProps {
@@ -72,6 +72,17 @@ interface MetaRow {
 }
 
 export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
+	const [isPathEdited, setIsPathEdited] = createSignal(false);
+
+	const handlePathChange = (value: string) => {
+		setIsPathEdited(true);
+		props.onPathChange(value);
+	};
+
+	const handleRescan = () => {
+		setIsPathEdited(false);
+		props.onRescan();
+	};
 	const getInstance = () =>
 		props.instances.find((item) => item.instancePath === props.selectedInstancePath) ?? null;
 
@@ -145,7 +156,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 						<TextFieldInput
 							value={props.basePath}
 							placeholder="Detected launcher instances path"
-							onInput={(e) => props.onPathChange((e.target as HTMLInputElement).value)}
+							onInput={(e) => handlePathChange((e.target as HTMLInputElement).value)}
 						/>
 					</TextFieldRoot>
 					<LauncherButton
@@ -155,13 +166,15 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 					>
 						Browse
 					</LauncherButton>
-					<LauncherButton
-						variant="solid"
-						onClick={props.onRescan}
-						disabled={props.isLoading || props.isImporting}
-					>
-						{props.isLoading ? "Scanning..." : "Rescan"}
-					</LauncherButton>
+					<Show when={isPathEdited() && !props.isLoading}>
+						<LauncherButton
+							variant="solid"
+							onClick={handleRescan}
+							disabled={props.isLoading || props.isImporting}
+						>
+							Rescan
+						</LauncherButton>
+					</Show>
 				</div>
 
 				<Show when={props.instances.length > 0}>
