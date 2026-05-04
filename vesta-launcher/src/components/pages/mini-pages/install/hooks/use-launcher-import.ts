@@ -14,7 +14,6 @@ import { launcherLabelMap } from "../config/launcher-options";
 
 interface UseLauncherImportParams {
   selectedLauncherFromQuery: Accessor<LauncherKind | null>;
-  showLauncherDetails: Accessor<boolean>;
   onImportSuccess: () => void;
 }
 
@@ -119,7 +118,10 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 
   const handleLauncherFolderPick = async () => {
     const result = await open({ directory: true, multiple: false });
-    if (typeof result === "string") setLauncherBasePath(result);
+    if (typeof result === "string") {
+      setLauncherBasePath(result);
+      await loadLauncherInstances(activeLauncherKind(), result);
+    }
   };
 
   const handleImportLauncherInstance = async () => {
@@ -156,7 +158,7 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 
   createEffect(() => {
     const launcher = params.selectedLauncherFromQuery();
-    if (!params.showLauncherDetails() || !launcher) {
+    if (!launcher) {
       setAutoLoadedLauncher(null);
       return;
     }

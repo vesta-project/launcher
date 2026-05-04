@@ -26,11 +26,8 @@ function ImportPage(props: ImportPageRouteProps) {
 		return launcher ? (launcher as LauncherKind) : null;
 	});
 
-	const showLauncherDetails = createMemo(() => !!selectedLauncherFromQuery());
-
 	const launcherImport = useLauncherImport({
 		selectedLauncherFromQuery,
-		showLauncherDetails,
 		onImportSuccess: () => (props.close ? props.close() : activeRouter()?.navigate("/home")),
 	});
 

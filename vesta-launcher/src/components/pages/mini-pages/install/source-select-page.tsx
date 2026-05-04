@@ -65,11 +65,7 @@ function SourceSelectPage(props: { router?: any }) {
 										onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
 										autofocus
 									/>
-									<LauncherButton
-										color="primary"
-										onClick={handleUrlSubmit}
-										disabled={!urlValue().trim()}
-									>
+									<LauncherButton color="primary" onClick={handleUrlSubmit} disabled={!urlValue().trim()}>
 										Import URL
 									</LauncherButton>
 									<LauncherButton variant="ghost" onClick={() => setShowUrlInput(false)}>

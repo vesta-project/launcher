@@ -118,7 +118,14 @@ fn dedupe_paths(paths: Vec<PathBuf>) -> Vec<PathBuf> {
 }
 
 fn normalize_path_for_dedup(path: &PathBuf) -> String {
-    path.to_string_lossy().to_lowercase()
+    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    {
+        path.to_string_lossy().to_lowercase()
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        path.to_string_lossy().to_string()
+    }
 }
 
 const MODRINTH_PRESETS: &[PathPreset] = &[

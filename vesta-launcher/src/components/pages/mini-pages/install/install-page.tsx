@@ -102,7 +102,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		modpackInfo: source.modpackInfo as any,
 		modpackUrl: source.modpackUrl,
 		modpackPath: source.modpackPath,
-		projectVersions: () => projectVersions() ?? [],
+		projectVersions: () => projectVersions(),
 	});
 
 	onMount(() => {
@@ -144,8 +144,7 @@ function InstallPage(props: InstallPageRouteProps) {
 				{/* Context banner (modpack info bar) */}
 				<Show
 					when={
-						(props.projectName || source.modpackPath() || source.modpackUrl()) &&
-						!isFetchingMetadata()
+						(props.projectName || source.modpackPath() || source.modpackUrl()) && !isFetchingMetadata()
 					}
 				>
 					<InstallContextBanner
@@ -156,11 +155,7 @@ function InstallPage(props: InstallPageRouteProps) {
 						modloader={source.modpackInfo()?.modloader || props.initialModloader}
 						analyzing={!source.modpackInfo() && !props.projectName}
 						backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"}
-						onBack={() =>
-							effectiveProjectId()
-								? activeRouter()?.backwards()
-								: source.resetSource()
-						}
+						onBack={() => (effectiveProjectId() ? activeRouter()?.backwards() : source.resetSource())}
 					/>
 				</Show>
 
@@ -209,8 +204,7 @@ function InstallPage(props: InstallPageRouteProps) {
 						initialJvmArgs={props.initialJvmArgs}
 						onInstall={install.handleInstall}
 						onCancel={() => {
-							if (isModpackMode() && (source.modpackUrl() || source.modpackPath()))
-								source.resetSource();
+							if (isModpackMode() && (source.modpackUrl() || source.modpackPath())) source.resetSource();
 							else if (props.close) props.close();
 							else activeRouter()?.navigate(props.projectName ? "/resources" : "/home");
 						}}

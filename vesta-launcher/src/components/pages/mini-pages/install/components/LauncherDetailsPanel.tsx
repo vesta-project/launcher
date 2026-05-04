@@ -1,8 +1,12 @@
+import CurseForgeIcon from "@assets/curseforge.svg";
+import FolderIcon from "@assets/folder.svg";
+import ModrinthIcon from "@assets/modrinth.svg";
+import { open } from "@tauri-apps/plugin-shell";
 import LauncherButton from "@ui/button/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import type { ExternalInstanceCandidate } from "@utils/launcher-imports";
-import { Show } from "solid-js";
+import { type Component, For, Show } from "solid-js";
 import styles from "../install-page.module.css";
 
 interface LauncherDetailsPanelProps {
@@ -19,101 +23,129 @@ interface LauncherDetailsPanelProps {
 	onImport: () => void;
 }
 
+function hasValue(value: string | null | undefined): boolean {
+	return typeof value === "string" && value.trim().length > 0;
+}
+
+function hasNumber(value: number | null | undefined): value is number {
+	return typeof value === "number" && Number.isFinite(value);
+}
+
+function formatSource(
+	platform: string | null | undefined,
+): { label: string; icon?: Component<{ class?: string }> } | null {
+	const normalized = (platform ?? "").trim().toLowerCase();
+	if (!normalized) return null;
+	if (normalized.includes("modrinth")) return { label: "Modrinth", icon: ModrinthIcon };
+	if (normalized.includes("curse")) return { label: "CurseForge", icon: CurseForgeIcon };
+	return { label: platform?.trim() ?? normalized };
+}
+
+function formatUnixTime(value: number | null | undefined): string | null {
+	if (!hasNumber(value)) return null;
+	const date = new Date(value);
+	if (Number.isNaN(date.getTime())) return null;
+	return date.toLocaleString();
+}
+
+function formatBytes(value: number | null | undefined): string | null {
+	if (!hasNumber(value) || value < 0) return null;
+	const units = ["B", "KB", "MB", "GB", "TB"];
+	let size = value;
+	let idx = 0;
+	while (size >= 1024 && idx < units.length - 1) {
+		size /= 1024;
+		idx += 1;
+	}
+	const rounded = idx === 0 ? `${Math.round(size)}` : size.toFixed(1);
+	return `${rounded} ${units[idx]}`;
+}
+
+interface StatPill {
+	label: string;
+	value: number;
+}
+
+interface MetaRow {
+	label: string;
+	value: string;
+}
+
 export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
-	const selectedInstance = () =>
+	const getInstance = () =>
 		props.instances.find((item) => item.instancePath === props.selectedInstancePath) ?? null;
 
 	const instanceLabel = (instancePath: string) => {
-		const instance = props.instances.find((item) => item.instancePath === instancePath);
-		if (!instance) return "Select an instance";
-		return `${instance.name}${instance.minecraftVersion ? ` (${instance.minecraftVersion})` : ""}`;
+		const inst = props.instances.find((item) => item.instancePath === instancePath);
+		if (!inst) return "Select an instance";
+		const suffix = inst.minecraftVersion ? ` (${inst.minecraftVersion})` : "";
+		return `${inst.name}${suffix}`;
 	};
 
-	const hasValue = (value?: string | null) => !!value && value.trim().length > 0;
-	const hasNumber = (value?: number | null) => typeof value === "number" && Number.isFinite(value);
-	const formatSource = (platform?: string | null) => {
-		const normalized = (platform ?? "").trim().toLowerCase();
-		if (!normalized) return null;
-		if (normalized.includes("modrinth")) return "Modrinth";
-		if (normalized.includes("curse")) return "CurseForge";
-		return platform ?? null;
+	const pills = (): StatPill[] => {
+		const inst = getInstance();
+		if (!inst) return [];
+		const result: StatPill[] = [];
+		if (hasNumber(inst.modsCount)) result.push({ label: "Mods", value: inst.modsCount });
+		if (hasNumber(inst.resourcepacksCount))
+			result.push({ label: "Packs", value: inst.resourcepacksCount });
+		if (hasNumber(inst.shaderpacksCount))
+			result.push({ label: "Shaders", value: inst.shaderpacksCount });
+		if (hasNumber(inst.worldsCount)) result.push({ label: "Worlds", value: inst.worldsCount });
+		if (hasNumber(inst.screenshotsCount))
+			result.push({ label: "Shots", value: inst.screenshotsCount });
+		return result;
 	};
-	const formatUnixTime = (value?: number | null) => {
-		if (!hasNumber(value)) return null;
-		const date = new Date(value!);
-		if (Number.isNaN(date.getTime())) return null;
-		return date.toLocaleString();
+
+	const metaRows = (): MetaRow[] => {
+		const inst = getInstance();
+		if (!inst) return [];
+		const rows: MetaRow[] = [];
+		const lastPlayed = formatUnixTime(inst.lastPlayedAtUnixMs);
+		if (lastPlayed) rows.push({ label: "Last Played", value: lastPlayed });
+		const dirSize = formatBytes(inst.gameDirectorySizeBytes);
+		if (dirSize) rows.push({ label: "Size", value: dirSize });
+		const source = formatSource(inst.modpackPlatform);
+		if (source) rows.push({ label: "Source", value: source.label });
+		if (hasValue(inst.modpackId)) rows.push({ label: "Project ID", value: inst.modpackId as string });
+		if (hasValue(inst.modloaderVersion))
+			rows.push({ label: "Loader", value: inst.modloaderVersion as string });
+		return rows;
 	};
-	const formatBytes = (value?: number | null) => {
-		if (!hasNumber(value) || value! < 0) return null;
-		const units = ["B", "KB", "MB", "GB", "TB"];
-		let size = value!;
-		let idx = 0;
-		while (size >= 1024 && idx < units.length - 1) {
-			size /= 1024;
-			idx += 1;
+
+	const sourceInfo = () => formatSource(getInstance()?.modpackPlatform);
+	const gameDirPath = () => getInstance()?.gameDirectory ?? null;
+	const minecraftVersion = () => getInstance()?.minecraftVersion ?? null;
+	const modloader = () => getInstance()?.modloader ?? null;
+
+	const handleOpenFolder = async () => {
+		const path = gameDirPath();
+		if (path) {
+			try {
+				await open(path);
+			} catch {
+				// Silently ignore if the directory can't be opened
+			}
 		}
-		const rounded = idx === 0 ? `${Math.round(size)}` : size.toFixed(1);
-		return `${rounded} ${units[idx]}`;
 	};
-	const selectedDetails = () => {
-		const instance = selectedInstance();
-		if (!instance) return [];
-		const details: Array<{ label: string; value: string }> = [];
-		if (hasValue(instance.minecraftVersion)) {
-			details.push({ label: "Minecraft", value: instance.minecraftVersion!.trim() });
-		}
-		if (hasValue(instance.modloader)) {
-			details.push({ label: "Modloader", value: instance.modloader!.trim() });
-		}
-		if (hasValue(instance.modloaderVersion)) {
-			details.push({ label: "Loader Version", value: instance.modloaderVersion!.trim() });
-		}
-		const source = formatSource(instance.modpackPlatform);
-		if (source && source.trim().length > 0) {
-			details.push({ label: "Source", value: source.trim() });
-		}
-		if (hasValue(instance.modpackId)) {
-			details.push({ label: "Modpack ID", value: instance.modpackId!.trim() });
-		}
-		if (hasValue(instance.modpackVersionId)) {
-			details.push({ label: "Version ID", value: instance.modpackVersionId!.trim() });
-		}
-		const modsCount = hasNumber(instance.modsCount) ? `${instance.modsCount}` : null;
-		if (modsCount) details.push({ label: "Mods", value: modsCount });
-		const resourcepacksCount = hasNumber(instance.resourcepacksCount)
-			? `${instance.resourcepacksCount}`
-			: null;
-		if (resourcepacksCount) details.push({ label: "Resourcepacks", value: resourcepacksCount });
-		const shaderpacksCount = hasNumber(instance.shaderpacksCount)
-			? `${instance.shaderpacksCount}`
-			: null;
-		if (shaderpacksCount) details.push({ label: "Shaderpacks", value: shaderpacksCount });
-		const worldsCount = hasNumber(instance.worldsCount) ? `${instance.worldsCount}` : null;
-		if (worldsCount) details.push({ label: "Worlds", value: worldsCount });
-		const screenshotsCount = hasNumber(instance.screenshotsCount)
-			? `${instance.screenshotsCount}`
-			: null;
-		if (screenshotsCount) details.push({ label: "Screenshots", value: screenshotsCount });
-		const lastPlayed = formatUnixTime(instance.lastPlayedAtUnixMs);
-		if (lastPlayed) details.push({ label: "Last Played", value: lastPlayed });
-		const dirSize = formatBytes(instance.gameDirectorySizeBytes);
-		if (dirSize) details.push({ label: "Instance Size", value: dirSize });
-		if (hasValue(instance.gameDirectory)) {
-			details.push({ label: "Game Directory", value: instance.gameDirectory.trim() });
-		}
-		return details;
-	};
+
+	const hasDetails = () =>
+		getInstance() !== null && (pills().length > 0 || metaRows().length > 0 || gameDirPath() !== null);
 
 	return (
-		<>
-			<div class={`${styles["url-input-container"]} ${styles["url-input-container--launcher"]}`}>
+		<div
+			class={`${styles["url-input-container"]} ${styles["url-input-container--launcher"]} ${
+				hasDetails() ? styles["url-input-container--with-side"] : ""
+			}`}
+		>
+			{/* ---------- LEFT COLUMN: controls ---------- */}
+			<div class={styles["import-panel-main"]}>
 				<div class={styles["launcher-path-row"]}>
 					<TextFieldRoot class={styles["launcher-path-input"]}>
 						<TextFieldInput
 							value={props.basePath}
 							placeholder="Detected launcher instances path"
-							onInput={(e) => props.onPathChange(e.currentTarget.value)}
+							onInput={(e) => props.onPathChange((e.target as HTMLInputElement).value)}
 						/>
 					</TextFieldRoot>
 					<LauncherButton
@@ -151,26 +183,13 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 						</Select>
 					</div>
 				</Show>
-				<Show when={selectedInstance() && selectedDetails().length > 0}>
-					{() => (
-						<div class={styles["launcher-instance-details"]}>
-							<div class={styles["launcher-instance-details-header"]}>Selected Instance Details</div>
-							<div class={styles["launcher-instance-details-grid"]}>
-								{selectedDetails().map((detail) => (
-									<div class={styles["launcher-detail-item"]}>
-										<span class={styles["launcher-detail-label"]}>{detail.label}</span>
-										<span class={styles["launcher-detail-value"]}>{detail.value}</span>
-									</div>
-								))}
-							</div>
-						</div>
-					)}
-				</Show>
+
 				<Show when={props.hasScanned && props.instances.length === 0}>
 					<p class={styles["fetching-subtext"]}>
 						No instances found for the selected launcher and path.
 					</p>
 				</Show>
+
 				<div class={styles["url-input-row"]}>
 					<LauncherButton
 						variant="solid"
@@ -181,6 +200,87 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 					</LauncherButton>
 				</div>
 			</div>
-		</>
+
+			{/* ---------- RIGHT COLUMN: instance details ---------- */}
+			<Show when={hasDetails()}>
+				<div class={styles["import-panel-side"]}>
+					<div class={styles["import-details-card"]}>
+						{/* Name header */}
+						<div class={styles["import-details-name"]}>{getInstance()?.name}</div>
+
+						{/* Badge row: MC version, modloader, source with brand icon */}
+						<div class={styles["import-details-badges"]}>
+							<Show when={minecraftVersion()}>
+								<span class={styles["import-badge"]}>MC {minecraftVersion()}</span>
+							</Show>
+							<Show when={modloader()}>
+								<span class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}>
+									{modloader()}
+								</span>
+							</Show>
+							<Show when={sourceInfo()}>
+								<span class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}>
+									{(() => {
+										const si = sourceInfo();
+										if (si?.icon) {
+											const Icon = si.icon;
+											return (
+												<>
+													<Icon class={styles["import-brand-icon"]} />
+													{si.label}
+												</>
+											);
+										}
+										return si?.label;
+									})()}
+								</span>
+							</Show>
+						</div>
+
+						{/* Stat pills (no icons, just numbers) */}
+						<Show when={pills().length > 0}>
+							<div class={styles["import-stat-row"]}>
+								<For each={pills()}>
+									{(pill) => (
+										<div class={styles["import-stat-pill"]}>
+											<span class={styles["import-stat-value"]}>{pill.value}</span>
+											<span class={styles["import-stat-label"]}>{pill.label}</span>
+										</div>
+									)}
+								</For>
+							</div>
+						</Show>
+
+						{/* Meta rows */}
+						<Show when={metaRows().length > 0}>
+							<div class={styles["import-meta-list"]}>
+								<For each={metaRows()}>
+									{(row) => (
+										<div class={styles["import-meta-row"]}>
+											<span class={styles["import-meta-label"]}>{row.label}</span>
+											<span class={styles["import-meta-value"]}>{row.value}</span>
+										</div>
+									)}
+								</For>
+							</div>
+						</Show>
+
+						{/* Clickable game directory */}
+						<Show when={gameDirPath()}>
+							<button
+								class={styles["import-path-button"]}
+								onClick={handleOpenFolder}
+								title="Open game directory in file manager"
+								type="button"
+							>
+								<FolderIcon class={styles["import-path-icon"]} />
+								<span class={styles["import-path-text"]}>{gameDirPath()}</span>
+								<span class={styles["import-path-hint"]}>Open</span>
+							</button>
+						</Show>
+					</div>
+				</div>
+			</Show>
+		</div>
 	);
 }
