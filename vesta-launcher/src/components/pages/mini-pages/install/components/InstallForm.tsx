@@ -1,4 +1,4 @@
-﻿import BackArrow from "@assets/back-arrow.svg";
+import BackArrow from "@assets/back-arrow.svg";
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
@@ -266,6 +266,12 @@ export function InstallForm(props: InstallFormProps) {
 				if (d.iconPath && !isIconDirty()) setIcon(d.iconPath);
 				if (d.maxMemory && !isMemoryDirty()) setMemory([d.minMemory || 2048, d.maxMemory]);
 				if (d.javaArgs !== undefined && !isJvmArgsDirty()) setJvmArgs(d.javaArgs ?? "");
+				if (!isHooksDirty()) {
+					if (d.useGlobalHooks !== undefined) setUseGlobalHooks(d.useGlobalHooks);
+					if (d.preLaunchHook !== undefined) setPreLaunchHook(d.preLaunchHook || "");
+					if (d.wrapperCommand !== undefined) setWrapperCommand(d.wrapperCommand || "");
+					if (d.postExitHook !== undefined) setPostExitHook(d.postExitHook || "");
+				}
 			}
 
 			if (props.initialName !== undefined && !isNameDirty() && !d?.name) setName(props.initialName);
