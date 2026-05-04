@@ -8,6 +8,7 @@ use chrono::Utc;
 use diesel::prelude::*;
 use futures::future::BoxFuture;
 use std::path::{Path, PathBuf};
+use tauri::Manager;
 use walkdir::WalkDir;
 
 pub struct CloneInstanceTask {
@@ -125,6 +126,9 @@ impl Task for CloneInstanceTask {
                 modpack_icon_url: source.modpack_icon_url.clone(),
                 icon_data: source.icon_data.clone(),
                 last_operation: None,
+                import_source_game_directory: None,
+                import_launcher_kind: None,
+                import_instance_path: None,
                 use_global_resolution: source.use_global_resolution,
                 use_global_memory: source.use_global_memory,
                 use_global_java_args: source.use_global_java_args,
@@ -213,8 +217,14 @@ impl Task for ResetInstanceTask {
                 ctx.update_description("Wiping instance directory...".to_string());
                 let gd_path = PathBuf::from(gd);
                 if gd_path.exists() {
-                    let _ = std::fs::remove_dir_all(&gd_path);
-                    let _ = std::fs::create_dir_all(&gd_path);
+                    let gd_path_clone = gd_path.clone();
+                    tokio::task::spawn_blocking(move || {
+                        let _ = std::fs::remove_dir_all(&gd_path_clone);
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to remove instance directory: {}", e))?;
+                    std::fs::create_dir_all(&gd_path)
+                        .map_err(|e| format!("Failed to recreate instance directory: {}", e))?;
                 }
             }
 
@@ -282,6 +292,125 @@ impl Task for RepairInstanceTask {
             install_task.set_update_notification_title(false);
             install_task.run(ctx).await?;
 
+            Ok(())
+        })
+    }
+}
+
+pub struct DeleteInstanceTask {
+    instance_id: i32,
+}
+
+impl DeleteInstanceTask {
+    pub fn new(instance_id: i32) -> Self {
+        Self { instance_id }
+    }
+}
+
+impl Task for DeleteInstanceTask {
+    fn name(&self) -> String {
+        "Deleting Instance".to_string()
+    }
+
+    fn id(&self) -> Option<String> {
+        Some(format!("delete_instance_{}", self.instance_id))
+    }
+
+    fn cancellable(&self) -> bool {
+        false
+    }
+
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
+    fn starting_description(&self) -> String {
+        "Preparing uninstall...".to_string()
+    }
+
+    fn completion_description(&self) -> String {
+        "Instance deleted".to_string()
+    }
+
+    fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
+        let instance_id = self.instance_id;
+
+        Box::pin(async move {
+            log::info!(
+                "[delete_instance_task] start instance_id={}",
+                instance_id
+            );
+            ctx.update_full(5, "Stopping watcher...".to_string(), Some(1), Some(5));
+            let watcher = ctx.app_handle.state::<crate::resources::watcher::ResourceWatcher>();
+            if let Err(e) = tokio::time::timeout(
+                tokio::time::Duration::from_secs(5),
+                watcher.unwatch_instance(instance_id),
+            )
+            .await
+            {
+                log::warn!(
+                    "[delete_instance_task] unwatch timeout instance_id={} error={}",
+                    instance_id,
+                    e
+                );
+            }
+
+            ctx.update_full(25, "Resolving instance details...".to_string(), Some(2), Some(5));
+            let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+            use crate::schema::instance::dsl::*;
+
+            let inst = instance
+                .find(instance_id)
+                .first::<Instance>(&mut conn)
+                .map_err(|e| format!("Instance not found: {}", e))?;
+            let slug_val = inst.slug();
+            let game_dir = inst.game_directory.clone();
+
+            if let Some(gd) = game_dir {
+                ctx.update_full(55, "Removing instance files...".to_string(), Some(3), Some(5));
+                let gd_path = std::path::PathBuf::from(gd);
+                if gd_path.exists() {
+                    tokio::task::spawn_blocking({
+                        let path = gd_path.clone();
+                        move || std::fs::remove_dir_all(&path)
+                    })
+                    .await
+                    .map_err(|e| format!("Failed to await instance removal task: {}", e))?
+                    .map_err(|e| {
+                        format!(
+                            "Failed to remove instance files at '{}': {}",
+                            gd_path.display(),
+                            e
+                        )
+                    })?;
+                }
+            }
+
+            ctx.update_full(80, "Removing database references...".to_string(), Some(4), Some(5));
+            conn.transaction::<_, diesel::result::Error, _>(|conn| {
+                diesel::delete(
+                    crate::schema::installed_resource::dsl::installed_resource.filter(
+                        crate::schema::installed_resource::dsl::instance_id.eq(instance_id),
+                    ),
+                )
+                .execute(conn)?;
+
+                diesel::delete(instance.find(instance_id)).execute(conn)?;
+                Ok(())
+            })
+            .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
+
+            ctx.update_full(95, "Finalizing...".to_string(), Some(5), Some(5));
+            use tauri::Emitter;
+            let _ = ctx.app_handle.emit(
+                "core://instance-deleted",
+                serde_json::json!({ "id": instance_id }),
+            );
+            log::info!(
+                "[delete_instance_task] completed instance_id={} slug={}",
+                instance_id,
+                slug_val
+            );
             Ok(())
         })
     }

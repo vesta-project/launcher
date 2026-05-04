@@ -1,6 +1,28 @@
 import { invoke } from "@tauri-apps/api/core";
 import { Instance } from "./instances";
 
+const METADATA_TIMEOUT_MS = 30_000;
+const INSTALL_START_TIMEOUT_MS = 45_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => {
+			reject(new Error(`${operation} timed out after ${Math.round(timeoutMs / 1000)}s`));
+		}, timeoutMs);
+
+		void promise.then(
+			(value) => {
+				clearTimeout(timer);
+				resolve(value);
+			},
+			(error) => {
+				clearTimeout(timer);
+				reject(error);
+			},
+		);
+	});
+}
+
 export interface ModpackInfo {
 	name: string;
 	version: string;
@@ -35,7 +57,11 @@ export async function getModpackInfo(
 	targetId?: string,
 	targetPlatform?: string,
 ): Promise<ModpackInfo> {
-	return await invoke("get_modpack_info", { path, targetId, targetPlatform });
+	return await withTimeout(
+		invoke("get_modpack_info", { path, targetId, targetPlatform }),
+		METADATA_TIMEOUT_MS,
+		"Modpack metadata lookup",
+	);
 }
 
 export async function getModpackInfoFromUrl(
@@ -43,11 +69,15 @@ export async function getModpackInfoFromUrl(
 	targetId?: string,
 	targetPlatform?: string,
 ): Promise<ModpackInfo> {
-	return await invoke("get_modpack_info_from_url", {
-		url,
-		targetId,
-		targetPlatform,
-	});
+	return await withTimeout(
+		invoke("get_modpack_info_from_url", {
+			url,
+			targetId,
+			targetPlatform,
+		}),
+		METADATA_TIMEOUT_MS,
+		"Modpack URL metadata lookup",
+	);
 }
 
 export async function getHardwareInfo(): Promise<number> {
@@ -101,11 +131,15 @@ export async function installModpackFromZip(
 		postExitHook: null,
 		wrapperCommand: null,
 	};
-	return await invoke("install_modpack_from_zip", {
-		zipPath,
-		instanceData,
-		metadata: metadata || null,
-	});
+	return await withTimeout(
+		invoke("install_modpack_from_zip", {
+			zipPath,
+			instanceData,
+			metadata: metadata || null,
+		}),
+		INSTALL_START_TIMEOUT_MS,
+		"Modpack install start",
+	);
 }
 
 export async function installModpackFromUrl(
@@ -151,11 +185,15 @@ export async function installModpackFromUrl(
 		postExitHook: null,
 		wrapperCommand: null,
 	};
-	return await invoke("install_modpack_from_url", {
-		url,
-		instanceData,
-		metadata: metadata || null,
-	});
+	return await withTimeout(
+		invoke("install_modpack_from_url", {
+			url,
+			instanceData,
+			metadata: metadata || null,
+		}),
+		INSTALL_START_TIMEOUT_MS,
+		"Modpack install start",
+	);
 }
 
 export async function listExportCandidates(instanceId: number): Promise<ExportCandidate[]> {

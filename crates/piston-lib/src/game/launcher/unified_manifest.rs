@@ -1,6 +1,9 @@
-use serde::{Deserialize, Serialize};
-use crate::game::launcher::version_parser::{AssetIndex, JavaVersion, Library, ExtractRules, VersionManifest, Argument, Rule, RuleAction, LoggingConfig};
 use crate::game::installer::types::OsType;
+use crate::game::launcher::version_parser::{
+    Argument, AssetIndex, ExtractRules, JavaVersion, Library, LoggingConfig, Rule, RuleAction,
+    VersionManifest,
+};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A unified manifest that combines vanilla and modloader requirements.
@@ -66,12 +69,20 @@ impl UnifiedManifest {
     pub fn merge(vanilla: VersionManifest, modloader: Option<VersionManifest>, os: OsType) -> Self {
         let mut id = vanilla.id.clone();
         let mut main_class = vanilla.main_class.clone().unwrap_or_default();
-        let mut game_arguments = vanilla.arguments.as_ref().map(|a| a.game.clone()).unwrap_or_default();
-        let mut jvm_arguments = vanilla.arguments.as_ref().map(|a| a.jvm.clone()).unwrap_or_default();
+        let mut game_arguments = vanilla
+            .arguments
+            .as_ref()
+            .map(|a| a.game.clone())
+            .unwrap_or_default();
+        let mut jvm_arguments = vanilla
+            .arguments
+            .as_ref()
+            .map(|a| a.jvm.clone())
+            .unwrap_or_default();
         let mut libraries_map: HashMap<String, UnifiedLibrary> = HashMap::new();
 
         // Add vanilla libraries
-        for lib in vanilla.libraries {
+        for lib in &vanilla.libraries {
             for unified in UnifiedLibrary::from_library(&lib, None, os) {
                 libraries_map.insert(get_lib_key(&unified), unified);
             }
@@ -88,9 +99,34 @@ impl UnifiedManifest {
             }
 
             // Merge arguments
-            if let Some(ml_args) = ml.arguments {
-                game_arguments.extend(ml_args.game);
-                jvm_arguments.extend(ml_args.jvm);
+            let mut child_game_args = ml
+                .arguments
+                .as_ref()
+                .map(|a| a.game.clone())
+                .unwrap_or_default();
+            let mut child_jvm_args = ml
+                .arguments
+                .as_ref()
+                .map(|a| a.jvm.clone())
+                .unwrap_or_default();
+
+            // CRITICAL FIX: Handle legacy Forge `minecraft_arguments`
+            if let Some(legacy) = ml.minecraft_arguments {
+                let tokens = crate::game::launcher::arguments::split_preserving_quotes(&legacy);
+                let converted: Vec<Argument> = tokens.into_iter().map(Argument::Simple).collect();
+                child_game_args.extend(converted);
+            }
+
+            if !child_game_args.is_empty() {
+                let mut new_game = child_game_args;
+                new_game.extend(game_arguments);
+                game_arguments = new_game;
+            }
+
+            if !child_jvm_args.is_empty() {
+                let mut new_jvm = child_jvm_args;
+                new_jvm.extend(jvm_arguments);
+                jvm_arguments = new_jvm;
             }
 
             // Determine modloader type for maven resolution
@@ -118,17 +154,18 @@ impl UnifiedManifest {
                 if parts.len() >= 2 {
                     ml_base_prefixes.insert(format!("{}:{}", parts[0], parts[1]));
                 }
-                
+
                 ml_unified_libraries.extend(unified_list);
             }
 
             // Wipe vanilla variants first
             for prefix in ml_base_prefixes {
-                let keys_to_remove: Vec<String> = libraries_map.keys()
+                let keys_to_remove: Vec<String> = libraries_map
+                    .keys()
                     .filter(|k| k.starts_with(&prefix))
                     .map(|k| k.clone())
                     .collect();
-                
+
                 for k in keys_to_remove {
                     libraries_map.remove(&k);
                 }
@@ -157,13 +194,17 @@ impl UnifiedManifest {
             data: HashMap::new(),
             assets: vanilla.assets.clone(),
             version_type: vanilla.version_type.clone(),
-            is_legacy: vanilla.minecraft_arguments.is_some() && vanilla.arguments.is_none(),
+            is_legacy: crate::game::launcher::version_parser::is_legacy_version(&vanilla),
             logging: vanilla.logging.clone(),
         }
     }
 
     /// Add processors and data from a Forge install profile
-    pub fn with_forge_profile(mut self, processors: Vec<Processor>, data: HashMap<String, SidedDataEntry>) -> Self {
+    pub fn with_forge_profile(
+        mut self,
+        processors: Vec<Processor>,
+        data: HashMap<String, SidedDataEntry>,
+    ) -> Self {
         self.processors = processors;
         self.data = data;
         self
@@ -171,7 +212,7 @@ impl UnifiedManifest {
 
     pub fn load_from_path(path: &std::path::Path) -> anyhow::Result<Self> {
         let content = std::fs::read_to_string(path)?;
-        
+
         // Try to parse as UnifiedManifest first
         if let Ok(manifest) = serde_json::from_str::<Self>(&content) {
             // Check if it's actually a UnifiedManifest by looking for a required field
@@ -215,7 +256,10 @@ impl From<VersionManifest> for UnifiedManifest {
 
 fn is_known_native_library(name: &str) -> bool {
     let n = name.to_lowercase();
-    n.contains("org.lwjgl") || n.contains("ca.weblite:java-objc-bridge") || n.contains("com.mojang:text2speech") || n.contains("com.mojang:jtracy")
+    n.contains("org.lwjgl")
+        || n.contains("ca.weblite:java-objc-bridge")
+        || n.contains("com.mojang:text2speech")
+        || n.contains("com.mojang:jtracy")
 }
 
 fn get_default_classifier_for_os(os: OsType) -> &'static str {
@@ -232,29 +276,36 @@ impl UnifiedLibrary {
         if !should_include_library(lib, os) {
             return Vec::new();
         }
-        
+
         let mut results = Vec::new();
 
         // 1. Check for normal artifact
         let mut normal_lib = None;
         if let Some(downloads) = &lib.downloads {
             if let Some(artifact) = &downloads.artifact {
-                let path = artifact.path.clone().unwrap_or_else(|| name_to_path(&lib.name));
+                let path = artifact
+                    .path
+                    .clone()
+                    .unwrap_or_else(|| name_to_path(&lib.name));
                 let url = artifact.url.clone().or_else(|| {
                     if let Some(lib_url) = &lib.url {
-                        let base = if lib_url.ends_with('/') { lib_url.clone() } else { format!("{}/", lib_url) };
+                        let base = if lib_url.ends_with('/') {
+                            lib_url.clone()
+                        } else {
+                            format!("{}/", lib_url)
+                        };
                         Some(format!("{}{}", base, path))
                     } else {
                         resolve_maven_url(&lib.name, ml_type)
                     }
                 });
 
-                // In modern Minecraft, native libraries are often separate entries with 
+                // In modern Minecraft, native libraries are often separate entries with
                 // ":natives-<os>" in their name. We need to mark them as native so they get extracted.
                 let name_lower = lib.name.to_lowercase();
-                let is_native_by_name = name_lower.contains(":natives-") 
+                let is_native_by_name = name_lower.contains(":natives-")
                     || (name_lower.contains("natives-") && name_lower.split(':').count() > 3);
-                
+
                 // If it's a separate entry, it might have the classifier in the name
                 let parts: Vec<&str> = lib.name.split(':').collect();
                 let classifier = if parts.len() > 3 {
@@ -276,18 +327,22 @@ impl UnifiedLibrary {
             }
         }
 
-        // If no downloads.artifact, but it's a normal library (no natives field), 
+        // If no downloads.artifact, but it's a normal library (no natives field),
         // we still might need it (e.g. Fabric/Quilt libraries often don't have downloads field)
         if normal_lib.is_none() && lib.natives.is_none() {
-             let path = name_to_path(&lib.name);
-             let url = if let Some(lib_url) = &lib.url {
-                let base = if lib_url.ends_with('/') { lib_url.clone() } else { format!("{}/", lib_url) };
+            let path = name_to_path(&lib.name);
+            let url = if let Some(lib_url) = &lib.url {
+                let base = if lib_url.ends_with('/') {
+                    lib_url.clone()
+                } else {
+                    format!("{}/", lib_url)
+                };
                 Some(format!("{}{}", base, path))
-             } else {
+            } else {
                 resolve_maven_url(&lib.name, ml_type)
-             };
+            };
 
-             normal_lib = Some(UnifiedLibrary {
+            normal_lib = Some(UnifiedLibrary {
                 name: lib.name.clone(),
                 path,
                 download_url: url,
@@ -296,7 +351,7 @@ impl UnifiedLibrary {
                 is_native: false,
                 classifier: None,
                 extract_rules: lib.extract.clone(),
-             });
+            });
         }
 
         if let Some(nl) = normal_lib {
@@ -357,14 +412,18 @@ impl UnifiedLibrary {
                     }
                 }
             }
-            
+
             if path.is_empty() {
                 path = name_to_path_with_classifier(&lib.name, &classifier);
             }
 
             if url.is_none() {
                 if let Some(lib_url) = &lib.url {
-                    let base = if lib_url.ends_with('/') { lib_url.clone() } else { format!("{}/", lib_url) };
+                    let base = if lib_url.ends_with('/') {
+                        lib_url.clone()
+                    } else {
+                        format!("{}/", lib_url)
+                    };
                     url = Some(format!("{}{}", base, path));
                 } else {
                     url = resolve_maven_url_with_classifier(&lib.name, &classifier, ml_type);
@@ -411,7 +470,7 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
                 return false;
             }
         }
-        
+
         if let Some(ref arch) = os_rule.arch {
             let target_arch = match os {
                 OsType::Windows | OsType::MacOS | OsType::Linux => "x86_64",
@@ -434,8 +493,16 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
     if let Some(ref features) = rule.features {
         for (feature_name, required_state) in features {
             match feature_name.as_str() {
-                "is_demo_user" => if *required_state { return false; },
-                "has_custom_resolution" => if *required_state { return false; },
+                "is_demo_user" => {
+                    if *required_state {
+                        return false;
+                    }
+                }
+                "has_custom_resolution" => {
+                    if *required_state {
+                        return false;
+                    }
+                }
                 _ => {}
             }
         }
@@ -452,30 +519,40 @@ fn name_to_path_with_classifier(name: &str, classifier: &str) -> String {
     } else {
         format!("{}:{}", name, classifier)
     };
-    
+
     crate::game::launcher::maven_to_path(&coords).unwrap_or_else(|_| {
         let parts: Vec<&str> = name.split(':').collect();
         let group = parts[0].replace('.', "/");
         let artifact = parts.get(1).unwrap_or(&"");
         let version = parts.get(2).unwrap_or(&"");
-        format!("{}/{}/{}/{}-{}-{}.jar", group, artifact, version, artifact, version, classifier)
+        format!(
+            "{}/{}/{}/{}-{}-{}.jar",
+            group, artifact, version, artifact, version, classifier
+        )
     })
 }
 
 fn name_to_path(name: &str) -> String {
-    crate::game::launcher::maven_to_path(name).unwrap_or_else(|_| name.replace('.', "/").replace(':', "/"))
+    crate::game::launcher::maven_to_path(name)
+        .unwrap_or_else(|_| name.replace('.', "/").replace(':', "/"))
 }
 
 fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
     let path = name_to_path(name);
-    
+
     match ml_type {
         Some("forge") => Some(format!("https://maven.minecraftforge.net/{}", path)),
         Some("fabric") => Some(format!("https://maven.fabricmc.net/{}", path)),
-        Some("quilt") => Some(format!("https://maven.quiltmc.org/repository/release/{}", path)),
+        Some("quilt") => Some(format!(
+            "https://maven.quiltmc.org/repository/release/{}",
+            path
+        )),
         _ => {
             // Default to libraries.minecraft.net for vanilla-looking things
-            if name.starts_with("com.mojang") || name.starts_with("net.minecraft") || name.starts_with("org.lwjgl") {
+            if name.starts_with("com.mojang")
+                || name.starts_with("net.minecraft")
+                || name.starts_with("org.lwjgl")
+            {
                 Some(format!("https://libraries.minecraft.net/{}", path))
             } else {
                 None
@@ -484,16 +561,26 @@ fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
     }
 }
 
-fn resolve_maven_url_with_classifier(name: &str, classifier: &str, ml_type: Option<&str>) -> Option<String> {
+fn resolve_maven_url_with_classifier(
+    name: &str,
+    classifier: &str,
+    ml_type: Option<&str>,
+) -> Option<String> {
     let path = name_to_path_with_classifier(name, classifier);
-    
+
     match ml_type {
         Some("forge") => Some(format!("https://maven.minecraftforge.net/{}", path)),
         Some("fabric") => Some(format!("https://maven.fabricmc.net/{}", path)),
-        Some("quilt") => Some(format!("https://maven.quiltmc.org/repository/release/{}", path)),
+        Some("quilt") => Some(format!(
+            "https://maven.quiltmc.org/repository/release/{}",
+            path
+        )),
         _ => {
             // Default to libraries.minecraft.net for vanilla-looking things
-            if name.starts_with("com.mojang") || name.starts_with("net.minecraft") || name.starts_with("org.lwjgl") {
+            if name.starts_with("com.mojang")
+                || name.starts_with("net.minecraft")
+                || name.starts_with("org.lwjgl")
+            {
                 Some(format!("https://libraries.minecraft.net/{}", path))
             } else {
                 None
@@ -504,10 +591,13 @@ fn resolve_maven_url_with_classifier(name: &str, classifier: &str, ml_type: Opti
 
 fn classifier_key_matches_os(key: &str, target_os: OsType) -> bool {
     let key = key.to_lowercase();
-    
+
     let is_macos = matches!(target_os, OsType::MacOS | OsType::MacOSArm64);
     let is_windows = matches!(target_os, OsType::Windows | OsType::WindowsArm64);
-    let is_linux = matches!(target_os, OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64);
+    let is_linux = matches!(
+        target_os,
+        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64
+    );
 
     let os_match = if is_macos {
         key.contains("osx") || key.contains("macos")
@@ -524,7 +614,10 @@ fn classifier_key_matches_os(key: &str, target_os: OsType) -> bool {
     }
 
     // Architecture matching
-    let target_is_arm64 = matches!(target_os, OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::WindowsArm64);
+    let target_is_arm64 = matches!(
+        target_os,
+        OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::WindowsArm64
+    );
     let target_is_arm32 = matches!(target_os, OsType::LinuxArm32);
     let target_is_x64 = matches!(target_os, OsType::Windows | OsType::MacOS | OsType::Linux);
 

@@ -31,6 +31,7 @@ interface GeneralSettingsTabProps {
 	handleCloseToTrayToggle: (checked: boolean) => void;
 	autostartEnabled: boolean;
 	handleAutostartToggle: (checked: boolean) => void;
+	navigateToImporter: () => void;
 }
 
 export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
@@ -180,6 +181,12 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 			</SettingsCard>
 
 			<SettingsCard header="Troubleshooting">
+				<SettingsField
+					label="Launcher Import"
+					description="Open the launcher import flow to bring in instances from other launchers."
+					actionLabel="Open Importer"
+					onAction={props.navigateToImporter}
+				/>
 				<SettingsField
 					label="Reset Onboarding"
 					description="Redo the first-time setup process. This will not delete your accounts or instances."

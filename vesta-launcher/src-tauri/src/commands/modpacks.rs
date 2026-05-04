@@ -19,6 +19,7 @@ use piston_lib::game::modpack::parser::get_modpack_metadata;
 use piston_lib::game::modpack::types::ModpackFormat;
 use serde_json;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use tauri::{command, AppHandle, State};
 use tempfile::NamedTempFile;
 
@@ -565,6 +566,8 @@ pub async fn get_modpack_info_from_url(
         );
     let client = reqwest::Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
 
@@ -1051,6 +1054,9 @@ async fn prepare_instance(
         modpack_icon_url: instance_data.modpack_icon_url.clone(),
         icon_data: final_icon_data,
         last_operation: Some("install".to_string()),
+        import_source_game_directory: None,
+        import_launcher_kind: None,
+        import_instance_path: None,
         use_global_resolution: instance_data.use_global_resolution,
         use_global_memory: instance_data.use_global_memory,
         use_global_java_args: instance_data.use_global_java_args,
@@ -1437,6 +1443,8 @@ pub async fn install_modpack_from_url(
 ) -> Result<i32, String> {
     let client = reqwest::Client::builder()
         .user_agent("VestaLauncher/0.1.0")
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
 

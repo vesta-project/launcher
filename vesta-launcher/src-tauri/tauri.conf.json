@@ -14,26 +14,18 @@
 			"csp": "default-src 'self' ipc: http://ipc.localhost; img-src 'self' https: asset: http://asset.localhost data:; style-src 'self' 'unsafe-inline'; font-src 'self' data:",
 			"assetProtocol": {
 				"enable": true,
-				"scope": [
-					"$APPLOCALDATA/**",
-					"$APPCACHE/**",
-					"$APPDATA/.VestaLauncher/**"
-				]
+				"scope": ["$APPLOCALDATA/**", "$APPCACHE/**", "$APPDATA/.VestaLauncher/**"]
 			}
 		}
 	},
 	"plugins": {
 		"deep-link": {
 			"desktop": {
-				"schemes": [
-					"vesta"
-				]
+				"schemes": ["vesta"]
 			}
 		},
 		"updater": {
-			"endpoints": [
-				"https://r2.vestalauncher.com/launcher/releases/latest.json"
-			],
+			"endpoints": ["https://r2.vestalauncher.com/launcher/releases/latest.json"],
 			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUxNUU3NUE0MjVERTI1NUUKUldSZUpkNGxwSFZlVVY3QWRoeS9HeU81bDVibG9Md2NTM2w4cjZ5WGZuRzZ6bDdoMHI3MmFyb0MK"
 		},
 		"os": {}
@@ -58,9 +50,6 @@
 			"icons/icon.icns",
 			"icons/icon.ico"
 		],
-		"resources": [
-			"../resources/exit-handler/exit-handler.jar",
-			"icons/icon.png"
-		]
+		"resources": ["../resources/exit-handler/exit-handler.jar", "icons/icon.png"]
 	}
 }

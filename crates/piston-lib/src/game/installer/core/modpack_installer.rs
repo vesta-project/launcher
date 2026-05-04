@@ -4,6 +4,7 @@ use crate::game::installer::install_instance;
 use crate::game::modpack::parser::{extract_overrides, get_modpack_metadata};
 use crate::game::modpack::types::ModpackMod;
 use anyhow::{Context, Result};
+use futures::stream::{self, StreamExt};
 use reqwest::Client;
 use std::path::Path;
 use std::sync::Arc;
@@ -120,6 +121,7 @@ impl ModpackInstaller {
             let downloader = BatchDownloader::new(client, 8);
             
             let mut artifacts = Vec::new();
+            let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();
             for mod_entry in metadata.mods.clone() {
                 match mod_entry {
                     ModpackMod::Modrinth { path, urls, hashes, size: _ } => {
@@ -138,27 +140,62 @@ impl ModpackInstaller {
                         }
                     }
                     ModpackMod::CurseForge { project_id, file_id, required: _, hash } => {
-                        if let Some(resolver) = &resolver {
-                            match resolver.resolve_curseforge(project_id, file_id, hash).await {
-                                Ok(resolved) => {
-                                    let target_path = game_dir.join(&resolved.subfolder).join(&resolved.filename);
-                                    let pid_str = project_id.map(|id| id.to_string()).unwrap_or_else(|| "unknown".to_string());
-                                    artifacts.push(BatchArtifact {
-                                        name: target_path.file_name().and_then(|n| n.to_str()).unwrap_or("unknown").to_string(),
-                                        label: format!("mod-cf-{}-{}", pid_str, file_id),
-                                        urls: vec![resolved.url],
-                                        path: target_path,
-                                        sha1: resolved.sha1,
-                                    });
-                                }
-                                Err(e) => {
-                                    log::error!("Failed to resolve CurseForge mod {:?} {}: {}", project_id, file_id, e);
-                                }
+                        curseforge_jobs.push((project_id, file_id, hash));
+                    }
+                }
+            }
+
+            if !curseforge_jobs.is_empty() {
+                if let Some(resolver) = &resolver {
+                    // Resolve CurseForge entries concurrently; this avoids long serialized
+                    // API-bound phases before the downloader starts.
+                    let resolved = stream::iter(curseforge_jobs.into_iter())
+                        .map(|(project_id, file_id, hash)| {
+                            let resolver = resolver.clone();
+                            async move {
+                                let result = resolver.resolve_curseforge(project_id, file_id, hash).await;
+                                (project_id, file_id, result)
                             }
-                        } else {
-                            log::warn!("Skipping CurseForge mod (project: {:?}, file: {}) - no resolver provided", project_id, file_id);
+                        })
+                        .buffer_unordered(12)
+                        .collect::<Vec<_>>()
+                        .await;
+
+                    for (project_id, file_id, result) in resolved {
+                        match result {
+                            Ok(resolved) => {
+                                let target_path =
+                                    game_dir.join(&resolved.subfolder).join(&resolved.filename);
+                                let pid_str = project_id
+                                    .map(|id| id.to_string())
+                                    .unwrap_or_else(|| "unknown".to_string());
+                                artifacts.push(BatchArtifact {
+                                    name: target_path
+                                        .file_name()
+                                        .and_then(|n| n.to_str())
+                                        .unwrap_or("unknown")
+                                        .to_string(),
+                                    label: format!("mod-cf-{}-{}", pid_str, file_id),
+                                    urls: vec![resolved.url],
+                                    path: target_path,
+                                    sha1: resolved.sha1,
+                                });
+                            }
+                            Err(e) => {
+                                log::error!(
+                                    "Failed to resolve CurseForge mod {:?} {}: {}",
+                                    project_id,
+                                    file_id,
+                                    e
+                                );
+                            }
                         }
                     }
+                } else {
+                    log::warn!(
+                        "Skipping {} CurseForge mods - no resolver provided",
+                        curseforge_jobs.len()
+                    );
                 }
             }
 

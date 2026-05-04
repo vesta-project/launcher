@@ -11,6 +11,13 @@ type RunningMetadata = {
 	startTime: number;
 };
 
+type InstalledEventPayload =
+	| Instance
+	| {
+			name: string;
+			instance_id: string;
+	  };
+
 type InstancesState = {
 	instances: Instance[];
 	launchingIds: Record<string, boolean>;
@@ -108,6 +115,24 @@ function removeInstance(instanceId: number) {
 	setInstancesState("instances", (instances) => instances.filter((inst) => inst.id !== instanceId));
 }
 
+function isFullInstancePayload(payload: InstalledEventPayload): payload is Instance {
+	return typeof (payload as Instance).id === "number";
+}
+
+export function removeInstanceOptimistic(instanceId: number): Instance | null {
+	const snapshot = instancesState.instances.find((inst) => inst.id === instanceId) ?? null;
+	removeInstance(instanceId);
+	return snapshot;
+}
+
+export function restoreInstanceOptimistic(instanceSnapshot: Instance | null) {
+	if (!instanceSnapshot) return;
+	const exists = instancesState.instances.some((inst) => inst.id === instanceSnapshot.id);
+	if (!exists) {
+		setInstancesState("instances", (instances) => [instanceSnapshot, ...instances]);
+	}
+}
+
 // Listen for Tauri events
 let setupPromise: Promise<void> | null = null;
 
@@ -130,9 +155,22 @@ export function setupInstanceListeners() {
 			removeInstance(event.payload.id);
 		});
 
+		// Optimistic deletion signal (task queued)
+		await listen<{ id: number }>("core://instance-delete-queued", (event) => {
+			removeInstance(event.payload.id);
+		});
+
 		// Listen for installation status updates
-		await listen<Instance>("core://instance-installed", (event) => {
-			updateInstance(event.payload);
+		await listen<InstalledEventPayload>("core://instance-installed", (event) => {
+			if (isFullInstancePayload(event.payload)) {
+				updateInstance(event.payload);
+				return;
+			}
+
+			// Legacy payload support: refresh from backend when only slug/name is provided.
+			void initializeInstances(true).catch((error) => {
+				console.error("Failed to refresh instances after installed event:", error);
+			});
 		});
 
 		// Listen for launch initiated (this is for UI responsiveness)

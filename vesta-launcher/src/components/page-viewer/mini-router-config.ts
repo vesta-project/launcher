@@ -3,7 +3,9 @@ import InvalidPage from "@components/pages/mini-pages/404-page";
 import ChangelogPage from "@components/pages/mini-pages/changelog/changelog";
 import DebugTestPage from "@components/pages/mini-pages/debug-test";
 import FileDropPage from "@components/pages/mini-pages/file-drop/file-drop-page";
+import ImportPage from "@components/pages/mini-pages/install/import-page";
 import InstallPage from "@components/pages/mini-pages/install/install-page";
+import SourceSelectPage from "@components/pages/mini-pages/install/source-select-page";
 import InstanceDetailsPage from "@components/pages/mini-pages/instance-details/instance-details";
 import LoginPage from "@components/pages/mini-pages/login/login-page";
 import ResourceBrowser from "@components/pages/mini-pages/resources/resource-browser";
@@ -18,6 +20,8 @@ export const miniRouterPaths = {
 	...CreateMiniRouterPath("/config", SettingsPage, "Settings"),
 	...CreateMiniRouterPath("/changelog", ChangelogPage, "Changelog"),
 	...CreateMiniRouterPath("/install", InstallPage, "Install"),
+	...CreateMiniRouterPath("/install/source", SourceSelectPage, "Install Source"),
+	...CreateMiniRouterPath("/install/import", ImportPage, "Launcher Import"),
 	...CreateMiniRouterPath("/modding-guide", ModdingGuidePage, "Modding Guide"),
 	...CreateMiniRouterPath("/instance", InstanceDetailsPage, "Instance Details"),
 	...CreateMiniRouterPath("/file-drop", FileDropPage, "File Drop"),

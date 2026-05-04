@@ -1,671 +1,215 @@
-import CubeIcon from "@assets/cube.svg";
-import GlobeIcon from "@assets/earth-globe.svg";
-import SearchIcon from "@assets/search.svg";
-import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
-import { ResourceVersion, resources, SourcePlatform } from "@stores/resources";
-import { open } from "@tauri-apps/plugin-dialog";
-import { Badge } from "@ui/badge";
-import { Separator } from "@ui/separator/separator";
-import { showToast } from "@ui/toast/toast";
-import { createInstance, getInstance, type Instance, installInstance } from "@utils/instances";
-import {
-	getModpackInfo,
-	getModpackInfoFromUrl,
-	installModpackFromUrl,
-	installModpackFromZip,
-	ModpackInfo,
-} from "@utils/modpacks";
-import {
-	batch,
-	createEffect,
-	createMemo,
-	createResource,
-	createSignal,
-	onMount,
-	Show,
-} from "solid-js";
+import type { Instance } from "@utils/instances";
+import { createMemo, createSignal, onMount, Show } from "solid-js";
+import { FetchingOverlay } from "./components/FetchingOverlay";
+import { InstallContextBanner } from "./components/InstallContextBanner";
 import { InstallForm } from "./components/InstallForm";
+import { InstallStageHeader } from "./components/InstallStageHeader";
+import { useInstallCapabilities } from "./hooks/use-install-capabilities";
+import { useInstallSubmit } from "./hooks/use-install-submit";
+import { useModpackSource } from "./hooks/use-modpack-source";
+import { useProjectVersions } from "./hooks/use-project-versions";
 import styles from "./install-page.module.css";
-
-interface InstallPageProps {
-	close?: () => void;
-	// Routing Params
-	projectId?: string;
-	platform?: string;
-	projectName?: string;
-	projectIcon?: string;
-	projectAuthor?: string;
-	resourceType?: string;
-	// Modpack Specific
-	isModpack?: boolean;
-	modpackUrl?: string;
-	modpackPath?: string;
-	initialName?: string;
-	initialVersion?: string;
-	initialModloader?: string;
-	initialModloaderVersion?: string;
-	initialIcon?: string;
-	originalIcon?: string;
-	initialMinMemory?: number;
-	initialMaxMemory?: number;
-	initialJvmArgs?: string;
-	initialResW?: string;
-	initialResH?: string;
-	initialIncludeSnapshots?: boolean;
-}
+import type { InstallPageRouteProps } from "./types";
 
 /**
- * InstallPage handles the high-level state of creating a new instance.
- * It manages:
- * 1. Mode (Standard vs Modpack)
- * 2. Source selection (Local, URL, or Browse)
- * 3. Metadata fetching for modpacks
- * 4. Communication with the InstallForm
+ * InstallPage is the simplified instance configuration form.
+ *
+ * Standard installs arrive directly at /install.
+ * Modpack installs arrive here with modpackUrl/modpackPath/projectId params
+ * (set by the resource browser, source-select-page, or file-drop).
  */
-function InstallPage(props: InstallPageProps & { router?: MiniRouter }) {
+function InstallPage(props: InstallPageRouteProps) {
+	const [formState, setFormState] = createSignal<Partial<Instance>>({});
+	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
+	const routeParams = createMemo(() => (props.router || router())?.currentParams.get() || {});
 	const activeRouter = createMemo(() => props.router || router());
-	// Derive states from router params for navigable history
-	const isModpackMode = createMemo(() => {
-		const params = activeRouter()?.currentParams.get();
-		if (params?.mode === "modpack") return true;
-		if (params?.mode === "standard") return false;
 
-		const isModpack = props.isModpack;
-		const resType = props.resourceType?.toLowerCase();
-		return (
-			String(isModpack) === "true" ||
-			isModpack === true ||
-			!!props.modpackUrl ||
-			!!props.modpackPath ||
-			resType === "modpack" ||
-			resType === "modpacks"
-		);
+	// --- Effective props (merge route params with direct props) ---
+	const effectiveIsModpack = createMemo(() => {
+		const routeFlag = routeParams().isModpack as boolean | string | undefined;
+		if (String(routeFlag) === "true" || routeFlag === true) return true;
+		if (String(routeFlag) === "false" || routeFlag === false) return false;
+		return String(props.isModpack) === "true" || props.isModpack === true;
 	});
-
-	const showUrlInput = createMemo(() => {
-		return activeRouter()?.currentParams.get()?.sourceView === "url";
-	});
-
-	// --- Fundamental State ---
-	const [isInstalling, setIsInstalling] = createSignal(false);
-	const [isFetchingMetadata, setIsFetchingMetadata] = createSignal(false);
-
-	// Modpack source tracking
-	const [modpackUrl, setModpackUrl] = createSignal(props.modpackUrl || "");
-	const [modpackPath, setModpackPath] = createSignal(props.modpackPath || "");
-	const [modpackInfo, setModpackInfo] = createSignal<ModpackInfo | undefined>();
-
-	// The "Original" icon for the picker (persists even if user changes selection)
-	const originalIcon = createMemo(
-		() => props.originalIcon || modpackInfo()?.iconUrl || props.projectIcon || undefined,
+	const effectiveModpackUrl = createMemo(
+		() => (routeParams().modpackUrl as string | undefined) || props.modpackUrl,
+	);
+	const effectiveModpackPath = createMemo(
+		() => (routeParams().modpackPath as string | undefined) || props.modpackPath,
+	);
+	const effectiveProjectId = createMemo(
+		() => (routeParams().projectId as string | undefined) || props.projectId,
+	);
+	const effectivePlatform = createMemo(
+		() => (routeParams().platform as string | undefined) || props.platform,
+	);
+	const effectiveInitialVersion = createMemo(
+		() => (routeParams().initialVersion as string | undefined) || props.initialVersion,
+	);
+	const effectiveResourceType = createMemo(
+		() => (routeParams().resourceType as string | undefined) || props.resourceType,
 	);
 
-	// --- Form Capture ---
-	const [formState, setFormState] = createSignal<Partial<Instance>>({});
+	// --- Hooks ---
+	const isModpackMode = createMemo(
+		() =>
+			effectiveIsModpack() ||
+			!!effectiveModpackUrl() ||
+			!!effectiveModpackPath() ||
+			effectiveResourceType()?.toLowerCase() === "modpack" ||
+			effectiveResourceType()?.toLowerCase() === "modpacks",
+	);
+
+	const source = useModpackSource({
+		projectId: effectiveProjectId(),
+		platform: effectivePlatform(),
+		projectName: props.projectName,
+		projectIcon: props.projectIcon,
+		projectAuthor: props.projectAuthor,
+		initialVersion: effectiveInitialVersion(),
+		initialModloader: props.initialModloader,
+		initialModloaderVersion: props.initialModloaderVersion,
+		originalIcon: props.originalIcon,
+		modpackUrl: effectiveModpackUrl(),
+		modpackPath: effectiveModpackPath(),
+		selectedModpackVersionId,
+	});
+
+	const install = useInstallSubmit({
+		close: props.close,
+		navigateHome: () => activeRouter()?.navigate("/home"),
+		isModpackMode,
+		modpackUrl: source.modpackUrl,
+		modpackPath: source.modpackPath,
+		modpackInfo: source.modpackInfo as any,
+	});
+
+	const { projectVersions, handleModpackVersionChange } = useProjectVersions({
+		isModpackMode,
+		modpackPath: source.modpackPath,
+		modpackUrl: source.modpackUrl,
+		modpackInfo: source.modpackInfo as any,
+		projectId: effectiveProjectId,
+		platform: effectivePlatform,
+		initialVersion: effectiveInitialVersion,
+		selectedModpackVersionId,
+		setSelectedModpackVersionId,
+		setModpackUrl: source.setModpackUrl,
+	});
+
+	const capabilities = useInstallCapabilities({
+		modpackInfo: source.modpackInfo as any,
+		modpackUrl: source.modpackUrl,
+		modpackPath: source.modpackPath,
+		projectVersions: () => projectVersions(),
+	});
 
 	onMount(() => {
-		// Register state provider for pop-out
+		console.log("[InstallPage] Mounted with props:", props, "route params:", routeParams());
 		activeRouter()?.registerStateProvider("/install", () => ({
-			...props, // Include routing params
-			modpackUrl: modpackUrl(),
-			modpackPath: modpackPath(),
+			...props,
+			modpackUrl: source.modpackUrl(),
+			modpackPath: source.modpackPath(),
 			selectedModpackVersionId: selectedModpackVersionId(),
-			// Pass the live form state as a single object to simplify persistence
 			initialData: formState(),
-			originalIcon: originalIcon(),
+			originalIcon: source.originalIcon(),
 		}));
 	});
 
-	// UI Toggles
-	const [urlInputValue, setUrlInputValue] = createSignal("");
-	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
-
-	// --- Derived UI States ---
-	// These prevent layout flickering between state updates
-	const shouldShowOverlay = createMemo(() => {
-		// If we HAVE a source but don't have modpack info yet, we are analyzing
-		const hasSource = !!(modpackUrl() || modpackPath());
-		const hasInfo = !!modpackInfo();
-
-		if (isModpackMode() && hasSource && !hasInfo && !props.projectName) return true;
-
-		// If we're loading project versions from the browser and don't have a name yet
-		if (isModpackMode() && props.projectId && projectVersions.loading && !props.projectName)
-			return true;
-
-		return false;
-	});
-
-	const shouldShowForm = createMemo(() => {
-		// Always show form in standard mode
-		if (!isModpackMode()) return true;
-		// Show if we have modpack metadata
-		if (modpackInfo()) return true;
-		// Show if we have initial project context (browser install)
-		if (props.projectName) return true;
-		return false;
-	});
-
-	// --- Resource: Fetch Platform Versions (Remote Repos) ---
-	const [projectVersions] = createResource(
-		() => {
-			// [FIX] Never fetch versions for a local file import.
-			// We only support version switching for Browser or URL imports.
-			if (modpackPath()) return null;
-
-			const pId = props.projectId || modpackInfo()?.modpackId;
-			const pPlatform = props.platform || modpackInfo()?.modpackPlatform;
-
-			if (pId && pPlatform) {
-				return { id: pId, platform: pPlatform };
-			}
-			return null;
-		},
-		async ({ id, platform }: { id: string; platform: string }) => {
-			try {
-				const vs = await resources.getVersions(platform as SourcePlatform, id);
-				// Sync selection if we have an initial URL matched up
-				const currentUrl = modpackUrl();
-				const info = modpackInfo();
-				const initialVer = props.initialVersion || info?.modpackVersionId;
-
-				if (initialVer) {
-					const match = vs.find(
-						(v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer,
-					);
-					if (match) {
-						setSelectedModpackVersionId(match.id);
-						return vs;
-					}
-				}
-
-				if (currentUrl) {
-					const match = vs.find((v: ResourceVersion) => v.download_url === currentUrl);
-					if (match) {
-						setSelectedModpackVersionId(match.id);
-						return vs;
-					}
-				}
-
-				if (vs.length > 0 && isModpackMode()) {
-					// Auto-select latest if no specific match found
-					let target = vs[0];
-
-					batch(() => {
-						setSelectedModpackVersionId(target.id);
-						setModpackUrl(target.download_url);
-					});
-				}
-				return vs;
-			} catch (e) {
-				console.error("[InstallPage] Version fetch failed:", e);
-				return [];
-			}
-		},
+	// --- Derived UI state ---
+	const isFetchingMetadata = createMemo(
+		() => source.isFetchingMetadata() || projectVersions.loading,
 	);
 
-	createEffect(() => {
-		const versions = projectVersions();
-		const selectedId = selectedModpackVersionId();
-		if (!versions || versions.length === 0 || !selectedId) return;
-
-		const match = versions.find(
-			(version: ResourceVersion) => version.id === selectedId || version.version_number === selectedId,
-		);
-
-		if (match) {
-			if (match.id !== selectedId) {
-				setSelectedModpackVersionId(match.id);
-			}
-			return;
-		}
-
-		const fallback = versions[0];
-		batch(() => {
-			setSelectedModpackVersionId(fallback.id);
-			setModpackUrl(fallback.download_url);
-		});
-
-		showToast({
-			title: "Version Updated",
-			description:
-				"The selected modpack version is no longer available. Switched to the latest available version.",
-			severity: "info",
-		});
-	});
-
-	// --- Effect: Reactive Metadata Sync ---
-	// Whenever the modpack source changes, fetch its info.
-	createEffect(() => {
-		const url = modpackUrl();
-		const path = modpackPath();
-
-		if (!url && !path) {
-			setModpackInfo(undefined);
-			return;
-		}
-
-		const fetchDetails = async () => {
-			setIsFetchingMetadata(true);
-			try {
-				const info = url
-					? await getModpackInfoFromUrl(url, props.projectId, props.platform)
-					: await getModpackInfo(path, props.projectId, props.platform);
-
-				setModpackInfo(info);
-			} catch (err) {
-				console.error("[InstallPage] Metadata fetch error:", err);
-
-				// Fallback: If we have project metadata, we can construct a partial ModpackInfo
-				// This allows the UI to still function even if the ZIP reading fails.
-				if (props.projectId || props.projectName) {
-					// If versions are still loading, wait a bit or try to find them
-					let vs = projectVersions();
-					if (!vs && projectVersions.loading) {
-						console.log("[InstallPage] Waiting for project versions to settle for fallback...");
-						// We don't want to block progress too much, but a small delay help
-					}
-
-					const initialVerId = props.initialVersion || selectedModpackVersionId();
-					const selectedVer =
-						vs?.find(
-							(v: ResourceVersion) => v.id === initialVerId || v.version_number === initialVerId,
-						) || vs?.[0];
-
-					setModpackInfo({
-						name: props.projectName || "Unknown Modpack",
-						version: selectedVer?.version_number || props.initialVersion || "1.0.0",
-						author: props.projectAuthor || "",
-						description: null,
-						iconUrl: props.projectIcon || null,
-						minecraftVersion: selectedVer?.game_versions[0] || props.initialModloaderVersion || "",
-						modloader: (selectedVer?.loaders[0] as any) || props.initialModloader || "vanilla",
-						modloaderVersion: null,
-						modCount: 0,
-						format: "unknown",
-					});
-					console.warn(
-						"[InstallPage] Using constructed fallback metadata due to fetch failure for:",
-						props.projectName,
-					);
-				} else {
-					showToast({
-						title: "Metadata Sync Failed",
-						description:
-							"Could not read modpack metadata from the provided source. Check your selection.",
-						severity: "warning",
-					});
-					// Reset the source so we go back to the selection page
-					batch(() => {
-						setModpackUrl("");
-						setModpackPath("");
-					});
-				}
-			} finally {
-				setIsFetchingMetadata(false);
-			}
-		};
-
-		fetchDetails();
-	});
-
-	// --- Actions ---
-
-	const handleModpackVersionChange = (versionId: string) => {
-		const vs = projectVersions();
-		const target = vs?.find((v: ResourceVersion) => v.id === versionId);
-		if (target) {
-			setSelectedModpackVersionId(versionId);
-			setModpackUrl(target.download_url);
-			// createEffect above will handle the rest
-		}
-	};
-
-	const handleInstall = async (data: Partial<Instance>) => {
-		setIsInstalling(true);
-
-		try {
-			if (isModpackMode() && (modpackUrl() || modpackPath())) {
-				const sourceUrl = modpackUrl();
-				const sourcePath = modpackPath();
-				const info = modpackInfo();
-				const fullMetadata = info?.fullMetadata;
-
-				if (sourceUrl) {
-					console.log(`[Install] Fetching modpack from URL: ${sourceUrl}`);
-					await installModpackFromUrl(sourceUrl, data, fullMetadata);
-				} else if (sourcePath) {
-					console.log(`[Install] Installing modpack from local file: ${sourcePath}`);
-					await installModpackFromZip(sourcePath, data, fullMetadata);
-				}
-			} else {
-				const id = await createInstance(data as any);
-				if (id) {
-					const instance = await getInstance(id);
-					await installInstance(instance);
-				}
-			}
-
-			// Navigate back after starting
-			setTimeout(() => {
-				if (props.close) props.close();
-				else activeRouter()?.navigate("/home");
-			}, 500);
-		} catch (e) {
-			console.error("[Install] ERROR:", e);
-			showToast({ title: "Failed", description: String(e), severity: "error" });
-			setIsInstalling(false);
-		}
-	};
-
-	const handleLocalImport = async () => {
-		try {
-			const res = await open({
-				multiple: false,
-				filters: [{ name: "Modpack", extensions: ["zip", "mrpack"] }],
-			});
-			if (res && typeof res === "string") {
-				setModpackPath(res);
-				setModpackUrl("");
-			}
-		} catch (e) {
-			console.error("[InstallPage] Import error:", e);
-		}
-	};
-
-	const handleUrlSubmit = () => {
-		const val = urlInputValue().trim();
-		if (val) {
-			setModpackUrl(val);
-			setModpackPath("");
-			activeRouter()?.removeQuery("source");
-			setUrlInputValue("");
-		}
-	};
-
-	// --- Filtering & Logic Memos ---
-
-	const supportedMcVersions = createMemo(() => {
-		const info = modpackInfo();
-		// If we have a source, we are locked to its version.
-		if (info && (modpackUrl() || modpackPath())) return [info.minecraftVersion];
-		// If browsing a project, show all its available versions
-		return projectVersions()?.flatMap((v: ResourceVersion) => v.game_versions) || undefined;
-	});
-
-	const supportedModloaders = createMemo(() => {
-		const info = modpackInfo();
-		if (info && (modpackUrl() || modpackPath())) return [info.modloader.toLowerCase()];
-
-		const vs = projectVersions();
-		if (vs && vs.length > 0) {
-			const set = new Set(["vanilla"]);
-			vs.forEach((v: ResourceVersion) => v.loaders.forEach((l: string) => set.add(l.toLowerCase())));
-			return Array.from(set);
-		}
-		return undefined;
-	});
+	const showForm = createMemo(
+		() =>
+			!isFetchingMetadata() &&
+			(!isModpackMode() || source.modpackUrl() || source.modpackPath() || effectiveProjectId()),
+	);
 
 	return (
 		<div class={styles["page-root"]}>
-			<Show when={!(props.projectId || modpackUrl() || modpackPath() || isModpackMode())}>
-				<header class={styles["install-page-header"]}>
-					<div class={styles["header-text"]}>
-						<h1>{isModpackMode() ? "Install Modpack" : "New Instance"}</h1>
-						<p>
-							{isModpackMode()
-								? "Install a pre-configured modpack."
-								: "Create a clean slate and customize it."}
-						</p>
-					</div>
-
-					<Show
-						when={
-							!props.projectId &&
-							!props.modpackUrl &&
-							!props.modpackPath &&
-							!modpackUrl() &&
-							!modpackPath() &&
-							!isFetchingMetadata()
-						}
-					>
-						<Badge
-							pill={true}
-							clickable={true}
-							variant="surface"
-							onClick={() =>
-								activeRouter()?.updateQuery("mode", isModpackMode() ? "standard" : "modpack", true)
-							}
-						>
-							{isModpackMode() ? "Standard Instance" : "Install Modpack"}
-						</Badge>
-					</Show>
-				</header>
+			{/* Header for standard (non-modpack) installs */}
+			<Show when={!isModpackMode() && !effectiveProjectId()}>
+				<InstallStageHeader
+					title="New Instance"
+					description="Create a clean slate and customize it."
+					actionLabel="Back"
+					onAction={() => activeRouter()?.navigate("/install/source")}
+				/>
 			</Show>
 
 			<div class={styles["page-wrapper"]}>
-				{/* Context Banner (e.g. "Installing Fabulous Optimized") */}
-				<Show when={(props.projectName || modpackPath() || modpackUrl()) && !shouldShowOverlay()}>
-					<div class={styles["install-resource-context"]}>
-						<button
-							class={styles["back-link"]}
-							onClick={() => {
-								if (props.projectId) {
-									activeRouter()?.backwards();
-								} else {
-									batch(() => {
-										setModpackUrl("");
-										setModpackPath("");
-										setModpackInfo(undefined);
-									});
-								}
-							}}
-						>
-							{props.projectId ? "Back to Browser" : "Back to Source"}
-						</button>
-						<Separator orientation="vertical" style={{ height: "24px" }} />
-						<div class={styles["resource-pill"]}>
-							<Show when={props.projectIcon || modpackInfo()?.iconUrl}>
-								<img src={(props.projectIcon || modpackInfo()?.iconUrl) ?? undefined} alt="" />
-							</Show>
-							<div class={styles["resource-info"]}>
-								<span class={styles["resource-label"]}>
-									{props.resourceType || (isModpackMode() ? "Modpack" : "Package")}
-								</span>
-								<div class={styles["resource-name-row"]}>
-									<span
-										class={styles["resource-name"]}
-										classList={{
-											[styles["is-analyzing"]]: !modpackInfo() && !props.projectName,
-										}}
-									>
-										{props.projectName || modpackInfo()?.name || "Analyzing modpack details..."}
-									</span>
-									<Show when={modpackInfo() || (props.initialVersion && props.initialModloader)}>
-										<div class={styles["resource-meta"]}>
-											<span class={styles["meta-tag"]}>
-												{modpackInfo()?.minecraftVersion || props.initialVersion}
-											</span>
-											<span class={`${styles["meta-tag"]} ${styles.capitalize}`}>
-												{modpackInfo()?.modloader || props.initialModloader}
-											</span>
-										</div>
-									</Show>
-								</div>
-							</div>
-						</div>
-					</div>
-				</Show>
-
-				{/* Source Selection (Only if we don't have a source yet and we're in modpack mode) */}
+				{/* Context banner (modpack info bar) */}
 				<Show
 					when={
-						isModpackMode() &&
-						!modpackUrl() &&
-						!modpackPath() &&
-						!isFetchingMetadata() &&
-						!props.projectId
+						(props.projectName || source.modpackPath() || source.modpackUrl()) && !isFetchingMetadata()
 					}
 				>
-					<div class={styles["import-selection-wrapper"]}>
-						<Show when={!showUrlInput()}>
-							<div class={styles["import-header"]}>
-								<h1>Install Modpack</h1>
-								<p>Choose an installation source to get started.</p>
-							</div>
-
-							<div class={styles["modpack-import-container"]}>
-								<div class={styles["modpack-import-card"]} onClick={handleLocalImport}>
-									<div class={styles["card-icon"]}>
-										<CubeIcon />
-									</div>
-									<div class={styles["card-content"]}>
-										<div class={styles.title}>Local File</div>
-										<div class={styles.description}>Upload .zip or .mrpack</div>
-									</div>
-								</div>
-								<div
-									class={styles["modpack-import-card"]}
-									onClick={() => {
-										resources.setType("modpack");
-										activeRouter()?.navigate("/resources");
-									}}
-								>
-									<div class={styles["card-icon"]}>
-										<SearchIcon />
-									</div>
-									<div class={styles["card-content"]}>
-										<div class={styles.title}>Explore</div>
-										<div class={styles.description}>Browse Modrinth & CF</div>
-									</div>
-								</div>
-								<div
-									class={styles["modpack-import-card"]}
-									onClick={() => activeRouter()?.updateQuery("source", "url", true)}
-								>
-									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
-										<GlobeIcon />
-									</div>
-									<div class={styles["card-content"]}>
-										<div class={styles.title}>From URL</div>
-										<div class={styles.description}>Direct download link</div>
-									</div>
-								</div>
-							</div>
-
-							<div class={styles["import-footer"]}>
-								<button
-									class={styles["switch-mode-button"]}
-									onClick={() => activeRouter()?.updateQuery("mode", "standard", true)}
-								>
-									Switch to Standard Instance
-								</button>
-							</div>
-						</Show>
-
-						<Show when={showUrlInput()}>
-							<div class={styles["url-input-container"]}>
-								<div class={styles["url-input-header"]}>
-									<div class={`${styles["card-icon"]} ${styles["is-stroke"]}`}>
-										<GlobeIcon />
-									</div>
-									<h3>Enter Download Link</h3>
-									<p>Paste a CurseForge, Modrinth, or direct ZIP/MRPACK link.</p>
-								</div>
-								<div class={styles["url-input-row"]}>
-									<input
-										type="text"
-										placeholder="https://example.com/pack.zip"
-										value={urlInputValue()}
-										onInput={(e) => setUrlInputValue(e.currentTarget.value)}
-										onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
-										autofocus
-									/>
-									<button
-										class={styles["import-button"]}
-										onClick={handleUrlSubmit}
-										disabled={!urlInputValue()}
-									>
-										Continue
-									</button>
-								</div>
-								<button class={styles["cancel-link"]} onClick={() => activeRouter()?.removeQuery("source")}>
-									Go Back
-								</button>
-							</div>
-						</Show>
-					</div>
+					<InstallContextBanner
+						title={props.projectName || source.modpackInfo()?.name || "Analyzing modpack details..."}
+						label={effectiveResourceType() || (isModpackMode() ? "Modpack" : "Package")}
+						iconUrl={props.projectIcon || source.modpackInfo()?.iconUrl}
+						minecraftVersion={source.modpackInfo()?.minecraftVersion || props.initialVersion}
+						modloader={source.modpackInfo()?.modloader || props.initialModloader}
+						analyzing={!source.modpackInfo() && !props.projectName}
+						backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"}
+						onBack={() => (effectiveProjectId() ? activeRouter()?.backwards() : source.resetSource())}
+					/>
 				</Show>
 
-				{/* Loading / Fetching State (Initial) */}
-				{/* We only show the full-page fetching overlay if we don't have a project name to show the form for yet */}
-				<Show when={shouldShowOverlay()}>
-					<div class={styles["fetching-metadata-container"]}>
-						<div class={styles["fetching-overlay"]}>
-							<div class={styles.spinner} />
-							<p>
-								{projectVersions.loading ? "Loading available versions..." : "Fetching modpack details..."}
-							</p>
-							<Show when={!projectVersions.loading}>
-								<span class={styles["fetching-subtext"]}>
-									This usually takes a few seconds as we verify the pack manifest.
-								</span>
-							</Show>
-						</div>
-					</div>
-				</Show>
-
-				{/* Configuration Form */}
-				{/* We show the form as soon as we have some basic context, or if we are not in modpack mode. */}
-				<Show
-					when={
-						shouldShowForm() && (!isModpackMode() || modpackUrl() || modpackPath() || props.projectId)
+				{/* Loading overlay */}
+				<FetchingOverlay
+					isVisible={isFetchingMetadata()}
+					title={
+						projectVersions.loading ? "Loading available versions..." : "Fetching modpack details..."
 					}
-				>
+					message={
+						projectVersions.loading
+							? undefined
+							: "This usually takes a few seconds as we verify the pack manifest."
+					}
+				/>
+
+				{/* The actual install form */}
+				<Show when={showForm()}>
 					<InstallForm
 						isModpack={isModpackMode()}
-						isLocalImport={!!modpackPath()}
-						modpackInfo={modpackInfo()}
+						isLocalImport={!!source.modpackPath()}
+						modpackInfo={source.modpackInfo()}
 						modpackVersions={projectVersions() ?? []}
 						selectedModpackVersionId={selectedModpackVersionId()}
 						onModpackVersionChange={handleModpackVersionChange}
-						supportedMcVersions={supportedMcVersions()}
-						supportedModloaders={supportedModloaders()}
+						supportedMcVersions={capabilities.supportedMcVersions()}
+						supportedModloaders={capabilities.supportedModloaders()}
 						onStateChange={setFormState}
-						projectId={props.projectId}
-						platform={props.platform}
-						// Primary state source for persistence/handoff
+						projectId={effectiveProjectId()}
+						platform={effectivePlatform()}
 						initialData={(props as any).initialData}
-						// Fallback Mapping (Used for initial route parameters or metadata)
-						initialName={props.initialName || modpackInfo()?.name || props.projectName}
-						initialAuthor={modpackInfo()?.author || props.projectAuthor || undefined}
-						initialIcon={props.initialIcon || modpackInfo()?.iconUrl || props.projectIcon || undefined}
-						originalIcon={originalIcon()}
-						initialVersion={props.initialVersion || modpackInfo()?.minecraftVersion}
-						initialModloader={props.initialModloader || modpackInfo()?.modloader}
+						initialName={props.initialName || source.modpackInfo()?.name || props.projectName}
+						initialAuthor={source.modpackInfo()?.author || props.projectAuthor || undefined}
+						initialIcon={
+							props.initialIcon || source.modpackInfo()?.iconUrl || props.projectIcon || undefined
+						}
+						originalIcon={source.originalIcon()}
+						initialVersion={props.initialVersion || source.modpackInfo()?.minecraftVersion}
+						initialModloader={props.initialModloader || source.modpackInfo()?.modloader}
 						initialModloaderVersion={
-							modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined
+							source.modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined
 						}
 						initialIncludeSnapshots={props.initialIncludeSnapshots}
 						initialMinMemory={props.initialMinMemory}
 						initialMaxMemory={props.initialMaxMemory}
 						initialJvmArgs={props.initialJvmArgs}
-						initialResW={props.initialResW}
-						initialResH={props.initialResH}
-						onInstall={handleInstall}
+						onInstall={install.handleInstall}
 						onCancel={() => {
-							if (isModpackMode() && (modpackUrl() || modpackPath())) {
-								batch(() => {
-									setModpackUrl("");
-									setModpackPath("");
-									setModpackInfo(undefined);
-								});
-							} else if (props.close) props.close();
+							if (isModpackMode() && (source.modpackUrl() || source.modpackPath())) source.resetSource();
+							else if (props.close) props.close();
 							else activeRouter()?.navigate(props.projectName ? "/resources" : "/home");
 						}}
-						isInstalling={isInstalling()}
-						isFetchingMetadata={isFetchingMetadata() || projectVersions.loading}
+						isInstalling={install.isInstalling()}
+						isFetchingMetadata={isFetchingMetadata()}
 					/>
 				</Show>
 			</div>

@@ -1,3 +1,4 @@
+import BackArrow from "@assets/back-arrow.svg";
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
@@ -11,14 +12,6 @@ import {
 } from "@ui/combobox/combobox";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
-import {
-	NumberField,
-	NumberFieldDecrementTrigger,
-	NumberFieldGroup,
-	NumberFieldIncrementTrigger,
-	NumberFieldInput,
-	NumberFieldLabel,
-} from "@ui/number-field/number-field";
 import { Separator } from "@ui/separator/separator";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
@@ -53,6 +46,7 @@ import {
 	Show,
 } from "solid-js";
 import { createStore } from "solid-js/store";
+import { calculateRecommendedMemory } from "../config/memory-defaults";
 import styles from "../install-page.module.css";
 
 export interface InstallFormProps {
@@ -70,8 +64,6 @@ export interface InstallFormProps {
 	initialMaxMemory?: number;
 	initialIncludeSnapshots?: boolean;
 	initialJvmArgs?: string;
-	initialResW?: string;
-	initialResH?: string;
 
 	isModpack?: any;
 	isLocalImport?: boolean;
@@ -101,7 +93,7 @@ interface DirtyState {
 	icon?: boolean;
 	memory?: boolean;
 	jvmArgs?: boolean;
-	res?: boolean;
+	hooks?: boolean;
 }
 
 /**
@@ -147,8 +139,6 @@ export function InstallForm(props: InstallFormProps) {
 			maxMemory: memory()[1],
 			includeSnapshots: includeSnapshots(),
 			javaArgs: jvmArgs(),
-			width: parseInt(resW()) || 854,
-			height: parseInt(resH()) || 480,
 			_dirty: { ...dirty },
 		} as any);
 	});
@@ -179,14 +169,13 @@ export function InstallForm(props: InstallFormProps) {
 	const [jvmArgs, setJvmArgs] = createSignal(
 		props.initialData?.javaArgs || props.initialJvmArgs || "",
 	);
-	const [resW, setResW] = createSignal(
-		String(props.initialData?.gameWidth || props.initialResW || "854"),
-	);
-	const [resH, setResH] = createSignal(
-		String(props.initialData?.gameHeight || props.initialResH || "480"),
-	);
 
-	// --- Internal UI Toggles ---
+	// --- Advanced Section ---
+	const [showAdvanced, setShowAdvanced] = createSignal(false);
+	const [useGlobalHooks, setUseGlobalHooks] = createSignal(true);
+	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialData?.preLaunchHook || "");
+	const [wrapperCommand, setWrapperCommand] = createSignal(props.initialData?.wrapperCommand || "");
+	const [postExitHook, setPostExitHook] = createSignal(props.initialData?.postExitHook || "");
 
 	// --- Data Sources ---
 	const [pistonMetadata] = createResource<PistonMetadata>(getMinecraftVersions);
@@ -220,7 +209,7 @@ export function InstallForm(props: InstallFormProps) {
 	const isLoaderDirty = () => !!dirty.loader;
 	const isLoaderVerDirty = () => !!dirty.loaderVer;
 	const isJvmArgsDirty = () => !!dirty.jvmArgs;
-	const isResDirty = () => !!dirty.res;
+	const isHooksDirty = () => !!dirty.hooks;
 	const isMemoryDirty = () => !!dirty.memory;
 
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
@@ -277,8 +266,12 @@ export function InstallForm(props: InstallFormProps) {
 				if (d.iconPath && !isIconDirty()) setIcon(d.iconPath);
 				if (d.maxMemory && !isMemoryDirty()) setMemory([d.minMemory || 2048, d.maxMemory]);
 				if (d.javaArgs !== undefined && !isJvmArgsDirty()) setJvmArgs(d.javaArgs ?? "");
-				if (d.gameWidth && !isResDirty()) setResW(String(d.gameWidth));
-				if (d.gameHeight && !isResDirty()) setResH(String(d.gameHeight));
+				if (!isHooksDirty()) {
+					if (d.useGlobalHooks !== undefined) setUseGlobalHooks(d.useGlobalHooks);
+					if (d.preLaunchHook !== undefined) setPreLaunchHook(d.preLaunchHook || "");
+					if (d.wrapperCommand !== undefined) setWrapperCommand(d.wrapperCommand || "");
+					if (d.postExitHook !== undefined) setPostExitHook(d.postExitHook || "");
+				}
 			}
 
 			if (props.initialName !== undefined && !isNameDirty() && !d?.name) setName(props.initialName);
@@ -296,8 +289,6 @@ export function InstallForm(props: InstallFormProps) {
 				setIncludeSnapshots(props.initialIncludeSnapshots);
 			if (props.initialJvmArgs !== undefined && !isJvmArgsDirty() && !d?.javaArgs)
 				setJvmArgs(props.initialJvmArgs);
-			if (props.initialResW && !isResDirty() && !d?.gameWidth) setResW(props.initialResW);
-			if (props.initialResH && !isResDirty() && !d?.gameHeight) setResH(props.initialResH);
 		});
 	});
 
@@ -313,7 +304,10 @@ export function InstallForm(props: InstallFormProps) {
 				if (info.minecraftVersion && !isVersionDirty()) setMcVersion(info.minecraftVersion);
 				if (info.modloader && !isLoaderDirty()) setLoader(info.modloader.toLowerCase());
 				if (info.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(info.modloaderVersion);
-				if (info.recommendedRamMb && !isMemoryDirty()) setMemory([2048, info.recommendedRamMb]);
+				if (!isMemoryDirty()) {
+					const rec = calculateRecommendedMemory(totalRam(), info.modCount ?? 0, info.recommendedRamMb);
+					setMemory([rec.min, rec.max]);
+				}
 			});
 		}
 	});
@@ -508,15 +502,16 @@ export function InstallForm(props: InstallFormProps) {
 			minMemory: memory()[0],
 			maxMemory: memory()[1],
 			javaArgs: jvmArgs() || null,
-			gameWidth: parseInt(resW()) || 854,
-			gameHeight: parseInt(resH()) || 480,
 			// Linking data
 			useGlobalResolution: true,
 			useGlobalMemory: true,
 			useGlobalJavaArgs: true,
 			useGlobalJavaPath: true,
-			useGlobalHooks: true,
+			useGlobalHooks: useGlobalHooks(),
 			useGlobalEnvironmentVariables: true,
+			preLaunchHook: useGlobalHooks() ? null : preLaunchHook() || null,
+			wrapperCommand: useGlobalHooks() ? null : wrapperCommand() || null,
+			postExitHook: useGlobalHooks() ? null : postExitHook() || null,
 			modpackId: props.projectId || props.modpackInfo?.modpackId || null,
 			modpackPlatform: props.platform || props.modpackInfo?.modpackPlatform || null,
 			modpackVersionId: props.selectedModpackVersionId || props.modpackInfo?.modpackVersionId || null,
@@ -533,175 +528,149 @@ export function InstallForm(props: InstallFormProps) {
 				[styles["install-form--fetching"]]: props.isFetchingMetadata,
 			}}
 		>
-			<div class={styles["install-form__sections"]}>
-				{/* LEFT COLUMN: Identity & Game Settings */}
-				<div class={styles["install-form__main"]}>
-					{/* IDENTITY SECTION */}
-					<div class={styles["form-section"]}>
-						<div class={styles["form-section-title"]}>Instance Identity</div>
-						<div class={styles["identity-row"]}>
-							<IconPicker
-								value={icon()}
-								onSelect={(newIcon) => {
-									setIcon(newIcon);
-									setDirty("icon", true);
-								}}
-								modpackIcon={normalizedIsModpack() || props.projectId ? props.originalIcon : undefined}
-								isSuggestedSelected={!!props.originalIcon && icon() === props.originalIcon}
-								uploadedIcons={uploadedIcons()}
-								showHint={!isIconDirty()}
-								triggerProps={{
-									class: styles["form-icon-trigger"],
-								}}
-							/>
-							<div class={styles["name-field"]}>
-								<TextFieldRoot>
-									<TextFieldLabel>Instance Name</TextFieldLabel>
-									<TextFieldInput
-										value={name()}
-										onInput={(e) => {
-											setName((e.currentTarget as HTMLInputElement).value);
-											setDirty("name", true);
-										}}
-										placeholder="My Instance"
-									/>
-								</TextFieldRoot>
-							</div>
-						</div>
-					</div>
-
-					{/* MODPACK AUTHOR INFO (Moved here) */}
-					<Show when={normalizedIsModpack() && props.modpackInfo}>
-						<div class={`${styles["form-section"]} ${styles["info-section"]}`}>
-							<div class={styles["info-block-grid"]}>
-								<div class={styles["info-block"]}>
-									<span class={styles["info-label"]}>Author</span>
-									<span class={styles["info-value"]}>
-										{props.modpackInfo?.author || props.initialAuthor || "Unknown"}
-										<Show when={props.modpackInfo?.modpackId || props.projectId}>
-											<span class={styles["info-id"]}>
-												{" "}
-												({props.modpackInfo?.modpackId || props.projectId})
-											</span>
-										</Show>
-									</span>
-								</div>
-								<div class={styles["info-block"]}>
-									<span class={styles["info-label"]}>Pack Version</span>
-									<span class={styles["info-value"]}>{props.modpackInfo?.version || "1.0.0"}</span>
-								</div>
-							</div>
-							<Show when={props.modpackInfo?.description}>
-								<div class={styles["info-description"]}>{props.modpackInfo?.description}</div>
-							</Show>
-						</div>
-					</Show>
-
-					<Show
-						when={
-							normalizedIsModpack() &&
-							!props.isLocalImport &&
-							(props.projectId || (props.modpackVersions && props.modpackVersions.length > 0))
-						}
-					>
-						<div
-							class={`${styles["form-section"]} ${styles["modpack-context-section"]}`}
-							classList={{ [styles["is-fetching"]]: props.isFetchingMetadata }}
-						>
-							<div class={styles["form-section-title"]}>Modpack Configuration</div>
-
-							<Show
-								when={props.modpackVersions && props.modpackVersions.length > 0}
-								fallback={
-									<div class={styles["modpack-version-placeholder"]}>
-										{props.isFetchingMetadata
-											? "Fetching available versions..."
-											: "No other versions available for this platform."}
-									</div>
-								}
-							>
-								<div class={styles["modpack-version-picker"]}>
-									<div class={styles["field-label-manual"]}>Release Version</div>
-									<Combobox<any>
-										options={searchableModpackVersions()}
-										value={selectedModpackVersionOption()}
-										onChange={(version: any) => {
-											if (version?.id) {
-												props.onModpackVersionChange?.(version.id);
-											}
-										}}
-										optionValue={(v) => v.id}
-										optionLabel={(v) => {
-											const mcVersion = v.game_versions?.[0];
-											return mcVersion ? `${v.version_number} (MC ${mcVersion})` : v.version_number;
-										}}
-										optionTextValue={(v) => v.searchString}
-										placeholder={props.selectedModpackVersionId ? "Loading version..." : "Select version..."}
-										itemComponent={(p) => (
-											<ComboboxItem item={p.item}>
-												<div class={styles["version-item-content"]}>
-													<span class={styles["v-num"]}>{p.item.rawValue.version_number}</span>
-													<span class={styles["v-meta"]}>
-														{(p.item.rawValue.game_versions as string[]).join(", ")} -{" "}
-														{(p.item.rawValue.loaders as string[]).join(", ")}
-													</span>
-												</div>
-											</ComboboxItem>
-										)}
-									>
-										<ComboboxControl aria-label="Modpack Version Selection">
-											<ComboboxInput as="input" />
-											<ComboboxTrigger />
-										</ComboboxControl>
-										<ComboboxContent />
-									</Combobox>
-								</div>
-							</Show>
-
-							<div class={styles["modpack-meta-grid"]}>
-								<div class={styles["meta-item"]}>
-									<span class={styles["label"]}>Minecraft</span>
-									<span class={styles["value"]}>{mcVersion() || "Loading..."}</span>
-								</div>
-								<div class={styles["meta-item"]}>
-									<span class={styles["label"]}>
-										Modloader
-										<HelpTrigger topic="MODLOADER_EXPLAINED" />
-									</span>
-									<span class={styles["value"]}>
-										{MODLOADER_DISPLAY_NAMES[loader()] || loader()} {loaderVer()}
-									</span>
-								</div>
-							</div>
-						</div>
-					</Show>
-
-					{/* MANUAL GAME SETTINGS (Visible for non-modpacks OR specialized resources) */}
-					<Show when={!normalizedIsModpack()}>
+			<div class={styles["install-scroll-area"]}>
+				<div
+					class={styles["install-grid"]}
+					classList={{
+						[styles["install-grid--with-side"]]: normalizedIsModpack() && !!props.modpackInfo,
+						[styles["install-grid--single"]]: !(normalizedIsModpack() && !!props.modpackInfo),
+					}}
+				>
+					{/* Main Column */}
+					<div class={styles["install-main-column"]}>
+						{/* IDENTITY SECTION */}
 						<div class={styles["form-section"]}>
-							<div class={styles["form-section-title"]}>Game Options</div>
-
-							<div class={styles["form-row"]}>
-								<div class={styles["flex-grow"]}>
-									<div class={styles["field-label-manual"]}>
-										Modloader
-										<HelpTrigger topic="MODLOADER_EXPLAINED" />
-									</div>
-									<ModloaderSwitcher
-										options={modloaderSwitcherOptions()}
-										value={loader()}
-										onChange={(nextLoader) => {
-											batch(() => {
-												setLoader(nextLoader);
-												setLoaderVer("");
-												setDirty("loader", true);
-											});
-										}}
-									/>
+							<div class={styles["form-section-title"]}>Instance Identity</div>
+							<div class={styles["identity-row"]}>
+								<IconPicker
+									value={icon()}
+									onSelect={(newIcon) => {
+										setIcon(newIcon);
+										setDirty("icon", true);
+									}}
+									modpackIcon={normalizedIsModpack() || props.projectId ? props.originalIcon : undefined}
+									isSuggestedSelected={!!props.originalIcon && icon() === props.originalIcon}
+									uploadedIcons={uploadedIcons()}
+									showHint={!isIconDirty()}
+									triggerProps={{
+										class: styles["form-icon-trigger"],
+									}}
+								/>
+								<div class={styles["name-field"]}>
+									<TextFieldRoot>
+										<TextFieldLabel>Instance Name</TextFieldLabel>
+										<TextFieldInput
+											value={name()}
+											onInput={(e) => {
+												setName((e.currentTarget as HTMLInputElement).value);
+												setDirty("name", true);
+											}}
+											placeholder="My Instance"
+										/>
+									</TextFieldRoot>
 								</div>
 							</div>
+						</div>
 
-							<div class={styles["standard-settings-grid"]}>
+						{/* MODPACK VERSION PICKER */}
+						<Show
+							when={
+								normalizedIsModpack() &&
+								!props.isLocalImport &&
+								(props.projectId || (props.modpackVersions && props.modpackVersions.length > 0))
+							}
+						>
+							<div
+								class={`${styles["form-section"]} ${styles["modpack-context-section"]}`}
+								classList={{ [styles["is-fetching"]]: props.isFetchingMetadata }}
+							>
+								<div class={styles["form-section-title"]}>Modpack Configuration</div>
+								<Show
+									when={props.modpackVersions && props.modpackVersions.length > 0}
+									fallback={
+										<div class={styles["modpack-version-placeholder"]}>
+											{props.isFetchingMetadata
+												? "Fetching available versions..."
+												: "No other versions available for this platform."}
+										</div>
+									}
+								>
+									<div class={styles["modpack-version-picker"]}>
+										<div class={styles["field-label-manual"]}>Release Version</div>
+										<Combobox<any>
+											options={searchableModpackVersions()}
+											value={selectedModpackVersionOption()}
+											onChange={(version: any) => {
+												if (version?.id) props.onModpackVersionChange?.(version.id);
+											}}
+											optionValue={(v) => v.id}
+											optionLabel={(v) => {
+												const mc = v.game_versions?.[0];
+												return mc ? `${v.version_number} (MC ${mc})` : v.version_number;
+											}}
+											optionTextValue={(v) => v.searchString}
+											placeholder={props.selectedModpackVersionId ? "Loading version..." : "Select version..."}
+											itemComponent={(p) => (
+												<ComboboxItem item={p.item}>
+													<div class={styles["version-item-content"]}>
+														<span class={styles["v-num"]}>{p.item.rawValue.version_number}</span>
+														<span class={styles["v-meta"]}>
+															{(p.item.rawValue.game_versions as string[]).join(", ")} -{" "}
+															{(p.item.rawValue.loaders as string[]).join(", ")}
+														</span>
+													</div>
+												</ComboboxItem>
+											)}
+										>
+											<ComboboxControl aria-label="Modpack Version Selection">
+												<ComboboxInput as="input" />
+												<ComboboxTrigger />
+											</ComboboxControl>
+											<ComboboxContent />
+										</Combobox>
+									</div>
+								</Show>
+								<div class={styles["modpack-meta-grid"]}>
+									<div class={styles["meta-item"]}>
+										<span class={styles["label"]}>Minecraft</span>
+										<span class={styles["value"]}>{mcVersion() || "Loading..."}</span>
+									</div>
+									<div class={styles["meta-item"]}>
+										<span class={styles["label"]}>
+											Modloader
+											<HelpTrigger topic="MODLOADER_EXPLAINED" />
+										</span>
+										<span class={styles["value"]}>
+											{MODLOADER_DISPLAY_NAMES[loader()] || loader()} {loaderVer()}
+										</span>
+									</div>
+								</div>
+							</div>
+						</Show>
+
+						{/* GAME OPTIONS (Standard / non-modpack installs) */}
+						<Show when={!normalizedIsModpack()}>
+							<div class={styles["form-section"]}>
+								<div class={styles["form-section-title"]}>Game Options</div>
+								<div class={styles["form-row"]}>
+									<div class={styles["flex-grow"]}>
+										<div class={styles["field-label-manual"]}>
+											Modloader
+											<HelpTrigger topic="MODLOADER_EXPLAINED" />
+										</div>
+										<ModloaderSwitcher
+											options={modloaderSwitcherOptions()}
+											value={loader()}
+											onChange={(nextLoader) => {
+												batch(() => {
+													setLoader(nextLoader);
+													setLoaderVer("");
+													setDirty("loader", true);
+												});
+											}}
+										/>
+									</div>
+								</div>
 								<div class={styles["form-row"]}>
 									<div class={styles["flex-grow"]}>
 										<div class={styles["field-label-manual"]}>
@@ -740,11 +709,76 @@ export function InstallForm(props: InstallFormProps) {
 										</Switch>
 									</div>
 								</div>
+							</div>
+						</Show>
 
-								<div class={styles["form-row"]}>
-									<Show when={loader() !== "vanilla"}>
-										<div class={styles["flex-grow"]}>
-											<div class={styles["field-label-manual"]}>Loader Version</div>
+						<div>
+							{/* ADVANCED SETTINGS (collapsible) */}
+							<button
+								class={styles["advanced-toggle"]}
+								onClick={() => setShowAdvanced(!showAdvanced())}
+								type="button"
+							>
+								<BackArrow
+									class={styles["arrow"]}
+									style={{ transform: showAdvanced() ? "rotate(90deg)" : "rotate(-90deg)" }}
+								/>
+								Advanced Settings
+							</button>
+
+							<Show when={showAdvanced()}>
+								<div class={styles["advanced-fields-box"]}>
+									{/* MEMORY ALLOCATION */}
+									<div class={styles["form-section"]}>
+										<div class={styles["form-section-title"]}>Memory Allocation</div>
+										<div class={styles["memory-setting"]}>
+											<div class={styles["memory-header"]}>
+												<div class={styles["memory-labels"]}>
+													<span class={styles["main-label"]}>
+														Allocation
+														<HelpTrigger topic="MEMORY_ALLOCATION" />
+													</span>
+													<span class={styles["sub-label"]}>Min and Max memory in {memoryUnit()}</span>
+												</div>
+												<div class={styles["memory-range-display"]} onClick={toggleMemoryUnit}>
+													{formatMemory(memory()[0])} {memoryUnit()} — {formatMemory(memory()[1])} {memoryUnit()}
+												</div>
+											</div>
+											<Slider
+												value={memory()}
+												onChange={(val) => {
+													setMemory(val);
+													setDirty("memory", true);
+												}}
+												minValue={512}
+												maxValue={totalRam()}
+												step={512}
+											>
+												<SliderTrack>
+													<SliderFill />
+													<SliderThumb />
+													<SliderThumb />
+												</SliderTrack>
+											</Slider>
+											<div class={styles["memory-footer"]}>
+												<Show when={props.modpackInfo?.recommendedRamMb}>
+													<span
+														class={styles["rec-hint"]}
+														classList={{
+															[styles["is-low"]]: memory()[1] < (props.modpackInfo?.recommendedRamMb ?? 0),
+														}}
+													>
+														Recommended: {formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)} {memoryUnit()}
+													</span>
+												</Show>
+											</div>
+										</div>
+									</div>
+
+									{/* LOADER VERSION (standard installs only) */}
+									<Show when={!normalizedIsModpack() && loader() !== "vanilla"}>
+										<div class={styles["form-section"]}>
+											<div class={styles["form-section-title"]}>Loader Version</div>
 											<Combobox<string>
 												options={availableLoaderVers().map((v) => v.version)}
 												value={loaderVer()}
@@ -756,7 +790,7 @@ export function InstallForm(props: InstallFormProps) {
 												}}
 												placeholder="Latest"
 												itemComponent={(p) => {
-													const versionInfo = availableLoaderVers().find((v) => v.version === p.item.rawValue);
+													const vi = availableLoaderVers().find((v) => v.version === p.item.rawValue);
 													return (
 														<ComboboxItem item={p.item}>
 															<div
@@ -769,7 +803,7 @@ export function InstallForm(props: InstallFormProps) {
 																}}
 															>
 																<span>{p.item.rawValue}</span>
-																<Show when={!versionInfo?.stable}>
+																<Show when={!vi?.stable}>
 																	<span
 																		style={{
 																			"font-size": "10px",
@@ -795,108 +829,126 @@ export function InstallForm(props: InstallFormProps) {
 											</Combobox>
 										</div>
 									</Show>
+
+									{/* LIFE-CYCLE HOOKS */}
+									<div class={styles["form-section"]}>
+										<div class={styles["form-section-title"]}>Life-cycle Hooks</div>
+										<div
+											style={{
+												display: "flex",
+												"align-items": "center",
+												"justify-content": "space-between",
+												"margin-bottom": "8px",
+											}}
+										>
+											<span style={{ "font-size": "12px", color: "var(--text-secondary)" }}>
+												Use global hook settings
+											</span>
+											<Switch
+												checked={useGlobalHooks()}
+												onCheckedChange={(val: boolean) => {
+													setUseGlobalHooks(val);
+													setDirty("hooks", true);
+												}}
+											>
+												<SwitchControl>
+													<SwitchThumb />
+												</SwitchControl>
+											</Switch>
+										</div>
+										<Show
+											when={!useGlobalHooks()}
+											fallback={
+												<div
+													style={{
+														padding: "10px",
+														"border-radius": "8px",
+														border: "1px dashed var(--border-subtle)",
+														opacity: 0.6,
+														"font-size": "12px",
+													}}
+												>
+													Using hooks from global settings.
+												</div>
+											}
+										>
+											<div style={{ display: "flex", "flex-direction": "column", gap: "8px" }}>
+												<TextFieldRoot>
+													<TextFieldLabel>Pre-launch Hook</TextFieldLabel>
+													<TextFieldInput
+														value={preLaunchHook()}
+														onInput={(e: any) => {
+															setPreLaunchHook(e.currentTarget.value);
+															setDirty("hooks", true);
+														}}
+														placeholder="e.g. C:\scripts\pre-launch.bat"
+														style="font-family: var(--font-mono); font-size: 12px;"
+													/>
+												</TextFieldRoot>
+												<TextFieldRoot>
+													<TextFieldLabel>Wrapper Command</TextFieldLabel>
+													<TextFieldInput
+														value={wrapperCommand()}
+														onInput={(e: any) => {
+															setWrapperCommand(e.currentTarget.value);
+															setDirty("hooks", true);
+														}}
+														placeholder="e.g. mangohud --dlsym"
+														style="font-family: var(--font-mono); font-size: 12px;"
+													/>
+												</TextFieldRoot>
+												<TextFieldRoot>
+													<TextFieldLabel>Post-exit Hook</TextFieldLabel>
+													<TextFieldInput
+														value={postExitHook()}
+														onInput={(e: any) => {
+															setPostExitHook(e.currentTarget.value);
+															setDirty("hooks", true);
+														}}
+														placeholder="e.g. powershell -File cleanup.ps1"
+														style="font-family: var(--font-mono); font-size: 12px;"
+													/>
+												</TextFieldRoot>
+											</div>
+										</Show>
+									</div>
 								</div>
+							</Show>
+						</div>
+					</div>
+
+					{/* Side Column (Modpack Info) */}
+					<Show when={normalizedIsModpack() && props.modpackInfo}>
+						<div class={styles["install-side-column"]}>
+							<div class={`${styles["form-section"]} ${styles["info-section"]}`}>
+								<div class={styles["info-block-grid"]}>
+									<div class={styles["info-block"]}>
+										<span class={styles["info-label"]}>Author</span>
+										<span class={styles["info-value"]}>
+											{props.modpackInfo?.author || props.initialAuthor || "Unknown"}
+											<Show when={props.modpackInfo?.modpackId || props.projectId}>
+												<span class={styles["info-id"]}>
+													{" "}
+													({props.modpackInfo?.modpackId || props.projectId})
+												</span>
+											</Show>
+										</span>
+									</div>
+									<div class={styles["info-block"]}>
+										<span class={styles["info-label"]}>Pack Version</span>
+										<span class={styles["info-value"]}>{props.modpackInfo?.version || "1.0.0"}</span>
+									</div>
+								</div>
+								<Show when={props.modpackInfo?.description}>
+									<div class={styles["info-description"]}>{props.modpackInfo?.description}</div>
+								</Show>
 							</div>
 						</div>
 					</Show>
 				</div>
-
-				{/* RIGHT COLUMN: Info & Runtime */}
-				<div class={styles["install-form__side"]}>
-					<div class={styles["form-section"]}>
-						<div class={styles["form-section-title"]}>Memory & Java</div>
-
-						{/* RAM RANGE SLIDER */}
-						<div class={styles["memory-setting"]}>
-							<div class={styles["memory-header"]}>
-								<div class={styles["memory-labels"]}>
-									<span class={styles["main-label"]}>
-										Allocation
-										<HelpTrigger topic="MEMORY_ALLOCATION" />
-									</span>
-									<span class={styles["sub-label"]}>Min and Max memory in {memoryUnit()}</span>
-								</div>
-								<div class={styles["memory-range-display"]} onClick={toggleMemoryUnit}>
-									{formatMemory(memory()[0])}
-									{memoryUnit()} — {formatMemory(memory()[1])}
-									{memoryUnit()}
-								</div>
-							</div>
-							<Slider
-								value={memory()}
-								onChange={(val) => {
-									setMemory(val);
-									setDirty("memory", true);
-								}}
-								minValue={512}
-								maxValue={totalRam()}
-								step={512}
-							>
-								<SliderTrack>
-									<SliderFill />
-									<SliderThumb />
-									<SliderThumb />
-								</SliderTrack>
-							</Slider>
-							<div class={styles["memory-footer"]}>
-								<Show when={props.modpackInfo?.recommendedRamMb}>
-									<span
-										class={styles["rec-hint"]}
-										classList={{
-											[styles["is-low"]]: memory()[1] < (props.modpackInfo?.recommendedRamMb ?? 0),
-										}}
-									>
-										Recommended: {formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)} {memoryUnit()}
-									</span>
-								</Show>
-							</div>
-						</div>
-					</div>
-
-					<div class={styles["form-section"]}>
-						<div class={styles["form-section-title"]}>Window & Display</div>
-						{/* RESOLUTION */}
-						<div class={styles["resolution-row"]}>
-							<NumberField
-								value={resW()}
-								onRawValueChange={(val) => {
-									if (!isNaN(val)) {
-										setResW(val.toString());
-										setDirty("res", true);
-									}
-								}}
-								minValue={0}
-							>
-								<NumberFieldLabel>Width</NumberFieldLabel>
-								<NumberFieldGroup>
-									<NumberFieldInput />
-									<NumberFieldIncrementTrigger />
-									<NumberFieldDecrementTrigger />
-								</NumberFieldGroup>
-							</NumberField>
-							<NumberField
-								value={resH()}
-								onRawValueChange={(val) => {
-									if (!isNaN(val)) {
-										setResH(val.toString());
-										setDirty("res", true);
-									}
-								}}
-								minValue={0}
-							>
-								<NumberFieldLabel>Height</NumberFieldLabel>
-								<NumberFieldGroup>
-									<NumberFieldInput />
-									<NumberFieldIncrementTrigger />
-									<NumberFieldDecrementTrigger />
-								</NumberFieldGroup>
-							</NumberField>
-						</div>
-					</div>
-				</div>
 			</div>
 
-			{/* FOOTER ACTIONS - MOVED OUTSIDE SCROLL AREA */}
+			{/* FOOTER ACTIONS */}
 			<Separator />
 			<div class={styles["install-form__actions-container"]}>
 				<div class={styles["install-form__actions"]}>

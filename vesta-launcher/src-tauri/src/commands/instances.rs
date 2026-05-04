@@ -3,16 +3,26 @@ use crate::discord::DiscordManager;
 use crate::models::instance::{Instance, NewInstance};
 use crate::resources::ResourceWatcher;
 use crate::schema::instance::dsl::*;
+use crate::tasks::installers::external_import::ImportExternalInstanceTask;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::maintenance::{CloneInstanceTask, RepairInstanceTask, ResetInstanceTask};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
+use lazy_static::lazy_static;
 use rayon::prelude::*;
+use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::Mutex;
+use std::time::Instant;
 use std::time::UNIX_EPOCH;
 use tauri::{Manager, State};
+use walkdir::WalkDir;
+
+lazy_static! {
+    static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> = Mutex::new(HashMap::new());
+}
 
 #[derive(Debug, Clone, Copy)]
 enum LauncherActionOnLaunch {
@@ -83,6 +93,83 @@ fn apply_launcher_action_after_launch(
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
+}
+
+fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(), String> {
+    let has_modpack_link = inst.modpack_platform.is_some()
+        || inst.modpack_id.is_some()
+        || inst.modpack_version_id.is_some();
+    let game_path = std::path::Path::new(game_dir);
+    let has_manifest = game_path.join(".vesta").join("modpack_manifest.json").is_file();
+
+    if !(has_modpack_link || has_manifest) {
+        return Ok(());
+    }
+
+    let critical_dirs = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
+    let mut discovered_files = 0usize;
+    for dir_name in critical_dirs {
+        let dir = game_path.join(dir_name);
+        if !dir.exists() {
+            continue;
+        }
+        for entry in WalkDir::new(&dir)
+            .max_depth(3)
+            .into_iter()
+            .filter_map(Result::ok)
+        {
+            if entry.file_type().is_file() {
+                discovered_files += 1;
+                break;
+            }
+        }
+    }
+
+    log::info!(
+        "[launch_instance] modpack-resource-check instance={} linked={} manifest={} discovered_files={}",
+        inst.slug(),
+        has_modpack_link,
+        has_manifest,
+        discovered_files
+    );
+
+    if discovered_files == 0 {
+        // Fallback: if resources are already indexed in DB for this instance,
+        // do not hard-block launch due to path-layout drift.
+        if inst.id > 0 {
+            use crate::schema::installed_resource::dsl as ir_dsl;
+            if let Ok(mut conn) = get_vesta_conn() {
+                let indexed_count = ir_dsl::installed_resource
+                    .filter(ir_dsl::instance_id.eq(inst.id))
+                    .filter(
+                        ir_dsl::resource_type
+                            .eq("mod")
+                            .or(ir_dsl::resource_type.eq("resourcepack"))
+                            .or(ir_dsl::resource_type.eq("shader"))
+                            .or(ir_dsl::resource_type.eq("datapack")),
+                    )
+                    .count()
+                    .get_result::<i64>(&mut conn)
+                    .unwrap_or(0);
+                if indexed_count > 0 {
+                    log::warn!(
+                        "[launch_instance] modpack-resource-check bypassed: no files found at {} but {} indexed resources exist in DB for instance={}",
+                        game_dir,
+                        indexed_count,
+                        inst.slug()
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
+        return Err(
+            "Modpack-linked instance has no modpack-managed resource files (mods/resourcepacks/shaderpacks/datapacks). Run Repair to restore missing files."
+                .to_string(),
+        );
+    }
+
+    Ok(())
 }
 
 /// Update playtime for an instance in the database
@@ -244,6 +331,48 @@ pub async fn install_instance(
     instance_data: Instance,
     dry_run: Option<bool>,
 ) -> Result<(), String> {
+    // If this instance originated from launcher import, reinstall should reuse
+    // the same import migration path instead of normal modpack install flow.
+    if instance_data.last_operation.as_deref() == Some("external-import") {
+        let source_game_directory = instance_data
+            .import_source_game_directory
+            .clone()
+            .ok_or_else(|| {
+                "Cannot reinstall imported instance: missing source game directory".to_string()
+            })?;
+        if !std::path::Path::new(&source_game_directory).exists() {
+            return Err(format!(
+                "Cannot reinstall imported instance: source directory does not exist ({})",
+                source_game_directory
+            ));
+        }
+
+        log::info!(
+            "[install_instance] rerouting to external import reinstall for instance_id={} source={}",
+            instance_data.id,
+            source_game_directory
+        );
+        if instance_data.id > 0 {
+            let _ = crate::commands::instances::update_instance_operation(
+                &app_handle,
+                instance_data.id,
+                "external-import",
+            );
+            let _ = crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_data.id,
+                "installing",
+            );
+        }
+        let task = ImportExternalInstanceTask::new(
+            instance_data.id,
+            instance_data.name.clone(),
+            source_game_directory,
+        );
+        task_manager.submit(Box::new(task)).await?;
+        return Ok(());
+    }
+
     // Check if we are in guest mode
     let active_account = match crate::auth::get_active_account() {
         Ok(a) => a,
@@ -423,6 +552,7 @@ pub async fn create_instance(
 
     // Make a mutable copy so we can set defaults (game_directory) before inserting
     let mut inst = instance_data;
+    let skip_initial_watch = inst.installation_status.as_deref() == Some("skip-initial-watch");
 
     // Get app config to check for custom instances directory
     let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
@@ -571,7 +701,10 @@ pub async fn create_instance(
         modpack_platform: inst.modpack_platform,
         modpack_icon_url: inst.modpack_icon_url,
         icon_data: inst.icon_data,
-        last_operation: None,
+        last_operation: inst.last_operation,
+        import_source_game_directory: inst.import_source_game_directory,
+        import_launcher_kind: inst.import_launcher_kind,
+        import_instance_path: inst.import_instance_path,
         use_global_resolution: inst.use_global_resolution,
         use_global_memory: inst.use_global_memory,
         use_global_java_args: inst.use_global_java_args,
@@ -618,17 +751,25 @@ pub async fn create_instance(
         "installing",
     );
 
-    // Start watching the new instance's folders for mods/packs
-    log::info!(
-        "[create_instance] Initializing resource watcher for instance: {} ({})",
-        slug,
-        inserted_id
-    );
-    if let Err(e) = resource_watcher
-        .watch_instance(slug.clone(), inserted_id, gd)
-        .await
-    {
-        log::error!("[create_instance] Failed to start resource watcher: {}", e);
+    // Start watching the new instance's folders for mods/packs unless caller requested deferred watch.
+    if skip_initial_watch {
+        log::info!(
+            "[create_instance] Skipping initial resource watcher for instance: {} ({})",
+            slug,
+            inserted_id
+        );
+    } else {
+        log::info!(
+            "[create_instance] Initializing resource watcher for instance: {} ({})",
+            slug,
+            inserted_id
+        );
+        if let Err(e) = resource_watcher
+            .watch_instance(slug.clone(), inserted_id, gd)
+            .await
+        {
+            log::error!("[create_instance] Failed to start resource watcher: {}", e);
+        }
     }
 
     log::info!(
@@ -930,56 +1071,17 @@ pub async fn delete_instance(
     app_handle: tauri::AppHandle,
     instance_id: i32,
     task_manager: tauri::State<'_, TaskManager>,
-    resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
+    _resource_watcher: tauri::State<'_, crate::resources::watcher::ResourceWatcher>,
 ) -> Result<(), String> {
-    log::info!("Deleting instance ID: {}", instance_id);
-
-    // 0. Cancel any active tasks (install/download) for this instance
+    log::info!("[delete_instance] enqueue instance_id={}", instance_id);
     task_manager.cancel_instance_tasks(instance_id);
+    let task = crate::tasks::maintenance::DeleteInstanceTask::new(instance_id);
+    task_manager.submit(Box::new(task)).await?;
 
-    let mut conn =
-        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
-
-    // 1. Fetch instance to get slug and directory before deleting
-    let inst = instance
-        .find(instance_id)
-        .first::<Instance>(&mut conn)
-        .map_err(|e| format!("Instance not found: {}", e))?;
-
-    let slug_val = inst.slug();
-    let game_dir = inst.game_directory.clone();
-
-    // 2. Unwatch from resource watcher
-    if let Err(e) = resource_watcher.unwatch_instance(instance_id).await {
-        log::error!("Failed to unwatch instance {}: {}", instance_id, e);
-    }
-
-    // 3. Delete from database
-    diesel::delete(instance.find(instance_id))
-        .execute(&mut conn)
-        .map_err(|e| format!("Failed to delete instance from database: {}", e))?;
-
-    // 4. Clean up files on disk (optional but recommended since user asked)
-    if let Some(gd) = game_dir {
-        let gd_path = std::path::PathBuf::from(gd);
-        if gd_path.exists() {
-            log::info!("Removing instance directory: {:?}", gd_path);
-            if let Err(e) = std::fs::remove_dir_all(&gd_path) {
-                log::error!(
-                    "Failed to delete instance directory at {:?}: {}",
-                    gd_path,
-                    e
-                );
-            }
-        }
-    }
-
-    log::info!("Deleted instance ID: {} (slug: {})", instance_id, slug_val);
-
-    // Notify frontend
+    // Signal UI for optimistic removal immediately.
     use tauri::Emitter;
     let _ = app_handle.emit(
-        "core://instance-deleted",
+        "core://instance-delete-queued",
         serde_json::json!({ "id": instance_id }),
     );
     Ok(())
@@ -1103,7 +1205,29 @@ pub async fn launch_instance(
     };
 
     // Determine game directory
-    let game_dir = if instance_data.use_global_game_dir {
+    // Prefer persisted per-instance game_directory whenever it exists.
+    // This avoids false path recomputation when global directory settings change.
+    let game_dir = if let Some(stored) = instance_data.game_directory.clone() {
+        if !stored.is_empty() && std::path::Path::new(&stored).exists() {
+            stored
+        } else if instance_data.use_global_game_dir {
+            let instances_root = if let Some(ref dir) = app_config.default_game_dir {
+                if !dir.is_empty() && dir != "/" {
+                    std::path::PathBuf::from(dir)
+                } else {
+                    data_dir.join("instances")
+                }
+            } else {
+                data_dir.join("instances")
+            };
+            instances_root
+                .join(&instance_id)
+                .to_string_lossy()
+                .to_string()
+        } else {
+            stored
+        }
+    } else if instance_data.use_global_game_dir {
         let instances_root = if let Some(ref dir) = app_config.default_game_dir {
             if !dir.is_empty() && dir != "/" {
                 std::path::PathBuf::from(dir)
@@ -1118,14 +1242,14 @@ pub async fn launch_instance(
             .to_string_lossy()
             .to_string()
     } else {
-        instance_data.game_directory.clone().unwrap_or_else(|| {
-            data_dir
-                .join("instances")
-                .join(&instance_id)
-                .to_string_lossy()
-                .to_string()
-        })
+        data_dir
+            .join("instances")
+            .join(&instance_id)
+            .to_string_lossy()
+            .to_string()
     };
+
+    verify_modpack_resource_presence(&instance_data, &game_dir)?;
 
     // Resolve settings (Resolution, Memory, Java Args)
     let res_width = if instance_data.use_global_resolution {
@@ -1179,6 +1303,144 @@ pub async fn launch_instance(
         .modloader
         .as_ref()
         .and_then(|m| m.parse::<piston_lib::game::ModloaderType>().ok());
+
+    // Fast launch preflight: verify runtime artifacts before spawning JVM.
+    let verify_spec = piston_lib::game::installer::types::InstallSpec {
+        version_id: instance_data.minecraft_version.clone(),
+        modloader: modloader_type.clone(),
+        modloader_version: instance_data.modloader_version.clone(),
+        data_dir: spec_data_dir.clone(),
+        game_dir: std::path::PathBuf::from(&game_dir),
+        java_path: Some(std::path::PathBuf::from(&java_path_str)),
+        dry_run: false,
+        concurrency: 8,
+    };
+    let preflight_report = piston_lib::game::installer::verify_instance(&verify_spec)
+        .map_err(|e| format!("Launch preflight verification failed: {}", e))?;
+    log::info!(
+        "[launch_instance] verify-summary ready={} checked={} missing={} mismatch={}",
+        preflight_report.ready,
+        preflight_report.checked,
+        preflight_report.missing_count(),
+        preflight_report.mismatch_count()
+    );
+    if !preflight_report.ready {
+        for issue in &preflight_report.issues {
+            log::debug!(
+                "[launch_instance] verify-issue kind={:?} class={} path={} detail={}",
+                issue.kind,
+                issue.artifact_class,
+                issue.path,
+                issue.detail
+            );
+        }
+
+        let now = Instant::now();
+        let recently_attempted = {
+            let guard = LAUNCH_AUTO_REPAIR_GUARD
+                .lock()
+                .map_err(|_| "Failed to lock launch auto-repair guard".to_string())?;
+            guard
+                .get(&instance_id)
+                .map(|t| now.duration_since(*t) < std::time::Duration::from_secs(90))
+                .unwrap_or(false)
+        };
+        if recently_attempted {
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    instance_data.id,
+                    "installed",
+                );
+            }
+            return Err(format!(
+                "Launch blocked: runtime files are still missing/corrupt (missing={}, mismatched={}). Auto-repair was already attempted recently; run Repair to view detailed errors.",
+                preflight_report.missing_count(),
+                preflight_report.mismatch_count()
+            ));
+        }
+        {
+            let mut guard = LAUNCH_AUTO_REPAIR_GUARD
+                .lock()
+                .map_err(|_| "Failed to lock launch auto-repair guard".to_string())?;
+            guard.insert(instance_id.clone(), now);
+        }
+
+        log::info!(
+            "[launch_instance] runtime gaps detected, running one-shot auto-repair instance={}",
+            instance_id
+        );
+        if instance_data.id > 0 {
+            let _ = crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_data.id,
+                "launch-preflight-repair",
+            );
+        }
+        let silent_reporter: std::sync::Arc<
+            dyn piston_lib::game::installer::types::ProgressReporter,
+        > = std::sync::Arc::new(piston_lib::game::installer::types::SilentProgressReporter);
+        piston_lib::game::installer::install_instance(verify_spec, silent_reporter)
+            .await
+            .map_err(|e| {
+                if instance_data.id > 0 {
+                    let _ = crate::commands::instances::update_installation_status(
+                        &app_handle,
+                        instance_data.id,
+                        "installed",
+                    );
+                }
+                format!(
+                    "Launch auto-repair failed (missing={}, mismatched={}): {}",
+                    preflight_report.missing_count(),
+                    preflight_report.mismatch_count(),
+                    e
+                )
+            })?;
+        let post_repair = piston_lib::game::installer::verify_instance(
+            &piston_lib::game::installer::types::InstallSpec {
+                version_id: instance_data.minecraft_version.clone(),
+                modloader: modloader_type.clone(),
+                modloader_version: instance_data.modloader_version.clone(),
+                data_dir: spec_data_dir.clone(),
+                game_dir: std::path::PathBuf::from(&game_dir),
+                java_path: Some(std::path::PathBuf::from(&java_path_str)),
+                dry_run: false,
+                concurrency: 8,
+            },
+        )
+        .map_err(|e| {
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    instance_data.id,
+                    "installed",
+                );
+            }
+            format!("Post-repair verification failed: {}", e)
+        })?;
+        if !post_repair.ready {
+            if instance_data.id > 0 {
+                let _ = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    instance_data.id,
+                    "installed",
+                );
+            }
+            return Err(format!(
+                "Launch blocked after auto-repair: runtime files still missing/corrupt (missing={}, mismatched={}).",
+                post_repair.missing_count(),
+                post_repair.mismatch_count()
+            ));
+        }
+        if instance_data.id > 0 {
+            let _ = crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_data.id,
+                "installed",
+            );
+        }
+    }
 
     // Attempt to read the current active account
     let mut active_account = match crate::auth::get_active_account() {
@@ -1315,7 +1577,7 @@ pub async fn launch_instance(
     let spec = piston_lib::game::launcher::LaunchSpec {
         instance_id: instance_id.clone(),
         version_id: instance_data.minecraft_version.clone(),
-        modloader: modloader_type,
+        modloader: modloader_type.clone(),
         modloader_version: instance_data.modloader_version.clone(),
         data_dir: spec_data_dir.clone(),
         game_dir: std::path::PathBuf::from(&game_dir),
@@ -1960,6 +2222,36 @@ pub async fn resume_instance_operation(
     match op {
         "repair" => repair_instance(app_handle, task_manager, instance_id).await,
         "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
+        "external-import" => {
+            let source_game_directory = inst
+                .import_source_game_directory
+                .clone()
+                .ok_or_else(|| "Cannot resume external import: missing source directory".to_string())?;
+            if !std::path::Path::new(&source_game_directory).exists() {
+                return Err(format!(
+                    "Cannot resume external import: source directory does not exist ({})",
+                    source_game_directory
+                ));
+            }
+
+            crate::commands::instances::update_instance_operation(
+                &app_handle,
+                instance_id,
+                "external-import",
+            )?;
+            crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_id,
+                "installing",
+            )?;
+
+            let task = ImportExternalInstanceTask::new(
+                instance_id,
+                inst.name.clone(),
+                source_game_directory,
+            );
+            task_manager.submit(Box::new(task)).await
+        }
         "install" | _ => install_instance(app_handle, task_manager, inst, None).await,
     }
 }

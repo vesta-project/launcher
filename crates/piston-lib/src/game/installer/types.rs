@@ -43,6 +43,49 @@ pub trait ProgressReporter: Send + Sync {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum VerificationIssueKind {
+    Missing,
+    Mismatch,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationIssue {
+    pub kind: VerificationIssueKind,
+    pub artifact_class: String,
+    pub path: String,
+    pub detail: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerificationResult {
+    pub ready: bool,
+    pub checked: usize,
+    pub issues: Vec<VerificationIssue>,
+}
+
+impl VerificationResult {
+    pub fn missing_count(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|issue| issue.kind == VerificationIssueKind::Missing)
+            .count()
+    }
+
+    pub fn mismatch_count(&self) -> usize {
+        self.issues
+            .iter()
+            .filter(|issue| issue.kind == VerificationIssueKind::Mismatch)
+            .count()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RemediationPolicy {
+    VerifyOnly,
+    RepairIfNeeded,
+}
+
 /// Notification action specification
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NotificationActionSpec {

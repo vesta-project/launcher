@@ -1,4 +1,5 @@
 import { dialogStore } from "@stores/dialog-store";
+import { removeInstanceOptimistic, restoreInstanceOptimistic } from "@stores/instances";
 import { showToast } from "@ui/toast/toast";
 import {
 	deleteInstance,
@@ -101,6 +102,7 @@ export const handleUninstall = async (instance: Instance, onSuccess?: () => void
 	);
 
 	if (confirmed) {
+		const snapshot = removeInstanceOptimistic(instance.id);
 		try {
 			await deleteInstance(instance.id);
 			showToast({
@@ -109,6 +111,7 @@ export const handleUninstall = async (instance: Instance, onSuccess?: () => void
 			});
 			if (onSuccess) onSuccess();
 		} catch (e) {
+			restoreInstanceOptimistic(snapshot);
 			console.error("Uninstall failed:", e);
 			showToast({
 				title: "Uninstall failed",
