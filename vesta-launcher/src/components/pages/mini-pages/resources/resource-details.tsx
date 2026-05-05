@@ -2485,12 +2485,15 @@ const ResourceDetailsPage: Component<{
 
                             const spoiler = target.closest(".spoiler");
                             if (spoiler instanceof HTMLElement) {
-                              // Only toggle if we clicked the spoiler container itself
-                              // (which acts as the header button) or if it's currently closed.
-                              if (
-                                target === spoiler ||
-                                !spoiler.classList.contains("is-visible")
-                              ) {
+                              const isVisible = spoiler.classList.contains("is-visible");
+                              const header = target.closest(".spoiler-header");
+
+                              // Behavior:
+                              // - If the spoiler is closed, clicking anywhere inside it opens it.
+                              // - If the spoiler is open, only clicks on the header toggle (close/open).
+                              if (!isVisible) {
+                                spoiler.classList.add("is-visible");
+                              } else if (header) {
                                 spoiler.classList.toggle("is-visible");
                               }
                             }
