@@ -1353,8 +1353,37 @@ const ResourceDetailsPage: Component<{
     const desc = project()?.description;
     if (!desc) return "No description provided.";
 
+    // Preprocess known spoiler BBCode from CurseForge/other sources.
+    // Some descriptions include [spoiler]...[/spoiler] blocks with
+    // characters like '<' that can break HTML parsing when injected
+    // directly. Convert those BBCode blocks into a safe HTML wrapper
+    // and escape lone '<' characters inside the spoiler body to avoid
+    // DOMParser misinterpreting them as tags.
+    const escapeForSpoiler = (s: string) =>
+      s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+    // Replace spoiler BBCode iteratively, handling nested spoilers by
+    // always matching and replacing the innermost spoiler first. The
+    // regex below forbids encountering another opening `[spoiler]`
+    // inside the body capture, so repeated replacements will peel
+    // nested layers correctly.
+    let descWithSpoilerHtml = desc;
+    const innerSpoilerRegex = /\[spoiler(?:=(['"]?)(.*?)\1)?\]((?:(?!\[spoiler\]).)*?)\[\/spoiler\]/gis;
+    let safetyCounter = 0;
+    while (innerSpoilerRegex.test(descWithSpoilerHtml) && safetyCounter < 100) {
+      descWithSpoilerHtml = descWithSpoilerHtml.replace(
+        innerSpoilerRegex,
+        (_all, _q, title, body) => {
+          const head = title ? `<div class=\"spoiler-header\">${escapeForSpoiler(title)}</div>` : "";
+          const safeBody = escapeForSpoiler(body);
+          return `<div class=\"spoiler\">${head}<div class=\"spoiler-body\">${safeBody}</div></div>`;
+        },
+      );
+      safetyCounter++;
+    }
+
     // Explicitly set marked options for each parse to ensure consistency
-    const rawHtml = marked.parse(desc, {
+    const rawHtml = marked.parse(descWithSpoilerHtml, {
       gfm: true,
       breaks: false, // Treat single newlines as spaces (Modrinth behavior)
     }) as string;
@@ -1368,6 +1397,39 @@ const ResourceDetailsPage: Component<{
     try {
       const parser = new DOMParser();
       const doc = parser.parseFromString(rawHtml, "text/html");
+
+      // Normalize existing HTML spoilers: ensure each `.spoiler` has a
+      // direct `.spoiler-body` child wrapping its content. This ensures
+      // the CSS rule `.spoiler > * { display: none }` hides the body
+      // regardless of whether the original content was text nodes,
+      // paragraphs, or mixed nodes which could otherwise remain visible.
+      const spoilers = Array.from(doc.querySelectorAll(".spoiler"));
+      for (const sp of spoilers) {
+        // Skip if author already provided a spoiler-body
+        if (sp.querySelector(".spoiler-body")) continue;
+
+        // Detect optional header element (e.g. produced from [spoiler=title])
+        const firstEl = sp.firstElementChild;
+        const hasHeader = !!(firstEl && firstEl.classList.contains("spoiler-header"));
+
+        // Collect nodes to move into the new body (all nodes except the header)
+        const nodesToMove: Node[] = [];
+        for (const node of Array.from(sp.childNodes)) {
+          if (hasHeader && node === firstEl) continue;
+          nodesToMove.push(node);
+        }
+
+        // If there is nothing to move, continue
+        if (nodesToMove.length === 0) continue;
+
+        const body = doc.createElement("div");
+        body.className = "spoiler-body";
+        for (const n of nodesToMove) body.appendChild(n);
+
+        if (hasHeader && firstEl && firstEl.nextSibling)
+          sp.insertBefore(body, firstEl.nextSibling);
+        else sp.appendChild(body);
+      }
       const anchors = Array.from(doc.querySelectorAll("a[href]"));
       for (const a of anchors) {
         try {
