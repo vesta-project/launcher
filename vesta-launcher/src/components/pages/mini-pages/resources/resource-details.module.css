@@ -977,45 +977,47 @@
 }
 
 .description :global(.spoiler) {
-	background: var(--surface-low);
+	background: rgba(0,0,0,0.02);
 	border: 1px solid var(--border-subtle);
 	border-radius: 8px;
 	margin: 16px 0;
 	overflow: hidden;
-	transition: border-color 0.2s;
+	transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .description :global(.spoiler.is-visible) {
-	border-color: var(--primary-low);
-	background: var(--surface-sunken);
-	padding: 0 16px 16px 16px;
+	/* Use a gentler surface for opened spoilers so they don't go very dark */
+	border-color: var(--border-subtle);
+	background: var(--surface);
+	padding: 0 14px 14px 14px;
+	box-shadow: 0 1px 0 rgba(0,0,0,0.04) inset;
 }
 
 .description :global(.spoiler)::before {
 	content: "View Spoiler";
 	display: block;
 	padding: 10px 16px;
-	background: var(--surface-raised);
-	color: var(--text-primary);
+	background: transparent;
+	color: var(--text-secondary);
 	font-weight: 700;
 	font-size: 14px;
 	cursor: pointer;
 	border-bottom: 1px solid transparent;
-	transition:
-		background 0.2s,
-		color 0.2s;
+	transition: background 0.18s ease, color 0.18s ease;
 	user-select: none;
 }
 
 .description :global(.spoiler.is-visible)::before {
 	content: "Hide Spoiler";
 	border-bottom: 1px solid var(--border-subtle);
-	margin: 0 -16px 16px -16px;
+	margin: 0 -14px 12px -14px;
+	color: var(--text-primary);
+	background: transparent;
 }
 
 .description :global(.spoiler):hover::before {
-	background: var(--surface-overlay);
-	color: var(--primary-accent);
+	background: rgba(0,0,0,0.02);
+	color: var(--text-primary);
 }
 
 .description :global(.spoiler > *) {
@@ -1024,6 +1026,19 @@
 
 .description :global(.spoiler.is-visible > *) {
 	display: block;
+}
+
+/* Ensure text inside spoilers uses readable colors and comfortable spacing */
+.description :global(.spoiler-body) {
+	color: var(--text-primary);
+	padding: 12px 0 0 0;
+	line-height: 1.65;
+}
+
+.description :global(.spoiler-header) {
+	padding: 10px 16px;
+	font-weight: 700;
+	color: var(--text-primary);
 }
 
 .description h1,
