@@ -21,7 +21,8 @@ use tauri::{Manager, State};
 use walkdir::WalkDir;
 
 lazy_static! {
-    static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> = Mutex::new(HashMap::new());
+    static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> =
+        Mutex::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -100,7 +101,10 @@ fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(
         || inst.modpack_id.is_some()
         || inst.modpack_version_id.is_some();
     let game_path = std::path::Path::new(game_dir);
-    let has_manifest = game_path.join(".vesta").join("modpack_manifest.json").is_file();
+    let has_manifest = game_path
+        .join(".vesta")
+        .join("modpack_manifest.json")
+        .is_file();
 
     if !(has_modpack_link || has_manifest) {
         return Ok(());
@@ -480,8 +484,9 @@ pub fn process_instance_icon(mut inst: Instance) -> Instance {
     if !is_gradient {
         if let Some(ref data) = inst.icon_data {
             use base64::{engine::general_purpose, Engine as _};
+            let mime = crate::utils::image::detect_image_mime(data);
             let b64 = general_purpose::STANDARD.encode(data);
-            inst.icon_path = Some(format!("data:image/png;base64,{}", b64));
+            inst.icon_path = Some(format!("data:{};base64,{}", mime, b64));
         } else if inst.icon_path.is_none() && inst.modpack_icon_url.is_some() {
             // Fallback to URL if we have one but no data and no explicitly set path
             inst.icon_path = inst.modpack_icon_url.clone();
@@ -1740,9 +1745,9 @@ pub async fn launch_instance(
             use tauri::Emitter;
             let _ = app_handle.emit(
                 "core://instance-launched",
-                serde_json::json!({ 
-                    "instance_id": instance_id, 
-                    "name": instance_data.name, 
+                serde_json::json!({
+                    "instance_id": instance_id,
+                    "name": instance_data.name,
                     "pid": result.instance.pid,
                     "start_time": std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
                 }),
@@ -2223,10 +2228,10 @@ pub async fn resume_instance_operation(
         "repair" => repair_instance(app_handle, task_manager, instance_id).await,
         "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
         "external-import" => {
-            let source_game_directory = inst
-                .import_source_game_directory
-                .clone()
-                .ok_or_else(|| "Cannot resume external import: missing source directory".to_string())?;
+            let source_game_directory =
+                inst.import_source_game_directory.clone().ok_or_else(|| {
+                    "Cannot resume external import: missing source directory".to_string()
+                })?;
             if !std::path::Path::new(&source_game_directory).exists() {
                 return Err(format!(
                     "Cannot resume external import: source directory does not exist ({})",

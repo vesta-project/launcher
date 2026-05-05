@@ -4,6 +4,7 @@ pub mod crash_parser;
 pub mod dialog_manager;
 pub mod hash;
 pub mod hooks;
+pub mod image;
 pub mod java;
 pub mod network;
 

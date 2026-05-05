@@ -16,18 +16,21 @@ use tauri::{Manager, State};
 const IMAGE_DOWNLOAD_TIMEOUT_SECS: u64 = 8;
 
 /// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.
-/// This ensures resource icons are served as CSP-compatible `data:` URLs.
+/// Detects the actual image format from magic bytes.
 fn process_resource_record_icon(mut record: ResourceProjectRecord) -> ResourceProjectRecord {
     if let Some(ref data) = record.icon_data {
         if !data.is_empty() {
+            let mime = crate::utils::image::detect_image_mime(data);
             let b64 = general_purpose::STANDARD.encode(data);
-            record.icon_url = Some(format!("data:image/png;base64,{}", b64));
+            record.icon_url = Some(format!("data:{};base64,{}", mime, b64));
         }
     }
-    // Clear icon_url if it's an external http/https URL (CSP would block it, and we
-    // don't want the frontend falling back to insecure remote URLs).
+    // Keep the icon_url as a fallback only if it's a secure HTTPS URL (CSP allows `img-src https:`).
+    // Insecure HTTP URLs are stripped — they would be blocked by both ATS and CSP.
+    // If icon_data was available we already replaced icon_url with a data: URL above, so
+    // this fallback only applies to records that haven't had their icon downloaded yet.
     if let Some(ref url) = record.icon_url {
-        if url.starts_with("http://") || url.starts_with("https://") {
+        if url.starts_with("http://") {
             record.icon_url = None;
         }
     }
