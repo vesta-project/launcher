@@ -1,13 +1,38 @@
+use anyhow::{anyhow, Context};
+use base64::{engine::general_purpose, Engine as _};
+
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceProjectRef, ResourceType, ResourceVersion,
-    SearchQuery, SearchResponse, SourcePlatform,
+    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
+    ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::resource_download::ResourceDownloadTask;
 use anyhow_tauri::TAResult as Result;
 use tauri::{Manager, State};
+
+/// Timeout for image downloads (in seconds)
+const IMAGE_DOWNLOAD_TIMEOUT_SECS: u64 = 8;
+
+/// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.
+/// This ensures resource icons are served as CSP-compatible `data:` URLs.
+fn process_resource_record_icon(mut record: ResourceProjectRecord) -> ResourceProjectRecord {
+    if let Some(ref data) = record.icon_data {
+        if !data.is_empty() {
+            let b64 = general_purpose::STANDARD.encode(data);
+            record.icon_url = Some(format!("data:image/png;base64,{}", b64));
+        }
+    }
+    // Clear icon_url if it's an external http/https URL (CSP would block it, and we
+    // don't want the frontend falling back to insecure remote URLs).
+    if let Some(ref url) = record.icon_url {
+        if url.starts_with("http://") || url.starts_with("https://") {
+            record.icon_url = None;
+        }
+    }
+    record
+}
 
 #[tauri::command]
 pub async fn check_resource_updates(
@@ -114,16 +139,183 @@ pub async fn cache_resource_metadata(
 pub async fn get_cached_resource_project(
     resource_manager: State<'_, ResourceManager>,
     id: String,
-) -> Result<Option<crate::models::resource::ResourceProjectRecord>> {
-    Ok(resource_manager.get_project_record(&id).await?)
+) -> Result<Option<ResourceProjectRecord>> {
+    Ok(resource_manager
+        .get_project_record(&id)
+        .await?
+        .map(process_resource_record_icon))
+}
+
+/// Downloads and caches a remote image as a base64 data URL.
+/// Checks an in-memory cache in `ResourceManager` first; if the URL has
+/// already been fetched, the cached data URL is returned immediately.
+#[tauri::command]
+pub async fn resolve_image_url(
+    resource_manager: State<'_, ResourceManager>,
+    url: String,
+) -> Result<String> {
+    // 1. Check cache
+    {
+        let cache = resource_manager.image_cache.lock().await;
+        if let Some(cached) = cache.get(&url) {
+            return Ok(cached.clone());
+        }
+    }
+
+    // 2. Download image with 8s timeout
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(IMAGE_DOWNLOAD_TIMEOUT_SECS))
+        .build()
+        .context("Failed to build HTTP client")?;
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .with_context(|| format!("Failed to download image from {}", url))?;
+    if !response.status().is_success() {
+        return Err(anyhow!(
+            "Image download failed with HTTP {} for {}",
+            response.status(),
+            url
+        )
+        .into());
+    }
+
+    let content_type = response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| "image/png".to_string());
+
+    let bytes = response
+        .bytes()
+        .await
+        .context("Failed to read response bytes")?;
+    if bytes.is_empty() {
+        return Err(anyhow!("Downloaded image is empty for {}", url).into());
+    }
+
+    // 3. Base64 encode
+    let b64 = general_purpose::STANDARD.encode(&bytes);
+    let data_url = format!("data:{};base64,{}", content_type, b64);
+
+    // 4. Store in cache
+    {
+        let mut cache = resource_manager.image_cache.lock().await;
+        cache.insert(url, data_url.clone());
+    }
+
+    Ok(data_url)
+}
+
+/// Batch version of `resolve_image_url`. Accepts multiple URLs, checks the cache first
+/// for each one, then downloads any uncached URLs concurrently. Returns a `Vec<String>`
+/// where each element is the base64 data URL for the corresponding input URL.
+/// If a download fails, an empty string is returned for that position.
+#[tauri::command]
+pub async fn resolve_image_urls(
+    resource_manager: State<'_, ResourceManager>,
+    urls: Vec<String>,
+) -> Result<Vec<String>> {
+    let total = urls.len();
+    let mut results: Vec<Option<String>> = vec![None; total];
+
+    // 1. Check cache for all URLs
+    let mut uncached: Vec<(usize, String)> = Vec::new();
+    {
+        let cache = resource_manager.image_cache.lock().await;
+        for (i, url) in urls.iter().enumerate() {
+            if let Some(cached) = cache.get(url) {
+                results[i] = Some(cached.clone());
+            } else {
+                uncached.push((i, url.clone()));
+            }
+        }
+    }
+
+    if uncached.is_empty() {
+        return Ok(results.into_iter().map(|r| r.unwrap_or_default()).collect());
+    }
+
+    // 2. Build a reusable HTTP client
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(IMAGE_DOWNLOAD_TIMEOUT_SECS))
+        .build()
+        .context("Failed to build HTTP client")?;
+
+    // 3. Download all uncached URLs concurrently
+    let downloads = uncached.iter().map(|(_, url)| {
+        let client = client.clone();
+        let url = url.clone();
+        async move {
+            let result = async {
+                let response = client
+                    .get(&url)
+                    .send()
+                    .await
+                    .with_context(|| format!("Failed to download image from {}", url))?;
+
+                if !response.status().is_success() {
+                    anyhow::bail!(
+                        "Image download failed with HTTP {} for {}",
+                        response.status(),
+                        url
+                    );
+                }
+
+                let content_type = response
+                    .headers()
+                    .get(reqwest::header::CONTENT_TYPE)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|s| s.to_string())
+                    .unwrap_or_else(|| "image/png".to_string());
+
+                let bytes = response
+                    .bytes()
+                    .await
+                    .with_context(|| format!("Failed to read response bytes from {}", url))?;
+
+                if bytes.is_empty() {
+                    anyhow::bail!("Downloaded image is empty for {}", url);
+                }
+
+                let b64 = general_purpose::STANDARD.encode(&bytes);
+                let data_url = format!("data:{};base64,{}", content_type, b64);
+                Ok::<_, anyhow::Error>(data_url)
+            }
+            .await;
+            (url, result.ok())
+        }
+    });
+
+    let downloaded: Vec<(String, Option<String>)> = futures::future::join_all(downloads).await;
+
+    // 4. Store results in cache and populate the output vector
+    {
+        let mut cache = resource_manager.image_cache.lock().await;
+        for ((idx, _original_url), (url, data_url)) in uncached.iter().zip(downloaded.iter()) {
+            if let Some(data_url) = data_url {
+                cache.insert(url.clone(), data_url.clone());
+                results[*idx] = Some(data_url.clone());
+            }
+            // If download failed, results[idx] stays None -> will become empty string
+        }
+    }
+
+    Ok(results.into_iter().map(|r| r.unwrap_or_default()).collect())
 }
 
 #[tauri::command]
 pub async fn get_cached_resource_projects(
     resource_manager: State<'_, ResourceManager>,
     ids: Vec<String>,
-) -> Result<Vec<crate::models::resource::ResourceProjectRecord>> {
-    Ok(resource_manager.get_project_records(&ids)?)
+) -> Result<Vec<ResourceProjectRecord>> {
+    Ok(resource_manager
+        .get_project_records(&ids)?
+        .into_iter()
+        .map(process_resource_record_icon)
+        .collect())
 }
 
 #[tauri::command]
@@ -132,14 +324,17 @@ pub async fn get_or_hydrate_resource_projects(
     refs: Vec<ResourceProjectRef>,
     allow_network: Option<bool>,
     refresh_stale: Option<bool>,
-) -> Result<Vec<crate::models::resource::ResourceProjectRecord>> {
+) -> Result<Vec<ResourceProjectRecord>> {
     Ok(resource_manager
         .get_or_hydrate_project_records(
             &refs,
             allow_network.unwrap_or(true),
             refresh_stale.unwrap_or(false),
         )
-        .await?)
+        .await?
+        .into_iter()
+        .map(process_resource_record_icon)
+        .collect())
 }
 
 #[tauri::command]

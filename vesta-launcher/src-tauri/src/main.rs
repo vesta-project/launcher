@@ -266,6 +266,8 @@ fn main() {
             commands::resources::sync_instance_resources,
             commands::resources::get_installed_resources,
             commands::resources::check_resource_updates,
+            commands::resources::resolve_image_url,
+            commands::resources::resolve_image_urls,
             commands::launcher_imports::detect_external_launchers,
             commands::launcher_imports::list_external_instances,
             commands::launcher_imports::import_external_instance,

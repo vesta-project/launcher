@@ -67,6 +67,7 @@ pub struct ResourceManager {
     hash_cache: Arc<Mutex<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
     search_cache: Arc<Mutex<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
     category_cache: Arc<Mutex<HashMap<SourcePlatform, (Vec<ResourceCategory>, NaiveDateTime)>>>,
+    pub image_cache: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl ResourceManager {
@@ -83,6 +84,7 @@ impl ResourceManager {
             hash_cache: Arc::new(Mutex::new(HashMap::new())),
             search_cache: Arc::new(Mutex::new(HashMap::new())),
             category_cache: Arc::new(Mutex::new(HashMap::new())),
+            image_cache: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -95,6 +97,7 @@ impl ResourceManager {
         self.hash_cache.lock().await.clear();
         self.search_cache.lock().await.clear();
         self.category_cache.lock().await.clear();
+        self.image_cache.lock().await.clear();
 
         // 2. Clear database tables
         let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
@@ -284,7 +287,7 @@ impl ResourceManager {
                         {
                             best_version = Some(v.clone());
                         } else {
-                            log::info!("Pinned version {} for {} is incompatible with current environment ({}, {}). Finding better alternative...", 
+                            log::info!("Pinned version {} for {} is incompatible with current environment ({}, {}). Finding better alternative...",
                                 vid, dep.project_id, mc_version, loader);
                         }
                     }
@@ -344,7 +347,7 @@ impl ResourceManager {
                     next_level_deps.extend(v.dependencies.clone());
                     resolved.push((project, v));
                 } else {
-                    log::warn!("[DependencyResolution] Could not find compatible version for dependency {} (MC: {}, Loader: {})", 
+                    log::warn!("[DependencyResolution] Could not find compatible version for dependency {} (MC: {}, Loader: {})",
                         dep.project_id, mc_version, loader);
                 }
             }
@@ -656,12 +659,22 @@ impl ResourceManager {
             }
         }
 
-        if allow_network {
-            for project_ref in refs_to_hydrate {
-                if let Err(e) = self
-                    .get_project(project_ref.platform, &project_ref.id)
-                    .await
-                {
+        if allow_network && !refs_to_hydrate.is_empty() {
+            // Parallelize project hydration to significantly reduce load time for many resources.
+            // Each get_project call makes network requests (API + icon download), so running
+            // them concurrently is much faster than sequential.
+            use futures::stream::{self, StreamExt};
+            const MAX_CONCURRENT_HYDRATIONS: usize = 15;
+            let futures: Vec<_> = refs_to_hydrate
+                .iter()
+                .map(|project_ref| self.get_project(project_ref.platform, &project_ref.id))
+                .collect();
+            let results: Vec<_> = stream::iter(futures)
+                .buffer_unordered(MAX_CONCURRENT_HYDRATIONS)
+                .collect()
+                .await;
+            for (project_ref, result) in refs_to_hydrate.iter().zip(results.iter()) {
+                if let Err(e) = result {
                     log::warn!(
                         "[ResourceManager] Failed to hydrate project {}/{}: {}",
                         format!("{:?}", project_ref.platform).to_lowercase(),
