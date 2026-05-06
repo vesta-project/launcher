@@ -106,7 +106,7 @@
 		0 2px 4px -2px rgb(0 0 0 / 30%);
 	transform-origin: var(--kb-combobox-content-transform-origin);
 	animation: contentHide 250ms ease-in forwards;
-	z-index: 1000;
+	z-index: var(--z-select-dropdown);
 
 	& svg {
 		height: 20px;

@@ -101,8 +101,8 @@ body {
 	--z-sidebar: 200;
 	--z-sidebar-open: 200;
 	--z-floating-action: 190; /* Slide-out buttons - behind sidebar for 'emerge' look */
-	--z-select-dropdown: 1000;
 	--z-modal: 2000;
+	--z-select-dropdown: 10001; /* Above modals and popovers */
 	--z-toast: 9999;
 	--z-loader: 9999;
 	--z-popover: 10000; /* Context menus, Tooltips */
