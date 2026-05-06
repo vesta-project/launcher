@@ -277,10 +277,14 @@
 	opacity: 0.4;
 	z-index: 0;
 	transition: all 0.4s ease;
+	/* Clip background-image to parent's border-radius */
+	clip-path: inset(0 round 16px);
 }
 
 .instance-details-header.shrunk .header-background {
 	filter: blur(15px) brightness(0.7);
+	/* Update clip-path for shrunk border-radius (12px) */
+	clip-path: inset(0 round 12px);
 }
 
 .header-content {
