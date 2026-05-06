@@ -69,10 +69,6 @@ import {
   RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX,
 } from "./resource-details-header-progress";
 
-// In-memory cache for description images: URL → base64 data URL.
-// Prevents re-downloading images every time a resource page is viewed.
-const descriptionImageCache = new Map<string, string>();
-
 /// Frontend cache for ResourceProject data to avoid re-fetching from the backend API
 /// on repeated navigations within the same session.
 interface ProjectCacheEntry {
@@ -102,192 +98,6 @@ function getProjectFromCache(
 function setProjectCache(platform: SourcePlatform, project: ResourceProject) {
   const key = getProjectCacheKey(platform, project.id);
   projectCache.set(key, { project, timestamp: Date.now() });
-}
-
-// 1×1 transparent GIF used as a placeholder while images are resolved through the cache.
-const IMAGE_PLACEHOLDER =
-  "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yF6GAAAAAAALAAAAAABAAEAAAIBRAA7";
-
-/**
- * Maximum number of uncached image URLs to include in a single batch IPC call.
- * Prevents sending hundreds of URLs at once on pages with many images.
- */
-const BATCH_CHUNK_SIZE = 20;
-
-/**
- * Distance (in pixels) below the viewport at which images begin preloading.
- * 800px gives a comfortable preload buffer while keeping initial requests minimal.
- */
-const LAZY_LOAD_MARGIN_PX = 800;
-
-/**
- * Resolves images in a description container by fetching them through the backend cache.
- * Uses an IntersectionObserver to load images only as they approach the viewport,
- * so long descriptions with many images don't trigger a burst of all-at-once downloads.
- */
-async function resolveDescriptionImages(container: HTMLElement) {
-  const images = Array.from(
-    container.querySelectorAll<HTMLImageElement>("img[data-src]"),
-  );
-  if (images.length === 0) return;
-
-  // Apply cached images instantly (no IPC, no wait).
-  // For uncached images, set up an IntersectionObserver so they load
-  // only when the user scrolls near them.
-  const uncached: HTMLImageElement[] = [];
-
-  for (const img of images) {
-    const url = img.dataset.src;
-    if (!url) continue;
-
-    const hit = descriptionImageCache.get(url);
-    if (hit) {
-      img.src = hit;
-      img.removeAttribute("data-src");
-    } else {
-      uncached.push(img);
-    }
-  }
-
-  if (uncached.length === 0) return;
-
-  // Use IntersectionObserver to lazily load uncached images.
-  // Images within the margin are resolved immediately; the rest wait until
-  // they're scrolled near.
-  let batchTimer: ReturnType<typeof setTimeout> | null = null;
-  const pendingUrls = new Set<string>();
-  const pendingMap = new Map<string, HTMLImageElement[]>();
-
-  const flushBatch = async () => {
-    if (batchTimer) {
-      clearTimeout(batchTimer);
-      batchTimer = null;
-    }
-
-    const urls = Array.from(pendingUrls);
-    if (urls.length === 0) return;
-
-    pendingUrls.clear();
-
-    // Chunk into batches to avoid sending hundreds of URLs at once
-    for (let i = 0; i < urls.length; i += BATCH_CHUNK_SIZE) {
-      const chunk = urls.slice(i, i + BATCH_CHUNK_SIZE);
-      try {
-        const results = await invoke<string[]>("resolve_image_urls", {
-          urls: chunk,
-        });
-        for (let j = 0; j < results.length; j++) {
-          const url = chunk[j];
-          const b64 = results[j];
-          if (b64) {
-            descriptionImageCache.set(url, b64);
-          }
-          const elements = pendingMap.get(url) || [];
-          for (const el of elements) {
-            el.src = b64 || url;
-            el.removeAttribute("data-src");
-          }
-          pendingMap.delete(url);
-        }
-      } catch (e) {
-        console.warn(
-          "[ResourceDetails] Batch image fetch failed, falling back individually:",
-          e,
-        );
-        for (const url of chunk) {
-          const elements = pendingMap.get(url) || [];
-          for (const el of elements) {
-            try {
-              const single = await invoke<string>("resolve_image_url", {
-                url,
-              });
-              descriptionImageCache.set(url, single);
-              el.src = single;
-            } catch {
-              el.src = url;
-            }
-            el.removeAttribute("data-src");
-          }
-          pendingMap.delete(url);
-        }
-      }
-    }
-  };
-
-  const enqueueImage = (img: HTMLImageElement) => {
-    const url = img.dataset.src;
-    if (!url) return;
-
-    // Already resolved by someone else while we were waiting
-    if (descriptionImageCache.has(url)) {
-      img.src = descriptionImageCache.get(url)!;
-      img.removeAttribute("data-src");
-      return;
-    }
-
-    pendingUrls.add(url);
-    if (!pendingMap.has(url)) {
-      pendingMap.set(url, []);
-    }
-    pendingMap.get(url)!.push(img);
-
-    // Debounce to batch multiple nearby images together
-    if (batchTimer) clearTimeout(batchTimer);
-    batchTimer = setTimeout(flushBatch, 50);
-  };
-
-  // Immediately resolve images already in or near the viewport;
-  // observe the rest for lazy loading.
-  const observer = new IntersectionObserver(
-    (entries) => {
-      let hasWork = false;
-      for (const entry of entries) {
-        if (entry.isIntersecting) {
-          observer.unobserve(entry.target);
-          enqueueImage(entry.target as HTMLImageElement);
-          hasWork = true;
-        }
-      }
-      // Flush immediately if we enqueued work so the user sees images ASAP
-      if (hasWork && batchTimer) {
-        clearTimeout(batchTimer);
-        batchTimer = setTimeout(flushBatch, 50);
-      }
-    },
-    {
-      rootMargin: `${LAZY_LOAD_MARGIN_PX}px`,
-    },
-  );
-
-  for (const img of uncached) {
-    // If the image is already visible within the margin, resolve immediately
-    const rect = img.getBoundingClientRect();
-    const vh = window.innerHeight;
-    if (
-      rect.top < vh + LAZY_LOAD_MARGIN_PX &&
-      rect.bottom > -LAZY_LOAD_MARGIN_PX
-    ) {
-      enqueueImage(img);
-    } else {
-      observer.observe(img);
-    }
-  }
-
-  // Flush any images that were immediately enqueued
-  if (pendingUrls.size > 0) {
-    if (batchTimer) clearTimeout(batchTimer);
-    await flushBatch();
-  }
-
-  // Cleanup observer after a short delay to allow scrolling to trigger remaining loads
-  const cleanupTimer = setTimeout(() => {
-    observer.disconnect();
-  }, 30000);
-  // Store cleanup on the container so it's cleaned up if the component unmounts
-  (container as any).__lazyObserverCleanup = () => {
-    clearTimeout(cleanupTimer);
-    observer.disconnect();
-  };
 }
 
 // Configure marked for GFM
@@ -473,7 +283,6 @@ const ResourceDetailsPage: Component<{
   let headerLayoutRef: HTMLDivElement | undefined;
   let headerScrollRaf: number | null = null;
   let headerMeasureRaf: number | null = null;
-  let descriptionContainerRef: HTMLDivElement | undefined;
 
   // Register refetch so the navbar reload button works
   onMount(() => {
@@ -1155,6 +964,14 @@ const ResourceDetailsPage: Component<{
       return;
     }
 
+    // Clear stale project data so the old resource isn't briefly visible while loading
+    setProject(undefined);
+    setVersionFilter("");
+    setIncludeUnstable(false);
+    setVersionPage(1);
+    setManualVersionId(null);
+    setSelectedGalleryItem(null);
+
     // Ensure categories for this platform are loaded in the store
     if (
       resources.state.activeSource !== platform ||
@@ -1368,13 +1185,16 @@ const ResourceDetailsPage: Component<{
     // inside the body capture, so repeated replacements will peel
     // nested layers correctly.
     let descWithSpoilerHtml = desc;
-    const innerSpoilerRegex = /\[spoiler(?:=(['"]?)(.*?)\1)?\]((?:(?!\[spoiler\]).)*?)\[\/spoiler\]/gis;
+    const innerSpoilerRegex =
+      /\[spoiler(?:=(['"]?)(.*?)\1)?\]((?:(?!\[spoiler\]).)*?)\[\/spoiler\]/gis;
     let safetyCounter = 0;
     while (innerSpoilerRegex.test(descWithSpoilerHtml) && safetyCounter < 100) {
       descWithSpoilerHtml = descWithSpoilerHtml.replace(
         innerSpoilerRegex,
         (_all, _q, title, body) => {
-          const head = title ? `<div class=\"spoiler-header\">${escapeForSpoiler(title)}</div>` : "";
+          const head = title
+            ? `<div class=\"spoiler-header\">${escapeForSpoiler(title)}</div>`
+            : "";
           const safeBody = escapeForSpoiler(body);
           return `<div class=\"spoiler\">${head}<div class=\"spoiler-body\">${safeBody}</div></div>`;
         },
@@ -1410,7 +1230,9 @@ const ResourceDetailsPage: Component<{
 
         // Detect optional header element (e.g. produced from [spoiler=title])
         const firstEl = sp.firstElementChild;
-        const hasHeader = !!(firstEl && firstEl.classList.contains("spoiler-header"));
+        const hasHeader = !!(
+          firstEl && firstEl.classList.contains("spoiler-header")
+        );
 
         // Collect nodes to move into the new body (all nodes except the header)
         const nodesToMove: Node[] = [];
@@ -1454,8 +1276,8 @@ const ResourceDetailsPage: Component<{
           // Ignore per-anchor errors
         }
       }
-      // Process all resource-loading elements: upgrade http:// to https://
-      // and replace <img src> with a cached placeholder to avoid network fetch on every view.
+      // Upgrade http:// to https:// on all resource-loading elements. macOS ATS blocks
+      // insecure connections. Also add native lazy loading for images.
       const resourceElements = Array.from(
         doc.querySelectorAll(
           "img[src], iframe[src], video[src], audio[src], source[src]",
@@ -1467,24 +1289,9 @@ const ResourceDetailsPage: Component<{
         const upgraded = src.startsWith("http://")
           ? src.replace("http://", "https://")
           : src;
-
+        el.setAttribute("src", upgraded);
         if (tag === "img") {
-          // If the image URL is already in our frontend cache, embed the base64 directly
-          // in the HTML — no placeholder needed, no async resolution required.
-          const cached = descriptionImageCache.get(upgraded);
-          if (cached) {
-            el.setAttribute("src", cached);
-            el.removeAttribute("data-src");
-            el.setAttribute("loading", "lazy");
-          } else {
-            // Not cached yet — use a transparent placeholder and move the real URL to data-src.
-            // It will be resolved asynchronously through our backend cache.
-            el.setAttribute("data-src", upgraded);
-            el.setAttribute("src", IMAGE_PLACEHOLDER);
-            el.setAttribute("loading", "lazy");
-          }
-        } else {
-          el.setAttribute("src", upgraded);
+          el.setAttribute("loading", "lazy");
         }
       }
 
@@ -1499,35 +1306,35 @@ const ResourceDetailsPage: Component<{
     }
   });
 
-  // Resolve description images through backend cache whenever the description content changes.
-  // Cleans up any previous IntersectionObserver when the description content or visibility changes.
+  // When content barely overflows or fits entirely, add a one-time spacer
+  // beneath the description so the user can scroll far enough to collapse
+  // the header. The spacer is applied to the inner .description element
+  // (not the scroll container) so the layout change doesn't affect scrollTop.
+  // We defer with requestAnimationFrame to let the initial paint settle first.
   createEffect(() => {
     const html = renderedDescription();
     const isVisible = activeTab() === "description";
-    const container = descriptionContainerRef;
+    const container = headerScrollContainerRef;
+    if (!isVisible || !html || !container) return;
 
-    // Clean up any previous lazy observer from a previous render
-    if (container && (container as any).__lazyObserverCleanup) {
-      (container as any).__lazyObserverCleanup();
-      delete (container as any).__lazyObserverCleanup;
-    }
+    requestAnimationFrame(() => {
+      const headerEl = container.querySelector<HTMLElement>(
+        "." + styles["resource-details-header"],
+      );
+      const headerHeight = headerEl?.offsetHeight ?? 72;
+      const neededRange = Math.min(72, headerHeight);
+      const currentScroll = container.scrollHeight - container.clientHeight;
 
-    if (isVisible && html && container) {
-      queueMicrotask(() => {
-        resolveDescriptionImages(container);
-      });
-    }
-  });
-
-  // Clean up lazy observer when the component unmounts entirely
-  onCleanup(() => {
-    if (
-      descriptionContainerRef &&
-      (descriptionContainerRef as any).__lazyObserverCleanup
-    ) {
-      (descriptionContainerRef as any).__lazyObserverCleanup();
-      delete (descriptionContainerRef as any).__lazyObserverCleanup;
-    }
+      // Add spacer only when content doesn't already scroll enough
+      if (currentScroll < neededRange) {
+        const descEl = container.querySelector<HTMLElement>(
+          "." + styles.description,
+        );
+        if (descEl) {
+          descEl.style.paddingBottom = neededRange - currentScroll + "px";
+        }
+      }
+    });
   });
 
   const resetHeaderCollapse = () => {
@@ -1541,10 +1348,9 @@ const ResourceDetailsPage: Component<{
       return;
     }
 
-    const maxScroll = Math.max(0, target.scrollHeight - target.clientHeight);
     const nextProgress = computeHeaderCollapseProgress(
       target.scrollTop,
-      maxScroll,
+      target.scrollHeight - target.clientHeight,
     );
 
     setHeaderCollapseProgress((previous) =>
@@ -2458,7 +2264,6 @@ const ResourceDetailsPage: Component<{
                         <div
                           class={styles.description}
                           innerHTML={renderedDescription() as string}
-                          ref={descriptionContainerRef}
                           onMouseOver={(e) => {
                             const target = e.target as HTMLElement;
                             const anchor = target.closest("a");
@@ -2485,7 +2290,8 @@ const ResourceDetailsPage: Component<{
 
                             const spoiler = target.closest(".spoiler");
                             if (spoiler instanceof HTMLElement) {
-                              const isVisible = spoiler.classList.contains("is-visible");
+                              const isVisible =
+                                spoiler.classList.contains("is-visible");
                               const header = target.closest(".spoiler-header");
 
                               // Behavior:
