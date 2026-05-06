@@ -7,11 +7,11 @@ import {
 	NumberFieldInput,
 	NumberFieldLabel,
 } from "@ui/number-field/number-field";
-import { Select, SelectContent, SelectTrigger, SelectValue } from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Separator } from "@ui/separator/separator";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { TextFieldInput, TextFieldRoot, TextFieldTextArea } from "@ui/text-field/text-field";
-import { Component } from "solid-js";
+import { Component, For } from "solid-js";
 import styles from "../settings-page.module.css";
 
 export const InstanceDefaultsTab: Component<{
@@ -164,23 +164,16 @@ export const InstanceDefaultsTab: Component<{
 							]}
 							optionValue="value"
 							optionTextValue="label"
-							value={{
-								label: (
-									{
-										"stay-open": "Stay Open",
-										minimize: "Minimize Window",
-										"hide-to-tray": "Hide To Tray",
-										quit: "Request Quit",
-									} as any
-								)[props.config.default_launcher_action_on_launch || "stay-open"],
-								value: props.config.default_launcher_action_on_launch || "stay-open",
-							}}
-							onChange={(option: any) =>
-								props.updateConfig("default_launcher_action_on_launch", option.value)
+							value={props.config.default_launcher_action_on_launch || "stay-open"}
+							onChange={(value) =>
+								props.updateConfig("default_launcher_action_on_launch", value)
 							}
+							itemComponent={(selectProps) => (
+								<SelectItem item={selectProps.item}>{selectProps.item.rawValue.label}</SelectItem>
+							)}
 						>
 							<SelectTrigger>
-								<SelectValue<any>>{(state) => state.selectedOption().label}</SelectValue>
+								<SelectValue<any>>{(state) => state.selectedOption()?.label || "Select..."}</SelectValue>
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
