@@ -19,7 +19,7 @@
 		"@kobalte/core": "^0.13.11",
 		"@solidjs/router": "^0.16.1",
 		"@tanstack/solid-table": "^8.21.3",
-		"@tauri-apps/api": "^2.10.1",
+		"@tauri-apps/api": "^2.11.0",
 		"@tauri-apps/plugin-clipboard-manager": "^2.3.2",
 		"@tauri-apps/plugin-deep-link": "^2.4.8",
 		"@tauri-apps/plugin-dialog": "^2.7.0",
@@ -43,7 +43,7 @@
 	"devDependencies": {
 		"@csstools/postcss-contrast-color-function": "^3.0.2",
 		"@solidjs/testing-library": "^0.8.10",
-		"@tauri-apps/cli": "^2.10.0",
+		"@tauri-apps/cli": "^2.11.0",
 		"@testing-library/dom": "^10.4.1",
 		"@types/chroma-js": "^3.1.2",
 		"@types/three": "^0.183.1",
