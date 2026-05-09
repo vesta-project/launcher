@@ -260,7 +260,7 @@ pub async fn clear_cache(
 
     // 3. Clear Piston manifest file
     if let Ok(config_dir) = get_app_config_dir() {
-        let cache_path = config_dir.join("piston_manifest.json");
+        let cache_path = config_dir.join("data").join("piston_manifest.json");
         if cache_path.exists() {
             if let Err(e) = std::fs::remove_file(&cache_path) {
                 log::warn!("Failed to delete Piston manifest file: {}", e);
@@ -292,7 +292,7 @@ pub async fn get_cache_size() -> Result<String, String> {
     let mut total_bytes = 0;
 
     // 1. Piston manifest
-    let manifest_path = config_dir.join("piston_manifest.json");
+    let manifest_path = config_dir.join("data").join("piston_manifest.json");
     if let Ok(meta) = std::fs::metadata(&manifest_path) {
         total_bytes += meta.len();
     }

@@ -137,7 +137,8 @@ pub async fn load_manifest_for_java_resolution(
         }
     }
 
-    let data_dir = get_app_config_dir().map_err(|e| e.to_string())?;
+    let config_dir = get_app_config_dir().map_err(|e| e.to_string())?;
+    let data_dir = config_dir.join("data");
     match piston_lib::game::metadata::cache::load_cached_metadata_if_present(&data_dir).await {
         Ok(Some(mut meta)) => {
             normalize_metadata_java_requirements(&mut meta);

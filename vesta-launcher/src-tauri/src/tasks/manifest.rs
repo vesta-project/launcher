@@ -85,6 +85,7 @@ impl Task for GenerateManifestTask {
                 e.to_string()
             })?;
             log::info!("Config directory resolved: {:?}", config_dir);
+            let data_dir = config_dir.join("data");
 
             let _ = ctx.update_full(
                 10,
@@ -113,19 +114,19 @@ impl Task for GenerateManifestTask {
             let metadata_res = if force_refresh {
                 log::info!("Force refreshing PistonMetadata (bypassing cache)...");
                 // Delete cache to force fresh fetch
-                let cache_path = config_dir.join("piston_manifest.json");
+                let cache_path = data_dir.join("piston_manifest.json");
                 if cache_path.exists() {
                     log::info!("Deleting cache file to force refresh");
                     let _ = fs::remove_file(&cache_path).await;
                 }
-                piston_lib::game::metadata::cache::refresh_metadata(&config_dir).await
+                piston_lib::game::metadata::cache::refresh_metadata(&data_dir).await
             } else {
                 log::info!(
                     "Fetching PistonMetadata (status: {:?}, max_age: {}h)...",
                     network_status,
                     max_age
                 );
-                piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&config_dir, max_age)
+                piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&data_dir, max_age)
                     .await
             };
 
