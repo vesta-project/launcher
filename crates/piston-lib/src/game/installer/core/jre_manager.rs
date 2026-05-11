@@ -280,8 +280,6 @@ pub fn scan_system_javas() -> Vec<DetectedJava> {
     {
         search_roots.push(PathBuf::from("C:\\Program Files\\Java"));
         search_roots.push(PathBuf::from("C:\\Program Files (x86)\\Java"));
-        
-        // Also check Eclipse Temurin / Adoptium
         search_roots.push(PathBuf::from("C:\\Program Files\\Eclipse Foundation"));
     }
 
@@ -320,7 +318,6 @@ pub fn scan_system_javas() -> Vec<DetectedJava> {
 }
 
 fn detect_system_java_from_path() -> Option<PathBuf> {
-    // Try to find the java executable path
     #[cfg(windows)]
     {
         if let Ok(output) = std::process::Command::new("where")
@@ -344,17 +341,16 @@ fn detect_system_java_from_path() -> Option<PathBuf> {
             }
         }
     }
+
     None
 }
 
-/// Verify a Java path and return information about it
+/// Verify a Java path and return installation information
 pub fn verify_java(path: &Path) -> Result<DetectedJava> {
     if !path.exists() {
         anyhow::bail!("Java path does not exist: {:?}", path);
     }
 
-    // Run java -version
-    // Note: java -version outputs to STDERR unusually
     let output = std::process::Command::new(path)
         .arg("-version")
         .suppress_console()
@@ -362,13 +358,11 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
         .context("Failed to run java -version")?;
 
     let version_str = String::from_utf8_lossy(&output.stderr);
-    
-    // Parse version string like 'openjdk version "17.0.1" 2021-10-19' or 'java version "1.8.0_311"'
     let major_version = parse_major_version(&version_str)
         .context(format!("Could not parse Java version from: {}", version_str))?;
-
-    // Check if 64-bit
-    let is_64bit = version_str.contains("64-Bit") || version_str.contains("x86_64") || version_str.contains("amd64");
+    let is_64bit = version_str.contains("64-Bit")
+        || version_str.contains("x86_64")
+        || version_str.contains("amd64");
 
     Ok(DetectedJava {
         path: path.to_path_buf(),
@@ -378,12 +372,10 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
 }
 
 fn parse_major_version(version_output: &str) -> Option<u32> {
-    // Look for patterns like "1.8.0", "17.0.1", "21-ea"
-    let re = regex::Regex::new(r"version\s+?.\s*?(\d+)(\.(\d+))?").ok()?;
+    let re = regex::Regex::new(r#"version\s+".?(\d+)(\.(\d+))?"#).ok()?;
     if let Some(caps) = re.captures(version_output) {
         let major = caps.get(1)?.as_str().parse::<u32>().ok()?;
         if major == 1 {
-            // Handle 1.8.x -> 8
             return caps.get(3)?.as_str().parse::<u32>().ok();
         }
         return Some(major);
@@ -391,7 +383,7 @@ fn parse_major_version(version_output: &str) -> Option<u32> {
     None
 }
 
-/// Detect system Java installations
+/// Detect Java from PATH
 pub fn detect_system_java() -> Option<PathBuf> {
     detect_system_java_from_path()
 }

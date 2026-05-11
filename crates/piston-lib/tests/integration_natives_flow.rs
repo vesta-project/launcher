@@ -44,6 +44,7 @@ async fn integration_installer_launcher_natives_flow() {
         rules: None,
         natives: Some(natives),
         extract: Some(ExtractRules { exclude: vec![] }),
+        include_in_classpath: true,
     };
 
     // Create the classifier JAR on disk so the launcher can extract it
