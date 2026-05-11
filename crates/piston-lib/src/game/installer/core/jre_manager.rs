@@ -67,7 +67,10 @@ pub async fn get_or_install_jre(
     log::info!("Ensuring JRE {} is available", required_version.major);
 
     if reporter.is_dry_run() {
-        log::info!("[Dry-Run] Would ensure JRE {} is available", required_version.major);
+        log::info!(
+            "[Dry-Run] Would ensure JRE {} is available",
+            required_version.major
+        );
         let dummy_path = jre_dir.join(format!("zulu-{}/bin/java.exe", required_version.major));
         return Ok(dummy_path);
     }
@@ -358,8 +361,10 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
         .context("Failed to run java -version")?;
 
     let version_str = String::from_utf8_lossy(&output.stderr);
-    let major_version = parse_major_version(&version_str)
-        .context(format!("Could not parse Java version from: {}", version_str))?;
+    let major_version = parse_major_version(&version_str).context(format!(
+        "Could not parse Java version from: {}",
+        version_str
+    ))?;
     let is_64bit = version_str.contains("64-Bit")
         || version_str.contains("x86_64")
         || version_str.contains("amd64");
@@ -372,7 +377,7 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
 }
 
 fn parse_major_version(version_output: &str) -> Option<u32> {
-    let re = regex::Regex::new(r#"version\s+".?(\d+)(\.(\d+))?"#).ok()?;
+    let re = regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).ok()?;
     if let Some(caps) = re.captures(version_output) {
         let major = caps.get(1)?.as_str().parse::<u32>().ok()?;
         if major == 1 {
@@ -404,7 +409,12 @@ mod tests {
     fn parses_java_version_from_component() {
         assert_eq!(JavaVersion::from_component("jre-legacy").unwrap().major, 8);
         assert_eq!(JavaVersion::from_component("17").unwrap().major, 17);
-        assert_eq!(JavaVersion::from_component("java-runtime-21").unwrap().major, 21);
+        assert_eq!(
+            JavaVersion::from_component("java-runtime-21")
+                .unwrap()
+                .major,
+            21
+        );
         assert!(JavaVersion::from_component("java-runtime-delta").is_err());
     }
 
