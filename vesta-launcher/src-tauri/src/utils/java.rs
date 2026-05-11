@@ -123,7 +123,11 @@ pub async fn resolve_required_java_major(
         }
     }
 
-    let fetched = piston_lib::game::metadata::fetch_java_major_for_version(mc_version)
+    let client = reqwest::Client::builder()
+        .user_agent("VestaLauncher/1.0")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let fetched = piston_lib::game::java_policy::fetch_java_major_for_version(mc_version, &client)
         .await
         .map_err(|e| e.to_string())?;
     let preferred = preferred_java_major(fetched);

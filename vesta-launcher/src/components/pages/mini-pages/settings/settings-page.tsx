@@ -460,17 +460,20 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
       const managedVersion = managedJavas.find(
         (m: any) => m.major_version === req.major_version,
       );
+      // Fall back to DB path when disk scan doesn't find it (e.g. after
+      // async download task registered the path but before disk scan ran)
+      const managedPath = managedVersion?.path || current?.path;
 
       // Managed option
       options.push({
         type: "managed",
         version: req.major_version,
         title: "Managed Runtime",
-        path: managedVersion?.path,
+        path: managedPath,
         isActive: current?.is_managed || false,
         onClick: () => {
-          if (managedVersion) {
-            handleSetGlobalPath(req.major_version, managedVersion.path, true);
+          if (managedPath) {
+            handleSetGlobalPath(req.major_version, managedPath, true);
           }
         },
         onDownload: () => handleDownloadManaged(req.major_version),

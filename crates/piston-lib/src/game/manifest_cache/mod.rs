@@ -245,70 +245,88 @@ impl ManifestCache {
         let forge = self.get_or_fetch("forge").await.ok();
         let neo = self.get_or_fetch("neo").await.ok();
 
-        let mut game_versions = Vec::new();
+        // Pre-parse each loader manifest ONCE — avoids re-parsing for every version.
+        struct LoaderInfo {
+            /// Map of version_id → loader versions (Forge/NeoForge style)
+            per_version: HashMap<String, Vec<LoaderVersionInfo>>,
+            /// Set of version IDs that this loader supports (Fabric/Quilt style)
+            supported_versions: std::collections::HashSet<String>,
+            /// Dummy entry loaders (Fabric/Quilt style)
+            dummy_loaders: Vec<LoaderVersionInfo>,
+        }
 
-        // Pre-resolve each loader manifest.
-        //
-        // Fabric/Quilt: a dummy entry (${modrinth.gameVersion}) holds all loader
-        // versions. Named entries (e.g. "1.20.1") mark which MC versions are
-        // supported but have empty loaders. The dummy's loaders apply ONLY to
-        // versions explicitly named in the manifest.
-        //
-        // Forge/NeoForge: each game version has its own loaders entry.
-        let resolve_loader_versions = |manifest: &Arc<serde_json::Value>, mc_id: &str| -> Vec<LoaderVersionInfo> {
+        fn parse_loader(manifest: &Option<Arc<serde_json::Value>>) -> Option<LoaderInfo> {
             let parsed: crate::game::metadata::types::ModrinthManifest =
-                match serde_json::from_value((**manifest).clone()) {
+                match serde_json::from_value((**manifest.as_ref()?).clone()) {
                     Ok(m) => m,
-                    Err(_) => return Vec::new(),
+                    Err(_) => return None,
                 };
 
-            // Forge/NeoForge style: exact match on version ID with non-empty loaders
-            if let Some(entry) = parsed.game_versions.iter().find(|gv| gv.id == mc_id) {
-                if !entry.loaders.is_empty() {
-                    return entry.loaders.iter().map(|lv| LoaderVersionInfo {
+            let mut per_version = HashMap::new();
+            let mut supported_versions = std::collections::HashSet::new();
+            let mut dummy_loaders = Vec::new();
+
+            for gv in &parsed.game_versions {
+                if crate::game::metadata::types::is_dummy_game_version(&gv.id) {
+                    // Fabric/Quilt: dummy entry holds all loader versions
+                    dummy_loaders = gv.loaders.iter().map(|lv| LoaderVersionInfo {
                         version: lv.id.clone(),
                         stable: lv.stable,
                         url: Some(lv.url.clone()),
                         sha1: None,
                         metadata: None,
                     }).collect();
-                }
-            }
-
-            // Fabric/Quilt style: find the dummy entry. Only apply if this
-            // MC version is explicitly listed in the manifest (as a named entry
-            // with empty loaders).
-            let has_named_entry = parsed.game_versions.iter().any(|gv| gv.id == mc_id);
-            if has_named_entry {
-                if let Some(dummy) = parsed.game_versions.iter().find(|gv| {
-                    crate::game::metadata::types::is_dummy_game_version(&gv.id)
-                }) {
-                    return dummy.loaders.iter().map(|lv| LoaderVersionInfo {
+                } else if !gv.loaders.is_empty() {
+                    // Forge/NeoForge: each version has its own non‑empty loader list
+                    per_version.insert(gv.id.clone(), gv.loaders.iter().map(|lv| LoaderVersionInfo {
                         version: lv.id.clone(),
                         stable: lv.stable,
                         url: Some(lv.url.clone()),
                         sha1: None,
                         metadata: None,
-                    }).collect();
+                    }).collect());
+                } else {
+                    // Fabric/Quilt: named entry with empty loaders — marks support
+                    supported_versions.insert(gv.id.clone());
                 }
             }
-            Vec::new()
-        };
 
+            Some(LoaderInfo { per_version, supported_versions, dummy_loaders })
+        }
+
+        let loader_infos = [
+            (ModloaderType::Fabric, parse_loader(&fabric)),
+            (ModloaderType::Quilt, parse_loader(&quilt)),
+            (ModloaderType::Forge, parse_loader(&forge)),
+            (ModloaderType::NeoForge, parse_loader(&neo)),
+        ];
+
+        let mut game_versions = Vec::new();
         for mv in &mc_manifest.versions {
             let mut loaders = HashMap::new();
 
-            for (loader_type, manifest) in [
-                (ModloaderType::Fabric, &fabric),
-                (ModloaderType::Quilt, &quilt),
-                (ModloaderType::Forge, &forge),
-                (ModloaderType::NeoForge, &neo),
-            ] {
-                if let Some(manifest) = manifest {
-                    let versions = resolve_loader_versions(manifest, &mv.id);
-                    if !versions.is_empty() {
-                        loaders.insert(loader_type, versions);
-                    }
+            for (loader_type, info) in &loader_infos {
+                let Some(info) = info else { continue; };
+
+                // Forge/NeoForge: exact version match
+                if let Some(versions) = info.per_version.get(&mv.id) {
+                    loaders.insert(*loader_type, versions.clone());
+                    continue;
+                }
+
+                // Fabric/Quilt: must be a named supported version
+                if info.supported_versions.contains(&mv.id) {
+                    loaders.insert(*loader_type, info.dummy_loaders.clone());
+                }
+            }
+            let mut loaders = HashMap::new();
+
+            for (loader_type, info) in &loader_infos {
+                let Some(info) = info else { continue; };
+                if let Some(versions) = info.per_version.get(&mv.id) {
+                    loaders.insert(*loader_type, versions.clone());
+                } else if info.supported_versions.contains(&mv.id) {
+                    loaders.insert(*loader_type, info.dummy_loaders.clone());
                 }
             }
 
@@ -327,6 +345,24 @@ impl ManifestCache {
         // Sort: latest first
         game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
 
+        // Fetch available Java runtimes from Mojang's runtime manifest (1 HTTP request).
+        // This replaces the old hardcoded [8, 17, 21] with real data.
+        let required_java_major_versions = crate::game::java_policy::fetch_available_runtimes(&self.client)
+            .await
+            .unwrap_or_else(|e| {
+                log::warn!("Failed to fetch Java runtimes: {e}. Falling back to [21, 17, 8]");
+                vec![21u32, 17, 8]
+            });
+
+        // Fetch Java version for latest release + snapshot so onboarding works.
+        // Other versions resolve lazily when the user tries to install them.
+        let mut java_versions = HashMap::new();
+        for v in [&mc_manifest.latest.release, &mc_manifest.latest.snapshot] {
+            if let Ok(major) = crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await {
+                java_versions.insert(v.clone(), major);
+            }
+        }
+
         Ok(PistonMetadata {
             last_updated: Utc::now(),
             game_versions,
@@ -334,8 +370,8 @@ impl ManifestCache {
                 release: mc_manifest.latest.release.clone(),
                 snapshot: mc_manifest.latest.snapshot.clone(),
             },
-            required_java_major_versions: vec![8, 17, 21],
-            java_major_version_by_game_version: HashMap::new(),
+            required_java_major_versions,
+            java_major_version_by_game_version: java_versions,
         })
     }
 }
@@ -352,3 +388,4 @@ fn manifest_url(slug: &str) -> String {
         _ => format!("https://launcher-meta.modrinth.com/{slug}/v0/manifest.json"),
     }
 }
+

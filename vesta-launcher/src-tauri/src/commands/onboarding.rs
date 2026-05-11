@@ -237,4 +237,5 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
         .submit(Box::new(task))
         .await
         .map_err(|e| e.to_string())
+
 }
