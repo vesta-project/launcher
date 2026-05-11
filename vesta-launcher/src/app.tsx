@@ -7,6 +7,7 @@ import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
 import { Route, Router, useNavigate } from "@solidjs/router";
 import { cleanupDialogSystem, dialogStore, initializeDialogSystem } from "@stores/dialog-store";
+import "@stores/versions"; // eager-load version metadata on boot
 import { setupInstanceListeners } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";

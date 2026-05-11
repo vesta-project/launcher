@@ -30,6 +30,7 @@ import {
 	isDefaultIcon,
 	type PistonMetadata,
 } from "@utils/instances";
+import { useMinecraftVersions } from "@stores/versions";
 import { startAppTutorial } from "@utils/tutorial";
 import {
 	describeSelectionAdjustments,
@@ -513,7 +514,7 @@ function InitInstallationPage(props: InitPagesProps) {
 		}
 	});
 
-	const [metadata] = createResource<PistonMetadata>(getMinecraftVersions);
+	const metadata = useMinecraftVersions();
 
 	createEffect(() => {
 		const meta = metadata();

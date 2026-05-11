@@ -41,9 +41,10 @@ import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
 import {
   DEFAULT_ICONS,
-  getMinecraftVersions,
+
   isDefaultIcon,
 } from "@utils/instances";
+import { useMinecraftVersions } from "@stores/versions";
 import { parseResourceUrl } from "@utils/resource-url";
 import { sanitizeSvg } from "@utils/security";
 import {
@@ -815,7 +816,7 @@ const ResourceCard: Component<{
 
 const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
   const activeRouter = createMemo(() => props.router || router());
-  const [mcVersions] = createResource(getMinecraftVersions);
+  const mcVersions = useMinecraftVersions();
 
   // Auto-expand groups that contain active categories
   createEffect(() => {

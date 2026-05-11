@@ -20,12 +20,11 @@ import { showToast } from "@ui/toast/toast";
 import {
 	DEFAULT_ICONS,
 	GameVersionMetadata,
-	getMinecraftVersions,
 	getStableIconId,
 	Instance,
 	isDefaultIcon,
-	PistonMetadata,
 } from "@utils/instances";
+import { useMinecraftVersions } from "@stores/versions";
 import { getSystemMemoryMb, ModpackInfo } from "@utils/modpacks";
 import {
 	describeSelectionAdjustments,
@@ -40,7 +39,6 @@ import {
 	batch,
 	createEffect,
 	createMemo,
-	createResource,
 	createSignal,
 	onMount,
 	Show,
@@ -178,7 +176,7 @@ export function InstallForm(props: InstallFormProps) {
 	const [postExitHook, setPostExitHook] = createSignal(props.initialData?.postExitHook || "");
 
 	// --- Data Sources ---
-	const [pistonMetadata] = createResource<PistonMetadata>(getMinecraftVersions);
+	const pistonMetadata = useMinecraftVersions();
 
 	const searchableModpackVersions = createMemo(() => {
 		return (props.modpackVersions ?? []).map((v) => ({
