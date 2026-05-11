@@ -39,11 +39,7 @@ import {
 import { TextField } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
-import {
-  DEFAULT_ICONS,
-
-  isDefaultIcon,
-} from "@utils/instances";
+import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import { useMinecraftVersions } from "@stores/versions";
 import { parseResourceUrl } from "@utils/resource-url";
 import { sanitizeSvg } from "@utils/security";
@@ -816,7 +812,7 @@ const ResourceCard: Component<{
 
 const FiltersPanel: Component<{ router?: MiniRouter }> = (props) => {
   const activeRouter = createMemo(() => props.router || router());
-  const mcVersions = useMinecraftVersions();
+  const { versions: mcVersions } = useMinecraftVersions();
 
   // Auto-expand groups that contain active categories
   createEffect(() => {

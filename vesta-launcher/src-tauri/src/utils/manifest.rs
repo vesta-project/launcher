@@ -61,9 +61,11 @@ pub async fn load_manifest(app_handle: &tauri::AppHandle) -> Result<PistonMetada
     }
 
     // 3. Nothing cached — fetch fresh
-    let meta = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
+    let mut meta = piston_lib::game::metadata::cache::load_or_fetch_metadata(&data_dir)
         .await
         .map_err(|e| format!("Failed to fetch metadata: {}", e))?;
+
+    super::java::normalize_metadata_java_requirements(&mut meta);
 
     if let Some(cache) = app_handle.try_state::<MetadataCache>() {
         cache.set(&meta);

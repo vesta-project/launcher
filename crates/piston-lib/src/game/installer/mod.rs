@@ -285,7 +285,13 @@ pub async fn install_instance(
                 let hash = asset_obj
                     .get("hash")
                     .and_then(|h| h.as_str())
-                    .unwrap_or(asset_name);
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "Asset '{}' in index is missing its hash \
+                             — asset index may be corrupt",
+                            asset_name
+                        )
+                    })?;
                 let hash_prefix = &hash[..2];
                 let asset_url = format!(
                     "https://resources.download.minecraft.net/{}/{}",

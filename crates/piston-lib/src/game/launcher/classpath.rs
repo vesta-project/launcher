@@ -68,15 +68,16 @@ pub fn build_classpath_filtered(
 
         let full_path = libraries_dir.join(&library.path);
 
-        // Add to classpath if file exists - skip with warning if missing
+        // Add to classpath if file exists — fail hard if missing.
+        // At this point we've already filtered out natives and non-classpath
+        // libraries, so any remaining library is a required classpath JAR.
         if full_path.exists() {
             classpath_entries.push(full_path.to_string_lossy().to_string());
         } else {
-            log::warn!(
-                "Missing library, skipping: {} ({})",
-                library.name,
-                full_path.display()
-            );
+            return Err(ValidationError::LibraryNotFound {
+                library_path: full_path.to_string_lossy().to_string(),
+            }
+            .into());
         }
     }
 

@@ -1,4 +1,5 @@
 import { getMinecraftVersions, type PistonMetadata } from "@utils/instances";
+import { showToast } from "@ui/toast/toast";
 import { createSignal } from "solid-js";
 
 /**
@@ -14,11 +15,41 @@ const [versions, setVersions] = createSignal<PistonMetadata | undefined>(
   },
 );
 
+const [versionsLoading, setVersionsLoading] = createSignal(false);
+const [versionsError, setVersionsError] = createSignal<string | null>(null);
+
+/**
+ * Fetch Minecraft version metadata from the backend.
+ * Exported so components can retry on failure.
+ */
+export async function refetchMinecraftVersions() {
+  setVersionsLoading(true);
+  setVersionsError(null);
+  try {
+    const data = await getMinecraftVersions();
+    setVersions(data);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("[versions store] Failed to load:", e);
+    setVersionsError(msg);
+    showToast({
+      title: "Failed to load Minecraft versions",
+      description: msg,
+      severity: "error",
+    });
+  } finally {
+    setVersionsLoading(false);
+  }
+}
+
 // Eager-fetch on import — no waiting for a component to call useMinecraftVersions
-getMinecraftVersions()
-  .then(setVersions)
-  .catch((e) => console.error("[versions store] Failed to load:", e));
+refetchMinecraftVersions();
 
 export function useMinecraftVersions() {
-  return versions;
+  return {
+    versions,
+    loading: versionsLoading,
+    error: versionsError,
+    refetch: refetchMinecraftVersions,
+  };
 }
