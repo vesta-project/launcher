@@ -44,6 +44,12 @@ pub struct UnifiedLibrary {
     pub is_native: bool,
     pub classifier: Option<String>,
     pub extract_rules: Option<ExtractRules>,
+    #[serde(default = "default_true")]
+    pub include_in_classpath: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 /// Processor to run during installation (for Forge/NeoForge)
@@ -79,12 +85,12 @@ impl UnifiedManifest {
             .as_ref()
             .map(|a| a.jvm.clone())
             .unwrap_or_default();
-        let mut libraries_map: HashMap<String, UnifiedLibrary> = HashMap::new();
+        let mut libraries: Vec<UnifiedLibrary> = Vec::new();
 
         // Add vanilla libraries
         for lib in &vanilla.libraries {
             for unified in UnifiedLibrary::from_library(&lib, None, os) {
-                libraries_map.insert(get_lib_key(&unified), unified);
+                libraries.push(unified);
             }
         }
 
@@ -104,7 +110,7 @@ impl UnifiedManifest {
                 .as_ref()
                 .map(|a| a.game.clone())
                 .unwrap_or_default();
-            let mut child_jvm_args = ml
+            let child_jvm_args = ml
                 .arguments
                 .as_ref()
                 .map(|a| a.jvm.clone())
@@ -118,14 +124,14 @@ impl UnifiedManifest {
             }
 
             if !child_game_args.is_empty() {
-                let mut new_game = child_game_args;
-                new_game.extend(game_arguments);
+                let mut new_game = game_arguments;
+                new_game.extend(child_game_args);
                 game_arguments = new_game;
             }
 
             if !child_jvm_args.is_empty() {
-                let mut new_jvm = child_jvm_args;
-                new_jvm.extend(jvm_arguments);
+                let mut new_jvm = jvm_arguments;
+                new_jvm.extend(child_jvm_args);
                 jvm_arguments = new_jvm;
             }
 
@@ -140,9 +146,28 @@ impl UnifiedManifest {
                 None
             };
 
-            // Merge libraries
+            // Deduplicate vanilla libraries that the loader overrides.
+            // Matches daedalus::merge_partial_version(): if the loader provides
+            // a library with the same group:artifact and include_in_classpath=true,
+            // the vanilla version is skipped to avoid class conflicts.
+            let loader_lib_artifacts: Vec<&str> = ml
+                .libraries
+                .iter()
+                .filter(|l| l.include_in_classpath)
+                .filter_map(|l| l.name.rsplit_once(':'))
+                .map(|(artifact, _)| artifact)
+                .collect();
+
+            libraries.retain(|lib| {
+                if let Some(lib_artifact) = lib.name.rsplit_once(':').map(|x| x.0) {
+                    !loader_lib_artifacts.contains(&lib_artifact)
+                } else {
+                    true
+                }
+            });
+
+            // Add loader libraries
             let mut ml_unified_libraries = Vec::new();
-            let mut ml_base_prefixes = std::collections::HashSet::new();
 
             for ml_lib in ml.libraries {
                 let unified_list = UnifiedLibrary::from_library(&ml_lib, ml_type, os);
@@ -150,31 +175,10 @@ impl UnifiedManifest {
                     continue;
                 }
 
-                let parts: Vec<&str> = ml_lib.name.split(':').collect();
-                if parts.len() >= 2 {
-                    ml_base_prefixes.insert(format!("{}:{}", parts[0], parts[1]));
-                }
-
                 ml_unified_libraries.extend(unified_list);
             }
 
-            // Wipe vanilla variants first
-            for prefix in ml_base_prefixes {
-                let keys_to_remove: Vec<String> = libraries_map
-                    .keys()
-                    .filter(|k| k.starts_with(&prefix))
-                    .map(|k| k.clone())
-                    .collect();
-
-                for k in keys_to_remove {
-                    libraries_map.remove(&k);
-                }
-            }
-
-            // Insert modloader libraries
-            for unified in ml_unified_libraries {
-                libraries_map.insert(get_lib_key(&unified), unified);
-            }
+            libraries.extend(ml_unified_libraries);
 
             if ml.java_version.is_some() {
                 java_version = ml.java_version;
@@ -186,7 +190,7 @@ impl UnifiedManifest {
             main_class,
             minecraft_version,
             java_version,
-            libraries: libraries_map.into_values().collect(),
+            libraries,
             asset_index,
             game_arguments,
             jvm_arguments,
@@ -232,41 +236,9 @@ impl UnifiedManifest {
     }
 }
 
-/// Helper to get deduplication key (group:artifact:classifier)
-fn get_lib_key(lib: &UnifiedLibrary) -> String {
-    let parts: Vec<&str> = lib.name.split(':').collect();
-    let base = if parts.len() >= 2 {
-        format!("{}:{}", parts[0], parts[1])
-    } else {
-        lib.name.clone()
-    };
-
-    if let Some(ref classifier) = lib.classifier {
-        format!("{}:{}", base, classifier)
-    } else {
-        base
-    }
-}
-
 impl From<VersionManifest> for UnifiedManifest {
     fn from(v: VersionManifest) -> Self {
         UnifiedManifest::merge(v, None, OsType::current())
-    }
-}
-
-fn is_known_native_library(name: &str) -> bool {
-    let n = name.to_lowercase();
-    n.contains("org.lwjgl")
-        || n.contains("ca.weblite:java-objc-bridge")
-        || n.contains("com.mojang:text2speech")
-        || n.contains("com.mojang:jtracy")
-}
-
-fn get_default_classifier_for_os(os: OsType) -> &'static str {
-    match os {
-        OsType::Windows | OsType::WindowsArm64 => "windows",
-        OsType::MacOS | OsType::MacOSArm64 => "osx",
-        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
     }
 }
 
@@ -323,6 +295,7 @@ impl UnifiedLibrary {
                     is_native: is_native_by_name,
                     classifier,
                     extract_rules: lib.extract.clone(),
+                    include_in_classpath: lib.include_in_classpath,
                 });
             }
         }
@@ -351,6 +324,7 @@ impl UnifiedLibrary {
                 is_native: false,
                 classifier: None,
                 extract_rules: lib.extract.clone(),
+                include_in_classpath: lib.include_in_classpath,
             });
         }
 
@@ -359,22 +333,23 @@ impl UnifiedLibrary {
         }
 
         // 2. Check for native classifier
+        // Try ARM-specific keys first (e.g. "osx-arm64") so that
+        // Modrinth-patched version JSONs with arm64 native classifiers
+        // are preferred on Apple Silicon / ARM Linux machines.
         let mut native_classifier = if let Some(natives) = &lib.natives {
-            let os_key = match os {
-                OsType::Windows | OsType::WindowsArm64 => "windows",
-                OsType::MacOS | OsType::MacOSArm64 => "osx",
-                OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+            let os_keys: &[&str] = match os {
+                OsType::WindowsArm64 => &["windows-arm64", "windows"],
+                OsType::Windows => &["windows"],
+                OsType::MacOSArm64 => &["osx-arm64", "osx"],
+                OsType::MacOS => &["osx"],
+                OsType::LinuxArm64 => &["linux-arm64", "linux"],
+                OsType::LinuxArm32 => &["linux-arm32", "linux"],
+                OsType::Linux => &["linux"],
             };
-            natives.get(os_key).cloned()
+            os_keys.iter().find_map(|key| natives.get(*key)).cloned()
         } else {
             None
         };
-
-        // Fallback: If it's a known native-using library but lacks an explicit natives map,
-        // or if it's not found in the manifest's native map, try to infer it.
-        if native_classifier.is_none() && is_known_native_library(&lib.name) {
-            native_classifier = Some(get_default_classifier_for_os(os).to_string());
-        }
 
         // Fallback: Check downloads.classifiers for OS match if not found in natives map or inferred
         if native_classifier.is_none() {
@@ -439,6 +414,7 @@ impl UnifiedLibrary {
                 is_native: true,
                 classifier: Some(classifier),
                 extract_rules: lib.extract.clone(),
+                include_in_classpath: lib.include_in_classpath,
             });
         }
 
@@ -494,12 +470,12 @@ fn rule_matches(rule: &Rule, os: OsType) -> bool {
         for (feature_name, required_state) in features {
             match feature_name.as_str() {
                 "is_demo_user" => {
-                    if *required_state {
+                    if required_state.unwrap_or(true) {
                         return false;
                     }
                 }
                 "has_custom_resolution" => {
-                    if *required_state {
+                    if required_state.unwrap_or(true) {
                         return false;
                     }
                 }
