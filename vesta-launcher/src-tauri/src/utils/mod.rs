@@ -6,6 +6,7 @@ pub mod hash;
 pub mod hooks;
 pub mod image;
 pub mod java;
+pub mod manifest;
 pub mod network;
 
 pub mod db; // New Diesel connection management

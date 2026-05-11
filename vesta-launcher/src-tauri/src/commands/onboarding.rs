@@ -33,69 +33,64 @@ fn java_requirement_name(version: u32) -> String {
 pub async fn get_required_java_versions(
     app_handle: AppHandle,
 ) -> Result<Vec<JavaRequirement>, String> {
-    let metadata = crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?;
+    let meta = crate::utils::manifest::load_manifest(&app_handle).await?;
 
     let mut requirements = Vec::new();
+    let latest_required_major =
+        crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.release)
+            .or_else(|_| {
+                crate::utils::java::resolve_required_java_from_manifest(
+                    &meta,
+                    &meta.latest.snapshot,
+                )
+            })
+            .ok()
+            .or_else(|| {
+                meta.required_java_major_versions
+                    .first()
+                    .copied()
+                    .map(crate::utils::java::preferred_java_major)
+            });
 
-    if let Some(meta) = metadata {
-        let latest_required_major =
-            crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.release)
-                .or_else(|_| {
-                    crate::utils::java::resolve_required_java_from_manifest(
-                        &meta,
-                        &meta.latest.snapshot,
-                    )
-                })
-                .ok()
-                .or_else(|| {
-                    meta.required_java_major_versions
-                        .first()
-                        .copied()
-                        .map(crate::utils::java::preferred_java_major)
-                });
+    let latest_required_major = match latest_required_major {
+        Some(v) => v,
+        None => {
+            log::warn!("Manifest does not contain Java runtime majors; forcing refresh");
+            let _ = crate::utils::manifest::queue_manifest_generation(&app_handle, true).await;
+            return Err("MANIFEST_NOT_READY".to_string());
+        }
+    };
 
-        let latest_required_major = match latest_required_major {
-            Some(v) => v,
-            None => {
-                log::warn!("Manifest does not contain Java runtime majors; forcing refresh");
-                let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
-                return Err("MANIFEST_NOT_READY".to_string());
-            }
-        };
+    let mut versions: Vec<u32> = meta
+        .required_java_major_versions
+        .iter()
+        .copied()
+        .map(crate::utils::java::preferred_java_major)
+        .collect();
+    versions.sort_unstable_by(|a, b| b.cmp(a));
+    versions.dedup();
 
-        let mut versions: Vec<u32> = meta
-            .required_java_major_versions
-            .iter()
+    if versions.is_empty() {
+        let set: std::collections::BTreeSet<u32> = meta
+            .java_major_version_by_game_version
+            .values()
             .copied()
             .map(crate::utils::java::preferred_java_major)
             .collect();
-        versions.sort_unstable_by(|a, b| b.cmp(a));
-        versions.dedup();
+        versions = set.into_iter().rev().collect();
+    }
 
-        if versions.is_empty() {
-            let set: std::collections::BTreeSet<u32> = meta
-                .java_major_version_by_game_version
-                .values()
-                .copied()
-                .map(crate::utils::java::preferred_java_major)
-                .collect();
-            versions = set.into_iter().rev().collect();
-        }
-
-        if versions.is_empty() {
-            let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
-            return Err("MANIFEST_NOT_READY".to_string());
-        }
-
-        for version in versions {
-            requirements.push(JavaRequirement {
-                major_version: version,
-                recommended_name: java_requirement_name(version),
-                is_required_for_latest: version == latest_required_major,
-            });
-        }
-    } else {
+    if versions.is_empty() {
+        let _ = crate::utils::manifest::queue_manifest_generation(&app_handle, true).await;
         return Err("MANIFEST_NOT_READY".to_string());
+    }
+
+    for version in versions {
+        requirements.push(JavaRequirement {
+            major_version: version,
+            recommended_name: java_requirement_name(version),
+            is_required_for_latest: version == latest_required_major,
+        });
     }
 
     Ok(requirements)

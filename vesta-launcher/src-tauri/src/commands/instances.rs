@@ -1916,13 +1916,7 @@ pub async fn is_instance_running(instance_data: Instance) -> Result<bool, String
 pub async fn get_minecraft_versions(
     app_handle: tauri::AppHandle,
 ) -> Result<piston_lib::game::metadata::PistonMetadata, String> {
-    if let Some(metadata) =
-        crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?
-    {
-        return Ok(metadata);
-    }
-
-    Err("MANIFEST_NOT_READY".to_string())
+    crate::utils::manifest::load_manifest(&app_handle).await
 }
 
 #[tauri::command]
