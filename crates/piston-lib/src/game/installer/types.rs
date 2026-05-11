@@ -107,8 +107,12 @@ impl ProgressReporter for SilentProgressReporter {
     fn set_substep(&self, _name: Option<&str>, _current: Option<u32>, _total: Option<u32>) {}
     fn set_actions(&self, _actions: Option<Vec<NotificationActionSpec>>) {}
     fn done(&self, _success: bool, _message: Option<&str>) {}
-    fn is_cancelled(&self) -> bool { false }
-    fn is_paused(&self) -> bool { false }
+    fn is_cancelled(&self) -> bool {
+        false
+    }
+    fn is_paused(&self) -> bool {
+        false
+    }
 }
 
 /// Cancellation token wrapper
@@ -156,11 +160,7 @@ pub struct InstallSpec {
 }
 
 impl InstallSpec {
-    pub fn new(
-        version_id: String,
-        data_dir: PathBuf,
-        game_dir: PathBuf,
-    ) -> Self {
+    pub fn new(version_id: String, data_dir: PathBuf, game_dir: PathBuf) -> Self {
         Self {
             version_id,
             modloader: None,
@@ -310,12 +310,31 @@ impl OsType {
         }
     }
 
-    /// Get the OS name as a string (for rule matching)
+    /// Get the OS name as a string (for rule matching, matches Modrinth/daedalus Os enum).
+    /// ARM variants return distinct names so rules like {"action": "disallow", "os": {"name": "osx"}}
+    /// only match Intel Macs and don't exclude ARM-compatible libraries.
     pub fn as_str(&self) -> &'static str {
         match self {
-            OsType::Windows | OsType::WindowsArm64 => "windows",
-            OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
-            OsType::MacOS | OsType::MacOSArm64 => "osx",
+            OsType::Windows => "windows",
+            OsType::WindowsArm64 => "windows-arm64",
+            OsType::MacOS => "osx",
+            OsType::MacOSArm64 => "osx-arm64",
+            OsType::Linux => "linux",
+            OsType::LinuxArm64 => "linux-arm64",
+            OsType::LinuxArm32 => "linux-arm32",
+        }
+    }
+
+    /// Get the full OS name including architecture (for Modrinth rule matching)
+    pub fn as_str_full(&self) -> &'static str {
+        match self {
+            OsType::Windows => "windows",
+            OsType::WindowsArm64 => "windows-arm64",
+            OsType::MacOS => "osx",
+            OsType::MacOSArm64 => "osx-arm64",
+            OsType::Linux => "linux",
+            OsType::LinuxArm64 => "linux-arm64",
+            OsType::LinuxArm32 => "linux-arm32",
         }
     }
 

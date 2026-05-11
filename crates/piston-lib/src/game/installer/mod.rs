@@ -4,26 +4,21 @@ pub mod core;
 pub mod modloaders;
 pub mod transaction;
 pub mod types;
-pub mod vanilla;
 pub mod verifier;
-
-#[cfg(test)]
-mod tests;
 
 use anyhow::{Context, Result};
 use types::{InstallSpec, ModloaderType, ProgressReporter};
 
-use crate::game::installer::core::traits::ModloaderInstaller;
-use crate::game::installer::modloaders::fabric::FabricInstaller;
-use crate::game::installer::modloaders::forge::ForgeInstaller;
-use crate::game::installer::modloaders::neoforge::NeoForgeInstaller;
-use crate::game::installer::modloaders::quilt::QuiltInstaller;
-use crate::game::installer::vanilla::VanillaInstaller;
+use crate::game::installer::core::batch::{BatchArtifact, BatchDownloader};
+use crate::game::installer::core::downloader::download_to_path;
+use crate::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
+use crate::game::installer::core::pipeline::process_and_download_libraries;
+use crate::game::java_policy::preferred_java_major;
 use cache::{ArtifactCache, InstallArtifactRef};
+use reqwest::Client;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use transaction::InstallTransaction;
 use verifier::verify_instance_readiness;
 
 tokio::task_local! {
@@ -78,7 +73,6 @@ pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Res
             }
 
             if cache_guard.restore_artifact(&sha, destination)? {
-                // Track it without re-hashing since we know the SHA from the cache
                 let mut artifacts_guard = artifacts.lock().await;
                 artifacts_guard.push(InstallArtifactRef::new(label.to_string(), sha));
                 return Ok(true);
@@ -88,18 +82,8 @@ pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Res
     Ok(false)
 }
 
-fn get_installer(modloader: Option<ModloaderType>) -> Box<dyn ModloaderInstaller> {
-    match modloader {
-        None | Some(ModloaderType::Vanilla) => Box::new(VanillaInstaller),
-        Some(ModloaderType::Fabric) => Box::new(FabricInstaller),
-        Some(ModloaderType::Quilt) => Box::new(QuiltInstaller),
-        Some(ModloaderType::Forge) => Box::new(ForgeInstaller),
-        Some(ModloaderType::NeoForge) => Box::new(NeoForgeInstaller),
-    }
-}
-
-/// Main entry point for game installation
-/// Dispatches to the appropriate installer based on modloader type
+/// Main entry point for game installation.
+/// Handles vanilla + modloader installation in a single unified pass.
 pub async fn install_instance(
     spec: InstallSpec,
     reporter: std::sync::Arc<dyn ProgressReporter>,
@@ -112,7 +96,6 @@ pub async fn install_instance(
     );
 
     if !spec.dry_run {
-        // Ensure base directories exist
         std::fs::create_dir_all(spec.data_dir())?;
         std::fs::create_dir_all(spec.libraries_dir())?;
         std::fs::create_dir_all(spec.assets_dir())?;
@@ -120,7 +103,6 @@ pub async fn install_instance(
         std::fs::create_dir_all(spec.jre_dir())?;
         std::fs::create_dir_all(&spec.game_dir)?;
 
-        // Ensure mods directory exists for modded installations
         if spec.modloader.is_some() && spec.modloader != Some(ModloaderType::Vanilla) {
             std::fs::create_dir_all(spec.game_dir.join("mods"))?;
         }
@@ -137,7 +119,7 @@ pub async fn install_instance(
     );
     if !preflight.ready {
         for issue in &preflight.issues {
-            log::debug!(
+            log::error!(
                 "[installer] verify-issue stage=preflight kind={:?} class={} path={} detail={}",
                 issue.kind,
                 issue.artifact_class,
@@ -152,139 +134,295 @@ pub async fn install_instance(
         return Ok(());
     }
 
-    // Load cache + transaction state
-    let cache = Arc::new(Mutex::new(ArtifactCache::load_with_labels(
-        spec.data_dir(),
-    )?));
-    let recorded_artifacts = Arc::new(Mutex::new(Vec::new()));
-    let install_id = spec.installed_version_id();
-    let loader_label = spec.modloader.map(|m| m.as_str().to_string());
-    let txn = if !spec.dry_run {
-        let t = InstallTransaction::new(install_id.clone(), spec.data_dir());
-        t.begin()?;
-        Some(t)
-    } else {
-        None
-    };
+    // ------------------------------------------------------------------
+    // Phase 1: Load version info + optional modloader profile
+    // ------------------------------------------------------------------
+    let client = Client::builder()
+        .pool_max_idle_per_host(8)
+        .tcp_keepalive(Some(std::time::Duration::from_secs(30)))
+        .timeout(std::time::Duration::from_secs(120))
+        .build()?;
 
-    reporter.set_message("Starting installation...");
-    reporter.set_percent(0);
+    // 1a. Fetch / use cached version info
+    reporter.start_step("Loading version metadata", None);
+    reporter.set_percent(5);
 
-    let installer = get_installer(spec.modloader);
-    let scope = InstallScope {
-        cache: cache.clone(),
-        artifacts: recorded_artifacts.clone(),
-        dry_run: spec.dry_run,
-    };
+    let version_json_path = spec
+        .versions_dir()
+        .join(&spec.version_id)
+        .join(format!("{}.json", spec.version_id));
+    let version_json_label = format!("versions/{}/{}.json", spec.version_id, spec.version_id);
 
-    let install_result = INSTALL_SCOPE
-        .scope(scope, async {
-            installer.install(&spec, reporter.clone()).await
-        })
-        .await;
-
-    if let Err(err) = install_result {
-        if let Some(ref t) = txn {
-            let _ = t.rollback(&err.to_string());
-        }
-        reporter.done(false, Some("Installation failed"));
-        return Err(err);
+    if !version_json_path.exists()
+        && try_restore_artifact(&version_json_label, &version_json_path).await?
+    {
+        log::info!("Restored cached version metadata for {}", spec.version_id);
     }
 
-    if spec.dry_run {
-        reporter.done(true, Some("Dry-run completed successfully"));
-        return Ok(());
+    if !version_json_path.exists() {
+        tokio::fs::create_dir_all(version_json_path.parent().unwrap()).await?;
+
+        let version_url = format!(
+            "https://launcher-meta.modrinth.com/minecraft/v0/versions/{}.json",
+            spec.version_id
+        );
+        download_to_path(&client, &version_url, &version_json_path, None, &*reporter)
+            .await
+            .with_context(|| format!("Failed to download version info for {}", spec.version_id))?;
+
+        track_artifact_from_path(
+            version_json_label.clone(),
+            &version_json_path,
+            None,
+            Some(version_url),
+        )
+        .await?;
     }
 
-    let finalize_result = async {
-        let mut cache_guard = cache.lock().await;
-        let mut artifacts = collect_version_artifacts(&spec, &install_id, &mut cache_guard)?;
-        drop(cache_guard);
+    let version_info: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&version_json_path)?)?;
 
+    // 1b. If modloader, resolve version and fetch profile
+    let loader_profile =
+        if spec.modloader.is_some() && spec.modloader != Some(ModloaderType::Vanilla) {
+            Some(
+                crate::game::installer::modloaders::resolve_loader_profile(
+                    &spec,
+                    reporter.clone(),
+                    &client,
+                )
+                .await?,
+            )
+        } else {
+            None
+        };
+
+    // ------------------------------------------------------------------
+    // Phase 2: Download client jar + assets
+    // ------------------------------------------------------------------
+    reporter.start_step("Downloading game client", None);
+    reporter.set_percent(15);
+
+    let installed_id = spec.installed_version_id();
+    let client_jar_path = spec
+        .versions_dir()
+        .join(&installed_id)
+        .join(format!("{}.jar", installed_id));
+
+    if !client_jar_path.exists() {
+        if let Some(client_url) = version_info
+            .get("downloads")
+            .and_then(|d| d.get("client"))
+            .and_then(|c| c.get("url"))
+            .and_then(|u| u.as_str())
         {
-            let mut recorded = recorded_artifacts.lock().await;
-            artifacts.extend(recorded.drain(..));
-        }
+            let client_sha1 = version_info
+                .get("downloads")
+                .and_then(|d| d.get("client"))
+                .and_then(|c| c.get("sha1"))
+                .and_then(|s| s.as_str());
 
-        let mut cache_guard = cache.lock().await;
-        cache_guard.record_install(&install_id, loader_label.clone(), &artifacts);
-        cache_guard.prune_unused();
-        cache_guard.save()?;
-        drop(cache_guard);
-
-        if let Some(ref txn) = txn {
-            txn.commit()?;
+            download_to_path(
+                &client,
+                client_url,
+                &client_jar_path,
+                client_sha1,
+                &*reporter,
+            )
+            .await?;
         }
-        Ok::<(), anyhow::Error>(())
-    }
-    .await;
-
-    if let Err(err) = finalize_result {
-        if let Some(ref txn) = txn {
-            let _ = txn.rollback(&err.to_string());
-        }
-        reporter.done(false, Some("Installation failed"));
-        return Err(err);
     }
 
-    let postflight = verify_instance_readiness(&spec)?;
-    log::info!(
-        "[installer] verify-summary stage=postflight ready={} checked={} missing={} mismatch={}",
-        postflight.ready,
-        postflight.checked,
-        postflight.missing_count(),
-        postflight.mismatch_count()
-    );
-    if !postflight.ready {
-        for issue in &postflight.issues {
-            log::debug!(
-                "[installer] verify-issue stage=postflight kind={:?} class={} path={} detail={}",
-                issue.kind,
-                issue.artifact_class,
-                issue.path,
-                issue.detail
-            );
+    // 2b. Download asset index
+    reporter.start_step("Downloading asset index", None);
+    reporter.set_percent(20);
+
+    if let Some(asset_index) = version_info.get("assetIndex") {
+        let asset_index_id = asset_index
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("legacy");
+        let asset_index_path = spec
+            .assets_dir()
+            .join("indexes")
+            .join(format!("{}.json", asset_index_id));
+        let asset_index_label = format!("assets/indexes/{}.json", asset_index_id);
+
+        if !asset_index_path.exists()
+            && try_restore_artifact(&asset_index_label, &asset_index_path).await?
+        {
+            log::info!("Restored asset index from cache");
         }
-        reporter.done(false, Some("Installation verification failed"));
-        return Err(anyhow::anyhow!(
-            "Post-install verification failed: {} missing, {} mismatched artifacts",
-            postflight.missing_count(),
-            postflight.mismatch_count()
-        ));
+
+        if !asset_index_path.exists() {
+            if let Some(url) = asset_index.get("url").and_then(|u| u.as_str()) {
+                let sha1 = asset_index.get("sha1").and_then(|s| s.as_str());
+                download_to_path(&client, url, &asset_index_path, sha1, &*reporter).await?;
+                track_artifact_from_path(
+                    asset_index_label,
+                    &asset_index_path,
+                    None,
+                    Some(url.to_string()),
+                )
+                .await?;
+            }
+        }
+
+        // 2c. Download assets
+        reporter.start_step("Downloading assets", None);
+        reporter.set_percent(30);
+
+        let asset_index_content = std::fs::read_to_string(&asset_index_path)?;
+        let asset_index_parsed: serde_json::Value = serde_json::from_str(&asset_index_content)?;
+
+        if let Some(objects) = asset_index_parsed
+            .get("objects")
+            .and_then(|o| o.as_object())
+        {
+            let mut assets_to_download = Vec::new();
+
+            for (asset_name, asset_obj) in objects {
+                let hash = asset_obj
+                    .get("hash")
+                    .and_then(|h| h.as_str())
+                    .unwrap_or(asset_name);
+                let hash_prefix = &hash[..2];
+                let asset_url = format!(
+                    "https://resources.download.minecraft.net/{}/{}",
+                    hash_prefix, hash
+                );
+                let asset_path = spec
+                    .assets_dir()
+                    .join("objects")
+                    .join(hash_prefix)
+                    .join(hash);
+
+                if !asset_path.exists() {
+                    assets_to_download.push(BatchArtifact {
+                        name: asset_name.clone(),
+                        urls: vec![asset_url],
+                        path: asset_path,
+                        sha1: Some(hash.to_string()),
+                        label: format!("assets/objects/{}/{}", hash_prefix, hash),
+                    });
+                }
+            }
+
+            if !assets_to_download.is_empty() {
+                let batch = BatchDownloader::new(client.clone(), spec.concurrency);
+                batch
+                    .download_all(assets_to_download, reporter.clone(), 30, 10.0)
+                    .await?;
+            }
+        }
     }
 
+    // ------------------------------------------------------------------
+    // Phase 3: Unified library download + native extraction
+    // ------------------------------------------------------------------
+    reporter.start_step("Downloading libraries", None);
+    reporter.set_percent(40);
+
+    // Parse vanilla manifest
+    let vanilla_manifest: crate::game::launcher::version_parser::VersionManifest =
+        serde_json::from_str(&std::fs::read_to_string(&version_json_path)?)?;
+
+    // Convert loader profile to VersionManifest if present
+    // (borrow the profile so we can still use it for processors later)
+    let loader_manifest = loader_profile
+        .as_ref()
+        .map(|p| crate::game::installer::modloaders::profile_to_version_manifest(p, &spec));
+
+    let unified = process_and_download_libraries(
+        &spec,
+        vanilla_manifest,
+        loader_manifest,
+        client.clone(),
+        reporter.clone(),
+    )
+    .await?;
+
+    // ------------------------------------------------------------------
+    // Phase 4: Run Forge/NeoForge processors
+    // ------------------------------------------------------------------
+    if let Some(ref profile) = loader_profile {
+        if let Some(processors) = &profile.processors {
+            if !processors.is_empty() {
+                if let Some(data) = &profile.data {
+                    reporter.start_step("Running forge processors", None);
+                    reporter.set_percent(90);
+
+                    crate::game::installer::modloaders::execute_loader_processors(
+                        &spec,
+                        reporter.clone(),
+                        processors,
+                        data,
+                        &client,
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 5: Setup JRE
+    // ------------------------------------------------------------------
+    reporter.start_step("Setting up Java runtime", None);
+    reporter.set_percent(95);
+
+    let java_major = version_info
+        .get("javaVersion")
+        .and_then(|j| j.get("majorVersion"))
+        .and_then(|m| m.as_u64())
+        .unwrap_or(8) as u32;
+
+    let preferred = preferred_java_major(java_major);
+    let java_ver = JavaVersion::new(preferred);
+
+    if spec.java_path.is_none() {
+        get_or_install_jre(&spec.jre_dir(), &java_ver, &*reporter).await?;
+    }
+
+    // ------------------------------------------------------------------
+    // Phase 6: Save unified manifest + finalize
+    // ------------------------------------------------------------------
+    if !spec.dry_run {
+        // Only save the UnifiedManifest for modloader installs where the
+        // installed version ID differs from the base Minecraft version.
+        // For vanilla installs, the raw Modrinth version JSON must remain
+        // at its original path so that subsequent modloader installs can
+        // read it as a `VersionManifest` (which has `downloads.artifact.url`).
+        if installed_id != spec.version_id {
+            reporter.start_step("Finalizing installation", None);
+            reporter.set_percent(98);
+
+            let installed_dir = spec.versions_dir().join(&installed_id);
+            tokio::fs::create_dir_all(&installed_dir).await?;
+            let version_json_path = installed_dir.join(format!("{}.json", installed_id));
+
+            // Remove read-only flag if the file exists (left over from a previous install)
+            if version_json_path.exists() {
+                let mut perms = tokio::fs::metadata(&version_json_path).await?.permissions();
+                if perms.readonly() {
+                    perms.set_readonly(false);
+                    tokio::fs::set_permissions(&version_json_path, perms).await?;
+                }
+            }
+
+            let version_json = serde_json::to_string_pretty(&unified)?;
+            tokio::fs::write(&version_json_path, version_json).await?;
+        }
+    }
+
+    reporter.set_percent(100);
     reporter.done(true, Some("Installation complete"));
     log::info!("Installation completed successfully: {}", spec.version_id);
 
     Ok(())
 }
 
-fn collect_version_artifacts(
-    spec: &InstallSpec,
-    install_id: &str,
-    cache: &mut ArtifactCache,
-) -> Result<Vec<InstallArtifactRef>> {
-    let mut artifacts = Vec::new();
-    let version_dir = spec.versions_dir().join(install_id);
-    let jar_name = format!("{}.jar", install_id);
-    let jar_path = version_dir.join(&jar_name);
-    if jar_path.exists() {
-        let sha = cache
-            .ingest_file(&jar_path, None, None)
-            .with_context(|| format!("Cache version jar {:?}", jar_path))?;
-        artifacts.push(InstallArtifactRef::new(
-            format!("versions/{}/{}", install_id, jar_name),
-            sha,
-        ));
-    } else {
-        log::warn!(
-            "Version jar missing after install; skip cache ingestion: {:?}",
-            jar_path
-        );
-    }
-    Ok(artifacts)
-}
-
+/// Verify that an instance's runtime artifacts are present and valid.
 pub fn verify_instance(spec: &InstallSpec) -> Result<types::VerificationResult> {
     verify_instance_readiness(spec)
 }

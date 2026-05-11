@@ -1,23 +1,33 @@
 //! Centralized installer settings.
-//! Currently static constants; later can be made user-configurable via a shared config.
-//! These values are used by download helpers and installers.
+//! All metadata and library downloads go through Modrinth's launcher-meta endpoint.
 
 // Progress reporting throttling (used in higher-level reporter)
 pub const REQUEST_TIMEOUT_SECS: u64 = 120;
 
-// TODO: Centralized installer settings will be re-added here later.
-// Helper for future dynamic loading (placeholder)
 #[allow(dead_code)]
 pub fn current_timeout() -> std::time::Duration {
     std::time::Duration::from_secs(REQUEST_TIMEOUT_SECS)
 }
-// URL Constants
+
+// ---------------------------------------------------------------------------
+// Modrinth launcher-meta endpoints (single source of truth for everything)
+// ---------------------------------------------------------------------------
+
+/// Base URL for Modrinth's launcher-meta service
+pub const MODRINTH_BASE_URL: &str = "https://launcher-meta.modrinth.com";
+
+/// Minecraft version manifest (lists all versions with URLs to patched JSONs)
 pub const VANILLA_MANIFEST_URL: &str =
-    "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-pub const FABRIC_META_URL: &str = "https://meta.fabricmc.net/v2/versions/loader";
-pub const FABRIC_MAVEN_URL: &str = "https://maven.fabricmc.net/";
-pub const QUILT_META_URL: &str = "https://meta.quiltmc.org/v3/versions/loader";
-pub const QUILT_MAVEN_URL: &str = "https://maven.quiltmc.org/repository/release/";
-pub const NEOFORGE_MAVEN_URL: &str = "https://maven.neoforged.net/releases/";
-pub const FORGE_MAVEN_URL: &str = "https://maven.minecraftforge.net/";
+    "https://launcher-meta.modrinth.com/minecraft/v0/manifest.json";
+
+/// Maven artifact mirror — all library JARs are mirrored by Modrinth's daedalus
+pub const MODRINTH_MAVEN_URL: &str = "https://launcher-meta.modrinth.com/maven/";
+
+/// Quilt maven URL (same Modrinth mirror)
+pub const QUILT_MAVEN_URL: &str = "https://launcher-meta.modrinth.com/maven/";
+
+/// NeoForge maven URL (same Modrinth mirror)
+pub const NEOFORGE_MAVEN_URL: &str = "https://launcher-meta.modrinth.com/maven/";
+
+/// Java runtime metadata (still from Mojang — Modrinth doesn't mirror runtimes)
 pub const ZULU_JRE_API_URL: &str = "https://api.azul.com/metadata/v1/zulu/packages";

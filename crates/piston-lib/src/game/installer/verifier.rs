@@ -18,8 +18,30 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
         .join(format!("{}.json", spec.version_id));
     let manifest_path = if installed_manifest.exists() {
         installed_manifest
-    } else {
+    } else if spec.modloader.is_none()
+        || spec.modloader == Some(crate::game::installer::types::ModloaderType::Vanilla)
+    {
+        // Vanilla-only: fall back to the base version manifest.
         vanilla_manifest
+    } else {
+        // Modloader install: the installed manifest MUST exist.
+        // Falling back to the vanilla manifest would make the preflight check
+        // pass when only vanilla is installed, causing the modloader install
+        // to be silently skipped.
+        issues.push(VerificationIssue {
+            kind: VerificationIssueKind::Missing,
+            artifact_class: "version-manifest".to_string(),
+            path: installed_manifest.to_string_lossy().to_string(),
+            detail: format!(
+                "Modloader version manifest is missing: {}",
+                spec.installed_version_id()
+            ),
+        });
+        return Ok(VerificationResult {
+            ready: false,
+            checked,
+            issues,
+        });
     };
 
     checked += 1;
@@ -136,6 +158,12 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
 }
 
 fn library_artifact_path(lib: &serde_json::Value) -> Option<PathBuf> {
+    // UnifiedManifest format: path is directly on the library object
+    if let Some(path) = lib.get("path").and_then(|v| v.as_str()) {
+        return Some(Path::new(path).to_path_buf());
+    }
+
+    // Mojang/VersionManifest format: path is under downloads.artifact.path
     lib.get("downloads")
         .and_then(|v| v.get("artifact"))
         .and_then(|v| v.get("path"))
