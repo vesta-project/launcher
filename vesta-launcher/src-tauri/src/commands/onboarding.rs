@@ -144,19 +144,14 @@ pub async fn select_java_file(app_handle: AppHandle) -> Result<Option<String>, S
 pub fn set_global_java_path(version: i32, path_str: String, managed: bool) -> Result<(), String> {
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
 
-    let new_entry = GlobalJavaPath {
-        major_version: version,
-        path: path_str,
-        is_managed: managed,
-    };
-
-    diesel::insert_into(global_java_paths)
-        .values(&new_entry)
-        .on_conflict(major_version)
-        .do_update()
-        .set(&new_entry)
-        .execute(&mut conn)
-        .map_err(|e| e.to_string())?;
+    diesel::sql_query(
+        "INSERT OR REPLACE INTO global_java_paths (major_version, path, is_managed) VALUES (?, ?, ?)"
+    )
+    .bind::<diesel::sql_types::Integer, _>(version)
+    .bind::<diesel::sql_types::Text, _>(&path_str)
+    .bind::<diesel::sql_types::Bool, _>(managed)
+    .execute(&mut conn)
+    .map_err(|e| e.to_string())?;
 
     Ok(())
 }
@@ -208,22 +203,14 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
             );
 
             let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-            let new_entry = GlobalJavaPath {
-                major_version: version as i32,
-                path: java_path.to_string_lossy().to_string(),
-                is_managed: true,
-            };
-
-            diesel::insert_into(global_java_paths)
-                .values(&new_entry)
-                .on_conflict(major_version)
-                .do_update()
-                .set((
-                    path_col.eq(&new_entry.path),
-                    is_managed_col.eq(new_entry.is_managed),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
+            diesel::sql_query(
+                "INSERT OR REPLACE INTO global_java_paths (major_version, path, is_managed) VALUES (?, ?, ?)"
+            )
+            .bind::<diesel::sql_types::Integer, _>(version as i32)
+            .bind::<diesel::sql_types::Text, _>(&java_path.to_string_lossy().to_string())
+            .bind::<diesel::sql_types::Bool, _>(true)
+            .execute(&mut conn)
+            .map_err(|e| e.to_string())?;
 
             return Ok(());
         }

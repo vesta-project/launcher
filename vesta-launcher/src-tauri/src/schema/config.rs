@@ -57,7 +57,8 @@ diesel::table! {
 }
 
 diesel::table! {
-    global_java_paths (major_version) {
+    global_java_paths (id) {
+        id -> Integer,
         major_version -> Integer,
         path -> Text,
         is_managed -> Bool,

@@ -311,6 +311,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
   const [detected, { refetch: refetchDetected }] = detectedJava;
   const [managed, { refetch: refetchManaged }] = managedJava;
   const [globalPaths, { refetch: refetchGlobalPaths }] = globalJavaPaths;
+  const [activeJavaPath, setActiveJavaPath] = createSignal<{version: number, path: string} | null>(null);
 
   const [cacheSizeValue, { refetch: refetchSize }] = cacheSize;
 
@@ -454,23 +455,28 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     const globalPathsData = globalPaths() || [];
 
     reqs.forEach((req: any) => {
-      const current = globalPathsData.find(
+      const allForVersion = globalPathsData.filter(
         (p: any) => p.major_version === req.major_version,
       );
+      const managed = allForVersion.find((p: any) => p.is_managed);
+      const current = allForVersion[0];
       const managedVersion = managedJavas.find(
         (m: any) => m.major_version === req.major_version,
       );
       // Fall back to DB path when disk scan doesn't find it (e.g. after
       // async download task registered the path but before disk scan ran)
-      const managedPath = managedVersion?.path || current?.path;
+      const managedPath = managedVersion?.path || managed?.path;
 
-      // Managed option
+      // Managed option — active if it exists and no custom path is selected
+      const active = activeJavaPath();
+      const hasCustomActive = active?.version === req.major_version
+        && allForVersion.some((p: any) => !p.is_managed && p.path === active?.path);
       options.push({
         type: "managed",
         version: req.major_version,
         title: "Managed Runtime",
         path: managedPath,
-        isActive: current?.is_managed || false,
+        isActive: (managed?.is_managed || false) && !hasCustomActive,
         onClick: () => {
           if (managedPath) {
             handleSetGlobalPath(req.major_version, managedPath, true);
@@ -494,22 +500,21 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
           });
         });
 
-      // Custom active path (if not in detected list)
-      if (
-        current &&
-        !current.is_managed &&
-        !detectedJavas.some(
-          (d: any) =>
-            d.path === current.path && d.major_version === req.major_version,
-        )
-      ) {
+      // Show all non-managed DB paths as custom options
+      const activePath = activeJavaPath();
+      for (const p of allForVersion) {
+        if (p.is_managed) continue;
+        if (detectedJavas.some(
+          (d: any) => d.path === p.path && d.major_version === req.major_version,
+        )) continue;
+        const isActive = activePath?.version === req.major_version && activePath?.path === p.path;
         options.push({
           type: "custom",
           version: req.major_version,
           title: "Custom Path",
-          path: current.path,
-          isActive: true,
-          onClick: () => handleManualPickSetGlobal(req.major_version),
+          path: p.path,
+          isActive,
+          onClick: () => handleSetGlobalPath(req.major_version, p.path, false),
         });
       }
 
@@ -555,6 +560,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         pathStr: path,
         managed: isManaged,
       });
+      setActiveJavaPath({version, path});
       refetchGlobalPaths();
     } catch (e) {
       console.error("Failed to set global java path:", e);
