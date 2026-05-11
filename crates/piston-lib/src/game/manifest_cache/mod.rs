@@ -97,7 +97,7 @@ impl ManifestCache {
                                             Arc::clone(&data),
                                             cached.etag.clone(),
                                             cached.last_modified.clone(),
-                                        );
+                                        ).await;
                                         return Ok(data);
                                     }
                                     Ok(None) => {
@@ -108,7 +108,7 @@ impl ManifestCache {
                                             Arc::clone(&data),
                                             cached.etag,
                                             cached.last_modified,
-                                        );
+                                        ).await;
                                         return Ok(data);
                                     }
                                     Err(_) => {
@@ -199,19 +199,19 @@ impl ManifestCache {
         tokio::fs::write(disk_path, json).await?;
 
         // Store in memory
-        self.store_in_memory(slug, Arc::clone(&data_arc), etag.clone(), last_modified.clone());
+        self.store_in_memory(slug, Arc::clone(&data_arc), etag.clone(), last_modified.clone()).await;
 
         Ok(data_arc)
     }
 
-    fn store_in_memory(
+    async fn store_in_memory(
         &self,
         slug: &str,
         data: Arc<serde_json::Value>,
         etag: Option<String>,
         last_modified: Option<String>,
     ) {
-        let mut entries = self.entries.blocking_write();
+        let mut entries = self.entries.write().await;
         entries.insert(
             slug.to_string(),
             MemEntry {
@@ -246,10 +246,58 @@ impl ManifestCache {
         let neo = self.get_or_fetch("neo").await.ok();
 
         let mut game_versions = Vec::new();
+
+        // Pre-resolve each loader manifest.
+        //
+        // Fabric/Quilt: a dummy entry (${modrinth.gameVersion}) holds all loader
+        // versions. Named entries (e.g. "1.20.1") mark which MC versions are
+        // supported but have empty loaders. The dummy's loaders apply ONLY to
+        // versions explicitly named in the manifest.
+        //
+        // Forge/NeoForge: each game version has its own loaders entry.
+        let resolve_loader_versions = |manifest: &Arc<serde_json::Value>, mc_id: &str| -> Vec<LoaderVersionInfo> {
+            let parsed: crate::game::metadata::types::ModrinthManifest =
+                match serde_json::from_value((**manifest).clone()) {
+                    Ok(m) => m,
+                    Err(_) => return Vec::new(),
+                };
+
+            // Forge/NeoForge style: exact match on version ID with non-empty loaders
+            if let Some(entry) = parsed.game_versions.iter().find(|gv| gv.id == mc_id) {
+                if !entry.loaders.is_empty() {
+                    return entry.loaders.iter().map(|lv| LoaderVersionInfo {
+                        version: lv.id.clone(),
+                        stable: lv.stable,
+                        url: Some(lv.url.clone()),
+                        sha1: None,
+                        metadata: None,
+                    }).collect();
+                }
+            }
+
+            // Fabric/Quilt style: find the dummy entry. Only apply if this
+            // MC version is explicitly listed in the manifest (as a named entry
+            // with empty loaders).
+            let has_named_entry = parsed.game_versions.iter().any(|gv| gv.id == mc_id);
+            if has_named_entry {
+                if let Some(dummy) = parsed.game_versions.iter().find(|gv| {
+                    crate::game::metadata::types::is_dummy_game_version(&gv.id)
+                }) {
+                    return dummy.loaders.iter().map(|lv| LoaderVersionInfo {
+                        version: lv.id.clone(),
+                        stable: lv.stable,
+                        url: Some(lv.url.clone()),
+                        sha1: None,
+                        metadata: None,
+                    }).collect();
+                }
+            }
+            Vec::new()
+        };
+
         for mv in &mc_manifest.versions {
             let mut loaders = HashMap::new();
 
-            // Check each loader for this version
             for (loader_type, manifest) in [
                 (ModloaderType::Fabric, &fabric),
                 (ModloaderType::Quilt, &quilt),
@@ -257,26 +305,7 @@ impl ManifestCache {
                 (ModloaderType::NeoForge, &neo),
             ] {
                 if let Some(manifest) = manifest {
-                    let parsed: crate::game::metadata::types::ModrinthManifest =
-                        match serde_json::from_value((**manifest).clone()) {
-                            Ok(m) => m,
-                            Err(_) => continue,
-                        };
-                    let entry = parsed.game_versions.iter().find(|gv| gv.id == mv.id);
-                    let versions: Vec<LoaderVersionInfo> = entry
-                        .map(|gv| {
-                            gv.loaders
-                                .iter()
-                                .map(|lv| LoaderVersionInfo {
-                                    version: lv.id.clone(),
-                                    stable: lv.stable,
-                                    url: Some(lv.url.clone()),
-                                    sha1: None,
-                                    metadata: None,
-                                })
-                                .collect()
-                        })
-                        .unwrap_or_default();
+                    let versions = resolve_loader_versions(manifest, &mv.id);
                     if !versions.is_empty() {
                         loaders.insert(loader_type, versions);
                     }
