@@ -105,6 +105,10 @@ pub struct LoaderVersionInfo {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub url: Option<String>,
 
+    /// SHA1 hash of the version JSON (for cache validation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha1: Option<String>,
+
     /// Additional metadata (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
@@ -204,7 +208,7 @@ pub struct ModrinthArtifact {
 }
 
 /// Forge/NeoForge sided data entry (client/server paths).
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct ModrinthSidedDataEntry {
     pub client: String,
     pub server: String,
@@ -216,6 +220,9 @@ pub struct ModrinthProcessor {
     pub jar: String,
     pub classpath: Vec<String>,
     pub args: Vec<String>,
+    /// Optional main class override; if absent, read from the JAR's manifest.
+    #[serde(rename = "mainClass", default)]
+    pub main_class: Option<String>,
     pub outputs: Option<HashMap<String, String>>,
     pub sides: Option<Vec<String>>,
 }
@@ -223,10 +230,16 @@ pub struct ModrinthProcessor {
 impl ModrinthLoaderProfile {
     /// Replace `${modrinth.gameVersion}` placeholders with the actual Minecraft version.
     pub fn resolve_placeholders(&mut self, mc_version: &str) {
-        self.id = self.id.replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
-        self.inherits_from = self.inherits_from.replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
+        self.id = self
+            .id
+            .replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
+        self.inherits_from = self
+            .inherits_from
+            .replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
         for lib in &mut self.libraries {
-            lib.name = lib.name.replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
+            lib.name = lib
+                .name
+                .replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
         }
     }
 }

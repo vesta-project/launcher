@@ -4,6 +4,9 @@ use anyhow::{Context, Result};
 use chrono::{Datelike, Utc};
 use std::collections::{HashMap, HashSet};
 
+const MODRINTH_MC_MANIFEST_URL: &str =
+    "https://launcher-meta.modrinth.com/minecraft/v0/manifest.json";
+/// Kept for Java version resolution (fallback)
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const JAVA_RUNTIME_ALL_URL: &str =
     "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
@@ -32,13 +35,13 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
 
     let http_client = build_http_client()?;
 
-    // Fetch Mojang vanilla versions (used as the base version list)
-    log::info!("Fetching Mojang version manifest...");
-    let mojang_manifest = fetch_mojang_manifest_with_client(&http_client)
+    // Fetch Minecraft versions from Modrinth (patched version URLs/SHA1)
+    log::info!("Fetching Minecraft manifest from Modrinth...");
+    let mc_manifest = fetch_modrinth_mc_manifest(&http_client)
         .await
-        .context("Failed to fetch Mojang version manifest")?;
+        .context("Failed to fetch Modrinth Minecraft manifest")?;
 
-    let mut game_versions = build_initial_game_versions(&mojang_manifest);
+    let mut game_versions = build_initial_game_versions(&mc_manifest);
 
     // Fetch all modloader manifests from Modrinth in parallel
     log::info!("Fetching modloader metadata from Modrinth...");
@@ -106,8 +109,8 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
         last_updated: Utc::now(),
         game_versions,
         latest: LatestVersions {
-            release: mojang_manifest.latest.release.clone(),
-            snapshot: mojang_manifest.latest.snapshot.clone(),
+            release: mc_manifest.latest.release.clone(),
+            snapshot: mc_manifest.latest.snapshot.clone(),
         },
         required_java_major_versions: fetch_runtime_java_majors(&http_client)
             .await
@@ -202,10 +205,7 @@ fn apply_fabric_style_from_modrinth(
         .collect();
 
     let Some(dummy) = dummy_entry else {
-        log::warn!(
-            "{} manifest has no dummy entry",
-            loader_type.as_str()
-        );
+        log::warn!("{} manifest has no dummy entry", loader_type.as_str());
         return 0;
     };
 
@@ -213,11 +213,12 @@ fn apply_fabric_style_from_modrinth(
     let loader_infos: Vec<LoaderVersionInfo> = dummy
         .loaders
         .iter()
-        .filter(|l| !blacklist::is_blacklisted(loader_type, "", &l.id))
+        
         .map(|l| LoaderVersionInfo {
             version: l.id.clone(),
             stable: l.stable,
             url: Some(l.url.clone()),
+            sha1: None,
             metadata: None,
         })
         .collect();
@@ -259,11 +260,12 @@ fn apply_forge_style_from_modrinth(
             let loaders: Vec<LoaderVersionInfo> = gv
                 .loaders
                 .iter()
-                .filter(|l| blacklist::is_blacklisted(loader_type, &gv.id, &l.id) == false)
+                
                 .map(|l| LoaderVersionInfo {
                     version: l.id.clone(),
                     stable: l.stable,
                     url: Some(l.url.clone()),
+                    sha1: None,
                     metadata: None,
                 })
                 .collect();
@@ -429,33 +431,43 @@ fn is_legacy_mojang_version(version_type: &str, release_time: &str) -> bool {
         .unwrap_or(false)
 }
 
-fn build_initial_game_versions(
-    mojang_manifest: &MojangVersionManifest,
-) -> Vec<GameVersionMetadata> {
-    mojang_manifest
+fn build_initial_game_versions(manifest: &MojangVersionManifest) -> Vec<GameVersionMetadata> {
+    manifest
         .versions
         .iter()
-        .map(|mojang_version| {
+        .map(|version| {
             let mut loaders = HashMap::new();
 
+            let vanilla_url = format!(
+                "{}/minecraft/v0/versions/{}.json",
+                MODRINTH_BASE_URL, version.id
+            );
+
+            let vanilla_sha1 = if version.sha1.is_empty() {
+                None
+            } else {
+                Some(version.sha1.clone())
+            };
+
             let vanilla_loader = LoaderVersionInfo {
-                version: mojang_version.id.clone(),
-                stable: mojang_version.version_type == "release",
-                url: None,
+                version: version.id.clone(),
+                stable: version.version_type == "release",
+                url: Some(vanilla_url),
+                sha1: vanilla_sha1,
                 metadata: None,
             };
 
             loaders.insert(ModloaderType::Vanilla, vec![vanilla_loader]);
 
-            let release_time = chrono::DateTime::parse_from_rfc3339(&mojang_version.release_time)
+            let release_time = chrono::DateTime::parse_from_rfc3339(&version.release_time)
                 .map(|dt| dt.with_timezone(&Utc))
                 .unwrap_or_else(|_| Utc::now());
 
             GameVersionMetadata {
-                id: mojang_version.id.clone(),
-                version_type: mojang_version.version_type.clone(),
+                id: version.id.clone(),
+                version_type: version.version_type.clone(),
                 release_time,
-                stable: mojang_version.version_type == "release",
+                stable: version.version_type == "release",
                 loaders,
             }
         })
@@ -539,9 +551,28 @@ pub(crate) async fn send_with_retry(
         }
     }
 
-    Err(last_error.unwrap_or_else(|| {
-        anyhow::anyhow!("Failed to fetch {} after {} retries", url, max_retries)
-    }))
+    let detail = last_error
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| "unknown error".to_string());
+    Err(anyhow::anyhow!(
+        "Failed to fetch {} after {} retries: {}",
+        url,
+        max_retries,
+        detail
+    ))
+}
+
+async fn fetch_modrinth_mc_manifest(client: &reqwest::Client) -> Result<MojangVersionManifest> {
+    let resp = send_with_retry(client, MODRINTH_MC_MANIFEST_URL, 3, 1000).await?;
+    let manifest = resp
+        .json::<MojangVersionManifest>()
+        .await
+        .context("Failed to parse Modrinth Minecraft manifest JSON")?;
+    log::info!(
+        "Fetched {} Minecraft versions from Modrinth",
+        manifest.versions.len()
+    );
+    Ok(manifest)
 }
 
 async fn fetch_mojang_manifest_with_client(
@@ -566,17 +597,39 @@ async fn fetch_version_detail(client: &reqwest::Client, url: &str) -> Result<Moj
 // Blacklist re-export helper
 // ============================================================================
 
-/// Re-export blacklist for use in this module
-mod blacklist {
-    pub use super::super::blacklist::is_blacklisted;
-}
+
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
+    use wiremock::{Request, Respond};
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    struct FailThenOkResponder {
+        first_status: u16,
+        retry_after: Option<&'static str>,
+        calls: AtomicUsize,
+    }
+
+    impl Respond for FailThenOkResponder {
+        fn respond(&self, _request: &Request) -> ResponseTemplate {
+            let call = self.calls.fetch_add(1, Ordering::SeqCst);
+            if call == 0 {
+                let mut resp =
+                    ResponseTemplate::new(self.first_status).set_body_string("retry");
+                if let Some(value) = self.retry_after {
+                    resp = resp.insert_header("Retry-After", value);
+                }
+                resp
+            } else {
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"versions": []}))
+            }
+        }
+    }
 
     #[tokio::test]
     async fn test_send_with_retry_retries_on_5xx() {
@@ -584,17 +637,12 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/test"))
-            .respond_with(ResponseTemplate::new(500).set_body_string("Server Error"))
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/test"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions": []})),
-            )
-            .expect(1)
+            .respond_with(FailThenOkResponder {
+                first_status: 500,
+                retry_after: None,
+                calls: AtomicUsize::new(0),
+            })
+            .expect(2)
             .mount(&mock_server)
             .await;
 
@@ -617,21 +665,12 @@ mod tests {
 
         Mock::given(method("GET"))
             .and(path("/test"))
-            .respond_with(
-                ResponseTemplate::new(429)
-                    .insert_header("Retry-After", "1")
-                    .set_body_string("Too Many Requests"),
-            )
-            .expect(1)
-            .mount(&mock_server)
-            .await;
-
-        Mock::given(method("GET"))
-            .and(path("/test"))
-            .respond_with(
-                ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions": []})),
-            )
-            .expect(1)
+            .respond_with(FailThenOkResponder {
+                first_status: 429,
+                retry_after: Some("1"),
+                calls: AtomicUsize::new(0),
+            })
+            .expect(2)
             .mount(&mock_server)
             .await;
 
