@@ -12,6 +12,20 @@ pub(crate) fn os_name(os: &OsType) -> &'static str {
     }
 }
 
+/// Full OS name including architecture (used by Modrinth patches)
+#[allow(dead_code)]
+pub(crate) fn os_name_full(os: &OsType) -> &'static str {
+    match os {
+        OsType::Windows => "windows",
+        OsType::WindowsArm64 => "windows-arm64",
+        OsType::MacOS => "osx",
+        OsType::MacOSArm64 => "osx-arm64",
+        OsType::Linux => "linux",
+        OsType::LinuxArm64 => "linux-arm64",
+        OsType::LinuxArm32 => "linux-arm32",
+    }
+}
+
 /// Get arch bits used in manifest templates like ${arch}
 #[allow(dead_code)]
 pub(crate) fn arch_bits(os: &OsType) -> &'static str {
@@ -40,31 +54,36 @@ pub(crate) fn classifier_key_matches_os(key: &str, os_name: &str) -> bool {
 
 /// Resolve a classifier string from a library's natives or classifiers metadata.
 /// This does not check the presence of any local files; it only computes a candidate
-/// classifier string (with ${arch} replaced) suitable for downloading the artifact.
+/// classifier string (with ${arch} replacement) suitable for downloading the artifact.
 /// Resolve the classifier string, given an OS name (like "windows", "linux", "osx") and
-/// arch ("32"/"64").
+/// arch ("32"/"64" for bitness, used in `${arch}` template replacement).
 pub(crate) fn resolve_classifier_string<T>(
     _lib_name: &str,
     natives: Option<&std::collections::HashMap<String, String>>,
     classifiers: Option<&std::collections::HashMap<String, T>>,
-    os_name: &str,
-    arch: &str,
+    os_name: &str,      // base OS name like "osx"
+    os_name_full: &str, // arch-specific name like "osx-arm64"
+    arch: &str,         // for ${arch} replacement — "64" or "32"
 ) -> Option<String> {
-    // 1. Try natives[os]
+    // 1. Try natives[os_name_full] first (Modrinth format), then natives[os_name] (Mojang format)
     if let Some(natives) = natives {
+        if let Some(v) = natives.get(os_name_full) {
+            return Some(v.replace("${arch}", arch));
+        }
         if let Some(v) = natives.get(os_name) {
             return Some(v.replace("${arch}", arch));
         }
-
         if let Some(v) = natives.get("natives") {
             return Some(v.replace("${arch}", arch));
         }
     }
 
-    // 2. Try classifiers keys that look like they match OS
+    // 2. Try classifiers keys that match either OS name
     if let Some(classifiers) = classifiers {
         for key in classifiers.keys() {
-            if classifier_key_matches_os(key, os_name) {
+            if classifier_key_matches_os(key, os_name)
+                || classifier_key_matches_os(key, os_name_full)
+            {
                 return Some(key.replace("${arch}", arch));
             }
         }
@@ -81,6 +100,7 @@ pub(crate) fn find_classifier_jar_on_disk<T>(
     natives: Option<&std::collections::HashMap<String, String>>,
     classifiers: Option<&std::collections::HashMap<String, T>>,
     os_name: &str,
+    os_name_full: &str,
     arch: &str,
     libraries_dir: &Path,
 ) -> Result<Option<(String, std::path::PathBuf)>> {
@@ -95,7 +115,7 @@ pub(crate) fn find_classifier_jar_on_disk<T>(
 
     // 1. Use resolve_classifier_string first
     if let Some(candidate) =
-        resolve_classifier_string(lib_name, natives, classifiers, os_name, arch)
+        resolve_classifier_string(lib_name, natives, classifiers, os_name, os_name_full, arch)
     {
         if let Some(path) = build(&candidate) {
             if path.exists() {

@@ -140,6 +140,7 @@ mod tests {
             rules: None,
             natives: Some(natives_map),
             extract: Some(ExtractRules { exclude: vec![] }),
+            include_in_classpath: true,
         };
 
         // Build the expected jar path using our classifier replacement (use 64-bit on test host)
@@ -225,6 +226,7 @@ mod tests {
             rules: None,
             natives: Some(natives_map),
             extract: Some(ExtractRules { exclude: vec![] }),
+            include_in_classpath: true,
         };
 
         // Create an actual jar for the permissive classifier so extract_natives can find it

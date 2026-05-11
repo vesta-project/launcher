@@ -320,6 +320,7 @@ fn evaluate_rules(
         if matches {
             if let Some(features) = &rule.features {
                 for (k, v) in features.iter() {
+                    let required = v.unwrap_or(true);
                     let satisfied = match k.as_str() {
                         "is_demo_user" => {
                             // Demo user detection: match launcher defaults.
@@ -328,12 +329,12 @@ fn evaluate_rules(
                                 || spec.uuid == "00000000-0000-0000-0000-000000000000"
                                 || spec.access_token == "0")
                                 && spec.access_token != "offline";
-                            is_demo == *v
+                            is_demo == required
                         }
                         "has_custom_resolution" => {
                             let has_res =
                                 spec.window_width.is_some() && spec.window_height.is_some();
-                            has_res == *v
+                            has_res == required
                         }
                         _ => {
                             // Unknown features: conservative, do not match
