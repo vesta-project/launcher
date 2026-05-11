@@ -10,24 +10,20 @@ pub fn metadata_cache_path(data_dir: &Path) -> PathBuf {
 }
 
 /// Load or fetch metadata, delegating to ManifestCache.
-/// Takes a `max_age_hours` parameter that's used for the ETag revalidation interval.
-pub async fn load_or_fetch_metadata_ext(
-    data_dir: &PathBuf,
-    _max_age_hours: i64,
-) -> Result<PistonMetadata> {
+/// ETag revalidation is handled internally by ManifestCache (5-min freshness window).
+pub async fn load_or_fetch_metadata_ext(data_dir: &PathBuf) -> Result<PistonMetadata> {
     let cache = ManifestCache::new(data_dir.join("manifests"));
     cache.build_piston_metadata().await
 }
 
-/// Load or fetch metadata with default TTL.
+/// Load or fetch metadata with default settings.
 pub async fn load_or_fetch_metadata(data_dir: &PathBuf) -> Result<PistonMetadata> {
-    load_or_fetch_metadata_ext(data_dir, 24).await
+    load_or_fetch_metadata_ext(data_dir).await
 }
 
 /// Load cached metadata only, without triggering any network fetch.
-/// Returns `None` if not available (does not fetch).
+/// Uses disk-only reads — no ETag revalidation. Returns `None` if not available.
 pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Option<PistonMetadata>> {
-    let cache = ManifestCache::new(data_dir.join("manifests"));
     // Check if all manifests are cached on disk
     let all_cached = crate::game::manifest_cache::MANIFEST_SLUGS
         .iter()
@@ -40,6 +36,8 @@ pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Optio
     if !all_cached {
         return Ok(None);
     }
+    // Use disk-only reads — skip ETag revalidation
+    let cache = ManifestCache::new_offline(data_dir.join("manifests"));
     Ok(Some(cache.build_piston_metadata().await?))
 }
 

@@ -160,6 +160,16 @@ pub async fn install_instance(
     }
 
     if !version_json_path.exists() {
+        if spec.dry_run {
+            log::info!(
+                "[Dry-Run] Would download version metadata for {}",
+                spec.version_id
+            );
+            reporter.set_percent(100);
+            reporter.done(true, Some("[Dry-Run] Installation plan validated"));
+            return Ok(());
+        }
+
         tokio::fs::create_dir_all(version_json_path.parent().unwrap()).await?;
 
         let version_url = format!(

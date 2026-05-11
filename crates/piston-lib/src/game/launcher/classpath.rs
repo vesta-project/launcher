@@ -98,16 +98,18 @@ pub fn validate_classpath(
     };
 
     for library in libraries {
+        // Match build_classpath_filtered: skip natives and non-classpath
+        if library.is_native || !library.include_in_classpath {
+            validation.excluded_libraries.push(library.name.clone());
+            continue;
+        }
+
         let full_path = libraries_dir.join(&library.path);
 
         if full_path.exists() {
-            if library.is_native {
-                validation.excluded_libraries.push(library.name.clone());
-            } else {
-                validation
-                    .valid_libraries
-                    .push(full_path.to_string_lossy().to_string());
-            }
+            validation
+                .valid_libraries
+                .push(full_path.to_string_lossy().to_string());
         } else {
             validation
                 .missing_libraries

@@ -45,6 +45,7 @@ pub struct ManifestCache {
     entries: RwLock<HashMap<String, MemEntry>>,
     cache_dir: PathBuf,
     client: reqwest::Client,
+    offline: bool,
 }
 
 impl ManifestCache {
@@ -57,6 +58,21 @@ impl ManifestCache {
                 .user_agent("VestaLauncher/1.0")
                 .build()
                 .expect("Failed to build HTTP client"),
+            offline: false,
+        }
+    }
+
+    /// Create a ManifestCache that only reads from disk — no network requests.
+    /// Used by load_cached_metadata_if_present for offline warmup.
+    pub fn new_offline(cache_dir: PathBuf) -> Self {
+        Self {
+            entries: RwLock::new(HashMap::new()),
+            cache_dir,
+            client: reqwest::Client::builder()
+                .user_agent("VestaLauncher/1.0")
+                .build()
+                .expect("Failed to build HTTP client"),
+            offline: true,
         }
     }
 
@@ -65,6 +81,16 @@ impl ManifestCache {
     /// On cache miss, fetches, saves to disk, stores in memory.
     /// On stale, does an ETag revalidation (304 = fast refresh).
     pub async fn get_or_fetch(&self, slug: &str) -> Result<Arc<serde_json::Value>> {
+        // Offline mode: read from disk only, fail if not cached
+        if self.offline {
+            let disk_path = self.cache_dir.join(format!("{slug}.json"));
+            let content = tokio::fs::read_to_string(&disk_path)
+                .await
+                .map_err(|e| anyhow::anyhow!("Manifest '{}' not cached on disk: {}", slug, e))?;
+            let cached: CachedManifest = serde_json::from_str(&content)?;
+            return Ok(Arc::new(cached.data));
+        }
+
         // Check in-memory
         {
             let entries = self.entries.read().await;

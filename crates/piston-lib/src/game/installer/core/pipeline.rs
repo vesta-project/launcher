@@ -13,7 +13,6 @@ use std::io::Cursor;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
-use std::sync::Mutex;
 
 /// Process a vanilla + optional loader manifest into a UnifiedManifest,
 /// download all libraries, extract all natives, and return the result.
@@ -66,7 +65,6 @@ pub async fn process_and_download_libraries(
 
         let total_natives = native_libs.len();
         let downloaded = Arc::new(AtomicUsize::new(0));
-        let errors: Arc<Mutex<Vec<String>>> = Arc::new(Mutex::new(Vec::new()));
 
         // Clone needed fields from each library to avoid FnOnce lifetime issues
         // with async closures that borrow from their arguments.
@@ -87,7 +85,6 @@ pub async fn process_and_download_libraries(
                 let client = client.clone();
                 let reporter = reporter.clone();
                 let downloaded = Arc::clone(&downloaded);
-                let _errors = Arc::clone(&errors);
                 let libraries_dir = spec.libraries_dir().clone();
                 let natives_dir = natives_dir.clone();
 
@@ -146,15 +143,7 @@ pub async fn process_and_download_libraries(
             .await
             .into_iter()
             .collect::<Result<Vec<_>>>()
-            .map_err(|e| {
-                // Check if there were other errors
-                let errs = errors.lock().unwrap();
-                if !errs.is_empty() {
-                    anyhow::anyhow!("{} (and {} other native errors)", e, errs.len())
-                } else {
-                    e
-                }
-            })?;
+            .map_err(|e| e)?;
     }
 
     Ok(unified)
