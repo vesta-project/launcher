@@ -125,7 +125,8 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
         java_major_version_by_game_version: HashMap::new(),
     };
 
-    metadata.sort_all_versions();
+    // Sort game versions by release date (latest first)
+    metadata.game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
 
     log::info!(
         "PistonMetadata fetched successfully: {} game versions, {} total loader combinations",
