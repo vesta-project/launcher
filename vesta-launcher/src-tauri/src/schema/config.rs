@@ -62,6 +62,7 @@ diesel::table! {
         major_version -> Integer,
         path -> Text,
         is_managed -> Bool,
+        is_active -> Bool,
     }
 }
 

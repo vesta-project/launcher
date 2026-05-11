@@ -1,7 +1,9 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::models::java::GlobalJavaPath;
 use crate::models::resource::SourcePlatform;
-use crate::schema::config::global_java_paths::dsl::{global_java_paths, major_version};
+use crate::schema::config::global_java_paths::dsl::{
+    global_java_paths, id as gp_id, is_active, major_version,
+};
 use crate::schema::vesta::instance::dsl::*;
 use crate::tasks::installers::modpack::InstallModpackTask;
 use crate::tasks::manager::TaskManager;
@@ -61,7 +63,7 @@ pub async fn get_modpack_info(
     let metadata =
         get_modpack_metadata(&path_buf).map_err(|e| format!("Failed to parse modpack: {}", e))?;
 
-    log::info!("[get_modpack_info] Parsed metadata: name={}, version={}, mc={}, loader={:?}, loader_ver={:?}", 
+    log::info!("[get_modpack_info] Parsed metadata: name={}, version={}, mc={}, loader={:?}, loader_ver={:?}",
         metadata.name, metadata.version, metadata.minecraft_version, metadata.modloader_type, metadata.modloader_version);
 
     let mut info = ModpackInfo {
@@ -969,6 +971,7 @@ async fn prepare_instance(
                 if let Ok(mut config_conn) = get_config_conn() {
                     let global_path = global_java_paths
                         .filter(major_version.eq(recommended_major as i32))
+                        .order((is_active.desc(), gp_id.desc()))
                         .first::<GlobalJavaPath>(&mut config_conn)
                         .ok();
 

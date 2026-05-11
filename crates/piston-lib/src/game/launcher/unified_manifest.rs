@@ -150,16 +150,20 @@ impl UnifiedManifest {
             // Matches daedalus::merge_partial_version(): if the loader provides
             // a library with the same group:artifact and include_in_classpath=true,
             // the vanilla version is skipped to avoid class conflicts.
+            //
+            // We extract group:artifact by taking the first two colon-separated
+            // components. This correctly handles Maven coords with classifiers
+            // (group:artifact:version:classifier) where rsplit_once(':') would
+            // yield group:artifact:version instead of group:artifact.
             let loader_lib_artifacts: Vec<&str> = ml
                 .libraries
                 .iter()
                 .filter(|l| l.include_in_classpath)
-                .filter_map(|l| l.name.rsplit_once(':'))
-                .map(|(artifact, _)| artifact)
+                .filter_map(|l| maven_group_artifact(&l.name))
                 .collect();
 
             libraries.retain(|lib| {
-                if let Some(lib_artifact) = lib.name.rsplit_once(':').map(|x| x.0) {
+                if let Some(lib_artifact) = maven_group_artifact(&lib.name) {
                     !loader_lib_artifacts.contains(&lib_artifact)
                 } else {
                     true
@@ -614,4 +618,17 @@ fn classifier_key_matches_os(key: &str, target_os: OsType) -> bool {
     }
 
     true
+}
+
+/// Extract group:artifact from a Maven coordinate string.
+///
+/// Maven coords have the format `group:artifact:version` or
+/// `group:artifact:version:classifier`. This function returns the first
+/// two colon-separated components (`group:artifact`), which is the correct
+/// key for library deduplication.
+fn maven_group_artifact(coord: &str) -> Option<&str> {
+    let first_colon = coord.find(':')?;
+    let rest = &coord[first_colon + 1..];
+    let second_colon = rest.find(':')?;
+    Some(&coord[..first_colon + 1 + second_colon])
 }

@@ -2293,6 +2293,7 @@ async fn resolve_java_path_for_version(
         let mut conn = get_config_conn().ok()?;
         global_java_paths
             .filter(major_version.eq(required_major as i32))
+            .order((is_active.desc(), id.desc()))
             .select(path)
             .first::<String>(&mut conn)
             .ok()

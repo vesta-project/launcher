@@ -29,20 +29,36 @@ pub async fn download_to_path(
     // Check if file exists
     if path.exists() {
         if let Some(expected) = expected_sha1 {
-            let bytes = tokio::fs::read(path).await?;
-            let mut hasher = Sha1::new();
-            hasher.update(&bytes);
-            let computed = format!("{:x}", hasher.finalize());
-            if computed.eq_ignore_ascii_case(expected) {
-                log::debug!("File exists and hash matches, skipping: {:?}", path);
-                return Ok(());
+            match tokio::fs::read(path).await {
+                Ok(bytes) => {
+                    let mut hasher = Sha1::new();
+                    hasher.update(&bytes);
+                    let computed = format!("{:x}", hasher.finalize());
+                    if computed.eq_ignore_ascii_case(expected) {
+                        log::debug!("File exists and hash matches, skipping: {:?}", path);
+                        return Ok(());
+                    }
+                    log::info!(
+                        "File exists but hash mismatches ({} != {}), re-downloading: {:?}",
+                        computed,
+                        expected,
+                        path
+                    );
+                }
+                Err(e) => {
+                    // On Windows, files may be locked by a running process (sharing violation).
+                    // If we can't read it, we can't overwrite it either, so treat it as
+                    // valid and skip rather than failing the entire install.
+                    if is_sharing_violation(&e) {
+                        log::warn!(
+                            "File is locked by another process, assuming valid and skipping: {:?}",
+                            path
+                        );
+                        return Ok(());
+                    }
+                    return Err(e.into());
+                }
             }
-            log::info!(
-                "File exists but hash mismatches ({} != {}), re-downloading: {:?}",
-                computed,
-                expected,
-                path
-            );
         } else {
             log::debug!(
                 "File exists and no hash provided, assuming valid and skipping: {:?}",
@@ -505,6 +521,21 @@ impl crate::game::installer::types::ProgressReporter for NoopReporter {
         false
     }
     fn is_paused(&self) -> bool {
+        false
+    }
+}
+
+/// Detect whether an I/O error is caused by a file sharing violation (Windows).
+/// On Windows, files locked by running processes return ERROR_SHARING_VIOLATION (32).
+/// On other platforms this always returns false since file locking is advisory.
+fn is_sharing_violation(error: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        error.raw_os_error() == Some(32) // ERROR_SHARING_VIOLATION
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = error;
         false
     }
 }

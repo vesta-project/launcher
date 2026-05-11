@@ -1,7 +1,5 @@
 use crate::models::java::GlobalJavaPath;
-use crate::schema::config::global_java_paths::dsl::{
-    global_java_paths, is_managed as is_managed_col, major_version, path as path_col,
-};
+use crate::schema::config::global_java_paths::dsl::{global_java_paths, id, is_active};
 use crate::tasks::installers::java::DownloadJavaTask;
 use crate::tasks::manager::TaskManager;
 use crate::utils::config::{update_config_field, update_config_fields};
@@ -144,14 +142,27 @@ pub async fn select_java_file(app_handle: AppHandle) -> Result<Option<String>, S
 pub fn set_global_java_path(version: i32, path_str: String, managed: bool) -> Result<(), String> {
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
 
-    diesel::sql_query(
-        "INSERT OR REPLACE INTO global_java_paths (major_version, path, is_managed) VALUES (?, ?, ?)"
-    )
-    .bind::<diesel::sql_types::Integer, _>(version)
-    .bind::<diesel::sql_types::Text, _>(&path_str)
-    .bind::<diesel::sql_types::Bool, _>(managed)
-    .execute(&mut conn)
-    .map_err(|e| e.to_string())?;
+    conn.transaction(|conn| {
+        // Deactivate all existing rows for this major_version
+        diesel::sql_query("UPDATE global_java_paths SET is_active = 0 WHERE major_version = ?")
+            .bind::<diesel::sql_types::Integer, _>(version)
+            .execute(conn)?;
+
+        // Upsert the chosen path with is_active = 1
+        diesel::sql_query(
+            "INSERT INTO global_java_paths (major_version, path, is_managed, is_active) \
+             VALUES (?, ?, ?, 1) \
+             ON CONFLICT(major_version, path) DO UPDATE SET is_active = 1, is_managed = ?",
+        )
+        .bind::<diesel::sql_types::Integer, _>(version)
+        .bind::<diesel::sql_types::Text, _>(&path_str)
+        .bind::<diesel::sql_types::Bool, _>(managed)
+        .bind::<diesel::sql_types::Bool, _>(managed)
+        .execute(conn)?;
+
+        Ok(())
+    })
+    .map_err(|e: diesel::result::Error| e.to_string())?;
 
     Ok(())
 }
@@ -160,6 +171,7 @@ pub fn set_global_java_path(version: i32, path_str: String, managed: bool) -> Re
 pub fn get_global_java_paths() -> Result<Vec<GlobalJavaPath>, String> {
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
     global_java_paths
+        .order((is_active.desc(), id.desc()))
         .load::<GlobalJavaPath>(&mut conn)
         .map_err(|e| e.to_string())
 }
@@ -203,14 +215,25 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
             );
 
             let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-            diesel::sql_query(
-                "INSERT OR REPLACE INTO global_java_paths (major_version, path, is_managed) VALUES (?, ?, ?)"
-            )
-            .bind::<diesel::sql_types::Integer, _>(version as i32)
-            .bind::<diesel::sql_types::Text, _>(&java_path.to_string_lossy().to_string())
-            .bind::<diesel::sql_types::Bool, _>(true)
-            .execute(&mut conn)
-            .map_err(|e| e.to_string())?;
+            conn.transaction(|conn| {
+                diesel::sql_query(
+                    "UPDATE global_java_paths SET is_active = 0 WHERE major_version = ?",
+                )
+                .bind::<diesel::sql_types::Integer, _>(version as i32)
+                .execute(conn)?;
+
+                diesel::sql_query(
+                    "INSERT INTO global_java_paths (major_version, path, is_managed, is_active) \
+                     VALUES (?, ?, 1, 1) \
+                     ON CONFLICT(major_version, path) DO UPDATE SET is_active = 1, is_managed = 1",
+                )
+                .bind::<diesel::sql_types::Integer, _>(version as i32)
+                .bind::<diesel::sql_types::Text, _>(&java_path.to_string_lossy().to_string())
+                .execute(conn)?;
+
+                Ok(())
+            })
+            .map_err(|e: diesel::result::Error| e.to_string())?;
 
             return Ok(());
         }
@@ -224,5 +247,4 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
         .submit(Box::new(task))
         .await
         .map_err(|e| e.to_string())
-
 }

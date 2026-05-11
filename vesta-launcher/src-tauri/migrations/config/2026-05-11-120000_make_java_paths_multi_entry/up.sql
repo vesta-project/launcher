@@ -8,10 +8,18 @@ CREATE TABLE global_java_paths (
     major_version INTEGER NOT NULL,
     path TEXT NOT NULL,
     is_managed BOOLEAN NOT NULL DEFAULT 0,
+    is_active BOOLEAN NOT NULL DEFAULT 0,
     UNIQUE(major_version, path)
 );
 
-INSERT INTO global_java_paths (major_version, path, is_managed)
-SELECT major_version, path, is_managed FROM global_java_paths_old;
+INSERT INTO global_java_paths (major_version, path, is_managed, is_active)
+SELECT major_version, path, is_managed, 0 FROM global_java_paths_old;
+
+-- Activate the most recent row for each major_version
+UPDATE global_java_paths
+SET is_active = 1
+WHERE id IN (
+    SELECT MAX(id) FROM global_java_paths GROUP BY major_version
+);
 
 DROP TABLE global_java_paths_old;

@@ -9,4 +9,5 @@ pub struct GlobalJavaPath {
     pub major_version: i32,
     pub path: String,
     pub is_managed: bool,
+    pub is_active: bool,
 }

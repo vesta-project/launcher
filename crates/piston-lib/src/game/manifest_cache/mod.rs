@@ -89,15 +89,28 @@ impl ManifestCache {
                                     .try_revalidate(slug, etag, cached.last_modified.as_deref())
                                     .await
                                 {
-                                    Ok(Some(fresh_data)) => {
-                                        // 200 — data changed, use fresh
+                                    Ok(Some((fresh_data, new_etag, new_lm))) => {
+                                        // 200 — data changed, use fresh headers + body
                                         let data = Arc::new(fresh_data);
+                                        let etag = new_etag.or_else(|| cached.etag.clone());
+                                        let lm = new_lm.or_else(|| cached.last_modified.clone());
                                         self.store_in_memory(
                                             slug,
                                             Arc::clone(&data),
-                                            cached.etag.clone(),
-                                            cached.last_modified.clone(),
-                                        ).await;
+                                            etag.clone(),
+                                            lm.clone(),
+                                        )
+                                        .await;
+                                        // Also persist to disk with new headers
+                                        let disk_cached = CachedManifest {
+                                            etag: etag,
+                                            last_modified: lm,
+                                            fetched_at: Utc::now(),
+                                            data: (*data).clone(),
+                                        };
+                                        if let Ok(json) = serde_json::to_string(&disk_cached) {
+                                            let _ = tokio::fs::write(&disk_path, json).await;
+                                        }
                                         return Ok(data);
                                     }
                                     Ok(None) => {
@@ -108,7 +121,8 @@ impl ManifestCache {
                                             Arc::clone(&data),
                                             cached.etag,
                                             cached.last_modified,
-                                        ).await;
+                                        )
+                                        .await;
                                         return Ok(data);
                                     }
                                     Err(_) => {
@@ -134,33 +148,39 @@ impl ManifestCache {
     }
 
     /// Lightweight ETag revalidation — sends `If-None-Match`.
-    /// Returns `Ok(Some(data))` if data changed, `Ok(None)` if 304.
+    /// Returns `Ok(Some((data, new_etag, new_last_modified)))` if data changed (200),
+    /// `Ok(None)` if 304 Not Modified.
     async fn try_revalidate(
         &self,
         slug: &str,
         etag: &str,
-        last_modified: Option<&str>,
-    ) -> Result<Option<serde_json::Value>> {
+        _last_modified: Option<&str>,
+    ) -> Result<Option<(serde_json::Value, Option<String>, Option<String>)>> {
         let url = manifest_url(slug);
-        let mut req = self.client.head(&url).header("If-None-Match", etag);
-        if let Some(lm) = last_modified {
-            req = req.header("If-Modified-Since", lm);
-        }
-        let resp = req.send().await?;
-        if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
-            return Ok(None);
-        }
-        // Fetch full body
-        let body = self
+        // Use a single GET with If-None-Match: 304 = not modified, 200 = body + new headers
+        let resp = self
             .client
             .get(&url)
             .header("If-None-Match", etag)
             .send()
-            .await?
-            .bytes()
             .await?;
+        if resp.status() == reqwest::StatusCode::NOT_MODIFIED {
+            return Ok(None);
+        }
+        // Capture new headers from the 200 response
+        let new_etag = resp
+            .headers()
+            .get(reqwest::header::ETAG)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let new_last_modified = resp
+            .headers()
+            .get(reqwest::header::LAST_MODIFIED)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        let body = resp.bytes().await?;
         let data: serde_json::Value = serde_json::from_slice(&body)?;
-        Ok(Some(data))
+        Ok(Some((data, new_etag, new_last_modified)))
     }
 
     /// Fetch a manifest fresh from the API and cache it.
@@ -199,7 +219,13 @@ impl ManifestCache {
         tokio::fs::write(disk_path, json).await?;
 
         // Store in memory
-        self.store_in_memory(slug, Arc::clone(&data_arc), etag.clone(), last_modified.clone()).await;
+        self.store_in_memory(
+            slug,
+            Arc::clone(&data_arc),
+            etag.clone(),
+            last_modified.clone(),
+        )
+        .await;
 
         Ok(data_arc)
     }
@@ -269,29 +295,43 @@ impl ManifestCache {
             for gv in &parsed.game_versions {
                 if crate::game::metadata::types::is_dummy_game_version(&gv.id) {
                     // Fabric/Quilt: dummy entry holds all loader versions
-                    dummy_loaders = gv.loaders.iter().map(|lv| LoaderVersionInfo {
-                        version: lv.id.clone(),
-                        stable: lv.stable,
-                        url: Some(lv.url.clone()),
-                        sha1: None,
-                        metadata: None,
-                    }).collect();
+                    dummy_loaders = gv
+                        .loaders
+                        .iter()
+                        .map(|lv| LoaderVersionInfo {
+                            version: lv.id.clone(),
+                            stable: lv.stable,
+                            url: Some(lv.url.clone()),
+                            sha1: None,
+                            metadata: None,
+                        })
+                        .collect();
                 } else if !gv.loaders.is_empty() {
                     // Forge/NeoForge: each version has its own non‑empty loader list
-                    per_version.insert(gv.id.clone(), gv.loaders.iter().map(|lv| LoaderVersionInfo {
-                        version: lv.id.clone(),
-                        stable: lv.stable,
-                        url: Some(lv.url.clone()),
-                        sha1: None,
-                        metadata: None,
-                    }).collect());
+                    per_version.insert(
+                        gv.id.clone(),
+                        gv.loaders
+                            .iter()
+                            .map(|lv| LoaderVersionInfo {
+                                version: lv.id.clone(),
+                                stable: lv.stable,
+                                url: Some(lv.url.clone()),
+                                sha1: None,
+                                metadata: None,
+                            })
+                            .collect(),
+                    );
                 } else {
                     // Fabric/Quilt: named entry with empty loaders — marks support
                     supported_versions.insert(gv.id.clone());
                 }
             }
 
-            Some(LoaderInfo { per_version, supported_versions, dummy_loaders })
+            Some(LoaderInfo {
+                per_version,
+                supported_versions,
+                dummy_loaders,
+            })
         }
 
         let loader_infos = [
@@ -306,23 +346,9 @@ impl ManifestCache {
             let mut loaders = HashMap::new();
 
             for (loader_type, info) in &loader_infos {
-                let Some(info) = info else { continue; };
-
-                // Forge/NeoForge: exact version match
-                if let Some(versions) = info.per_version.get(&mv.id) {
-                    loaders.insert(*loader_type, versions.clone());
+                let Some(info) = info else {
                     continue;
-                }
-
-                // Fabric/Quilt: must be a named supported version
-                if info.supported_versions.contains(&mv.id) {
-                    loaders.insert(*loader_type, info.dummy_loaders.clone());
-                }
-            }
-            let mut loaders = HashMap::new();
-
-            for (loader_type, info) in &loader_infos {
-                let Some(info) = info else { continue; };
+                };
                 if let Some(versions) = info.per_version.get(&mv.id) {
                     loaders.insert(*loader_type, versions.clone());
                 } else if info.supported_versions.contains(&mv.id) {
@@ -347,18 +373,21 @@ impl ManifestCache {
 
         // Fetch available Java runtimes from Mojang's runtime manifest (1 HTTP request).
         // This replaces the old hardcoded [8, 17, 21] with real data.
-        let required_java_major_versions = crate::game::java_policy::fetch_available_runtimes(&self.client)
-            .await
-            .unwrap_or_else(|e| {
-                log::warn!("Failed to fetch Java runtimes: {e}. Falling back to [21, 17, 8]");
-                vec![21u32, 17, 8]
-            });
+        let required_java_major_versions =
+            crate::game::java_policy::fetch_available_runtimes(&self.client)
+                .await
+                .unwrap_or_else(|e| {
+                    log::warn!("Failed to fetch Java runtimes: {e}. Falling back to [21, 17, 8]");
+                    vec![21u32, 17, 8]
+                });
 
         // Fetch Java version for latest release + snapshot so onboarding works.
         // Other versions resolve lazily when the user tries to install them.
         let mut java_versions = HashMap::new();
         for v in [&mc_manifest.latest.release, &mc_manifest.latest.snapshot] {
-            if let Ok(major) = crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await {
+            if let Ok(major) =
+                crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await
+            {
                 java_versions.insert(v.clone(), major);
             }
         }
@@ -388,4 +417,3 @@ fn manifest_url(slug: &str) -> String {
         _ => format!("https://launcher-meta.modrinth.com/{slug}/v0/manifest.json"),
     }
 }
-

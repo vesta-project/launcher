@@ -71,11 +71,12 @@ pub async fn load_manifest(app_handle: &tauri::AppHandle) -> Result<PistonMetada
     Ok(meta)
 }
 
-/// Load only game versions + loader data — skips Java normalization for speed.
-/// Used by the install page which doesn't need Java version info.
+/// Load manifest for version display on the install page.
+/// Currently delegates to `load_manifest` (which does normalize Java requirements).
+/// TODO: Add a fast-path that skips Java normalization since the install page
+///       doesn't need Java version info.
 pub async fn load_manifest_for_versions(
     app_handle: &tauri::AppHandle,
 ) -> Result<PistonMetadata, String> {
     load_manifest(app_handle).await
 }
-
