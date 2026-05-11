@@ -8,9 +8,9 @@ use crate::utils::config::{get_app_config, init_config_db, normalize_theme_confi
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::version_tracking::VersionTrackingRepository;
-use tauri::Manager;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
+use tauri::Manager;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -155,7 +155,10 @@ fn store_crash_details_setup(
     ))
 }
 
-fn setup_tray(app: &tauri::AppHandle, show_tray_icon: bool) -> Result<(), Box<dyn std::error::Error>> {
+fn setup_tray(
+    app: &tauri::AppHandle,
+    show_tray_icon: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let show_i = MenuItem::with_id(app, "tray_show", "Show", true, None::<&str>)?;
     let hide_i = MenuItem::with_id(app, "tray_hide", "Hide", true, None::<&str>)?;
     let quit_i = MenuItem::with_id(app, "tray_quit", "Quit", true, None::<&str>)?;
@@ -301,9 +304,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
         use crate::schema::account::dsl::*;
         use diesel::prelude::*;
-        
+
         log::info!("[setup] Cleaning up temporal demo account if present...");
-        
+
         // Remove from DB
         let _ = diesel::delete(account.filter(account_type.eq(crate::auth::ACCOUNT_TYPE_DEMO)))
             .execute(&mut conn);
@@ -444,10 +447,44 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Initialize MetadataCache (in-memory fast path for manifest)
     app.manage(MetadataCache::new());
 
+    // Start warming the manifest cache immediately in the background.
+    // By the time the user opens the install page, manifests are already
+    // cached in memory and on disk.
+    {
+        let app_handle = app.handle().clone();
+        tauri::async_runtime::spawn(async move {
+            let config_dir = get_app_config_dir().ok();
+            if let Some(dir) = config_dir {
+                let cache = piston_lib::game::manifest_cache::ManifestCache::new(
+                    dir.join("data").join("manifests"),
+                );
+                log::info!("[setup] Warming manifest cache in background...");
+                cache.warm_up().await;
+                log::info!("[setup] Manifest cache warmup complete");
+
+                // Populate MetadataCache from the warmed manifests
+                match cache.build_piston_metadata().await {
+                    Ok(meta) => {
+                        if let Some(mc) = app_handle.try_state::<MetadataCache>() {
+                            mc.set(&meta);
+                            log::info!(
+                                "[setup] MetadataCache populated: {} versions",
+                                meta.game_versions.len()
+                            );
+                        }
+                    }
+                    Err(e) => log::warn!("[setup] Failed to build metadata after warmup: {}", e),
+                }
+            }
+        });
+    }
+
     // Sync profiles on startup
     if let Some(task_manager) = app.try_state::<TaskManager>() {
         log::info!("[setup] Submitting SyncAccountProfilesTask...");
-        let _ = task_manager.submit(Box::new(crate::tasks::sync_profiles::SyncAccountProfilesTask::new()));
+        let _ = task_manager.submit(Box::new(
+            crate::tasks::sync_profiles::SyncAccountProfilesTask::new(),
+        ));
     } else {
         log::error!("[setup] Failed to get TaskManager state for startup sync");
     }
@@ -503,9 +540,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     }
 
                     // Update the last seen version so we don't notify again
-                    if let Err(e) =
-                        VersionTrackingRepository::update_last_seen_version("launcher", &current_version, true)
-                    {
+                    if let Err(e) = VersionTrackingRepository::update_last_seen_version(
+                        "launcher",
+                        &current_version,
+                        true,
+                    ) {
                         log::error!("Failed to update last seen launcher version: {}", e);
                     }
                 }
@@ -535,7 +574,8 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             if let Ok(mut conn) = get_vesta_conn() {
                 if let Ok(instances_list) = instance.load::<Instance>(&mut conn) {
                     if let Some(watcher) = handle.try_state::<ResourceWatcher>() {
-                        let startup_scan_limiter = std::sync::Arc::new(tokio::sync::Semaphore::new(2));
+                        let startup_scan_limiter =
+                            std::sync::Arc::new(tokio::sync::Semaphore::new(2));
                         let mut startup_scan_tasks = tokio::task::JoinSet::new();
                         for inst in instances_list {
                             if let Some(game_dir) = &inst.game_directory {
@@ -847,16 +887,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         "linux"
     };
 
-    let win_builder = tauri::WebviewWindowBuilder::new(
-        app,
-        "main",
-        tauri::WebviewUrl::App("index.html".into()),
-    )
-    .initialization_script(&format!(
-        "window.__VESTA_OS__ = '{}';",
-        os_str
-    ))
-    .title("Vesta Launcher")
+    let win_builder =
+        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
+            .initialization_script(&format!("window.__VESTA_OS__ = '{}';", os_str))
+            .title("Vesta Launcher")
             .inner_size(1200_f64, 700_f64)
             .min_inner_size(520_f64, 465_f64)
             .disable_drag_drop_handler() // Allow HTML5 drag-and-drop to work
@@ -864,7 +898,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .visible(false)
             .transparent(true)
             .decorations(false);
-        
+
     let config = get_app_config()?;
     // Legacy bridge: use persisted config size as bootstrap defaults until window-state restore applies.
     let win_builder = win_builder.inner_size(
