@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::collections::HashMap;
 
 pub const LEGACY_JAVA_MAJOR: u32 = 8;
@@ -68,42 +68,22 @@ pub fn parse_java_major(version: &str) -> Option<u32> {
 }
 
 /// Fetch the Java major version required by a specific Minecraft version.
-/// Makes one HTTP request to Mojang's version detail endpoint.
-/// Returns 8 as default for legacy versions without a declared requirement.
+/// Uses the Modrinth launcher-meta API (single request), same data source
+/// as the install pipeline.
 pub async fn fetch_java_major_for_version(
     mc_version: &str,
     client: &reqwest::Client,
 ) -> Result<u32> {
-    #[derive(serde::Deserialize)]
-    struct Detail {
-        java_version: Option<JavaVersionDetail>,
-    }
-    #[derive(serde::Deserialize)]
-    struct JavaVersionDetail {
-        major_version: u32,
-    }
-
-    // Find the version's detail URL from the Mojang version manifest
-    let manifest_url = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-    #[derive(serde::Deserialize)]
-    struct VersionManifest {
-        versions: Vec<VersionEntry>,
-    }
-    #[derive(serde::Deserialize)]
-    struct VersionEntry {
-        id: String,
-        url: String,
-    }
-
-    let manifest: VersionManifest = client.get(manifest_url).send().await?.json().await?;
-    let version = manifest
-        .versions
-        .iter()
-        .find(|v| v.id == mc_version)
-        .with_context(|| format!("Minecraft version '{mc_version}' not found"))?;
-
-    let detail: Detail = client.get(&version.url).send().await?.json().await?;
-    let major = detail.java_version.map(|j| j.major_version).unwrap_or(8);
+    let url = format!(
+        "https://launcher-meta.modrinth.com/minecraft/v0/versions/{}.json",
+        mc_version
+    );
+    let detail: serde_json::Value = client.get(&url).send().await?.json().await?;
+    let major = detail
+        .get("javaVersion")
+        .and_then(|j| j.get("majorVersion"))
+        .and_then(|m| m.as_u64())
+        .unwrap_or(8) as u32;
     Ok(preferred_java_major(major))
 }
 
