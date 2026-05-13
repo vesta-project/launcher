@@ -64,6 +64,11 @@ pub async fn process_and_download_libraries(
         tokio::fs::create_dir_all(&natives_dir).await?;
 
         let total_natives = native_libs.len();
+        log::info!(
+            "Processing {} native libraries — will download and extract to {:?}",
+            total_natives,
+            natives_dir
+        );
         let downloaded = Arc::new(AtomicUsize::new(0));
 
         // Clone needed fields from each library to avoid FnOnce lifetime issues
@@ -79,6 +84,13 @@ pub async fn process_and_download_libraries(
                 )
             })
             .collect();
+
+        // Debug: log native specs to ensure download URLs and paths are present
+        for (name, path, url, _sha) in &native_specs {
+            let full_path = spec.libraries_dir().join(path);
+            let exists = full_path.exists();
+            log::info!("Native spec prepared: name={} path={} url={:?} exists={}", name, path, url, exists);
+        }
 
         stream::iter(native_specs)
             .map(|(name, path, download_url, sha1)| {
@@ -98,13 +110,14 @@ pub async fn process_and_download_libraries(
                     // Download if not cached
                     if !full_path.exists() {
                         if let Some(ref url) = download_url {
+                            log::info!("Downloading native: {} -> {:?}", name, full_path);
                             download_to_path(&client, url, &full_path, sha1.as_deref(), &*reporter)
                                 .await
                                 .with_context(|| {
                                     format!("Failed to download native: {} ({})", name, url)
                                 })?;
                         } else {
-                            log::warn!("Skipping native {} — no download URL available", name);
+                            log::error!("Skipping native {} — no download URL available (path={})", name, path);
                             let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
                             let progress =
                                 80 + ((count as f32 / total_natives as f32) * 10.0) as i32;

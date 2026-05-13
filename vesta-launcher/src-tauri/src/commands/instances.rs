@@ -1331,7 +1331,7 @@ pub async fn launch_instance(
     );
     if !preflight_report.ready {
         for issue in &preflight_report.issues {
-            log::debug!(
+            log::warn!(
                 "[launch_instance] verify-issue kind={:?} class={} path={} detail={}",
                 issue.kind,
                 issue.artifact_class,

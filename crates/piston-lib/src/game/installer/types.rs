@@ -2,6 +2,35 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use tokio::sync::watch;
 
+/// Policy for native library selection on ARM architectures.
+///
+/// When on ARM64 (e.g., macOS arm64), we may encounter libraries with:
+/// - Architecture-specific classifier (e.g., "natives-osx-arm64")
+/// - Generic classifier without architecture (e.g., "natives-osx")
+///
+/// The generic classifier typically contains only x86/x64 binaries.
+/// This policy controls whether to exclude generic classifiers when
+/// a pure-ARM variant exists, or to permit fallback to generic x86.
+///
+/// **To reverse this policy**: Change to `AllowGenericNativeFallback` if ARM
+/// installs fail due to missing libraries on newer Java/platform versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NativeArchitecturePolicy {
+    /// Reject generic natives (e.g., "natives-osx") on ARM64 if a specific ARM variant exists.
+    /// This prevents x86/x64-only binaries on ARM. Safe for platforms with full ARM support.
+    /// (Current: enabled for Apple Silicon with Java 21+)
+    PreferArchSpecificOnly,
+
+    /// Allow fallback to generic natives on ARM64 when no specific variant exists.
+    /// Safer for platforms with mixed or incomplete ARM support.
+    AllowGenericNativeFallback,
+}
+
+/// Current native architecture policy.
+/// Change this constant to control behavior on ARM platforms.
+pub const NATIVE_ARCH_POLICY: NativeArchitecturePolicy =
+    NativeArchitecturePolicy::PreferArchSpecificOnly;
+
 /// Progress reporter trait for installer operations
 /// Implementations forward updates to the UI/notification system
 pub trait ProgressReporter: Send + Sync {
@@ -362,6 +391,151 @@ impl OsType {
             OsType::WindowsArm64 | OsType::MacOSArm64 | OsType::LinuxArm64 => Arch::Arm64,
             OsType::LinuxArm32 => Arch::Arm32,
         }
+    }
+
+    /// Get the canonical OS name used in classifier/rule matching.
+    /// Returns "windows", "linux", or "osx" (Mojang convention).
+    pub fn os_name(&self) -> &'static str {
+        match self {
+            OsType::Windows | OsType::WindowsArm64 => "windows",
+            OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => "linux",
+            OsType::MacOS | OsType::MacOSArm64 => "osx",
+        }
+    }
+
+    /// Check whether an OS name from a version rule matches this runtime OS.
+    ///
+    /// Rules often use base names ("osx", "windows", "linux") even on ARM,
+    /// but may also use arch-specific names (e.g. "osx-arm64").
+    ///
+    /// Base names like `"osx"` match ALL variants of that OS (Intel + ARM64).
+    /// Architecture selection is handled via the library's classifier (e.g.
+    /// `natives-macos-arm64`), not via rule names. Arch-qualified names like
+    /// `"osx-arm64"` match only the specific ARM variant.
+    pub fn matches_rule_os_name(&self, rule_name: &str) -> bool {
+        let name = rule_name.to_lowercase();
+        match self {
+            OsType::Windows => name == "windows",
+            OsType::WindowsArm64 => name == "windows" || name == "windows-arm64",
+            OsType::MacOS => name == "osx" || name == "macos",
+            OsType::MacOSArm64 => {
+                name == "osx" || name == "macos" || name == "osx-arm64" || name == "macos-arm64"
+            }
+            OsType::Linux => name == "linux",
+            OsType::LinuxArm32 => name == "linux" || name == "linux-arm32",
+            OsType::LinuxArm64 => name == "linux" || name == "linux-arm64",
+        }
+    }
+
+    /// Check whether this is an ARM architecture variant.
+    pub fn is_arm(&self) -> bool {
+        matches!(
+            self,
+            OsType::WindowsArm64 | OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::LinuxArm32
+        )
+    }
+
+    /// Check whether a native library classifier string matches this OS.
+    ///
+    /// Handles the "osx"/"macos" interchangeability found in real-world
+    /// manifests, as well as architecture-specific suffixes (arm64, x86_64, etc.).
+    /// Non-native classifiers (those without "natives" or "native" in the string)
+    /// are always considered applicable.
+    pub fn classifier_matches(&self, classifier: &str) -> bool {
+        let cl = classifier.to_lowercase();
+
+        // Non-native classifiers are always applicable
+        let is_native = cl.contains("natives") || cl.contains("native");
+        if !is_native {
+            return true;
+        }
+
+        // --- OS matching ---
+        let is_macos = matches!(self, OsType::MacOS | OsType::MacOSArm64);
+        let is_windows = matches!(self, OsType::Windows | OsType::WindowsArm64);
+        let is_linux = matches!(
+            self,
+            OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64
+        );
+
+        let os_match = if is_macos {
+            cl.contains("osx") || cl.contains("macos")
+        } else if is_windows {
+            cl.contains("windows") || cl.contains("win")
+        } else if is_linux {
+            cl.contains("linux")
+        } else {
+            false
+        };
+
+        if !os_match {
+            return false;
+        }
+
+        // --- Architecture matching ---
+        let target_is_arm64 = matches!(
+            self,
+            OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::WindowsArm64
+        );
+        let target_is_arm32 = matches!(self, OsType::LinuxArm32);
+        let target_is_x64 = matches!(self, OsType::Windows | OsType::MacOS | OsType::Linux);
+
+        if cl.contains("arm64") || cl.contains("aarch64") || cl.contains("aarch_64") {
+            return target_is_arm64;
+        }
+        if cl.contains("arm32") || cl.contains("armv7") || cl.contains("armhf") {
+            return target_is_arm32;
+        }
+        if cl.contains("x86_64") || cl.contains("x64") || cl.contains("amd64") {
+            return target_is_x64;
+        }
+        // Plain x86 (32-bit) — allow on Windows/Linux x64 as fallback
+        if cl.contains("x86") && !cl.contains("x86_64") {
+            return matches!(self, OsType::Windows | OsType::Linux);
+        }
+
+        // No arch specifier in classifier → matches any arch for this OS
+        true
+    }
+
+    /// Check if a native classifier should be rejected based on architecture policy.
+    /// Used to filter libraries during selection when architecture-specific variants exist.
+    ///
+    /// # Parameters
+    /// - `classifier`: The native classifier string (e.g., "natives-osx")
+    /// - `has_arch_specific_variant`: Whether an architecture-specific variant exists (e.g., "natives-osx-arm64")
+    ///
+    /// # Returns
+    /// true if the library should be skipped, false if it should be included.
+    pub fn should_skip_generic_native(
+        &self,
+        classifier: &str,
+        has_arch_specific_variant: bool,
+    ) -> bool {
+        // Only filter on ARM64 with PreferArchSpecificOnly policy
+        if NATIVE_ARCH_POLICY != NativeArchitecturePolicy::PreferArchSpecificOnly {
+            return false;
+        }
+
+        let target_is_arm64 = matches!(
+            self,
+            OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::WindowsArm64
+        );
+
+        if !target_is_arm64 || !has_arch_specific_variant {
+            return false;
+        }
+
+        // On ARM64 with arch-specific variant available, skip generic classifiers
+        let cl = classifier.to_lowercase();
+        let has_arch_specifier = cl.contains("arm64")
+            || cl.contains("aarch64")
+            || cl.contains("aarch_64")
+            || cl.contains("x86_64")
+            || cl.contains("x64")
+            || cl.contains("amd64");
+
+        !has_arch_specifier
     }
 }
 

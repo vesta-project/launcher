@@ -85,6 +85,15 @@ impl UnifiedManifest {
             .as_ref()
             .map(|a| a.jvm.clone())
             .unwrap_or_default();
+
+        // Handle legacy vanilla `minecraftArguments` (pre-1.13 string format)
+        // when the structured `arguments` field is absent.
+        if vanilla.arguments.is_none() {
+            if let Some(ref legacy) = vanilla.minecraft_arguments {
+                let tokens = crate::game::launcher::arguments::split_preserving_quotes(legacy);
+                game_arguments = tokens.into_iter().map(Argument::Simple).collect();
+            }
+        }
         let mut libraries: Vec<UnifiedLibrary> = Vec::new();
 
         // Add vanilla libraries
@@ -126,6 +135,9 @@ impl UnifiedManifest {
             if !child_game_args.is_empty() {
                 let mut new_game = game_arguments;
                 new_game.extend(child_game_args);
+                // Deduplicate by flag name — both vanilla and modloader may
+                // include common tokens like `--gameDir`, `--accessToken`.
+                deduplicate_args(&mut new_game);
                 game_arguments = new_game;
             }
 
@@ -188,6 +200,11 @@ impl UnifiedManifest {
                 java_version = ml.java_version;
             }
         }
+
+        // Apply architecture-aware native filtering based on policy
+        // On ARM64, if both generic (e.g., "natives-osx") and arch-specific (e.g., "natives-osx-arm64")
+        // variants exist for the same library, skip the generic one.
+        libraries = filter_native_libraries_by_arch_policy(libraries, os);
 
         UnifiedManifest {
             id,
@@ -263,27 +280,33 @@ impl UnifiedLibrary {
                     .path
                     .clone()
                     .unwrap_or_else(|| name_to_path(&lib.name));
-                let url = artifact.url.clone().or_else(|| {
-                    if let Some(lib_url) = &lib.url {
-                        let base = if lib_url.ends_with('/') {
-                            lib_url.clone()
-                        } else {
-                            format!("{}/", lib_url)
-                        };
-                        Some(format!("{}{}", base, path))
-                    } else {
-                        resolve_maven_url(&lib.name, ml_type)
-                    }
-                });
+                let explicit = artifact.url.as_deref().filter(|s| !s.is_empty());
+                let url = normalize_explicit_url(
+                    explicit,
+                    &path,
+                    lib.url.as_deref(),
+                    resolve_maven_url(&lib.name, ml_type),
+                );
 
                 // In modern Minecraft, native libraries are often separate entries with
-                // ":natives-<os>" in their name. We need to mark them as native so they get extracted.
+                // ":natives-<os>" or ":native-<name>:<os>-<arch>" in their name. We need
+                // to mark them as native so they get extracted.
                 let name_lower = lib.name.to_lowercase();
-                let is_native_by_name = name_lower.contains(":natives-")
-                    || (name_lower.contains("natives-") && name_lower.split(':').count() > 3);
-
-                // If it's a separate entry, it might have the classifier in the name
                 let parts: Vec<&str> = lib.name.split(':').collect();
+                let is_native_by_name = name_lower.contains(":natives-")
+                    || name_lower.contains(":native-")
+                    || (name_lower.contains("natives-") && parts.len() > 3)
+                    || (name_lower.contains("native-") && parts.len() > 3)
+                    || (parts.len() > 3 && {
+                        let cl = parts[3].to_lowercase();
+                        cl.starts_with("osx-")
+                            || cl.starts_with("macos-")
+                            || cl.starts_with("linux-")
+                            || cl.starts_with("windows-")
+                            || cl.starts_with("win-")
+                    });
+
+                // Extract the classifier from the name
                 let classifier = if parts.len() > 3 {
                     Some(parts[3].to_string())
                 } else {
@@ -385,7 +408,13 @@ impl UnifiedLibrary {
                 if let Some(classifiers) = &downloads.classifiers {
                     if let Some(artifact) = classifiers.get(&classifier) {
                         path = artifact.path.clone().unwrap_or_default();
-                        url = artifact.url.clone();
+                        let explicit = artifact.url.as_deref().filter(|s| !s.is_empty());
+                        url = normalize_explicit_url(
+                            explicit,
+                            &path,
+                            lib.url.as_deref(),
+                            resolve_maven_url_with_classifier(&lib.name, &classifier, ml_type),
+                        );
                         sha1 = artifact.sha1.clone();
                         size = artifact.size;
                     }
@@ -427,26 +456,112 @@ impl UnifiedLibrary {
 }
 
 fn should_include_library(library: &Library, os: OsType) -> bool {
+    // If the Maven coordinate has a classifier that explicitly targets an OS,
+    // require it to match the current runtime architecture/OS.
+    // This prevents downloading/extracting both x64 and arm64 native variants.
+    let parts: Vec<&str> = library.name.split(':').collect();
+    if parts.len() > 3 {
+        let classifier = parts[3].to_lowercase();
+        let os_specific = classifier.contains("osx")
+            || classifier.contains("macos")
+            || classifier.contains("linux")
+            || classifier.contains("windows")
+            || classifier.contains("win");
+        if os_specific {
+            let token = if classifier.contains("native") {
+                classifier
+            } else {
+                format!("natives-{classifier}")
+            };
+            if !os.classifier_matches(&token) {
+                return false;
+            }
+        }
+    }
+
     let Some(rules) = &library.rules else {
         return true;
     };
 
-    let mut include = false;
-    for rule in rules {
-        if rule_matches(rule, os) {
+    // Modrinth-style rule evaluation:
+    // - Allow + match     -> include
+    // - Allow + no match  -> exclude (rule says "only include if...")
+    // - Disallow + match  -> exclude
+    // - Disallow + no match -> neutral (rule doesn't apply)
+    // - If ALL rules are Disallow and NONE match -> include (default allow)
+    let mut results: Vec<Option<bool>> = rules
+        .iter()
+        .map(|rule| {
+            let matches = rule_matches(rule, os);
             match rule.action {
-                RuleAction::Allow => include = true,
-                RuleAction::Disallow => include = false,
+                RuleAction::Allow => Some(matches),
+                RuleAction::Disallow => {
+                    if matches {
+                        Some(false)
+                    } else {
+                        None
+                    }
+                }
+            }
+        })
+        .collect();
+
+    // If every rule is a disallow, add a synthetic allow (default-allow)
+    if rules
+        .iter()
+        .all(|r| matches!(r.action, RuleAction::Disallow))
+    {
+        results.push(Some(true));
+    }
+
+    // Include if: at least one explicit true AND no explicit false
+    let should_exclude =
+        results.iter().any(|r| r == &Some(false)) || results.iter().all(|r| r.is_none());
+
+    // Exception: On ARM64 systems, if the library has ARM64-specific native classifiers
+    // for the **current** OS (e.g., "osx-arm64" on macOS ARM64), include it even if
+    // rules would normally exclude it. This handles Modrinth JSONs that provide arm64
+    // variants alongside old libraries with outdated rules.
+    //
+    // IMPORTANT: The check is scoped to the current OS — a Linux-only "natives-linux-arm64"
+    // must NOT trigger this exception on macOS ARM64.
+    if should_exclude {
+        let arm64_os_key = match os {
+            OsType::MacOSArm64 => Some("osx-arm64"),
+            OsType::LinuxArm64 => Some("linux-arm64"),
+            OsType::WindowsArm64 => Some("windows-arm64"),
+            _ => None,
+        };
+        let os_prefix = os.os_name(); // "osx", "linux", or "windows"
+
+        if let Some(arm64_key) = arm64_os_key {
+            // Check natives map for a direct ARM64 entry (e.g. { "osx-arm64": "natives-osx-arm64" })
+            if let Some(natives) = &library.natives {
+                if natives.contains_key(arm64_key) {
+                    return true;
+                }
+            }
+            // Check classifiers for OS + arm64 combination
+            if let Some(downloads) = &library.downloads {
+                if let Some(classifiers) = &downloads.classifiers {
+                    if classifiers.keys().any(|k| {
+                        let kl = k.to_lowercase();
+                        kl.contains(os_prefix) && (kl.contains("arm64") || kl.contains("aarch64"))
+                    }) {
+                        return true;
+                    }
+                }
             }
         }
     }
-    include
+
+    !should_exclude
 }
 
 fn rule_matches(rule: &Rule, os: OsType) -> bool {
     if let Some(ref os_rule) = rule.os {
         if let Some(ref os_name) = os_rule.name {
-            if os_name != os.as_str() {
+            if !os.matches_rule_os_name(os_name) {
                 return false;
             }
         }
@@ -569,55 +684,187 @@ fn resolve_maven_url_with_classifier(
     }
 }
 
-fn classifier_key_matches_os(key: &str, target_os: OsType) -> bool {
-    let key = key.to_lowercase();
-
-    let is_macos = matches!(target_os, OsType::MacOS | OsType::MacOSArm64);
-    let is_windows = matches!(target_os, OsType::Windows | OsType::WindowsArm64);
-    let is_linux = matches!(
-        target_os,
-        OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64
-    );
-
-    let os_match = if is_macos {
-        key.contains("osx") || key.contains("macos")
-    } else if is_windows {
-        key.contains("windows") || key.contains("win")
-    } else if is_linux {
-        key.contains("linux")
+fn normalize_explicit_url(
+    explicit: Option<&str>,
+    path: &str,
+    lib_base: Option<&str>,
+    maven_base: Option<String>,
+) -> Option<String> {
+    // If we have an explicit URL
+    if let Some(s) = explicit {
+        if s.starts_with("http://") || s.starts_with("https://") {
+            return Some(s.to_string());
+        }
+        // Relative explicit - prefer lib_base, then maven_base
+        if !s.is_empty() {
+            if let Some(base) = lib_base {
+                if base.ends_with('/') {
+                    return Some(format!("{}{}", base, s.trim_start_matches('/')));
+                } else {
+                    return Some(format!("{}/{}", base, s.trim_start_matches('/')));
+                }
+            }
+            if let Some(mb) = maven_base.as_deref() {
+                if mb.ends_with('/') {
+                    return Some(format!("{}{}", mb, s.trim_start_matches('/')));
+                } else {
+                    return Some(format!("{}/{}", mb, s.trim_start_matches('/')));
+                }
+            }
+        }
     } else {
-        false
-    };
-
-    if !os_match {
-        return false;
+        // No explicit URL: build from lib_base + path or maven_base + path
+        if let Some(base) = lib_base {
+            if base.ends_with('/') {
+                return Some(format!("{}{}", base, path));
+            } else {
+                return Some(format!("{}/{}", base.trim_end_matches('/'), path));
+            }
+        }
+        if let Some(mb) = maven_base.as_deref() {
+            if mb.ends_with('/') {
+                return Some(format!("{}{}", mb, path));
+            } else {
+                return Some(format!("{}/{}", mb.trim_end_matches('/'), path));
+            }
+        }
     }
 
-    // Architecture matching
+    None
+}
+
+fn classifier_key_matches_os(key: &str, target_os: OsType) -> bool {
+    target_os.classifier_matches(key)
+}
+
+/// Filter native libraries based on architecture policy.
+/// On ARM64, when both a generic native (e.g., "natives-osx") and an arch-specific
+/// variant (e.g., "natives-osx-arm64") exist for the same library, this function
+/// removes the generic one to prevent downloading x86/x64-only binaries.
+fn filter_native_libraries_by_arch_policy(
+    libraries: Vec<UnifiedLibrary>,
+    os: OsType,
+) -> Vec<UnifiedLibrary> {
+    use crate::game::installer::types::NATIVE_ARCH_POLICY;
+    use std::collections::HashMap;
+
+    // Only apply filtering on ARM64 with PreferArchSpecificOnly policy
+    if NATIVE_ARCH_POLICY
+        != crate::game::installer::types::NativeArchitecturePolicy::PreferArchSpecificOnly
+    {
+        return libraries;
+    }
+
     let target_is_arm64 = matches!(
-        target_os,
+        os,
         OsType::MacOSArm64 | OsType::LinuxArm64 | OsType::WindowsArm64
     );
-    let target_is_arm32 = matches!(target_os, OsType::LinuxArm32);
-    let target_is_x64 = matches!(target_os, OsType::Windows | OsType::MacOS | OsType::Linux);
 
-    if key.contains("arm64") || key.contains("aarch64") {
-        return target_is_arm64;
-    }
-    if key.contains("arm32") || key.contains("armv7") || key.contains("armhf") {
-        return target_is_arm32;
+    if !target_is_arm64 {
+        return libraries;
     }
 
-    if key.contains("x86_64") || key.contains("x64") || key.contains("amd64") {
-        return target_is_x64;
+    // Group native libraries by their base name (without classifier)
+    // to detect when both generic and arch-specific variants exist.
+    //
+    // TODO: This groups by group:artifact:version (first 3 Maven components),
+    // which means DIFFERENT VERSIONS of the same library (e.g. lwjgl:2.9.2
+    // and lwjgl:2.9.4) land in separate groups. On ARM64, if 2.9.2 only has
+    // generic natives ("natives-osx") and 2.9.4 has arch-specific ones
+    // ("natives-osx-arm64"), BOTH get through — and the extraction order
+    // determines which .dylib wins in the natives directory. If the x86_64
+    // one is extracted last, it overwrites the ARM64 one and causes
+    // UnsatisfiedLinkError.
+    //
+    // A more robust fix would group by group:artifact only (any version),
+    // so that a generic native from one version gets removed when an
+    // arch-specific native for the same library exists in any version.
+    let mut base_to_libs: HashMap<String, Vec<&UnifiedLibrary>> = HashMap::new();
+    for lib in &libraries {
+        if lib.is_native {
+            // Extract base name without classifier
+            let base = lib.name.split(':').take(3).collect::<Vec<_>>().join(":");
+            base_to_libs.entry(base).or_insert_with(Vec::new).push(lib);
+        }
     }
 
-    // Allow x86 on x64 as fallback for Windows/Linux
-    if key.contains("x86") && !key.contains("x86_64") {
-        return matches!(target_os, OsType::Windows | OsType::Linux);
+    // Filter: for each base library group, skip generic natives if arch-specific exist
+    let mut skip_names = std::collections::HashSet::new();
+    for libs in base_to_libs.values() {
+        let has_arch_specific = libs.iter().any(|lib| {
+            if let Some(cl) = &lib.classifier {
+                let cl_lower = cl.to_lowercase();
+                cl_lower.contains("arm64")
+                    || cl_lower.contains("aarch64")
+                    || cl_lower.contains("aarch_64")
+            } else {
+                false
+            }
+        });
+
+        if has_arch_specific {
+            // Mark all generic (no arch specifier) variants for removal
+            for lib in libs {
+                if let Some(cl) = &lib.classifier {
+                    let has_arch_specifier = {
+                        let cl_lower = cl.to_lowercase();
+                        cl_lower.contains("arm64")
+                            || cl_lower.contains("aarch64")
+                            || cl_lower.contains("aarch_64")
+                            || cl_lower.contains("x86_64")
+                            || cl_lower.contains("x64")
+                            || cl_lower.contains("amd64")
+                    };
+                    if !has_arch_specifier {
+                        log::info!(
+                            "[NativeArchPolicy] Skipping generic native {} (arch-specific variant exists)",
+                            &lib.name
+                        );
+                        skip_names.insert(lib.name.clone());
+                    }
+                }
+            }
+        }
     }
 
-    true
+    // Remove flagged libraries
+    libraries
+        .into_iter()
+        .filter(|lib| !skip_names.contains(&lib.name))
+        .collect()
+}
+
+/// Deduplicate game arguments by flag name.
+/// Legacy `minecraftArguments` produce `--flag value` pairs. When both vanilla
+/// and modloader provide these (e.g. `--gameDir`, `--accessToken`), the same
+/// flag can appear twice. This function removes the second occurrence.
+fn deduplicate_args(args: &mut Vec<Argument>) {
+    use std::collections::HashSet;
+    let mut seen_flags: HashSet<String> = HashSet::new();
+    let mut i = 0;
+    while i < args.len() {
+        let is_dup_flag = match &args[i] {
+            Argument::Simple(s) if s.starts_with("--") => !seen_flags.insert(s.clone()),
+            _ => false,
+        };
+        if is_dup_flag {
+            // Remove the duplicate flag
+            args.remove(i);
+            // Remove its value too (next token, if it doesn't start with --)
+            if i < args.len() {
+                let next_is_value = match &args[i] {
+                    Argument::Simple(s) => !s.starts_with("--"),
+                    _ => true,
+                };
+                if next_is_value {
+                    args.remove(i);
+                }
+            }
+            // Don't increment i — next element shifted into this position
+        } else {
+            i += 1;
+        }
+    }
 }
 
 /// Extract group:artifact from a Maven coordinate string.
@@ -631,4 +878,58 @@ fn maven_group_artifact(coord: &str) -> Option<&str> {
     let rest = &coord[first_colon + 1..];
     let second_colon = rest.find(':')?;
     Some(&coord[..first_colon + 1 + second_colon])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::launcher::version_parser::{Rule, RuleAction};
+
+    fn allow_rule_for_os(name: &str) -> Rule {
+        Rule {
+            action: RuleAction::Allow,
+            os: Some(crate::game::launcher::version_parser::OsRule {
+                name: Some(name.to_string()),
+                version: None,
+                arch: None,
+            }),
+            features: None,
+        }
+    }
+
+    #[test]
+    fn rule_matches_osx_base_name_for_arm64_macos() {
+        let rule = allow_rule_for_os("osx");
+        assert!(rule_matches(&rule, OsType::MacOSArm64));
+    }
+
+    #[test]
+    fn should_include_library_when_rule_uses_base_os_name() {
+        let mut lib = Library {
+            name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
+            ..Default::default()
+        };
+        lib.rules = Some(vec![allow_rule_for_os("osx")]);
+        assert!(should_include_library(&lib, OsType::MacOSArm64));
+    }
+
+    #[test]
+    fn should_exclude_arm64_native_classifier_on_intel_macos() {
+        let mut lib = Library {
+            name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
+            ..Default::default()
+        };
+        lib.rules = Some(vec![allow_rule_for_os("osx")]);
+        assert!(!should_include_library(&lib, OsType::MacOS));
+    }
+
+    #[test]
+    fn should_include_aarch64_classifier_on_arm64_linux() {
+        let mut lib = Library {
+            name: "io.netty:netty-transport-native-epoll:4.2.7.Final:linux-aarch_64".to_string(),
+            ..Default::default()
+        };
+        lib.rules = Some(vec![allow_rule_for_os("linux")]);
+        assert!(should_include_library(&lib, OsType::LinuxArm64));
+    }
 }
