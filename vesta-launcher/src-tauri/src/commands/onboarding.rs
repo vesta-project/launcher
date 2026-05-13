@@ -1,7 +1,5 @@
 use crate::models::java::GlobalJavaPath;
-use crate::schema::config::global_java_paths::dsl::{
-    global_java_paths, is_managed as is_managed_col, major_version, path as path_col,
-};
+use crate::schema::config::global_java_paths::dsl::{global_java_paths, id, is_active};
 use crate::tasks::installers::java::DownloadJavaTask;
 use crate::tasks::manager::TaskManager;
 use crate::utils::config::{update_config_field, update_config_fields};
@@ -33,69 +31,64 @@ fn java_requirement_name(version: u32) -> String {
 pub async fn get_required_java_versions(
     app_handle: AppHandle,
 ) -> Result<Vec<JavaRequirement>, String> {
-    let metadata = crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?;
+    let meta = crate::utils::manifest::load_manifest(&app_handle).await?;
 
     let mut requirements = Vec::new();
+    let latest_required_major =
+        crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.release)
+            .or_else(|_| {
+                crate::utils::java::resolve_required_java_from_manifest(
+                    &meta,
+                    &meta.latest.snapshot,
+                )
+            })
+            .ok()
+            .or_else(|| {
+                meta.required_java_major_versions
+                    .first()
+                    .copied()
+                    .map(crate::utils::java::preferred_java_major)
+            });
 
-    if let Some(meta) = metadata {
-        let latest_required_major =
-            crate::utils::java::resolve_required_java_from_manifest(&meta, &meta.latest.release)
-                .or_else(|_| {
-                    crate::utils::java::resolve_required_java_from_manifest(
-                        &meta,
-                        &meta.latest.snapshot,
-                    )
-                })
-                .ok()
-                .or_else(|| {
-                    meta.required_java_major_versions
-                        .first()
-                        .copied()
-                        .map(crate::utils::java::preferred_java_major)
-                });
+    let latest_required_major = match latest_required_major {
+        Some(v) => v,
+        None => {
+            log::warn!("Manifest does not contain Java runtime majors; forcing refresh");
+            let _ = crate::utils::manifest::queue_manifest_generation(&app_handle, true).await;
+            return Err("MANIFEST_NOT_READY".to_string());
+        }
+    };
 
-        let latest_required_major = match latest_required_major {
-            Some(v) => v,
-            None => {
-                log::warn!("Manifest does not contain Java runtime majors; forcing refresh");
-                let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
-                return Err("MANIFEST_NOT_READY".to_string());
-            }
-        };
+    let mut versions: Vec<u32> = meta
+        .required_java_major_versions
+        .iter()
+        .copied()
+        .map(crate::utils::java::preferred_java_major)
+        .collect();
+    versions.sort_unstable_by(|a, b| b.cmp(a));
+    versions.dedup();
 
-        let mut versions: Vec<u32> = meta
-            .required_java_major_versions
-            .iter()
+    if versions.is_empty() {
+        let set: std::collections::BTreeSet<u32> = meta
+            .java_major_version_by_game_version
+            .values()
             .copied()
             .map(crate::utils::java::preferred_java_major)
             .collect();
-        versions.sort_unstable_by(|a, b| b.cmp(a));
-        versions.dedup();
+        versions = set.into_iter().rev().collect();
+    }
 
-        if versions.is_empty() {
-            let set: std::collections::BTreeSet<u32> = meta
-                .java_major_version_by_game_version
-                .values()
-                .copied()
-                .map(crate::utils::java::preferred_java_major)
-                .collect();
-            versions = set.into_iter().rev().collect();
-        }
-
-        if versions.is_empty() {
-            let _ = crate::utils::java::queue_manifest_generation(&app_handle, true).await;
-            return Err("MANIFEST_NOT_READY".to_string());
-        }
-
-        for version in versions {
-            requirements.push(JavaRequirement {
-                major_version: version,
-                recommended_name: java_requirement_name(version),
-                is_required_for_latest: version == latest_required_major,
-            });
-        }
-    } else {
+    if versions.is_empty() {
+        let _ = crate::utils::manifest::queue_manifest_generation(&app_handle, true).await;
         return Err("MANIFEST_NOT_READY".to_string());
+    }
+
+    for version in versions {
+        requirements.push(JavaRequirement {
+            major_version: version,
+            recommended_name: java_requirement_name(version),
+            is_required_for_latest: version == latest_required_major,
+        });
     }
 
     Ok(requirements)
@@ -149,19 +142,27 @@ pub async fn select_java_file(app_handle: AppHandle) -> Result<Option<String>, S
 pub fn set_global_java_path(version: i32, path_str: String, managed: bool) -> Result<(), String> {
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
 
-    let new_entry = GlobalJavaPath {
-        major_version: version,
-        path: path_str,
-        is_managed: managed,
-    };
+    conn.transaction(|conn| {
+        // Deactivate all existing rows for this major_version
+        diesel::sql_query("UPDATE global_java_paths SET is_active = 0 WHERE major_version = ?")
+            .bind::<diesel::sql_types::Integer, _>(version)
+            .execute(conn)?;
 
-    diesel::insert_into(global_java_paths)
-        .values(&new_entry)
-        .on_conflict(major_version)
-        .do_update()
-        .set(&new_entry)
-        .execute(&mut conn)
-        .map_err(|e| e.to_string())?;
+        // Upsert the chosen path with is_active = 1
+        diesel::sql_query(
+            "INSERT INTO global_java_paths (major_version, path, is_managed, is_active) \
+             VALUES (?, ?, ?, 1) \
+             ON CONFLICT(major_version, path) DO UPDATE SET is_active = 1, is_managed = ?",
+        )
+        .bind::<diesel::sql_types::Integer, _>(version)
+        .bind::<diesel::sql_types::Text, _>(&path_str)
+        .bind::<diesel::sql_types::Bool, _>(managed)
+        .bind::<diesel::sql_types::Bool, _>(managed)
+        .execute(conn)?;
+
+        Ok(())
+    })
+    .map_err(|e: diesel::result::Error| e.to_string())?;
 
     Ok(())
 }
@@ -170,6 +171,7 @@ pub fn set_global_java_path(version: i32, path_str: String, managed: bool) -> Re
 pub fn get_global_java_paths() -> Result<Vec<GlobalJavaPath>, String> {
     let mut conn = get_config_conn().map_err(|e| e.to_string())?;
     global_java_paths
+        .order((is_active.desc(), id.desc()))
         .load::<GlobalJavaPath>(&mut conn)
         .map_err(|e| e.to_string())
 }
@@ -213,22 +215,25 @@ pub async fn download_managed_java(app_handle: AppHandle, version: u32) -> Resul
             );
 
             let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-            let new_entry = GlobalJavaPath {
-                major_version: version as i32,
-                path: java_path.to_string_lossy().to_string(),
-                is_managed: true,
-            };
+            conn.transaction(|conn| {
+                diesel::sql_query(
+                    "UPDATE global_java_paths SET is_active = 0 WHERE major_version = ?",
+                )
+                .bind::<diesel::sql_types::Integer, _>(version as i32)
+                .execute(conn)?;
 
-            diesel::insert_into(global_java_paths)
-                .values(&new_entry)
-                .on_conflict(major_version)
-                .do_update()
-                .set((
-                    path_col.eq(&new_entry.path),
-                    is_managed_col.eq(new_entry.is_managed),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
+                diesel::sql_query(
+                    "INSERT INTO global_java_paths (major_version, path, is_managed, is_active) \
+                     VALUES (?, ?, 1, 1) \
+                     ON CONFLICT(major_version, path) DO UPDATE SET is_active = 1, is_managed = 1",
+                )
+                .bind::<diesel::sql_types::Integer, _>(version as i32)
+                .bind::<diesel::sql_types::Text, _>(&java_path.to_string_lossy().to_string())
+                .execute(conn)?;
+
+                Ok(())
+            })
+            .map_err(|e: diesel::result::Error| e.to_string())?;
 
             return Ok(());
         }

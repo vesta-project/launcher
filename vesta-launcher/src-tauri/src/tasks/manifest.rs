@@ -85,6 +85,7 @@ impl Task for GenerateManifestTask {
                 e.to_string()
             })?;
             log::info!("Config directory resolved: {:?}", config_dir);
+            let data_dir = config_dir.join("data");
 
             let _ = ctx.update_full(
                 10,
@@ -100,33 +101,23 @@ impl Task for GenerateManifestTask {
             let network_manager = app.state::<crate::utils::network::NetworkManager>();
             let network_status = network_manager.get_status();
 
-            let max_age = if network_status == crate::utils::network::NetworkStatus::Weak {
-                168 // 7 days
-            } else if network_status == crate::utils::network::NetworkStatus::Offline {
-                8760 // 1 year (basically use any cache we have)
-            } else {
-                24 // 1 day
-            };
-
-            // Load or fetch metadata
+            // Load or fetch metadata (ManifestCache handles freshness via ETag)
             let start = std::time::Instant::now();
             let metadata_res = if force_refresh {
                 log::info!("Force refreshing PistonMetadata (bypassing cache)...");
                 // Delete cache to force fresh fetch
-                let cache_path = config_dir.join("piston_manifest.json");
+                let cache_path = data_dir.join("piston_manifest.json");
                 if cache_path.exists() {
                     log::info!("Deleting cache file to force refresh");
                     let _ = fs::remove_file(&cache_path).await;
                 }
-                piston_lib::game::metadata::cache::refresh_metadata(&config_dir).await
+                piston_lib::game::metadata::cache::refresh_metadata(&data_dir).await
             } else {
                 log::info!(
-                    "Fetching PistonMetadata (status: {:?}, max_age: {}h)...",
-                    network_status,
-                    max_age
+                    "Fetching PistonMetadata (status: {:?})...",
+                    network_status
                 );
-                piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&config_dir, max_age)
-                    .await
+                piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&data_dir).await
             };
 
             network_manager

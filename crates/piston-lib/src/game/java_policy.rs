@@ -1,7 +1,9 @@
+use anyhow::Result;
+use std::collections::HashMap;
+
 pub const LEGACY_JAVA_MAJOR: u32 = 8;
 
 /// Normalize declared Java requirements to launcher policy.
-///
 /// Current policy: treat Java 16 requirements as Java 17.
 pub fn preferred_java_major(major: u32) -> u32 {
     if major == 16 {
@@ -9,6 +11,80 @@ pub fn preferred_java_major(major: u32) -> u32 {
     } else {
         major
     }
+}
+
+/// Fetch available Java runtime majors from Mojang's runtime manifest.
+/// Single HTTP request returns all Java runtimes that exist on any platform.
+pub async fn fetch_available_runtimes(client: &reqwest::Client) -> Result<Vec<u32>> {
+    #[derive(serde::Deserialize)]
+    struct Entry {
+        version: VersionInfo,
+    }
+    #[derive(serde::Deserialize)]
+    struct VersionInfo {
+        name: String,
+    }
+
+    let url = "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
+    let data: HashMap<String, HashMap<String, Vec<Entry>>> =
+        client.get(url).send().await?.json().await?;
+
+    let mut majors: std::collections::BTreeSet<u32> = std::collections::BTreeSet::new();
+    for (_platform, components) in data {
+        for (component, entries) in components {
+            if !component.starts_with("java-runtime-") && component != "jre-legacy" {
+                continue;
+            }
+            for entry in entries {
+                if let Some(major) = parse_java_major(&entry.version.name) {
+                    majors.insert(preferred_java_major(major));
+                }
+            }
+        }
+    }
+
+    if majors.is_empty() {
+        anyhow::bail!("No Java runtimes found in Mojang manifest");
+    }
+    Ok(majors.into_iter().rev().collect())
+}
+
+/// Parse a Java version string like "1.8.0_402" or "17.0.14" to its major number.
+pub fn parse_java_major(version: &str) -> Option<u32> {
+    if let Some(rest) = version.strip_prefix("1.") {
+        return rest
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect::<String>()
+            .parse::<u32>()
+            .ok();
+    }
+    version
+        .chars()
+        .take_while(|c| c.is_ascii_digit())
+        .collect::<String>()
+        .parse::<u32>()
+        .ok()
+}
+
+/// Fetch the Java major version required by a specific Minecraft version.
+/// Uses the Modrinth launcher-meta API (single request), same data source
+/// as the install pipeline.
+pub async fn fetch_java_major_for_version(
+    mc_version: &str,
+    client: &reqwest::Client,
+) -> Result<u32> {
+    let url = format!(
+        "https://launcher-meta.modrinth.com/minecraft/v0/versions/{}.json",
+        mc_version
+    );
+    let detail: serde_json::Value = client.get(&url).send().await?.json().await?;
+    let major = detail
+        .get("javaVersion")
+        .and_then(|j| j.get("majorVersion"))
+        .and_then(|m| m.as_u64())
+        .unwrap_or(8) as u32;
+    Ok(preferred_java_major(major))
 }
 
 #[cfg(test)]
@@ -26,5 +102,24 @@ mod tests {
         assert_eq!(preferred_java_major(17), 17);
         assert_eq!(preferred_java_major(21), 21);
         assert_eq!(preferred_java_major(25), 25);
+    }
+
+    #[test]
+    fn parses_java_8_format() {
+        assert_eq!(parse_java_major("1.8.0_402"), Some(8));
+        assert_eq!(parse_java_major("1.8.0_402-b08"), Some(8));
+    }
+
+    #[test]
+    fn parses_modern_java_format() {
+        assert_eq!(parse_java_major("17.0.14"), Some(17));
+        assert_eq!(parse_java_major("21.0.5"), Some(21));
+        assert_eq!(parse_java_major("25"), Some(25));
+    }
+
+    #[test]
+    fn parse_returns_none_for_garbage() {
+        assert_eq!(parse_java_major(""), None);
+        assert_eq!(parse_java_major("abc"), None);
     }
 }

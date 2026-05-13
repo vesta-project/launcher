@@ -260,14 +260,25 @@ pub async fn clear_cache(
 
     // 3. Clear Piston manifest file
     if let Ok(config_dir) = get_app_config_dir() {
-        let cache_path = config_dir.join("piston_manifest.json");
+        let cache_path = config_dir.join("data").join("piston_manifest.json");
         if cache_path.exists() {
             if let Err(e) = std::fs::remove_file(&cache_path) {
                 log::warn!("Failed to delete Piston manifest file: {}", e);
             }
         }
 
-        // 4. Clear generic cache and temp folders if they exist
+        // 4. Clear new per-manifest cache files under data/manifests/
+        let manifests_dir = config_dir.join("data").join("manifests");
+        if manifests_dir.exists() && manifests_dir.is_dir() {
+            if let Err(e) = std::fs::remove_dir_all(&manifests_dir) {
+                log::warn!("Failed to delete manifests cache: {}", e);
+            } else {
+                log::info!("Cleared manifests cache directory");
+                let _ = std::fs::create_dir_all(&manifests_dir);
+            }
+        }
+
+        // 5. Clear generic cache and temp folders if they exist
         for folder in ["cache", "temp"] {
             let path = config_dir.join(folder);
             if path.exists() && path.is_dir() {
@@ -292,12 +303,18 @@ pub async fn get_cache_size() -> Result<String, String> {
     let mut total_bytes = 0;
 
     // 1. Piston manifest
-    let manifest_path = config_dir.join("piston_manifest.json");
+    let manifest_path = config_dir.join("data").join("piston_manifest.json");
     if let Ok(meta) = std::fs::metadata(&manifest_path) {
         total_bytes += meta.len();
     }
 
-    // 2. Cache & Temp folders
+    // 2. New per-manifest cache files under data/manifests/
+    let manifests_dir = config_dir.join("data").join("manifests");
+    if manifests_dir.exists() && manifests_dir.is_dir() {
+        total_bytes += get_dir_size(&manifests_dir);
+    }
+
+    // 3. Cache & Temp folders
     for folder in ["cache", "temp"] {
         let path = config_dir.join(folder);
         if path.exists() && path.is_dir() {

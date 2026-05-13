@@ -77,12 +77,8 @@ impl Task for ImportResourceResyncTask {
                 ));
             }
 
-            if let Err(err) = seed_launcher_linkage_hints(
-                &app_handle,
-                &target_instance,
-                &target_dir,
-            )
-            .await
+            if let Err(err) =
+                seed_launcher_linkage_hints(&app_handle, &target_instance, &target_dir).await
             {
                 log::warn!(
                     "[external_import_resync] launcher hint seeding skipped instance_id={} reason={}",
@@ -97,8 +93,9 @@ impl Task for ImportResourceResyncTask {
                 .await
                 .map_err(|e| format!("Failed to start watcher before resync: {e}"))?;
 
-            let (progress_tx, mut progress_rx) =
-                tokio::sync::mpsc::unbounded_channel::<crate::resources::watcher::ScanProgressSnapshot>();
+            let (progress_tx, mut progress_rx) = tokio::sync::mpsc::unbounded_channel::<
+                crate::resources::watcher::ScanProgressSnapshot,
+            >();
             let app_for_resync = app_handle.clone();
             let target_dir_for_refresh = target_dir.clone();
             let refresh_task = tauri::async_runtime::spawn(async move {
@@ -170,10 +167,7 @@ impl Task for ImportResourceResyncTask {
             let verify_spec = InstallSpec {
                 version_id: target_instance.minecraft_version.clone(),
                 modloader: parse_modloader(
-                    target_instance
-                        .modloader
-                        .as_deref()
-                        .unwrap_or("vanilla"),
+                    target_instance.modloader.as_deref().unwrap_or("vanilla"),
                 ),
                 modloader_version: target_instance.modloader_version.clone(),
                 data_dir,
@@ -183,8 +177,14 @@ impl Task for ImportResourceResyncTask {
                 concurrency: 8,
             };
 
-            let verify_report = piston_lib::game::installer::verify_instance(&verify_spec)
-                .map_err(|e| format!("Runtime verify preflight failed: {}", e))?;
+            // Spawn blocking to avoid async Send issues with &InstallSpec
+            let verify_spec_clone = verify_spec.clone();
+            let verify_report = tokio::task::spawn_blocking(move || {
+                piston_lib::game::installer::verify_instance(&verify_spec_clone)
+            })
+            .await
+            .map_err(|e| format!("Verify task join failed: {}", e))?
+            .map_err(|e| format!("Runtime verify preflight failed: {}", e))?;
             log::info!(
                 "[external_import_resync] runtime-verify-preflight instance_id={} ready={} checked={} missing={} mismatch={}",
                 instance_id,
@@ -207,8 +207,9 @@ impl Task for ImportResourceResyncTask {
                 ctx.update_description(
                     "Repairing missing runtime artifacts for imported instance...".to_string(),
                 );
-                let silent_reporter: std::sync::Arc<dyn piston_lib::game::installer::types::ProgressReporter> =
-                    std::sync::Arc::new(SilentProgressReporter);
+                let silent_reporter: std::sync::Arc<
+                    dyn piston_lib::game::installer::types::ProgressReporter,
+                > = std::sync::Arc::new(SilentProgressReporter);
                 piston_lib::game::installer::install_instance(verify_spec, silent_reporter)
                     .await
                     .map_err(|e| format!("Imported runtime repair failed: {}", e))?;
@@ -274,7 +275,8 @@ async fn seed_launcher_linkage_hints(
         return Ok(());
     }
 
-    let (seeded, skipped_missing_file) = apply_launcher_hints(app_handle, inst.id, target_dir, hints).await?;
+    let (seeded, skipped_missing_file) =
+        apply_launcher_hints(app_handle, inst.id, target_dir, hints).await?;
     log::info!(
         "[external_import_resync] hint-applied instance_id={} seeded={} skipped_missing_file={}",
         inst.id,
@@ -295,7 +297,10 @@ struct LocalHint {
 
 fn collect_launcher_hints(launcher_kind: &str, source_root: &PathBuf) -> Vec<LocalHint> {
     match launcher_kind {
-        "curseforgeFlame" | "prism" | "multimc" => crate::launcher_import::providers::flame_metadata::extract_flame_resource_hints(source_root)
+        "curseforgeFlame" | "prism" | "multimc" => {
+            crate::launcher_import::providers::flame_metadata::extract_flame_resource_hints(
+                source_root,
+            )
             .into_iter()
             .map(|hint| LocalHint {
                 project_id: hint.project_id,
@@ -303,7 +308,8 @@ fn collect_launcher_hints(launcher_kind: &str, source_root: &PathBuf) -> Vec<Loc
                 platform: crate::models::resource::SourcePlatform::CurseForge,
                 file_name: hint.file_name,
             })
-            .collect(),
+            .collect()
+        }
         "modrinthApp" => {
             let launcher_root = resolve_modrinth_launcher_root(source_root);
             crate::launcher_import::providers::modrinth_app::extract_modrinth_resource_hints(
@@ -341,7 +347,10 @@ fn collect_launcher_hints(launcher_kind: &str, source_root: &PathBuf) -> Vec<Loc
             })
             .collect()
         }
-        "atlauncher" => crate::launcher_import::providers::atlauncher::extract_atlauncher_resource_hints(source_root)
+        "atlauncher" => {
+            crate::launcher_import::providers::atlauncher::extract_atlauncher_resource_hints(
+                source_root,
+            )
             .into_iter()
             .filter_map(|hint| {
                 let platform = match hint.platform.as_str() {
@@ -356,7 +365,8 @@ fn collect_launcher_hints(launcher_kind: &str, source_root: &PathBuf) -> Vec<Loc
                     file_name: hint.file_name,
                 })
             })
-            .collect(),
+            .collect()
+        }
         _ => Vec::new(),
     }
 }
@@ -419,7 +429,10 @@ async fn apply_launcher_hints(
     let mut skipped_missing_file = 0usize;
 
     for hint in hints {
-        let key = format!("{:?}:{}:{}", hint.platform, hint.project_id, hint.version_id);
+        let key = format!(
+            "{:?}:{}:{}",
+            hint.platform, hint.project_id, hint.version_id
+        );
         if !seen_pairs.insert(key) {
             continue;
         }

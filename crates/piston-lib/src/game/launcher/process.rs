@@ -1,15 +1,15 @@
 /// Process management and game launch orchestration
 use crate::game::installer::types::OsType;
-use crate::utils::process::PistonCommandExt;
 use crate::game::launcher::{
     arguments::{build_game_arguments, build_jvm_arguments},
     classpath::{build_classpath_filtered, validate_classpath},
     natives::extract_natives,
     registry::register_instance,
     types::{GameInstance, LaunchResult, LaunchSpec},
-    version_parser::resolve_version_chain,
     unified_manifest::UnifiedManifest,
+    version_parser::resolve_version_chain,
 };
+use crate::utils::process::PistonCommandExt;
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::process::Stdio;
@@ -17,13 +17,14 @@ use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
 #[cfg(unix)]
-use sysinfo::{Pid as SysPid, ProcessRefreshKind, ProcessStatus, System, ProcessesToUpdate};
+use sysinfo::{Pid as SysPid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
 
-#[cfg(windows)]
-use windows_sys::Win32::UI::WindowsAndMessaging::{EnumWindows, GetWindowThreadProcessId, IsHungAppWindow, IsWindowVisible, PostMessageW, WM_CLOSE};
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::HWND;
-
+#[cfg(windows)]
+use windows_sys::Win32::UI::WindowsAndMessaging::{
+    EnumWindows, GetWindowThreadProcessId, IsHungAppWindow, IsWindowVisible, PostMessageW, WM_CLOSE,
+};
 
 /// Log callback type - receives (instance_id, line, stream_type)
 /// stream_type is "stdout" or "stderr"
@@ -103,7 +104,7 @@ fn is_process_stalled_unix(pid: i32) -> bool {
 }
 
 /// Launch the game
-/// 
+///
 /// If `log_callback` is provided, it will be called for each line of stdout/stderr output.
 /// The callback receives (instance_id, line, stream_type) where stream_type is "stdout" or "stderr".
 pub async fn launch_game(
@@ -140,17 +141,21 @@ pub async fn launch_game(
     // instead of relying solely on `resolve_version_chain` to fail later. For now, we only
     // check for existence here and assume `resolve_version_chain` will handle any deeper issues.
 
-    let mut manifest = if manifest_path.exists() {
+    let manifest = if manifest_path.exists() {
         log::info!("Found loader manifest at: {:?}", manifest_path);
-        
+
         // Try to load as a pre-resolved UnifiedManifest first (this is what our installer writes)
         match UnifiedManifest::load_from_path(&manifest_path) {
             Ok(m) => {
                 log::info!("Successfully loaded pre-resolved UnifiedManifest");
                 m
-            },
+            }
             Err(e) => {
-                log::info!("File at {:?} is not a UnifiedManifest, trying to resolve version chain: {}", manifest_path, e);
+                log::info!(
+                    "File at {:?} is not a UnifiedManifest, trying to resolve version chain: {}",
+                    manifest_path,
+                    e
+                );
                 let v = resolve_version_chain(&installed_id, &spec.data_dir)
                     .await
                     .context(format!(
@@ -161,7 +166,11 @@ pub async fn launch_game(
             }
         }
     } else {
-        log::info!("No loader manifest found at {:?}, falling back to vanilla: {}", manifest_path, spec.version_id);
+        log::info!(
+            "No loader manifest found at {:?}, falling back to vanilla: {}",
+            manifest_path,
+            spec.version_id
+        );
         let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
             .await
             .context(format!(
@@ -171,28 +180,6 @@ pub async fn launch_game(
         UnifiedManifest::from(v)
     };
 
-    // Auto-repair: If manifest claims no natives, but they likely exist (stale cache), try re-resolving
-    if !manifest.has_natives() && spec.modloader.is_none() {
-        log::warn!("Vanilla manifest loaded from cache has no natives - checking if this is due to stale cache");
-        
-        let v = resolve_version_chain(&spec.version_id, &spec.data_dir)
-            .await
-            .context(format!(
-                "Failed to resolve version chain for {}",
-                spec.version_id
-            ))?;
-        let fresh_manifest = UnifiedManifest::from(v);
-        
-        if fresh_manifest.has_natives() {
-            log::info!("Stale vanilla manifest detected! Replaced with fresh manifest containing natives.");
-            manifest = fresh_manifest;
-        } else {
-            log::info!("Verified: This vanilla version legitimately has no natives.");
-        }
-    } else if !manifest.has_natives() {
-        log::debug!("Modded manifest has no natives. This is common for modern versions (1.19+) or specialized loaders.");
-    }
-
     // 2. Verify Java installation
     verify_java(&spec.java_path).context("Java verification failed")?;
 
@@ -200,131 +187,31 @@ pub async fn launch_game(
     log::debug!("Extracting native libraries");
     // Natives are shared per version, not per instance - use spec.natives_dir()
     let natives_dir = spec.natives_dir();
-    
+
     // Perform extraction
-    extract_natives(
-        &manifest.libraries,
-        &spec.libraries_dir(),
-        &natives_dir,
-        os,
-    )
-    .await
-    .context("Failed to extract native libraries")?;
+    extract_natives(&manifest.libraries, &spec.libraries_dir(), &natives_dir, os)
+        .await
+        .context("Failed to extract native libraries")?;
 
-    // Quick runtime verification: ensure native libraries were actually
-    // extracted into the natives dir (DLL/.so/.dylib/.jnilib) so the render system
-    // and LWJGL can initialize.
-    log::debug!("Verifying natives directory: {:?}", natives_dir);
-    // Determine whether this manifest actually contains native libraries for THIS OS.
-    let expected_native_jars = manifest.libraries.iter().filter(|l| l.is_native).count();
-    let mut found_native = false;
-    let mut native_files: Vec<String> = Vec::new();
-
-    // Use a recursive check because some versions (especially Forge/Legacy) 
-    // extract into subdirectories which must be scanned.
-    let check_natives_recursive = |dir: &Path, files: &mut Vec<String>, found: &mut bool, os: OsType| {
-        fn recursive(dir: &Path, files: &mut Vec<String>, found: &mut bool, os: OsType) {
-            if let Ok(entries) = std::fs::read_dir(dir) {
-                for entry in entries.flatten() {
-                    let path = entry.path();
-                    if path.is_dir() {
-                        recursive(&path, files, found, os);
-                    } else if let Some(fname) = path.file_name().and_then(|n| n.to_str()) {
-                        let lower = fname.to_lowercase();
-                        let is_native_ext = match os {
-                            OsType::Windows | OsType::WindowsArm64 => lower.ends_with(".dll"),
-                            OsType::MacOS | OsType::MacOSArm64 => lower.ends_with(".dylib") || lower.ends_with(".jnilib"),
-                            OsType::Linux | OsType::LinuxArm32 | OsType::LinuxArm64 => lower.ends_with(".so"),
-                        };
-
-                        if is_native_ext {
-                            files.push(path.to_string_lossy().to_string());
-                            *found = true;
-                        }
-                    }
-                }
-            }
-        }
-        recursive(dir, files, found, os);
-    };
-
-    check_natives_recursive(&natives_dir, &mut native_files, &mut found_native, os);
-
-    if !found_native {
-        if expected_native_jars == 0 {
-            // Nothing found and nothing expected — normal for versions with no natives
-            log::info!(
-                "No native library files were found, but manifest indicates no natives are required for version {} — continuing",
-                spec.version_id
-            );
-        } else {
-            log::error!(
-                "No native library files found in natives directory {:?} (expected contents from {} native JARs). This will likely cause RenderSystem failures.",
-                natives_dir, expected_native_jars
-            );
-
-            anyhow::bail!(
-                "No native library files found in {:?} — verify platform natives were correctly extracted",
-                natives_dir
-            );
-        }
-    } else {
-        log::info!(
-            "Verified natives: Found {} platform-specific library files (from {} expected native JARs) in {:?}",
-            native_files.len(),
-            expected_native_jars,
-            natives_dir
-        );
-    }
-
-    // Determine if this is a legacy version (pre-LaunchWrapper, before Minecraft 1.6)
-    let is_legacy = manifest.is_legacy;
-    if is_legacy {
-        log::info!(
-            "Version {} detected as legacy (pre-LaunchWrapper) - using direct launch",
-            spec.version_id
-        );
-    }
-
-    // For legacy versions, filter out LaunchWrapper-related libraries
-    // These were added retroactively by Mojang but don't work for old versions
-    let libraries_for_classpath = if is_legacy {
-        manifest.libraries.iter()
-            .filter(|lib| {
-                let name_lower = lib.name.to_lowercase();
-                // Filter out LaunchWrapper and its related dependencies
-                if name_lower.contains("launchwrapper") 
-                    || name_lower.contains("jopt-simple")
-                    || name_lower.contains("asm-all") 
-                {
-                    log::debug!("Filtering legacy-incompatible library: {}", lib.name);
-                    false
-                } else {
-                    true
-                }
-            })
-            .cloned()
-            .collect::<Vec<_>>()
-    } else {
-        manifest.libraries.clone()
-    };
+    let libraries_for_classpath = manifest.libraries.clone();
 
     // 4. Validate classpath requirements before building
     log::debug!("Validating classpath requirements");
-    let validation = validate_classpath(
-        &libraries_for_classpath,
-        &spec.libraries_dir(),
-        os,
-    ).context("Classpath validation failed")?;
+    let validation = validate_classpath(&libraries_for_classpath, &spec.libraries_dir(), os)
+        .context("Classpath validation failed")?;
 
     if !validation.missing_libraries.is_empty() {
-        log::warn!("Missing {} libraries: {:?}", validation.missing_libraries.len(), validation.missing_libraries);
+        log::warn!(
+            "Missing {} libraries: {:?}",
+            validation.missing_libraries.len(),
+            validation.missing_libraries
+        );
         // TODO: Silent repair is disabled for now as it re-runs the full installation process.
         // We should implement a "repair-only" mode for the installer that skips metadata/cache work.
     }
-    
+
     log::info!(
-        "Classpath validation: {} valid, {} excluded libraries", 
+        "Classpath validation: {} valid, {} excluded libraries",
         validation.valid_libraries.len(),
         validation.excluded_libraries.len()
     );
@@ -332,47 +219,11 @@ pub async fn launch_game(
     // 5. Build classpath (now guaranteed to succeed)
     log::debug!("Building classpath");
 
-    // Identify libraries that are already explicitly mentioned in JVM arguments
-    // (common in modern Forge for --module-path) to avoid "ResolutionException: Module ... reads more than one module"
-    let mut excluded_from_classpath = Vec::new();
-    for arg in &manifest.jvm_arguments {
-        match arg {
-            crate::game::launcher::version_parser::Argument::Simple(s) => {
-                for lib in &libraries_for_classpath {
-                    if s.contains(&lib.path) {
-                        excluded_from_classpath.push(lib.path.clone());
-                    }
-                }
-            }
-            crate::game::launcher::version_parser::Argument::Conditional { value, .. } => {
-                let values = match value {
-                    crate::game::launcher::version_parser::ArgumentValue::Single(s) => vec![s],
-                    crate::game::launcher::version_parser::ArgumentValue::Multiple(v) => v.iter().collect(),
-                };
-                for s in values {
-                    for lib in &libraries_for_classpath {
-                        if s.contains(&lib.path) {
-                            excluded_from_classpath.push(lib.path.clone());
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    if !excluded_from_classpath.is_empty() {
-        log::debug!(
-            "Excluding {} libraries from classpath that are already in JVM arguments: {:?}",
-            excluded_from_classpath.len(),
-            excluded_from_classpath
-        );
-    }
-
     let mut classpath = build_classpath_filtered(
         &libraries_for_classpath,
         &spec.libraries_dir(),
         os,
-        &excluded_from_classpath,
+        &[],
     )
     .context("Failed to build classpath")?;
 
@@ -398,42 +249,15 @@ pub async fn launch_game(
 
     if !game_jar.exists() {
         log::error!("Game JAR not found: {:?}", game_jar);
-        return Err(anyhow::anyhow!("Main game JAR not found (looked for {:?}). Please try reinstalling the version.", game_jar));
+        return Err(anyhow::anyhow!(
+            "Main game JAR not found (looked for {:?}). Please try reinstalling the version.",
+            game_jar
+        ));
     }
 
     let separator = os.classpath_separator();
-    
-    // Check if the manifest libraries already include the game's JAR (common in modern Forge).
-    // If it's already there, we SHOULD NOT add the vanilla/installed JAR manually 
-    // to avoid "ResolutionException: Module ... reads more than one module" errors.
-    let installed_id = spec.installed_version_id();
-    let already_has_game_jar = libraries_for_classpath.iter().any(|lib| {
-        let name = lib.name.to_lowercase();
-        // Modern Forge (1.13+) uses net.minecraftforge:forge:...:client
-        // NeoForge uses net.neoforged:neoforge
-        // Also check if the path contains forge or neoforge as a library
-        (name.contains("net.minecraftforge:forge") && lib.classifier.as_deref() == Some("client"))
-        || (name.contains("net.neoforged:neoforge"))
-        || (lib.path.contains("net/minecraftforge/forge/") && lib.path.contains("-client.jar"))
-        || (lib.path.contains("net/neoforged/neoforge/"))
-    });
 
-    // Detect if we are running modern Forge/NeoForge to apply special classpath rules
-    let is_modern_forge = manifest.main_class.contains("cpw.mods.bootstraplauncher") 
-                       || manifest.main_class.contains("net.minecraftforge.fml")
-                       || manifest.main_class.contains("net.neoforged.fml");
-
-    if already_has_game_jar {
-        log::info!("Detected game JAR in libraries list, skipping manual game_jar addition to classpath.");
-    } else if is_modern_forge {
-        // For modern forge, if it's NOT in the libraries list, we still add it,
-        // but we need to be very careful about conflicts.
-        log::debug!("Modern Forge detected - adding vanilla game JAR to classpath");
-        classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
-    } else {
-        // Standard behavior for vanilla/fabric/legacy
-        classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
-    }
+    classpath = format!("{}{}{}", classpath, separator, game_jar.to_string_lossy());
 
     // 5. Build JVM arguments (substitutes ${classpath} in manifest with our classpath string)
     log::debug!("Building JVM arguments");
@@ -448,16 +272,17 @@ pub async fn launch_game(
     let main_class = manifest.main_class.clone();
 
     // 8. Set up logging - use spec.log_file if provided, otherwise use default
-    let log_file = spec
-        .log_file
-        .clone()
-        .unwrap_or_else(|| spec.data_dir.join("logs").join(format!("{}.log", spec.instance_id)));
+    let log_file = spec.log_file.clone().unwrap_or_else(|| {
+        spec.data_dir
+            .join("logs")
+            .join(format!("{}.log", spec.instance_id))
+    });
 
     tokio::fs::create_dir_all(log_file.parent().unwrap()).await?;
 
     // 9. Construct command - may wrap with exit handler if provided
     let mut command;
-    
+
     // Build the "core" game command arguments (java path and all args)
     let mut game_base_command: Vec<String> = Vec::new();
     game_base_command.push(spec.java_path.to_string_lossy().to_string());
@@ -467,9 +292,8 @@ pub async fn launch_game(
 
     // Resolve what the actual executable and its initial args are
     let (executable, initial_args) = if let Some(ref wrapper) = spec.wrapper_command {
-        let parts = shlex::split(wrapper).unwrap_or_else(|| {
-            wrapper.split_whitespace().map(|s| s.to_string()).collect()
-        });
+        let parts = shlex::split(wrapper)
+            .unwrap_or_else(|| wrapper.split_whitespace().map(|s| s.to_string()).collect());
         if parts.is_empty() {
             (spec.java_path.to_string_lossy().to_string(), Vec::new())
         } else {
@@ -483,21 +307,21 @@ pub async fn launch_game(
         // Wrap with exit handler JAR
         // Structure: [Wrapper] <java> -jar <exit-handler.jar> ... -- <original game command>
         log::info!("Using exit handler JAR: {:?}", exit_handler_jar);
-        
+
         let exit_file = spec.game_dir.join(".vesta").join("exit_status.json");
-        
+
         // Ensure .vesta directory exists
         tokio::fs::create_dir_all(spec.game_dir.join(".vesta")).await?;
-        
+
         // If we have a wrapper, the executable is the wrapper, and its FIRST argument after its own args
         // should be the java path to run the exit handler.
         // Wait, if executable is Java (no wrapper), this works too.
         command = tokio::process::Command::new(executable);
         command.args(initial_args);
-        
+
         // If there WAS a wrapper, we need to push Java path as the next arg
         if spec.wrapper_command.is_some() {
-             command.arg(&spec.java_path);
+            command.arg(&spec.java_path);
         }
 
         command.arg("-jar");
@@ -508,36 +332,36 @@ pub async fn launch_game(
         command.arg(&exit_file);
         command.arg("--log-file");
         command.arg(&log_file);
-        
+
         if let Some(ref pre_hook) = spec.pre_launch_hook {
             command.arg("--pre-launch-hook");
             command.arg(pre_hook);
         }
-        
+
         if let Some(ref post_hook) = spec.post_exit_hook {
             command.arg("--post-exit-hook");
             command.arg(post_hook);
         }
 
         command.arg("--");
-        
+
         // Pass the original game command (java path and all args)
         command.args(&game_base_command);
     } else {
         // No exit handler, just wrapper + game
         command = tokio::process::Command::new(executable);
         command.args(initial_args);
-        
+
         // If there WAS a wrapper, we need to push Java path as the next arg
         if spec.wrapper_command.is_some() {
-             command.arg(&spec.java_path);
+            command.arg(&spec.java_path);
         }
 
         command.args(&jvm_args);
         command.arg(&main_class);
         command.args(&game_args);
     }
-    
+
     command.current_dir(&spec.game_dir);
     command.envs(&spec.env_vars);
 
@@ -580,7 +404,13 @@ pub async fn launch_game(
         let mut wrapper_cmd: Vec<String> = Vec::new();
         wrapper_cmd.push(spec.java_path.to_string_lossy().to_string());
         wrapper_cmd.push("-jar".to_string());
-        wrapper_cmd.push(spec.exit_handler_jar.as_ref().unwrap().to_string_lossy().to_string());
+        wrapper_cmd.push(
+            spec.exit_handler_jar
+                .as_ref()
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        );
         wrapper_cmd.push("--instance-id".to_string());
         wrapper_cmd.push(spec.instance_id.clone());
         wrapper_cmd.push("--exit-file".to_string());
@@ -589,11 +419,19 @@ pub async fn launch_game(
         wrapper_cmd.push(log_file.to_string_lossy().to_string());
         wrapper_cmd.push("--".to_string());
         wrapper_cmd.extend(game_base_command.clone());
-        wrapper_cmd.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" ")
+        wrapper_cmd
+            .iter()
+            .map(|a| quote_arg(a))
+            .collect::<Vec<_>>()
+            .join(" ")
     } else {
-        game_base_command.iter().map(|a| quote_arg(a)).collect::<Vec<_>>().join(" ")
+        game_base_command
+            .iter()
+            .map(|a| quote_arg(a))
+            .collect::<Vec<_>>()
+            .join(" ")
     };
-    
+
     log::info!("Exec command: {}", full_cmd_str);
     log::debug!("Java: {:?}", spec.java_path);
     log::debug!("Main class: {}", main_class);
@@ -614,7 +452,7 @@ pub async fn launch_game(
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let log_file_clone = log_file.clone();
-    
+
     // When exit handler is used, it writes to the log file directly, so we only invoke callback
     // When no exit handler, we write to both file and callback
     let use_exit_handler = spec.exit_handler_jar.is_some();
@@ -628,7 +466,7 @@ pub async fn launch_game(
         tokio::spawn(async move {
             let reader = tokio::io::BufReader::new(stdout);
             let mut lines = reader.lines();
-            
+
             // Only open file for writing if not using exit handler
             let mut file = if write_to_file_stdout {
                 let file = std::fs::OpenOptions::new()
@@ -664,7 +502,7 @@ pub async fn launch_game(
         tokio::spawn(async move {
             let reader = tokio::io::BufReader::new(stderr);
             let mut lines = reader.lines();
-            
+
             // Only open file for writing if not using exit handler
             let mut file = if write_to_file_stderr {
                 let file = std::fs::OpenOptions::new()
@@ -725,7 +563,11 @@ pub async fn launch_game(
         child: Some(child),
     });
 
-    Ok(LaunchResult { instance, log_file, handle })
+    Ok(LaunchResult {
+        instance,
+        log_file,
+        handle,
+    })
 }
 
 /// Internal quoting helper used for logs / shell-copy; kept separate so it can be

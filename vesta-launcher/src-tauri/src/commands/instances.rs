@@ -1331,7 +1331,7 @@ pub async fn launch_instance(
     );
     if !preflight_report.ready {
         for issue in &preflight_report.issues {
-            log::debug!(
+            log::warn!(
                 "[launch_instance] verify-issue kind={:?} class={} path={} detail={}",
                 issue.kind,
                 issue.artifact_class,
@@ -1916,13 +1916,7 @@ pub async fn is_instance_running(instance_data: Instance) -> Result<bool, String
 pub async fn get_minecraft_versions(
     app_handle: tauri::AppHandle,
 ) -> Result<piston_lib::game::metadata::PistonMetadata, String> {
-    if let Some(metadata) =
-        crate::utils::java::load_manifest_for_java_resolution(&app_handle).await?
-    {
-        return Ok(metadata);
-    }
-
-    Err("MANIFEST_NOT_READY".to_string())
+    crate::utils::manifest::load_manifest(&app_handle).await
 }
 
 #[tauri::command]
@@ -2299,6 +2293,7 @@ async fn resolve_java_path_for_version(
         let mut conn = get_config_conn().ok()?;
         global_java_paths
             .filter(major_version.eq(required_major as i32))
+            .order((is_active.desc(), id.desc()))
             .select(path)
             .first::<String>(&mut conn)
             .ok()

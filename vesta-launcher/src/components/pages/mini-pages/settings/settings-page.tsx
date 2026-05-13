@@ -311,7 +311,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
   const [detected, { refetch: refetchDetected }] = detectedJava;
   const [managed, { refetch: refetchManaged }] = managedJava;
   const [globalPaths, { refetch: refetchGlobalPaths }] = globalJavaPaths;
-
   const [cacheSizeValue, { refetch: refetchSize }] = cacheSize;
 
   const [isScanning, setIsScanning] = createSignal(false);
@@ -445,7 +444,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     }
   };
 
-  // Flatten Java options into a simple array
+  // Flatten Java options into a simple array.
+  // Active state is derived from the is_active column in the DB,
+  // so it survives page re-opens and is always deterministic.
   const javaOptions = createMemo(() => {
     const options: JavaOption[] = [];
     const reqs = requirements() || [];
@@ -454,23 +455,33 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     const globalPathsData = globalPaths() || [];
 
     reqs.forEach((req: any) => {
-      const current = globalPathsData.find(
+      const allForVersion = globalPathsData.filter(
         (p: any) => p.major_version === req.major_version,
+      );
+      // Use is_active flag from DB for deterministic active selection.
+      // Fall back to first row if no row is explicitly active (shouldn't happen after migration).
+      const current =
+        allForVersion.find((p: any) => p.is_active) ?? allForVersion[0];
+      const managed = allForVersion.find(
+        (p: any) => p.is_managed && p.is_active,
       );
       const managedVersion = managedJavas.find(
         (m: any) => m.major_version === req.major_version,
       );
+      // Fall back to DB path when disk scan doesn't find it (e.g. after
+      // async download task registered the path but before disk scan ran)
+      const managedPath = managedVersion?.path || managed?.path;
 
-      // Managed option
+      // Managed option — active if its row is marked is_active
       options.push({
         type: "managed",
         version: req.major_version,
         title: "Managed Runtime",
-        path: managedVersion?.path,
-        isActive: current?.is_managed || false,
+        path: managedPath,
+        isActive: managed?.is_active ?? false,
         onClick: () => {
-          if (managedVersion) {
-            handleSetGlobalPath(req.major_version, managedVersion.path, true);
+          if (managedPath) {
+            handleSetGlobalPath(req.major_version, managedPath, true);
           }
         },
         onDownload: () => handleDownloadManaged(req.major_version),
@@ -485,28 +496,32 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
             version: req.major_version,
             title: "System Runtime",
             path: det.path,
-            isActive: current?.path === det.path && !current?.is_managed,
+            isActive:
+              current?.path === det.path &&
+              current?.is_active &&
+              !current?.is_managed,
             onClick: () =>
               handleSetGlobalPath(req.major_version, det.path, false),
           });
         });
 
-      // Custom active path (if not in detected list)
-      if (
-        current &&
-        !current.is_managed &&
-        !detectedJavas.some(
-          (d: any) =>
-            d.path === current.path && d.major_version === req.major_version,
+      // Show all non-managed DB paths as custom options
+      for (const p of allForVersion) {
+        if (p.is_managed) continue;
+        if (
+          detectedJavas.some(
+            (d: any) =>
+              d.path === p.path && d.major_version === req.major_version,
+          )
         )
-      ) {
+          continue;
         options.push({
           type: "custom",
           version: req.major_version,
           title: "Custom Path",
-          path: current.path,
-          isActive: true,
-          onClick: () => handleManualPickSetGlobal(req.major_version),
+          path: p.path,
+          isActive: p.is_active ?? false,
+          onClick: () => handleSetGlobalPath(req.major_version, p.path, false),
         });
       }
 
@@ -552,6 +567,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         pathStr: path,
         managed: isManaged,
       });
+      // Backend now sets is_active, so we just refetch to sync the UI
       refetchGlobalPaths();
     } catch (e) {
       console.error("Failed to set global java path:", e);

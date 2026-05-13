@@ -64,22 +64,25 @@ impl Task for DownloadJavaTask {
 
             // Save to database
             let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-            let new_entry = GlobalJavaPath {
-                major_version: major as i32,
-                path: java_path.to_string_lossy().to_string(),
-                is_managed: true,
-            };
+            conn.transaction(|conn| {
+                diesel::sql_query(
+                    "UPDATE global_java_paths SET is_active = 0 WHERE major_version = ?",
+                )
+                .bind::<diesel::sql_types::Integer, _>(major as i32)
+                .execute(conn)?;
 
-            diesel::insert_into(global_java_paths)
-                .values(&new_entry)
-                .on_conflict(major_version)
-                .do_update()
-                .set((
-                    path.eq(&new_entry.path),
-                    is_managed.eq(new_entry.is_managed),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
+                diesel::sql_query(
+                    "INSERT INTO global_java_paths (major_version, path, is_managed, is_active) \
+                     VALUES (?, ?, 1, 1) \
+                     ON CONFLICT(major_version, path) DO UPDATE SET is_active = 1, is_managed = 1",
+                )
+                .bind::<diesel::sql_types::Integer, _>(major as i32)
+                .bind::<diesel::sql_types::Text, _>(&java_path.to_string_lossy().to_string())
+                .execute(conn)?;
+
+                Ok(())
+            })
+            .map_err(|e: diesel::result::Error| e.to_string())?;
             // Emit event to notify frontend to refetch Java paths
             let _ = ctx.app_handle.emit("java-paths-updated", ());
             Ok(())

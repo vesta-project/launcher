@@ -102,10 +102,10 @@ pub struct VersionDownloads {
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server: Option<Artifact>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client_mappings: Option<Artifact>,
-    
+
     #[serde(skip_serializing_if = "Option::is_none")]
     pub server_mappings: Option<Artifact>,
 }
@@ -151,7 +151,7 @@ pub struct Rule {
     pub os: Option<OsRule>,
 
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub features: Option<HashMap<String, bool>>,
+    pub features: Option<HashMap<String, Option<bool>>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -199,6 +199,21 @@ pub struct Library {
     /// Extract rules for natives
     #[serde(skip_serializing_if = "Option::is_none")]
     pub extract: Option<ExtractRules>,
+
+    /// Whether this library should be included on the runtime classpath.
+    /// Some Forge/NeoForge profile libraries (e.g. neo-installer-extracts .lzma)
+    /// are only needed during installation processors and must NOT be on the
+    /// game classpath.
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub include_in_classpath: bool,
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn is_true(b: &bool) -> bool {
+    *b
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
@@ -353,7 +368,7 @@ pub async fn resolve_version_chain(version_id: &str, data_dir: &Path) -> Result<
     if let Some(parent_id) = manifest.inherits_from.clone() {
         let parent = Box::pin(resolve_version_chain(&parent_id, data_dir)).await?;
         manifest = merge_manifests(parent, manifest)?;
-        
+
         // Validate the merged result
         let validation_warnings = validate_manifest(&manifest)?;
         for warning in validation_warnings {
@@ -412,32 +427,23 @@ pub(crate) fn merge_manifests(
     // Child's ID takes precedence
     parent.id = child.id;
 
-    // CRITICAL FIX: Child main class should only override if it's NOT a modloader
-    // Most modloaders (Forge/Fabric) should inherit the vanilla main class
-    if let Some(ref child_main_class) = child.main_class {
-        // Only override if it's not a LaunchWrapper (which most modloaders use)
-        // or if the parent doesn't have a main class
-        if child_main_class != "net.minecraft.launchwrapper.Launch" || parent.main_class.is_none() {
-            parent.main_class = child.main_class;
-        }
-        // If child uses LaunchWrapper but parent has a different main class,
-        // this likely means we should preserve the parent's main class for compatibility
+    if child.main_class.is_some() {
+        parent.main_class = child.main_class;
     } else if parent.main_class.is_none() {
         // Provide sensible default if neither has main class
         parent.main_class = Some("net.minecraft.client.Minecraft".to_string());
     }
 
-    // CRITICAL FIX: Merge arguments properly - modloader args should come FIRST
+    // Merge arguments with parent-first ordering, matching Daedalus behavior.
     if let Some(child_args) = child.arguments {
         if let Some(ref mut parent_args) = parent.arguments {
-            // PREPEND child arguments before parent (modloader tweaks come first)
-            let mut new_game_args = child_args.game;
-            new_game_args.extend(parent_args.game.clone());
+            // Parent arguments first, then child arguments.
+            let mut new_game_args = parent_args.game.clone();
+            new_game_args.extend(child_args.game);
             parent_args.game = new_game_args;
-            
-            // For JVM args, child args typically come first (modloader JVM flags)
-            let mut new_jvm_args = child_args.jvm;
-            new_jvm_args.extend(parent_args.jvm.clone());
+
+            let mut new_jvm_args = parent_args.jvm.clone();
+            new_jvm_args.extend(child_args.jvm);
             parent_args.jvm = new_jvm_args;
         } else {
             parent.arguments = Some(child_args);
@@ -447,8 +453,8 @@ pub(crate) fn merge_manifests(
     // Merge top-level jvmArguments if they exist
     if let Some(child_jvm_top) = child.jvm_arguments {
         if let Some(ref mut parent_jvm_top) = parent.jvm_arguments {
-            let mut new_jvm = child_jvm_top;
-            new_jvm.extend(parent_jvm_top.clone());
+            let mut new_jvm = parent_jvm_top.clone();
+            new_jvm.extend(child_jvm_top);
             parent.jvm_arguments = Some(new_jvm);
         } else {
             parent.jvm_arguments = Some(child_jvm_top);
@@ -458,8 +464,8 @@ pub(crate) fn merge_manifests(
     // Merge top-level gameArguments if they exist
     if let Some(child_game_top) = child.game_arguments {
         if let Some(ref mut parent_game_top) = parent.game_arguments {
-            let mut new_game = child_game_top;
-            new_game.extend(parent_game_top.clone());
+            let mut new_game = parent_game_top.clone();
+            new_game.extend(child_game_top);
             parent.game_arguments = Some(new_game);
         } else {
             parent.game_arguments = Some(child_game_top);
@@ -513,23 +519,27 @@ pub fn validate_manifest(manifest: &VersionManifest) -> Result<Vec<String>> {
     if let Some(ref main_class) = manifest.main_class {
         if main_class == "net.minecraft.launchwrapper.Launch" {
             // Check if we have appropriate tweaker arguments
-            let has_tweakers = manifest.arguments
+            let has_tweakers = manifest
+                .arguments
                 .as_ref()
-                .map(|args| args.game.iter().any(|arg| {
-                    match arg {
-                        Argument::Simple(s) => s.contains("tweakClass"),
-                        Argument::Conditional { .. } => false, // More complex check would be needed
-                    }
-                }))
-                .unwrap_or(false) || 
-                manifest.minecraft_arguments
+                .map(|args| {
+                    args.game.iter().any(|arg| {
+                        match arg {
+                            Argument::Simple(s) => s.contains("tweakClass"),
+                            Argument::Conditional { .. } => false, // More complex check would be needed
+                        }
+                    })
+                })
+                .unwrap_or(false)
+                || manifest
+                    .minecraft_arguments
                     .as_ref()
                     .map(|args| args.contains("tweakClass"))
                     .unwrap_or(false);
 
             if !has_tweakers && manifest.id != "1.0" {
                 warnings.push(format!(
-                    "LaunchWrapper main class specified but no tweaker classes found for version {}", 
+                    "LaunchWrapper main class specified but no tweaker classes found for version {}",
                     manifest.id
                 ));
             }
@@ -559,17 +569,17 @@ pub fn validate_manifest(manifest: &VersionManifest) -> Result<Vec<String>> {
 }
 
 /// Determines if a version is a "legacy" version that predates LaunchWrapper.
-/// 
+///
 /// LaunchWrapper (net.minecraft.launchwrapper.Launch) was introduced in Minecraft 1.6
 /// (released July 1, 2013). Versions before this used direct main() invocation or
 /// Applet-based launching.
-/// 
+///
 /// Mojang has retroactively modified old version manifests to use LaunchWrapper,
 /// but this doesn't actually work properly for these old versions. We need to
 /// detect them and use the correct direct launch method instead.
-/// 
+///
 /// Detection criteria:
-/// 1. Asset index ID is "pre-1.6" or "legacy" 
+/// 1. Asset index ID is "pre-1.6" or "legacy"
 /// 2. Release date is before July 2013
 /// 3. Version ID pattern matches known legacy versions
 pub fn is_legacy_version(manifest: &VersionManifest) -> bool {
@@ -584,7 +594,7 @@ pub fn is_legacy_version(manifest: &VersionManifest) -> bool {
             return true;
         }
     }
-    
+
     // Check assets field (older manifests use this)
     if let Some(ref assets) = manifest.assets {
         if assets == "pre-1.6" || assets == "legacy" {
@@ -596,16 +606,17 @@ pub fn is_legacy_version(manifest: &VersionManifest) -> bool {
             return true;
         }
     }
-    
+
     // Check release time - LaunchWrapper was introduced July 1, 2013
     // Anything before that date is legacy
     if let Some(ref release_time) = manifest.release_time {
         // Parse ISO 8601 date format: 2012-03-01T00:00:00+00:00
         if let Ok(date) = chrono::DateTime::parse_from_rfc3339(release_time) {
             // LaunchWrapper was introduced with 1.6 on July 1, 2013
-            let launchwrapper_date = chrono::DateTime::parse_from_rfc3339("2013-07-01T00:00:00+00:00")
-                .expect("Invalid hardcoded date");
-            
+            let launchwrapper_date =
+                chrono::DateTime::parse_from_rfc3339("2013-07-01T00:00:00+00:00")
+                    .expect("Invalid hardcoded date");
+
             if date < launchwrapper_date {
                 log::debug!(
                     "Version {} detected as legacy: release_time {} < 2013-07-01",
@@ -616,7 +627,7 @@ pub fn is_legacy_version(manifest: &VersionManifest) -> bool {
             }
         }
     }
-    
+
     // Additional check: if main_class is LaunchWrapper but minecraft_arguments
     // doesn't contain --tweakClass, it's likely a retrofitted legacy version
     // that can't actually work with LaunchWrapper
@@ -633,12 +644,12 @@ pub fn is_legacy_version(manifest: &VersionManifest) -> bool {
             }
         }
     }
-    
+
     false
 }
 
 /// Get the main class from a manifest, with special handling for legacy versions.
-/// 
+///
 /// For versions that predate LaunchWrapper (pre-1.6), Mojang's manifests have been
 /// retroactively modified to use `net.minecraft.launchwrapper.Launch`, but this
 /// doesn't work. We override these to use the original direct main class.
@@ -655,7 +666,7 @@ pub fn get_main_class(manifest: &VersionManifest) -> Result<String> {
             }
         }
     }
-    
+
     if let Some(ref main_class) = manifest.main_class {
         Ok(main_class.clone())
     } else {
@@ -719,6 +730,7 @@ mod tests {
             release_time: None,
             time: None,
             downloads: None,
+            logging: None,
         };
 
         let child = VersionManifest {
@@ -740,6 +752,7 @@ mod tests {
             release_time: None,
             time: None,
             downloads: None,
+            logging: None,
         };
 
         let merged = merge_manifests(parent, child).unwrap();
@@ -750,7 +763,16 @@ mod tests {
             "cpw.mods.bootstraplauncher.BootstrapLauncher"
         );
         assert!(merged.inherits_from.is_none());
-        assert_eq!(merged.arguments.unwrap().game.len(), 2);
+        let merged_args = merged.arguments.unwrap().game;
+        assert_eq!(merged_args.len(), 2);
+        assert!(matches!(
+            &merged_args[0],
+            Argument::Simple(s) if s == "--version"
+        ));
+        assert!(matches!(
+            &merged_args[1],
+            Argument::Simple(s) if s == "--fml.forgeVersion"
+        ));
     }
 
     #[test]
@@ -771,6 +793,7 @@ mod tests {
             release_time: None,
             time: None,
             downloads: None,
+            logging: None,
         };
 
         let child = VersionManifest {
@@ -792,6 +815,7 @@ mod tests {
             release_time: None,
             time: None,
             downloads: None,
+            logging: None,
         };
 
         let merged = merge_manifests(parent, child).unwrap();

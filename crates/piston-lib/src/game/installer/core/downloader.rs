@@ -10,48 +10,6 @@ use std::time::Instant;
 
 // NOTE: Retry delay is a base value; we apply a simple linear backoff (delay * attempt).
 
-/// Check if a file is locked by another process (e.g., game is running)
-/// Returns true if the file appears to be locked/in-use
-fn is_file_locked(path: &Path) -> bool {
-    use std::fs::OpenOptions;
-
-    if !path.exists() {
-        return false; // File doesn't exist, so it's not locked
-    }
-
-    // Try to open the file for reading
-    // On Windows, if a file is opened exclusively by another process, this will fail
-    match OpenOptions::new().read(true).open(path) {
-        Ok(_) => false, // File is accessible
-        Err(e) => {
-            // Check for permission denied or sharing violation (Windows)
-            // These typically indicate the file is locked by another process
-            match e.kind() {
-                std::io::ErrorKind::PermissionDenied => {
-                    log::debug!("File appears to be locked: {:?}", path);
-                    true
-                }
-                _ => {
-                    // Other errors (e.g., file doesn't exist) mean not locked
-                    false
-                }
-            }
-        }
-    }
-}
-
-/// Set a file to read-only to prevent accidental modification
-/// This helps prevent corruption and race conditions
-fn set_read_only(path: &Path) -> Result<()> {
-    let mut perms = std::fs::metadata(path)
-        .context("Failed to get file metadata for read-only protection")?
-        .permissions();
-    perms.set_readonly(true);
-    std::fs::set_permissions(path, perms).context("Failed to set file to read-only")?;
-    log::debug!("Set file to read-only: {:?}", path);
-    Ok(())
-}
-
 /// Download a file to a path with progress reporting, SHA1 validation, and retry logic
 pub async fn download_to_path(
     client: &Client,
@@ -70,94 +28,43 @@ pub async fn download_to_path(
 
     // Check if file exists
     if path.exists() {
-        // Check if locked by another process
-        if is_file_locked(path) {
-            // File is locked - check if it's valid
-            if let Some(expected) = expected_sha1 {
-                match tokio::fs::read(path).await {
-                    Ok(bytes) => {
-                        let mut hasher = Sha1::new();
-                        hasher.update(&bytes);
-                        let computed = format!("{:x}", hasher.finalize());
-                        if computed.to_lowercase() == expected.to_lowercase() {
-                            log::info!("File is locked but hash matches, skipping: {:?}", path);
-                            return Ok(());
-                        } else {
-                            log::warn!(
-                                "File is locked and hash mismatches ({} != {}), cannot fix while in use: {:?}",
-                                computed,
-                                expected,
-                                path
-                            );
-                            return Ok(());
-                        }
+        if let Some(expected) = expected_sha1 {
+            match tokio::fs::read(path).await {
+                Ok(bytes) => {
+                    let mut hasher = Sha1::new();
+                    hasher.update(&bytes);
+                    let computed = format!("{:x}", hasher.finalize());
+                    if computed.eq_ignore_ascii_case(expected) {
+                        log::debug!("File exists and hash matches, skipping: {:?}", path);
+                        return Ok(());
                     }
-                    Err(e) => {
+                    log::info!(
+                        "File exists but hash mismatches ({} != {}), re-downloading: {:?}",
+                        computed,
+                        expected,
+                        path
+                    );
+                }
+                Err(e) => {
+                    // On Windows, files may be locked by a running process (sharing violation).
+                    // If we can't read it, we can't overwrite it either, so treat it as
+                    // valid and skip rather than failing the entire install.
+                    if is_sharing_violation(&e) {
                         log::warn!(
-                            "File is locked and cannot be read ({}), skipping: {:?}",
-                            e,
+                            "File is locked by another process, assuming valid and skipping: {:?}",
                             path
                         );
                         return Ok(());
                     }
+                    return Err(e.into());
                 }
-            } else {
-                log::info!("File is locked, assuming valid and skipping: {:?}", path);
-                return Ok(());
             }
         } else {
-            // File exists and is NOT locked
-            // Check if it's valid (if we have a hash)
-            if let Some(expected) = expected_sha1 {
-                match tokio::fs::read(path).await {
-                    Ok(bytes) => {
-                        let mut hasher = Sha1::new();
-                        hasher.update(&bytes);
-                        let computed = format!("{:x}", hasher.finalize());
-                        if computed.to_lowercase() == expected.to_lowercase() {
-                            log::debug!("File exists and hash matches, skipping: {:?}", path);
-                            return Ok(());
-                        }
-                        log::info!(
-                            "File exists but hash mismatches ({} != {}), re-downloading: {:?}",
-                            computed,
-                            expected,
-                            path
-                        );
-                    }
-                    Err(e) => {
-                        log::warn!(
-                            "Failed to read existing file for validation: {} - {}",
-                            e,
-                            path.display()
-                        );
-                    }
-                }
-            } else {
-                // No hash provided, but file exists and is not locked.
-                log::debug!("File exists and no hash provided, assuming valid and skipping: {:?}", path);
-                return Ok(());
-            }
-
-            // If we're here, we need to overwrite the file.
-            // Ensure it's not read-only, otherwise the overwrite will fail on Windows.
-            if let Ok(metadata) = std::fs::metadata(path) {
-                if metadata.permissions().readonly() {
-                    log::debug!(
-                        "Removing read-only attribute before overwriting: {:?}",
-                        path
-                    );
-                    let mut perms = metadata.permissions();
-                    perms.set_readonly(false);
-                    if let Err(e) = std::fs::set_permissions(path, perms) {
-                        log::warn!(
-                            "Failed to remove read-only attribute: {} - {}",
-                            e,
-                            path.display()
-                        );
-                    }
-                }
-            }
+            log::debug!(
+                "File exists and no hash provided, assuming valid and skipping: {:?}",
+                path
+            );
+            return Ok(());
         }
     }
 
@@ -171,13 +78,6 @@ pub async fn download_to_path(
         match download_with_validation(client, url, path, expected_sha1, reporter).await {
             Ok(()) => {
                 log::debug!("Download complete: {:?}", path);
-
-                // Set file to read-only to prevent accidental modification
-                if let Err(e) = set_read_only(path) {
-                    log::warn!("Failed to set file to read-only: {:?} - {}", path, e);
-                    // Don't fail the download if we can't set read-only
-                }
-
                 return Ok(());
             }
             Err(e) => {
@@ -621,6 +521,21 @@ impl crate::game::installer::types::ProgressReporter for NoopReporter {
         false
     }
     fn is_paused(&self) -> bool {
+        false
+    }
+}
+
+/// Detect whether an I/O error is caused by a file sharing violation (Windows).
+/// On Windows, files locked by running processes return ERROR_SHARING_VIOLATION (32).
+/// On other platforms this always returns false since file locking is advisory.
+fn is_sharing_violation(error: &std::io::Error) -> bool {
+    #[cfg(windows)]
+    {
+        error.raw_os_error() == Some(32) // ERROR_SHARING_VIOLATION
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = error;
         false
     }
 }

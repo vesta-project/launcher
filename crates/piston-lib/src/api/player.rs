@@ -1,25 +1,34 @@
 use anyhow::{Context, Result};
+use base64::{engine::general_purpose, Engine as _};
+use image::imageops;
 use reqwest;
+use serde::Deserialize;
 use std::path::PathBuf;
 use tokio::fs;
-use base64::{Engine as _, engine::general_purpose};
-use serde::Deserialize;
-use image::{imageops, GenericImageView};
 
 // --- Helper Structs for Public Profile resolution ---
 #[derive(Deserialize)]
-struct SessionProfile { properties: Vec<ProfileProperty> }
+struct SessionProfile {
+    properties: Vec<ProfileProperty>,
+}
 #[derive(Deserialize)]
-struct ProfileProperty { name: String, value: String }
+struct ProfileProperty {
+    name: String,
+    value: String,
+}
 #[derive(Deserialize)]
-struct TexturesProperty { textures: Textures }
+struct TexturesProperty {
+    textures: Textures,
+}
 #[derive(Deserialize)]
 struct Textures {
     #[serde(rename = "SKIN")]
     skin: Option<SkinTexture>,
 }
 #[derive(Deserialize)]
-struct SkinTexture { url: String }
+struct SkinTexture {
+    url: String,
+}
 
 /// Download player head/avatar by fetching the skin and extracting the face
 ///
@@ -60,18 +69,29 @@ pub async fn download_player_head(
     let skin_url = match known_skin_url {
         Some(url) => Some(url),
         None => {
-            let url = format!("https://sessionserver.mojang.com/session/minecraft/profile/{}", normalized_uuid);
+            let url = format!(
+                "https://sessionserver.mojang.com/session/minecraft/profile/{}",
+                normalized_uuid
+            );
             let resp = reqwest::get(&url).await?;
             if resp.status().is_success() {
                 // Parse as much as we can but treat any error as "no skin"
                 resp.json::<SessionProfile>()
                     .await
                     .ok()
-                    .and_then(|profile| profile.properties.into_iter().find(|p| p.name == "textures").map(|p| p.value))
+                    .and_then(|profile| {
+                        profile
+                            .properties
+                            .into_iter()
+                            .find(|p| p.name == "textures")
+                            .map(|p| p.value)
+                    })
                     .and_then(|value| general_purpose::STANDARD.decode(&value).ok())
                     .and_then(|decoded| serde_json::from_slice::<TexturesProperty>(&decoded).ok())
                     .and_then(|textures| textures.textures.skin.map(|s| s.url))
-            } else { None }
+            } else {
+                None
+            }
         }
     };
 
@@ -80,12 +100,22 @@ pub async fn download_player_head(
         None => {
             // Fallback to minotar if we fail to get the skin from the profile
             let endpoint = if overlay { "helm" } else { "avatar" };
-            let fallback_url = format!("https://minotar.net/{}/{}/{}.png", endpoint, normalized_uuid, size);
-            let response = reqwest::get(&fallback_url).await.context("Failed to fallback to minotar player head")?;
-            
+            let fallback_url = format!(
+                "https://minotar.net/{}/{}/{}.png",
+                endpoint, normalized_uuid, size
+            );
+            let response = reqwest::get(&fallback_url)
+                .await
+                .context("Failed to fallback to minotar player head")?;
+
             if response.status().is_success() {
-                let bytes = response.bytes().await.context("Failed to read fallback response bytes")?;
-                fs::write(&storage_path, bytes).await.context("Failed to write fallback player head to file")?;
+                let bytes = response
+                    .bytes()
+                    .await
+                    .context("Failed to read fallback response bytes")?;
+                fs::write(&storage_path, bytes)
+                    .await
+                    .context("Failed to write fallback player head to file")?;
             } else {
                 anyhow::bail!("Failed to download player head: HTTP {}", response.status());
             }
@@ -99,23 +129,24 @@ pub async fn download_player_head(
     // 3. Process Image
     let img = image::load_from_memory(&skin_bytes).context("Failed to load skin from memory")?;
 
-    // Crop face (x=8, y=8, width=8, height=8) 
+    // Crop face (x=8, y=8, width=8, height=8)
     let face = img.crop_imm(8, 8, 8, 8);
-    
+
     // Scale up using Nearest Neighbor to maintain pixel art style
     let mut head = imageops::resize(&face, size, size, imageops::FilterType::Nearest);
 
     if overlay {
-        // Crop hat/helm (x=40, y=8, width=8, height=8) 
+        // Crop hat/helm (x=40, y=8, width=8, height=8)
         let helm = img.crop_imm(40, 8, 8, 8);
         let scaled_helm = imageops::resize(&helm, size, size, imageops::FilterType::Nearest);
-        
+
         // Blend helm over face
         imageops::overlay(&mut head, &scaled_helm, 0, 0);
     }
 
     // 4. Save to Disk
-    head.save(&storage_path).context("Failed to write scaled head to disk")?;
+    head.save(&storage_path)
+        .context("Failed to write scaled head to disk")?;
 
     Ok(storage_path)
 }
@@ -130,8 +161,9 @@ mod tests {
         let test_uuid = "069a79f444e94726a5befca90e38aaf5"; // Notch
         let storage_path = temp_dir.join(format!("test_head_{}.png", test_uuid));
 
-        let result = download_player_head(test_uuid, None, storage_path.clone(), 128, true, true).await;
-        
+        let result =
+            download_player_head(test_uuid, None, storage_path.clone(), 128, true, true).await;
+
         assert!(result.is_ok());
         assert!(storage_path.exists());
 

@@ -1,6 +1,6 @@
+use crate::game::installer::types::OsType;
 /// Classpath construction for Minecraft launcher
 use crate::game::launcher::unified_manifest::UnifiedLibrary;
-use crate::game::installer::types::OsType;
 use anyhow::Result;
 use std::path::Path;
 
@@ -9,13 +9,13 @@ use std::path::Path;
 pub enum ValidationError {
     #[error("Required library not found: {library_path}")]
     LibraryNotFound { library_path: String },
-    
+
     #[error("Invalid Maven coordinates: {coords}")]
     InvalidMavenCoords { coords: String },
-    
+
     #[error("Rule evaluation failed for library: {library_name}")]
     RuleEvaluationFailed { library_name: String },
-    
+
     #[error("Architecture not supported: {arch} for OS: {os}")]
     UnsupportedArchitecture { arch: String, os: String },
 }
@@ -30,7 +30,11 @@ pub struct ClasspathValidation {
 }
 
 /// Build the classpath string from libraries
-pub fn build_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, os: OsType) -> Result<String> {
+pub fn build_classpath(
+    libraries: &[UnifiedLibrary],
+    libraries_dir: &Path,
+    os: OsType,
+) -> Result<String> {
     build_classpath_filtered(libraries, libraries_dir, os, &[])
 }
 
@@ -51,6 +55,12 @@ pub fn build_classpath_filtered(
             continue;
         }
 
+        // Skip libraries explicitly excluded from the classpath (e.g. Forge/NeoForge
+        // processor-only artifacts like neo-installer-extracts .lzma data files).
+        if !library.include_in_classpath {
+            continue;
+        }
+
         // Skip libraries explicitly excluded (e.g. they are in the module path)
         if exclude_relative_paths.contains(&library.path) {
             continue;
@@ -58,13 +68,18 @@ pub fn build_classpath_filtered(
 
         let full_path = libraries_dir.join(&library.path);
 
-        // Add to classpath if file exists - FAIL if missing required library
+        // Add to classpath if file exists — skip with warning if missing.
+        // Some modloader manifests reference libraries that may not be on
+        // disk (platform-specific, processor-only, etc.). Warn and skip
+        // rather than failing the entire launch.
         if full_path.exists() {
             classpath_entries.push(full_path.to_string_lossy().to_string());
         } else {
-            return Err(ValidationError::LibraryNotFound {
-                library_path: full_path.to_string_lossy().to_string(),
-            }.into());
+            log::warn!(
+                "Missing library, skipping: {} ({})",
+                library.name,
+                full_path.display()
+            );
         }
     }
 
@@ -72,7 +87,11 @@ pub fn build_classpath_filtered(
 }
 
 /// Validate classpath requirements before launch
-pub fn validate_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, _os: OsType) -> Result<ClasspathValidation> {
+pub fn validate_classpath(
+    libraries: &[UnifiedLibrary],
+    libraries_dir: &Path,
+    _os: OsType,
+) -> Result<ClasspathValidation> {
     let mut validation = ClasspathValidation {
         valid_libraries: Vec::new(),
         missing_libraries: Vec::new(),
@@ -81,16 +100,22 @@ pub fn validate_classpath(libraries: &[UnifiedLibrary], libraries_dir: &Path, _o
     };
 
     for library in libraries {
+        // Match build_classpath_filtered: skip natives and non-classpath
+        if library.is_native || !library.include_in_classpath {
+            validation.excluded_libraries.push(library.name.clone());
+            continue;
+        }
+
         let full_path = libraries_dir.join(&library.path);
-        
+
         if full_path.exists() {
-            if library.is_native {
-                validation.excluded_libraries.push(library.name.clone());
-            } else {
-                validation.valid_libraries.push(full_path.to_string_lossy().to_string());
-            }
+            validation
+                .valid_libraries
+                .push(full_path.to_string_lossy().to_string());
         } else {
-            validation.missing_libraries.push(full_path.to_string_lossy().to_string());
+            validation
+                .missing_libraries
+                .push(full_path.to_string_lossy().to_string());
         }
     }
 
@@ -225,10 +250,16 @@ mod tests {
     #[test]
     fn test_os_type_current() {
         let os = OsType::current();
-        // Just verify it doesn't panic
+        // Just verify it returns one of the valid variants (including arm64 variants)
         assert!(matches!(
             os,
-            OsType::Windows | OsType::Linux | OsType::MacOS
+            OsType::Windows
+                | OsType::WindowsArm64
+                | OsType::MacOS
+                | OsType::MacOSArm64
+                | OsType::Linux
+                | OsType::LinuxArm32
+                | OsType::LinuxArm64
         ));
     }
 

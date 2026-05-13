@@ -101,13 +101,151 @@ pub struct LoaderVersionInfo {
     /// Whether this loader version is stable
     pub stable: bool,
 
+    /// URL to the full loader profile JSON (from Modrinth)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub url: Option<String>,
+
+    /// SHA1 hash of the version JSON (for cache validation)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha1: Option<String>,
+
     /// Additional metadata (optional)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, serde_json::Value>>,
 }
 
 // ============================================================================
-// External API Response Types (for fetching from various sources)
+// Modrinth launcher-meta API response types
+// ============================================================================
+
+/// Base URL for Modrinth's launcher-meta service
+pub const MODRINTH_BASE_URL: &str = "https://launcher-meta.modrinth.com";
+
+/// Modrinth modloader manifest (Fabric, Quilt, Forge, NeoForge)
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthManifest {
+    pub game_versions: Vec<ModrinthGameVersion>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ModrinthGameVersion {
+    pub id: String,
+    pub stable: bool,
+    pub loaders: Vec<ModrinthLoaderVersion>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ModrinthLoaderVersion {
+    pub id: String,
+    pub url: String,
+    pub stable: bool,
+}
+
+/// Placeholder string that Modrinth uses in Fabric/Quilt profiles for the
+/// Minecraft version (replaced with the actual version at install time).
+pub const MODRINTH_GAME_VERSION_PLACEHOLDER: &str = "${modrinth.gameVersion}";
+
+/// Check if a game version id is the Fabric/Quilt dummy entry (${modrinth.gameVersion})
+pub fn is_dummy_game_version(id: &str) -> bool {
+    id.contains("modrinth.gameVersion")
+}
+
+// ============================================================================
+// Modrinth loader profile (PartialVersionInfo) — used by installers
+// ============================================================================
+
+/// A loader version profile from Modrinth (Fabric, Quilt, Forge, NeoForge).
+/// Matches daedalus::modded::PartialVersionInfo.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthLoaderProfile {
+    pub id: String,
+    pub inherits_from: String,
+    pub release_time: String,
+    pub time: String,
+    #[serde(rename = "type")]
+    pub version_type: Option<String>,
+    pub main_class: Option<String>,
+    pub minecraft_arguments: Option<String>,
+    pub arguments: Option<serde_json::Value>,
+    pub libraries: Vec<ModrinthProfileLibrary>,
+    /// Forge-only: data entries for processors
+    pub data: Option<HashMap<String, ModrinthSidedDataEntry>>,
+    /// Forge-only: processors to run after download
+    pub processors: Option<Vec<ModrinthProcessor>>,
+}
+
+/// A library entry in a Modrinth loader profile.
+#[derive(Debug, Deserialize)]
+pub struct ModrinthProfileLibrary {
+    pub name: String,
+    pub url: Option<String>,
+    pub downloads: Option<ModrinthLibraryDownloads>,
+    pub rules: Option<Vec<serde_json::Value>>,
+    pub natives: Option<HashMap<String, String>>,
+    pub extract: Option<serde_json::Value>,
+    #[serde(default = "default_include_in_classpath")]
+    pub include_in_classpath: bool,
+}
+
+fn default_include_in_classpath() -> bool {
+    true
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ModrinthLibraryDownloads {
+    pub artifact: Option<ModrinthArtifact>,
+    pub classifiers: Option<HashMap<String, ModrinthArtifact>>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ModrinthArtifact {
+    pub path: Option<String>,
+    pub sha1: String,
+    pub size: u64,
+    pub url: String,
+}
+
+/// Forge/NeoForge sided data entry (client/server paths).
+#[derive(Debug, Deserialize, Clone)]
+pub struct ModrinthSidedDataEntry {
+    pub client: String,
+    pub server: String,
+}
+
+/// Forge/NeoForge processor (run during installation).
+#[derive(Debug, Deserialize)]
+pub struct ModrinthProcessor {
+    pub jar: String,
+    pub classpath: Vec<String>,
+    pub args: Vec<String>,
+    /// Optional main class override; if absent, read from the JAR's manifest.
+    #[serde(rename = "mainClass", default)]
+    pub main_class: Option<String>,
+    pub outputs: Option<HashMap<String, String>>,
+    pub sides: Option<Vec<String>>,
+}
+
+impl ModrinthLoaderProfile {
+    /// Replace `${modrinth.gameVersion}` placeholders with the actual Minecraft version.
+    pub fn resolve_placeholders(&mut self, mc_version: &str) {
+        self.id = self
+            .id
+            .replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
+        self.inherits_from = self
+            .inherits_from
+            .replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
+        for lib in &mut self.libraries {
+            lib.name = lib
+                .name
+                .replace(MODRINTH_GAME_VERSION_PLACEHOLDER, mc_version);
+        }
+    }
+}
+
+// ============================================================================
+// Mojang API types (still needed for vanilla version list + Java resolution)
 // ============================================================================
 
 /// Mojang version manifest response
@@ -147,26 +285,4 @@ pub struct MojangVersionDetail {
 pub struct MojangJavaVersion {
     pub major_version: u32,
     pub component: String,
-}
-
-/// Fabric loader version response
-#[derive(Debug, Deserialize)]
-pub struct FabricLoaderVersion {
-    pub version: String,
-    pub stable: bool,
-}
-
-/// Quilt loader version response (same structure as Fabric)
-pub type QuiltLoaderVersion = FabricLoaderVersion;
-
-/// Forge version metadata response
-#[derive(Debug, Deserialize)]
-pub struct ForgeVersionMetadata {
-    pub versions: HashMap<String, Vec<String>>,
-}
-
-/// NeoForge version response
-#[derive(Debug, Deserialize)]
-pub struct NeoForgeVersionResponse {
-    pub versions: Vec<String>,
 }

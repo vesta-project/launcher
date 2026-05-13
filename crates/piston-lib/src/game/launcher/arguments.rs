@@ -1,8 +1,8 @@
 /// Argument builder for Minecraft launcher
 use crate::game::installer::types::OsType;
 use crate::game::launcher::types::LaunchSpec;
-use crate::game::launcher::version_parser::{Argument, ArgumentValue};
 use crate::game::launcher::unified_manifest::UnifiedManifest;
+use crate::game::launcher::version_parser::{Argument, ArgumentValue};
 use dunce::canonicalize;
 use std::collections::HashMap;
 use std::path::Path;
@@ -45,6 +45,27 @@ pub fn build_jvm_arguments(
         ]);
     }
 
+    // Add -XstartOnFirstThread on macOS (required by LWJGL 3 / GLFW).
+    // LWJGL 2 has its own Cocoa event loop and does NOT need this flag.
+    // In fact, on some macOS + JVM combos, adding it to LWJGL 2 causes the
+    // display to be created but the window to remain invisible (audio plays
+    // but no visible window).
+    //
+    // Detection: LWJGL 3 uses group `org.lwjgl` (e.g. `org.lwjgl:lwjgl:3.3.1`)
+    // while LWJGL 2 uses `org.lwjgl.lwjgl` (e.g. `org.lwjgl.lwjgl:lwjgl:2.9.4`).
+    // Any library starting with `org.lwjgl:lwjgl` indicates LWJGL 3 is in use.
+    let is_macos = matches!(os, OsType::MacOS | OsType::MacOSArm64);
+    if is_macos {
+        let has_lwjgl3 = manifest
+            .libraries
+            .iter()
+            .any(|lib| lib.name.starts_with("org.lwjgl:lwjgl"));
+        let has_start_on_first = spec.jvm_args.iter().any(|a| a == "-XstartOnFirstThread");
+        if has_lwjgl3 && !has_start_on_first {
+            args.push("-XstartOnFirstThread".to_string());
+        }
+    }
+
     // 3. Add Custom JVM args
     for arg in &spec.jvm_args {
         // Skip memory flags we already handled via spec.min/max (if they were somehow passed in both)
@@ -68,9 +89,15 @@ pub fn build_jvm_arguments(
     }
 
     // Check if manifest already defines these properties
-    let has_natives_path = manifest_args.iter().any(|arg| arg.starts_with("-Djava.library.path="));
-    let has_launcher_brand = manifest_args.iter().any(|arg| arg.starts_with("-Dminecraft.launcher.brand="));
-    let has_launcher_version = manifest_args.iter().any(|arg| arg.starts_with("-Dminecraft.launcher.version="));
+    let has_natives_path = manifest_args
+        .iter()
+        .any(|arg| arg.starts_with("-Djava.library.path="));
+    let has_launcher_brand = manifest_args
+        .iter()
+        .any(|arg| arg.starts_with("-Dminecraft.launcher.brand="));
+    let has_launcher_version = manifest_args
+        .iter()
+        .any(|arg| arg.starts_with("-Dminecraft.launcher.version="));
 
     // Add natives library path only if not in manifest (Forge/Fabric include it)
     if !has_natives_path {
@@ -95,20 +122,21 @@ pub fn build_jvm_arguments(
     if let Some(logging) = &manifest.logging {
         if let Some(client) = &logging.client {
             // Find the logging config file in assets
-            let config_path = spec
-                .assets_dir()
-                .join("log_configs")
-                .join(&client.file.id);
-            
+            let config_path = spec.assets_dir().join("log_configs").join(&client.file.id);
+
             if config_path.exists() {
-                let log_config_arg = client.argument.replace("${path}", &config_path.to_string_lossy());
+                let log_config_arg = client
+                    .argument
+                    .replace("${path}", &config_path.to_string_lossy());
                 args.push(log_config_arg);
             }
         }
     }
 
     // For legacy versions (like 1.0) that don't have JVM args in manifest, add classpath manually
-    let has_classpath = args.iter().any(|arg| arg == "-cp" || arg.starts_with("-cp=") || arg.starts_with("-classpath"));
+    let has_classpath = args
+        .iter()
+        .any(|arg| arg == "-cp" || arg.starts_with("-cp=") || arg.starts_with("-classpath"));
     if !has_classpath && manifest.jvm_arguments.is_empty() {
         args.push("-cp".to_string());
         args.push(classpath.to_string());
@@ -212,7 +240,13 @@ fn process_argument(
             }
 
             let res = substitute_variables(s, variables);
-            split_preserving_quotes(&res)
+            if should_split_substituted_argument(s) {
+                split_preserving_quotes(&res)
+            } else if res.trim().is_empty() {
+                Vec::new()
+            } else {
+                vec![res]
+            }
         }
         Argument::Conditional { rules, value } => {
             // Check if rules match
@@ -224,7 +258,13 @@ fn process_argument(
                         }
 
                         let res = substitute_variables(s, variables);
-                        split_preserving_quotes(&res)
+                        if should_split_substituted_argument(s) {
+                            split_preserving_quotes(&res)
+                        } else if res.trim().is_empty() {
+                            Vec::new()
+                        } else {
+                            vec![res]
+                        }
                     }
                     ArgumentValue::Multiple(vec) => {
                         // Substitute all parts and if any part results in an empty string
@@ -238,7 +278,13 @@ fn process_argument(
                             }
 
                             let substituted = substitute_variables(part, variables);
-                            let mut toks = split_preserving_quotes(&substituted);
+                            let mut toks = if should_split_substituted_argument(part) {
+                                split_preserving_quotes(&substituted)
+                            } else if substituted.trim().is_empty() {
+                                Vec::new()
+                            } else {
+                                vec![substituted]
+                            };
                             out.append(&mut toks);
                         }
 
@@ -250,6 +296,26 @@ fn process_argument(
             }
         }
     }
+}
+
+/// Whether a template argument should be split into multiple argv tokens
+/// after substitution. We split only when the template itself contains
+/// unquoted whitespace (e.g. "--flag ${value}"), not when whitespace is
+/// introduced by substituted values (e.g. "${game_directory}").
+fn should_split_substituted_argument(template: &str) -> bool {
+    let mut in_double = false;
+    let mut in_single = false;
+
+    for c in template.chars() {
+        match c {
+            '"' if !in_single => in_double = !in_double,
+            '\'' if !in_double => in_single = !in_single,
+            c if c.is_whitespace() && !in_double && !in_single => return true,
+            _ => {}
+        }
+    }
+
+    false
 }
 
 /// Evaluate rules to determine if they match
@@ -271,7 +337,7 @@ fn evaluate_rules(
         if let Some(ref os_rule) = rule.os {
             // OS name
             if let Some(ref os_name) = os_rule.name {
-                if os_name != os.as_str() {
+                if !os.matches_rule_os_name(os_name) {
                     matches = false;
                 }
             }
@@ -320,6 +386,7 @@ fn evaluate_rules(
         if matches {
             if let Some(features) = &rule.features {
                 for (k, v) in features.iter() {
+                    let required = v.unwrap_or(true);
                     let satisfied = match k.as_str() {
                         "is_demo_user" => {
                             // Demo user detection: match launcher defaults.
@@ -328,12 +395,12 @@ fn evaluate_rules(
                                 || spec.uuid == "00000000-0000-0000-0000-000000000000"
                                 || spec.access_token == "0")
                                 && spec.access_token != "offline";
-                            is_demo == *v
+                            is_demo == required
                         }
                         "has_custom_resolution" => {
                             let has_res =
                                 spec.window_width.is_some() && spec.window_height.is_some();
-                            has_res == *v
+                            has_res == required
                         }
                         _ => {
                             // Unknown features: conservative, do not match
@@ -370,10 +437,10 @@ pub fn substitute_variables(text: &str, variables: &HashMap<String, String>) -> 
     }
 
     // Modern Forge (1.13+) ModLauncher can be over-aggressive when scanning the library directory.
-    // Since we use a shared global libraries folder, it may find "extra" JARs (like slim/srg variants) 
+    // Since we use a shared global libraries folder, it may find "extra" JARs (like slim/srg variants)
     // that exist in the same version folder but are not part of the current manifest.
-    // 
-    // We prepend common variant patterns and the vanilla game JAR to the ignoreList to prevent 
+    //
+    // We prepend common variant patterns and the vanilla game JAR to the ignoreList to prevent
     // ModLauncher from attempting to load them as modules, which would cause package collisions.
     // This is done after variable substitution to ensure we can use dynamic values if needed.
     if result.contains("-DignoreList=") {
@@ -500,22 +567,25 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     vars.insert("uuid".to_string(), spec.uuid.clone());
     vars.insert("auth_access_token".to_string(), spec.access_token.clone());
     vars.insert("accessToken".to_string(), spec.access_token.clone());
-    
+
     // auth_session should be "-" for offline mode (access_token == "0"), else same as token
     if spec.access_token == "0" {
         vars.insert("auth_session".to_string(), "-".to_string());
     } else {
         vars.insert("auth_session".to_string(), spec.access_token.clone());
     }
-    
+
     vars.insert("user_type".to_string(), spec.user_type.clone());
-    
+
     // Client ID (used in 1.19+)
     vars.insert("clientid".to_string(), spec.client_id.clone());
     vars.insert("client_id".to_string(), spec.client_id.clone());
-    
+
     // XUID (used in 1.19+ for MSA accounts)
-    vars.insert("auth_xuid".to_string(), spec.xuid.clone().unwrap_or_else(|| "0".to_string()));
+    vars.insert(
+        "auth_xuid".to_string(),
+        spec.xuid.clone().unwrap_or_else(|| "0".to_string()),
+    );
 
     // Version info
     vars.insert("version_name".to_string(), manifest.id.clone());
@@ -545,7 +615,7 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     } else if let Some(ref assets) = manifest.assets {
         vars.insert("assets_index_name".to_string(), assets.clone());
     }
-    
+
     // Game assets directory (legacy versions like 1.0 use ${game_assets})
     vars.insert("game_assets".to_string(), assets_canon);
 
@@ -562,7 +632,7 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
     // clientid should contain a launcher client id. Use value supplied on LaunchSpec
     // (plumbed through from the caller) so ita can be the official client id.
     vars.insert("clientid".to_string(), spec.client_id.clone());
-    
+
     if spec.access_token == "0" {
         vars.insert("auth_session".to_string(), "-".to_string());
     } else {
@@ -644,7 +714,8 @@ mod tests {
         let natives_dir = std::path::PathBuf::from("natives");
         let classpath = "cp";
 
-        let args = build_jvm_arguments(&spec, &manifest, &natives_dir, classpath);
+        let args =
+            build_jvm_arguments(&spec, &manifest, &natives_dir, classpath, OsType::current());
 
         // Verify defaults from build_jvm_arguments
         assert!(args.contains(&"-Xms2048M".to_string()));
@@ -713,7 +784,7 @@ mod tests {
         };
 
         let unified = UnifiedManifest::from(manifest);
-        let jvm_vars = build_jvm_variables(&spec, &unified, &natives, "cp");
+        let jvm_vars = build_jvm_variables(&spec, &unified, &natives, "cp", OsType::current());
         // natives_directory should be canonicalized
         let expected_natives = canonicalize(&natives)
             .unwrap()
@@ -814,6 +885,68 @@ mod tests {
     }
 
     #[test]
+    fn process_argument_keeps_single_placeholder_with_spaces() {
+        let spec = LaunchSpec {
+            instance_id: "i".to_string(),
+            version_id: "v".to_string(),
+            modloader: None,
+            modloader_version: None,
+            data_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
+            game_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
+            java_path: std::path::PathBuf::from("java"),
+            username: "Player".to_string(),
+            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
+            access_token: "0".to_string(),
+            user_type: "msa".to_string(),
+            xuid: None,
+            jvm_args: vec![],
+            game_args: vec![],
+            window_width: None,
+            window_height: None,
+            min_memory: None,
+            max_memory: None,
+            client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
+            env_vars: HashMap::new(),
+        };
+
+        let mut vars = HashMap::new();
+        vars.insert(
+            "game_directory".to_string(),
+            "/Users/test/Library/Application Support/Vesta/instances/a".to_string(),
+        );
+        vars.insert(
+            "assets_root".to_string(),
+            "/Users/test/Library/Application Support/Vesta/data/assets".to_string(),
+        );
+
+        let game_dir_parts = process_argument(
+            &Argument::Simple("${game_directory}".to_string()),
+            &vars,
+            OsType::current(),
+            &spec,
+        );
+        assert_eq!(game_dir_parts.len(), 1);
+        assert_eq!(
+            game_dir_parts[0],
+            "/Users/test/Library/Application Support/Vesta/instances/a"
+        );
+
+        let assets_parts = process_argument(
+            &Argument::Simple("${assets_root}".to_string()),
+            &vars,
+            OsType::current(),
+            &spec,
+        );
+        assert_eq!(assets_parts.len(), 1);
+        assert_eq!(
+            assets_parts[0],
+            "/Users/test/Library/Application Support/Vesta/data/assets"
+        );
+    }
+
+    #[test]
     fn evaluate_rules_feature_checks() {
         use crate::game::launcher::version_parser::{Rule, RuleAction};
 
@@ -874,5 +1007,60 @@ mod tests {
             ..demo_spec.clone()
         };
         assert!(evaluate_rules(&[rule2], OsType::current(), &res_spec));
+    }
+
+    #[test]
+    fn evaluate_rules_matches_base_os_name_for_arm_variants() {
+        use crate::game::launcher::version_parser::{OsRule, Rule, RuleAction};
+
+        let spec = LaunchSpec {
+            instance_id: "i".to_string(),
+            version_id: "v".to_string(),
+            modloader: None,
+            modloader_version: None,
+            data_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
+            game_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
+            java_path: std::path::PathBuf::from("java"),
+            username: "Player".to_string(),
+            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
+            access_token: "0".to_string(),
+            user_type: "msa".to_string(),
+            xuid: None,
+            jvm_args: vec![],
+            game_args: vec![],
+            window_width: None,
+            window_height: None,
+            min_memory: None,
+            max_memory: None,
+            client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
+            env_vars: HashMap::new(),
+        };
+
+        let osx_rule = Rule {
+            action: RuleAction::Allow,
+            os: Some(OsRule {
+                name: Some("osx".to_string()),
+                version: None,
+                arch: None,
+            }),
+            features: None,
+        };
+        assert!(evaluate_rules(&[osx_rule], OsType::MacOSArm64, &spec));
+
+        let windows_rule = Rule {
+            action: RuleAction::Allow,
+            os: Some(OsRule {
+                name: Some("windows".to_string()),
+                version: None,
+                arch: None,
+            }),
+            features: None,
+        };
+        assert!(
+            evaluate_rules(&[windows_rule], OsType::WindowsArm64, &spec),
+            "windows rule should match WindowsArm64"
+        );
     }
 }
