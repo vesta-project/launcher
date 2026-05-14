@@ -25,6 +25,14 @@ pub struct CachedManifest {
     pub data: serde_json::Value,
 }
 
+/// Cached Java runtime info — persists between sessions for offline use.
+#[derive(Debug, Serialize, Deserialize)]
+struct JavaInfoCache {
+    required_java_major_versions: Vec<u32>,
+    #[serde(default)]
+    java_major_version_by_game_version: HashMap<String, u32>,
+}
+
 /// In-memory state for a cached manifest
 struct MemEntry {
     data: Arc<serde_json::Value>,
@@ -74,6 +82,10 @@ impl ManifestCache {
                 .expect("Failed to build HTTP client"),
             offline: true,
         }
+    }
+
+    fn java_info_path(&self) -> PathBuf {
+        self.cache_dir.join("java_info.json")
     }
 
     /// Get a manifest by slug, fetching if not cached or stale.
@@ -397,26 +409,44 @@ impl ManifestCache {
         // Sort: latest first
         game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
 
-        // Fetch available Java runtimes from Mojang's runtime manifest (1 HTTP request).
-        // This replaces the old hardcoded [8, 17, 21] with real data.
-        let required_java_major_versions =
-            crate::game::java_policy::fetch_available_runtimes(&self.client)
-                .await
-                .unwrap_or_else(|e| {
-                    log::warn!("Failed to fetch Java runtimes: {e}. Falling back to [21, 17, 8]");
-                    vec![21u32, 17, 8]
-                });
+        // Java data: from cache when offline, from network otherwise.
+        let (required_java_major_versions, java_major_version_by_game_version) =
+            if self.offline {
+                let path = self.java_info_path();
+                let content = tokio::fs::read_to_string(&path)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Java info cache not available: {e}"))?;
+                let cache: JavaInfoCache = serde_json::from_str(&content)?;
+                (cache.required_java_major_versions, cache.java_major_version_by_game_version)
+            } else {
+                let required = crate::game::java_policy::fetch_available_runtimes(&self.client)
+                    .await
+                    .unwrap_or_else(|e| {
+                        log::warn!("Failed to fetch Java runtimes: {e}. Falling back to [21, 17, 8]");
+                        vec![21u32, 17, 8]
+                    });
 
-        // Fetch Java version for latest release + snapshot so onboarding works.
-        // Other versions resolve lazily when the user tries to install them.
-        let mut java_versions = HashMap::new();
-        for v in [&mc_manifest.latest.release, &mc_manifest.latest.snapshot] {
-            if let Ok(major) =
-                crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await
-            {
-                java_versions.insert(v.clone(), major);
-            }
-        }
+                let mut java_versions = HashMap::new();
+                for v in [&mc_manifest.latest.release, &mc_manifest.latest.snapshot] {
+                    if let Ok(major) =
+                        crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await
+                    {
+                        java_versions.insert(v.clone(), major);
+                    }
+                }
+
+                // Persist to disk for offline use
+                let cache = JavaInfoCache {
+                    required_java_major_versions: required.clone(),
+                    java_major_version_by_game_version: java_versions.clone(),
+                };
+                if let Ok(json) = serde_json::to_string(&cache) {
+                    let path = self.java_info_path();
+                    let _ = tokio::fs::write(&path, json).await;
+                }
+
+                (required, java_versions)
+            };
 
         Ok(PistonMetadata {
             last_updated: Utc::now(),
@@ -426,7 +456,7 @@ impl ManifestCache {
                 snapshot: mc_manifest.latest.snapshot.clone(),
             },
             required_java_major_versions,
-            java_major_version_by_game_version: java_versions,
+            java_major_version_by_game_version,
         })
     }
 }
