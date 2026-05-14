@@ -44,7 +44,9 @@ import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
   DEFAULT_ICONS,
   duplicateInstance,
+  getInstance,
   getInstanceBySlug,
+  getInstanceSlug,
   getMinecraftVersions,
   getStableIconId,
   installInstance,
@@ -98,7 +100,8 @@ type TabType =
   | "screenshots";
 
 interface InstanceDetailsProps {
-  slug?: string; // Optional - can come from props or router params
+  id?: number;
+  slug?: string; // Optional fallback - can come from props or router params
   activeTab?: TabType;
   initialData?: any;
   initialName?: string;
@@ -248,15 +251,57 @@ export default function InstanceDetails(
 ) {
   const activeRouter = createMemo(() => props.router || router());
 
+  // Handle id/slug from props first, then fallback to router params
+  const getIdentifier = () => {
+    if (props.id !== undefined) return `id:${props.id}`;
+    if (props.slug) return `slug:${props.slug}`;
+    const params = activeRouter()?.currentParams.get();
+    const id = params?.id as string | undefined;
+    if (id) return `id:${id}`;
+    const slug = params?.slug as string | undefined;
+    if (slug) return `slug:${slug}`;
+    return "";
+  };
+
+  const paramsKey = createMemo(() => {
+    const k = getIdentifier();
+    return k;
+  });
+
+  const [instance, { refetch }] = createResource(paramsKey, async (key) => {
+    if (!key) {
+      return undefined;
+    }
+    try {
+      let inst: Instance | undefined;
+      if (key.startsWith("id:")) {
+        const id = parseInt(key.slice(3), 10);
+        inst = await getInstance(id);
+      } else if (key.startsWith("slug:")) {
+        const slugVal = key.slice(5);
+        inst = await getInstanceBySlug(slugVal);
+      }
+      return inst;
+    } catch (e) {
+      console.error("[InstanceDetails] Error fetching instance:", e);
+      throw e;
+    }
+  });
+
+  const slug = createMemo(() => {
+    const inst = instance();
+    return inst ? getInstanceSlug(inst) : "";
+  });
+
   const isPinned = createMemo(() =>
-    props.slug ? isPinnedInStore("instance", props.slug) : false,
+    slug() ? isPinnedInStore("instance", slug()) : false,
   );
 
   const handlePin = async () => {
-    if (!props.slug) return;
+    if (!slug()) return;
     if (isPinned()) {
       const pin = pinning.pins.find(
-        (p) => p.page_type === "instance" && p.target_id === props.slug,
+        (p) => p.page_type === "instance" && p.target_id === slug(),
       );
       if (pin) unpinPage(pin.id);
     } else {
@@ -264,7 +309,7 @@ export default function InstanceDetails(
       if (!inst) return;
       await pinPage({
         page_type: "instance",
-        target_id: props.slug,
+        target_id: slug(),
         label: inst.name,
         icon_url: inst.iconPath || inst.modpackIconUrl || null,
         platform: null,
@@ -272,36 +317,6 @@ export default function InstanceDetails(
       });
     }
   };
-
-  // Handle slug from props first, then fallback to router params
-  const getSlug = () => {
-    if (props.slug) return props.slug;
-    const params = activeRouter()?.currentParams.get();
-    return params?.slug as string | undefined;
-  };
-
-  const slug = createMemo(() => {
-    const s = getSlug();
-    console.log("[InstanceDetails] Derived slug:", s);
-    return s || "";
-  });
-
-  const [instance, { refetch }] = createResource(slug, async (s) => {
-    if (!s) {
-      console.warn("[InstanceDetails] No slug provided to resource fetcher");
-      return undefined;
-    }
-    console.log("[InstanceDetails] Fetching instance for slug:", s);
-    try {
-      const inst = await getInstanceBySlug(s);
-      if (!inst)
-        console.warn("[InstanceDetails] Backend returned null for slug:", s);
-      return inst;
-    } catch (e) {
-      console.error("[InstanceDetails] Error fetching instance:", e);
-      throw e;
-    }
-  });
 
   const [
     installedResources,
@@ -545,10 +560,10 @@ export default function InstanceDetails(
   const inst = () => instance();
   const isLaunchingGlobal = createMemo(
     () =>
-      (props.slug ? instancesState.launchingIds[props.slug] : false) || false,
+      (slug() ? instancesState.launchingIds[slug()] : false) || false,
   );
   const isRunningGlobal = createMemo(
-    () => (props.slug ? instancesState.runningIds[props.slug] : false) || false,
+    () => (slug() ? instancesState.runningIds[slug()] : false) || false,
   );
 
   const isDirty = createMemo(() => {
@@ -2072,7 +2087,7 @@ export default function InstanceDetails(
     if (!inst) return;
     setSaving(true);
     try {
-      const fresh = await getInstanceBySlug(slug());
+      const fresh = await getInstance(inst.id);
       fresh.name = name();
       fresh.iconPath = iconPath();
       fresh.javaArgs = javaArgs() || null;

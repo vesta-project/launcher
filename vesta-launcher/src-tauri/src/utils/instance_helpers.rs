@@ -29,7 +29,7 @@ pub fn compute_unique_slug(
     seen_slugs: &HashSet<String>,
     instances_root: &Path,
 ) -> String {
-    let mut slug = slug::slugify(base_name);
+    let mut slug = crate::utils::sanitize::sanitize_instance_name(base_name);
     if slug.is_empty() {
         slug = "instance".to_string();
     }
