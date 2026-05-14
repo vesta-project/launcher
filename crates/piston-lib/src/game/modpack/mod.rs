@@ -1,7 +1,9 @@
-pub mod types;
-pub mod parser;
 pub mod exporter;
+pub mod manifest;
+pub mod parser;
+pub mod types;
 
-pub use types::*;
-pub use parser::*;
 pub use exporter::*;
+pub use manifest::*;
+pub use parser::*;
+pub use types::*;

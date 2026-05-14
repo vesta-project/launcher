@@ -44,7 +44,12 @@ impl ProgressReporter for ConsoleReporter {
     }
 
     fn set_substep(&self, name: Option<&str>, current: Option<u32>, total: Option<u32>) {
-        println!("[SUBSTEP] name={:?} {}/{:?}", name, current.unwrap_or(0), total);
+        println!(
+            "[SUBSTEP] name={:?} {}/{:?}",
+            name,
+            current.unwrap_or(0),
+            total
+        );
     }
 
     fn set_actions(&self, actions: Option<Vec<NotificationActionSpec>>) {
@@ -87,6 +92,9 @@ async fn main() -> Result<()> {
         java_path: None,
         dry_run: false,
         concurrency: 8,
+        force_overwrite_configs: false,
+        repair_scope: Default::default(),
+        remediation_policy: Default::default(),
     };
 
     let (reporter_impl, _tx) = ConsoleReporter::new();

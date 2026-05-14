@@ -127,6 +127,21 @@ pub async fn install_instance(
                 issue.detail
             );
         }
+
+        // If VerifyOnly, stop here — don't download anything
+        if spec.remediation_policy == types::RemediationPolicy::VerifyOnly {
+            log::info!(
+                "[installer] RemediationPolicy::VerifyOnly — stopping after verification. {} issues found.",
+                preflight.issues.len()
+            );
+            reporter.set_message(&format!(
+                "Verification complete: {} issues found",
+                preflight.issues.len()
+            ));
+            reporter.set_percent(100);
+            reporter.done(true, Some("Verification complete"));
+            return Ok(());
+        }
     } else if !spec.dry_run {
         reporter.set_message("Runtime already valid. Skipping repair downloads.");
         reporter.set_percent(100);
@@ -302,7 +317,12 @@ pub async fn install_instance(
                             asset_name
                         )
                     })?;
-                let hash_prefix = &hash[..2];
+                let hash_prefix = hash.get(..2).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "Asset '{}' in index has a hash shorter than 2 characters",
+                        asset_name
+                    )
+                })?;
                 let asset_url = format!(
                     "https://resources.download.minecraft.net/{}/{}",
                     hash_prefix, hash

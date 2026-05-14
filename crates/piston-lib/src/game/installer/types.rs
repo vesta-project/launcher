@@ -109,10 +109,38 @@ impl VerificationResult {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+/// Controls whether verification produces a report or triggers remediation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RemediationPolicy {
+    /// Only verify and report issues; do not download or modify files.
     VerifyOnly,
+    /// Verify and repair any issues found.
     RepairIfNeeded,
+}
+
+impl Default for RemediationPolicy {
+    fn default() -> Self {
+        Self::RepairIfNeeded
+    }
+}
+
+/// Scope of a repair operation — what categories to check and fix.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepairScope {
+    /// Repair everything: version metadata, libraries, assets, JRE, and modpack resources.
+    Full,
+    /// Repair version metadata and client JAR only.
+    Versions,
+    /// Repair libraries and native runtime only.
+    Libraries,
+    /// Repair modpack resources (mods, resource packs, shaders, etc.) and overrides only.
+    Resources,
+}
+
+impl Default for RepairScope {
+    fn default() -> Self {
+        Self::Full
+    }
 }
 
 /// Notification action specification
@@ -186,6 +214,19 @@ pub struct InstallSpec {
 
     /// Number of concurrent downloads
     pub concurrency: usize,
+
+    /// If true, force overwrite of user config files during modpack repair.
+    /// Backend/CLI only; not exposed in the frontend.
+    #[doc(hidden)]
+    pub force_overwrite_configs: bool,
+
+    /// Scope of the repair operation (which categories to check/fix).
+    /// Defaults to Full when not specified.
+    pub repair_scope: RepairScope,
+
+    /// Remediation policy: VerifyOnly produces a report without mutating disk,
+    /// RepairIfNeeded proceeds with downloads and fixes.
+    pub remediation_policy: RemediationPolicy,
 }
 
 impl InstallSpec {
@@ -199,6 +240,9 @@ impl InstallSpec {
             java_path: None,
             dry_run: false,
             concurrency: 8,
+            force_overwrite_configs: false,
+            repair_scope: RepairScope::default(),
+            remediation_policy: RemediationPolicy::default(),
         }
     }
 
@@ -280,6 +324,9 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 8,
+            force_overwrite_configs: false,
+            repair_scope: RepairScope::Full,
+            remediation_policy: RemediationPolicy::RepairIfNeeded,
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -296,6 +343,9 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 8,
+            force_overwrite_configs: false,
+            repair_scope: RepairScope::Full,
+            remediation_policy: RemediationPolicy::RepairIfNeeded,
         };
 
         assert_eq!(spec.installed_version_id(), "fabric-loader-0.38.2-1.20.1");

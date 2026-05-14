@@ -1,12 +1,271 @@
 use crate::game::installer::types::{
-    InstallSpec, VerificationIssue, VerificationIssueKind, VerificationResult,
+    InstallSpec, RepairScope, VerificationIssue, VerificationIssueKind, VerificationResult,
 };
 use anyhow::Result;
+use sha1::{Digest, Sha1};
+use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// Maximum number of asset objects to spot-check (randomly sampled).
+/// Set to 0 to disable spot-checking entirely.
+const ASSET_SPOT_CHECK_COUNT: usize = 20;
+
+/// Compute SHA1 hash of a file. Returns hex string.
+fn compute_sha1(path: &Path) -> Result<String> {
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha1::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Verify that a file's SHA1 matches the expected hash (case-insensitive compare).
+/// Returns Ok(true) if match, Ok(false) if mismatch, Err if file can't be read.
+fn verify_sha1(path: &Path, expected_sha1: &str) -> Result<bool> {
+    let computed = compute_sha1(path)?;
+    Ok(computed.to_lowercase() == expected_sha1.to_lowercase())
+}
+
+/// Verify JRE executable at the given path is runnable.
+/// Returns `true` if `java -version` succeeds, `false` if the binary doesn't exist or fails.
+fn verify_jre_executable(java_path: &Path) -> bool {
+    if !java_path.exists() {
+        return false;
+    }
+    Command::new(java_path)
+        .arg("-version")
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false)
+}
+
+/// Verify asset objects exist and spot-check their SHA1 hashes.
+/// Returns a list of VerificationIssues found.
+fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<VerificationIssue> {
+    let mut issues = Vec::new();
+
+    // Find the asset index to know what objects are expected
+    let installed_id = spec.installed_version_id();
+    let version_json_path = spec
+        .versions_dir()
+        .join(&installed_id)
+        .join(format!("{}.json", installed_id));
+
+    let index_content = match std::fs::read_to_string(&version_json_path) {
+        Ok(c) => c,
+        Err(_) => {
+            // Try vanilla version path
+            let vanilla_path = spec
+                .versions_dir()
+                .join(&spec.version_id)
+                .join(format!("{}.json", spec.version_id));
+            match std::fs::read_to_string(&vanilla_path) {
+                Ok(c) => c,
+                Err(_) => return issues, // Can't verify assets without version JSON
+            }
+        }
+    };
+
+    let parsed: serde_json::Value = match serde_json::from_str(&index_content) {
+        Ok(v) => v,
+        Err(_) => return issues,
+    };
+
+    let asset_index_id = parsed
+        .get("assetIndex")
+        .and_then(|a| a.get("id"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("legacy");
+
+    let index_path = assets_dir
+        .join("indexes")
+        .join(format!("{}.json", asset_index_id));
+
+    let index_content = match std::fs::read_to_string(&index_path) {
+        Ok(c) => c,
+        Err(_) => {
+            issues.push(VerificationIssue {
+                kind: VerificationIssueKind::Missing,
+                artifact_class: "asset-index".to_string(),
+                path: index_path.to_string_lossy().to_string(),
+                detail: "Asset index file is missing; cannot verify asset objects".to_string(),
+            });
+            return issues;
+        }
+    };
+
+    let index: serde_json::Value = match serde_json::from_str(&index_content) {
+        Ok(v) => v,
+        Err(_) => {
+            issues.push(VerificationIssue {
+                kind: VerificationIssueKind::Mismatch,
+                artifact_class: "asset-index".to_string(),
+                path: index_path.to_string_lossy().to_string(),
+                detail: "Asset index is corrupt (unparseable)".to_string(),
+            });
+            return issues;
+        }
+    };
+
+    let objects = match index.get("objects").and_then(|o| o.as_object()) {
+        Some(o) => o,
+        None => return issues, // Legacy format without objects
+    };
+
+    let total_expected = objects.len();
+    let objects_dir = assets_dir.join("objects");
+    let mut present_count = 0usize;
+    let mut missing_count = 0usize;
+    let mut mismatch_count = 0usize;
+
+    // Collect entries for spot-check sampling
+    let entries: Vec<(&String, &serde_json::Value)> = objects.iter().collect();
+
+    // If spot-checking, randomly select a subset
+    let check_set: Vec<usize> =
+        if ASSET_SPOT_CHECK_COUNT > 0 && entries.len() > ASSET_SPOT_CHECK_COUNT {
+            use std::collections::HashSet;
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let seed = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_nanos() as u64)
+                .unwrap_or(42);
+            // Simple deterministic sampling based on time seed
+            let mut indices = HashSet::new();
+            let mut rng = seed;
+            while indices.len() < ASSET_SPOT_CHECK_COUNT {
+                rng = rng
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                indices.insert((rng as usize) % entries.len());
+            }
+            indices.into_iter().collect()
+        } else {
+            (0..entries.len()).collect()
+        };
+
+    let is_full_check = check_set.len() == entries.len();
+
+    for idx in &check_set {
+        let (asset_name, asset_obj) = entries[*idx];
+        let hash = match asset_obj.get("hash").and_then(|h| h.as_str()) {
+            Some(h) => h,
+            None => continue,
+        };
+        let Some(hash_prefix) = hash.get(..2) else {
+            log::warn!(
+                "[verifier] Asset object hash too short to derive path: name={} hash={}",
+                asset_name,
+                hash
+            );
+            issues.push(VerificationIssue {
+                kind: VerificationIssueKind::Mismatch,
+                artifact_class: "asset-object".to_string(),
+                path: assets_dir.to_string_lossy().to_string(),
+                detail: format!(
+                    "Asset object hash is too short to derive its path: {} (hash={})",
+                    asset_name, hash
+                ),
+            });
+            continue;
+        };
+        let asset_path = objects_dir.join(hash_prefix).join(hash);
+
+        if !asset_path.exists() {
+            missing_count += 1;
+            issues.push(VerificationIssue {
+                kind: VerificationIssueKind::Missing,
+                artifact_class: "asset-object".to_string(),
+                path: asset_path.to_string_lossy().to_string(),
+                detail: format!("Asset object missing: {}", asset_name),
+            });
+        } else {
+            present_count += 1;
+            // SHA1 spot-check
+            match compute_sha1(&asset_path) {
+                Ok(computed) => {
+                    if computed.to_lowercase() != hash.to_lowercase() {
+                        mismatch_count += 1;
+                        issues.push(VerificationIssue {
+                            kind: VerificationIssueKind::Mismatch,
+                            artifact_class: "asset-object".to_string(),
+                            path: asset_path.to_string_lossy().to_string(),
+                            detail: format!(
+                                "Asset object hash mismatch: {} (expected {}, got {})",
+                                asset_name, hash, computed
+                            ),
+                        });
+                    }
+                }
+                Err(e) => {
+                    mismatch_count += 1;
+                    issues.push(VerificationIssue {
+                        kind: VerificationIssueKind::Mismatch,
+                        artifact_class: "asset-object".to_string(),
+                        path: asset_path.to_string_lossy().to_string(),
+                        detail: format!("Cannot read asset object {}: {}", asset_name, e),
+                    });
+                }
+            }
+        }
+    }
+
+    // Also do a quick count check against the objects directory
+    if objects_dir.exists() {
+        if let Ok(dir_entries) = std::fs::read_dir(objects_dir) {
+            let on_disk_count: usize = dir_entries
+                .filter_map(|e| e.ok())
+                .filter(|e| e.path().is_dir())
+                .flat_map(|prefix_dir| {
+                    std::fs::read_dir(prefix_dir.path())
+                        .into_iter()
+                        .flat_map(|dir| dir.filter_map(|e| e.ok()))
+                })
+                .count();
+
+            if is_full_check && on_disk_count != total_expected {
+                log::warn!(
+                    "[verifier] Asset object count mismatch: expected {} objects, found {} on disk",
+                    total_expected,
+                    on_disk_count
+                );
+            }
+        }
+    }
+
+    if !is_full_check {
+        log::info!(
+            "[verifier] Asset spot-check: {}/{} checked, {} present, {} missing, {} mismatch",
+            check_set.len(),
+            total_expected,
+            present_count,
+            missing_count,
+            mismatch_count
+        );
+    } else {
+        log::info!(
+            "[verifier] Asset full check: {} total, {} present, {} missing, {} mismatch",
+            total_expected,
+            present_count,
+            missing_count,
+            mismatch_count
+        );
+    }
+
+    issues
+}
 
 pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResult> {
     let mut checked = 0usize;
-    let mut skipped_rules = 0usize;
     let mut skipped_native = 0usize;
     let mut skipped_no_path = 0usize;
     let mut expected_native_libraries = 0usize;
@@ -61,7 +320,10 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
 
     checked += 1;
     if !manifest_path.exists() {
-        log::error!("[verifier] Version manifest does not exist: {}", manifest_path.display());
+        log::error!(
+            "[verifier] Version manifest does not exist: {}",
+            manifest_path.display()
+        );
         issues.push(VerificationIssue {
             kind: VerificationIssueKind::Missing,
             artifact_class: "version-manifest".to_string(),
@@ -75,10 +337,14 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
         });
     }
 
-    let manifest_json = match std::fs::read_to_string(&manifest_path) {
+    let _manifest_json = match std::fs::read_to_string(&manifest_path) {
         Ok(raw) => raw,
         Err(e) => {
-            log::error!("[verifier] Version manifest unreadable: {} — {}", manifest_path.display(), e);
+            log::error!(
+                "[verifier] Version manifest unreadable: {} — {}",
+                manifest_path.display(),
+                e
+            );
             issues.push(VerificationIssue {
                 kind: VerificationIssueKind::Mismatch,
                 artifact_class: "version-manifest".to_string(),
@@ -94,17 +360,27 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     };
 
     // Try to load a UnifiedManifest (handles both VersionManifest and UnifiedManifest)
-    let unified = match crate::game::launcher::unified_manifest::UnifiedManifest::load_from_path(&manifest_path) {
+    let unified = match crate::game::launcher::unified_manifest::UnifiedManifest::load_from_path(
+        &manifest_path,
+    ) {
         Ok(u) => u,
         Err(e) => {
-            log::error!("[verifier] Failed to parse manifest into unified manifest: {} — {}", manifest_path.display(), e);
+            log::error!(
+                "[verifier] Failed to parse manifest into unified manifest: {} — {}",
+                manifest_path.display(),
+                e
+            );
             issues.push(VerificationIssue {
                 kind: VerificationIssueKind::Mismatch,
                 artifact_class: "version-manifest".to_string(),
                 path: manifest_path.to_string_lossy().to_string(),
                 detail: format!("Version manifest could not be parsed: {}", e),
             });
-            return Ok(VerificationResult { ready: false, checked, issues });
+            return Ok(VerificationResult {
+                ready: false,
+                checked,
+                issues,
+            });
         }
     };
 
@@ -132,7 +408,11 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     } else {
         log::info!(
             "[verifier] Client JAR found: {}",
-            if installed_jar.exists() { "installed" } else { "vanilla" }
+            if installed_jar.exists() {
+                "installed"
+            } else {
+                "vanilla"
+            }
         );
     }
 
@@ -158,6 +438,12 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
             });
         } else {
             log::info!("[verifier] Asset index found: id={}", asset_index_id);
+            // Deep check: verify asset objects (only in Full scope)
+            if spec.repair_scope == RepairScope::Full {
+                let asset_issues = verify_asset_objects(&spec.assets_dir(), spec);
+                checked += asset_issues.len();
+                issues.extend(asset_issues);
+            }
         }
     } else {
         log::debug!("[verifier] No asset index in manifest");
@@ -187,7 +473,11 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
                 let full = spec.libraries_dir().join(&lib.path);
                 if full.exists() {
                     present_native_artifacts += 1;
-                    log::debug!("[verifier] Found native artifact: {} at {}", name, full.display());
+                    log::debug!(
+                        "[verifier] Found native artifact: {} at {}",
+                        name,
+                        full.display()
+                    );
                 } else {
                     log::warn!(
                         "[verifier] Native artifact missing from libraries dir: name={} path={}",
@@ -221,14 +511,56 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
                     path: full.to_string_lossy().to_string(),
                     detail: format!("Library artifact missing: {}", name),
                 });
+            } else if let Some(ref expected_sha1) = lib.sha1 {
+                // Deep check: verify SHA1 hash
+                match verify_sha1(&full, expected_sha1) {
+                    Ok(true) => {
+                        log::debug!(
+                            "[verifier] Library verified (SHA1): {} at {}",
+                            name,
+                            full.display()
+                        );
+                    }
+                    Ok(false) => {
+                        log::warn!(
+                            "[verifier] Library SHA1 mismatch: name={} path={}",
+                            name,
+                            full.display()
+                        );
+                        issues.push(VerificationIssue {
+                            kind: VerificationIssueKind::Mismatch,
+                            artifact_class: "library".to_string(),
+                            path: full.to_string_lossy().to_string(),
+                            detail: format!(
+                                "Library SHA1 mismatch: {} (expected {})",
+                                name, expected_sha1
+                            ),
+                        });
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[verifier] Cannot read library for SHA1 check: name={} path={} err={}",
+                            name,
+                            full.display(),
+                            e
+                        );
+                        issues.push(VerificationIssue {
+                            kind: VerificationIssueKind::Mismatch,
+                            artifact_class: "library".to_string(),
+                            path: full.to_string_lossy().to_string(),
+                            detail: format!("Cannot verify library {}: {}", name, e),
+                        });
+                    }
+                }
             } else {
-                log::debug!("[verifier] Found library: {} at {}", name, full.display());
+                log::debug!(
+                    "[verifier] Found library (no SHA1): {} at {}",
+                    name,
+                    full.display()
+                );
             }
         } else {
-            log::warn!(
-                "[verifier] No path for library: {} — cannot verify",
-                name
-            );
+            log::warn!("[verifier] No path for library: {} — cannot verify", name);
             skipped_no_path += 1;
         }
     }
@@ -264,14 +596,47 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
         }
     }
 
+    // ------------------------------------------------------------------
+    // JRE verification
+    // ------------------------------------------------------------------
+    if spec.repair_scope == RepairScope::Full || spec.repair_scope == RepairScope::Versions {
+        let jre_dir = spec.jre_dir();
+        let java_bin = jre_dir.join("bin").join(if cfg!(target_os = "windows") {
+            "java.exe"
+        } else {
+            "java"
+        });
+        if java_bin.exists() {
+            checked += 1;
+            if !verify_jre_executable(&java_bin) {
+                log::warn!(
+                    "[verifier] JRE executable exists but fails to run: {}",
+                    java_bin.display()
+                );
+                issues.push(VerificationIssue {
+                    kind: VerificationIssueKind::Mismatch,
+                    artifact_class: "jre".to_string(),
+                    path: java_bin.to_string_lossy().to_string(),
+                    detail: "JRE executable exists but failed to execute (may be corrupt)"
+                        .to_string(),
+                });
+            } else {
+                log::info!("[verifier] JRE executable verified: {}", java_bin.display());
+            }
+        } else {
+            log::debug!(
+                "[verifier] No JRE found at expected path; will be installed during repair"
+            );
+        }
+    }
+
     log::info!(
-        "[verifier] verify-summary ready={} checked={} missing={} mismatch={} skipped_native={} skipped_rules={} skipped_no_path={}",
+        "[verifier] verify-summary ready={} checked={} missing={} mismatch={} skipped_native={} skipped_no_path={}",
         issues.is_empty(),
         checked,
         issues.iter().filter(|i| matches!(i.kind, VerificationIssueKind::Missing)).count(),
         issues.iter().filter(|i| matches!(i.kind, VerificationIssueKind::Mismatch)).count(),
         skipped_native,
-        skipped_rules,
         skipped_no_path,
     );
 
@@ -391,7 +756,11 @@ fn library_allowed_by_rules(
             match rule.get("action").and_then(|v| v.as_str()) {
                 Some("allow") => Some(matches),
                 Some("disallow") => {
-                    if matches { Some(false) } else { None }
+                    if matches {
+                        Some(false)
+                    } else {
+                        None
+                    }
                 }
                 _ => None,
             }
@@ -399,9 +768,9 @@ fn library_allowed_by_rules(
         .collect();
 
     // If every rule is a disallow, add a synthetic allow (default-allow)
-    let all_disallow = rules.iter().all(|r| {
-        r.get("action").and_then(|v| v.as_str()) == Some("disallow")
-    });
+    let all_disallow = rules
+        .iter()
+        .all(|r| r.get("action").and_then(|v| v.as_str()) == Some("disallow"));
     if all_disallow {
         results.push(Some(true));
     }
@@ -497,10 +866,7 @@ mod tests {
         let os = OsType::current();
         let classifier = native_classifier_for_os(os);
         let library_name = format!("org.lwjgl:lwjgl:3.4.1:{}", classifier);
-        let artifact_path = format!(
-            "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-{}.jar",
-            classifier
-        );
+        let artifact_path = format!("org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-{}.jar", classifier);
 
         let manifest = json!({
             "id": version_id,
@@ -552,6 +918,60 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 4,
+            force_overwrite_configs: false,
+            repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+            remediation_policy:
+                piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+        }
+    }
+
+    fn setup_spec_with_asset_hash(hash: &str) -> InstallSpec {
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let root = tmp.into_path();
+
+        let version_id = "1.20.1-test-short-hash".to_string();
+        let versions_dir = root.join("versions").join(&version_id);
+        let assets_indexes = root.join("assets").join("indexes");
+        let game_dir = root.join("instances").join("x");
+        std::fs::create_dir_all(&versions_dir).expect("create versions");
+        std::fs::create_dir_all(&assets_indexes).expect("create assets");
+        std::fs::create_dir_all(&game_dir).expect("create game dir");
+
+        let manifest = json!({
+            "id": version_id,
+            "assetIndex": { "id": "30" },
+            "libraries": []
+        });
+        std::fs::write(
+            assets_indexes.join("30.json"),
+            json!({
+                "objects": {
+                    "bad-object": { "hash": hash }
+                }
+            })
+            .to_string(),
+        )
+        .expect("write asset index");
+        std::fs::write(
+            versions_dir.join(format!("{}.json", version_id)),
+            serde_json::to_string(&manifest).expect("serialize"),
+        )
+        .expect("write manifest");
+        std::fs::write(versions_dir.join(format!("{}.jar", version_id)), "jar").expect("write jar");
+
+        InstallSpec {
+            version_id,
+            modloader: None,
+            modloader_version: None,
+            data_dir: root,
+            game_dir,
+            java_path: None,
+            dry_run: false,
+            concurrency: 4,
+            force_overwrite_configs: false,
+            repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+            remediation_policy:
+                piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
         }
     }
 
@@ -579,6 +999,20 @@ mod tests {
                 .iter()
                 .any(|i| i.artifact_class == "native-runtime"),
             "did not expect native-runtime issue, got: {:?}",
+            result.issues
+        );
+    }
+
+    #[test]
+    fn verify_handles_short_asset_hash_without_panicking() {
+        let spec = setup_spec_with_asset_hash("a");
+        let result = verify_instance_readiness(&spec).expect("verification");
+        assert!(
+            result
+                .issues
+                .iter()
+                .any(|i| i.artifact_class == "asset-object"),
+            "expected asset-object issue, got: {:?}",
             result.issues
         );
     }

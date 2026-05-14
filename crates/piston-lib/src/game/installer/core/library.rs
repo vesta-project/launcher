@@ -257,16 +257,68 @@ impl<'a> LibraryDownloader<'a> {
                         }
                     }
 
-                    download_to_path(
-                        client,
-                        &url,
-                        &full_path,
-                        lib.sha1.as_deref(),
-                        &NoopReporter {
-                            dry_run: reporter.is_dry_run(),
-                        },
-                    )
-                    .await?;
+                    // Download with exponential backoff retry.
+                    // Max 3 attempts with delays: 1s, 2s, 4s.
+                    //
+                    // TODO: Future enhancement — use HTTP Range requests for
+                    // true resume support.  reqwest supports this via
+                    // .header("Range", "bytes=<offset>-") on the request
+                    // builder, combined with checking the local file size
+                    // before retrying.
+                    const MAX_RETRIES: u32 = 3;
+                    let mut last_err: Option<anyhow::Error> = None;
+                    for attempt in 0..MAX_RETRIES {
+                        match download_to_path(
+                            client,
+                            &url,
+                            &full_path,
+                            lib.sha1.as_deref(),
+                            &NoopReporter {
+                                dry_run: reporter.is_dry_run(),
+                            },
+                        )
+                        .await
+                        {
+                            Ok(()) => {
+                                last_err = None;
+                                break;
+                            }
+                            Err(e) => {
+                                if attempt + 1 < MAX_RETRIES {
+                                    let delay_secs = 1u64 << attempt; // 1s, 2s, 4s
+                                    log::warn!(
+                                        "Library download failed (attempt {}/{}) for {}: {}. Retrying in {}s...",
+                                        attempt + 1,
+                                        MAX_RETRIES,
+                                        lib.name,
+                                        e,
+                                        delay_secs
+                                    );
+                                    tokio::time::sleep(std::time::Duration::from_secs(delay_secs))
+                                        .await;
+                                    if reporter.is_cancelled() {
+                                        return Err(anyhow::anyhow!("Installation cancelled by user"));
+                                    }
+                                } else {
+                                    log::error!(
+                                        "Library download failed after {} attempts for {}: {}",
+                                        MAX_RETRIES,
+                                        lib.name,
+                                        e
+                                    );
+                                    last_err = Some(e);
+                                }
+                            }
+                        }
+                    }
+
+                    // If all retries were exhausted, return the error so the
+                    // collector (below) can gather it while other downloads
+                    // continue.
+                    if let Some(e) = last_err {
+                        return Err(e);
+                    }
+
                     track_artifact_from_path(label, &full_path, None, Some(url)).await?;
 
                     // Update progress
