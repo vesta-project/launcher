@@ -240,11 +240,22 @@ impl Task for ResetInstanceTask {
 
 pub struct RepairInstanceTask {
     instance_id: i32,
+    scope: Option<String>,
 }
 
 impl RepairInstanceTask {
     pub fn new(instance_id: i32) -> Self {
-        Self { instance_id }
+        Self {
+            instance_id,
+            scope: None,
+        }
+    }
+
+    pub fn with_scope(instance_id: i32, scope: String) -> Self {
+        Self {
+            instance_id,
+            scope: Some(scope),
+        }
     }
 }
 
@@ -275,6 +286,7 @@ impl Task for RepairInstanceTask {
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let inst_id = self.instance_id;
+        let scope = self.scope.clone();
 
         Box::pin(async move {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
@@ -284,14 +296,298 @@ impl Task for RepairInstanceTask {
                 .find(inst_id)
                 .first::<Instance>(&mut conn)
                 .map_err(|e| format!("Instance not found: {}", e))?;
+            let app_handle = ctx.app_handle.clone();
 
-            ctx.update_description("Verifying and repairing all files...".to_string());
+            // Resolve repair scope
+            let repair_scope = match scope.as_deref() {
+                Some("versions") => "versions",
+                Some("libraries") => "libraries",
+                Some("resources") => "resources",
+                _ => "full",
+            };
 
-            // Reinstall task with hash verification already handled by piston-lib
-            let mut install_task = InstallInstanceTask::new(inst);
-            install_task.set_update_notification_title(false);
-            install_task.run(ctx).await?;
+            // Phase 1: Verification with progress
+            ctx.update_full(
+                5,
+                format!("Verifying instance integrity (scope: {})...", repair_scope),
+                Some(0),
+                Some(3),
+            );
 
+            let config_dir =
+                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+            let data_dir = config_dir.join("data");
+            let game_dir = inst
+                .game_directory
+                .as_ref()
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+            let version_id = inst.minecraft_version.clone();
+
+            let mut spec = piston_lib::game::installer::types::InstallSpec::new(
+                version_id,
+                data_dir,
+                game_dir.clone(),
+            );
+            spec.java_path = inst.java_path.as_ref().map(std::path::PathBuf::from);
+            // Pass modloader info so the verifier uses the correct manifest
+            // (e.g. fabric-loader-X-1.20.1 instead of vanilla 1.20.1)
+            spec.modloader = inst.modloader.as_deref().and_then(|m| match m {
+                "fabric" => Some(piston_lib::game::installer::types::ModloaderType::Fabric),
+                "quilt" => Some(piston_lib::game::installer::types::ModloaderType::Quilt),
+                "forge" => Some(piston_lib::game::installer::types::ModloaderType::Forge),
+                "neoforge" => Some(piston_lib::game::installer::types::ModloaderType::NeoForge),
+                _ => None,
+            });
+            spec.modloader_version = inst.modloader_version.clone();
+            spec.remediation_policy =
+                piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded;
+            spec.repair_scope = match repair_scope {
+                "versions" => piston_lib::game::installer::types::RepairScope::Versions,
+                "libraries" => piston_lib::game::installer::types::RepairScope::Libraries,
+                "resources" => piston_lib::game::installer::types::RepairScope::Resources,
+                _ => piston_lib::game::installer::types::RepairScope::Full,
+            };
+
+            // Run verification (blocking — may take a moment for SHA1 checks)
+            ctx.update_progress(20, Some(0), Some(3));
+            let verify_result = piston_lib::game::installer::verify_instance(&spec)
+                .map_err(|e| format!("Verification failed: {}", e))?;
+
+            log::info!(
+                "[RepairInstanceTask] Verification: ready={}, issues={}",
+                verify_result.ready,
+                verify_result.issues.len()
+            );
+
+            // Phase 2: If not ready, run installer to fix version/lib issues
+            if !verify_result.ready && repair_scope != "resources" {
+                ctx.update_full(
+                    30,
+                    "Repairing instance files...".to_string(),
+                    Some(1),
+                    Some(3),
+                );
+                let mut install_task = InstallInstanceTask::new(inst.clone());
+                install_task.set_update_notification_title(false);
+                install_task.run(ctx.clone()).await?;
+                ctx.update_progress(80, Some(1), Some(3));
+            } else if verify_result.ready {
+                ctx.update_full(
+                    50,
+                    "Instance files verified — no issues found.".to_string(),
+                    Some(2),
+                    Some(3),
+                );
+            }
+
+            // Phase 3: Modpack repair (if applicable)
+            let manifest_path = game_dir.join("modpack_manifest.json");
+            let mut repair_error: Option<String> = None;
+            if repair_scope == "full" || repair_scope == "resources" {
+                if manifest_path.exists() {
+                    log::info!(
+                        "[RepairInstanceTask] Found modpack manifest, running modpack repair"
+                    );
+                    ctx.update_full(
+                        85,
+                        "Repairing modpack files...".to_string(),
+                        Some(2),
+                        Some(3),
+                    );
+                    let repair_reporter: std::sync::Arc<
+                        dyn piston_lib::game::installer::types::ProgressReporter,
+                    > = std::sync::Arc::new(
+                        piston_lib::game::installer::types::SilentProgressReporter,
+                    );
+                    let resolver: std::sync::Arc<
+                        dyn piston_lib::game::installer::core::modpack_installer::ModpackResolver,
+                    > = std::sync::Arc::new(
+                        crate::tasks::installers::modpack::PistonModpackResolver::new(
+                            app_handle.clone(),
+                        ),
+                    );
+                    match piston_lib::game::installer::core::modpack_installer::ModpackInstaller::repair_modpack(
+                        &game_dir,
+                        false,
+                        repair_reporter,
+                        Some(resolver),
+                    ).await {
+                        Ok(_) => log::info!("[RepairInstanceTask] Modpack repair complete"),
+                        Err(e) => {
+                            log::warn!("[RepairInstanceTask] Modpack repair failed: {}", e);
+                            repair_error = Some(e.to_string());
+                        }
+                    }
+                } else if inst.modpack_id.is_some()
+                    && inst.modpack_version_id.is_some()
+                    && inst.modpack_platform.is_some()
+                {
+                    // Instance is linked to a modpack but no manifest exists.
+                    // Reconstruct the manifest from the modpack source.
+                    log::info!(
+                        "[RepairInstanceTask] No manifest found, but instance is linked to modpack {}/{} — reconstructing",
+                        inst.modpack_platform.as_deref().unwrap_or("?"),
+                        inst.modpack_id.as_deref().unwrap_or("?")
+                    );
+                    ctx.update_full(
+                        85,
+                        "Reconstructing modpack manifest...".to_string(),
+                        Some(2),
+                        Some(3),
+                    );
+
+                    // Download the modpack version ZIP and parse its manifest
+                    let version_id = inst.modpack_version_id.as_deref().unwrap_or("");
+                    let project_id = inst.modpack_id.as_deref().unwrap_or("");
+
+                    // Fetch download URL from ResourceManager
+                    let resource_manager = app_handle.state::<crate::resources::ResourceManager>();
+                    let platform_enum = match inst.modpack_platform.as_deref() {
+                        Some("modrinth") => crate::models::SourcePlatform::Modrinth,
+                        _ => crate::models::SourcePlatform::CurseForge,
+                    };
+
+                    match resource_manager
+                        .get_version(platform_enum, project_id, version_id)
+                        .await
+                    {
+                        Ok(version) => {
+                            // Download to persistent modpacks cache (same location as InstallModpackTask)
+                            let modpacks_dir =
+                                app_handle.path().app_cache_dir().unwrap().join("modpacks");
+                            let _ = std::fs::create_dir_all(&modpacks_dir);
+                            // Use deterministic name so repeated repairs reuse the cached file
+                            let file_stem = format!("{}-{}", project_id, version_id)
+                                .replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_");
+                            let zip_path = modpacks_dir.join(format!("{}.zip", file_stem));
+
+                            // Only download if not already cached
+                            if !zip_path.exists() {
+                                ctx.update_description(
+                                    "Downloading modpack version...".to_string(),
+                                );
+
+                                let client = reqwest::Client::new();
+                                let silent_reporter =
+                                    piston_lib::game::installer::types::SilentProgressReporter;
+                                if let Err(e) =
+                                    piston_lib::game::installer::core::downloader::download_to_path(
+                                        &client,
+                                        &version.download_url,
+                                        &zip_path,
+                                        Some(&version.hash),
+                                        &silent_reporter,
+                                    )
+                                    .await
+                                {
+                                    log::warn!("[RepairInstanceTask] Failed to download modpack version: {}", e);
+                                }
+                            }
+
+                            if zip_path.exists() {
+                                // Parse metadata and build manifest
+                                match piston_lib::game::modpack::parser::get_modpack_metadata(
+                                    &zip_path,
+                                ) {
+                                    Ok(metadata) => {
+                                        let manifest = piston_lib::game::modpack::manifest::ModpackManifest::from_install(
+                                            &metadata,
+                                            &[],
+                                            &[],
+                                            Some(zip_path.clone()),
+                                            inst.modpack_id.clone(),
+                                        );
+                                        // Persist so future repairs find it
+                                        let _ = manifest.persist(&game_dir);
+
+                                        // Now run the repair against the new manifest
+                                        let repair_reporter: std::sync::Arc<
+                                            dyn piston_lib::game::installer::types::ProgressReporter,
+                                        > = std::sync::Arc::new(
+                                            piston_lib::game::installer::types::SilentProgressReporter,
+                                        );
+                                        let resolver: std::sync::Arc<
+                                            dyn piston_lib::game::installer::core::modpack_installer::ModpackResolver,
+                                        > = std::sync::Arc::new(
+                                            crate::tasks::installers::modpack::PistonModpackResolver::new(
+                                                app_handle.clone(),
+                                            ),
+                                        );
+                                        match piston_lib::game::installer::core::modpack_installer::ModpackInstaller::repair_modpack(
+                                            &game_dir,
+                                            false,
+                                            repair_reporter,
+                                            Some(resolver),
+                                        ).await {
+                                            Ok(_) => log::info!("[RepairInstanceTask] Modpack repair complete"),
+                                            Err(e) => {
+                                                log::warn!("[RepairInstanceTask] Modpack repair failed: {}", e);
+                                                repair_error = Some(e.to_string());
+                                            }
+                                        }
+                                    }
+                                    Err(e) => {
+                                        log::warn!("[RepairInstanceTask] Failed to parse modpack metadata: {}", e);
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => {
+                            log::warn!(
+                                "[RepairInstanceTask] Failed to resolve modpack version: {}",
+                                e
+                            );
+                        }
+                    }
+                } else {
+                    log::info!(
+                        "[RepairInstanceTask] No modpack manifest at {:?} and instance is not linked — resource repair skipped",
+                        manifest_path
+                    );
+                }
+            }
+
+            let total_issues = verify_result.issues.len();
+            let final_desc = match (&repair_error, total_issues, verify_result.ready) {
+                (Some(err), _, _) => format!(
+                    "Repair completed with warnings: modpack repair failed — {}",
+                    err
+                ),
+                (None, 0, true) => "All files verified — no issues found.".to_string(),
+                (None, _, _) => format!(
+                    "Repair complete. {} issue(s) were found and fixed.",
+                    total_issues
+                ),
+            };
+            ctx.update_full(95, final_desc, Some(3), Some(3));
+
+            // Update instance status to installed (same as InstallInstanceTask)
+            if inst.id > 0 {
+                if let Err(e) = crate::commands::instances::update_installation_status(
+                    &app_handle,
+                    inst.id,
+                    "installed",
+                ) {
+                    log::error!("[RepairInstanceTask] Failed to update status: {}", e);
+                }
+
+                // Emit event so frontend refreshes the instance card
+                use tauri::Emitter;
+                match crate::commands::instances::get_instance(inst.id) {
+                    Ok(updated_instance) => {
+                        let _ = app_handle.emit("core://instance-installed", updated_instance);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[RepairInstanceTask] Failed to fetch instance payload: {}",
+                            e
+                        );
+                    }
+                }
+            }
+
+            ctx.update_progress(100, Some(3), Some(3));
             Ok(())
         })
     }
@@ -336,12 +632,11 @@ impl Task for DeleteInstanceTask {
         let instance_id = self.instance_id;
 
         Box::pin(async move {
-            log::info!(
-                "[delete_instance_task] start instance_id={}",
-                instance_id
-            );
+            log::info!("[delete_instance_task] start instance_id={}", instance_id);
             ctx.update_full(5, "Stopping watcher...".to_string(), Some(1), Some(5));
-            let watcher = ctx.app_handle.state::<crate::resources::watcher::ResourceWatcher>();
+            let watcher = ctx
+                .app_handle
+                .state::<crate::resources::watcher::ResourceWatcher>();
             if let Err(e) = tokio::time::timeout(
                 tokio::time::Duration::from_secs(5),
                 watcher.unwatch_instance(instance_id),
@@ -355,7 +650,12 @@ impl Task for DeleteInstanceTask {
                 );
             }
 
-            ctx.update_full(25, "Resolving instance details...".to_string(), Some(2), Some(5));
+            ctx.update_full(
+                25,
+                "Resolving instance details...".to_string(),
+                Some(2),
+                Some(5),
+            );
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl::*;
 
@@ -367,7 +667,12 @@ impl Task for DeleteInstanceTask {
             let game_dir = inst.game_directory.clone();
 
             if let Some(gd) = game_dir {
-                ctx.update_full(55, "Removing instance files...".to_string(), Some(3), Some(5));
+                ctx.update_full(
+                    55,
+                    "Removing instance files...".to_string(),
+                    Some(3),
+                    Some(5),
+                );
                 let gd_path = std::path::PathBuf::from(gd);
                 if gd_path.exists() {
                     tokio::task::spawn_blocking({
@@ -386,7 +691,12 @@ impl Task for DeleteInstanceTask {
                 }
             }
 
-            ctx.update_full(80, "Removing database references...".to_string(), Some(4), Some(5));
+            ctx.update_full(
+                80,
+                "Removing database references...".to_string(),
+                Some(4),
+                Some(5),
+            );
             conn.transaction::<_, diesel::result::Error, _>(|conn| {
                 diesel::delete(
                     crate::schema::installed_resource::dsl::installed_resource.filter(

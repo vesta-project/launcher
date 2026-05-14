@@ -1,8 +1,8 @@
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 
 use crate::models::instance::Instance;
 use crate::models::SourcePlatform;
@@ -28,9 +28,18 @@ pub struct InstallModpackTask {
     metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
 }
 
-struct PistonModpackResolver {
+pub(crate) struct PistonModpackResolver {
     app_handle: tauri::AppHandle,
     cf_cache: Arc<RwLock<HashMap<String, CachedCurseForgeResolution>>>,
+}
+
+impl PistonModpackResolver {
+    pub(crate) fn new(app_handle: tauri::AppHandle) -> Self {
+        Self {
+            app_handle,
+            cf_cache: Arc::new(RwLock::new(HashMap::new())),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -281,10 +290,7 @@ impl Task for InstallModpackTask {
                     .map_err(|e| e.to_string())?;
             }
 
-            let resolver = Arc::new(PistonModpackResolver {
-                app_handle: app_handle.clone(),
-                cf_cache: Arc::new(RwLock::new(HashMap::new())),
-            });
+            let resolver = Arc::new(PistonModpackResolver::new(app_handle.clone()));
 
             let java_path = instance.java_path.as_ref().map(PathBuf::from);
 
@@ -475,7 +481,8 @@ impl Task for InstallModpackTask {
                             let (project, version, subfolder) = if let Some(c) = cached {
                                 (c.project, c.version, c.subfolder)
                             } else {
-                                let pid_str = project_id.map(|id| id.to_string()).unwrap_or_default();
+                                let pid_str =
+                                    project_id.map(|id| id.to_string()).unwrap_or_default();
                                 let fid_str = file_id.to_string();
                                 let version = match rm
                                     .get_version(
@@ -500,7 +507,9 @@ impl Task for InstallModpackTask {
                                 };
                                 let subfolder = match project.resource_type {
                                     crate::models::resource::ResourceType::Mod => "mods",
-                                    crate::models::resource::ResourceType::ResourcePack => "resourcepacks",
+                                    crate::models::resource::ResourceType::ResourcePack => {
+                                        "resourcepacks"
+                                    }
                                     crate::models::resource::ResourceType::Shader => "shaderpacks",
                                     crate::models::resource::ResourceType::DataPack => "datapacks",
                                     crate::models::resource::ResourceType::World => "saves",
@@ -510,7 +519,8 @@ impl Task for InstallModpackTask {
                                 (project, version, subfolder)
                             };
 
-                            let local_path = game_dir_clone.join(subfolder).join(&version.file_name);
+                            let local_path =
+                                game_dir_clone.join(subfolder).join(&version.file_name);
                             if local_path.exists() {
                                 let meta = if let Ok(m) = std::fs::metadata(&local_path) {
                                     (

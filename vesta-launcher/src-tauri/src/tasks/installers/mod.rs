@@ -144,7 +144,11 @@ impl Task for InstallInstanceTask {
                 game_dir: game_dir.clone(),
                 java_path: instance.java_path.as_ref().map(PathBuf::from),
                 dry_run,
-                concurrency: 8, // TODO: Make this configurable in app settings
+                concurrency: 8,
+                force_overwrite_configs: false,
+                repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+                remediation_policy:
+                    piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
             };
 
             // Background task to handle pause/resume UI updates

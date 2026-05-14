@@ -1319,6 +1319,9 @@ pub async fn launch_instance(
         java_path: Some(std::path::PathBuf::from(&java_path_str)),
         dry_run: false,
         concurrency: 8,
+        force_overwrite_configs: false,
+        repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+        remediation_policy: piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
     };
     let preflight_report = piston_lib::game::installer::verify_instance(&verify_spec)
         .map_err(|e| format!("Launch preflight verification failed: {}", e))?;
@@ -1412,6 +1415,10 @@ pub async fn launch_instance(
                 java_path: Some(std::path::PathBuf::from(&java_path_str)),
                 dry_run: false,
                 concurrency: 8,
+                force_overwrite_configs: false,
+                repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+                remediation_policy:
+                    piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
             },
         )
         .map_err(|e| {
@@ -2157,6 +2164,7 @@ pub async fn repair_instance(
     app_handle: tauri::AppHandle,
     task_manager: tauri::State<'_, TaskManager>,
     instance_id: i32,
+    scope: Option<String>,
 ) -> Result<(), String> {
     // Set status to 'installing' so UI shows progress
     let _ =
@@ -2167,7 +2175,10 @@ pub async fn repair_instance(
         "installing",
     );
 
-    let task = RepairInstanceTask::new(instance_id);
+    let task = match scope {
+        Some(s) => RepairInstanceTask::with_scope(instance_id, s),
+        None => RepairInstanceTask::new(instance_id),
+    };
     let _ = task_manager.submit(Box::new(task)).await;
     Ok(())
 }
@@ -2219,7 +2230,7 @@ pub async fn resume_instance_operation(
     );
 
     match op {
-        "repair" => repair_instance(app_handle, task_manager, instance_id).await,
+        "repair" => repair_instance(app_handle, task_manager, instance_id, None).await,
         "hard-reset" => reset_instance(app_handle, task_manager, instance_id).await,
         "external-import" => {
             let source_game_directory =

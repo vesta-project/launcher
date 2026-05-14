@@ -175,6 +175,10 @@ impl Task for ImportResourceResyncTask {
                 java_path: target_instance.java_path.as_ref().map(PathBuf::from),
                 dry_run: false,
                 concurrency: 8,
+                force_overwrite_configs: false,
+                repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+                remediation_policy:
+                    piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
             };
 
             // Spawn blocking to avoid async Send issues with &InstallSpec
