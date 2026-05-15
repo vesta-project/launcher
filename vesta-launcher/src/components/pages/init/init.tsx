@@ -49,11 +49,9 @@ import SplashStep from "./steps/splash-step";
 import CreditsStep from "./steps/credits-step";
 import AuthStep from "./steps/auth-step";
 import LearnStep from "./steps/learn-step";
+import ThemeStep from "./steps/theme-step";
 
 // Placeholder step components until we build them in later chunks
-function ThemeStep(props: any) {
-	return <div class={styles["step-placeholder"]}>Theme Step (Chunk E)</div>;
-}
 function FirstInstanceStep(props: any) {
 	return <div class={styles["step-placeholder"]}>First Instance Step (Chunk F)</div>;
 }
