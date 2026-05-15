@@ -23,7 +23,9 @@ function StageCard(props: StageCardProps) {
 			style={typeof local.style === "string" ? local.style : (local.style as any)}
 			{...rest}
 		>
-			{c()}
+			<div class={styles["stage-card-content"]}>
+				{c()}
+			</div>
 		</div>
 	);
 }

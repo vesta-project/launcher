@@ -1,16 +1,10 @@
 import LogoIcon from "@assets/logo.svg";
 import Button from "@ui/button/button";
-import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import networkStore from "@stores/network";
-import { openExternal as openUrl } from "@utils/external-link";
-import { invoke } from "@tauri-apps/api/core";
 import { Motion } from "@motionone/solid";
-import { createSignal, onMount, Show } from "solid-js";
+import { createSignal, Show } from "solid-js";
 import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
-
-const PRIVACY_POLICY_URL =
-	"https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
 
 interface SplashStepProps {
 	goNext: () => Promise<void>;
@@ -18,35 +12,6 @@ interface SplashStepProps {
 }
 
 function SplashStep(props: SplashStepProps) {
-	const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
-	const [showTelemetry, setShowTelemetry] = createSignal(false);
-
-	onMount(() => {
-		void (async () => {
-			try {
-				const config = await invoke<any>("get_config");
-				setTelemetryEnabled(config.telemetry_enabled ?? true);
-			} catch (error) {
-				console.error("Failed to load telemetry preference:", error);
-			}
-		})();
-
-		const timer = setTimeout(() => setShowTelemetry(true), 1000);
-		return () => clearTimeout(timer);
-	});
-
-	const persistTelemetry = async (enabled: boolean) => {
-		setTelemetryEnabled(enabled);
-		try {
-			await invoke("update_config_field", {
-				field: "telemetry_enabled",
-				value: enabled,
-			});
-		} catch (error) {
-			console.error("Failed to persist telemetry preference:", error);
-		}
-	};
-
 	return (
 		<div class={styles["splash-step"]}>
 			<Motion
@@ -106,37 +71,6 @@ function SplashStep(props: SplashStepProps) {
 					</button>
 				</div>
 			</Motion>
-
-			<Show when={showTelemetry()}>
-				<Motion
-					initial={{ opacity: 0 }}
-					animate={{ opacity: 1 }}
-					transition={{ duration: DURATION.normal, easing: EASE.smooth }}
-				>
-					<div class={styles["splash-telemetry"]}>
-						<Switch
-							checked={telemetryEnabled()}
-							onCheckedChange={(checked: boolean) => void persistTelemetry(checked)}
-						>
-							<SwitchControl class={styles["splash-telemetry-switch"]}>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-						<p class={styles["splash-telemetry-text"]}>
-							Help us improve by sharing crash reports.{" "}
-							<a
-								href={PRIVACY_POLICY_URL}
-								onClick={(e) => {
-									e.preventDefault();
-									void openUrl(PRIVACY_POLICY_URL);
-								}}
-							>
-								Privacy Policy
-							</a>
-						</p>
-					</div>
-				</Motion>
-			</Show>
 		</div>
 	);
 }

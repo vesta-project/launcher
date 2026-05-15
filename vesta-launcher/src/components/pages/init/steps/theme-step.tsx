@@ -8,9 +8,8 @@ import {
 	getThemeById,
 	PRESET_THEMES,
 	type ThemeConfig,
-} from "../../../themes/presets";
-import { currentThemeConfig, saveThemeUpdate as persistThemeUpdate } from "../../../utils/config-sync";
-import ThemePreviewCard from "../components/theme-preview-card";
+} from "../../../../themes/presets";
+import { currentThemeConfig, saveThemeUpdate as persistThemeUpdate } from "../../../../utils/config-sync";
 import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
 
@@ -18,6 +17,48 @@ interface ThemeStepProps {
 	goNext: () => Promise<void>;
 	goBack: () => Promise<void>;
 	onThemeActivated: () => void;
+}
+
+function OnboardingThemeCard(props: {
+	theme: ThemeConfig;
+	isSelected: boolean;
+	onClick: () => void;
+}) {
+	const previewStyle = () => props.theme.style ?? "glass";
+
+	return (
+		<button
+			type="button"
+			class={styles["onboarding-theme-card"]}
+			classList={{ [styles["onboarding-theme-card--selected"]]: props.isSelected }}
+			onClick={props.onClick}
+			data-preview-style={previewStyle()}
+			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
+			style={{
+				"--preview-hue": props.theme.primaryHue,
+				"--preview-angle": props.theme.rotation ?? 135,
+			}}
+		>
+			<div class={styles["onboarding-theme-preview"]}>
+				<div class={styles["onboarding-theme-preview__bg"]} />
+				<div class={styles["onboarding-theme-preview__sidebar"]}>
+					<div class={styles["onboarding-theme-preview__dot"]} />
+					<div
+						class={styles["onboarding-theme-preview__dot"]}
+						classList={{ [styles["onboarding-theme-preview__dot--active"]]: true }}
+					/>
+					<div class={styles["onboarding-theme-preview__dot"]} />
+				</div>
+				<div class={styles["onboarding-theme-preview__main"]}>
+					<div class={styles["onboarding-theme-preview__card"]}>
+						<div class={styles["onboarding-theme-preview__line"]} />
+						<div class={styles["onboarding-theme-preview__line--short"]} />
+					</div>
+				</div>
+			</div>
+			<span class={styles["onboarding-theme-card__name"]}>{props.theme.name}</span>
+		</button>
+	);
 }
 
 function ThemeStep(props: ThemeStepProps) {
@@ -41,12 +82,13 @@ function ThemeStep(props: ThemeStepProps) {
 		}
 	});
 
-	const handlePresetSelect = async (id: string) => {
+	const handlePresetSelect = (id: string) => {
 		const theme = getThemeById(id);
 		if (!theme) return;
 
-		setIsPersisting(true);
 		setThemeId(id);
+		setExplicitThemeSelected(true);
+		setIsPersisting(true);
 
 		const newHue =
 			theme.allowHueChange === false
@@ -57,13 +99,14 @@ function ThemeStep(props: ThemeStepProps) {
 			setBackgroundHue(newHue);
 		}
 
-		applyTheme(
-			{ ...theme, primaryHue: newHue },
-			{ transition: "preset-switch" },
-		);
+		requestAnimationFrame(() => {
+			applyTheme(
+				{ ...theme, primaryHue: newHue },
+				{ transition: "preset-switch" },
+			);
+			props.onThemeActivated();
 
-		try {
-			await persistThemeUpdate({
+			persistThemeUpdate({
 				themeId: id,
 				primaryHue: newHue,
 				opacity: theme.opacity,
@@ -74,15 +117,13 @@ function ThemeStep(props: ThemeStepProps) {
 				borderWidth: theme.borderWidth,
 				backgroundOpacity: 25,
 				windowEffect: theme.windowEffect,
-			});
-			setExplicitThemeSelected(true);
-			props.onThemeActivated();
-		} catch (e) {
-			setExplicitThemeSelected(false);
-			console.error("Failed to persist selected onboarding theme:", e);
-		} finally {
-			setIsPersisting(false);
-		}
+			})
+				.then(() => setIsPersisting(false))
+				.catch((e) => {
+					setIsPersisting(false);
+					console.error("Failed to persist selected onboarding theme:", e);
+				});
+		});
 	};
 
 	const handleHueChange = async (values: number[]) => {
@@ -111,28 +152,30 @@ function ThemeStep(props: ThemeStepProps) {
 				<div class={styles["theme-header"]}>
 					<h2 class={styles["theme-title"]}>Make it yours.</h2>
 					<p class={styles["theme-subtitle"]}>
-						Pick a starting look for Vesta. You can always change this later.
+						Pick a starting look for Vesta.
 					</p>
 				</div>
 			</Motion>
 
-			<Motion
-				initial={{ opacity: 0, y: 16 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: DURATION.slow, delay: 0.1, easing: EASE.smooth }}
-			>
-				<div class={styles["theme-grid"]}>
-					<For each={PRESET_THEMES.filter((t) => t.id !== "custom")}>
-						{(theme) => (
-							<ThemePreviewCard
-								theme={theme}
-								isSelected={isSelected(theme.id)}
-								onClick={() => void handlePresetSelect(theme.id)}
-							/>
-						)}
-					</For>
-				</div>
-			</Motion>
+			<div class={styles["theme-scrollable"]}>
+				<Motion
+					initial={{ opacity: 0, y: 16 }}
+					animate={{ opacity: 1, y: 0 }}
+					transition={{ duration: DURATION.slow, delay: 0.1, easing: EASE.smooth }}
+				>
+					<div class={styles["theme-grid"]}>
+						<For each={PRESET_THEMES.filter((t) => t.id !== "custom")}>
+							{(theme) => (
+								<OnboardingThemeCard
+									theme={theme}
+									isSelected={isSelected(theme.id)}
+									onClick={() => void handlePresetSelect(theme.id)}
+								/>
+							)}
+						</For>
+					</div>
+				</Motion>
+			</div>
 
 			<Show when={explicitThemeSelected() && canChangeHue()}>
 				<Motion

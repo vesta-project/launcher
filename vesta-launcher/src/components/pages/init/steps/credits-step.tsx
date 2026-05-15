@@ -5,7 +5,7 @@ import ModrinthIcon from "@assets/modrinth.svg";
 import NeoForgeLogo from "@assets/neoforge-logo.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
 import { Motion } from "@motionone/solid";
-import { onCleanup, onMount } from "solid-js";
+import { createSignal, onCleanup, onMount } from "solid-js";
 import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
 
@@ -23,10 +23,12 @@ const PLATFORMS = [
 ];
 
 function CreditsStep(props: CreditsStepProps) {
+	const [canSkip, setCanSkip] = createSignal(false);
+
 	onMount(() => {
 		const autoAdvanceTimer = setTimeout(() => {
 			void props.goNext();
-		}, 3000);
+		}, 6000);
 
 		const handleKey = () => {
 			clearTimeout(autoAdvanceTimer);
@@ -34,17 +36,24 @@ function CreditsStep(props: CreditsStepProps) {
 		};
 
 		window.addEventListener("keydown", handleKey);
-		window.addEventListener("click", handleKey);
+
+		// Delay enabling click skip so the splash button click doesn't bubble here
+		const skipEnableTimer = setTimeout(() => setCanSkip(true), 50);
 
 		onCleanup(() => {
 			clearTimeout(autoAdvanceTimer);
+			clearTimeout(skipEnableTimer);
 			window.removeEventListener("keydown", handleKey);
-			window.removeEventListener("click", handleKey);
 		});
 	});
 
+	const handleClick = () => {
+		if (!canSkip()) return;
+		void props.goNext();
+	};
+
 	return (
-		<div class={styles["credits-step"]} onClick={() => void props.goNext()}>
+		<div class={styles["credits-step"]} onClick={handleClick}>
 			<Motion
 				initial={{ opacity: 0, y: 16 }}
 				animate={{ opacity: 1, y: 0 }}
@@ -90,7 +99,7 @@ function CreditsStep(props: CreditsStepProps) {
 				animate={{ opacity: 0.4 }}
 				transition={{ duration: DURATION.slow, delay: 0.8, easing: EASE.smooth }}
 			>
-				<p class={styles["credits-hint"]}>Press any key to continue</p>
+				<p class={styles["credits-hint"]}>Click or press any key to continue</p>
 			</Motion>
 		</div>
 	);

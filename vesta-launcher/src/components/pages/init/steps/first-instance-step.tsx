@@ -1,15 +1,15 @@
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import Button from "@ui/button/button";
-import { Combobox, ComboboxContent, ComboboxControl, ComboboxInput, ComboboxItem, ComboboxTrigger } from "@ui/combobox/combobox";
 import { TextFieldInput, TextFieldLabel, TextFieldRoot } from "@ui/text-field/text-field";
 import { createInstance, DEFAULT_ICONS, getStableIconId, installInstance, type Instance, type CreateInstanceData } from "@utils/instances";
 import { useMinecraftVersions } from "@stores/versions";
-import { getAllModloaders, getLoaderVersionsForGameVersion, getModloadersForGameVersion, resolveCompatibleVersionSelection } from "@utils/version-selection";
+import { getAllModloaders, getModloadersForGameVersion, resolveCompatibleVersionSelection } from "@utils/version-selection";
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
+import { openModpackInstallFromUrl } from "@stores/modpack-install";
 import { Motion, Presence } from "@motionone/solid";
 import { invoke } from "@tauri-apps/api/core";
-import { batch, createEffect, createMemo, createSignal, Match, Show, Switch } from "solid-js";
+import { batch, createEffect, createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
 import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
 
@@ -19,7 +19,19 @@ interface FirstInstanceStepProps {
 	navigate: (to: string, options?: { replace?: boolean }) => void;
 }
 
-type FirstInstanceMode = "menu" | "blank" | "import-file" | "import-url";
+type FirstInstanceMode = "menu" | "blank" | "modpack-picker";
+
+interface CuratedModpack {
+	id: string;
+	name: string;
+	author: string;
+	description: string;
+	iconUrl: string | null;
+	minecraftVersion: string;
+	modloader: string;
+	downloadCount: number;
+	platform: "modrinth" | "curseforge";
+}
 
 function FirstInstanceStep(props: FirstInstanceStepProps) {
 	const [mode, setMode] = createSignal<FirstInstanceMode>("menu");
@@ -29,9 +41,14 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	const [instanceName, setInstanceName] = createSignal("My First Instance");
 	const [selectedVersion, setSelectedVersion] = createSignal<string>("");
 	const [selectedModloader, setSelectedModloader] = createSignal<string>("vanilla");
-	const [selectedModloaderVersion, setSelectedModloaderVersion] = createSignal<string>("");
 	const [iconPath, setIconPath] = createSignal<string | null>(null);
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+
+	// Modpack picker state
+	const [modpacks, setModpacks] = createSignal<CuratedModpack[]>([]);
+	const [modpacksLoading, setModpacksLoading] = createSignal(false);
+	const [modpacksError, setModpacksError] = createSignal("");
+	const [installingModpackId, setInstallingModpackId] = createSignal<string | null>(null);
 
 	const { versions: metadata } = useMinecraftVersions();
 
@@ -86,29 +103,6 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 		}));
 	});
 
-	const availableLoaderVersions = createMemo(() => {
-		const version = selectedVersion();
-		const loader = selectedModloader();
-		const meta = metadata();
-		if (!version || !loader || loader === "vanilla" || !meta) return [];
-		return getLoaderVersionsForGameVersion(meta, version, loader);
-	});
-
-	const versionOptions = createMemo(() => {
-		const meta = metadata();
-		const loader = selectedModloader();
-		if (!meta) return [];
-		return meta.game_versions
-			.filter((v) => {
-				if (!v.stable) return false;
-				if (loader === "vanilla") return true;
-				return Object.keys(v.loaders).some(
-					(l) => l.toLowerCase() === loader.toLowerCase(),
-				);
-			})
-			.map((v) => v.id);
-	});
-
 	createEffect(() => {
 		const meta = metadata();
 		const version = selectedVersion();
@@ -118,7 +112,6 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 			metadata: meta,
 			minecraftVersion: version,
 			modloader: selectedModloader(),
-			modloaderVersion: selectedModloaderVersion(),
 			includeSnapshots: false,
 		});
 
@@ -129,11 +122,104 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 			if (resolved.modloader !== selectedModloader()) {
 				setSelectedModloader(resolved.modloader);
 			}
-			if (resolved.modloaderVersion !== selectedModloaderVersion()) {
-				setSelectedModloaderVersion(resolved.modloaderVersion);
-			}
 		});
 	});
+
+	const fetchCuratedModpacks = async () => {
+		setModpacksLoading(true);
+		setModpacksError("");
+		try {
+			// Search for popular modpacks on Modrinth
+			const response = await invoke<{ hits: Array<{
+				id: string;
+				name: string;
+				author: string;
+				summary: string;
+				icon_url: string | null;
+				download_count: number;
+			}>; total_hits: number }>("search_resources", {
+				platform: "modrinth",
+				query: {
+					text: null,
+					resource_type: "modpack",
+					offset: 0,
+					limit: 8,
+					game_version: null,
+					loader: null,
+					categories: null,
+					sort_by: "downloads",
+					sort_order: "desc",
+				},
+			});
+
+			const curated: CuratedModpack[] = response.hits.map((hit) => ({
+				id: hit.id,
+				name: hit.name,
+				author: hit.author,
+				description: hit.summary,
+				iconUrl: hit.icon_url,
+				minecraftVersion: "",
+				modloader: "",
+				downloadCount: hit.download_count,
+				platform: "modrinth",
+			}));
+
+			setModpacks(curated);
+		} catch (e) {
+			console.error("Failed to fetch curated modpacks:", e);
+			setModpacksError("Could not load modpacks. Please try again or create a blank instance.");
+		} finally {
+			setModpacksLoading(false);
+		}
+	};
+
+	const handleOpenModpackPicker = () => {
+		setMode("modpack-picker");
+		void fetchCuratedModpacks();
+	};
+
+	const handleInstallModpack = async (modpack: CuratedModpack) => {
+		setInstallingModpackId(modpack.id);
+		try {
+			// Fetch versions to get download URL
+			const versions = await invoke<Array<{
+				id: string;
+				version_number: string;
+				game_versions: string[];
+				loaders: string[];
+				download_url: string;
+				file_name: string;
+				release_type: "release" | "beta" | "alpha";
+			}>>("get_resource_versions", {
+				platform: modpack.platform,
+				projectId: modpack.id,
+			});
+
+			if (!versions || versions.length === 0) {
+				throw new Error("No versions found for this modpack");
+			}
+
+			// Find latest stable version
+			const latestVersion = versions.find((v) => v.release_type === "release") || versions[0];
+
+			// Complete onboarding and go home
+			await completeOnboarding();
+			props.navigate("/home", { replace: true });
+
+			// Open install dialog
+			openModpackInstallFromUrl(
+				latestVersion.download_url,
+				modpack.iconUrl || undefined,
+				modpack.id,
+				modpack.platform,
+			);
+		} catch (e) {
+			console.error("Failed to install modpack:", e);
+			setModpacksError(`Failed to install ${modpack.name}. Please try again.`);
+		} finally {
+			setInstallingModpackId(null);
+		}
+	};
 
 	const handleInstallBlank = async () => {
 		const name = instanceName().trim();
@@ -147,7 +233,6 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				minecraftVersion: version,
 				iconPath: iconPath() || undefined,
 				modloader: selectedModloader() === "vanilla" ? undefined : selectedModloader(),
-				modloaderVersion: selectedModloaderVersion() || undefined,
 				minMemory: 2048,
 				maxMemory: 4096,
 			};
@@ -158,7 +243,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				name,
 				minecraftVersion: version,
 				modloader: selectedModloader() === "vanilla" ? null : selectedModloader(),
-				modloaderVersion: selectedModloaderVersion() || null,
+				modloaderVersion: null,
 				javaPath: null,
 				javaArgs: null,
 				gameDirectory: null,
@@ -194,16 +279,12 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 			await installInstance(fullInstance);
 			await completeOnboarding();
+			props.navigate("/home", { replace: true });
 		} catch (error) {
 			console.error("[Onboarding] Installation failed:", error);
 		} finally {
 			setIsInstalling(false);
 		}
-	};
-
-	const handleBrowseModpacks = () => {
-		// Complete onboarding and navigate to home, then open resources
-		void completeOnboardingAndGoHome();
 	};
 
 	const handleSkip = async () => {
@@ -223,6 +304,12 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 		props.navigate("/home", { replace: true });
 	};
 
+	const formatDownloads = (count: number) => {
+		if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
+		if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`;
+		return String(count);
+	};
+
 	const menuOptions = [
 		{
 			id: "browse" as const,
@@ -234,7 +321,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 					<line x1="21" y1="21" x2="16.65" y2="16.65" />
 				</svg>
 			),
-			action: () => setMode("menu"),
+			action: () => handleOpenModpackPicker(),
 		},
 		{
 			id: "blank" as const,
@@ -303,6 +390,96 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 						</Motion>
 					</Match>
 
+					<Match when={mode() === "modpack-picker"}>
+						<Motion
+							initial={{ opacity: 0, y: 12 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -12 }}
+							transition={{ duration: DURATION.fast, easing: EASE.swift }}
+						>
+							<div class={styles["modpack-picker"]}>
+								<div class={styles["modpack-picker-header"]}>
+									<button
+										class={styles["first-instance-back"]}
+										onClick={() => setMode("menu")}
+									>
+										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+											<polyline points="15 18 9 12 15 6" />
+										</svg>
+										Back
+									</button>
+									<h3 class={styles["modpack-picker-title"]}>Popular Modpacks</h3>
+									<p class={styles["modpack-picker-subtitle"]}>
+										Hand-picked modpacks from the community
+									</p>
+								</div>
+
+								<Show when={modpacksLoading()}>
+									<div class={styles["modpack-picker-loading"]}>
+										<div class={styles["spinner--small"]} />
+										<span>Loading modpacks...</span>
+									</div>
+								</Show>
+
+								<Show when={modpacksError()}>
+									<div class={styles["modpack-picker-error"]}>
+										{modpacksError()}
+									</div>
+								</Show>
+
+								<div class={styles["modpack-grid"]}>
+									<For each={modpacks()}>
+										{(modpack) => (
+											<button
+												class={styles["modpack-card"]}
+												onClick={() => void handleInstallModpack(modpack)}
+												disabled={installingModpackId() !== null}
+											>
+												<div class={styles["modpack-card-icon"]}>
+													<Show
+														when={modpack.iconUrl}
+														fallback={
+															<div class={styles["modpack-card-icon-placeholder"]}>
+																<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+																	<rect x="3" y="3" width="18" height="18" rx="2" />
+																	<path d="M3 9h18" />
+																</svg>
+															</div>
+														}
+													>
+														<img
+															src={modpack.iconUrl!}
+															alt={modpack.name}
+															loading="lazy"
+														/>
+														</Show>
+												</div>
+												<div class={styles["modpack-card-info"]}>
+													<span class={styles["modpack-card-name"]}>{modpack.name}</span>
+													<span class={styles["modpack-card-author"]}>by {modpack.author}</span>
+													<span class={styles["modpack-card-desc"]}>{modpack.description}</span>
+													<span class={styles["modpack-card-downloads"]}>
+														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+															<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+															<polyline points="7 10 12 15 17 10" />
+															<line x1="12" y1="15" x2="12" y2="3" />
+														</svg>
+														{formatDownloads(modpack.downloadCount)} downloads
+													</span>
+												</div>
+												<Show when={installingModpackId() === modpack.id}>
+													<div class={styles["modpack-card-installing"]}>
+														<div class={styles["spinner--small"]} />
+													</div>
+												</Show>
+											</button>
+										)}
+									</For>
+								</div>
+							</div>
+						</Motion>
+					</Match>
+
 					<Match when={mode() === "blank"}>
 						<Motion
 							initial={{ opacity: 0, y: 12 }}
@@ -339,7 +516,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 												</TextFieldLabel>
 												<TextFieldInput
 													value={instanceName()}
-													onInput={(e) => setInstanceName(e.currentTarget.value)}
+													onInput={(e) => setInstanceName((e.target as HTMLInputElement).value)}
 													placeholder="Enter instance name..."
 													style={{ background: "var(--surface-sunken)" }}
 												/>
@@ -353,106 +530,11 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 													onChange={setSelectedModloader}
 												/>
 											</div>
-
-											<div class={styles["first-instance-form-row--compact"]}>
-												<div style={{ flex: 1 }}>
-													<label class={styles["first-instance-label"]}>
-														Minecraft Version
-													</label>
-												<Combobox
-													options={versionOptions()}
-													value={selectedVersion()}
-													onChange={setSelectedVersion}
-													placeholder="Select version..."
-													itemComponent={(itemProps) => (
-														<ComboboxItem item={itemProps.item}>
-															{itemProps.item.rawValue}
-														</ComboboxItem>
-													)}
-												>
-													<ComboboxControl
-														aria-label="Minecraft Version"
-														style={{ background: "var(--surface-sunken)" }}
-													>
-														<ComboboxInput />
-														<ComboboxTrigger />
-													</ComboboxControl>
-													<ComboboxContent />
-												</Combobox>
-												</div>
-
-												<Show
-													when={
-														selectedModloader() !== "vanilla" &&
-														availableLoaderVersions().length > 0
-													}
-												>
-													<div style={{ flex: 1 }}>
-														<label class={styles["first-instance-label"]}>
-															{selectedModloader()} Version
-														</label>
-														<Combobox
-															options={availableLoaderVersions().map((v) => v.version)}
-															value={selectedModloaderVersion()}
-															onChange={setSelectedModloaderVersion}
-															placeholder={`Select ${selectedModloader()} version...`}
-															itemComponent={(itemProps) => {
-																const versionInfo = availableLoaderVersions().find(
-																	(v) => v.version === itemProps.item.rawValue,
-																);
-																return (
-																	<ComboboxItem item={itemProps.item}>
-																		<div
-																			style={{
-																				display: "flex",
-																			"justify-content": "space-between",
-																				width: "100%",
-																				"align-items": "center",
-																				gap: "12px",
-																			}}
-																		>
-																			<span>{itemProps.item.rawValue}</span>
-																			<Show when={!versionInfo?.stable}>
-																				<span
-																					style={{
-																						"font-size": "10px",
-																						background: "var(--surface-raised)",
-																						padding: "2px 6px",
-																						"border-radius": "4px",
-																						opacity: 0.6,
-																					}}
-																				>
-																					Experimental
-																				</span>
-																			</Show>
-																		</div>
-																	</ComboboxItem>
-																);
-															}}
-														>
-															<ComboboxControl
-																aria-label="Loader Version"
-																style={{ background: "var(--surface-sunken)" }}
-															>
-																<ComboboxInput />
-																<ComboboxTrigger />
-															</ComboboxControl>
-															<ComboboxContent />
-														</Combobox>
-													</div>
-												</Show>
-											</div>
 										</div>
 									</div>
 								</div>
 
 								<div class={styles["first-instance-form-footer"]}>
-									<Button
-										variant="ghost"
-										onClick={() => setMode("menu")}
-									>
-										Back
-									</Button>
 									<Button
 										color="primary"
 										onClick={handleInstallBlank}

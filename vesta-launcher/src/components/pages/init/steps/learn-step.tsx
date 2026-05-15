@@ -1,4 +1,4 @@
-import { Motion, Presence } from "@motionone/solid";
+import { Motion } from "@motionone/solid";
 import { createSignal, For, Show, type JSX } from "solid-js";
 import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
@@ -78,7 +78,7 @@ const SLIDES: Slide[] = [
 					const x = 30 + i * 45;
 					const heights = [55, 45, 50, 40];
 					return (
-						<g key={name}>
+						<g>
 							<rect
 								x={x - 18}
 								y={100 - heights[i]}
@@ -162,28 +162,22 @@ function LearnStep(props: LearnStepProps) {
 			</div>
 
 			<div class={styles["learn-deck"]}>
-				<Presence exitBeforeEnter>
-					<Motion
-						key={currentSlide()}
-						initial={{ opacity: 0, x: xOffset() }}
-						animate={{ opacity: 1, x: 0 }}
-						exit={{ opacity: 0, x: -xOffset() }}
-						transition={{ duration: DURATION.normal, easing: EASE.smooth }}
-						style={{ "will-change": "transform, opacity" }}
-					>
-						<div class={styles["learn-slide"]}>
-							<div class={styles["learn-illustration-wrap"]}>
-								{SLIDES[currentSlide()].illustration}
-							</div>
-							<h3 class={styles["learn-slide-title"]}>
-								{SLIDES[currentSlide()].title}
-							</h3>
-							<p class={styles["learn-slide-body"]}>
-								{SLIDES[currentSlide()].body}
-							</p>
-						</div>
-					</Motion>
-				</Presence>
+				<Motion.div
+					class={styles["learn-slide"]}
+					initial={{ opacity: 0, x: xOffset() }}
+					animate={{ opacity: 1, x: 0 }}
+					transition={{ duration: DURATION.normal, easing: EASE.smooth }}
+				>
+					<div class={styles["learn-illustration-wrap"]}>
+						{SLIDES[currentSlide()].illustration}
+					</div>
+					<h3 class={styles["learn-slide-title"]}>
+						{SLIDES[currentSlide()].title}
+					</h3>
+					<p class={styles["learn-slide-body"]}>
+						{SLIDES[currentSlide()].body}
+					</p>
+				</Motion.div>
 			</div>
 
 			<div class={styles["learn-controls"]}>
@@ -210,9 +204,9 @@ function LearnStep(props: LearnStepProps) {
 								}}
 								aria-label={`Go to slide ${i() + 1}`}
 							/>
-							)}
-						</For>
-					</div>
+						)}
+					</For>
+				</div>
 
 				<Show
 					when={currentSlide() < SLIDES.length - 1}

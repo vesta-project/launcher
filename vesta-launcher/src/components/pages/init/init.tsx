@@ -2,7 +2,9 @@ import TitleBar from "@components/page-root/titlebar/titlebar";
 import { useNavigate } from "@solidjs/router";
 import { consumeInitBootstrapState } from "@utils/startup-bootstrap";
 import { useOs } from "@utils/os";
-import { Match, Switch as MatchSwitch, onMount, Show } from "solid-js";
+import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { openExternal as openUrl } from "@utils/external-link";
+import { createSignal, Match, Switch as MatchSwitch, onMount, Show } from "solid-js";
 import AtmosphereLayer from "./components/atmosphere-layer";
 import StageCard from "./components/stage-card";
 import StepTransition from "./components/step-transition";
@@ -196,8 +198,66 @@ function InitPage() {
 					</StepTransition>
 				</StageCard>
 			</div>
+			<TelemetryToggle show={flow.step() === ONBOARDING_STEP.SPLASH} />
 		</div>
 	);
 }
+
+function TelemetryToggle(props: { show: boolean }) {
+	const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
+	const [visible, setVisible] = createSignal(false);
+
+	onMount(() => {
+		void (async () => {
+			try {
+				const config = await invoke<any>("get_config");
+				setTelemetryEnabled(config.telemetry_enabled ?? true);
+			} catch (error) {
+				console.error("Failed to load telemetry preference:", error);
+			}
+		})();
+	});
+
+	const persistTelemetry = async (enabled: boolean) => {
+		setTelemetryEnabled(enabled);
+		try {
+			await invoke("update_config_field", {
+				field: "telemetry_enabled",
+				value: enabled,
+			});
+		} catch (error) {
+			console.error("Failed to persist telemetry preference:", error);
+		}
+	};
+
+	return (
+		<Show when={props.show}>
+			<div class={styles["init-telemetry"]}>
+				<Switch
+					checked={telemetryEnabled()}
+					onCheckedChange={(checked: boolean) => void persistTelemetry(checked)}
+				>
+					<SwitchControl class={styles["init-telemetry-switch"]}>
+						<SwitchThumb />
+					</SwitchControl>
+				</Switch>
+				<p class={styles["init-telemetry-text"]}>
+					Share crash and error reports.{" "}
+					<a
+						href={PRIVACY_POLICY_URL}
+						onClick={(e) => {
+							e.preventDefault();
+							void openUrl(PRIVACY_POLICY_URL);
+						}}
+					>
+						Privacy Policy
+					</a>
+				</p>
+			</div>
+		</Show>
+	);
+}
+
+
 
 export default InitPage;
