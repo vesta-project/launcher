@@ -48,11 +48,9 @@ function isValidStartupState(
 import SplashStep from "./steps/splash-step";
 import CreditsStep from "./steps/credits-step";
 import AuthStep from "./steps/auth-step";
+import LearnStep from "./steps/learn-step";
 
 // Placeholder step components until we build them in later chunks
-function LearnStep(props: any) {
-	return <div class={styles["step-placeholder"]}>Learn Step (Chunk D)</div>;
-}
 function ThemeStep(props: any) {
 	return <div class={styles["step-placeholder"]}>Theme Step (Chunk E)</div>;
 }
