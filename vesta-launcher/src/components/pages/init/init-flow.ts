@@ -1,62 +1,57 @@
-export const INIT_STEPS = {
-	WELCOME: 0,
-	GUIDE: 1,
-	LOGIN: 2,
-	JAVA: 3,
-	APPEARANCE: 4,
-	DATA_STORAGE: 5,
-	INSTALLATION: 6,
-	FINISHED: 7,
+export const ONBOARDING_STEP = {
+	SPLASH: 0,
+	CREDITS: 1,
+	AUTH: 2,
+	LEARN: 3,
+	THEME: 4,
+	FIRST_INSTANCE: 5,
+	COMPLETE: 6,
 } as const;
 
-export type InitStep = (typeof INIT_STEPS)[keyof typeof INIT_STEPS];
+export type OnboardingStep = (typeof ONBOARDING_STEP)[keyof typeof ONBOARDING_STEP];
 
-const MIN_INIT_STEP = INIT_STEPS.WELCOME;
-const MAX_INIT_STEP = INIT_STEPS.FINISHED;
+const MIN_STEP = ONBOARDING_STEP.SPLASH;
+const MAX_STEP = ONBOARDING_STEP.COMPLETE;
 
-export function normalizeInitStep(step: unknown): InitStep {
+export function normalizeOnboardingStep(step: unknown): OnboardingStep {
 	const numeric = Number(step);
 	if (!Number.isFinite(numeric)) {
-		return INIT_STEPS.WELCOME;
+		return ONBOARDING_STEP.SPLASH;
 	}
-
 	const truncated = Math.trunc(numeric);
-	if (truncated < MIN_INIT_STEP) {
-		return MIN_INIT_STEP;
+	if (truncated < MIN_STEP) {
+		return MIN_STEP;
 	}
-	if (truncated > MAX_INIT_STEP) {
-		return MAX_INIT_STEP;
+	if (truncated > MAX_STEP) {
+		return MAX_STEP;
 	}
-
-	return truncated as InitStep;
+	return truncated as OnboardingStep;
 }
 
-export function getNextInitStep(step: InitStep): InitStep {
-	if (step >= MAX_INIT_STEP) {
-		return MAX_INIT_STEP;
+export function getNextOnboardingStep(step: OnboardingStep): OnboardingStep {
+	if (step >= MAX_STEP) {
+		return MAX_STEP;
 	}
-	return (step + 1) as InitStep;
+	return (step + 1) as OnboardingStep;
 }
 
-export function getPreviousInitStep(step: InitStep): InitStep {
-	if (step <= MIN_INIT_STEP) {
-		return MIN_INIT_STEP;
+export function getPreviousOnboardingStep(step: OnboardingStep): OnboardingStep {
+	if (step <= MIN_STEP) {
+		return MIN_STEP;
 	}
-	return (step - 1) as InitStep;
+	return (step - 1) as OnboardingStep;
 }
 
-export function getCanonicalBackStep(step: InitStep, guideVisited: boolean): InitStep {
-	if (step === INIT_STEPS.LOGIN) {
-		return guideVisited ? INIT_STEPS.GUIDE : INIT_STEPS.WELCOME;
+export function getCanonicalBackStep(
+	step: OnboardingStep,
+	learnCompleted: boolean,
+): OnboardingStep {
+	if (step === ONBOARDING_STEP.AUTH) {
+		return learnCompleted ? ONBOARDING_STEP.LEARN : ONBOARDING_STEP.SPLASH;
 	}
-
-	return getPreviousInitStep(step);
+	return getPreviousOnboardingStep(step);
 }
 
-/**
- * Recover from legacy guest-mode state where setup_completed was written
- * while onboarding was still on early steps (welcome/guide/login).
- */
 export function shouldRecoverLegacyGuestCompletion(
 	setupCompleted: boolean,
 	setupStep: unknown,
@@ -64,28 +59,27 @@ export function shouldRecoverLegacyGuestCompletion(
 	if (!setupCompleted) {
 		return false;
 	}
-
-	return normalizeInitStep(setupStep) <= INIT_STEPS.LOGIN;
+	const normalized = normalizeOnboardingStep(setupStep);
+	// Legacy steps: WELCOME(0), GUIDE(1), LOGIN(2) map roughly to SPLASH(0), LEARN(3), AUTH(2).
+	// If setup is marked complete but step is very early, something is wrong.
+	return normalized <= ONBOARDING_STEP.AUTH;
 }
 
-interface InitAccountLike {
+interface OnboardingAccountLike {
 	is_expired?: boolean | null;
 	account_type?: string | null;
 }
 
 export function isGuestOrDemoAccountType(accountType?: string | null): boolean {
-	const normalizedType = String(accountType || "")
-		.trim()
-		.toLowerCase();
-	return normalizedType === "guest" || normalizedType === "demo";
+	const normalized = String(accountType || "").trim().toLowerCase();
+	return normalized === "guest" || normalized === "demo";
 }
 
 export function isSkippableAuthenticatedAccount(
-	account: InitAccountLike | null | undefined,
+	account: OnboardingAccountLike | null | undefined,
 ): boolean {
 	if (!account || account.is_expired) {
 		return false;
 	}
-
 	return !isGuestOrDemoAccountType(account.account_type);
 }
