@@ -1004,3 +1004,205 @@
     font-weight: 700;
     border-radius: 14px;
 }
+
+/* ============================================================
+   First Instance Step
+   ============================================================ */
+
+.first-instance-step {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 8px 0;
+    min-height: 360px;
+}
+
+.first-instance-menu {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.first-instance-header {
+    text-align: center;
+}
+
+.first-instance-title {
+    font-size: clamp(24px, 3.5vh, 32px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+    background: linear-gradient(160deg, #fff 20%, var(--primary) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.first-instance-subtitle {
+    font-size: clamp(13px, 1.8vh, 15px);
+    opacity: 0.5;
+    margin: 0;
+    font-weight: 500;
+}
+
+.first-instance-options {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    width: 100%;
+}
+
+@media (max-width: 640px) {
+    .first-instance-options {
+        grid-template-columns: 1fr;
+    }
+}
+
+.first-instance-option {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 28px 20px;
+    background: rgba(255, 255, 255, 0.03);
+    border: var(--border-width-subtle) solid var(--border-subtle);
+    border-radius: 16px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    color: var(--text-primary);
+    text-align: center;
+}
+
+.first-instance-option:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.15);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 40px -12px rgba(0, 0, 0, 0.3);
+}
+
+.first-instance-option-icon {
+    color: var(--primary);
+    opacity: 0.8;
+}
+
+.first-instance-option-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.first-instance-option-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.first-instance-option-desc {
+    font-size: 13px;
+    opacity: 0.5;
+    line-height: 1.4;
+}
+
+.first-instance-footer {
+    display: flex;
+    justify-content: center;
+    padding-top: 8px;
+}
+
+.first-instance-skip {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    opacity: 0.35;
+    transition: opacity 0.2s ease;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.first-instance-skip:hover {
+    opacity: 0.7;
+}
+
+/* Blank Instance Form */
+.first-instance-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.first-instance-form-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.first-instance-back {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: opacity 0.2s ease;
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+.first-instance-back:hover {
+    opacity: 0.8;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.first-instance-form-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+.first-instance-form-body {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.first-instance-form-row {
+    display: flex;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+.first-instance-form-row--compact {
+    display: flex;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.first-instance-form-fields {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.first-instance-label {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.5;
+    color: var(--text-primary);
+    margin-bottom: 6px;
+    display: block;
+}
+
+.first-instance-form-footer {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding-top: 8px;
+}

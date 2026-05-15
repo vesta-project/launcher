@@ -50,11 +50,9 @@ import CreditsStep from "./steps/credits-step";
 import AuthStep from "./steps/auth-step";
 import LearnStep from "./steps/learn-step";
 import ThemeStep from "./steps/theme-step";
+import FirstInstanceStep from "./steps/first-instance-step";
 
 // Placeholder step components until we build them in later chunks
-function FirstInstanceStep(props: any) {
-	return <div class={styles["step-placeholder"]}>First Instance Step (Chunk F)</div>;
-}
 
 function InitPage() {
 	const navigate = useNavigate();
