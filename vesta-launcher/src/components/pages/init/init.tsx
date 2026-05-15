@@ -45,13 +45,10 @@ function isValidStartupState(
 	);
 }
 
+import SplashStep from "./steps/splash-step";
+import CreditsStep from "./steps/credits-step";
+
 // Placeholder step components until we build them in later chunks
-function SplashStep(props: any) {
-	return <div class={styles["step-placeholder"]}>Splash Step (Chunk B)</div>;
-}
-function CreditsStep(props: any) {
-	return <div class={styles["step-placeholder"]}>Credits Step (Chunk B)</div>;
-}
 function AuthStep(props: any) {
 	return <div class={styles["step-placeholder"]}>Auth Step (Chunk C)</div>;
 }

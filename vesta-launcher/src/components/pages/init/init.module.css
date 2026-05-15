@@ -241,3 +241,208 @@
     font-size: 18px;
     opacity: 0.6;
 }
+
+/* ============================================================
+   Splash Step
+   ============================================================ */
+
+.splash-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 20px 0;
+}
+
+.splash-logo {
+    width: 72px;
+    height: 72px;
+    color: var(--text-primary);
+    opacity: 0.9;
+    animation: logo-float 5s ease-in-out infinite;
+}
+
+@keyframes logo-float {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+.splash-title {
+    font-size: clamp(40px, 6vh, 56px);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    margin: 0;
+    background: linear-gradient(160deg, #fff 20%, var(--primary) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.splash-subtitle {
+    font-size: clamp(15px, 2vh, 18px);
+    font-weight: 500;
+    opacity: 0.5;
+    margin: 0;
+    letter-spacing: 0.3px;
+}
+
+.splash-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    margin-top: 24px;
+    width: 100%;
+}
+
+.splash-primary-btn {
+    width: clamp(240px, 60%, 320px);
+    height: clamp(48px, 6vh, 56px);
+    font-size: clamp(15px, 2vh, 17px);
+    font-weight: 700;
+    border-radius: 14px;
+}
+
+.splash-offline-hint {
+    color: #ff5555;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.4;
+    margin: 0;
+}
+
+.splash-offline-hint span {
+    display: block;
+    font-weight: 400;
+    opacity: 0.8;
+    font-size: 11px;
+    margin-top: 4px;
+}
+
+.splash-guest-link {
+    background: none;
+    border: none;
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    opacity: 0.45;
+    transition: opacity 0.2s ease;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.splash-guest-link:hover {
+    opacity: 0.8;
+}
+
+.splash-telemetry {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 28px;
+    max-width: 420px;
+}
+
+.splash-telemetry-switch :global(.switch__control) {
+    border: none;
+    background: hsl(var(--color__primary-hue) 10% 24% / 0.78);
+}
+
+.splash-telemetry-switch :global(.switch__control[data-checked]) {
+    background: var(--accent-primary);
+}
+
+.splash-telemetry-text {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-primary);
+    opacity: 0.6;
+    text-align: left;
+}
+
+.splash-telemetry-text a {
+    color: var(--text-primary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+/* ============================================================
+   Credits Step
+   ============================================================ */
+
+.credits-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 20px;
+    padding: 20px 0;
+    cursor: pointer;
+}
+
+.credits-text {
+    font-size: clamp(16px, 2.2vh, 20px);
+    font-weight: 500;
+    line-height: 1.6;
+    opacity: 0.85;
+    margin: 0;
+    max-width: 480px;
+}
+
+.credits-subtext {
+    font-size: clamp(13px, 1.8vh, 15px);
+    line-height: 1.5;
+    opacity: 0.55;
+    margin: 0;
+    max-width: 440px;
+}
+
+.credits-logos {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 16px 24px;
+    margin-top: 8px;
+}
+
+.credits-logo-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.7;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.credits-logo-item:hover {
+    opacity: 1;
+    transform: translateY(-2px);
+}
+
+.credits-logo-item svg {
+    width: 28px;
+    height: 28px;
+}
+
+.credits-logo-item span {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+}
+
+.credits-hint {
+    font-size: 12px;
+    opacity: 0.35;
+    margin-top: 16px;
+    letter-spacing: 0.5px;
+}
