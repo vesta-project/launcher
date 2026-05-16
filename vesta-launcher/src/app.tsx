@@ -30,6 +30,7 @@ import {
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
+import { GlobalModpackInstallDialog } from "@stores/modpack-install";
 import { lazy, onCleanup, onMount } from "solid-js";
 
 const StandalonePageViewer = lazy(() => import("@components/page-viewer/standalone-page-viewer"));
@@ -529,6 +530,7 @@ function Root(props: ChildrenProp) {
 			{props.children}
 			<SessionExpiredDialog />
 			<DialogRoot />
+			<GlobalModpackInstallDialog />
 		</>
 	);
 }

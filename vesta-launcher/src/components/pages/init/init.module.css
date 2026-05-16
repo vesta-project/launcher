@@ -1582,30 +1582,25 @@
 
 .modpack-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
     width: 100%;
-}
-
-@media (max-width: 640px) {
-    .modpack-grid {
-        grid-template-columns: 1fr;
-    }
 }
 
 .modpack-card {
     all: unset;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: 14px;
-    padding: 14px;
+    gap: 10px;
+    padding: 16px 8px;
     background: rgba(255, 255, 255, 0.03);
     border: var(--border-width-subtle) solid var(--border-subtle);
     border-radius: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
     color: var(--text-primary);
-    position: relative;
+    text-align: center;
 }
 
 .modpack-card:hover:not(:disabled) {
@@ -1620,9 +1615,9 @@
 }
 
 .modpack-card-icon {
-    width: 48px;
-    height: 48px;
-    border-radius: 10px;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
     overflow: hidden;
     flex-shrink: 0;
     background: rgba(255, 255, 255, 0.05);
@@ -1646,52 +1641,106 @@
     opacity: 0.3;
 }
 
-.modpack-card-info {
+.modpack-card-name {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.3;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    max-width: 100%;
+}
+
+/* ============================================================
+   Modpack Detail
+   ============================================================ */
+
+.modpack-detail {
     display: flex;
     flex-direction: column;
-    gap: 3px;
-    min-width: 0;
-    flex: 1;
+    gap: 16px;
+    align-items: center;
+    text-align: center;
+    position: relative;
 }
 
-.modpack-card-name {
-    font-size: 14px;
-    font-weight: 700;
-    line-height: 1.3;
+/* Back button pinned to top-left, outside the centered flow */
+.modpack-detail > .first-instance-back {
+    align-self: flex-start;
+    margin-bottom: 4px;
+}
+
+.modpack-detail-hero {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.modpack-detail-icon {
+    width: 80px;
+    height: 80px;
+    border-radius: 18px;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    background: rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
-.modpack-card-author {
-    font-size: 12px;
+.modpack-detail-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.modpack-detail-name {
+    font-size: 22px;
+    font-weight: 800;
+    margin: 0;
+    color: var(--text-primary);
+    letter-spacing: -0.02em;
+}
+
+.modpack-detail-author {
+    font-size: 14px;
+    opacity: 0.5;
+    margin: 0;
+    font-weight: 500;
+}
+
+.modpack-detail-desc {
+    font-size: 14px;
+    opacity: 0.6;
+    line-height: 1.5;
+    max-width: 400px;
+    margin: 0;
+}
+
+.modpack-detail-meta {
+    display: flex;
+    align-items: center;
+    font-size: 13px;
     opacity: 0.5;
     font-weight: 500;
 }
 
-.modpack-card-desc {
-    font-size: 12px;
-    opacity: 0.4;
-    line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-}
-
-.modpack-card-downloads {
-    display: flex;
+.modpack-detail-meta span {
+    display: inline-flex;
     align-items: center;
-    gap: 4px;
-    font-size: 11px;
-    opacity: 0.4;
-    font-weight: 500;
+    gap: 6px;
 }
 
-.modpack-card-installing {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
+.modpack-detail-meta svg {
+    opacity: 0.7;
+    flex-shrink: 0;
+}
+
+.modpack-detail-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    padding-top: 4px;
+    width: 100%;
 }

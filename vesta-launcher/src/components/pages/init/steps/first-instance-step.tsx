@@ -17,7 +17,7 @@ interface FirstInstanceStepProps {
 	navigate: (to: string, options?: { replace?: boolean }) => void;
 }
 
-type FirstInstanceMode = "menu" | "blank" | "modpack-picker";
+	type FirstInstanceMode = "menu" | "blank" | "modpack-picker" | "modpack-detail";
 
 interface CuratedModpack {
 	id: string;
@@ -47,6 +47,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	const [modpacksLoading, setModpacksLoading] = createSignal(false);
 	const [modpacksError, setModpacksError] = createSignal("");
 	const [installingModpackId, setInstallingModpackId] = createSignal<string | null>(null);
+	const [selectedModpack, setSelectedModpack] = createSignal<CuratedModpack | null>(null);
 
 	const { versions: metadata } = useMinecraftVersions();
 
@@ -141,7 +142,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 					text: null,
 					resource_type: "modpack",
 					offset: 0,
-					limit: 8,
+					limit: 10,
 					game_version: null,
 					loader: null,
 					categories: null,
@@ -174,6 +175,11 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	const handleOpenModpackPicker = () => {
 		setMode("modpack-picker");
 		void fetchCuratedModpacks();
+	};
+
+	const handleSelectModpack = (modpack: CuratedModpack) => {
+		setSelectedModpack(modpack);
+		setMode("modpack-detail");
 	};
 
 	const handleInstallModpack = async (modpack: CuratedModpack) => {
@@ -414,7 +420,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 							{(modpack) => (
 								<button
 									class={styles["modpack-card"]}
-									onClick={() => void handleInstallModpack(modpack)}
+									onClick={() => handleSelectModpack(modpack)}
 									disabled={installingModpackId() !== null}
 								>
 									<div class={styles["modpack-card-icon"]}>
@@ -422,11 +428,11 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 											when={modpack.iconUrl}
 											fallback={
 												<div class={styles["modpack-card-icon-placeholder"]}>
-													<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-													<rect x="3" y="3" width="18" height="18" rx="2" />
-													<path d="M3 9h18" />
-												</svg>
-											</div>
+													<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+														<rect x="3" y="3" width="18" height="18" rx="2" />
+														<path d="M3 9h18" />
+													</svg>
+												</div>
 											}
 										>
 											<img
@@ -436,29 +442,86 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 											/>
 											</Show>
 									</div>
-									<div class={styles["modpack-card-info"]}>
-										<span class={styles["modpack-card-name"]}>{modpack.name}</span>
-										<span class={styles["modpack-card-author"]}>by {modpack.author}</span>
-										<span class={styles["modpack-card-desc"]}>{modpack.description}</span>
-										<span class={styles["modpack-card-downloads"]}>
-											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-												<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-												<polyline points="7 10 12 15 17 10" />
-												<line x1="12" y1="15" x2="12" y2="3" />
-											</svg>
-											{formatDownloads(modpack.downloadCount)} downloads
-										</span>
-									</div>
-									<Show when={installingModpackId() === modpack.id}>
-										<div class={styles["modpack-card-installing"]}>
-											<div class={styles["spinner--small"]} />
-										</div>
-									</Show>
+									<span class={styles["modpack-card-name"]}>{modpack.name}</span>
 								</button>
 							)}
 						</For>
 					</div>
 				</div>
+			</Show>
+
+			<Show when={mode() === "modpack-detail" && selectedModpack()} keyed>
+				{(modpack) => (
+					<div class={`${styles["modpack-detail"]} ${styles["panel--enter"]}`}>
+						<button
+							class={styles["first-instance-back"]}
+							onClick={() => setMode("modpack-picker")}
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+								<polyline points="15 18 9 12 15 6" />
+							</svg>
+							Back
+						</button>
+
+						<div class={styles["modpack-detail-hero"]}>
+							<div class={styles["modpack-detail-icon"]}>
+								<Show
+									when={modpack.iconUrl}
+									fallback={
+										<div class={styles["modpack-card-icon-placeholder"]}>
+											<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+												<rect x="3" y="3" width="18" height="18" rx="2" />
+												<path d="M3 9h18" />
+											</svg>
+										</div>
+									}
+								>
+									<img
+										src={modpack.iconUrl!}
+										alt={modpack.name}
+										loading="lazy"
+									/>
+								</Show>
+							</div>
+							<h3 class={styles["modpack-detail-name"]}>{modpack.name}</h3>
+							<p class={styles["modpack-detail-author"]}>by {modpack.author}</p>
+						</div>
+
+						<p class={styles["modpack-detail-desc"]}>{modpack.description}</p>
+
+						<div class={styles["modpack-detail-meta"]}>
+							<span>
+								<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+									<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+									<polyline points="7 10 12 15 17 10" />
+									<line x1="12" y1="15" x2="12" y2="3" />
+								</svg>
+								{formatDownloads(modpack.downloadCount)} downloads
+							</span>
+						</div>
+
+						<div class={styles["modpack-detail-actions"]}>
+							<Button
+								color="primary"
+								size="lg"
+								onClick={() => void handleInstallModpack(modpack)}
+								disabled={installingModpackId() !== null}
+							>
+								<Show
+									when={installingModpackId() !== modpack.id}
+									fallback={
+										<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+											<div class={styles["spinner--small"]} />
+											Installing...
+										</div>
+									}
+								>
+									Install Modpack
+								</Show>
+							</Button>
+						</div>
+					</div>
+				)}
 			</Show>
 
 			<Show when={mode() === "blank"} keyed>
