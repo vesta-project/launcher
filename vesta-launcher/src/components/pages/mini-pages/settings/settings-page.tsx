@@ -35,6 +35,7 @@ import {
   currentThemeConfig,
   onConfigUpdate,
   saveThemeUpdate as persistThemeUpdate,
+  updateThemeConfigLocal,
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import {
@@ -52,6 +53,7 @@ import {
 import { createStore, reconcile } from "solid-js/store";
 import {
   applyTheme,
+  DEFAULT_UI_CHROME_MODE,
   type GradientHarmony,
   getAllThemes,
   getSupportedWindowEffects,
@@ -59,13 +61,17 @@ import {
   isBuiltinThemeId,
   loadWindowEffectCapabilities,
   normalizeStyleMode,
+  normalizeUiChromeMode,
   normalizeWindowEffectForCurrentOS,
   PRESET_THEMES,
   parseThemeData,
+  resolveUiChromeMode,
   removeCustomTheme,
+  setUiChromeModeInThemeData,
   type StyleMode,
   setCustomThemes,
   type ThemeConfig,
+  type UiChromeMode,
   type ThemeVariableValue,
   upsertCustomTheme,
   validateTheme,
@@ -279,6 +285,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     normalizeWindowEffectForCurrentOS(
       currentThemeConfig.theme_window_effect || "none",
     ),
+  );
+  const [uiChromeMode, setUiChromeMode] = createSignal<UiChromeMode>(
+    resolveUiChromeMode(initialThemeData.uiChromeMode),
   );
   const [windowEffectOptions, setWindowEffectOptions] = createSignal<string[]>(
     getSupportedWindowEffects(),
@@ -743,6 +752,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
               normalizeWindowEffectForCurrentOS(themeData.windowEffect),
             );
           }
+          setUiChromeMode(resolveUiChromeMode(themeData.uiChromeMode));
           if (themeData.userVariables)
             setUserVariables(reconcile(themeData.userVariables));
         }
@@ -851,6 +861,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
               setWindowEffect(
                 normalizeWindowEffectForCurrentOS(themeData.windowEffect),
               );
+            }
+            const nextUiChromeMode = resolveUiChromeMode(themeData.uiChromeMode);
+            if (nextUiChromeMode !== untrack(uiChromeMode)) {
+              setUiChromeMode(nextUiChromeMode);
             }
 
             if (themeData.userVariables) {
@@ -1028,6 +1042,18 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
       setWindowEffect(normalizedEffect);
     });
     saveThemeUpdate({ windowEffect: normalizedEffect });
+  };
+
+  const handleUiChromeModeChange = (mode: UiChromeMode) => {
+    const nextMode = normalizeUiChromeMode(mode) ?? DEFAULT_UI_CHROME_MODE;
+    if (nextMode === uiChromeMode()) return;
+
+    setUiChromeMode(nextMode);
+    updateThemeConfigLocal(
+      "theme_data",
+      setUiChromeModeInThemeData(currentThemeConfig.theme_data, nextMode),
+    );
+    saveThemeUpdate({ uiChromeMode: nextMode });
   };
 
   const handleGradientTypeChange = (type: "linear" | "radial") => {
@@ -1240,6 +1266,10 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     const activeWEffect = normalizeWindowEffectForCurrentOS(
       overrides.windowEffect ?? windowEffect(),
     );
+    const activeUiChromeMode = resolveUiChromeMode(
+      overrides.uiChromeMode,
+      uiChromeMode(),
+    );
     const activeUserVars = overrides.userVariables ?? userVariablesSnapshot();
 
     // 2. Map frontend terms to central store persistence terminology
@@ -1259,6 +1289,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
       borderWidth: activeBWidth,
       backgroundOpacity: activeBgOp,
       windowEffect: activeWEffect,
+      uiChromeMode: activeUiChromeMode,
       customCss: overrides.customCss ?? currentTheme?.customCss,
       allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
       allowStyleChange:
@@ -1285,6 +1316,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         borderWidth: activeBWidth,
         backgroundOpacity: activeBgOp,
         windowEffect: activeWEffect,
+        uiChromeMode: activeUiChromeMode,
         allowHueChange:
           overrides.allowHueChange ?? currentTheme?.allowHueChange,
         allowStyleChange:
@@ -1348,6 +1380,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         borderWidth: borderThickness(),
         backgroundOpacity: backgroundOpacity(),
         windowEffect: windowEffect(),
+        uiChromeMode: uiChromeMode(),
         userVariables: activeUserVars,
       });
       applyTheme(themeToApply);
@@ -1785,6 +1818,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
                 handleBorderThicknessChange={handleBorderThicknessChange}
                 backgroundOpacity={backgroundOpacity()}
                 handleBackgroundOpacityChange={handleBackgroundOpacityChange}
+                uiChromeMode={uiChromeMode()}
+                handleUiChromeModeChange={handleUiChromeModeChange}
                 windowEffect={windowEffect()}
                 windowEffectOptions={windowEffectOptions()}
                 handleWindowEffectChange={handleWindowEffectChange}
