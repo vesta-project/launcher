@@ -58,9 +58,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 	const launcherImport = useLauncherImport({
 		selectedLauncherFromQuery: () => null,
-		onImportSuccess: () => {
-			void completeOnboarding();
-			props.navigate("/home", { replace: true });
+		onImportSuccess: async () => {
+			await completeOnboarding();
+			await props.goNext();
 		},
 	});
 
@@ -231,9 +231,9 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 			// Find latest stable version
 			const latestVersion = versions.find((v) => v.release_type === "release") || versions[0];
 
-			// Complete onboarding and go home
+			// Complete onboarding and go to finish step
 			await completeOnboarding();
-			props.navigate("/home", { replace: true });
+			await props.goNext();
 
 			// Open install dialog
 			openModpackInstallFromUrl(
