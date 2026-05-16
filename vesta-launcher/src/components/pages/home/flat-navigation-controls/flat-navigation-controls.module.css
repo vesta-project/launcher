@@ -1,0 +1,52 @@
+.flat-navigation-controls {
+	grid-column: 2 / 3;
+	grid-row: 1 / 2;
+	align-self: center;
+	justify-self: start;
+	z-index: 150;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	margin-left: 12px;
+	pointer-events: auto;
+}
+
+.flat-navigation-controls__button {
+	width: 24px;
+	height: 24px;
+	border: 0;
+	border-radius: 5px;
+	background: hsl(0deg 0% 100% / 6%);
+	color: var(--text-primary);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	cursor: pointer;
+	opacity: 0.78;
+	transition:
+		background 0.18s ease,
+		opacity 0.18s ease,
+		transform 0.12s ease;
+}
+
+.flat-navigation-controls__button:hover:not(:disabled) {
+	background: hsl(var(--hue-secondary) 70% 46% / 22%);
+	opacity: 1;
+}
+
+.flat-navigation-controls__button:active:not(:disabled) {
+	transform: translateY(1px);
+}
+
+.flat-navigation-controls__button:disabled {
+	cursor: not-allowed;
+	opacity: 0.28;
+}
+
+.flat-navigation-controls__button svg {
+	width: 13px;
+	height: 13px;
+	display: block;
+	fill: currentColor;
+}

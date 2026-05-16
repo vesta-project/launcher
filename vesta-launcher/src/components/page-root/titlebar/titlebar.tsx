@@ -3,10 +3,8 @@ import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
 import { WindowControls } from "@tauri-controls-v2/solid";
 import { ACCOUNT_TYPE_GUEST, type Account, getActiveAccount } from "@utils/auth";
-import { getOsType } from "@utils/os";
-import { createResource, createSignal, Show } from "solid-js";
+import { createResource, Show } from "solid-js";
 import NetworkPill from "./network-pill";
-import { PageOptionsMenu } from "./page-options-menu";
 import styles from "./titlebar.module.css";
 
 interface TitleBarProps {
@@ -14,6 +12,7 @@ interface TitleBarProps {
 	hideHelp?: boolean;
 	class?: string;
 	os: string;
+	sectionTitle?: string;
 }
 
 function TitleBar(props: TitleBarProps) {
@@ -52,7 +51,14 @@ function TitleBar(props: TitleBarProps) {
 			</Show>
 			<div class={styles["titlebar__grab"]} data-tauri-drag-region={true}>
 				<div data-tauri-drag-region={true} class={styles["titlebar__content"]}>
-					<span data-tauri-drag-region={true}>Vesta Launcher {version() ? `v${version()}` : "..."}</span>
+					<span data-tauri-drag-region={true} class={styles["titlebar__brand"]}>
+						Vesta Launcher {version() ? `v${version()}` : "..."}
+					</span>
+					<Show when={props.sectionTitle}>
+						<span data-tauri-drag-region={true} class={styles["titlebar__section"]}>
+							{props.sectionTitle}
+						</span>
+					</Show>
 					<Show when={activeAccount()?.account_type === ACCOUNT_TYPE_GUEST}>
 						<div
 							class={styles["guest-pill"]}
