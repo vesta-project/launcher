@@ -10,7 +10,6 @@ import {
   type AuthStage,
 } from "@utils/auth";
 import { invoke } from "@tauri-apps/api/core";
-import { Motion, Presence } from "@motionone/solid";
 import {
   createSignal,
   Match,
@@ -19,7 +18,6 @@ import {
   Show,
   Switch,
 } from "solid-js";
-import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
 
 interface AuthStepProps {
@@ -172,172 +170,148 @@ function AuthStep(props: AuthStepProps) {
 
   return (
     <div class={styles["auth-step"]}>
-      <Motion
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: DURATION.normal, easing: EASE.smooth }}
-      >
-        <div class={styles["auth-header"]}>
-          <h2 class={styles["auth-title"]}>Sign in to Minecraft</h2>
-          <p class={styles["auth-subtitle"]}>
-            Use your Microsoft account to play online.
-          </p>
-        </div>
-      </Motion>
+      <div class={`${styles["auth-header"]} ${styles["fade-up--enter"]}`}>
+        <h2 class={styles["auth-title"]}>Sign in to Minecraft</h2>
+        <p class={styles["auth-subtitle"]}>
+          Use your Microsoft account to play online.
+        </p>
+      </div>
 
       <div class={styles["auth-body"]}>
-        <Presence exitBeforeEnter>
-          <Show when={!isAuthenticating()}>
-            <Motion
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: DURATION.fast, easing: EASE.swift }}
+        <Show when={!isAuthenticating()} keyed>
+          <div class={`${styles["auth-idle"]} ${styles["panel--enter"]}`}>
+            <Show
+              when={!networkStore.isOffline()}
+              fallback={
+                <div class={styles["auth-offline-box"]}>
+                  <svg
+                    width="40"
+                    height="40"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#ff5555"
+                    stroke-width="2"
+                  >
+                    <line x1="1" y1="1" x2="23" y2="23" />
+                    <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.5" />
+                    <path d="M5 12.5a10.94 10.94 0 0 1 5.17-2.39" />
+                    <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
+                    <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+                    <line x1="12" y1="20" x2="12.01" y2="20" />
+                  </svg>
+                  <p class={styles["auth-offline-title"]}>
+                    No internet connection
+                  </p>
+                  <p class={styles["auth-offline-desc"]}>
+                    A connection is required to authenticate with Microsoft.
+                  </p>
+                </div>
+              }
             >
-              <div class={styles["auth-idle"]}>
+              <Button
+                variant="ghost"
+                size="lg"
+                onClick={handleLogin}
+                disabled={isStartingAuth()}
+                class={styles["auth-ms-btn"]}
+              >
                 <Show
-                  when={!networkStore.isOffline()}
+                  when={!isStartingAuth()}
                   fallback={
-                    <div class={styles["auth-offline-box"]}>
-                      <svg
-                        width="40"
-                        height="40"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#ff5555"
-                        stroke-width="2"
-                      >
-                        <line x1="1" y1="1" x2="23" y2="23" />
-                        <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.5" />
-                        <path d="M5 12.5a10.94 10.94 0 0 1 5.17-2.39" />
-                        <path d="M10.71 5.05A16 16 0 0 1 22.58 9" />
-                        <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
-                        <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
-                        <line x1="12" y1="20" x2="12.01" y2="20" />
-                      </svg>
-                      <p class={styles["auth-offline-title"]}>
-                        No internet connection
-                      </p>
-                      <p class={styles["auth-offline-desc"]}>
-                        A connection is required to authenticate with Microsoft.
-                      </p>
+                    <div class={styles["auth-spinner-inline"]}>
+                      <div class={styles["spinner--small"]} />
+                      <span>Connecting...</span>
                     </div>
                   }
                 >
-                  <Button
-                    variant="ghost"
-                    size="lg"
-                    onClick={handleLogin}
-                    disabled={isStartingAuth()}
-                    class={styles["auth-ms-btn"]}
+                  <svg
+                    width="22"
+                    height="22"
+                    viewBox="0 0 23 23"
+                    class={styles["auth-ms-icon"]}
                   >
-                    <Show
-                      when={!isStartingAuth()}
-                      fallback={
-                        <div class={styles["auth-spinner-inline"]}>
-                          <div class={styles["spinner--small"]} />
-                          <span>Connecting...</span>
-                        </div>
-                      }
-                    >
-                      <svg
-                        width="22"
-                        height="22"
-                        viewBox="0 0 23 23"
-                        class={styles["auth-ms-icon"]}
-                      >
-                        <path fill="#f35325" d="M1 1h10v10H1z" />
-                        <path fill="#81bc06" d="M12 1h10v10H12z" />
-                        <path fill="#05a6f0" d="M1 12h10v10H1z" />
-                        <path fill="#ffba08" d="M12 12h10v10H12z" />
-                      </svg>
-                      Login with Microsoft
-                    </Show>
-                  </Button>
+                    <path fill="#f35325" d="M1 1h10v10H1z" />
+                    <path fill="#81bc06" d="M12 1h10v10H12z" />
+                    <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                    <path fill="#ffba08" d="M12 12h10v10H12z" />
+                  </svg>
+                  Login with Microsoft
                 </Show>
+              </Button>
+            </Show>
 
-                <Show when={errorMessage()}>
-                  <div class={styles["auth-error"]}>{errorMessage()}</div>
-                </Show>
+            <Show when={errorMessage()}>
+              <div class={styles["auth-error"]}>{errorMessage()}</div>
+            </Show>
 
-                <button
-                  class={styles["auth-guest-link"]}
-                  onClick={handleGuestMode}
-                >
-                  {hasAccount() && props.isLoginOnly
-                    ? "Back to Launcher"
-                    : "Continue as Guest"}
-                </button>
-
-                <Show when={networkStore.isOffline()}>
-                  <p class={styles["auth-guest-hint"]}>
-                    Guest profiles cannot launch Minecraft.
-                  </p>
-                </Show>
-              </div>
-            </Motion>
-          </Show>
-        </Presence>
-
-        <Presence exitBeforeEnter>
-          <Show when={isAuthenticating()}>
-            <Motion
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: DURATION.fast, easing: EASE.swift }}
+            <button
+              class={styles["auth-guest-link"]}
+              onClick={handleGuestMode}
             >
-              <div class={styles["auth-active"]}>
-                <div class={styles["auth-instructions"]}>
-                  <p>
-                    Visit <strong>microsoft.com/link</strong>
-                  </p>
-                  <p class={styles["auth-instructions-sub"]}>
-                    Enter the code below to connect your account.
-                  </p>
-                </div>
+              {hasAccount() && props.isLoginOnly
+                ? "Back to Launcher"
+                : "Continue as Guest"}
+            </button>
 
-                <div class={styles["auth-code-box"]}>
-                  <div class={styles["auth-code"]}>{authCode()}</div>
-                  <button class={styles["auth-copy-btn"]} onClick={copyCode}>
-                    {copied() ? "Copied!" : "Copy"}
-                  </button>
-                </div>
+            <Show when={networkStore.isOffline()}>
+              <p class={styles["auth-guest-hint"]}>
+                Guest profiles cannot launch Minecraft.
+              </p>
+            </Show>
+          </div>
+        </Show>
 
-                <div class={styles["auth-actions"]}>
-                  <Button color="primary" onClick={openAuthUrl}>
-                    Open Browser
+        <Show when={isAuthenticating()} keyed>
+          <div class={`${styles["auth-active"]} ${styles["panel--enter"]}`}>
+            <div class={styles["auth-instructions"]}>
+              <p>
+                Visit <strong>microsoft.com/link</strong>
+              </p>
+              <p class={styles["auth-instructions-sub"]}>
+                Enter the code below to connect your account.
+              </p>
+            </div>
+
+            <div class={styles["auth-code-box"]}>
+              <div class={styles["auth-code"]}>{authCode()}</div>
+              <button class={styles["auth-copy-btn"]} onClick={copyCode}>
+                {copied() ? "Copied!" : "Copy"}
+              </button>
+            </div>
+
+            <div class={styles["auth-actions"]}>
+              <Button color="primary" onClick={openAuthUrl}>
+                Open Browser
+              </Button>
+              <Button variant="ghost" onClick={handleCancel}>
+                Cancel
+              </Button>
+            </div>
+
+            <div class={styles["auth-timer"]}>
+              <Show
+                when={timeLeft() > 0}
+                fallback={
+                  <Button size="sm" variant="shadow" onClick={handleLogin}>
+                    Get New Code
                   </Button>
-                  <Button variant="ghost" onClick={handleCancel}>
-                    Cancel
-                  </Button>
-                </div>
+                }
+              >
+                <span
+                  class={timeLeft() < 30 ? styles["auth-timer--low"] : ""}
+                >
+                  {timerDisplay()}
+                </span>
+              </Show>
+            </div>
 
-                <div class={styles["auth-timer"]}>
-                  <Show
-                    when={timeLeft() > 0}
-                    fallback={
-                      <Button size="sm" variant="shadow" onClick={handleLogin}>
-                        Get New Code
-                      </Button>
-                    }
-                  >
-                    <span
-                      class={timeLeft() < 30 ? styles["auth-timer--low"] : ""}
-                    >
-                      {timerDisplay()}
-                    </span>
-                  </Show>
-                </div>
-
-                <div class={styles["auth-waiting"]}>
-                  <div class={styles["spinner--small"]} />
-                  <span>Waiting for Microsoft authentication...</span>
-                </div>
-              </div>
-            </Motion>
-          </Show>
-        </Presence>
+            <div class={styles["auth-waiting"]}>
+              <div class={styles["spinner--small"]} />
+              <span>Waiting for Microsoft authentication...</span>
+            </div>
+          </div>
+        </Show>
       </div>
     </div>
   );

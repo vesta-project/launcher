@@ -22,9 +22,12 @@
     z-index: 2;
     flex: 1;
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
+    justify-content: flex-start;
     padding: 16px;
+    overflow: hidden;
+    min-height: 0;
 }
 
 /* ============================================================
@@ -35,7 +38,8 @@
     position: relative;
     width: 100%;
     max-width: 720px;
-    max-height: calc(100vh - 32px);
+    max-height: 100%;
+    box-sizing: border-box;
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -49,6 +53,8 @@
     transition:
         background-color 0.5s ease,
         border-color 0.5s ease;
+    margin-top: auto;
+    margin-bottom: auto;
 }
 
 .stage-card-content {
@@ -58,6 +64,14 @@
     overflow-x: hidden;
     display: flex;
     flex-direction: column;
+    scrollbar-gutter: stable;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.06) transparent;
+}
+
+.stage-card:hover .stage-card-content,
+.stage-card-content:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
 }
 
 .stage-card-content::-webkit-scrollbar {
@@ -68,15 +82,106 @@
     background: transparent;
 }
 
+/* Always-visible subtle thumb — macOS overlay scrollbars auto-hide
+   anything that starts at transparent, so we keep a faint permanent
+   colour and simply brighten it on hover. */
 .stage-card-content::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
     border-radius: 3px;
+}
+
+.stage-card:hover .stage-card-content::-webkit-scrollbar-thumb,
+.stage-card-content:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
 }
 
 .stage-card--full {
     max-width: 100%;
     max-height: 100%;
     border-radius: 0;
+}
+
+/* ============================================================
+   Generic Enter Animations
+   ============================================================ */
+
+.fade-up--enter {
+    animation: fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.fade-up--enter-delay-1 {
+    animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+}
+
+.fade-up--enter-delay-2 {
+    animation: fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+}
+
+.fade-in--enter-delay-3 {
+    animation: fade-in 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.6s both;
+}
+
+.scale-in--enter {
+    animation: scale-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.panel--enter {
+    animation: panel-enter 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.credits-hint--enter {
+    animation: credits-hint-fade 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.8s both;
+}
+
+@keyframes fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes scale-in {
+    from {
+        opacity: 0;
+        transform: scale(0.8);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes panel-enter {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes credits-hint-fade {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 0.4;
+    }
 }
 
 @media (max-width: 640px) {
@@ -249,6 +354,25 @@
 :global(:root[data-reduced-motion="true"]) .atmosphere-orb,
 :global(:root[data-reduced-motion="true"]) .atmosphere-speck {
     animation: none !important;
+}
+
+/* ============================================================
+   Step Transition
+   ============================================================ */
+
+.step-transition--enter {
+    animation: step-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes step-enter {
+    from {
+        opacity: 0;
+        transform: translateX(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 /* ============================================================
@@ -757,7 +881,23 @@
     flex-direction: column;
     gap: 20px;
     padding: 8px 0;
-    min-height: 380px;
+    flex: 1;
+    min-height: 0;
+}
+
+.learn-slide--enter {
+    animation: learn-slide-enter 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes learn-slide-enter {
+    from {
+        opacity: 0;
+        transform: translateX(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
 }
 
 .learn-header {
@@ -897,6 +1037,25 @@
     flex-direction: column;
     gap: 16px;
     padding: 0;
+}
+
+.theme-fade-up--enter {
+    animation: theme-fade-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.theme-fade-up--enter-delayed {
+    animation: theme-fade-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.1s both;
+}
+
+@keyframes theme-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .theme-header {
@@ -1176,7 +1335,8 @@
     flex-direction: column;
     gap: 20px;
     padding: 8px 0;
-    min-height: 360px;
+    flex: 1;
+    min-height: 0;
 }
 
 .first-instance-menu {

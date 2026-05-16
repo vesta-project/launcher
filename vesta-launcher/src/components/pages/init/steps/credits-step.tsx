@@ -4,9 +4,7 @@ import ForgeLogo from "@assets/forge-logo.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import NeoForgeLogo from "@assets/neoforge-logo.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
-import { Motion } from "@motionone/solid";
 import { createSignal, onCleanup, onMount } from "solid-js";
-import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
 
 interface CreditsStepProps {
@@ -54,53 +52,31 @@ function CreditsStep(props: CreditsStepProps) {
 
 	return (
 		<div class={styles["credits-step"]} onClick={handleClick}>
-			<Motion
-				initial={{ opacity: 0, y: 16 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: DURATION.slow, easing: EASE.smooth }}
-			>
-				<p class={styles["credits-text"]}>
-					Minecraft modding exists because of an incredible community.
-				</p>
-			</Motion>
+			<p class={`${styles["credits-text"]} ${styles["fade-up--enter"]}`}>
+				Minecraft modding exists because of an incredible community.
+			</p>
 
-			<Motion
-				initial={{ opacity: 0, y: 16 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: DURATION.slow, delay: 0.15, easing: EASE.smooth }}
-			>
-				<p class={styles["credits-subtext"]}>
-					Vesta stands on the work of these teams and the thousands of mod developers
-					who make it all possible.
-				</p>
-			</Motion>
+			<p class={`${styles["credits-subtext"]} ${styles["fade-up--enter-delay-1"]}`}>
+				Vesta stands on the work of these teams and the thousands of mod developers
+				who make it all possible.
+			</p>
 
-			<Motion
-				initial={{ opacity: 0, y: 16 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: DURATION.slow, delay: 0.3, easing: EASE.smooth }}
-			>
-				<div class={styles["credits-logos"]}>
-					{PLATFORMS.map((platform) => (
-						<div
-							class={styles["credits-logo-item"]}
-							style={{ color: platform.color }}
-							title={platform.name}
-						>
-							<platform.icon />
-							<span>{platform.name}</span>
-						</div>
-					))}
-				</div>
-			</Motion>
+			<div class={`${styles["credits-logos"]} ${styles["fade-up--enter-delay-2"]}`}>
+				{PLATFORMS.map((platform) => (
+					<div
+						class={styles["credits-logo-item"]}
+						style={{ color: platform.color }}
+						title={platform.name}
+					>
+						<platform.icon />
+						<span>{platform.name}</span>
+					</div>
+				))}
+			</div>
 
-			<Motion
-				initial={{ opacity: 0 }}
-				animate={{ opacity: 0.4 }}
-				transition={{ duration: DURATION.slow, delay: 0.8, easing: EASE.smooth }}
-			>
-				<p class={styles["credits-hint"]}>Click or press any key to continue</p>
-			</Motion>
+			<p class={`${styles["credits-hint"]} ${styles["credits-hint--enter"]}`}>
+				Click or press any key to continue
+			</p>
 		</div>
 	);
 }

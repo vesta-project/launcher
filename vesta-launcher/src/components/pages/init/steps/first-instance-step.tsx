@@ -7,10 +7,8 @@ import { getAllModloaders, getModloadersForGameVersion, resolveCompatibleVersion
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
-import { Motion, Presence } from "@motionone/solid";
 import { invoke } from "@tauri-apps/api/core";
-import { batch, createEffect, createMemo, createSignal, For, Match, Show, Switch } from "solid-js";
-import { DURATION, EASE } from "../utils/motion";
+import { batch, createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import styles from "../init.module.css";
 
 interface FirstInstanceStepProps {
@@ -277,7 +275,10 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				wrapperCommand: null,
 			};
 
-			await installInstance(fullInstance);
+			// Start installation in background, continue onboarding immediately
+			installInstance(fullInstance).catch((error) => {
+				console.error("[Onboarding] Background install failed:", error);
+			});
 			await completeOnboarding();
 			await props.goNext();
 		} catch (error) {
@@ -336,214 +337,189 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 	return (
 		<div class={styles["first-instance-step"]}>
-			<Presence exitBeforeEnter>
-				<Switch>
-					<Match when={mode() === "menu"}>
-						<Motion
-							initial={{ opacity: 0, y: 12 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -12 }}
-							transition={{ duration: DURATION.fast, easing: EASE.swift }}
-						>
-							<div class={styles["first-instance-menu"]}>
-								<div class={styles["first-instance-header"]}>
-									<h2 class={styles["first-instance-title"]}>Your First Instance</h2>
-									<p class={styles["first-instance-subtitle"]}>
-										How would you like to get started?
-									</p>
-								</div>
+			<Show when={mode() === "menu"} keyed>
+				<div class={`${styles["first-instance-menu"]} ${styles["panel--enter"]}`}>
+					<div class={styles["first-instance-header"]}>
+						<h2 class={styles["first-instance-title"]}>Your First Instance</h2>
+						<p class={styles["first-instance-subtitle"]}>
+							How would you like to get started?
+						</p>
+					</div>
 
-								<div class={styles["first-instance-options"]}>
-									{menuOptions.map((option) => (
-										<button
-											class={styles["first-instance-option"]}
-											onClick={option.action}
+					<div class={styles["first-instance-options"]}>
+						{menuOptions.map((option) => (
+							<button
+								class={styles["first-instance-option"]}
+								onClick={option.action}
+							>
+								<div class={styles["first-instance-option-icon"]}>
+									{option.icon}
+								</div>
+								<div class={styles["first-instance-option-text"]}>
+									<span class={styles["first-instance-option-title"]}>
+										{option.title}
+									</span>
+									<span class={styles["first-instance-option-desc"]}>
+										{option.description}
+									</span>
+								</div>
+							</button>
+						))}
+						</div>
+
+					<div class={styles["first-instance-footer"]}>
+						<button
+							class={styles["first-instance-skip"]}
+							onClick={handleSkip}
+						>
+							Skip for now
+						</button>
+					</div>
+				</div>
+			</Show>
+
+			<Show when={mode() === "modpack-picker"} keyed>
+				<div class={`${styles["modpack-picker"]} ${styles["panel--enter"]}`}>
+					<div class={styles["modpack-picker-header"]}>
+						<button
+							class={styles["first-instance-back"]}
+							onClick={() => setMode("menu")}
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+								<polyline points="15 18 9 12 15 6" />
+							</svg>
+							Back
+						</button>
+						<h3 class={styles["modpack-picker-title"]}>Popular Modpacks</h3>
+						<p class={styles["modpack-picker-subtitle"]}>
+							Hand-picked modpacks from the community
+						</p>
+					</div>
+
+					<Show when={modpacksLoading()}>
+						<div class={styles["modpack-picker-loading"]}>
+							<div class={styles["spinner--small"]} />
+							<span>Loading modpacks...</span>
+						</div>
+					</Show>
+
+					<Show when={modpacksError()}>
+						<div class={styles["modpack-picker-error"]}>
+							{modpacksError()}
+						</div>
+					</Show>
+
+					<div class={styles["modpack-grid"]}>
+						<For each={modpacks()}>
+							{(modpack) => (
+								<button
+									class={styles["modpack-card"]}
+									onClick={() => void handleInstallModpack(modpack)}
+									disabled={installingModpackId() !== null}
+								>
+									<div class={styles["modpack-card-icon"]}>
+										<Show
+											when={modpack.iconUrl}
+											fallback={
+												<div class={styles["modpack-card-icon-placeholder"]}>
+													<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+													<rect x="3" y="3" width="18" height="18" rx="2" />
+													<path d="M3 9h18" />
+												</svg>
+											</div>
+											}
 										>
-											<div class={styles["first-instance-option-icon"]}>
-												{option.icon}
-											</div>
-											<div class={styles["first-instance-option-text"]}>
-												<span class={styles["first-instance-option-title"]}>
-													{option.title}
-												</span>
-												<span class={styles["first-instance-option-desc"]}>
-													{option.description}
-												</span>
-											</div>
-										</button>
-									))}
+											<img
+												src={modpack.iconUrl!}
+												alt={modpack.name}
+												loading="lazy"
+											/>
+											</Show>
 									</div>
-
-								<div class={styles["first-instance-footer"]}>
-									<button
-										class={styles["first-instance-skip"]}
-										onClick={handleSkip}
-									>
-										Skip for now
-									</button>
-								</div>
-							</div>
-						</Motion>
-					</Match>
-
-					<Match when={mode() === "modpack-picker"}>
-						<Motion
-							initial={{ opacity: 0, y: 12 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -12 }}
-							transition={{ duration: DURATION.fast, easing: EASE.swift }}
-						>
-							<div class={styles["modpack-picker"]}>
-								<div class={styles["modpack-picker-header"]}>
-									<button
-										class={styles["first-instance-back"]}
-										onClick={() => setMode("menu")}
-									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-											<polyline points="15 18 9 12 15 6" />
-										</svg>
-										Back
-									</button>
-									<h3 class={styles["modpack-picker-title"]}>Popular Modpacks</h3>
-									<p class={styles["modpack-picker-subtitle"]}>
-										Hand-picked modpacks from the community
-									</p>
-								</div>
-
-								<Show when={modpacksLoading()}>
-									<div class={styles["modpack-picker-loading"]}>
-										<div class={styles["spinner--small"]} />
-										<span>Loading modpacks...</span>
+									<div class={styles["modpack-card-info"]}>
+										<span class={styles["modpack-card-name"]}>{modpack.name}</span>
+										<span class={styles["modpack-card-author"]}>by {modpack.author}</span>
+										<span class={styles["modpack-card-desc"]}>{modpack.description}</span>
+										<span class={styles["modpack-card-downloads"]}>
+											<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+												<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+												<polyline points="7 10 12 15 17 10" />
+												<line x1="12" y1="15" x2="12" y2="3" />
+											</svg>
+											{formatDownloads(modpack.downloadCount)} downloads
+										</span>
 									</div>
-								</Show>
-
-								<Show when={modpacksError()}>
-									<div class={styles["modpack-picker-error"]}>
-										{modpacksError()}
-									</div>
-								</Show>
-
-								<div class={styles["modpack-grid"]}>
-									<For each={modpacks()}>
-										{(modpack) => (
-											<button
-												class={styles["modpack-card"]}
-												onClick={() => void handleInstallModpack(modpack)}
-												disabled={installingModpackId() !== null}
-											>
-												<div class={styles["modpack-card-icon"]}>
-													<Show
-														when={modpack.iconUrl}
-														fallback={
-															<div class={styles["modpack-card-icon-placeholder"]}>
-																<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-																	<rect x="3" y="3" width="18" height="18" rx="2" />
-																	<path d="M3 9h18" />
-																</svg>
-															</div>
-														}
-													>
-														<img
-															src={modpack.iconUrl!}
-															alt={modpack.name}
-															loading="lazy"
-														/>
-														</Show>
-												</div>
-												<div class={styles["modpack-card-info"]}>
-													<span class={styles["modpack-card-name"]}>{modpack.name}</span>
-													<span class={styles["modpack-card-author"]}>by {modpack.author}</span>
-													<span class={styles["modpack-card-desc"]}>{modpack.description}</span>
-													<span class={styles["modpack-card-downloads"]}>
-														<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-															<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-															<polyline points="7 10 12 15 17 10" />
-															<line x1="12" y1="15" x2="12" y2="3" />
-														</svg>
-														{formatDownloads(modpack.downloadCount)} downloads
-													</span>
-												</div>
-												<Show when={installingModpackId() === modpack.id}>
-													<div class={styles["modpack-card-installing"]}>
-														<div class={styles["spinner--small"]} />
-													</div>
-												</Show>
-											</button>
-										)}
-									</For>
-								</div>
-							</div>
-						</Motion>
-					</Match>
-
-					<Match when={mode() === "blank"}>
-						<Motion
-							initial={{ opacity: 0, y: 12 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -12 }}
-							transition={{ duration: DURATION.fast, easing: EASE.swift }}
-						>
-							<div class={styles["first-instance-form"]}>
-								<div class={styles["first-instance-form-header"]}>
-									<button
-										class={styles["first-instance-back"]}
-										onClick={() => setMode("menu")}
-									>
-										<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-											<polyline points="15 18 9 12 15 6" />
-										</svg>
-										Back
-									</button>
-									<h3 class={styles["first-instance-form-title"]}>Blank Instance</h3>
-								</div>
-
-								<div class={styles["first-instance-form-body"]}>
-									<div class={styles["first-instance-form-row"]}>
-										<IconPicker
-											value={iconPath() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]}
-											onSelect={setIconPath}
-											uploadedIcons={uploadedIcons()}
-											showHint={true}
-										/>
-										<div class={styles["first-instance-form-fields"]}>
-											<TextFieldRoot>
-												<TextFieldLabel class={styles["first-instance-label"]}>
-													Instance Name
-												</TextFieldLabel>
-												<TextFieldInput
-													value={instanceName()}
-													onInput={(e) => setInstanceName((e.target as HTMLInputElement).value)}
-													placeholder="Enter instance name..."
-													style={{ background: "var(--surface-sunken)" }}
-												/>
-											</TextFieldRoot>
-
-											<div>
-												<label class={styles["first-instance-label"]}>Modloader</label>
-												<ModloaderSwitcher
-													options={modloaderSwitcherOptions()}
-													value={selectedModloader()}
-													onChange={setSelectedModloader}
-												/>
-											</div>
+									<Show when={installingModpackId() === modpack.id}>
+										<div class={styles["modpack-card-installing"]}>
+											<div class={styles["spinner--small"]} />
 										</div>
-									</div>
-								</div>
+									</Show>
+								</button>
+							)}
+						</For>
+					</div>
+				</div>
+			</Show>
 
-								<div class={styles["first-instance-form-footer"]}>
-									<Button
-										color="primary"
-										onClick={handleInstallBlank}
-										disabled={isInstalling() || !instanceName() || !selectedVersion()}
-									>
-										{isInstalling() ? "Creating..." : "Create Instance"}
-									</Button>
+			<Show when={mode() === "blank"} keyed>
+				<div class={`${styles["first-instance-form"]} ${styles["panel--enter"]}`}>
+					<div class={styles["first-instance-form-header"]}>
+						<button
+							class={styles["first-instance-back"]}
+							onClick={() => setMode("menu")}
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+								<polyline points="15 18 9 12 15 6" />
+							</svg>
+							Back
+						</button>
+						<h3 class={styles["first-instance-form-title"]}>Blank Instance</h3>
+					</div>
+
+					<div class={styles["first-instance-form-body"]}>
+						<div class={styles["first-instance-form-row"]}>
+							<IconPicker
+								value={iconPath() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]}
+								onSelect={setIconPath}
+								uploadedIcons={uploadedIcons()}
+								showHint={true}
+							/>
+							<div class={styles["first-instance-form-fields"]}>
+								<TextFieldRoot>
+									<TextFieldLabel class={styles["first-instance-label"]}>
+										Instance Name
+									</TextFieldLabel>
+									<TextFieldInput
+										value={instanceName()}
+										onInput={(e) => setInstanceName((e.target as HTMLInputElement).value)}
+										placeholder="Enter instance name..."
+										style={{ background: "var(--surface-sunken)" }}
+									/>
+								</TextFieldRoot>
+
+								<div>
+									<label class={styles["first-instance-label"]}>Modloader</label>
+									<ModloaderSwitcher
+										options={modloaderSwitcherOptions()}
+										value={selectedModloader()}
+										onChange={setSelectedModloader}
+									/>
 								</div>
 							</div>
-						</Motion>
-					</Match>
-				</Switch>
-			</Presence>
+						</div>
+					</div>
+
+					<div class={styles["first-instance-form-footer"]}>
+						<Button
+							color="primary"
+							onClick={handleInstallBlank}
+							disabled={isInstalling() || !instanceName() || !selectedVersion()}
+						>
+							{isInstalling() ? "Creating..." : "Create Instance"}
+						</Button>
+					</div>
+				</div>
+			</Show>
 		</div>
 	);
 }

@@ -1,8 +1,7 @@
 import Button from "@ui/button/button";
 import { Slider, SliderThumb, SliderTrack } from "@ui/slider/slider";
-import { Motion } from "@motionone/solid";
 import { invoke } from "@tauri-apps/api/core";
-import { createSignal, For, onMount, Show } from "solid-js";
+import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import {
 	applyTheme,
 	getThemeById,
@@ -10,7 +9,6 @@ import {
 	type ThemeConfig,
 } from "../../../../themes/presets";
 import { currentThemeConfig, saveThemeUpdate as persistThemeUpdate } from "../../../../utils/config-sync";
-import { DURATION, EASE } from "../utils/motion";
 import styles from "../init.module.css";
 
 interface ThemeStepProps {
@@ -82,6 +80,23 @@ function ThemeStep(props: ThemeStepProps) {
 		}
 	});
 
+	createEffect(() => {
+		if (explicitThemeSelected()) {
+			// Defer until after the hue slider and footer have rendered
+			requestAnimationFrame(() => {
+				requestAnimationFrame(() => {
+					const content = document.querySelector(".stage-card-content");
+					if (content) {
+						content.scrollTo({
+							top: content.scrollHeight,
+							behavior: "smooth",
+						});
+					}
+				});
+			});
+		}
+	});
+
 	const handlePresetSelect = (id: string) => {
 		const theme = getThemeById(id);
 		if (!theme) return;
@@ -144,25 +159,17 @@ function ThemeStep(props: ThemeStepProps) {
 
 	return (
 		<div class={styles["theme-step"]}>
-			<Motion
-				initial={{ opacity: 0, y: 12 }}
-				animate={{ opacity: 1, y: 0 }}
-				transition={{ duration: DURATION.normal, easing: EASE.smooth }}
-			>
+			<div class={styles["theme-fade-up--enter"]}>
 				<div class={styles["theme-header"]}>
 					<h2 class={styles["theme-title"]}>Make it yours.</h2>
 					<p class={styles["theme-subtitle"]}>
 						Pick a starting look for Vesta.
 					</p>
 				</div>
-			</Motion>
+			</div>
 
 			<div class={styles["theme-scrollable"]}>
-				<Motion
-					initial={{ opacity: 0, y: 16 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: DURATION.slow, delay: 0.1, easing: EASE.smooth }}
-				>
+				<div class={styles["theme-fade-up--enter-delayed"]}>
 					<div class={styles["theme-grid"]}>
 						<For each={PRESET_THEMES.filter((t) => t.id !== "custom")}>
 							{(theme) => (
@@ -174,15 +181,11 @@ function ThemeStep(props: ThemeStepProps) {
 							)}
 						</For>
 					</div>
-				</Motion>
+				</div>
 			</div>
 
 			<Show when={explicitThemeSelected() && canChangeHue()}>
-				<Motion
-					initial={{ opacity: 0, y: 12 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: DURATION.normal, easing: EASE.smooth }}
-				>
+				<div class={styles["theme-fade-up--enter"]}>
 					<div class={styles["theme-hue-section"]}>
 						<div class={styles["theme-hue-label"]}>
 							<span>Customize Primary Hue</span>
@@ -207,15 +210,11 @@ function ThemeStep(props: ThemeStepProps) {
 							</SliderTrack>
 						</Slider>
 					</div>
-				</Motion>
+				</div>
 			</Show>
 
 			<Show when={explicitThemeSelected()}>
-				<Motion
-					initial={{ opacity: 0, y: 12 }}
-					animate={{ opacity: 1, y: 0 }}
-					transition={{ duration: DURATION.normal, easing: EASE.smooth }}
-				>
+				<div class={styles["theme-fade-up--enter"]}>
 					<div class={styles["theme-footer"]}>
 						<Button
 							color="primary"
@@ -227,7 +226,7 @@ function ThemeStep(props: ThemeStepProps) {
 							Continue
 						</Button>
 					</div>
-				</Motion>
+				</div>
 			</Show>
 		</div>
 	);
