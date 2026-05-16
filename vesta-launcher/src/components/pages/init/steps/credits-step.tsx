@@ -1,9 +1,9 @@
 import CurseForgeIcon from "@assets/curseforge.svg";
-import FabricLogo from "@assets/fabric-logo.svg";
-import ForgeLogo from "@assets/forge-logo.svg";
+import FabricLogo from "@assets/fabricmc-logo-colored.svg";
+import ForgeLogo from "@assets/forge-logo-colored.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
-import NeoForgeLogo from "@assets/neoforge-logo.svg";
-import QuiltLogo from "@assets/quilt-logo.svg";
+import NeoForgeLogo from "@assets/neoforged-logo-colored.svg";
+import QuiltLogo from "@assets/quiltmc-logo-colored.svg";
 import { createSignal, onCleanup, onMount } from "solid-js";
 import styles from "../init.module.css";
 
