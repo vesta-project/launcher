@@ -7,6 +7,11 @@ import { getAllModloaders, getModloadersForGameVersion, resolveCompatibleVersion
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { IconPicker } from "@ui/icon-picker/icon-picker";
 import { openModpackInstallFromUrl } from "@stores/modpack-install";
+import { LauncherMenuGrid } from "@components/pages/mini-pages/install/components/LauncherMenuGrid";
+import { LauncherDetailsPanel } from "@components/pages/mini-pages/install/components/LauncherDetailsPanel";
+import { launcherOptions } from "@components/pages/mini-pages/install/config/launcher-options";
+import { useLauncherImport } from "@components/pages/mini-pages/install/hooks/use-launcher-import";
+import type { LauncherKind } from "@utils/launcher-imports";
 import { invoke } from "@tauri-apps/api/core";
 import { batch, createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import styles from "../init.module.css";
@@ -17,7 +22,7 @@ interface FirstInstanceStepProps {
 	navigate: (to: string, options?: { replace?: boolean }) => void;
 }
 
-	type FirstInstanceMode = "menu" | "blank" | "modpack-picker" | "modpack-detail";
+	type FirstInstanceMode = "menu" | "blank" | "modpack-picker" | "modpack-detail" | "import";
 
 interface CuratedModpack {
 	id: string;
@@ -48,6 +53,26 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	const [modpacksError, setModpacksError] = createSignal("");
 	const [installingModpackId, setInstallingModpackId] = createSignal<string | null>(null);
 	const [selectedModpack, setSelectedModpack] = createSignal<CuratedModpack | null>(null);
+	const [selectedImportLauncher, setSelectedImportLauncher] = createSignal<LauncherKind | null>(null);
+	const [isDetectingLauncher, setIsDetectingLauncher] = createSignal(false);
+
+	const launcherImport = useLauncherImport({
+		selectedLauncherFromQuery: () => null,
+		onImportSuccess: () => {
+			void completeOnboarding();
+			props.navigate("/home", { replace: true });
+		},
+	});
+
+	const handleSelectLauncher = async (kind: LauncherKind) => {
+		setIsDetectingLauncher(true);
+		try {
+			await launcherImport.initializeLauncherDetails(kind);
+		} finally {
+			setIsDetectingLauncher(false);
+		}
+		setSelectedImportLauncher(kind);
+	};
 
 	const { versions: metadata } = useMinecraftVersions();
 
@@ -327,6 +352,19 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 			action: () => handleOpenModpackPicker(),
 		},
 		{
+			id: "import" as const,
+			title: "Import from Launcher",
+			description: "Bring in instances from CurseForge, Prism, and others",
+			icon: (
+				<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+					<polyline points="17 8 12 3 7 8" />
+					<line x1="12" y1="3" x2="12" y2="15" />
+				</svg>
+			),
+			action: () => setMode("import"),
+		},
+		{
 			id: "blank" as const,
 			title: "Blank Instance",
 			description: "Start from scratch with any version and modloader",
@@ -522,6 +560,65 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 						</div>
 					</div>
 				)}
+			</Show>
+
+			<Show when={mode() === "import"} keyed>
+				<div class={`${styles["first-instance-import"]} ${styles["panel--enter"]}`}>
+					<div class={styles["first-instance-form-header"]}>
+						<button
+							class={styles["first-instance-back"]}
+							onClick={() => {
+								if (selectedImportLauncher()) {
+									setSelectedImportLauncher(null);
+								} else {
+									setMode("menu");
+								}
+							}}
+						>
+							<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+								<polyline points="15 18 9 12 15 6" />
+							</svg>
+							Back
+						</button>
+						<h3 class={styles["first-instance-form-title"]}>
+							{selectedImportLauncher() ? "Import Instance" : "Import from Launcher"}
+						</h3>
+					</div>
+
+					<Show
+						when={selectedImportLauncher()}
+						fallback={
+							<Show
+								when={!isDetectingLauncher()}
+								fallback={
+									<div class={styles["import-detecting"]}>
+										<div class={styles["spinner--small"]} />
+										<span>Detecting launcher...</span>
+									</div>
+								}
+							>
+								<LauncherMenuGrid
+									launchers={launcherOptions}
+									onSelect={handleSelectLauncher}
+								/>
+							</Show>
+						}
+					>
+						<LauncherDetailsPanel
+							basePath={launcherImport.launcherBasePath()}
+							instances={launcherImport.launcherInstances()}
+							selectedInstancePath={launcherImport.selectedInstancePath()}
+							hasScanned={launcherImport.hasScannedLauncherInstances()}
+							isLoading={launcherImport.isLoadingLauncherInstances()}
+							isImporting={launcherImport.isImportingLauncher()}
+							onPathChange={launcherImport.setLauncherBasePath}
+							onBrowse={launcherImport.handleLauncherFolderPick}
+							onRescan={() => launcherImport.loadLauncherInstances()}
+							onSelectInstance={launcherImport.setSelectedInstancePath}
+							onImport={launcherImport.handleImportLauncherInstance}
+						/>
+					</Show>
+				</div>
 			</Show>
 
 			<Show when={mode() === "blank"} keyed>
