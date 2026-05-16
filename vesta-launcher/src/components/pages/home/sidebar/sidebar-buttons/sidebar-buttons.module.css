@@ -16,12 +16,12 @@
 
 	&:hover {
 		box-shadow:
-			0 4px 12px rgba(0, 0, 0, 0.08),
-			0 0 1px rgba(0, 0, 0, 0.1);
-		background-color: rgba(0, 0, 0, 0.03);
+			inset 0 0 0 1px hsl(var(--hue-secondary) 80% 68% / 0.34),
+			0 8px 22px hsl(var(--hue-secondary) 70% 42% / 0.16);
+		background-color: hsl(var(--hue-secondary) 70% 46% / 0.18);
 
 		& > svg {
-			transform: scale(1.08);
+			transform: scale(1.03);
 		}
 	}
 
@@ -73,7 +73,7 @@
 			fill: var(--icon-primary);
 		}
 
-		background: linear-gradient(-45deg, hsl(0deg 0% 71% / 9%), hsl(0deg 0% 40% / 9%));
+		background: hsl(var(--hue-secondary) 70% 46% / 0.18);
 	}
 }
 
