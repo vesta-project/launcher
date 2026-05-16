@@ -13,9 +13,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
 import { useOs } from "@utils/os";
-import { startAppTutorial } from "@utils/tutorial";
 import { createEffect, createSignal, For, onMount, Show } from "solid-js";
+import { homeIntroShowDemoCards, homeIntroSidebarVisible, homeIntroVisible, setHomeIntroVisible } from "@stores/home-intro";
 import styles from "./home.module.css";
+import { DemoInstanceCards } from "./home-intro/demo-instance-cards";
+import HomeIntro from "./home-intro/home-intro";
 import Sidebar from "./sidebar/sidebar";
 
 // Module-level signals for sidebar state
@@ -41,7 +43,7 @@ function HomePage() {
 		if (!config.tutorial_completed) {
 			// Small delay to ensure UI is ready
 			setTimeout(() => {
-				startAppTutorial();
+				setHomeIntroVisible(true);
 			}, 1000);
 		}
 	});
@@ -51,14 +53,24 @@ function HomePage() {
 		clearToasts();
 	});
 
+	const introActive = () => homeIntroVisible();
+	const sidebarForcedHidden = () => introActive() && !homeIntroSidebarVisible();
+
 	return (
-		<div class={styles["home__root"]} draggable={false}>
+		<div
+			class={styles["home__root"]}
+			classList={{
+				[styles["home__root--intro-no-sidebar"]]: sidebarForcedHidden(),
+			}}
+			draggable={false}
+		>
 			<TitleBar os={os()} />
 			<Sidebar
 				os={os()}
 				setPageViewerOpen={setPageViewerOpen}
 				openChanged={setSidebarOpen}
 				open={sidebarOpen()}
+				introForcedHidden={sidebarForcedHidden()}
 			/>
 			<MainMenu />
 			<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
@@ -66,6 +78,9 @@ function HomePage() {
 				class={styles["home__toaster"]}
 				style={{ visibility: sidebarOpen() ? "hidden" : "visible" }}
 			/>
+			<Show when={homeIntroVisible()}>
+				<HomeIntro onComplete={() => setHomeIntroVisible(false)} />
+			</Show>
 		</div>
 	);
 }
@@ -119,12 +134,15 @@ function MainMenu() {
 							Failed to load instances: {String(instancesError())}
 						</p>
 					</Show>
-					<Show when={!instancesLoading() && instancesStore().length === 0}>
+					<Show when={!instancesLoading() && instancesStore().length === 0 && !homeIntroShowDemoCards()}>
 						<p style={{ color: "#888", padding: "20px" }}>
 							No instances found. Create one to get started!
 						</p>
 					</Show>
 					<For each={instancesStore()}>{(instance) => <InstanceCard instance={instance} />}</For>
+					<Show when={homeIntroShowDemoCards()}>
+						<DemoInstanceCards />
+					</Show>
 				</div>
 			</div>
 		</div>

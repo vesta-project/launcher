@@ -26,7 +26,6 @@ import {
 	persistentNotificationTrigger,
 	showAlert,
 } from "@utils/notifications";
-import { startAppTutorial } from "@utils/tutorial";
 import {
 	createEffect,
 	createResource,
@@ -37,7 +36,6 @@ import {
 	Show,
 } from "solid-js";
 import { PinnedItem } from "./pinned-items";
-// Transition and getOsType are unused in this file; remove imports to clean code.
 import styles from "./sidebar.module.css";
 
 interface SidebarProps {
@@ -45,6 +43,7 @@ interface SidebarProps {
 	open: boolean;
 	openChanged: (value: boolean) => void;
 	os: string;
+	introForcedHidden?: boolean;
 }
 
 function Sidebar(props: SidebarProps) {
@@ -125,6 +124,8 @@ function Sidebar(props: SidebarProps) {
 				[styles.sidebar]: true,
 				[styles.macos]: props.os === "macos",
 				[styles["sidebar--open"]]: props.open,
+				[styles["sidebar--intro-hidden"]]: props.introForcedHidden === true,
+				[styles["sidebar--intro-visible"]]: props.introForcedHidden === false,
 			}}
 		>
 			<div class={styles["sidebar__root"]}>
@@ -184,15 +185,14 @@ function Sidebar(props: SidebarProps) {
 								</div>
 							</div>
 						</Show>
-
-						{/* Deleted placeholder SidebarPageButton */}
 					</div>
 				</div>
 				<div class={styles["sidebar__section"]}>
-					<SidebarActionButton
-						onClick={() => props.openChanged(!props.open)}
-						tooltip_text={"Notifications"}
-					>
+				<SidebarActionButton
+					id={"sidebar-notifications"}
+					onClick={() => props.openChanged(!props.open)}
+					tooltip_text={"Notifications"}
+				>
 						<div
 							style={{
 								position: "relative",

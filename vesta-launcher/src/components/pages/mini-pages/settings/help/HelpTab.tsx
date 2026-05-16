@@ -3,7 +3,7 @@ import { SettingsCard, SettingsField } from "@components/settings";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { openExternal } from "@utils/external-link";
-import { startAppTutorial } from "@utils/tutorial";
+import { restartHomeIntro } from "@stores/home-intro";
 import { checkForAppUpdates } from "@utils/updater";
 import styles from "../settings-page.module.css";
 
@@ -38,7 +38,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 						<LauncherButton
 							onClick={() => {
 								props.close?.();
-								setTimeout(() => startAppTutorial(), 100);
+								setTimeout(() => restartHomeIntro(), 100);
 							}}
 						>
 							Run Tutorial

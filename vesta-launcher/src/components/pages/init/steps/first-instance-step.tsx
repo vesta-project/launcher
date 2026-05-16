@@ -279,7 +279,7 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 
 			await installInstance(fullInstance);
 			await completeOnboarding();
-			props.navigate("/home", { replace: true });
+			await props.goNext();
 		} catch (error) {
 			console.error("[Onboarding] Installation failed:", error);
 		} finally {
@@ -288,7 +288,8 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 	};
 
 	const handleSkip = async () => {
-		await completeOnboardingAndGoHome();
+		await completeOnboarding();
+		await props.goNext();
 	};
 
 	const completeOnboarding = async () => {
@@ -297,11 +298,6 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 		} catch (e) {
 			console.error("Failed to complete onboarding:", e);
 		}
-	};
-
-	const completeOnboardingAndGoHome = async () => {
-		await completeOnboarding();
-		props.navigate("/home", { replace: true });
 	};
 
 	const formatDownloads = (count: number) => {

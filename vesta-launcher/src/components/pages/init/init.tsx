@@ -53,6 +53,7 @@ import AuthStep from "./steps/auth-step";
 import LearnStep from "./steps/learn-step";
 import ThemeStep from "./steps/theme-step";
 import FirstInstanceStep from "./steps/first-instance-step";
+import CompleteStep from "./steps/complete-step";
 
 // Placeholder step components until we build them in later chunks
 
@@ -193,6 +194,9 @@ function InitPage() {
 									goBack={flow.goBack}
 									navigate={navigate}
 								/>
+							</Match>
+							<Match when={flow.step() === ONBOARDING_STEP.COMPLETE}>
+								<CompleteStep navigate={navigate} />
 							</Match>
 						</MatchSwitch>
 					</StepTransition>

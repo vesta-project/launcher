@@ -1112,6 +1112,62 @@
 }
 
 /* ============================================================
+   Complete Step
+   ============================================================ */
+
+.complete-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 16px;
+    padding: 20px 0;
+}
+
+.complete-icon {
+    width: 64px;
+    height: 64px;
+    color: var(--accent-primary);
+    opacity: 0.9;
+}
+
+.complete-title {
+    font-size: clamp(24px, 3.5vh, 32px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    margin: 0;
+    background: linear-gradient(160deg, var(--text-primary) 20%, var(--primary) 100%);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.complete-subtitle {
+    font-size: clamp(13px, 1.8vh, 15px);
+    opacity: 0.5;
+    margin: 0;
+    font-weight: 500;
+}
+
+.complete-skip {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 10px 24px;
+    border-radius: 10px;
+    transition: all 0.2s ease;
+    margin-top: 8px;
+}
+
+.complete-skip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* ============================================================
    First Instance Step
    ============================================================ */
 
