@@ -2,6 +2,7 @@
 	padding: 24px;
 	width: 100%;
 	height: 100%;
+	min-height: 0;
 	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
@@ -14,6 +15,7 @@
 	flex-direction: column;
 	width: 100%;
 	height: 100%;
+	min-height: 0;
 	padding: 0.2rem;
 }
 
@@ -51,6 +53,8 @@
 
 	.settings-tabs .tabs-content {
 		flex: 1;
+		min-width: 0;
+		min-height: 0;
 		padding-bottom: 0;
 		overflow-y: auto;
 		padding-right: 8px; /* Room for scrollbar */
@@ -94,6 +98,7 @@
 	padding-bottom: 40px;
 	overflow-y: auto;
 	overflow-x: clip;
+	min-height: 0;
 }
 
 .settings-section {
