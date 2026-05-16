@@ -8,6 +8,7 @@ import {
 	applyTheme,
 	configToTheme,
 	getThemeById,
+	resolveUiChromeMode,
 	normalizeStyleMode,
 	PRESET_THEMES,
 	parseThemeData,
@@ -219,6 +220,7 @@ export async function saveThemeUpdate(
 		borderWidth: number;
 		backgroundOpacity: number;
 		windowEffect: string;
+		uiChromeMode: string;
 		customCss: string;
 		allowHueChange: boolean;
 		allowStyleChange: boolean;
@@ -302,6 +304,7 @@ export async function saveThemeUpdate(
 		carriedThemeData.windowEffect ??
 		(sameThemeAsStore ? currentThemeConfig.theme_window_effect : undefined) ??
 		theme.windowEffect;
+	const activeUiChromeMode = resolveUiChromeMode(overrides.uiChromeMode, currentThemeData.uiChromeMode);
 	const activeCustomCss = overrides.customCss ?? carriedThemeData.customCss ?? theme.customCss;
 	const activeAllowHueChange =
 		overrides.allowHueChange ?? carriedThemeData.allowHueChange ?? theme.allowHueChange;
@@ -336,6 +339,7 @@ export async function saveThemeUpdate(
 		borderWidth: activeBorderWidth,
 		backgroundOpacity: activeBackgroundOpacity,
 		windowEffect: activeWindowEffect,
+		uiChromeMode: activeUiChromeMode,
 		customCss: activeCustomCss,
 		allowHueChange: activeAllowHueChange,
 		allowStyleChange: activeAllowStyleChange,

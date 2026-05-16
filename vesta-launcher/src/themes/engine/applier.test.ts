@@ -31,6 +31,7 @@ describe("applyTheme background and effect behavior", () => {
 		root.removeAttribute("data-theme-id");
 		root.removeAttribute("data-theme-var-keys");
 		root.removeAttribute("data-window-effect");
+		root.removeAttribute("data-ui-chrome");
 		root.removeAttribute("data-gradient");
 		root.removeAttribute("data-gradient-type");
 		root.removeAttribute("data-style");
@@ -92,5 +93,19 @@ describe("applyTheme background and effect behavior", () => {
 		expect(root.style.getPropertyValue("--app-background-tint").trim()).toBe("");
 		expect(root.style.getPropertyValue("--background-color").trim()).toBe("");
 		expect(root.style.getPropertyValue("--background-image").trim()).toBe("");
+	});
+
+	it("sets the UI chrome mode attribute for layout-specific surfaces", () => {
+		const root = document.documentElement;
+		applyTheme(createTheme({ uiChromeMode: "flat" }));
+
+		expect(root.getAttribute("data-ui-chrome")).toBe("flat");
+	});
+
+	it("falls back to windowed UI chrome for older theme data", () => {
+		const root = document.documentElement;
+		applyTheme(createTheme());
+
+		expect(root.getAttribute("data-ui-chrome")).toBe("windowed");
 	});
 });

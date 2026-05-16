@@ -1,5 +1,6 @@
 import { PRESET_THEMES } from "../presets/builtin";
 import type { ThemeConfig, ThemeVariable, ThemeVariableValue } from "../types";
+import { resolveUiChromeMode } from "../ui-chrome";
 import { getCurrentOsHint, normalizeWindowEffectForCurrentOS } from "./effects";
 import { normalizeStyleMode } from "./parser";
 import { clamp } from "./utils";
@@ -147,6 +148,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 						: "none"),
 		),
 		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
+		uiChromeMode: resolveUiChromeMode(theme.uiChromeMode, fallbackTheme.uiChromeMode),
 		variables: theme.variables,
 		userVariables: normalizeUserVariables(theme.userVariables, theme.variables),
 	};

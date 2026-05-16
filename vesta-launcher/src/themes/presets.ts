@@ -15,6 +15,13 @@ export type {
 	ThemeVariableType,
 	ThemeVariableValue,
 } from "./types";
+export {
+	DEFAULT_UI_CHROME_MODE,
+	normalizeUiChromeMode,
+	resolveUiChromeMode,
+	setUiChromeModeInThemeData,
+	type UiChromeMode,
+} from "./ui-chrome";
 
 /**
  * Vesta Launcher Theme System - Theme Management
@@ -85,6 +92,7 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 					? config.theme_advanced_overrides
 					: baseTheme.customCss,
 		windowEffect: themeData.windowEffect ?? config.theme_window_effect ?? baseTheme.windowEffect,
+		uiChromeMode: themeData.uiChromeMode ?? baseTheme.uiChromeMode,
 		backgroundOpacity:
 			themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,
 		author: themeData.author ?? baseTheme.author,

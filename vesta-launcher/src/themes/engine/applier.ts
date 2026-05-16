@@ -1,4 +1,5 @@
 import type { ThemeConfig } from "../types";
+import { resolveUiChromeMode } from "../ui-chrome";
 import { normalizeWindowEffectForCurrentOS } from "./effects";
 import { themeToCSSVars } from "./themeToCSSVars";
 import { startThemeTransition, type ThemeApplyOptions } from "./transitionManager";
@@ -77,8 +78,10 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	const currentBackgroundOpacity = style.getPropertyValue("--background-opacity").trim();
 	const currentOpacity = style.getPropertyValue("--effect-opacity").trim();
 	const currentWindowEffect = root.getAttribute("data-window-effect") || "none";
+	const currentUiChromeMode = root.getAttribute("data-ui-chrome") || "windowed";
 	const currentBorderWidth = style.getPropertyValue("--border-width-subtle").trim();
 	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
+	const uiChromeMode = resolveUiChromeMode(theme.uiChromeMode);
 	const styleMode = theme.style ?? "glass";
 	const nextThemeVarKeys = Object.keys(vars).filter((key) => key.startsWith("--theme-var-"));
 	const previousThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
@@ -135,6 +138,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 		numMatch(currentBackgroundOpacity, vars["--background-opacity"]) &&
 		numMatch(currentOpacity, vars["--effect-opacity"]) &&
 		currentWindowEffect === effectToSet &&
+		currentUiChromeMode === uiChromeMode &&
 		currentBorderWidth === vars["--border-width-subtle"]
 	) {
 		const anyVarChanged = nextThemeVarKeys.some((key) => {
@@ -168,6 +172,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	updateCustomCss(theme);
 	root.setAttribute("data-theme-id", themeId);
 	root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
+	root.setAttribute("data-ui-chrome", uiChromeMode);
 
 	applyBackgroundState(theme, effectToSet, root, style);
 
