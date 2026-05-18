@@ -10,6 +10,7 @@ import PlaceholderImage9 from "@assets/placeholder-images/placeholder-image9.png
 import PlaceholderImage10 from "@assets/placeholder-images/placeholder-image10.png";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getActiveAccount } from "@utils/auth";
 
 export const DEMO_INSTANCE_ID = -1;
 export const DEMO_INSTANCE_SLUG = "vesta-explorer-demo";
@@ -410,6 +411,13 @@ export async function getInstanceBySlug(slug: string): Promise<Instance> {
 
 // Install an instance (queues installation task)
 export async function installInstance(instance: Instance): Promise<void> {
+  const accountType = (await getActiveAccount())?.account_type?.toLowerCase();
+  if (accountType === "guest" || accountType === "demo") {
+    throw new Error(
+      "Guest and demo accounts cannot install instances. Please sign in with a Microsoft account.",
+    );
+  }
+
   console.log(
     "[installInstance] Invoking Tauri command with instance:",
     instance,
@@ -425,6 +433,13 @@ export async function installInstance(instance: Instance): Promise<void> {
 
 // Launch an instance (placeholder implementation - backend may actually run the game)
 export async function launchInstance(instance: Instance): Promise<void> {
+  const accountType = (await getActiveAccount())?.account_type?.toLowerCase();
+  if (accountType === "guest" || accountType === "demo") {
+    throw new Error(
+      "Guest and demo accounts cannot launch instances. Please sign in with a Microsoft account.",
+    );
+  }
+
   console.log(
     "[launchInstance] Invoking Tauri command to launch instance:",
     instance,

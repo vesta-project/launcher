@@ -718,6 +718,11 @@ function InitInstallationPage(props: InitPagesProps) {
       }
     } catch (error) {
       console.error("[Onboarding] Installation failed:", error);
+      showToast({
+        title: "Installation Failed",
+        description: String(error),
+        severity: "error",
+      });
     } finally {
       setIsInstalling(false);
     }

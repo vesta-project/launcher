@@ -16,7 +16,7 @@ import {
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
-import { DEFAULT_ICONS, getInstanceSlug, killInstance } from "@utils/instances";
+import { DEFAULT_ICONS, getInstanceSlug, killInstance, launchInstance } from "@utils/instances";
 import { clsx } from "clsx";
 import { createMemo, createSignal, onCleanup, onMount, Show } from "solid-js";
 import { SidebarButton } from "../sidebar-buttons/sidebar-buttons";
@@ -130,7 +130,7 @@ export function PinnedItem(props: PinnedItemProps) {
 
 		try {
 			setLaunching(props.pin.target_id, true);
-			await invoke("launch_instance", { instanceData: inst });
+			await launchInstance(inst);
 		} catch (err) {
 			console.error("Failed to launch instance from sidebar:", err);
 			setLaunching(props.pin.target_id, false);

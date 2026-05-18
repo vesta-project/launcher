@@ -2066,6 +2066,11 @@ export default function InstanceDetails(
       }
     } catch (e) {
       console.error("Action failed:", e);
+      showToast({
+        title: "Action Failed",
+        description: String(e),
+        severity: "error",
+      });
     }
     setBusy(false);
   };
