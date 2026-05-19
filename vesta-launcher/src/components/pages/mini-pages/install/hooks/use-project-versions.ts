@@ -1,4 +1,4 @@
-import { type ResourceVersion, resources, type SourcePlatform } from "@stores/resources";
+import { findBestVersion, type ResourceVersion, resources, type SourcePlatform } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
 import { type Accessor, batch, createEffect, createResource } from "solid-js";
 
@@ -31,6 +31,8 @@ interface UseProjectVersionsParams {
 	projectId?: Accessor<string | undefined>;
 	platform?: Accessor<string | undefined>;
 	initialVersion?: Accessor<string | undefined>;
+	initialMinecraftVersion?: Accessor<string | undefined>;
+	initialModloader?: Accessor<string | undefined>;
 	selectedModpackVersionId: Accessor<string>;
 	setSelectedModpackVersionId: (id: string) => void;
 	setModpackUrl: (url: string) => void;
@@ -78,7 +80,13 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 				}
 
 				if (vs.length > 0 && params.isModpackMode()) {
-					const target = vs[0];
+					const mcVersion = params.initialMinecraftVersion?.();
+					const loader = params.initialModloader?.();
+					const best =
+						mcVersion || loader
+							? findBestVersion(vs, mcVersion || "", loader || null, "release", "modpack")
+							: undefined;
+					const target = best || vs[0];
 					batch(() => {
 						params.setSelectedModpackVersionId(target.id);
 						params.setModpackUrl(target.download_url);

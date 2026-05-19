@@ -548,6 +548,8 @@ export function findBestVersion(
 			if (isVanilla) {
 				if (resourceType === "mod") {
 					matchesLoader = false;
+				} else if (resourceType === "modpack") {
+					matchesLoader = true;
 				} else {
 					matchesLoader = normalizedLoaders.length === 0 || normalizedLoaders.includes("minecraft");
 				}

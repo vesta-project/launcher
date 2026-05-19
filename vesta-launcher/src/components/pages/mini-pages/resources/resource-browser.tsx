@@ -526,6 +526,8 @@ const ResourceCard: Component<{
         projectName: props.project.name,
         projectIcon: props.project.icon_url || undefined,
         projectAuthor: props.project.author,
+        initialMinecraftVersion: resources.state.gameVersion || undefined,
+        initialModloader: resources.state.loader || undefined,
       });
       return;
     }
@@ -1372,6 +1374,14 @@ const ResourceBrowser: Component<{
       projectName: project.name,
       projectIcon: project.icon_url || "",
       resourceType: project.resource_type,
+      initialMinecraftVersion:
+        project.resource_type === "modpack"
+          ? (resources.state.gameVersion || undefined)
+          : undefined,
+      initialModloader:
+        project.resource_type === "modpack"
+          ? (resources.state.loader || undefined)
+          : undefined,
     });
   };
 

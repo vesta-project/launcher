@@ -51,6 +51,9 @@ function InstallPage(props: InstallPageRouteProps) {
 		() =>
 			(routeParams().initialMinecraftVersion as string | undefined) || props.initialMinecraftVersion,
 	);
+	const effectiveInitialModloader = createMemo(
+		() => (routeParams().initialModloader as string | undefined) || props.initialModloader,
+	);
 	const effectiveResourceType = createMemo(
 		() => (routeParams().resourceType as string | undefined) || props.resourceType,
 	);
@@ -73,7 +76,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		projectAuthor: props.projectAuthor,
 		initialVersion: effectiveInitialVersion(),
 		initialMinecraftVersion: effectiveInitialMinecraftVersion(),
-		initialModloader: props.initialModloader,
+		initialModloader: effectiveInitialModloader(),
 		initialModloaderVersion: props.initialModloaderVersion,
 		originalIcon: props.originalIcon,
 		modpackUrl: effectiveModpackUrl(),
@@ -98,6 +101,8 @@ function InstallPage(props: InstallPageRouteProps) {
 		projectId: effectiveProjectId,
 		platform: effectivePlatform,
 		initialVersion: effectiveInitialVersion,
+		initialMinecraftVersion: effectiveInitialMinecraftVersion,
+		initialModloader: effectiveInitialModloader,
 		selectedModpackVersionId,
 		setSelectedModpackVersionId,
 		setModpackUrl: source.setModpackUrl,
@@ -156,8 +161,8 @@ function InstallPage(props: InstallPageRouteProps) {
 						title={props.projectName || source.modpackInfo()?.name || "Analyzing modpack details..."}
 						label={effectiveResourceType() || (isModpackMode() ? "Modpack" : "Package")}
 						iconUrl={props.projectIcon || source.modpackInfo()?.iconUrl}
-						minecraftVersion={source.modpackInfo()?.minecraftVersion || props.initialVersion}
-						modloader={source.modpackInfo()?.modloader || props.initialModloader}
+							minecraftVersion={source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()}
+						modloader={source.modpackInfo()?.modloader || effectiveInitialModloader()}
 						analyzing={!source.modpackInfo() && !props.projectName}
 						backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"}
 						onBack={() => (effectiveProjectId() ? activeRouter()?.backwards() : source.resetSource())}
@@ -203,7 +208,7 @@ function InstallPage(props: InstallPageRouteProps) {
 							? effectiveInitialMinecraftVersion() || source.modpackInfo()?.minecraftVersion || ""
 							: props.initialVersion
 					}
-						initialModloader={props.initialModloader || source.modpackInfo()?.modloader}
+						initialModloader={effectiveInitialModloader() || source.modpackInfo()?.modloader}
 						initialModloaderVersion={
 							source.modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined
 						}
