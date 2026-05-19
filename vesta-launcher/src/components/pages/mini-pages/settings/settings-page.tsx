@@ -54,6 +54,7 @@ import { createStore, reconcile } from "solid-js/store";
 import {
   applyTheme,
   DEFAULT_UI_CHROME_MODE,
+  normalizeUiChromeMode,
   type GradientHarmony,
   getAllThemes,
   getSupportedWindowEffects,
@@ -61,13 +62,10 @@ import {
   isBuiltinThemeId,
   loadWindowEffectCapabilities,
   normalizeStyleMode,
-  normalizeUiChromeMode,
   normalizeWindowEffectForCurrentOS,
   PRESET_THEMES,
   parseThemeData,
-  resolveUiChromeMode,
   removeCustomTheme,
-  setUiChromeModeInThemeData,
   type StyleMode,
   setCustomThemes,
   type ThemeConfig,
@@ -124,6 +122,7 @@ export interface AppConfig {
   theme_background_opacity?: number;
   theme_data?: string;
   theme_border_width?: number;
+  ui_chrome_mode_enabled: boolean;
   setup_completed: boolean;
   setup_step: number;
   tutorial_completed: boolean;
@@ -286,9 +285,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
       currentThemeConfig.theme_window_effect || "none",
     ),
   );
-  const [uiChromeMode, setUiChromeMode] = createSignal<UiChromeMode>(
-    resolveUiChromeMode(initialThemeData.uiChromeMode),
-  );
+  const [uiChromeMode, setUiChromeMode] = createSignal<UiChromeMode>("windowed");
   const [windowEffectOptions, setWindowEffectOptions] = createSignal<string[]>(
     getSupportedWindowEffects(),
   );
@@ -752,7 +749,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
               normalizeWindowEffectForCurrentOS(themeData.windowEffect),
             );
           }
-          setUiChromeMode(resolveUiChromeMode(themeData.uiChromeMode));
+          setUiChromeMode(config.ui_chrome_mode_enabled ? "windowed" : "flat");
           if (themeData.userVariables)
             setUserVariables(reconcile(themeData.userVariables));
         }
@@ -767,6 +764,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         if (field === "discord_presence_enabled")
           setDiscordPresenceEnabled(value ?? true);
         if (field === "reduced_motion") setReducedMotion(value ?? false);
+        if (field === "ui_chrome_mode_enabled")
+          setUiChromeMode(value ? "windowed" : "flat");
         if (field === "autostart_enabled") setAutostartEnabled(value ?? false);
         if (field === "show_tray_icon") setShowTrayIcon(value ?? true);
         if (field === "minimize_to_tray") setCloseToTray(value ?? false);
@@ -862,11 +861,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
                 normalizeWindowEffectForCurrentOS(themeData.windowEffect),
               );
             }
-            const nextUiChromeMode = resolveUiChromeMode(themeData.uiChromeMode);
-            if (nextUiChromeMode !== untrack(uiChromeMode)) {
-              setUiChromeMode(nextUiChromeMode);
-            }
-
             if (themeData.userVariables) {
               const currentVars = untrack(userVariablesSnapshot);
               const hasChanged =
@@ -1049,11 +1043,12 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     if (nextMode === uiChromeMode()) return;
 
     setUiChromeMode(nextMode);
-    updateThemeConfigLocal(
-      "theme_data",
-      setUiChromeModeInThemeData(currentThemeConfig.theme_data, nextMode),
-    );
-    saveThemeUpdate({ uiChromeMode: nextMode });
+    if (hasTauriRuntime()) {
+      invoke("update_config_field", {
+        field: "ui_chrome_mode_enabled",
+        value: nextMode === "windowed",
+      });
+    }
   };
 
   const handleGradientTypeChange = (type: "linear" | "radial") => {
@@ -1266,10 +1261,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
     const activeWEffect = normalizeWindowEffectForCurrentOS(
       overrides.windowEffect ?? windowEffect(),
     );
-    const activeUiChromeMode = resolveUiChromeMode(
-      overrides.uiChromeMode,
-      uiChromeMode(),
-    );
     const activeUserVars = overrides.userVariables ?? userVariablesSnapshot();
 
     // 2. Map frontend terms to central store persistence terminology
@@ -1289,7 +1280,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
       borderWidth: activeBWidth,
       backgroundOpacity: activeBgOp,
       windowEffect: activeWEffect,
-      uiChromeMode: activeUiChromeMode,
       customCss: overrides.customCss ?? currentTheme?.customCss,
       allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
       allowStyleChange:
@@ -1316,7 +1306,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         borderWidth: activeBWidth,
         backgroundOpacity: activeBgOp,
         windowEffect: activeWEffect,
-        uiChromeMode: activeUiChromeMode,
         allowHueChange:
           overrides.allowHueChange ?? currentTheme?.allowHueChange,
         allowStyleChange:
@@ -1380,7 +1369,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
         borderWidth: borderThickness(),
         backgroundOpacity: backgroundOpacity(),
         windowEffect: windowEffect(),
-        uiChromeMode: uiChromeMode(),
         userVariables: activeUserVars,
       });
       applyTheme(themeToApply);

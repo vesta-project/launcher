@@ -6,7 +6,6 @@ import type {
 	ThemeVariableType,
 	ThemeVariableValue,
 } from "../types";
-import { normalizeUiChromeMode } from "../ui-chrome";
 
 // This function is used to migrate old theme formats
 export function normalizeStyleMode(value: unknown): StyleMode | undefined {
@@ -186,9 +185,6 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.borderWidth = getNumber(source.borderWidth ?? source.border_width);
 	out.backgroundOpacity = getNumber(source.backgroundOpacity ?? source.background_opacity);
 	out.windowEffect = getString(source.windowEffect ?? source.window_effect);
-	out.uiChromeMode = normalizeUiChromeMode(
-		source.uiChromeMode ?? source.ui_chrome_mode ?? source.launcherLayout ?? source.launcher_layout,
-	);
 	out.customCss = getString(source.customCss ?? source.custom_css);
 	out.allowHueChange = getBoolean(source.allowHueChange ?? source.allow_hue_change);
 	out.allowStyleChange = getBoolean(source.allowStyleChange ?? source.allow_style_change);

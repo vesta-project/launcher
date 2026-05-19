@@ -13,10 +13,9 @@ import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
-import { currentThemeConfig } from "@utils/config-sync";
+import { uiChromeModeEnabled } from "@utils/config-sync";
 import { useOs } from "@utils/os";
 import { startAppTutorial } from "@utils/tutorial";
-import { parseThemeData, resolveUiChromeMode } from "~/themes/presets";
 import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./home.module.css";
 import Sidebar from "./sidebar/sidebar";
@@ -26,10 +25,7 @@ const [sidebarOpen, setSidebarOpen] = createSignal(false);
 
 function HomePage() {
 	const os = useOs();
-	const uiChromeMode = createMemo(() =>
-		resolveUiChromeMode(parseThemeData(currentThemeConfig.theme_data).uiChromeMode),
-	);
-	const isFlatChrome = createMemo(() => uiChromeMode() === "flat");
+	const isFlatChrome = createMemo(() => !uiChromeModeEnabled());
 	const sectionTitle = createMemo(() => {
 		if (!isFlatChrome()) return undefined;
 		if (!pageViewerOpen()) return "Library";
@@ -87,13 +83,13 @@ function HomePage() {
 			<Show when={isFlatChrome()}>
 				<FlatNavigationControls />
 			</Show>
-			<Sidebar
-				os={os()}
-				setPageViewerOpen={setPageViewerOpen}
-				openChanged={setSidebarOpen}
-				open={sidebarOpen()}
-				uiChromeMode={uiChromeMode()}
-			/>
+		<Sidebar
+			os={os()}
+			setPageViewerOpen={setPageViewerOpen}
+			openChanged={setSidebarOpen}
+			open={sidebarOpen()}
+			uiChromeMode={isFlatChrome() ? "flat" : "windowed"}
+		/>
 			<Show
 				when={isFlatChrome()}
 				fallback={

@@ -1,14 +1,13 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
-import { batch } from "solid-js";
+import { batch, createSignal } from "solid-js";
 import { createStore } from "solid-js/store";
 import {
 	type AppThemeConfig,
 	applyTheme,
 	configToTheme,
 	getThemeById,
-	resolveUiChromeMode,
 	normalizeStyleMode,
 	PRESET_THEMES,
 	parseThemeData,
@@ -156,6 +155,17 @@ export const [currentThemeConfig, setCurrentThemeConfig] = createStore<Partial<A
 	theme_background_opacity: 25,
 });
 
+export const [uiChromeModeEnabled, _setUiChromeModeEnabled] = createSignal(false);
+
+function syncUiChromeAttribute(enabled: boolean): void {
+	document.documentElement.dataset.uiChrome = enabled ? "flat" : "windowed";
+}
+
+export function setUiChromeModeEnabled(enabled: boolean): void {
+	_setUiChromeModeEnabled(enabled);
+	syncUiChromeAttribute(enabled);
+}
+
 /**
  * Update the local theme config cache without triggering an apply
  * This is useful for keeping the cache in sync with UI signals before they are committed
@@ -195,6 +205,9 @@ export function applyCommonConfigUpdates(field: string, value: any): void {
 	if (field === "reduced_motion" && typeof value === "boolean") {
 		setReducedMotion(value);
 	}
+	if (field === "ui_chrome_mode_enabled" && typeof value === "boolean") {
+		setUiChromeModeEnabled(value);
+	}
 	// Add more common handlers here as needed
 }
 
@@ -220,7 +233,6 @@ export async function saveThemeUpdate(
 		borderWidth: number;
 		backgroundOpacity: number;
 		windowEffect: string;
-		uiChromeMode: string;
 		customCss: string;
 		allowHueChange: boolean;
 		allowStyleChange: boolean;
@@ -304,7 +316,6 @@ export async function saveThemeUpdate(
 		carriedThemeData.windowEffect ??
 		(sameThemeAsStore ? currentThemeConfig.theme_window_effect : undefined) ??
 		theme.windowEffect;
-	const activeUiChromeMode = resolveUiChromeMode(overrides.uiChromeMode, currentThemeData.uiChromeMode);
 	const activeCustomCss = overrides.customCss ?? carriedThemeData.customCss ?? theme.customCss;
 	const activeAllowHueChange =
 		overrides.allowHueChange ?? carriedThemeData.allowHueChange ?? theme.allowHueChange;
@@ -339,7 +350,6 @@ export async function saveThemeUpdate(
 		borderWidth: activeBorderWidth,
 		backgroundOpacity: activeBackgroundOpacity,
 		windowEffect: activeWindowEffect,
-		uiChromeMode: activeUiChromeMode,
 		customCss: activeCustomCss,
 		allowHueChange: activeAllowHueChange,
 		allowStyleChange: activeAllowStyleChange,
@@ -423,6 +433,11 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 
 	if (typeof config.reduced_motion === "boolean") {
 		applyCommonConfigUpdates("reduced_motion", config.reduced_motion);
+	}
+	if (typeof config.ui_chrome_mode_enabled === "boolean") {
+		setUiChromeModeEnabled(config.ui_chrome_mode_enabled);
+	} else {
+		syncUiChromeAttribute(false);
 	}
 }
 

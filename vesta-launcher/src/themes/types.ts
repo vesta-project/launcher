@@ -1,5 +1,3 @@
-import type { UiChromeMode } from "./ui-chrome";
-
 export type StyleMode = "glass" | "frosted" | "flat";
 
 export type LegacyStyleMode = "satin" | "bordered" | "solid";
@@ -76,7 +74,6 @@ export interface ThemeConfig {
 	allowBorderChange?: boolean;
 	windowEffect?: string;
 	backgroundOpacity?: number;
-	uiChromeMode?: UiChromeMode;
 	variables?: ThemeVariable[];
 	userVariables?: Record<string, ThemeVariableValue>;
 }
@@ -118,7 +115,6 @@ export interface ThemeDataPayload {
 	borderWidth?: number;
 	backgroundOpacity?: number;
 	windowEffect?: string;
-	uiChromeMode?: UiChromeMode;
 	customCss?: string;
 	allowHueChange?: boolean;
 	allowStyleChange?: boolean;

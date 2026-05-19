@@ -21,6 +21,11 @@
 	}
 }
 
+[data-ui-chrome="flat"] .page-viewer-wrapper,
+[data-ui-chrome="flat"] .page-viewer-wrapper--embedded {
+	padding: 0;
+}
+
 .page-viewer-wrapper--embedded {
 	width: 100%;
 	height: 100%;

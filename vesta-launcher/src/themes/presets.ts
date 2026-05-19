@@ -22,6 +22,7 @@ export {
 	setUiChromeModeInThemeData,
 	type UiChromeMode,
 } from "./ui-chrome";
+// TODO: Remove these exports once all consumers read ui_chrome_mode_enabled from app config
 
 /**
  * Vesta Launcher Theme System - Theme Management
@@ -92,7 +93,6 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 					? config.theme_advanced_overrides
 					: baseTheme.customCss,
 		windowEffect: themeData.windowEffect ?? config.theme_window_effect ?? baseTheme.windowEffect,
-		uiChromeMode: themeData.uiChromeMode ?? baseTheme.uiChromeMode,
 		backgroundOpacity:
 			themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,
 		author: themeData.author ?? baseTheme.author,
