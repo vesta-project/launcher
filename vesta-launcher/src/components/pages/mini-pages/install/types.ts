@@ -19,6 +19,7 @@ export interface InstallPageProps {
   modpackPath?: string;
   initialName?: string;
   initialVersion?: string;
+  initialVersionNumber?: string;
   initialMinecraftVersion?: string;
   initialModloader?: string;
   initialModloaderVersion?: string;

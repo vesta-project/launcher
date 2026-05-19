@@ -1,6 +1,7 @@
 import { router } from "@components/page-viewer/page-viewer";
 import type { Instance } from "@utils/instances";
-import { createMemo, createSignal, onMount, Show } from "solid-js";
+import type { ResourceVersion } from "@stores/resources";
+import { createMemo, createSignal, onMount, Show, createEffect, untrack } from "solid-js";
 import { FetchingOverlay } from "./components/FetchingOverlay";
 import { InstallContextBanner } from "./components/InstallContextBanner";
 import { InstallForm } from "./components/InstallForm";
@@ -54,6 +55,19 @@ function InstallPage(props: InstallPageRouteProps) {
 	const effectiveInitialModloader = createMemo(
 		() => (routeParams().initialModloader as string | undefined) || props.initialModloader,
 	);
+	const effectiveInitialVersionNumber = createMemo(
+		() =>
+			(routeParams().initialVersionNumber as string | undefined) || props.initialVersionNumber,
+	);
+	const effectiveProjectName = createMemo(
+		() => (routeParams().projectName as string | undefined) || props.projectName,
+	);
+	const effectiveProjectIcon = createMemo(
+		() => (routeParams().projectIcon as string | undefined) || props.projectIcon,
+	);
+	const effectiveProjectAuthor = createMemo(
+		() => (routeParams().projectAuthor as string | undefined) || props.projectAuthor,
+	);
 	const effectiveResourceType = createMemo(
 		() => (routeParams().resourceType as string | undefined) || props.resourceType,
 	);
@@ -71,11 +85,12 @@ function InstallPage(props: InstallPageRouteProps) {
 	const source = useModpackSource({
 		projectId: effectiveProjectId(),
 		platform: effectivePlatform(),
-		projectName: props.projectName,
-		projectIcon: props.projectIcon,
-		projectAuthor: props.projectAuthor,
+		projectName: effectiveProjectName(),
+		projectIcon: effectiveProjectIcon(),
+		projectAuthor: effectiveProjectAuthor(),
 		initialVersion: effectiveInitialVersion(),
 		initialMinecraftVersion: effectiveInitialMinecraftVersion(),
+		initialVersionNumber: effectiveInitialVersionNumber(),
 		initialModloader: effectiveInitialModloader(),
 		initialModloaderVersion: props.initialModloaderVersion,
 		originalIcon: props.originalIcon,
@@ -106,6 +121,67 @@ function InstallPage(props: InstallPageRouteProps) {
 		selectedModpackVersionId,
 		setSelectedModpackVersionId,
 		setModpackUrl: source.setModpackUrl,
+	});
+
+	// --- Enrich modpackInfo with version details when the selected version resolves ---
+	createEffect(() => {
+		const vs = projectVersions();
+		const selectedId = selectedModpackVersionId();
+		if (!vs || !selectedId) return;
+
+		const selected = vs.find(
+			(v: ResourceVersion) => v.id === selectedId || v.version_number === selectedId,
+		);
+		if (!selected) return;
+
+		const info = untrack(() => source.modpackInfo());
+
+		source.setModpackInfo({
+			name: info?.name || effectiveProjectName() || "Unknown Modpack",
+			version: selected.version_number,
+			author: info?.author || effectiveProjectAuthor() || null,
+			description: info?.description ?? null,
+			iconUrl: info?.iconUrl || effectiveProjectIcon() || null,
+			minecraftVersion:
+				selected.game_versions[0] ||
+				info?.minecraftVersion ||
+				effectiveInitialMinecraftVersion() ||
+				"",
+			modloader:
+				(selected.loaders[0] as any) ||
+				info?.modloader ||
+				effectiveInitialModloader() ||
+				"vanilla",
+			modloaderVersion: info?.modloaderVersion || null,
+			modCount: info?.modCount || 0,
+			format: info?.format || effectivePlatform() || "unknown",
+			modpackId: info?.modpackId || effectiveProjectId(),
+			modpackVersionId: selected.id,
+			modpackPlatform: info?.modpackPlatform || effectivePlatform(),
+		});
+	});
+
+	// --- Sync modpackInfo project-level fields from effective values ---
+	createEffect(() => {
+		const info = untrack(() => source.modpackInfo());
+		if (!info) return;
+
+		const name = effectiveProjectName();
+		const id = effectiveProjectId();
+		const platform = effectivePlatform();
+		const icon = effectiveProjectIcon();
+		const author = effectiveProjectAuthor();
+
+		const updates: Record<string, any> = {};
+		if (name && info.name === "Unknown Modpack") updates.name = name;
+		if (id && !info.modpackId) updates.modpackId = id;
+		if (platform && !info.modpackPlatform) updates.modpackPlatform = platform;
+		if (icon && !info.iconUrl) updates.iconUrl = icon;
+		if (author && !info.author) updates.author = author;
+
+		if (Object.keys(updates).length > 0) {
+			source.setModpackInfo({ ...info, ...updates });
+		}
 	});
 
 	const capabilities = useInstallCapabilities({
@@ -154,16 +230,16 @@ function InstallPage(props: InstallPageRouteProps) {
 				{/* Context banner (modpack info bar) */}
 				<Show
 					when={
-						(props.projectName || source.modpackPath() || source.modpackUrl()) && !isFetchingMetadata()
+						(effectiveProjectName() || source.modpackPath() || source.modpackUrl()) && !isFetchingMetadata()
 					}
 				>
 					<InstallContextBanner
-						title={props.projectName || source.modpackInfo()?.name || "Analyzing modpack details..."}
+						title={effectiveProjectName() || source.modpackInfo()?.name || "Analyzing modpack details..."}
 						label={effectiveResourceType() || (isModpackMode() ? "Modpack" : "Package")}
-						iconUrl={props.projectIcon || source.modpackInfo()?.iconUrl}
+						iconUrl={effectiveProjectIcon() || source.modpackInfo()?.iconUrl}
 							minecraftVersion={source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()}
 						modloader={source.modpackInfo()?.modloader || effectiveInitialModloader()}
-						analyzing={!source.modpackInfo() && !props.projectName}
+						analyzing={!source.modpackInfo() && !effectiveProjectName()}
 						backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"}
 						onBack={() => (effectiveProjectId() ? activeRouter()?.backwards() : source.resetSource())}
 					/>
@@ -173,12 +249,14 @@ function InstallPage(props: InstallPageRouteProps) {
 				<FetchingOverlay
 					isVisible={isFetchingMetadata()}
 					title={
-						projectVersions.loading ? "Loading available versions..." : "Fetching modpack details..."
+						source.isFetchingMetadata()
+							? "Fetching modpack details..."
+							: "Loading available versions..."
 					}
 					message={
-						projectVersions.loading
-							? undefined
-							: "This usually takes a few seconds as we verify the pack manifest."
+						source.isFetchingMetadata()
+							? "This usually takes a few seconds as we verify the pack manifest."
+							: undefined
 					}
 				/>
 
@@ -197,10 +275,10 @@ function InstallPage(props: InstallPageRouteProps) {
 						projectId={effectiveProjectId()}
 						platform={effectivePlatform()}
 						initialData={(props as any).initialData}
-						initialName={props.initialName || source.modpackInfo()?.name || props.projectName}
-						initialAuthor={source.modpackInfo()?.author || props.projectAuthor || undefined}
+						initialName={props.initialName || source.modpackInfo()?.name || effectiveProjectName()}
+						initialAuthor={source.modpackInfo()?.author || effectiveProjectAuthor() || undefined}
 						initialIcon={
-							props.initialIcon || source.modpackInfo()?.iconUrl || props.projectIcon || undefined
+							props.initialIcon || source.modpackInfo()?.iconUrl || effectiveProjectIcon() || undefined
 						}
 						originalIcon={source.originalIcon()}
 					initialVersion={
@@ -220,7 +298,7 @@ function InstallPage(props: InstallPageRouteProps) {
 						onCancel={() => {
 							if (isModpackMode() && (source.modpackUrl() || source.modpackPath())) source.resetSource();
 							else if (props.close) props.close();
-							else activeRouter()?.navigate(props.projectName ? "/resources" : "/home");
+							else activeRouter()?.navigate(effectiveProjectName() ? "/resources" : "/home");
 						}}
 						isInstalling={install.isInstalling()}
 						isFetchingMetadata={isFetchingMetadata()}

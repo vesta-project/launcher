@@ -1139,9 +1139,9 @@ const ResourceDetailsPage: Component<{
         projectIcon: p.icon_url || undefined,
         projectAuthor: p.author,
         initialVersion: version.id,
+        initialVersionNumber: version.version_number,
         initialModloader: version.loaders[0],
         initialMinecraftVersion: version.game_versions[0],
-        modpackUrl: version.download_url,
       });
       return;
     }
