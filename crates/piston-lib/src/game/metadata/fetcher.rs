@@ -33,11 +33,11 @@ struct RuntimeVersionInfo {
 pub async fn fetch_metadata() -> Result<PistonMetadata> {
     log::info!("Fetching PistonMetadata from Modrinth + Mojang...");
 
-    let http_client = build_http_client()?;
+    let http_client = crate::client::shared_client();
 
     // Fetch Minecraft versions from Modrinth (patched version URLs/SHA1)
     log::info!("Fetching Minecraft manifest from Modrinth...");
-    let mc_manifest = fetch_modrinth_mc_manifest(&http_client)
+    let mc_manifest = fetch_modrinth_mc_manifest(http_client)
         .await
         .context("Failed to fetch Modrinth Minecraft manifest")?;
 
@@ -45,10 +45,10 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
 
     // Fetch all modloader manifests from Modrinth in parallel
     log::info!("Fetching modloader metadata from Modrinth...");
-    let fabric_fut = fetch_modrinth_manifest(&http_client, "fabric", MODRINTH_FABRIC_FORMAT);
-    let quilt_fut = fetch_modrinth_manifest(&http_client, "quilt", MODRINTH_QUILT_FORMAT);
-    let forge_fut = fetch_modrinth_manifest(&http_client, "forge", MODRINTH_FORGE_FORMAT);
-    let neo_fut = fetch_modrinth_manifest(&http_client, "neo", MODRINTH_NEO_FORMAT);
+    let fabric_fut = fetch_modrinth_manifest(http_client, "fabric", MODRINTH_FABRIC_FORMAT);
+    let quilt_fut = fetch_modrinth_manifest(http_client, "quilt", MODRINTH_QUILT_FORMAT);
+    let forge_fut = fetch_modrinth_manifest(http_client, "forge", MODRINTH_FORGE_FORMAT);
+    let neo_fut = fetch_modrinth_manifest(http_client, "neo", MODRINTH_NEO_FORMAT);
 
     let (fabric_res, quilt_res, forge_res, neo_res) =
         tokio::join!(fabric_fut, quilt_fut, forge_fut, neo_fut);
@@ -112,7 +112,7 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
             release: mc_manifest.latest.release.clone(),
             snapshot: mc_manifest.latest.snapshot.clone(),
         },
-        required_java_major_versions: fetch_runtime_java_majors(&http_client)
+        required_java_major_versions: fetch_runtime_java_majors(http_client)
             .await
             .unwrap_or_else(|e| {
                 log::warn!(
@@ -294,8 +294,8 @@ fn apply_forge_style_from_modrinth(
 
 /// Fetch Java major version for a single Minecraft version directly from Mojang metadata.
 pub async fn fetch_java_major_for_version(version_id: &str) -> Result<u32> {
-    let client = build_http_client()?;
-    let manifest = fetch_mojang_manifest_with_client(&client).await?;
+    let client = crate::client::shared_client();
+    let manifest = fetch_mojang_manifest_with_client(client).await?;
 
     let version = manifest
         .versions
@@ -306,7 +306,7 @@ pub async fn fetch_java_major_for_version(version_id: &str) -> Result<u32> {
             version_id
         ))?;
 
-    let detail = fetch_version_detail(&client, &version.url).await?;
+    let detail = fetch_version_detail(client, &version.url).await?;
     java_major_from_version_detail(
         &version.id,
         &version.version_type,
@@ -317,20 +317,12 @@ pub async fn fetch_java_major_for_version(version_id: &str) -> Result<u32> {
 
 /// Fetch only latest release/snapshot identifiers from Mojang manifest.
 pub async fn fetch_latest_versions() -> Result<LatestVersions> {
-    let client = build_http_client()?;
-    let manifest = fetch_mojang_manifest_with_client(&client).await?;
+    let client = crate::client::shared_client();
+    let manifest = fetch_mojang_manifest_with_client(client).await?;
     Ok(LatestVersions {
         release: manifest.latest.release,
         snapshot: manifest.latest.snapshot,
     })
-}
-
-fn build_http_client() -> Result<reqwest::Client> {
-    reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(30))
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 VestaLauncher/1.0")
-        .build()
-        .context("Failed to create HTTP client")
 }
 
 async fn fetch_runtime_java_majors(client: &reqwest::Client) -> Result<Vec<u32>> {

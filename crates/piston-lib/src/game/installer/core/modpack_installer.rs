@@ -9,7 +9,6 @@ use crate::game::modpack::parser::{extract_overrides_with_config_policy, get_mod
 use crate::game::modpack::types::ModpackMod;
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
-use reqwest::Client;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -144,8 +143,7 @@ impl ModpackInstaller {
                 "Downloading modpack resources",
                 Some(metadata.mods.len() as u32),
             );
-            let client = Client::new();
-            let downloader = BatchDownloader::new(client, 8);
+            let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
 
             let mut artifacts = Vec::new();
             let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();
@@ -407,8 +405,7 @@ impl ModpackInstaller {
                 Some(diff.resources_to_fix.len() as u32),
             );
 
-            let client = Client::new();
-            let downloader = BatchDownloader::new(client.clone(), 8);
+            let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
             let mut artifacts = Vec::new();
             let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();
 

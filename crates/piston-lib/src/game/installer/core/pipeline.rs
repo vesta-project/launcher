@@ -127,7 +127,7 @@ pub async fn process_and_download_libraries(
                     }
 
                     // Extract the native JAR
-                    let native_bytes = match std::fs::read(&full_path) {
+                    let native_bytes = match tokio::fs::read(&full_path).await {
                         Ok(b) => b,
                         Err(e) => {
                             log::warn!("Cannot read native JAR {}: {}", name, e);

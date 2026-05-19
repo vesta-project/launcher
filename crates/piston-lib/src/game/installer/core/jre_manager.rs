@@ -62,6 +62,7 @@ struct ZuluPackage {
 pub async fn get_or_install_jre(
     jre_dir: &Path,
     required_version: &JavaVersion,
+    client: &reqwest::Client,
     reporter: &dyn ProgressReporter,
 ) -> Result<PathBuf> {
     log::info!("Ensuring JRE {} is available", required_version.major);
@@ -87,13 +88,14 @@ pub async fn get_or_install_jre(
 
     // Download and install
     log::info!("Downloading Zulu JRE {}...", required_version.major);
-    install_zulu_jre(jre_dir, required_version, reporter).await
+    install_zulu_jre(jre_dir, required_version, client, reporter).await
 }
 
 /// Install a Zulu JRE
 async fn install_zulu_jre(
     jre_dir: &Path,
     required_version: &JavaVersion,
+    client: &reqwest::Client,
     reporter: &dyn ProgressReporter,
 ) -> Result<PathBuf> {
     let os = OsType::current();
@@ -140,7 +142,6 @@ async fn install_zulu_jre(
     log::debug!("Querying Zulu API: {}", url);
 
     // Query API
-    let client = reqwest::Client::new();
     let response = client.get(&url).send().await?;
 
     if !response.status().is_success() {
@@ -154,9 +155,9 @@ async fn install_zulu_jre(
 
     log::info!("Downloading Zulu JRE from: {}", package.download_url);
 
-    // Download archive (reuse the client created above)
+    // Download archive (reuse the client)
     let archive_bytes = super::downloader::download_to_memory_with_client(
-        &client,
+        client,
         &package.download_url,
         None,
         Some(reporter),
@@ -377,7 +378,11 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
 }
 
 fn parse_major_version(version_output: &str) -> Option<u32> {
-    let re = regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).ok()?;
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).unwrap()
+    });
     if let Some(caps) = re.captures(version_output) {
         let major = caps.get(1)?.as_str().parse::<u32>().ok()?;
         if major == 1 {
