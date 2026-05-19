@@ -2000,7 +2000,7 @@ pub fn update_installation_status(
 }
 
 #[tauri::command]
-pub fn read_instance_log(
+pub async fn read_instance_log(
     instance_id_slug: String,
     last_lines: Option<usize>,
     since: Option<u64>,
@@ -2017,7 +2017,7 @@ pub fn read_instance_log(
     }
 
     if let Some(s) = since {
-        if let Ok(meta) = std::fs::metadata(&log_file) {
+        if let Ok(meta) = tokio::fs::metadata(&log_file).await {
             if let Ok(mtime) = meta.modified() {
                 if let Ok(duration) = mtime.duration_since(UNIX_EPOCH) {
                     if duration.as_secs() < s {
@@ -2028,18 +2028,22 @@ pub fn read_instance_log(
         }
     }
 
-    let file =
-        std::fs::File::open(&log_file).map_err(|e| format!("Failed to open log file: {}", e))?;
-    let reader = std::io::BufReader::new(file);
-    use std::io::BufRead;
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::BufRead;
+        let file =
+            std::fs::File::open(&log_file).map_err(|e| format!("Failed to open log file: {}", e))?;
+        let reader = std::io::BufReader::new(file);
 
-    let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
-    if let Some(n) = last_lines {
-        if lines.len() > n {
-            return Ok(lines[lines.len() - n..].to_vec());
+        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+        if let Some(n) = last_lines {
+            if lines.len() > n {
+                return Ok(lines[lines.len() - n..].to_vec());
+            }
         }
-    }
-    Ok(lines)
+        Ok(lines)
+    })
+    .await
+    .map_err(|e| format!("Failed to read log: {}", e))?
 }
 
 #[derive(serde::Serialize)]
@@ -2118,33 +2122,38 @@ pub fn get_instance_log_history(instance_id_slug: String) -> Result<Vec<LogFileI
 }
 
 #[tauri::command]
-pub fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
+pub async fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
     let path_buf = std::path::PathBuf::from(&path);
     if !path_buf.exists() {
         return Err("Log file does not exist".to_string());
     }
 
-    let file = std::fs::File::open(&path_buf).map_err(|e| format!("Failed to open file: {}", e))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::{BufRead, BufReader};
+        let file = std::fs::File::open(&path_buf)
+            .map_err(|e| format!("Failed to open file: {}", e))?;
 
-    let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
-    use std::io::{BufRead, BufReader};
+        let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-    if ext == "gz" {
-        use flate2::read::GzDecoder;
-        let decoder = GzDecoder::new(file);
-        let reader = BufReader::new(decoder);
-        let mut lines = Vec::new();
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                lines.push(l);
+        if ext == "gz" {
+            use flate2::read::GzDecoder;
+            let decoder = GzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            let mut lines = Vec::new();
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    lines.push(l);
+                }
             }
+            Ok(lines)
+        } else {
+            let reader = BufReader::new(file);
+            let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+            Ok(lines)
         }
-        Ok(lines)
-    } else {
-        let reader = BufReader::new(file);
-        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
-        Ok(lines)
-    }
+    })
+    .await
+    .map_err(|e| format!("Failed to read log file: {}", e))?
 }
 
 #[tauri::command]

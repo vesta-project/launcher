@@ -160,10 +160,7 @@ pub async fn resolve_image_url(
     }
 
     // 2. Download image with 8s timeout
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(IMAGE_DOWNLOAD_TIMEOUT_SECS))
-        .build()
-        .context("Failed to build HTTP client")?;
+    let client = piston_lib::client::shared_client();
     let response = client
         .get(&url)
         .send()
@@ -236,10 +233,7 @@ pub async fn resolve_image_urls(
     }
 
     // 2. Build a reusable HTTP client
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(IMAGE_DOWNLOAD_TIMEOUT_SECS))
-        .build()
-        .context("Failed to build HTTP client")?;
+    let client = piston_lib::client::shared_client();
 
     // 3. Download all uncached URLs concurrently
     let downloads = uncached.iter().map(|(_, url)| {

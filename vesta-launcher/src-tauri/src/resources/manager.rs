@@ -38,10 +38,7 @@ fn is_record_incomplete(record: &ResourceProjectRecord) -> bool {
 }
 
 async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
-        .build()?;
-
+    let client = piston_lib::client::shared_client();
     let response = client.get(url).send().await?;
     if !response.status().is_success() {
         return Err(anyhow!(

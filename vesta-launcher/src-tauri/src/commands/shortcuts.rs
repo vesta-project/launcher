@@ -21,10 +21,7 @@ async fn process_icon(app_handle: &AppHandle, input: Option<String>) -> Option<P
     }
 
     let bytes = if input.starts_with("http") {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(10))
-            .build()
-            .ok()?;
+        let client = piston_lib::client::shared_client();
         client
             .get(&input)
             .send()

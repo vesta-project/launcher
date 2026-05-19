@@ -231,10 +231,7 @@ impl Task for InstallModpackTask {
                 ModpackSource::Url(u) => {
                     reporter.set_message("Downloading modpack zip...");
 
-                    let client = reqwest::Client::builder()
-                        .user_agent("VestaLauncher/0.1.0")
-                        .build()
-                        .map_err(|e| e.to_string())?;
+                    let client = piston_lib::client::shared_client();
 
                     let response = client.get(&u).send().await.map_err(|e| e.to_string())?;
                     let total_size = response.content_length();

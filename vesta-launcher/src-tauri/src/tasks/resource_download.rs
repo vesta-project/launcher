@@ -8,7 +8,7 @@ use crate::utils::db::get_vesta_conn;
 use crate::utils::instance_helpers::normalize_path;
 use chrono::Utc;
 use diesel::prelude::*;
-use reqwest::{Client, Url};
+use reqwest::Url;
 use std::path::PathBuf;
 use tauri::Manager;
 use tokio::fs;
@@ -125,10 +125,7 @@ impl Task for ResourceDownloadTask {
             let url = Url::parse(&version.download_url)
                 .map_err(|e| format!("Invalid download URL '{}': {}", version.download_url, e))?;
 
-            let client = Client::builder()
-                .user_agent("VestaLauncher/0.1.0")
-                .build()
-                .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+            let client = piston_lib::client::shared_client();
 
             let mut response = client
                 .get(url)

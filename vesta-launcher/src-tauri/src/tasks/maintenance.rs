@@ -468,12 +468,12 @@ impl Task for RepairInstanceTask {
                                     "Downloading modpack version...".to_string(),
                                 );
 
-                                let client = reqwest::Client::new();
+                                let client = piston_lib::client::shared_client();
                                 let silent_reporter =
                                     piston_lib::game::installer::types::SilentProgressReporter;
                                 if let Err(e) =
                                     piston_lib::game::installer::core::downloader::download_to_path(
-                                        &client,
+                                        client,
                                         &version.download_url,
                                         &zip_path,
                                         Some(&version.hash),

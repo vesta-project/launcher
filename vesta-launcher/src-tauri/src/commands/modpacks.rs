@@ -21,7 +21,6 @@ use piston_lib::game::modpack::parser::get_modpack_metadata;
 use piston_lib::game::modpack::types::ModpackFormat;
 use serde_json;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use tauri::{command, AppHandle, State};
 use tempfile::NamedTempFile;
 
@@ -560,12 +559,7 @@ pub async fn get_modpack_info_from_url(
             url,
             target_id
         );
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = piston_lib::client::shared_client();
 
     // Optimization: Try to get metadata from Modrinth API first to avoid downloading large ZIPs
     if url.contains("modrinth.com/") {
@@ -830,7 +824,7 @@ pub async fn get_modpack_info_from_url(
     }
 
     // Fallback: Download and parse physical ZIP
-    let (final_url, icon_url) = resolve_modpack_resource(&client, &url).await;
+    let (final_url, icon_url) = resolve_modpack_resource(client, &url).await;
     log::info!(
         "[get_modpack_info_from_url] Falling back to ZIP download. Resolved: {} -> {}",
         url,
@@ -1434,14 +1428,9 @@ pub async fn install_modpack_from_url(
     metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
     task_manager: State<'_, TaskManager>,
 ) -> Result<i32, String> {
-    let client = reqwest::Client::builder()
-        .user_agent("VestaLauncher/0.1.0")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = piston_lib::client::shared_client();
 
-    let (final_url, _) = resolve_modpack_resource(&client, &url).await;
+    let (final_url, _) = resolve_modpack_resource(client, &url).await;
     log::info!(
         "[install_modpack_from_url] Resolved URL: {} -> {}",
         url,

@@ -8,3 +8,10 @@ authors = ["Eatham532"]
 edition = "2021"
 description = "A Minecraft launcher built with Tauri and SolidJS"
 license = "MIT"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

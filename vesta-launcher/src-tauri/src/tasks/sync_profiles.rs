@@ -25,7 +25,7 @@ pub async fn download_to_base64_data_uri(url: &str) -> std::result::Result<Strin
         return Ok(url.to_string());
     }
 
-    let client = reqwest::Client::new();
+    let client = piston_lib::client::shared_client();
     let resp = client.get(url).send().await.map_err(|e| e.to_string())?;
 
     if !resp.status().is_success() {
