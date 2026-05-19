@@ -33,12 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@ui/select/select";
-import {
-  Switch,
-  SwitchControl,
-  SwitchLabel,
-  SwitchThumb,
-} from "@ui/switch/switch";
+import { VersionFilterBar } from "./version-filter-bar/version-filter-bar";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
@@ -265,7 +260,9 @@ const ResourceDetailsPage: Component<{
   });
 
   const [versionFilter, setVersionFilter] = createSignal("");
-  const [includeUnstable, setIncludeUnstable] = createSignal(false);
+  const [versionReleaseTypes, setVersionReleaseTypes] = createSignal(new Set<string>());
+  const [versionLoaders, setVersionLoaders] = createSignal(new Set<string>());
+  const [gameVersionChips, setGameVersionChips] = createSignal<string[]>([]);
   const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<
     string | null
   >(null);
@@ -595,7 +592,9 @@ const ResourceDetailsPage: Component<{
             activeRouter()?.removeQuery("activeTab");
           }
           setVersionFilter("");
-          setIncludeUnstable(false);
+          setVersionReleaseTypes(new Set<string>());
+          setVersionLoaders(new Set<string>());
+          setGameVersionChips([]);
           setVersionPage(1);
           setSelectedGalleryItem(null);
         }
@@ -638,6 +637,38 @@ const ResourceDetailsPage: Component<{
     });
   });
 
+  const uniqueGameVersions = createMemo(() => {
+    const seen = new Set<string>();
+    for (const v of resources.state.versions) {
+      for (const gv of v.game_versions) {
+        seen.add(gv);
+      }
+    }
+    return Array.from(seen).sort((a, b) => {
+      const pa = a.split(".").map(Number);
+      const pb = b.split(".").map(Number);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const va = pa[i] || 0;
+        const vb = pb[i] || 0;
+        if (va !== vb) return vb - va;
+      }
+      return 0;
+    });
+  });
+
+  const uniqueLoaders = createMemo(() => {
+    const seen = new Set<string>();
+    for (const v of resources.state.versions) {
+      for (const l of v.loaders) {
+        const lower = l.toLowerCase();
+        if (lower && lower !== "vanilla") {
+          seen.add(l);
+        }
+      }
+    }
+    return Array.from(seen).sort();
+  });
+
   const hasCompatibleUnstableVersions = createMemo(() =>
     compatibilityFilteredVersions().some((v) => v.release_type !== "release"),
   );
@@ -646,8 +677,53 @@ const ResourceDetailsPage: Component<{
     const query = versionFilter().trim().toLowerCase();
     let list = compatibilityFilteredVersions();
 
-    if (!includeUnstable()) {
-      list = list.filter((v) => v.release_type === "release");
+    const releaseTypes = versionReleaseTypes();
+    if (releaseTypes.size > 0) {
+      list = list.filter((v) => releaseTypes.has(v.release_type));
+    }
+
+    const loaders = versionLoaders();
+    if (loaders.size > 0) {
+      list = list.filter((v) =>
+        v.loaders.some((l) => loaders.has(l.toLowerCase())),
+      );
+    }
+
+    const chips = gameVersionChips();
+    if (chips.length > 0) {
+      list = list.filter((v) =>
+        chips.some((chip) => {
+          if (chip.startsWith("range:")) {
+            const rangeStr = chip.slice("range:".length);
+            const parts = rangeStr.split("...");
+            if (parts.length !== 2) return false;
+            const start = parts[0];
+            const end = parts[1];
+            return v.game_versions.some((gv) => {
+              try {
+                const pa = gv.split(".").map(Number);
+                const ps = start.split(".").map(Number);
+                const pe = end.split(".").map(Number);
+                for (let i = 0; i < Math.max(pa.length, ps.length, pe.length); i++) {
+                  const va = pa[i] || 0;
+                  const vs = ps[i] || 0;
+                  const ve = pe[i] || 0;
+                  if (va < vs) return false;
+                  if (va > ve) return true;
+                }
+                return true;
+              } catch {
+                return false;
+              }
+            });
+          }
+          if (chip.startsWith("mc:")) {
+            const gv = chip.slice("mc:".length);
+            return v.game_versions.some((v2) => v2 === gv);
+          }
+          return v.game_versions.some((v2) => v2 === chip);
+        }),
+      );
     }
 
     if (query) {
@@ -693,11 +769,10 @@ const ResourceDetailsPage: Component<{
       };
     }
 
-    if (!includeUnstable() && hasCompatibleUnstableVersions()) {
+    if (gameVersionChips().length > 0 || versionLoaders().size > 0 || versionReleaseTypes().size > 0) {
       return {
-        title: "Only unstable versions are available",
-        description:
-          "Enable Include Unstable Versions to show beta and alpha builds for this selection.",
+        title: "No versions match your filters",
+        description: "Try clearing the version chips or loader filters.",
       };
     }
 
@@ -967,7 +1042,9 @@ const ResourceDetailsPage: Component<{
     // Clear stale project data so the old resource isn't briefly visible while loading
     setProject(undefined);
     setVersionFilter("");
-    setIncludeUnstable(false);
+    setVersionReleaseTypes(new Set<string>());
+    setVersionLoaders(new Set<string>());
+    setGameVersionChips([]);
     setVersionPage(1);
     setManualVersionId(null);
     setSelectedGalleryItem(null);
@@ -2504,45 +2581,26 @@ const ResourceDetailsPage: Component<{
 
                       <Show when={activeTab() === "versions"}>
                         <div class={styles["version-page"]}>
-                          <div class={styles["version-filters"]}>
-                            <input
-                              type="text"
-                              placeholder="Filter versions (e.g. 1.21.1, Fabric)..."
-                              value={versionFilter()}
-                              onInput={(e) => {
-                                setVersionFilter(e.currentTarget.value);
-                                setVersionPage(1);
-                              }}
-                              class={styles["version-search-input"]}
-                            />
-                            <div class={styles["version-filter-toggles"]}>
-                              <Switch
-                                checked={includeUnstable()}
-                                onCheckedChange={(checked: boolean) => {
-                                  setIncludeUnstable(checked);
-                                  setVersionPage(1);
-                                }}
-                                class={styles["version-switch"]}
-                              >
-                                <SwitchControl
-                                  class={styles["version-switch__control"]}
-                                >
-                                  <SwitchThumb
-                                    class={styles["version-switch__thumb"]}
-                                  />
-                                </SwitchControl>
-                                <SwitchLabel
-                                  class={styles["version-switch__label"]}
-                                >
-                                  Include Unstable Versions
-                                </SwitchLabel>
-                              </Switch>
-                              <span class={styles["version-filter-count"]}>
-                                {filteredVersions().length} /{" "}
-                                {resources.state.versions.length} shown
-                              </span>
-                            </div>
-                          </div>
+                          <VersionFilterBar
+                            searchText={versionFilter()}
+                            onSearchTextChange={(text) => {
+                              setVersionFilter(text);
+                            }}
+                            selectedVersions={gameVersionChips()}
+                            onSelectedVersionsChange={setGameVersionChips}
+                            availableVersions={uniqueGameVersions()}
+                            releaseTypes={versionReleaseTypes()}
+                            onReleaseTypesChange={(types) => {
+                              setVersionReleaseTypes(new Set(types));
+                            }}
+                            loaders={versionLoaders()}
+                            onLoadersChange={(loaders) => {
+                              setVersionLoaders(new Set(loaders));
+                            }}
+                            availableLoaders={uniqueLoaders()}
+                            totalCount={resources.state.versions.length}
+                            filteredCount={filteredVersions().length}
+                          />
 
                           <Show when={selectedInstance() && !isModpack()}>
                             <div

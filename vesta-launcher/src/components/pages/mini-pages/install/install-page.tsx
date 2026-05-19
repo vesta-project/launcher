@@ -193,7 +193,11 @@ function InstallPage(props: InstallPageRouteProps) {
 							props.initialIcon || source.modpackInfo()?.iconUrl || props.projectIcon || undefined
 						}
 						originalIcon={source.originalIcon()}
-						initialVersion={props.initialVersion || source.modpackInfo()?.minecraftVersion}
+						initialVersion={
+							isModpackMode()
+								? source.modpackInfo()?.minecraftVersion || ""
+								: props.initialVersion
+						}
 						initialModloader={props.initialModloader || source.modpackInfo()?.modloader}
 						initialModloaderVersion={
 							source.modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined
