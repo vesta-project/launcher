@@ -21,8 +21,8 @@
 	}
 }
 
-[data-ui-chrome="flat"] .page-viewer-wrapper,
-[data-ui-chrome="flat"] .page-viewer-wrapper--embedded {
+[data-ui-chrome-enabled="false"] .page-viewer-wrapper,
+[data-ui-chrome-enabled="false"] .page-viewer-wrapper--embedded {
 	padding: 0;
 }
 

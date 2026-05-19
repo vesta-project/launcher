@@ -158,7 +158,7 @@ export const [currentThemeConfig, setCurrentThemeConfig] = createStore<Partial<A
 export const [uiChromeModeEnabled, _setUiChromeModeEnabled] = createSignal(false);
 
 function syncUiChromeAttribute(enabled: boolean): void {
-	document.documentElement.dataset.uiChrome = enabled ? "flat" : "windowed";
+	document.documentElement.dataset.uiChromeEnabled = enabled ? "true" : "false";
 }
 
 export function setUiChromeModeEnabled(enabled: boolean): void {
