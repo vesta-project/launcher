@@ -413,7 +413,7 @@ pub async fn set_network_status(
     network_manager: tauri::State<'_, crate::utils::network::NetworkManager>,
 ) -> Result<(), String> {
     if status == crate::utils::network::NetworkStatus::Online {
-        let actual = network_manager.check_connectivity().await;
+        let actual = network_manager.verify_online().await;
         network_manager.set_status(actual);
     } else {
         network_manager.set_status(status);
@@ -425,7 +425,7 @@ pub async fn set_network_status(
 pub async fn refresh_network_status(
     network_manager: tauri::State<'_, crate::utils::network::NetworkManager>,
 ) -> Result<crate::utils::network::NetworkStatus, String> {
-    let status = network_manager.check_connectivity().await;
+    let status = network_manager.verify_online().await;
     network_manager.set_status(status);
     Ok(status)
 }

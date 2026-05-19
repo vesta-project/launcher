@@ -104,26 +104,20 @@ pub async fn get_resource_categories(
 #[tauri::command]
 pub async fn search_resources(
     resource_manager: State<'_, ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
     platform: SourcePlatform,
     query: SearchQuery,
 ) -> Result<SearchResponse> {
-    let start = std::time::Instant::now();
     let res = resource_manager.search(platform, query).await;
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
     Ok(res?)
 }
 
 #[tauri::command]
 pub async fn get_resource_project(
     resource_manager: State<'_, ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
     platform: SourcePlatform,
     id: String,
 ) -> Result<ResourceProject> {
-    let start = std::time::Instant::now();
     let res = resource_manager.get_project(platform, &id).await;
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
     Ok(res?)
 }
 

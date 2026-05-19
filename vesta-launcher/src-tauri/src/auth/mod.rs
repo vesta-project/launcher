@@ -98,12 +98,7 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
     let client = get_auth_client().map_err(|e| e.to_string())?;
 
     // Request device code
-    let start = std::time::Instant::now();
     let device_code_res = get_device_code(&client).await;
-
-    if let Some(nm) = app.try_state::<crate::utils::network::NetworkManager>() {
-        nm.report_request_result(start.elapsed().as_millis(), device_code_res.is_ok());
-    }
 
     let device_code_response =
         device_code_res.map_err(|e| format!("Failed to get device code: {}", e))?;

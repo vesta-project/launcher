@@ -2,16 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { createRoot, createSignal, onMount } from "solid-js";
 
-export type NetworkStatus = "online" | "weak" | "offline";
+export type NetworkStatus = "online" | "offline";
 
 function createNetworkStore() {
 	const [status, setStatus] = createSignal<NetworkStatus>("online");
 	const [isRefreshing, setIsRefreshing] = createSignal(false);
 
-	// Initial status fetch
 	invoke<NetworkStatus>("get_network_status").then((s) => setStatus(s));
 
-	// Listen for browser events and sync to backend
 	window.addEventListener("offline", () => {
 		invoke("set_network_status", { status: "offline" });
 	});
@@ -19,60 +17,49 @@ function createNetworkStore() {
 		invoke("set_network_status", { status: "online" });
 	});
 
-	let lastFocusCheck = 0;
-	// Re-verify when app regained focus
 	window.addEventListener("focus", () => {
-		const now = Date.now();
-		// If offline or weak, check immediately on focus
-		const isNotOnline = status() !== "online";
-		if (isNotOnline || now - lastFocusCheck > 30000) {
-			lastFocusCheck = now;
+		if (status() !== "online") {
 			refresh();
 		}
 	});
 
-	// Periodic background check
+	// Periodic check while the window is visible to catch silent
+	// connectivity loss (e.g. router loses internet but Wi-Fi stays up)
 	onMount(() => {
 		let interval: ReturnType<typeof setInterval> | null = null;
 
-		const startInterval = () => {
+		const start = () => {
 			if (interval) return;
 			interval = setInterval(() => {
 				invoke<NetworkStatus>("refresh_network_status").then((s) => {
 					if (s !== status()) setStatus(s);
 				});
-			}, 45000); // Check every 45s when active
+			}, 60000);
 		};
 
-		const stopInterval = () => {
+		const stop = () => {
 			if (interval) {
 				clearInterval(interval);
 				interval = null;
 			}
 		};
 
-		// Start initially
-		startInterval();
-
-		// Handle visibility changes to save resources
-		const handleVisibility = () => {
+		document.addEventListener("visibilitychange", () => {
 			if (document.hidden) {
-				stopInterval();
+				stop();
 			} else {
-				startInterval();
-				refresh(); // Check immediately when coming back
+				start();
 			}
-		};
+		});
 
-		document.addEventListener("visibilitychange", handleVisibility);
+		if (!document.hidden) start();
 
 		return () => {
-			stopInterval();
-			document.removeEventListener("visibilitychange", handleVisibility);
+			stop();
+			document.removeEventListener("visibilitychange", start);
 		};
 	});
 
-	// Listen for backend events
 	listen<NetworkStatus>("core://network-status-changed", (event) => {
 		setStatus(event.payload);
 	});
@@ -96,7 +83,6 @@ function createNetworkStore() {
 		refresh,
 		isRefreshing,
 		isOnline: () => status() === "online",
-		isWeak: () => status() === "weak",
 		isOffline: () => status() === "offline",
 	};
 }

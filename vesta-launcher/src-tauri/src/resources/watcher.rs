@@ -553,8 +553,8 @@ async fn identify_and_link_resource(
     let network_manager = app.state::<crate::utils::network::NetworkManager>();
     let network_status = network_manager.get_status();
 
-    // Skip external API calls if network is weak or offline
-    if network_status != crate::utils::network::NetworkStatus::Online {
+    // Skip external API calls if offline
+    if network_status == crate::utils::network::NetworkStatus::Offline {
         log::info!(
             "[ResourceWatcher] Skipping remote identification for {:?} due to {:?} network",
             path,

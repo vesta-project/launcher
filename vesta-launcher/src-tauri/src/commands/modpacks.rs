@@ -51,9 +51,7 @@ pub async fn get_modpack_info(
     target_id: Option<String>,
     target_platform: Option<String>,
     resource_manager: State<'_, crate::resources::ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
 ) -> Result<ModpackInfo, String> {
-    let start = std::time::Instant::now();
     let res = (async {
         let path_buf = PathBuf::from(path);
     if !path_buf.exists() {
@@ -370,8 +368,6 @@ pub async fn get_modpack_info(
     Ok(info)
 }).await;
 
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
-
     let info_val = res.map_err(|e| e.to_string())?;
     Ok(info_val)
 }
@@ -557,10 +553,8 @@ pub async fn get_modpack_info_from_url(
     target_id: Option<String>,
     target_platform: Option<String>,
     resource_manager: State<'_, crate::resources::ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
 ) -> Result<ModpackInfo, String> {
-    let start = std::time::Instant::now();
-    let res = (async {
+    (async {
         log::info!(
             "[get_modpack_info_from_url] Fetching info for: {} (id override: {:?})",
             url,
@@ -886,7 +880,6 @@ pub async fn get_modpack_info_from_url(
         target_id,
         target_platform,
         resource_manager,
-        nm.clone(),
     )
     .await?;
     if icon_url.is_some() {
@@ -894,10 +887,7 @@ pub async fn get_modpack_info_from_url(
     }
 
     Ok(info)
-}).await;
-
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
-    res
+}).await
 }
 
 async fn prepare_instance(
