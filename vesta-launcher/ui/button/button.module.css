@@ -31,8 +31,12 @@
 }
 
 .launcher-button:active:not(:disabled) {
-    color: var(--text-primary);
     transition-duration: 50ms;
+}
+
+.launcher-button:focus-visible {
+    outline: 2px solid var(--border-focus, hsl(var(--color__primary-hue) 70% 50% / 0.8));
+    outline-offset: 2px;
 }
 
 .launcher-button:disabled {
@@ -103,26 +107,6 @@
             transform: scale(108%);
         }
     }
-}
-
-.launcher-button--primary {
-    --button-color: hsla(var(--color__primary-hue) 60% 50% / 1);
-    color: var(--text-on-accent);
-}
-
-.launcher-button--secondary {
-    --button-color: var(--surface-raised);
-    color: var(--text-primary);
-}
-
-.launcher-button--accent {
-    --button-color: hsla(var(--color__primary-hue) 80% 60% / 1);
-    color: var(--text-on-accent);
-}
-
-.launcher-button--destructive {
-    --button-color: hsla(0 100% 50% / 0.8);
-    color: var(--text-on-accent);
 }
 
 /* Size modifications */
