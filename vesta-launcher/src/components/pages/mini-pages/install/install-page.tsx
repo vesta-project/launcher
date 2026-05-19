@@ -47,6 +47,10 @@ function InstallPage(props: InstallPageRouteProps) {
 	const effectiveInitialVersion = createMemo(
 		() => (routeParams().initialVersion as string | undefined) || props.initialVersion,
 	);
+	const effectiveInitialMinecraftVersion = createMemo(
+		() =>
+			(routeParams().initialMinecraftVersion as string | undefined) || props.initialMinecraftVersion,
+	);
 	const effectiveResourceType = createMemo(
 		() => (routeParams().resourceType as string | undefined) || props.resourceType,
 	);
@@ -68,6 +72,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		projectIcon: props.projectIcon,
 		projectAuthor: props.projectAuthor,
 		initialVersion: effectiveInitialVersion(),
+		initialMinecraftVersion: effectiveInitialMinecraftVersion(),
 		initialModloader: props.initialModloader,
 		initialModloaderVersion: props.initialModloaderVersion,
 		originalIcon: props.originalIcon,
@@ -193,11 +198,11 @@ function InstallPage(props: InstallPageRouteProps) {
 							props.initialIcon || source.modpackInfo()?.iconUrl || props.projectIcon || undefined
 						}
 						originalIcon={source.originalIcon()}
-						initialVersion={
-							isModpackMode()
-								? source.modpackInfo()?.minecraftVersion || ""
-								: props.initialVersion
-						}
+					initialVersion={
+						isModpackMode()
+							? effectiveInitialMinecraftVersion() || source.modpackInfo()?.minecraftVersion || ""
+							: props.initialVersion
+					}
 						initialModloader={props.initialModloader || source.modpackInfo()?.modloader}
 						initialModloaderVersion={
 							source.modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined

@@ -1140,6 +1140,7 @@ const ResourceDetailsPage: Component<{
         projectAuthor: p.author,
         initialVersion: version.id,
         initialModloader: version.loaders[0],
+        initialMinecraftVersion: version.game_versions[0],
         modpackUrl: version.download_url,
       });
       return;
