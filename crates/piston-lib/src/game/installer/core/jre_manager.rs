@@ -5,6 +5,7 @@ use crate::utils::process::PistonCommandExt;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use tokio::task;
 
 const ZULU_API_BASE: &str = "https://api.azul.com/metadata/v1/zulu/packages";
 
@@ -62,6 +63,7 @@ struct ZuluPackage {
 pub async fn get_or_install_jre(
     jre_dir: &Path,
     required_version: &JavaVersion,
+    client: &reqwest::Client,
     reporter: &dyn ProgressReporter,
 ) -> Result<PathBuf> {
     log::info!("Ensuring JRE {} is available", required_version.major);
@@ -87,13 +89,14 @@ pub async fn get_or_install_jre(
 
     // Download and install
     log::info!("Downloading Zulu JRE {}...", required_version.major);
-    install_zulu_jre(jre_dir, required_version, reporter).await
+    install_zulu_jre(jre_dir, required_version, client, reporter).await
 }
 
 /// Install a Zulu JRE
 async fn install_zulu_jre(
     jre_dir: &Path,
     required_version: &JavaVersion,
+    client: &reqwest::Client,
     reporter: &dyn ProgressReporter,
 ) -> Result<PathBuf> {
     let os = OsType::current();
@@ -140,7 +143,6 @@ async fn install_zulu_jre(
     log::debug!("Querying Zulu API: {}", url);
 
     // Query API
-    let client = reqwest::Client::new();
     let response = client.get(&url).send().await?;
 
     if !response.status().is_success() {
@@ -154,9 +156,9 @@ async fn install_zulu_jre(
 
     log::info!("Downloading Zulu JRE from: {}", package.download_url);
 
-    // Download archive (reuse the client created above)
+    // Download archive (reuse the client)
     let archive_bytes = super::downloader::download_to_memory_with_client(
-        &client,
+        client,
         &package.download_url,
         None,
         Some(reporter),
@@ -170,7 +172,7 @@ async fn install_zulu_jre(
     log::info!("Extracting JRE to: {:?}", install_dir);
 
     if ext == "zip" {
-        extract_zip(&archive_bytes, &install_dir).await?;
+        extract_zip(archive_bytes.clone(), &install_dir).await?;
     } else {
         extract_tar_gz(&archive_bytes, &install_dir).await?;
     }
@@ -183,9 +185,16 @@ async fn install_zulu_jre(
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&java_path)?.permissions();
+        let jp = java_path.clone();
+        let mut perms = task::spawn_blocking(move || std::fs::metadata(&jp))
+            .await
+            .context("spawn_blocking panicked")??
+            .permissions();
         perms.set_mode(0o755);
-        std::fs::set_permissions(&java_path, perms)?;
+        let jp = java_path.clone();
+        task::spawn_blocking(move || std::fs::set_permissions(&jp, perms))
+            .await
+            .context("spawn_blocking panicked")??;
     }
 
     if let Some(label) = relative_jre_label(jre_dir, &java_path) {
@@ -377,7 +386,11 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
 }
 
 fn parse_major_version(version_output: &str) -> Option<u32> {
-    let re = regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).ok()?;
+    use std::sync::OnceLock;
+    static RE: OnceLock<regex::Regex> = OnceLock::new();
+    let re = RE.get_or_init(|| {
+        regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).unwrap()
+    });
     if let Some(caps) = re.captures(version_output) {
         let major = caps.get(1)?.as_str().parse::<u32>().ok()?;
         if major == 1 {

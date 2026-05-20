@@ -68,11 +68,7 @@ pub fn ensure_instance_directory(instances_root: &Path, slug: &str) -> Result<Pa
 
 /// Download an icon from a URL and return it as bytes
 pub async fn download_icon_as_bytes(url: &str) -> Result<Vec<u8>> {
-    let client = reqwest::Client::builder()
-        .user_agent("VestaLauncher/0.1.0")
-        .timeout(std::time::Duration::from_secs(10))
-        .build()?;
-
+    let client = piston_lib::client::shared_client();
     let resp = client.get(url).send().await?;
     let bytes = resp.bytes().await?;
     Ok(bytes.to_vec())

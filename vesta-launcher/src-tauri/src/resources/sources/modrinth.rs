@@ -122,10 +122,7 @@ pub struct ModrinthSource {
 impl ModrinthSource {
     pub fn new() -> Self {
         Self {
-            client: Client::builder()
-                .user_agent("VestaLauncher/0.1.0")
-                .build()
-                .unwrap(),
+            client: piston_lib::client::shared_client().clone(),
         }
     }
 }

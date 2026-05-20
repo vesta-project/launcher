@@ -8,7 +8,8 @@ use crate::utils::db::get_vesta_conn;
 use crate::utils::instance_helpers::normalize_path;
 use chrono::Utc;
 use diesel::prelude::*;
-use reqwest::{Client, Url};
+use reqwest::Url;
+use sha1::{Digest, Sha1};
 use std::path::PathBuf;
 use tauri::Manager;
 use tokio::fs;
@@ -82,13 +83,17 @@ impl Task for ResourceDownloadTask {
             ctx.set_title(format!("Installing {}", project_name));
 
             // 1. Get instance path
-            let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-            let instance_path_str: String = instances_dsl::instance
-                .filter(instances_dsl::id.eq(instance_id))
-                .select(instances_dsl::game_directory)
-                .first::<Option<String>>(&mut conn)
-                .map_err(|e| format!("Instance not found: {}", e))?
-                .ok_or_else(|| "Instance has no game directory set".to_string())?;
+            let instance_path_str: String = tauri::async_runtime::spawn_blocking(move || {
+                let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+                instances_dsl::instance
+                    .filter(instances_dsl::id.eq(instance_id))
+                    .select(instances_dsl::game_directory)
+                    .first::<Option<String>>(&mut conn)
+                    .map_err(|e| format!("Instance not found: {}", e))?
+                    .ok_or_else(|| "Instance has no game directory set".to_string())
+            })
+            .await
+            .map_err(|e| format!("Failed to query instance: {}", e))??;
 
             let instance_path = PathBuf::from(instance_path_str);
 
@@ -125,10 +130,7 @@ impl Task for ResourceDownloadTask {
             let url = Url::parse(&version.download_url)
                 .map_err(|e| format!("Invalid download URL '{}': {}", version.download_url, e))?;
 
-            let client = Client::builder()
-                .user_agent("VestaLauncher/0.1.0")
-                .build()
-                .map_err(|e| format!("Failed to build HTTP client: {}", e))?;
+            let client = piston_lib::client::shared_client();
 
             let mut response = client
                 .get(url)
@@ -154,6 +156,8 @@ impl Task for ResourceDownloadTask {
                 .await
                 .map_err(|e| e.to_string())?;
 
+            let mut hasher = Sha1::new();
+
             while let Some(chunk) = response.chunk().await.map_err(|e| e.to_string())? {
                 // Check for cancellation
                 if *ctx.cancel_rx.borrow() {
@@ -162,6 +166,7 @@ impl Task for ResourceDownloadTask {
                 }
 
                 file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+                hasher.update(&chunk);
                 downloaded += chunk.len() as u64;
 
                 let now = std::time::Instant::now();
@@ -196,14 +201,23 @@ impl Task for ResourceDownloadTask {
             drop(file);
 
             // 4. Verification (Hash check)
-            // Skip for now, implement if needed later
+            if !version.hash.is_empty() {
+                let computed = format!("{:x}", hasher.finalize());
+                if computed.to_lowercase() != version.hash.to_lowercase() {
+                    let _ = fs::remove_file(&temp_file_path).await;
+                    return Err(format!(
+                        "SHA1 mismatch: expected {}, got {}",
+                        version.hash, computed
+                    ));
+                }
+            }
 
             // 5. Finalize file placement
             let final_path = target_dir.join(&version.file_name);
             let final_path_str = normalize_path(&final_path);
 
             // Get metadata from temp file before move
-            let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&temp_file_path) {
+            let (file_size, file_mtime) = if let Ok(meta) = tokio::fs::metadata(&temp_file_path).await {
                 (
                     meta.len() as i64,
                     meta.modified()
@@ -217,18 +231,25 @@ impl Task for ResourceDownloadTask {
             };
 
             // Check for existing database entry to find old file path
-            let existing_resource = installed_dsl::installed_resource
-                .filter(installed_dsl::instance_id.eq(instance_id))
-                .filter(installed_dsl::remote_id.eq(&project_id))
-                .first::<InstalledResource>(&mut conn)
-                .optional()
-                .map_err(|e| e.to_string())?;
+            let existing_resource = tauri::async_runtime::spawn_blocking({
+                let project_id = project_id.clone();
+                move || {
+                    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+                    installed_dsl::installed_resource
+                        .filter(installed_dsl::instance_id.eq(instance_id))
+                        .filter(installed_dsl::remote_id.eq(project_id))
+                        .first::<InstalledResource>(&mut conn)
+                        .optional()
+                        .map_err(|e| e.to_string())
+                }
+            })
+            .await
+            .map_err(|e| format!("Failed to query installed resource: {}", e))??;
 
             if let Some(res) = existing_resource {
-                // If the old path is different from new path, delete old file
                 if res.local_path != final_path_str {
                     let old_path = std::path::PathBuf::from(&res.local_path);
-                    if old_path.exists() {
+                    if tokio::fs::metadata(&old_path).await.is_ok() {
                         log::info!(
                             "[ResourceDownload] Deleting old version file: {:?}",
                             old_path
@@ -237,40 +258,51 @@ impl Task for ResourceDownloadTask {
                     }
                 }
 
-                // Update existing record
-                diesel::update(
-                    installed_dsl::installed_resource.filter(installed_dsl::id.eq(res.id)),
-                )
-                .set((
-                    installed_dsl::platform.eq(match platform {
-                        SourcePlatform::Modrinth => "modrinth",
-                        SourcePlatform::CurseForge => "curseforge",
-                    }),
-                    installed_dsl::remote_version_id.eq(&version.id),
-                    installed_dsl::resource_type.eq(match resource_type {
-                        ResourceType::Mod => "mod",
-                        ResourceType::ResourcePack => "resourcepack",
-                        ResourceType::Shader => "shader",
-                        ResourceType::DataPack => "datapack",
-                        ResourceType::Modpack => "modpack",
-                        ResourceType::World => "world",
-                    }),
-                    installed_dsl::local_path.eq(&final_path_str),
-                    installed_dsl::display_name.eq(&project_name),
-                    installed_dsl::current_version.eq(&version.version_number),
-                    installed_dsl::release_type
-                        .eq(format!("{:?}", version.release_type).to_lowercase()),
-                    installed_dsl::is_manual.eq(false),
-                    installed_dsl::is_enabled.eq(true),
-                    installed_dsl::last_updated.eq(Utc::now().to_rfc3339()),
-                    installed_dsl::file_size.eq(file_size),
-                    installed_dsl::file_mtime.eq(file_mtime),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| e.to_string())?;
+                let res_id = res.id;
+                let version_id = version.id.clone();
+                let project_name = project_name.clone();
+                let final_path_str = final_path_str.clone();
+                let version_number = version.version_number.clone();
+                let release_type = format!("{:?}", version.release_type).to_lowercase();
+                let version_hash = version.hash.clone();
+
+                tauri::async_runtime::spawn_blocking(move || {
+                    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+                    diesel::update(
+                        installed_dsl::installed_resource.filter(installed_dsl::id.eq(res_id)),
+                    )
+                    .set((
+                        installed_dsl::platform.eq(match platform {
+                            SourcePlatform::Modrinth => "modrinth",
+                            SourcePlatform::CurseForge => "curseforge",
+                        }),
+                        installed_dsl::remote_version_id.eq(version_id),
+                        installed_dsl::resource_type.eq(match resource_type {
+                            ResourceType::Mod => "mod",
+                            ResourceType::ResourcePack => "resourcepack",
+                            ResourceType::Shader => "shader",
+                            ResourceType::DataPack => "datapack",
+                            ResourceType::Modpack => "modpack",
+                            ResourceType::World => "world",
+                        }),
+                        installed_dsl::local_path.eq(final_path_str),
+                        installed_dsl::display_name.eq(project_name),
+                        installed_dsl::current_version.eq(version_number),
+                        installed_dsl::release_type.eq(release_type),
+                        installed_dsl::is_manual.eq(false),
+                        installed_dsl::is_enabled.eq(true),
+                        installed_dsl::last_updated.eq(Utc::now().to_rfc3339()),
+                        installed_dsl::file_size.eq(file_size),
+                        installed_dsl::file_mtime.eq(file_mtime),
+                        installed_dsl::hash.eq(Some(version_hash)),
+                    ))
+                    .execute(&mut conn)
+                    .map_err(|e| e.to_string())
+                })
+                .await
+                .map_err(|e| format!("Failed to update installed resource: {}", e))??;
             } else {
-                // Handle existing file block (pre-existing but not in DB)
-                if final_path.exists() {
+                if tokio::fs::metadata(&final_path).await.is_ok() {
                     fs::remove_file(&final_path)
                         .await
                         .map_err(|e| e.to_string())?;
@@ -287,8 +319,8 @@ impl Task for ResourceDownloadTask {
                         SourcePlatform::CurseForge => "curseforge",
                     }
                     .to_string(),
-                    remote_id: project_id,
-                    remote_version_id: version.id,
+                    remote_id: project_id.clone(),
+                    remote_version_id: version.id.clone(),
                     resource_type: match resource_type {
                         ResourceType::Mod => "mod",
                         ResourceType::ResourcePack => "resourcepack",
@@ -298,9 +330,9 @@ impl Task for ResourceDownloadTask {
                         ResourceType::World => "world",
                     }
                     .to_string(),
-                    local_path: final_path_str,
-                    display_name: project_name,
-                    current_version: version.version_number,
+                    local_path: final_path_str.clone(),
+                    display_name: project_name.clone(),
+                    current_version: version.version_number.clone(),
                     release_type: format!("{:?}", version.release_type).to_lowercase(),
                     is_manual: false,
                     is_enabled: true,
@@ -310,14 +342,18 @@ impl Task for ResourceDownloadTask {
                     file_mtime,
                 };
 
-                diesel::insert_into(installed_dsl::installed_resource)
-                    .values(&new_installed)
-                    .execute(&mut conn)
-                    .map_err(|e| e.to_string())?;
+                tauri::async_runtime::spawn_blocking(move || {
+                    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+                    diesel::insert_into(installed_dsl::installed_resource)
+                        .values(&new_installed)
+                        .execute(&mut conn)
+                        .map_err(|e| e.to_string())
+                })
+                .await
+                .map_err(|e| format!("Failed to insert installed resource: {}", e))??;
             }
 
-            // Ensure renamed temp file if we didn't do it in the "else" block above
-            if temp_file_path.exists() {
+            if tokio::fs::metadata(&temp_file_path).await.is_ok() {
                 let _ = fs::rename(&temp_file_path, &final_path).await;
             }
 

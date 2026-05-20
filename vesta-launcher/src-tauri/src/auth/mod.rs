@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::oneshot;
+use tokio::task;
 
 use crate::models::account::{Account, NewAccount};
 use crate::schema::account::dsl::*; // Bring table and column names into scope for queries
@@ -98,12 +99,7 @@ pub async fn start_login(app: AppHandle) -> Result<(), String> {
     let client = get_auth_client().map_err(|e| e.to_string())?;
 
     // Request device code
-    let start = std::time::Instant::now();
     let device_code_res = get_device_code(&client).await;
-
-    if let Some(nm) = app.try_state::<crate::utils::network::NetworkManager>() {
-        nm.report_request_result(start.elapsed().as_millis(), device_code_res.is_ok());
-    }
 
     let device_code_response =
         device_code_res.map_err(|e| format!("Failed to get device code: {}", e))?;
@@ -180,8 +176,13 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     let marker_path = app_data_dir.join(".guest_mode");
 
     // Create marker file
-    std::fs::File::create(&marker_path)
-        .map_err(|e| format!("Failed to create guest marker: {}", e))?;
+    let marker_clone = marker_path.clone();
+    task::spawn_blocking(move || {
+        std::fs::File::create(&marker_clone)
+            .map_err(|e| format!("Failed to create guest marker: {}", e))
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking panicked: {}", e))??;
 
     // Use the constant zeros for Guest UUID to ensure consistent detection
     let guest_uuid = GUEST_UUID.to_string();
@@ -421,7 +422,11 @@ async fn process_login_completion(
         let marker_path = dir.join(".guest_mode");
         if marker_path.exists() {
             log::info!("[auth] Cleaning up guest session...");
-            let _ = std::fs::remove_file(marker_path);
+            let marker_clone = marker_path.clone();
+            let _ = task::spawn_blocking(move || {
+                let _ = std::fs::remove_file(&marker_clone);
+            })
+            .await;
 
             // Clear the guest mode notification
             if let Some(nm) =

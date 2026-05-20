@@ -377,9 +377,11 @@ pub async fn launch_game(
     if !spec.game_dir.exists() {
         // Try to create it - the installer normally creates the instance directory for installed instances,
         // but creating it as a safety net should allow direct launches for new instances
-        if let Err(e) = std::fs::create_dir_all(&spec.game_dir) {
-            anyhow::bail!("Failed to create game directory {:?}: {}", spec.game_dir, e);
-        }
+        let game_dir = spec.game_dir.clone();
+        tokio::task::spawn_blocking(move || std::fs::create_dir_all(&game_dir))
+            .await
+            .context("spawn_blocking panicked")?
+            .with_context(|| format!("Failed to create game directory {:?}", spec.game_dir))?;
     } else if !spec.game_dir.is_dir() {
         anyhow::bail!(
             "Game directory path exists but is not a directory: {:?}",
@@ -469,14 +471,28 @@ pub async fn launch_game(
 
             // Only open file for writing if not using exit handler
             let mut file = if write_to_file_stdout {
-                let file = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&log_file_stdout)
-                    .ok();
-                Some(std::io::BufWriter::new(file.unwrap_or_else(|| {
-                    std::fs::File::create(&log_file_stdout).unwrap()
-                })))
+                let log_file = log_file_stdout.clone();
+                let file_opt = tokio::task::spawn_blocking(move || {
+                    std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&log_file)
+                        .ok()
+                })
+                .await
+                .unwrap_or(None);
+                let writer = if let Some(f) = file_opt {
+                    std::io::BufWriter::new(f)
+                } else {
+                    let log_file = log_file_stdout.clone();
+                    let f = tokio::task::spawn_blocking(move || {
+                        std::fs::File::create(&log_file).unwrap()
+                    })
+                    .await
+                    .unwrap_or_else(|e| panic!("spawn_blocking panicked: {:?}", e));
+                    std::io::BufWriter::new(f)
+                };
+                Some(writer)
             } else {
                 None
             };
@@ -505,14 +521,28 @@ pub async fn launch_game(
 
             // Only open file for writing if not using exit handler
             let mut file = if write_to_file_stderr {
-                let file = std::fs::OpenOptions::new()
-                    .create(true)
-                    .append(true)
-                    .open(&log_file_stderr)
-                    .ok();
-                Some(std::io::BufWriter::new(file.unwrap_or_else(|| {
-                    std::fs::File::create(&log_file_stderr).unwrap()
-                })))
+                let log_file = log_file_stderr.clone();
+                let file_opt = tokio::task::spawn_blocking(move || {
+                    std::fs::OpenOptions::new()
+                        .create(true)
+                        .append(true)
+                        .open(&log_file)
+                        .ok()
+                })
+                .await
+                .unwrap_or(None);
+                let writer = if let Some(f) = file_opt {
+                    std::io::BufWriter::new(f)
+                } else {
+                    let log_file = log_file_stderr.clone();
+                    let f = tokio::task::spawn_blocking(move || {
+                        std::fs::File::create(&log_file).unwrap()
+                    })
+                    .await
+                    .unwrap_or_else(|e| panic!("spawn_blocking panicked: {:?}", e));
+                    std::io::BufWriter::new(f)
+                };
+                Some(writer)
             } else {
                 None
             };
