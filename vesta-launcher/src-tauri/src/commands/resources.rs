@@ -153,7 +153,7 @@ pub async fn resolve_image_url(
 ) -> Result<String> {
     // 1. Check cache
     {
-        let cache = resource_manager.image_cache.lock().await;
+        let cache = resource_manager.image_cache.read().await;
         if let Some(cached) = cache.get(&url) {
             return Ok(cached.clone());
         }
@@ -196,7 +196,7 @@ pub async fn resolve_image_url(
 
     // 4. Store in cache
     {
-        let mut cache = resource_manager.image_cache.lock().await;
+        let mut cache = resource_manager.image_cache.write().await;
         cache.insert(url, data_url.clone());
     }
 
@@ -218,7 +218,7 @@ pub async fn resolve_image_urls(
     // 1. Check cache for all URLs
     let mut uncached: Vec<(usize, String)> = Vec::new();
     {
-        let cache = resource_manager.image_cache.lock().await;
+        let cache = resource_manager.image_cache.read().await;
         for (i, url) in urls.iter().enumerate() {
             if let Some(cached) = cache.get(url) {
                 results[i] = Some(cached.clone());
@@ -284,7 +284,7 @@ pub async fn resolve_image_urls(
 
     // 4. Store results in cache and populate the output vector
     {
-        let mut cache = resource_manager.image_cache.lock().await;
+        let mut cache = resource_manager.image_cache.write().await;
         for ((idx, _original_url), (url, data_url)) in uncached.iter().zip(downloaded.iter()) {
             if let Some(data_url) = data_url {
                 cache.insert(url.clone(), data_url.clone());

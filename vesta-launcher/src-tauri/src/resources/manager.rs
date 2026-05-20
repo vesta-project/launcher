@@ -3,7 +3,7 @@ use chrono::NaiveDateTime;
 use diesel::prelude::*;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
@@ -58,13 +58,13 @@ async fn download_icon_with_timeout(url: &str) -> Result<Vec<u8>> {
 
 #[derive(Clone)]
 pub struct ResourceManager {
-    sources: Arc<Mutex<Vec<Arc<dyn ResourceSource>>>>,
-    project_cache: Arc<Mutex<HashMap<(SourcePlatform, String), ResourceProject>>>,
-    version_cache: Arc<Mutex<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>>,
-    hash_cache: Arc<Mutex<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
-    search_cache: Arc<Mutex<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
-    category_cache: Arc<Mutex<HashMap<SourcePlatform, (Vec<ResourceCategory>, NaiveDateTime)>>>,
-    pub image_cache: Arc<Mutex<HashMap<String, String>>>,
+    sources: Arc<RwLock<Vec<Arc<dyn ResourceSource>>>>,
+    project_cache: Arc<RwLock<HashMap<(SourcePlatform, String), ResourceProject>>>,
+    version_cache: Arc<RwLock<HashMap<(SourcePlatform, String), Vec<ResourceVersion>>>>,
+    hash_cache: Arc<RwLock<HashMap<(SourcePlatform, String), (ResourceProject, ResourceVersion)>>>,
+    search_cache: Arc<RwLock<HashMap<String, (SearchResponse, NaiveDateTime)>>>,
+    category_cache: Arc<RwLock<HashMap<SourcePlatform, (Vec<ResourceCategory>, NaiveDateTime)>>>,
+    pub image_cache: Arc<RwLock<HashMap<String, String>>>,
 }
 
 impl ResourceManager {
@@ -75,13 +75,13 @@ impl ResourceManager {
         ];
 
         Self {
-            sources: Arc::new(Mutex::new(sources)),
-            project_cache: Arc::new(Mutex::new(HashMap::new())),
-            version_cache: Arc::new(Mutex::new(HashMap::new())),
-            hash_cache: Arc::new(Mutex::new(HashMap::new())),
-            search_cache: Arc::new(Mutex::new(HashMap::new())),
-            category_cache: Arc::new(Mutex::new(HashMap::new())),
-            image_cache: Arc::new(Mutex::new(HashMap::new())),
+            sources: Arc::new(RwLock::new(sources)),
+            project_cache: Arc::new(RwLock::new(HashMap::new())),
+            version_cache: Arc::new(RwLock::new(HashMap::new())),
+            hash_cache: Arc::new(RwLock::new(HashMap::new())),
+            search_cache: Arc::new(RwLock::new(HashMap::new())),
+            category_cache: Arc::new(RwLock::new(HashMap::new())),
+            image_cache: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -89,12 +89,12 @@ impl ResourceManager {
         log::info!("[ResourceManager] Clearing all caches (in-memory and database)");
 
         // 1. Clear in-memory caches
-        self.project_cache.lock().await.clear();
-        self.version_cache.lock().await.clear();
-        self.hash_cache.lock().await.clear();
-        self.search_cache.lock().await.clear();
-        self.category_cache.lock().await.clear();
-        self.image_cache.lock().await.clear();
+        self.project_cache.write().await.clear();
+        self.version_cache.write().await.clear();
+        self.hash_cache.write().await.clear();
+        self.search_cache.write().await.clear();
+        self.category_cache.write().await.clear();
+        self.image_cache.write().await.clear();
 
         // 2. Clear database tables
         let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
@@ -113,7 +113,7 @@ impl ResourceManager {
     pub async fn get_categories(&self, platform: SourcePlatform) -> Result<Vec<ResourceCategory>> {
         // 1. Check cache (cache for 1 hour)
         {
-            let cache = self.category_cache.lock().await;
+            let cache = self.category_cache.read().await;
             if let Some((categories, timestamp)) = cache.get(&platform) {
                 let now = chrono::Utc::now().naive_utc();
                 if (now - *timestamp).num_hours() < 1 {
@@ -123,14 +123,14 @@ impl ResourceManager {
         }
 
         // 2. Fetch from source
-        let sources = self.sources.lock().await;
+        let sources = self.sources.read().await;
         for source in sources.iter() {
             if source.platform() == platform {
                 let categories = source.get_categories().await?;
 
                 // 3. Update cache
                 {
-                    let mut cache = self.category_cache.lock().await;
+                    let mut cache = self.category_cache.write().await;
                     cache.insert(
                         platform,
                         (categories.clone(), chrono::Utc::now().naive_utc()),
@@ -367,7 +367,7 @@ impl ResourceManager {
         let cache_key = format!("{:?}_{:?}", platform, query);
 
         {
-            let cache = self.search_cache.lock().await;
+            let cache = self.search_cache.read().await;
             if let Some((resp, expiry)) = cache.get(&cache_key) {
                 if expiry > &chrono::Utc::now().naive_utc() {
                     return Ok(resp.clone());
@@ -379,7 +379,7 @@ impl ResourceManager {
         let response = source.search(query).await?;
 
         {
-            let mut cache = self.search_cache.lock().await;
+            let mut cache = self.search_cache.write().await;
             let expiry = chrono::Utc::now().naive_utc() + chrono::Duration::minutes(10);
             cache.insert(cache_key, (response.clone(), expiry));
         }
@@ -396,7 +396,7 @@ impl ResourceManager {
         let mut missing_ids = Vec::new();
 
         {
-            let cache = self.project_cache.lock().await;
+            let cache = self.project_cache.read().await;
             for id in ids {
                 if let Some(cached) = cache.get(&(platform, id.clone())) {
                     results.push(cached.clone());
@@ -415,7 +415,7 @@ impl ResourceManager {
 
         for project in fetched {
             {
-                let mut cache = self.project_cache.lock().await;
+                let mut cache = self.project_cache.write().await;
                 cache.insert((platform, project.id.clone()), project.clone());
             }
             let _ = self.cache_project_metadata(platform, &project).await;
@@ -427,7 +427,7 @@ impl ResourceManager {
 
     pub async fn get_project(&self, platform: SourcePlatform, id: &str) -> Result<ResourceProject> {
         {
-            let cache = self.project_cache.lock().await;
+            let cache = self.project_cache.read().await;
             if let Some(project) = cache.get(&(platform, id.to_string())) {
                 return Ok(project.clone());
             }
@@ -437,7 +437,7 @@ impl ResourceManager {
         let project = source.get_project(id).await?;
 
         {
-            let mut cache = self.project_cache.lock().await;
+            let mut cache = self.project_cache.write().await;
             cache.insert((platform, id.to_string()), project.clone());
             if id != project.id {
                 cache.insert((platform, project.id.clone()), project.clone());
@@ -459,7 +459,7 @@ impl ResourceManager {
         let can_use_memory_cache = !ignore_cache && mc_version.is_none() && loader.is_none();
 
         if can_use_memory_cache {
-            let cache = self.version_cache.lock().await;
+            let cache = self.version_cache.read().await;
             if let Some(versions) = cache.get(&(platform, project_id.to_string())) {
                 return Ok(versions.clone());
             }
@@ -470,7 +470,7 @@ impl ResourceManager {
 
         if can_use_memory_cache {
             {
-                let mut cache = self.version_cache.lock().await;
+                let mut cache = self.version_cache.write().await;
                 cache.insert((platform, project_id.to_string()), versions.clone());
             }
         }
@@ -580,7 +580,7 @@ impl ResourceManager {
         hash: &str,
     ) -> Result<(ResourceProject, ResourceVersion)> {
         {
-            let cache = self.hash_cache.lock().await;
+            let cache = self.hash_cache.read().await;
             if let Some(result) = cache.get(&(platform, hash.to_string())) {
                 return Ok(result.clone());
             }
@@ -590,13 +590,13 @@ impl ResourceManager {
         let (project, version) = source.get_by_hash(hash).await?;
 
         {
-            let mut h_cache = self.hash_cache.lock().await;
+            let mut h_cache = self.hash_cache.write().await;
             h_cache.insert(
                 (platform, hash.to_string()),
                 (project.clone(), version.clone()),
             );
 
-            let mut p_cache = self.project_cache.lock().await;
+            let mut p_cache = self.project_cache.write().await;
             p_cache.insert((platform, project.id.clone()), project.clone());
         }
         let _ = self.cache_project_metadata(platform, &project).await;
@@ -745,7 +745,7 @@ impl ResourceManager {
     }
 
     async fn get_source(&self, platform: SourcePlatform) -> Result<Arc<dyn ResourceSource>> {
-        let sources = self.sources.lock().await;
+        let sources = self.sources.read().await;
         sources
             .iter()
             .find(|s| s.platform() == platform)
