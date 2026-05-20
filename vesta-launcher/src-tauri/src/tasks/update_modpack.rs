@@ -97,7 +97,7 @@ impl Task for UpdateModpackTask {
                 Some(0),
                 Some(6),
             );
-            let (new_manifest, zip_path) =
+            let (new_manifest, _zip_path) =
                 fetch_new_manifest(&app_handle, &inst, &new_version_id).await?;
 
             ctx.update_full(
