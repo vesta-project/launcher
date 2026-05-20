@@ -102,7 +102,7 @@ impl StagingDir {
         log::info!("[staging] Committing staged update to {:?}", self.game_dir);
 
         // Move each file from staging to its final destination
-        Self::move_directory_contents(&self.root, &self.game_dir, &self.root)?;
+        Self::move_directory_contents(&self.root, &self.game_dir)?;
 
         // Clean up the now-empty staging directory
         if self.root.exists() {
@@ -127,18 +127,20 @@ impl StagingDir {
     }
 
     /// Recursively move contents of one directory into another.
-    fn move_directory_contents(source: &Path, target: &Path, root: &Path) -> Result<()> {
+    /// Strips the current `source` prefix (not a constant root) so that
+    /// nested subdirectories produce correct relative paths.
+    fn move_directory_contents(source: &Path, target: &Path) -> Result<()> {
         for entry in std::fs::read_dir(source)? {
             let entry = entry?;
             let path = entry.path();
             let relative = path
-                .strip_prefix(root)
+                .strip_prefix(source)
                 .with_context(|| format!("Failed to compute relative path for {:?}", path))?;
             let destination = target.join(relative);
 
             if path.is_dir() {
                 std::fs::create_dir_all(&destination)?;
-                Self::move_directory_contents(&path, &destination, root)?;
+                Self::move_directory_contents(&path, &destination)?;
             } else {
                 // Ensure parent directory exists in target
                 if let Some(parent) = destination.parent() {

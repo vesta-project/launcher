@@ -8526,6 +8526,7 @@ dependencies = [
  "which",
  "window-vibrancy 0.7.1",
  "winver",
+ "zip 8.2.0",
 ]
 
 [[package]]
