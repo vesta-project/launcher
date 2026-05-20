@@ -10,5 +10,6 @@ pub mod resources;
 pub mod screenshots;
 pub mod shortcuts;
 pub mod skins;
+pub mod sync;
 pub mod tasks;
 pub mod themes;

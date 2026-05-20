@@ -12,6 +12,7 @@ pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
 mod setup;
+mod sync;
 mod tasks;
 pub mod utils;
 
@@ -269,6 +270,8 @@ fn main() {
             commands::resources::check_resource_updates,
             commands::resources::resolve_image_url,
             commands::resources::resolve_image_urls,
+            commands::sync::check_modpack_update,
+            commands::sync::start_modpack_update,
             commands::launcher_imports::detect_external_launchers,
             commands::launcher_imports::list_external_instances,
             commands::launcher_imports::import_external_instance,
