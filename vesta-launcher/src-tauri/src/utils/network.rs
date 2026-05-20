@@ -22,7 +22,10 @@ impl NetworkManager {
 
         tauri::async_runtime::spawn(async move {
             let actual = Self::verify_online_static().await;
-            let mut s = status_clone.lock().unwrap();
+            let mut s = match status_clone.lock() {
+                Ok(guard) => guard,
+                Err(_) => return,
+            };
             if *s != actual {
                 *s = actual;
                 drop(s);
@@ -68,7 +71,10 @@ impl NetworkManager {
     }
 
     pub fn set_status(&self, new_status: NetworkStatus) {
-        let mut status = self.status.lock().unwrap();
+        let mut status = match self.status.lock() {
+            Ok(guard) => guard,
+            Err(_) => return,
+        };
         if *status != new_status {
             *status = new_status;
             log::info!("[NetworkManager] Status changed to: {:?}", new_status);
