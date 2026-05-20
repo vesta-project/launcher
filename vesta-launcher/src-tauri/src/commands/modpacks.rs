@@ -1182,7 +1182,13 @@ pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandid
     }
 
     // 2. Scan all folders in game_dir except standard Minecraft internals
-    if let Ok(entries) = std::fs::read_dir(&game_dir) {
+    let entries = tokio::task::spawn_blocking({
+        let game_dir = game_dir.clone();
+        move || std::fs::read_dir(&game_dir)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+    if let Ok(entries) = entries {
         let skip_folders = [
             "logs",
             "backups",
@@ -1215,7 +1221,12 @@ pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandid
                 // Recursively add files
                 let mut stack = vec![path];
                 while let Some(current) = stack.pop() {
-                    if let Ok(sub_entries) = std::fs::read_dir(&current) {
+                        let sub_entries = tokio::task::spawn_blocking(move || {
+                            std::fs::read_dir(&current)
+                        })
+                        .await
+                        .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+                        if let Ok(sub_entries) = sub_entries {
                         for sub_entry in sub_entries.flatten() {
                             let sub_path = sub_entry.path();
                             if sub_path.is_dir() {

@@ -926,7 +926,14 @@ pub async fn update_instance(
         let new_dir = instances_root.join(&new_slug);
 
         if old_dir.exists() {
-            if let Err(e) = std::fs::rename(&old_dir, &new_dir) {
+            let rename_result = tokio::task::spawn_blocking({
+                let old_dir = old_dir.clone();
+                let new_dir = new_dir.clone();
+                move || std::fs::rename(&old_dir, &new_dir)
+            })
+            .await
+            .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+            if let Err(e) = rename_result {
                 log::warn!(
                     "[update_instance] Failed to rename instance dir: {} -> {} : {}",
                     old_dir.display(),
@@ -961,7 +968,14 @@ pub async fn update_instance(
             .join(format!("{}.log", new_slug));
 
         if old_log.exists() {
-            if let Err(e) = std::fs::rename(&old_log, &new_log) {
+            let rename_log_result = tokio::task::spawn_blocking({
+                let old_log = old_log.clone();
+                let new_log = new_log.clone();
+                move || std::fs::rename(&old_log, &new_log)
+            })
+            .await
+            .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+            if let Err(e) = rename_log_result {
                 log::warn!("[update_instance] Failed to move log file: {}", e);
             }
         }
@@ -1795,34 +1809,39 @@ pub async fn launch_instance(
                         let exit_status_path =
                             game_dir_monitor.join(".vesta").join("exit_status.json");
                         let (exited_at_ts, exit_code) = if exit_status_path.exists() {
-                            // Simplified read logic
-                            if let Ok(content) = std::fs::read_to_string(&exit_status_path) {
-                                if let Ok(status) =
-                                    serde_json::from_str::<serde_json::Value>(&content)
-                                {
-                                    let ex = status
-                                        .get("exited_at")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let code = status
-                                        .get("exit_code")
-                                        .and_then(|v| v.as_i64())
-                                        .unwrap_or(0)
-                                        as i32;
-                                    (
-                                        if ex.is_empty() {
-                                            chrono::Utc::now().to_rfc3339()
-                                        } else {
-                                            ex
-                                        },
-                                        code,
-                                    )
-                                } else {
-                                    (chrono::Utc::now().to_rfc3339(), 0)
+                            let path_for_blocking = exit_status_path.clone();
+                            match tokio::task::spawn_blocking(move || {
+                                std::fs::read_to_string(&path_for_blocking)
+                            })
+                            .await
+                            {
+                                Ok(Ok(content)) => {
+                                    if let Ok(status) =
+                                        serde_json::from_str::<serde_json::Value>(&content)
+                                    {
+                                        let ex = status
+                                            .get("exited_at")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        let code = status
+                                            .get("exit_code")
+                                            .and_then(|v| v.as_i64())
+                                            .unwrap_or(0)
+                                            as i32;
+                                        (
+                                            if ex.is_empty() {
+                                                chrono::Utc::now().to_rfc3339()
+                                            } else {
+                                                ex
+                                            },
+                                            code,
+                                        )
+                                    } else {
+                                        (chrono::Utc::now().to_rfc3339(), 0)
+                                    }
                                 }
-                            } else {
-                                (chrono::Utc::now().to_rfc3339(), 0)
+                                _ => (chrono::Utc::now().to_rfc3339(), 0),
                             }
                         } else {
                             (chrono::Utc::now().to_rfc3339(), 0)

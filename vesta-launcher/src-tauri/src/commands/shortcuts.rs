@@ -157,7 +157,10 @@ pub async fn create_desktop_shortcut(
              </plist>",
             deep_link
         );
-        std::fs::write(path, content).map_err(|e| e.to_string())?;
+        tokio::task::spawn_blocking(move || std::fs::write(path, content))
+            .await
+            .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+            .map_err(|e| e.to_string())?;
 
         // Note: This creates an 'Internet Location' which Mac users often use for this purpose.
         // A true 'Alias' to the .app can't hold arguments.
@@ -187,17 +190,28 @@ pub async fn create_desktop_shortcut(
             target_args,
             icon_val
         );
-        std::fs::write(&desktop_file_path, content).map_err(|e| e.to_string())?;
+        let dfp = desktop_file_path.clone();
+        tokio::task::spawn_blocking(move || std::fs::write(&dfp, content))
+            .await
+            .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+            .map_err(|e| e.to_string())?;
 
         // Make it executable
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            let mut perms = std::fs::metadata(&desktop_file_path)
+            let dfp = desktop_file_path.clone();
+            let mut perms = tokio::task::spawn_blocking(move || std::fs::metadata(&dfp))
+                .await
+                .map_err(|e| format!("spawn_blocking panicked: {}", e))?
                 .map_err(|e| e.to_string())?
                 .permissions();
             perms.set_mode(0o755);
-            std::fs::set_permissions(&desktop_file_path, perms).map_err(|e| e.to_string())?;
+            let dfp = desktop_file_path.clone();
+            tokio::task::spawn_blocking(move || std::fs::set_permissions(&dfp, perms))
+                .await
+                .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+                .map_err(|e| e.to_string())?;
         }
     }
 

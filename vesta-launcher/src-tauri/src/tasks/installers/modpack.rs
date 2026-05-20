@@ -395,7 +395,14 @@ impl Task for InstallModpackTask {
                     let local_path = game_dir_clone.join(&override_path);
                     if local_path.exists() {
                         let hash = crate::utils::hash::calculate_sha1(&local_path).ok();
-                        let meta = if let Ok(m) = std::fs::metadata(&local_path) {
+                        let path_meta = local_path.clone();
+                        let meta = tokio::task::spawn_blocking(move || {
+                            std::fs::metadata(&path_meta)
+                        })
+                        .await
+                        .ok()
+                        .and_then(|r| r.ok())
+                        .map_or((0, 0), |m| {
                             (
                                 m.len() as i64,
                                 m.modified()
@@ -404,9 +411,7 @@ impl Task for InstallModpackTask {
                                     .map(|d| d.as_secs() as i64)
                                     .unwrap_or(0),
                             )
-                        } else {
-                            (0, 0)
-                        };
+                        });
 
                         let _ = crate::resources::watcher::link_manual_resource_to_db(
                             &app_handle_clone,
@@ -434,7 +439,14 @@ impl Task for InstallModpackTask {
                                         .get_by_hash(crate::models::SourcePlatform::Modrinth, sha1)
                                         .await
                                     {
-                                        let meta = if let Ok(m) = std::fs::metadata(&local_path) {
+                                        let path_meta = local_path.clone();
+                                        let meta = tokio::task::spawn_blocking(move || {
+                                            std::fs::metadata(&path_meta)
+                                        })
+                                        .await
+                                        .ok()
+                                        .and_then(|r| r.ok())
+                                        .map_or((0, 0), |m| {
                                             (
                                                 m.len() as i64,
                                                 m.modified()
@@ -445,9 +457,7 @@ impl Task for InstallModpackTask {
                                                     .map(|d| d.as_secs() as i64)
                                                     .unwrap_or(0),
                                             )
-                                        } else {
-                                            (0, 0)
-                                        };
+                                        });
 
                                         let _ = crate::resources::watcher::link_resource_to_db(
                                             &app_handle_clone,
@@ -519,20 +529,25 @@ impl Task for InstallModpackTask {
                             let local_path =
                                 game_dir_clone.join(subfolder).join(&version.file_name);
                             if local_path.exists() {
-                                let meta = if let Ok(m) = std::fs::metadata(&local_path) {
-                                    (
-                                        m.len() as i64,
-                                        m.modified()
-                                            .ok()
-                                            .and_then(|t| {
-                                                t.duration_since(std::time::UNIX_EPOCH).ok()
-                                            })
-                                            .map(|d| d.as_secs() as i64)
-                                            .unwrap_or(0),
-                                    )
-                                } else {
-                                    (0, 0)
-                                };
+                                 let path_meta = local_path.clone();
+                                 let meta = tokio::task::spawn_blocking(move || {
+                                     std::fs::metadata(&path_meta)
+                                 })
+                                 .await
+                                 .ok()
+                                 .and_then(|r| r.ok())
+                                 .map_or((0, 0), |m| {
+                                     (
+                                         m.len() as i64,
+                                         m.modified()
+                                             .ok()
+                                             .and_then(|t| {
+                                                 t.duration_since(std::time::UNIX_EPOCH).ok()
+                                             })
+                                             .map(|d| d.as_secs() as i64)
+                                             .unwrap_or(0),
+                                     )
+                                 });
 
                                 let _ = crate::resources::watcher::link_resource_to_db(
                                     &app_handle_clone,

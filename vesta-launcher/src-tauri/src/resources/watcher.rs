@@ -4,6 +4,7 @@ use crate::resources::ResourceManager;
 use crate::schema::installed_resource::dsl as ir_dsl;
 use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_sha1};
 use crate::utils::instance_helpers::normalize_path;
+use anyhow::Context;
 use anyhow::Result;
 use notify::{Config, Event, RecursiveMode, Watcher};
 use std::collections::{HashMap, HashSet};
@@ -219,7 +220,13 @@ impl ResourceWatcher {
                 let in_flight_spawn = in_flight_scans.clone();
 
                 // Get metadata for quick check
-                let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&path) {
+                let path_meta = path.clone();
+                let (file_size, file_mtime) = tokio::task::spawn_blocking(move || {
+                    std::fs::metadata(&path_meta)
+                })
+                .await
+                .context("spawn_blocking panicked")?
+                .map_or((0, 0), |meta| {
                     (
                         meta.len() as i64,
                         meta.modified()
@@ -228,9 +235,7 @@ impl ResourceWatcher {
                             .map(|d| d.as_secs() as i64)
                             .unwrap_or(0),
                     )
-                } else {
-                    (0, 0)
-                };
+                });
 
                 if !mark_in_flight(&in_flight_scans, db_id, &path).await {
                     summary.skipped += 1;
@@ -379,7 +384,14 @@ async fn handle_event(
                     let limiter_clone = scan_limiter.clone();
                     let in_flight_clone = in_flight_scans.clone();
 
-                    let (file_size, file_mtime) = if let Ok(meta) = std::fs::metadata(&path) {
+                    let path_clone = path.clone();
+                    let (file_size, file_mtime) = tokio::task::spawn_blocking(move || {
+                        std::fs::metadata(&path_clone)
+                    })
+                    .await
+                    .ok()
+                    .and_then(|r| r.ok())
+                    .map_or((0, 0), |meta| {
                         (
                             meta.len() as i64,
                             meta.modified()
@@ -388,9 +400,7 @@ async fn handle_event(
                                 .map(|d| d.as_secs() as i64)
                                 .unwrap_or(0),
                         )
-                    } else {
-                        (0, 0)
-                    };
+                    });
 
                     if !mark_in_flight(&in_flight_scans, db_id, &path).await {
                         continue;
@@ -498,17 +508,22 @@ async fn identify_and_link_resource(
     let (file_size, file_mtime) = if let Some(m) = metadata {
         m
     } else {
-        if let Ok(meta) = std::fs::metadata(path) {
-            (
+        let path_owned = path.to_path_buf();
+        let meta_result = tokio::task::spawn_blocking(move || {
+            std::fs::metadata(&path_owned)
+        })
+        .await
+        .context("spawn_blocking panicked")?;
+        match meta_result {
+            Ok(meta) => (
                 meta.len() as i64,
                 meta.modified()
                     .ok()
                     .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                     .map(|d| d.as_secs() as i64)
                     .unwrap_or(0),
-            )
-        } else {
-            (0, 0)
+            ),
+            Err(_) => (0, 0),
         }
     };
 

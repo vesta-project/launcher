@@ -11,6 +11,7 @@ use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
 use std::path::Path;
 use std::sync::Arc;
+use tokio::task;
 
 pub struct ModpackResolvedCF {
     pub url: String,
@@ -289,9 +290,13 @@ impl ModpackInstaller {
                                 mod_entry.sha1 = sha1.clone();
                                 *url = download_url.clone().unwrap_or_default();
                                 // Grab file size from disk after download
-                                mod_entry.size = std::fs::metadata(game_dir.join(relative_path))
-                                    .ok()
-                                    .map(|m| m.len());
+                                let gd = game_dir.to_path_buf();
+                                let rp = relative_path.clone();
+                                mod_entry.size = task::spawn_blocking(move || {
+                                    std::fs::metadata(gd.join(&rp)).ok().map(|m| m.len())
+                                })
+                                .await
+                                .context("spawn_blocking panicked")?;
                                 break;
                             }
                         }
@@ -528,9 +533,13 @@ impl ModpackInstaller {
                             mod_entry.path = relative_path.clone();
                             mod_entry.sha1 = sha1.clone();
                             *url = download_url.clone().unwrap_or_default();
-                            mod_entry.size = std::fs::metadata(game_dir.join(relative_path))
-                                .ok()
-                                .map(|m| m.len());
+                            let gd = game_dir.to_path_buf();
+                            let rp = relative_path.clone();
+                            mod_entry.size = task::spawn_blocking(move || {
+                                std::fs::metadata(gd.join(&rp)).ok().map(|m| m.len())
+                            })
+                            .await
+                            .context("spawn_blocking panicked")?;
                             break;
                         }
                     }

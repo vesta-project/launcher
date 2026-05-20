@@ -292,7 +292,12 @@ pub async fn install_instance(
         reporter.start_step("Downloading assets", None);
         reporter.set_percent(30);
 
-        let asset_index_content = std::fs::read_to_string(&asset_index_path)?;
+        let asset_index_path = asset_index_path.clone();
+        let asset_index_content = tokio::task::spawn_blocking(move || {
+            std::fs::read_to_string(&asset_index_path)
+        })
+        .await
+        .context("spawn_blocking panicked")??;
         let asset_index_parsed: serde_json::Value = serde_json::from_str(&asset_index_content)?;
 
         if let Some(objects) = asset_index_parsed

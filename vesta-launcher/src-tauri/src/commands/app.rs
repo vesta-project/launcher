@@ -262,7 +262,11 @@ pub async fn clear_cache(
     if let Ok(config_dir) = get_app_config_dir() {
         let cache_path = config_dir.join("data").join("piston_manifest.json");
         if cache_path.exists() {
-            if let Err(e) = std::fs::remove_file(&cache_path) {
+            let cp = cache_path.clone();
+            if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_file(&cp))
+                .await
+                .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+            {
                 log::warn!("Failed to delete Piston manifest file: {}", e);
             }
         }
@@ -270,7 +274,11 @@ pub async fn clear_cache(
         // 4. Clear new per-manifest cache files under data/manifests/
         let manifests_dir = config_dir.join("data").join("manifests");
         if manifests_dir.exists() && manifests_dir.is_dir() {
-            if let Err(e) = std::fs::remove_dir_all(&manifests_dir) {
+            let md = manifests_dir.clone();
+            if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&md))
+                .await
+                .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+            {
                 log::warn!("Failed to delete manifests cache: {}", e);
             } else {
                 log::info!("Cleared manifests cache directory");
@@ -282,7 +290,11 @@ pub async fn clear_cache(
         for folder in ["cache", "temp"] {
             let path = config_dir.join(folder);
             if path.exists() && path.is_dir() {
-                if let Err(e) = std::fs::remove_dir_all(&path) {
+                let p = path.clone();
+                if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&p))
+                    .await
+                    .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+                {
                     log::warn!("Failed to clear {} folder: {}", folder, e);
                 } else {
                     log::info!("Cleared {} folder", folder);
@@ -304,7 +316,10 @@ pub async fn get_cache_size() -> Result<String, String> {
 
     // 1. Piston manifest
     let manifest_path = config_dir.join("data").join("piston_manifest.json");
-    if let Ok(meta) = std::fs::metadata(&manifest_path) {
+    if let Ok(meta) = tokio::task::spawn_blocking(move || std::fs::metadata(&manifest_path))
+        .await
+        .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+    {
         total_bytes += meta.len();
     }
 

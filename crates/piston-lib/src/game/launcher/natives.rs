@@ -35,52 +35,58 @@ pub async fn extract_natives(
 async fn extract_jar(jar_path: &Path, output_dir: &Path, library: &UnifiedLibrary) -> Result<()> {
     log::debug!("Extracting natives from: {:?}", jar_path);
 
-    let file =
-        std::fs::File::open(jar_path).context(format!("Failed to open JAR: {:?}", jar_path))?;
-
-    let mut archive =
-        zip::ZipArchive::new(file).context(format!("Failed to read JAR: {:?}", jar_path))?;
-
-    // Get exclusion patterns
+    let jar_path = jar_path.to_path_buf();
+    let output_dir = output_dir.to_path_buf();
+    let library = library.clone();
     let exclusions = library
         .extract_rules
         .as_ref()
-        .map(|e| &e.exclude)
-        .map(|v| v.as_slice())
-        .unwrap_or(&[]);
+        .map(|e| e.exclude.clone())
+        .unwrap_or_default();
+    tokio::task::spawn_blocking(move || -> Result<()> {
+        let exclusions: Vec<&str> = exclusions.iter().map(|s| s.as_str()).collect();
+        let file = std::fs::File::open(&jar_path)
+            .with_context(|| format!("Failed to open JAR: {:?}", jar_path))?;
+        let mut archive = zip::ZipArchive::new(file)
+            .with_context(|| format!("Failed to read JAR: {:?}", jar_path))?;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let file_path = file.name();
+        for i in 0..archive.len() {
+            let mut entry = archive.by_index(i)?;
+            let file_path = entry.name().to_string();
 
-        // Skip if excluded
-        if should_exclude(file_path, exclusions) {
-            continue;
+            // Skip if excluded
+            if should_exclude(&file_path, &exclusions) {
+                continue;
+            }
+
+            // Skip directories
+            if entry.is_dir() {
+                continue;
+            }
+
+            // Extract file
+            let output_path = output_dir.join(&file_path);
+
+            // Create parent directories
+            if let Some(parent) = output_path.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+
+            // Write file
+            let mut output_file = std::fs::File::create(&output_path)?;
+            std::io::copy(&mut entry, &mut output_file)?;
         }
 
-        // Skip directories
-        if file.is_dir() {
-            continue;
-        }
-
-        // Extract file
-        let output_path = output_dir.join(file_path);
-
-        // Create parent directories
-        if let Some(parent) = output_path.parent() {
-            tokio::fs::create_dir_all(parent).await?;
-        }
-
-        // Write file
-        let mut output_file = std::fs::File::create(&output_path)?;
-        std::io::copy(&mut file, &mut output_file)?;
-    }
+        Ok(())
+    })
+    .await
+    .context("spawn_blocking panicked")??;
 
     Ok(())
 }
 
 /// Check if a file should be excluded
-fn should_exclude(file_path: &str, exclusions: &[String]) -> bool {
+fn should_exclude(file_path: &str, exclusions: &[&str]) -> bool {
     for exclusion in exclusions {
         if file_path.starts_with(exclusion) {
             return true;
@@ -100,7 +106,7 @@ mod tests {
 
     #[test]
     fn test_should_exclude() {
-        let exclusions = vec!["META-INF/".to_string(), "module-info.class".to_string()];
+        let exclusions = vec!["META-INF/", "module-info.class"];
 
         assert!(should_exclude("META-INF/MANIFEST.MF", &exclusions));
         assert!(should_exclude("module-info.class", &exclusions));

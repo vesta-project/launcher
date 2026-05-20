@@ -5,6 +5,7 @@ use crate::utils::process::PistonCommandExt;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+use tokio::task;
 
 const ZULU_API_BASE: &str = "https://api.azul.com/metadata/v1/zulu/packages";
 
@@ -184,9 +185,16 @@ async fn install_zulu_jre(
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let mut perms = std::fs::metadata(&java_path)?.permissions();
+        let jp = java_path.clone();
+        let mut perms = task::spawn_blocking(move || std::fs::metadata(&jp))
+            .await
+            .context("spawn_blocking panicked")??
+            .permissions();
         perms.set_mode(0o755);
-        std::fs::set_permissions(&java_path, perms)?;
+        let jp = java_path.clone();
+        task::spawn_blocking(move || std::fs::set_permissions(&jp, perms))
+            .await
+            .context("spawn_blocking panicked")??;
     }
 
     if let Some(label) = relative_jre_label(jre_dir, &java_path) {
