@@ -8,10 +8,10 @@ use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::sync::Mutex as StdMutex;
+use std::sync::Mutex;
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager};
-use tokio::sync::{mpsc, watch, Mutex, Semaphore};
+use tokio::sync::{mpsc, watch, Semaphore};
 
 #[derive(Clone)]
 pub struct TaskContext {
@@ -169,7 +169,7 @@ pub struct TaskManager {
     app_handle: AppHandle,
     sender: mpsc::Sender<QueuedTask>,
     semaphore: Arc<Semaphore>,
-    current_limit: StdMutex<usize>,
+    current_limit: Mutex<usize>,
     cancellation_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
     pause_tokens: Arc<Mutex<HashMap<String, watch::Sender<bool>>>>,
     active_tasks: Arc<Mutex<HashMap<String, String>>>,
@@ -180,7 +180,7 @@ impl TaskManager {
         let (sender, mut receiver) = mpsc::channel::<QueuedTask>(100);
         let initial_limit = 2;
         let semaphore = Arc::new(Semaphore::new(initial_limit));
-        let current_limit = StdMutex::new(initial_limit);
+        let current_limit = Mutex::new(initial_limit);
         let cancellation_tokens = Arc::new(Mutex::new(HashMap::new()));
         let pause_tokens = Arc::new(Mutex::new(HashMap::new()));
         let active_tasks = Arc::new(Mutex::new(HashMap::new()));
@@ -212,7 +212,7 @@ impl TaskManager {
 
                 // Check if task is already running (deduplication)
                 {
-                    let active = manager_active_tasks.lock().await;
+                    let active = manager_active_tasks.lock().unwrap();
                     if active.contains_key(&client_key) {
                         log::info!(
                             "TaskManager: Task with ID {} already active, ignoring submission",
@@ -225,7 +225,7 @@ impl TaskManager {
                 // Track active task
                 manager_active_tasks
                     .lock()
-                    .await
+                    .unwrap()
                     .insert(client_key.clone(), task_name.clone());
 
                 let manager = manager_app.state::<NotificationManager>();
@@ -294,7 +294,7 @@ impl TaskManager {
                 if is_cancellable {
                     manager_tokens
                         .lock()
-                        .await
+                        .unwrap()
                         .insert(client_key.clone(), tx);
                 }
 
@@ -303,7 +303,7 @@ impl TaskManager {
                 if is_pausable {
                     manager_pause_tokens
                         .lock()
-                        .await
+                        .unwrap()
                         .insert(client_key.clone(), pause_tx);
                 }
 
@@ -363,12 +363,12 @@ impl TaskManager {
 
                         // Cleanup tokens
                         if is_cancellable {
-                            tokens.lock().await.remove(&key_clone);
+                            tokens.lock().unwrap().remove(&key_clone);
                         }
                         if is_pausable {
-                            p_tokens.lock().await.remove(&key_clone);
+                            p_tokens.lock().unwrap().remove(&key_clone);
                         }
-                        active_tasks.lock().await.remove(&key_clone);
+                        active_tasks.lock().unwrap().remove(&key_clone);
                         drop(permit);
                         return;
                     }
@@ -398,12 +398,12 @@ impl TaskManager {
 
                     // Cleanup tokens after run
                     if is_cancellable {
-                        tokens.lock().await.remove(&key_clone);
+                        tokens.lock().unwrap().remove(&key_clone);
                     }
                     if is_pausable {
-                        p_tokens.lock().await.remove(&key_clone);
+                        p_tokens.lock().unwrap().remove(&key_clone);
                     }
-                    active_tasks.lock().await.remove(&key_clone);
+                    active_tasks.lock().unwrap().remove(&key_clone);
 
                     let manager = app.state::<NotificationManager>();
                     match run_result {
@@ -478,10 +478,10 @@ impl TaskManager {
 
                     // Cleanup tokens
                     if is_cancellable {
-                        tokens.lock().await.remove(&key_clone);
+                        tokens.lock().unwrap().remove(&key_clone);
                     }
                     if is_pausable {
-                        p_tokens.lock().await.remove(&key_clone);
+                        p_tokens.lock().unwrap().remove(&key_clone);
                     }
 
                     // TODO: The type cast 'as unknown as number' suggests a TypeScript/JavaScript pattern in Rust code. This appears to be in a setTimeout context, but the cast is unnecessary and potentially indicates confusion between JavaScript and Rust. The result of setTimeout in a browser context would be a timeout ID, but this is Rust backend code.
@@ -504,7 +504,7 @@ impl TaskManager {
 
     pub fn get_active_tasks(&self) -> Vec<String> {
         self.active_tasks
-            .blocking_lock()
+            .lock().unwrap()
             .values()
             .cloned()
             .collect()
@@ -551,7 +551,7 @@ impl TaskManager {
     }
 
     pub fn cancel_task(&self, client_key: &str) -> Result<(), String> {
-        let tokens = self.cancellation_tokens.blocking_lock();
+        let tokens = self.cancellation_tokens.lock().unwrap();
         if let Some(tx) = tokens.get(client_key) {
             let _ = tx.send(true);
             Ok(())
@@ -562,7 +562,7 @@ impl TaskManager {
 
     /// Cancel all active tasks associated with a specific instance (e.g. before deletion)
     pub fn cancel_instance_tasks(&self, instance_id: i32) {
-        let tokens = self.cancellation_tokens.blocking_lock();
+        let tokens = self.cancellation_tokens.lock().unwrap();
         let install_prefix = format!("install_instance_{}", instance_id);
         let download_prefix = format!("download_{}_", instance_id);
 
@@ -578,14 +578,14 @@ impl TaskManager {
     }
 
     pub fn pause_task(&self, client_key: &str) -> Result<(), String> {
-        let tokens = self.pause_tokens.blocking_lock();
+        let tokens = self.pause_tokens.lock().unwrap();
         if let Some(tx) = tokens.get(client_key) {
             let _ = tx.send(true);
 
             // Update notification actions to show Resume
             let is_cancellable = self
                 .cancellation_tokens
-                .blocking_lock()
+                .lock().unwrap()
                 .contains_key(client_key);
             let mut actions = Vec::new();
             if is_cancellable {
@@ -614,14 +614,14 @@ impl TaskManager {
     }
 
     pub fn resume_task(&self, client_key: &str) -> Result<(), String> {
-        let tokens = self.pause_tokens.blocking_lock();
+        let tokens = self.pause_tokens.lock().unwrap();
         if let Some(tx) = tokens.get(client_key) {
             let _ = tx.send(false);
 
             // Update notification actions to show Pause
             let is_cancellable = self
                 .cancellation_tokens
-                .blocking_lock()
+                .lock().unwrap()
                 .contains_key(client_key);
             let mut actions = Vec::new();
             if is_cancellable {
