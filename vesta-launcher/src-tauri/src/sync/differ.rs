@@ -376,8 +376,8 @@ fn build_override_set(overrides: &[String]) -> std::collections::HashSet<String>
 fn mod_source_to_file_source(m: &ModpackManifestMod) -> FileSource {
     match &m.source {
         ModSource::Modrinth {
-            project_id,
-            version_id,
+            project_id: _,
+            version_id: _,
             url,
         } => FileSource::Modrinth {
             url: url.clone(),

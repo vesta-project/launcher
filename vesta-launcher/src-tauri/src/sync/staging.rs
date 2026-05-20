@@ -37,6 +37,7 @@ impl StagingDir {
     }
 
     /// Get the path to the staging directory.
+    #[allow(dead_code)]
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -80,6 +81,7 @@ impl StagingDir {
     }
 
     /// Move a file from an external path into the staging directory.
+    #[allow(dead_code)]
     pub fn move_into_staging(&self, source: &Path, relative_path: &str) -> Result<()> {
         let target = self.staged_path(relative_path);
         self.prepare_parent(relative_path)?;
