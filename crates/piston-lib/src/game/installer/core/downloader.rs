@@ -334,7 +334,11 @@ pub async fn extract_zip(zip_bytes: Vec<u8>, dest_dir: &Path) -> Result<()> {
 
         for i in 0..archive.len() {
             let mut file = archive.by_index(i)?;
-            let outpath = dest_dir.join(file.name());
+            let name = file.name();
+            if name.starts_with('/') || name.contains("..") || name.starts_with('\\') {
+                anyhow::bail!("Zip entry escapes destination: {}", name);
+            }
+            let outpath = dest_dir.join(name);
 
             if file.name().ends_with('/') {
                 std::fs::create_dir_all(&outpath)?;

@@ -44,19 +44,21 @@ function createNetworkStore() {
 			}
 		};
 
-		document.addEventListener("visibilitychange", () => {
+		const handleVisibility = () => {
 			if (document.hidden) {
 				stop();
 			} else {
 				start();
 			}
-		});
+		};
+
+		document.addEventListener("visibilitychange", handleVisibility);
 
 		if (!document.hidden) start();
 
 		return () => {
 			stop();
-			document.removeEventListener("visibilitychange", start);
+			document.removeEventListener("visibilitychange", handleVisibility);
 		};
 	});
 
