@@ -44,6 +44,7 @@ Check this index for ongoing documentation work and areas needing contribution.
 - [Instance Management](features/instance_management.md) — Advanced instance management and modpack linking.
 - [Auto-Mod Installation](features/auto_mod_installation.md) — Automatic mod deployment and integrity verification.
 - [Resources System](features/RESOURCES.md) — Mod/resource browsing, installation, and management.
+- [Modpack Updating](features/MODPACK_UPDATING.md) — Delta-based modpack update engine with config merging and user-change protection.
 - [Pinning System](features/PINNING.md) — Sidebar pinning for quick access to pages.
 - [Desktop Shortcuts](features/SHORTCUTS.md) — Cross-platform shortcut creation and branding.
 - [Instance Management](features/INSTANCE_MANAGEMENT.md) — Instance creation, maintenance, and modpack linking.
