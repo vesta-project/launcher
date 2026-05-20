@@ -595,6 +595,7 @@ async fn fetch_version_detail(client: &reqwest::Client, url: &str) -> Result<Moj
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::client::shared_client;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
     use wiremock::{Request, Respond};
@@ -639,13 +640,10 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(1))
-            .build()
-            .unwrap();
+        let client = shared_client();
 
         let url = format!("{}/test", &mock_server.uri());
-        let result = send_with_retry(&client, &url, 3, 100).await;
+        let result = send_with_retry(client, &url, 3, 100).await;
 
         assert!(result.is_ok());
         let resp = result.unwrap();
@@ -667,14 +665,11 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap();
+        let client = shared_client();
 
         let url = format!("{}/test", &mock_server.uri());
         let start = Instant::now();
-        let result = send_with_retry(&client, &url, 3, 100).await;
+        let result = send_with_retry(client, &url, 3, 100).await;
         let elapsed = start.elapsed();
 
         assert!(result.is_ok());
@@ -694,13 +689,10 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(1))
-            .build()
-            .unwrap();
+        let client = shared_client();
 
         let url = format!("{}/test", &mock_server.uri());
-        let result = send_with_retry(&client, &url, 3, 100).await;
+        let result = send_with_retry(client, &url, 3, 100).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
@@ -718,13 +710,10 @@ mod tests {
             .mount(&mock_server)
             .await;
 
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(1))
-            .build()
-            .unwrap();
+        let client = shared_client();
 
         let url = format!("{}/test", &mock_server.uri());
-        let result = send_with_retry(&client, &url, 3, 100).await;
+        let result = send_with_retry(client, &url, 3, 100).await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
