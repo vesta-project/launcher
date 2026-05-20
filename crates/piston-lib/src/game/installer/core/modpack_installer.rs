@@ -147,12 +147,12 @@ impl ModpackInstaller {
 
             let mut artifacts = Vec::new();
             let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();
-            for mod_entry in metadata.mods.clone() {
+            for mod_entry in &metadata.mods {
                 match mod_entry {
                     ModpackMod::Modrinth {
-                        path,
+                        ref path,
                         urls,
-                        hashes,
+                        ref hashes,
                         size: _,
                     } => {
                         if !urls.is_empty() {
@@ -165,19 +165,19 @@ impl ModpackInstaller {
                                     .unwrap_or("unknown")
                                     .to_string(),
                                 label: format!("mod-modrinth-{}", urls[0]),
-                                urls,
+                                urls: urls.clone(),
                                 path: target_path,
                                 sha1,
                             });
                         }
                     }
                     ModpackMod::CurseForge {
-                        project_id,
+                        ref project_id,
                         file_id,
                         required: _,
-                        hash,
+                        ref hash,
                     } => {
-                        curseforge_jobs.push((project_id, file_id, hash));
+                        curseforge_jobs.push((*project_id, *file_id, hash.clone()));
                     }
                 }
             }
