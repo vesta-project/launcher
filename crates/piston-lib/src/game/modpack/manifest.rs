@@ -39,6 +39,8 @@ pub struct ModpackManifestMod {
     /// Path relative to game_dir
     pub path: String,
     pub sha1: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
     pub size: Option<u64>,
 }
 
@@ -119,6 +121,7 @@ impl ModpackManifest {
                         },
                         path: path.clone(),
                         sha1: hashes.get("sha1").cloned(),
+                        sha256: None,
                         size: Some(*size),
                     }
                 }
@@ -135,6 +138,7 @@ impl ModpackManifest {
                     },
                     path: format!("mods/{}.jar", file_id), // best-effort; actual path resolved at download
                     sha1: hash.clone(),
+                    sha256: None,
                     size: None,
                 },
             })
@@ -210,7 +214,22 @@ impl ModpackManifest {
                         // OK
                     }
                     _ => {
-                        resources_to_fix.push(m.clone());
+                        // Also try SHA-256 if available
+                        if let Some(ref expected_sha256) = m.sha256 {
+                            match compute_file_sha256(&full_path) {
+                                Ok(computed)
+                                    if computed.to_lowercase()
+                                        == expected_sha256.to_lowercase() =>
+                                {
+                                    // SHA-256 matched
+                                }
+                                _ => {
+                                    resources_to_fix.push(m.clone());
+                                }
+                            }
+                        } else {
+                            resources_to_fix.push(m.clone());
+                        }
                     }
                 }
             }
@@ -266,6 +285,24 @@ fn compute_file_sha1(path: &Path) -> Result<String, anyhow::Error> {
 
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha1::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let bytes_read = file.read(&mut buffer)?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+/// Compute SHA-256 hash of a file (for diff comparison — stronger than SHA-1).
+fn compute_file_sha256(path: &Path) -> Result<String, anyhow::Error> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+
+    let mut file = std::fs::File::open(path)?;
+    let mut hasher = Sha256::new();
     let mut buffer = [0u8; 8192];
     loop {
         let bytes_read = file.read(&mut buffer)?;

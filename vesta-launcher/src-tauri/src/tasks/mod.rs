@@ -6,3 +6,4 @@ pub mod modpack_export;
 pub mod resource_download;
 pub mod store;
 pub mod sync_profiles;
+pub mod update_modpack;

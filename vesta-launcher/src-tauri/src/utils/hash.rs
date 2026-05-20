@@ -56,6 +56,30 @@ pub fn calculate_sha1(path: &Path) -> Result<String> {
     Ok(hex::encode(hasher.finalize()))
 }
 
+pub fn calculate_sha256(path: &Path) -> Result<String> {
+    use sha2::{Digest, Sha256};
+    let mut file = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = [0; 8192];
+
+    loop {
+        let n = file.read(&mut buffer)?;
+        if n == 0 {
+            break;
+        }
+        hasher.update(&buffer[..n]);
+    }
+
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+pub fn calculate_sha1_from_bytes(data: &[u8]) -> String {
+    use sha1::{Digest, Sha1};
+    let mut hasher = Sha1::new();
+    hasher.update(data);
+    format!("{:x}", hasher.finalize())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -68,6 +92,18 @@ mod tests {
         file.write_all(b"hello world")?;
         let hash = calculate_sha1(file.path())?;
         assert_eq!(hash, "2aae6c35c94fcfb415dbe95f408b9ce91ee846ed");
+        Ok(())
+    }
+
+    #[test]
+    fn test_sha256() -> Result<()> {
+        let mut file = NamedTempFile::new()?;
+        file.write_all(b"hello world")?;
+        let hash = calculate_sha256(file.path())?;
+        assert_eq!(
+            hash,
+            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+        );
         Ok(())
     }
 
