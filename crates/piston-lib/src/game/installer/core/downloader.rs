@@ -319,45 +319,49 @@ pub async fn download_json_with_client<T: serde::de::DeserializeOwned>(
     Ok(data)
 }
 
-/// Extract a zip archive to a directory
-pub async fn extract_zip(zip_bytes: &[u8], dest_dir: &Path) -> Result<()> {
+/// Extract a zip archive to a directory (runs on blocking thread pool)
+pub async fn extract_zip(zip_bytes: Vec<u8>, dest_dir: &Path) -> Result<()> {
     use std::io::Cursor;
 
     log::debug!("Extracting zip to: {:?}", dest_dir);
 
     create_dir_all(dest_dir).await?;
 
-    let cursor = Cursor::new(zip_bytes);
-    let mut archive = zip::ZipArchive::new(cursor)?;
+    let dest_dir = dest_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let cursor = Cursor::new(zip_bytes);
+        let mut archive = zip::ZipArchive::new(cursor)?;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = dest_dir.join(file.name());
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let outpath = dest_dir.join(file.name());
 
-        if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    std::fs::create_dir_all(p)?;
+            if file.name().ends_with('/') {
+                std::fs::create_dir_all(&outpath)?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    if !p.exists() {
+                        std::fs::create_dir_all(p)?;
+                    }
+                }
+                let mut outfile = std::fs::File::create(&outpath)?;
+                std::io::copy(&mut file, &mut outfile)?;
+            }
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Some(mode) = file.unix_mode() {
+                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
                 }
             }
-            let mut outfile = std::fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
         }
 
-        // Set permissions on Unix
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Some(mode) = file.unix_mode() {
-                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
-            }
-        }
-    }
-
-    log::debug!("Zip extraction complete");
-    Ok(())
+        log::debug!("Zip extraction complete");
+        Ok(())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Zip extraction failed: {}", e))?
 }
 
 /// Ensure there's a client JAR available for a loader-installed variant

@@ -171,7 +171,7 @@ async fn install_zulu_jre(
     log::info!("Extracting JRE to: {:?}", install_dir);
 
     if ext == "zip" {
-        extract_zip(&archive_bytes, &install_dir).await?;
+        extract_zip(archive_bytes.clone(), &install_dir).await?;
     } else {
         extract_tar_gz(&archive_bytes, &install_dir).await?;
     }
