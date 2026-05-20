@@ -56,10 +56,12 @@ import {
   launchInstance,
   repairInstance,
   resumeInstanceOperation,
+  startModpackUpdate,
   unlinkInstance,
   updateInstance,
   updateInstanceModpackVersion,
 } from "@utils/instances";
+import type { Instance } from "@utils/instances";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
   describeSelectionAdjustments,
@@ -1443,9 +1445,9 @@ export default function InstanceDetails(
 
     setBusy(true);
     try {
-      await updateInstanceModpackVersion(inst.id, versionId);
-      // Repair fetches the files for the newly set version
-      await repairInstance(inst.id);
+      // Use the new delta-based update engine
+      await startModpackUpdate(inst.id, versionId);
+      // The task emits core://instance-installed on completion, which triggers a refetch
       await refetch();
     } catch (e) {
       console.error("Failed to update modpack version:", e);

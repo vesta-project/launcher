@@ -317,6 +317,38 @@ export async function updateInstanceModpackVersion(id: number, versionId: string
 	});
 }
 
+// Check if a modpack update is available
+export async function checkModpackUpdate(
+  instanceId: number,
+): Promise<ModpackUpdateInfo> {
+  return await invoke<ModpackUpdateInfo>("check_modpack_update", {
+    instanceId,
+  });
+}
+
+// Start a modpack update using the delta update engine
+export async function startModpackUpdate(
+  instanceId: number,
+  newVersionId: string,
+): Promise<void> {
+  await invoke("start_modpack_update", {
+    instanceId,
+    newVersionId,
+  });
+}
+
+export interface ModpackUpdateInfo {
+  currentVersion: string | null;
+  latestVersion: ModpackVersionInfo | null;
+  updateAvailable: boolean;
+}
+
+export interface ModpackVersionInfo {
+  id: string;
+  versionNumber: string;
+  releaseType: string;
+}
+
 // Duplicate an instance
 export async function duplicateInstance(id: number, newName?: string): Promise<void> {
 	await invoke("duplicate_instance", {
