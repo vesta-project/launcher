@@ -12,23 +12,16 @@ pub enum NetworkStatus {
 pub struct NetworkManager {
     status: Arc<Mutex<NetworkStatus>>,
     app_handle: AppHandle,
-    client: reqwest::Client,
 }
 
 impl NetworkManager {
     pub fn new(app_handle: AppHandle) -> Self {
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(5))
-            .build()
-            .unwrap_or_default();
-
         let status = Arc::new(Mutex::new(NetworkStatus::Online));
         let status_clone = status.clone();
         let app_handle_clone = app_handle.clone();
-        let client_clone = client.clone();
 
         tauri::async_runtime::spawn(async move {
-            let actual = Self::verify_online_static(&client_clone).await;
+            let actual = Self::verify_online_static().await;
             let mut s = status_clone.lock().unwrap();
             if *s != actual {
                 *s = actual;
@@ -40,15 +33,22 @@ impl NetworkManager {
         Self {
             status,
             app_handle,
-            client,
         }
     }
 
-    async fn verify_online_static(client: &reqwest::Client) -> NetworkStatus {
+    async fn verify_online_static() -> NetworkStatus {
+        let client = piston_lib::client::shared_client();
         let endpoints = ["https://1.1.1.1", "https://www.google.com"];
+        let timeout = std::time::Duration::from_secs(5);
 
         for endpoint in endpoints {
-            if client.head(endpoint).send().await.is_ok() {
+            if client
+                .head(endpoint)
+                .timeout(timeout)
+                .send()
+                .await
+                .is_ok()
+            {
                 return NetworkStatus::Online;
             }
         }
@@ -57,7 +57,7 @@ impl NetworkManager {
     }
 
     pub async fn verify_online(&self) -> NetworkStatus {
-        Self::verify_online_static(&self.client).await
+        Self::verify_online_static().await
     }
 
     pub fn get_status(&self) -> NetworkStatus {

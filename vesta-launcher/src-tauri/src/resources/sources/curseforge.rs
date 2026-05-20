@@ -6,7 +6,6 @@ use crate::resources::sources::ResourceSource;
 use crate::utils::url::normalize_url;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use reqwest::{header, Client};
 use serde::Deserialize;
 
 // Include generated obfuscated key
@@ -20,7 +19,7 @@ fn get_deobfuscated_key() -> String {
 }
 
 pub struct CurseForgeSource {
-    client: Client,
+    api_key: String,
 }
 
 #[derive(Deserialize)]
@@ -182,26 +181,21 @@ impl CurseForgeSource {
             key.len()
         );
 
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            "x-api-key",
-            header::HeaderValue::from_str(&key).unwrap_or_else(|_| {
-                log::error!("Failed to create header value from CurseForge key");
-                header::HeaderValue::from_static("")
-            }),
-        );
-        headers.insert(
-            header::ACCEPT,
-            header::HeaderValue::from_static("application/json"),
-        );
+        Self { api_key: key }
+    }
 
-        Self {
-            client: Client::builder()
-                .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                .default_headers(headers)
-                .build()
-                .unwrap(),
-        }
+    fn http_get(&self, url: &str) -> reqwest::RequestBuilder {
+        piston_lib::client::shared_client()
+            .get(url)
+            .header("x-api-key", &self.api_key)
+            .header("Accept", "application/json")
+    }
+
+    fn http_post(&self, url: &str) -> reqwest::RequestBuilder {
+        piston_lib::client::shared_client()
+            .post(url)
+            .header("x-api-key", &self.api_key)
+            .header("Accept", "application/json")
     }
 
     pub fn map_class_id_to_type(class_id: i64) -> ResourceType {
@@ -230,7 +224,7 @@ impl CurseForgeSource {
 
     pub async fn fetch_categories_direct(&self) -> Result<Vec<CFCategoryFull>> {
         let url = "https://api.curseforge.com/v1/categories?gameId=432";
-        let response = self.client.get(url).send().await?;
+        let response = self.http_get(url).send().await?;
 
         let status = response.status();
         if !status.is_success() {
@@ -277,7 +271,7 @@ impl CurseForgeSource {
 
             log::debug!("[CurseForge] Resolving search URL: {}", search_url);
 
-            let response = self.client.get(&search_url).send().await?;
+            let response = self.http_get(&search_url).send().await?;
             if response.status().is_success() {
                 let search_res: CFSearchResult = response.json().await?;
 
@@ -476,7 +470,7 @@ impl ResourceSource for CurseForgeSource {
 
         log::debug!("[CurseForge] Search URL: {}", url);
 
-        let response = self.client.get(&url).send().await?;
+        let response = self.http_get(&url).send().await?;
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
@@ -539,7 +533,7 @@ impl ResourceSource for CurseForgeSource {
         };
 
         let url = format!("https://api.curseforge.com/v1/mods/{}", numeric_id);
-        let response = self.client.get(&url).send().await?;
+        let response = self.http_get(&url).send().await?;
         if !response.status().is_success() {
             let status = response.status();
             let body = response.text().await.unwrap_or_default();
@@ -565,7 +559,7 @@ impl ResourceSource for CurseForgeSource {
             "https://api.curseforge.com/v1/mods/{}/description",
             numeric_id
         );
-        let desc_response = self.client.get(&desc_url).send().await?;
+        let desc_response = self.http_get(&desc_url).send().await?;
         let description = if desc_response.status().is_success() {
             let desc_data: CFDescriptionResponse = desc_response.json().await.map_err(|e| {
                 anyhow!(
@@ -629,7 +623,7 @@ impl ResourceSource for CurseForgeSource {
             "modIds": mod_ids
         });
 
-        let response = self.client.post(url).json(&body).send().await?;
+        let response = self.http_post(url).json(&body).send().await?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -726,7 +720,7 @@ impl ResourceSource for CurseForgeSource {
                 }
             }
 
-            let response = self.client.get(&url).send().await?;
+            let response = self.http_get(&url).send().await?;
             if !response.status().is_success() {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
@@ -851,7 +845,7 @@ impl ResourceSource for CurseForgeSource {
                 numeric_id, version_id
             )
         };
-        let response = self.client.get(&url).send().await?;
+        let response = self.http_get(&url).send().await?;
 
         if !response.status().is_success() {
             return Err(anyhow!(
@@ -939,7 +933,7 @@ impl ResourceSource for CurseForgeSource {
             "fingerprints": [fingerprint]
         });
 
-        let response = self.client.post(url).json(&body).send().await?;
+        let response = self.http_post(url).json(&body).send().await?;
 
         if !response.status().is_success() {
             let status = response.status();
