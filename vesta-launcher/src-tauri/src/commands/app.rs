@@ -491,6 +491,16 @@ pub fn show_window_from_tray(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command]
+pub fn clear_window_startup_background(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .set_background_color(None)
+            .map_err(|e| format!("Failed to clear startup background: {}", e))?;
+    }
+    Ok(())
+}
+
 pub fn sync_tray_visibility_with_config(app: &tauri::AppHandle) -> Result<(), String> {
     let config = crate::utils::config::get_app_config()
         .map_err(|e| format!("Failed to get config for tray visibility sync: {}", e))?;
