@@ -1301,7 +1301,7 @@ function InitLoginPage(props: InitPagesProps) {
                   onClick={handleGuestMode}
                   class={styles["login-page__url"]}
                   style={
-                    "background: none; border: none; color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 500; cursor: pointer; text-decoration: underline; transition: color 0.2s;"
+                    "background: none; border: none; color: rgba(255,255,255,0.5); font-size: 14px; font-weight: 500; cursor: default; text-decoration: underline; transition: color 0.2s;"
                   }
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color = "white";

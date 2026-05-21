@@ -126,7 +126,7 @@ https://github.com/tauri-apps/tauri/issues/9510
     border: none;
     padding: 0.35em;
     margin-left: 0.5em;
-    cursor: pointer;
+    cursor: default;
     color: var(--text-primary);
     opacity: 0.5;
     display: flex;
