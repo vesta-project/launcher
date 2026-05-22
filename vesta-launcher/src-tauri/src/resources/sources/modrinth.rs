@@ -39,6 +39,8 @@ struct ModrinthProjectHit {
     #[serde(rename = "date_modified")]
     updated: String,
     follows: u64,
+    gallery: Option<Vec<String>>,
+    featured_gallery: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -224,7 +226,8 @@ impl ResourceSource for ModrinthSource {
                 categories: hit.categories.unwrap_or_default(),
                 web_url: format!("https://modrinth.com/{}/{}", hit.project_type, hit.slug),
                 external_ids: None,
-                gallery: Vec::new(),
+                gallery: hit.gallery.unwrap_or_default(),
+                featured_gallery: hit.featured_gallery,
                 published_at: Some(hit.published),
                 updated_at: Some(hit.updated),
             })
@@ -301,6 +304,10 @@ impl ResourceSource for ModrinthSource {
             external_ids.insert("curseforge".to_string(), cf_id);
         }
 
+        let featured_gallery = project.gallery.as_ref().and_then(|items| {
+            items.iter().find(|i| i.featured == Some(true))
+        }).and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
+
         Ok(ResourceProject {
             id: project.id,
             source: SourcePlatform::Modrinth,
@@ -329,6 +336,7 @@ impl ResourceSource for ModrinthSource {
                 .into_iter()
                 .map(|i| i.raw_url.unwrap_or(i.url))
                 .collect(),
+            featured_gallery,
             published_at: Some(project.published),
             updated_at: Some(project.updated),
         })
@@ -379,6 +387,10 @@ impl ResourceSource for ModrinthSource {
                     external_ids.insert("curseforge".to_string(), cf_id);
                 }
 
+                let featured_gallery = p.gallery.as_ref().and_then(|items| {
+                    items.iter().find(|i| i.featured == Some(true))
+                }).and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
+
                 ResourceProject {
                     id: p.id,
                     source: SourcePlatform::Modrinth,
@@ -387,7 +399,7 @@ impl ResourceSource for ModrinthSource {
                     summary: p.description,
                     description: Some(p.body),
                     icon_url: p.icon_url,
-                    author: "Unknown".to_string(), // Batch doesn't provide authors in a simple way
+                    author: "Unknown".to_string(),
                     authors: vec!["Unknown".to_string()],
                     download_count: p.downloads,
                     follower_count: p.followers,
@@ -404,6 +416,7 @@ impl ResourceSource for ModrinthSource {
                         .into_iter()
                         .map(|i| i.raw_url.unwrap_or(i.url))
                         .collect(),
+                    featured_gallery,
                     published_at: Some(p.published),
                     updated_at: Some(p.updated),
                 }

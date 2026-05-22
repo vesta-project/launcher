@@ -49,6 +49,7 @@ pub struct ResourceProject {
     pub web_url: String,
     pub external_ids: Option<std::collections::HashMap<String, String>>,
     pub gallery: Vec<String>,
+    pub featured_gallery: Option<String>,
     pub published_at: Option<String>,
     pub updated_at: Option<String>,
 }

@@ -47,21 +47,6 @@ function Button(p: ButtonProps) {
 		}
 	};
 
-	const buttonColorVar =
-		local.color === "none"
-			? "var(--secondary-low)"
-			: local.color === "secondary"
-				? "var(--surface-raised)"
-				: `var(--${local.color})`;
-	const buttonFgVar =
-		local.color === "none" || local.color === "secondary"
-			? "var(--text-primary)"
-			: "var(--text-on-accent)";
-	const buttonTextVar =
-		local.color !== "none" && local.color !== "secondary" ? buttonColorVar : "var(--text-primary)";
-	const buttonBorderVar =
-		local.color === "none" || local.color === "secondary" ? "var(--border-subtle)" : "transparent";
-
 	return (
 		<Tooltip placement={props.tooltip_placement}>
 			<TooltipTrigger
@@ -81,15 +66,31 @@ function Button(p: ButtonProps) {
 					[local.class ?? ""]: true,
 				}}
 				style={
-					typeof local.style === "string"
-						? `--button-color: ${buttonColorVar}; --button-fg: ${buttonFgVar}; --button-border: ${buttonBorderVar}; --button-text: ${buttonTextVar}; ${local.style}`
-						: {
-								"--button-color": buttonColorVar,
-								"--button-fg": buttonFgVar,
-								"--button-border": buttonBorderVar,
-								"--button-text": buttonTextVar,
-								...(local.style as any),
-							}
+					(() => {
+						const cv =
+							local.color === "none"
+								? "var(--secondary-low)"
+								: local.color === "secondary"
+									? "var(--surface-raised)"
+									: `var(--${local.color})`;
+						const fg =
+							local.color === "none" || local.color === "secondary"
+								? "var(--text-primary)"
+								: "var(--text-on-accent)";
+						const txt = local.color !== "none" && local.color !== "secondary" ? cv : "var(--text-primary)";
+						const bdr =
+							local.color === "none" || local.color === "secondary" ? "var(--border-subtle)" : "transparent";
+
+						return typeof local.style === "string"
+							? `--button-color: ${cv}; --button-fg: ${fg}; --button-border: ${bdr}; --button-text: ${txt}; ${local.style}`
+							: {
+									"--button-color": cv,
+									"--button-fg": fg,
+									"--button-border": bdr,
+									"--button-text": txt,
+									...(local.style as any),
+								};
+					})()
 				}
 				onClick={handleClick}
 				disabled={props.disabled}

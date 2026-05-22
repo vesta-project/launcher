@@ -23,6 +23,7 @@ export type ResourceProject = {
 	web_url: string;
 	external_ids?: Record<string, string>;
 	gallery: string[];
+	featured_gallery?: string | null;
 	published_at: string | null;
 	updated_at: string | null;
 };
