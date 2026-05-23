@@ -1,4 +1,5 @@
 import HeartIcon from "@assets/heart.svg";
+import DownloadIcon from "@assets/download-compact.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -260,7 +261,7 @@ const ResourceCard: Component<{
 
 	const displayCategories = createMemo(() =>
 		props.project.categories.filter(
-			(c) => !MODLOADER_IDS.has(c.toLowerCase()),
+			(c) => !resources.state.loader || !MODLOADER_IDS.has(c.toLowerCase()),
 		),
 	);
 
@@ -521,7 +522,8 @@ const ResourceCard: Component<{
 							<span class={styles["card-author"]}>by {props.project.author}</span>
 							<div class={styles["card-stats"]}>
 								<span class={styles["card-stats-item"]}>
-									{props.project.download_count.toLocaleString()} downloads
+									{props.project.download_count.toLocaleString()}
+									<DownloadIcon />
 								</span>
 								<Show
 									when={
@@ -530,8 +532,8 @@ const ResourceCard: Component<{
 									}
 								>
 									<span class={styles["card-stats-item"]}>
-										<HeartIcon />
 										{(props.project.follower_count || 0).toLocaleString()}
+										<HeartIcon />
 									</span>
 								</Show>
 							</div>
@@ -624,15 +626,15 @@ const ResourceCard: Component<{
 							<span class={styles["card-list-meta"]}>
 								<span>by {props.project.author}</span>
 								<span>·</span>
-								<span>{props.project.download_count.toLocaleString()} dl</span>
+								<span>{props.project.download_count.toLocaleString()} <DownloadIcon /></span>
 								<Show
 									when={
 										props.project.source === "modrinth" &&
 										(props.project.follower_count || 0) > 0
 									}
 								>
-									<HeartIcon />
 									<span>{(props.project.follower_count || 0).toLocaleString()}</span>
+									<HeartIcon />
 								</Show>
 							</span>
 						</div>

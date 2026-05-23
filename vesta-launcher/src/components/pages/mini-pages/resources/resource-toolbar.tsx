@@ -22,28 +22,6 @@ import { ActiveFilterChips } from "./active-filter-chips";
 import { FilterPopover } from "./filter-popover";
 import styles from "./resource-browser.module.css";
 
-const ListIcon = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-		<line x1="8" y1="6" x2="21" y2="6" />
-		<line x1="8" y1="12" x2="21" y2="12" />
-		<line x1="8" y1="18" x2="21" y2="18" />
-		<line x1="3" y1="6" x2="3.01" y2="6" />
-		<line x1="3" y1="12" x2="3.01" y2="12" />
-		<line x1="3" y1="18" x2="3.01" y2="18" />
-	</svg>
-);
-
-const GridIcon = () => (
-	<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-		<rect x="3" y="3" width="7" height="7" />
-		<rect x="14" y="3" width="7" height="7" />
-		<rect x="14" y="14" width="7" height="7" />
-		<rect x="3" y="14" width="7" height="7" />
-	</svg>
-);
-
-
-
 const RESOURCE_TYPES = [
 	{ value: "mod", label: "Mods" },
 	{ value: "resourcepack", label: "Resource Packs" },
@@ -173,29 +151,7 @@ export function ResourceToolbar(props: {
 					</button>
 				</div>
 
-				<div class={styles["view-toggle"]}>
-					<button
-						class={styles["view-btn"]}
-						classList={{
-							[styles.active]: resources.state.viewMode === "list",
-						}}
-						onClick={() => resources.setViewMode("list")}
-						title="List View"
-					>
-						<ListIcon />
-					</button>
-					<button
-						class={styles["view-btn"]}
-						classList={{
-							[styles.active]: resources.state.viewMode === "grid",
-						}}
-						onClick={() => resources.setViewMode("grid")}
-						title="Grid View"
-					>
-						<GridIcon />
-					</button>
 				</div>
-			</div>
 
 			{/* Row 2: Instance picker, Filter button, Active chips */}
 			<div class={styles["toolbar-row-controls"]}>
@@ -282,26 +238,32 @@ export function ResourceToolbar(props: {
 					>
 						<SelectTrigger class={styles["instance-icon-trigger"]}>
 							<Show when={selectedInstance()} fallback={
-								<div class={styles["instance-icon-placeholder"]}>
-									<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-										<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-										<line x1="8" y1="21" x2="16" y2="21"/>
-										<line x1="12" y1="17" x2="12" y2="21"/>
-									</svg>
+								<div class={styles["instance-trigger-content"]}>
+									<div class={styles["instance-icon-placeholder"]}>
+										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+											<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+											<line x1="8" y1="21" x2="16" y2="21"/>
+											<line x1="12" y1="17" x2="12" y2="21"/>
+										</svg>
+									</div>
+									<span class={styles["instance-trigger-name"]}>Select an instance</span>
 								</div>
 							}>
-								<Show when={instanceIconUrl()} fallback={
-									<div class={styles["instance-icon-placeholder"]}>{instanceDisplayChar()}</div>
-								}>
-									<div
-										class={styles["instance-item-icon"]}
-										style={{
-											"background-image": `url('${instanceIconUrl() || ""}')`,
-											"background-size": "cover",
-											"background-position": "center",
-										}}
-									/>
-								</Show>
+								<div class={styles["instance-trigger-content"]}>
+									<Show when={instanceIconUrl()} fallback={
+										<div class={styles["instance-icon-placeholder"]}>{instanceDisplayChar()}</div>
+									}>
+										<div
+											class={styles["instance-item-icon"]}
+											style={{
+												"background-image": `url('${instanceIconUrl() || ""}')`,
+												"background-size": "cover",
+												"background-position": "center",
+											}}
+										/>
+									</Show>
+									<span class={styles["instance-trigger-name"]}>{selectedInstance()?.name}</span>
+								</div>
 							</Show>
 						</SelectTrigger>
 						<SelectContent />
@@ -323,6 +285,10 @@ export function ResourceToolbar(props: {
 						<FilterPopover router={activeRouter()} />
 					</PopoverContent>
 				</Popover>
+
+				<Show when={activeFilterCount() > 0}>
+					<div class={styles["filter-divider"]} />
+				</Show>
 
 				<div class={styles["active-filters-inline"]}>
 					<ActiveFilterChips router={activeRouter()} />

@@ -288,16 +288,6 @@ const ResourceBrowser: Component<{
       resources.fetchInstalled(resources.state.selectedInstanceId);
     }
     resources.fetchCategories();
-
-    const content = document.querySelector(".page-viewer-content");
-    if (content instanceof HTMLElement) {
-      content.style.overflow = "hidden";
-    }
-    onCleanup(() => {
-      if (content instanceof HTMLElement) {
-        content.style.overflow = "";
-      }
-    });
   });
 
   const [searchError, setSearchError] = createSignal<string | null>(null);
@@ -438,6 +428,37 @@ const ResourceBrowser: Component<{
               {resources.state.sortOrder === "asc" ? "↑" : "↓"}
             </button>
           </Show>
+
+          <div class={styles["view-toggle"]}>
+            <button
+              class={styles["view-btn"]}
+              classList={{ [styles.active]: resources.state.viewMode === "list" }}
+              onClick={() => resources.setViewMode("list")}
+              title="List View"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6" />
+                <line x1="8" y1="12" x2="21" y2="12" />
+                <line x1="8" y1="18" x2="21" y2="18" />
+                <line x1="3" y1="6" x2="3.01" y2="6" />
+                <line x1="3" y1="12" x2="3.01" y2="12" />
+                <line x1="3" y1="18" x2="3.01" y2="18" />
+              </svg>
+            </button>
+            <button
+              class={styles["view-btn"]}
+              classList={{ [styles.active]: resources.state.viewMode === "grid" }}
+              onClick={() => resources.setViewMode("grid")}
+              title="Grid View"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="7" height="7" />
+                <rect x="14" y="3" width="7" height="7" />
+                <rect x="14" y="14" width="7" height="7" />
+                <rect x="3" y="14" width="7" height="7" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
