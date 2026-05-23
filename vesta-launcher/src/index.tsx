@@ -1,5 +1,7 @@
 /* @refresh reload */
 
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { initSentryMonitoring } from "@utils/sentry";
 import { applyStartupRouteTarget, bootstrapStartup } from "@utils/startup-bootstrap";
 import { createSignal, Show } from "solid-js";
@@ -17,16 +19,12 @@ if (!root) {
 void initSentryMonitoring();
 
 if ((window as any).__TAURI_INTERNALS__) {
-	void import("@tauri-apps/api/window")
-		.then(({ getCurrentWindow }) => {
-			const label = getCurrentWindow().label;
-			if (label === "main") {
-				return import("@tauri-apps/api/core").then(({ invoke }) => invoke("show_window_from_tray"));
-			}
-		})
-		.catch((error) => {
-			console.warn("Failed to check window label or show startup window:", error);
+	const label = getCurrentWindow().label;
+	if (label === "main") {
+		invoke("show_window_from_tray").catch((error) => {
+			console.warn("Failed to show startup window:", error);
 		});
+	}
 }
 
 // Add Ctrl+R / Cmd+R reload handler

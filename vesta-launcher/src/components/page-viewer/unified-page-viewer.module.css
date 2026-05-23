@@ -126,7 +126,7 @@
 	border: none;
 	background: transparent;
 	color: inherit;
-	cursor: pointer;
+	cursor: default;
 	transition:
 		background 0.2s,
 		transform 0.1s;

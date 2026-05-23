@@ -1,5 +1,6 @@
 pub mod api;
 pub mod auth;
+pub mod client;
 pub mod game;
 pub mod models;
 pub mod utils;

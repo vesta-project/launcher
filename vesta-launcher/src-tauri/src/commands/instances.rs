@@ -926,7 +926,14 @@ pub async fn update_instance(
         let new_dir = instances_root.join(&new_slug);
 
         if old_dir.exists() {
-            if let Err(e) = std::fs::rename(&old_dir, &new_dir) {
+            let rename_result = tokio::task::spawn_blocking({
+                let old_dir = old_dir.clone();
+                let new_dir = new_dir.clone();
+                move || std::fs::rename(&old_dir, &new_dir)
+            })
+            .await
+            .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+            if let Err(e) = rename_result {
                 log::warn!(
                     "[update_instance] Failed to rename instance dir: {} -> {} : {}",
                     old_dir.display(),
@@ -961,7 +968,14 @@ pub async fn update_instance(
             .join(format!("{}.log", new_slug));
 
         if old_log.exists() {
-            if let Err(e) = std::fs::rename(&old_log, &new_log) {
+            let rename_log_result = tokio::task::spawn_blocking({
+                let old_log = old_log.clone();
+                let new_log = new_log.clone();
+                move || std::fs::rename(&old_log, &new_log)
+            })
+            .await
+            .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+            if let Err(e) = rename_log_result {
                 log::warn!("[update_instance] Failed to move log file: {}", e);
             }
         }
@@ -1795,34 +1809,39 @@ pub async fn launch_instance(
                         let exit_status_path =
                             game_dir_monitor.join(".vesta").join("exit_status.json");
                         let (exited_at_ts, exit_code) = if exit_status_path.exists() {
-                            // Simplified read logic
-                            if let Ok(content) = std::fs::read_to_string(&exit_status_path) {
-                                if let Ok(status) =
-                                    serde_json::from_str::<serde_json::Value>(&content)
-                                {
-                                    let ex = status
-                                        .get("exited_at")
-                                        .and_then(|v| v.as_str())
-                                        .unwrap_or("")
-                                        .to_string();
-                                    let code = status
-                                        .get("exit_code")
-                                        .and_then(|v| v.as_i64())
-                                        .unwrap_or(0)
-                                        as i32;
-                                    (
-                                        if ex.is_empty() {
-                                            chrono::Utc::now().to_rfc3339()
-                                        } else {
-                                            ex
-                                        },
-                                        code,
-                                    )
-                                } else {
-                                    (chrono::Utc::now().to_rfc3339(), 0)
+                            let path_for_blocking = exit_status_path.clone();
+                            match tokio::task::spawn_blocking(move || {
+                                std::fs::read_to_string(&path_for_blocking)
+                            })
+                            .await
+                            {
+                                Ok(Ok(content)) => {
+                                    if let Ok(status) =
+                                        serde_json::from_str::<serde_json::Value>(&content)
+                                    {
+                                        let ex = status
+                                            .get("exited_at")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        let code = status
+                                            .get("exit_code")
+                                            .and_then(|v| v.as_i64())
+                                            .unwrap_or(0)
+                                            as i32;
+                                        (
+                                            if ex.is_empty() {
+                                                chrono::Utc::now().to_rfc3339()
+                                            } else {
+                                                ex
+                                            },
+                                            code,
+                                        )
+                                    } else {
+                                        (chrono::Utc::now().to_rfc3339(), 0)
+                                    }
                                 }
-                            } else {
-                                (chrono::Utc::now().to_rfc3339(), 0)
+                                _ => (chrono::Utc::now().to_rfc3339(), 0),
                             }
                         } else {
                             (chrono::Utc::now().to_rfc3339(), 0)
@@ -2000,7 +2019,7 @@ pub fn update_installation_status(
 }
 
 #[tauri::command]
-pub fn read_instance_log(
+pub async fn read_instance_log(
     instance_id_slug: String,
     last_lines: Option<usize>,
     since: Option<u64>,
@@ -2017,7 +2036,7 @@ pub fn read_instance_log(
     }
 
     if let Some(s) = since {
-        if let Ok(meta) = std::fs::metadata(&log_file) {
+        if let Ok(meta) = tokio::fs::metadata(&log_file).await {
             if let Ok(mtime) = meta.modified() {
                 if let Ok(duration) = mtime.duration_since(UNIX_EPOCH) {
                     if duration.as_secs() < s {
@@ -2028,18 +2047,22 @@ pub fn read_instance_log(
         }
     }
 
-    let file =
-        std::fs::File::open(&log_file).map_err(|e| format!("Failed to open log file: {}", e))?;
-    let reader = std::io::BufReader::new(file);
-    use std::io::BufRead;
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::BufRead;
+        let file =
+            std::fs::File::open(&log_file).map_err(|e| format!("Failed to open log file: {}", e))?;
+        let reader = std::io::BufReader::new(file);
 
-    let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
-    if let Some(n) = last_lines {
-        if lines.len() > n {
-            return Ok(lines[lines.len() - n..].to_vec());
+        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+        if let Some(n) = last_lines {
+            if lines.len() > n {
+                return Ok(lines[lines.len() - n..].to_vec());
+            }
         }
-    }
-    Ok(lines)
+        Ok(lines)
+    })
+    .await
+    .map_err(|e| format!("Failed to read log: {}", e))?
 }
 
 #[derive(serde::Serialize)]
@@ -2118,33 +2141,38 @@ pub fn get_instance_log_history(instance_id_slug: String) -> Result<Vec<LogFileI
 }
 
 #[tauri::command]
-pub fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
+pub async fn read_specific_log_file(path: String) -> Result<Vec<String>, String> {
     let path_buf = std::path::PathBuf::from(&path);
     if !path_buf.exists() {
         return Err("Log file does not exist".to_string());
     }
 
-    let file = std::fs::File::open(&path_buf).map_err(|e| format!("Failed to open file: {}", e))?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::{BufRead, BufReader};
+        let file = std::fs::File::open(&path_buf)
+            .map_err(|e| format!("Failed to open file: {}", e))?;
 
-    let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
-    use std::io::{BufRead, BufReader};
+        let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
 
-    if ext == "gz" {
-        use flate2::read::GzDecoder;
-        let decoder = GzDecoder::new(file);
-        let reader = BufReader::new(decoder);
-        let mut lines = Vec::new();
-        for line in reader.lines() {
-            if let Ok(l) = line {
-                lines.push(l);
+        if ext == "gz" {
+            use flate2::read::GzDecoder;
+            let decoder = GzDecoder::new(file);
+            let reader = BufReader::new(decoder);
+            let mut lines = Vec::new();
+            for line in reader.lines() {
+                if let Ok(l) = line {
+                    lines.push(l);
+                }
             }
+            Ok(lines)
+        } else {
+            let reader = BufReader::new(file);
+            let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
+            Ok(lines)
         }
-        Ok(lines)
-    } else {
-        let reader = BufReader::new(file);
-        let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
-        Ok(lines)
-    }
+    })
+    .await
+    .map_err(|e| format!("Failed to read log file: {}", e))?
 }
 
 #[tauri::command]

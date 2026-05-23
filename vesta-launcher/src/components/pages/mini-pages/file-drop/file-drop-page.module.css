@@ -46,7 +46,7 @@
 	color: hsl(var(--color__primary-hue) 60% 90%);
 	border: 1px solid hsl(var(--color__primary-hue) 40% 40%);
 	border-radius: 6px;
-	cursor: pointer;
+	cursor: default;
 	font-size: 0.875rem;
 	transition: all 150ms ease-in-out;
 }

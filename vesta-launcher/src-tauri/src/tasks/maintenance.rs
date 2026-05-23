@@ -85,17 +85,27 @@ impl Task for CloneInstanceTask {
                 if src_dir.exists() {
                     ctx.update_description(format!("Copying files for {}...", final_name));
 
-                    for entry in WalkDir::new(src_dir).into_iter().filter_map(|e| e.ok()) {
-                        let path = entry.path();
-                        let relative = path.strip_prefix(src_dir).map_err(|e| e.to_string())?;
-                        let target = new_dir.join(relative);
+                    let src_dir_owned = src_dir.to_path_buf();
+                    let new_dir_for_copy = new_dir.clone();
+                    tokio::task::spawn_blocking(move || {
+                        for entry in WalkDir::new(&src_dir_owned).into_iter().filter_map(|e| e.ok()) {
+                            let path = entry.path().to_path_buf();
+                            let relative = match path.strip_prefix(&src_dir_owned) {
+                                Ok(r) => r.to_path_buf(),
+                                Err(e) => return Err(format!("Strip prefix error: {:?}", e)),
+                            };
+                            let target = new_dir_for_copy.join(&relative);
 
-                        if path.is_dir() {
-                            std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
-                        } else {
-                            std::fs::copy(path, &target).map_err(|e| e.to_string())?;
+                            if path.is_dir() {
+                                std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
+                            } else {
+                                std::fs::copy(&path, &target).map_err(|e| e.to_string())?;
+                            }
                         }
-                    }
+                        Ok(())
+                    })
+                    .await
+                    .map_err(|e| format!("File copy task panicked: {}", e))??;
                 }
             }
 
@@ -468,12 +478,12 @@ impl Task for RepairInstanceTask {
                                     "Downloading modpack version...".to_string(),
                                 );
 
-                                let client = reqwest::Client::new();
+                                let client = piston_lib::client::shared_client();
                                 let silent_reporter =
                                     piston_lib::game::installer::types::SilentProgressReporter;
                                 if let Err(e) =
                                     piston_lib::game::installer::core::downloader::download_to_path(
-                                        &client,
+                                        client,
                                         &version.download_url,
                                         &zip_path,
                                         Some(&version.hash),

@@ -55,6 +55,14 @@ export function initTheme(): Promise<Record<string, any> | null> {
 				document.documentElement.setAttribute("data-os", os);
 			}
 
+			// Clear the startup window background before applying theme effects,
+			// so window effects (vibrancy, blur, etc.) can show through transparency.
+			try {
+				await invoke("clear_window_startup_background");
+			} catch (e) {
+				console.warn("Failed to clear startup background:", e);
+			}
+
 			applyConfigSnapshot(config);
 			setIsThemeReady(true);
 			console.info("Initial theme applied from config");

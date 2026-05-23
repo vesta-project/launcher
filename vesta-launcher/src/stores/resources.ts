@@ -23,6 +23,7 @@ export type ResourceProject = {
 	web_url: string;
 	external_ids?: Record<string, string>;
 	gallery: string[];
+	featured_gallery?: string | null;
 	published_at: string | null;
 	updated_at: string | null;
 };
@@ -342,6 +343,7 @@ export const resources = {
 			});
 		} catch (e) {
 			console.error("Failed to search resources:", e);
+			throw e;
 		} finally {
 			setResourceStore("loading", false);
 		}
@@ -548,6 +550,8 @@ export function findBestVersion(
 			if (isVanilla) {
 				if (resourceType === "mod") {
 					matchesLoader = false;
+				} else if (resourceType === "modpack") {
+					matchesLoader = true;
 				} else {
 					matchesLoader = normalizedLoaders.length === 0 || normalizedLoaders.includes("minecraft");
 				}

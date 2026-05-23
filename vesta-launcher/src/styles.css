@@ -40,7 +40,6 @@ body {
 	--animate-spin-duration: 1s;
 
 	/* Gradient Configuration */
-	--gradient-enabled: 1; /* 0 = solid, 1 = gradient */
 	--rotation: 135deg;
 	--background-opacity: 0.25;
 	--window-surface-radius: 0px;
@@ -68,6 +67,14 @@ body {
 	);
 
 	--app-background-tint: hsl(var(--color__primary-hue) 10% var(--lightness-surface-base));
+
+	/* Same tint but with --background-opacity baked in as alpha.
+       Used when gradient is disabled so the solid background-image
+       still responds to the user's opacity control. */
+	--app-background-tint-with-opacity: hsl(
+		var(--color__primary-hue) 10% var(--lightness-surface-base) /
+		var(--background-opacity)
+	);
 
 	/* Borders */
 	--border-subtle: hsl(var(--color__primary-hue) 10% var(--lightness-border) / 0.4);
@@ -280,7 +287,9 @@ body {
 	   ============================================================================= */
 
 	font-family:
-		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Segoe UI Emoji", "Segoe UI Symbol", Inter, Avenir, Helvetica, sans-serif;
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+		Arial, "Noto Sans", "Segoe UI Emoji", "Segoe UI Symbol", Inter, Avenir,
+		Helvetica, sans-serif;
 	font-size: 100%;
 	color: var(--text-primary);
 

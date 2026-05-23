@@ -384,16 +384,6 @@ pub fn extract_overrides_with_config_policy<P: AsRef<Path>, D: AsRef<Path>>(
     Ok((extracted_files, skipped_configs))
 }
 
-fn extract_folder_to_root<R: Read + std::io::Seek>(
-    archive: &mut ZipArchive<R>,
-    folder_name: &str,
-    destination: &Path,
-) -> Result<Vec<PathBuf>> {
-    let (extracted, _) =
-        extract_folder_to_root_with_config_policy(archive, folder_name, destination, true)?;
-    Ok(extracted)
-}
-
 /// Extract a folder from a ZIP archive to a destination, with config preservation.
 /// When `force_overwrite_configs` is false, files in `config/` or with config extensions
 /// are skipped. Returns (extracted_files, skipped_config_paths).

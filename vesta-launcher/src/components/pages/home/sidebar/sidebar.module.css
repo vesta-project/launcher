@@ -1,11 +1,5 @@
 .sidebar {
-	--bg: linear-gradient(
-		90deg,
-		hsl(var(--color__primary-hue) 100% 7% / calc(var(--gradient-enabled) * 0.05)) 0%,
-		hsl(var(--color__primary-hue) 81% 40% / calc(var(--gradient-enabled) * 0.05)) 35%,
-		hsl(var(--color__primary-hue) 81% 40% / calc(var(--gradient-enabled) * 0.05)) 100%
-	);
-	color: contrast-color(var(--bg));
+	color: contrast-color(var(--sidebar-bg));
 
 	z-index: var(--z-sidebar);
 	padding: 13px 0 13px 13px;

@@ -11,6 +11,7 @@ use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
 use tauri::Manager;
+use tauri::webview::Color;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -897,7 +898,9 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             // Keep startup hidden until frontend requests show, so the first visible frame is the loader.
             .visible(false)
             .transparent(true)
-            .decorations(false);
+            .decorations(false)
+            // Match startup loader background so the window has a solid color before webview paints.
+            .background_color(Color(20, 20, 20, 255));
 
     let config = get_app_config()?;
     // Legacy bridge: use persisted config size as bootstrap defaults until window-state restore applies.
@@ -928,20 +931,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .title_bar_style(tauri::TitleBarStyle::Overlay);
 
     let _main_win = win_builder.build()?;
-
-    // Safety fallback: if frontend startup handshake fails, don't leave the app hidden forever.
-    {
-        let fallback_window = _main_win.clone();
-        tauri::async_runtime::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
-            let is_visible = fallback_window.is_visible().unwrap_or(false);
-            let is_minimized = fallback_window.is_minimized().unwrap_or(false);
-            if !is_visible && !is_minimized {
-                log::warn!("Main window still hidden after startup timeout; forcing show fallback");
-                let _ = fallback_window.show();
-            }
-        });
-    }
 
     // Always start with a solid, non-transparent window effect during bootstrap.
     // The frontend theme engine will apply the persisted effect once config/theme has loaded.

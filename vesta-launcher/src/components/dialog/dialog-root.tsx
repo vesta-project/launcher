@@ -8,8 +8,8 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import { Component, createSignal, For, Show } from "solid-js";
 
 export const DialogRoot: Component = () => {

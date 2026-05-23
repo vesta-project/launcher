@@ -38,7 +38,7 @@
 	text-align: left;
 	padding: 0.5rem 1rem;
 	border-radius: 6px;
-	cursor: pointer;
+	cursor: default;
 	font-size: 0.9rem;
 	transition: all 0.2s;
 	outline: none;
@@ -121,7 +121,7 @@
 	background: transparent;
 	border: none;
 	color: var(--text-tertiary);
-	cursor: pointer;
+	cursor: default;
 	padding: 0.25rem;
 	border-radius: 4px;
 	display: flex;

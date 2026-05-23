@@ -341,20 +341,24 @@ pub async fn resolve_version_chain(version_id: &str, data_dir: &Path) -> Result<
     );
     if !version_path.exists() {
         // Try to add more diagnostics to help understand why a manifest check might fail
-        let parent = version_path.parent();
-        if let Some(p) = parent {
-            match std::fs::read_dir(p) {
-                Ok(rd) => {
-                    let mut listing: Vec<String> = vec![];
-                    for entry in rd.flatten() {
-                        if let Ok(fname) = entry.file_name().into_string() {
-                            listing.push(fname);
-                        }
-                    }
-                    log::debug!("Parent directory {:?} contents: {:?}", p, listing);
+        if let Some(parent) = version_path.parent() {
+            let parent = parent.to_path_buf();
+            let pb = parent.clone();
+            let listing = tokio::task::spawn_blocking(move || -> std::io::Result<Vec<String>> {
+                let rd = std::fs::read_dir(&pb)?;
+                Ok(rd.flatten()
+                    .filter_map(|entry| entry.file_name().into_string().ok())
+                    .collect())
+            })
+            .await
+            .context("spawn_blocking panicked")?;
+
+            match listing {
+                Ok(entries) => {
+                    log::debug!("Parent directory {:?} contents: {:?}", parent, entries);
                 }
                 Err(e) => {
-                    log::debug!("Failed to read parent dir {:?}: {}", p, e);
+                    log::debug!("Failed to read parent dir {:?}: {}", parent, e);
                 }
             }
         }

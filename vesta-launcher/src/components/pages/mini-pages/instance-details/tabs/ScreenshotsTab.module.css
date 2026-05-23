@@ -46,7 +46,7 @@
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	overflow: hidden;
-	cursor: pointer;
+	cursor: default;
 	transition: all 0.2s ease;
 }
 
@@ -101,7 +101,7 @@
 	background: var(--surface-low);
 	border: 1px solid var(--border);
 	border-radius: 6px;
-	cursor: pointer;
+	cursor: default;
 	transition: all 0.2s;
 }
 

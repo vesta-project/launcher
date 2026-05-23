@@ -225,7 +225,7 @@
 	font-size: 13px;
 	opacity: 0.5;
 	text-decoration: underline;
-	cursor: pointer;
+	cursor: default;
 }
 
 .login-page__url:hover {
@@ -321,7 +321,7 @@
 /* Icon Picker Hint for onboarding */
 .init-icon-container {
 	position: relative;
-	cursor: pointer;
+	cursor: default;
 }
 
 .init-icon-hint {

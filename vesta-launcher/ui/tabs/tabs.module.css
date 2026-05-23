@@ -35,7 +35,7 @@
 	font-weight: 500;
 	color: var(--text-secondary);
 	background: transparent;
-	cursor: pointer;
+	cursor: default;
 	user-select: none;
 	transition: all 150ms ease;
 	z-index: 1;

@@ -50,7 +50,7 @@ describe("applyTheme background and effect behavior", () => {
 		expect(root.getAttribute("data-window-effect")).toBe("transparent");
 		expect(root.getAttribute("data-gradient")).toBe("0");
 		const bgImage = root.style.getPropertyValue("--background-image").trim();
-		expect(bgImage).toContain("var(--background-opacity)");
+		expect(bgImage).toContain("var(--app-background-tint-with-opacity)");
 		expect(bgImage).not.toContain("var(--app-background-tint)");
 		expect(root.style.getPropertyValue("--background-color").trim()).toBe("");
 	});
@@ -67,7 +67,7 @@ describe("applyTheme background and effect behavior", () => {
 		expect(root.getAttribute("data-window-effect")).toBe("none");
 		expect(root.getAttribute("data-gradient")).toBe("0");
 		expect(root.style.getPropertyValue("--background-image").trim()).toBe(
-			"linear-gradient(var(--app-background-tint), var(--app-background-tint))",
+			"linear-gradient(var(--app-background-tint-with-opacity), var(--app-background-tint-with-opacity))",
 		);
 		expect(root.style.getPropertyValue("--background-color").trim()).toBe(
 			"var(--app-background-tint)",
