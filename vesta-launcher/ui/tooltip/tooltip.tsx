@@ -11,7 +11,7 @@ function Tooltip(props: TooltipPrimitive.TooltipRootProps) {
 	return <TooltipPrimitive.Root gutter={4} closeDelay={100} {...props} />;
 }
 
-function TooltipContent(props: TooltipPrimitive.TooltipContentProps & ClassProp & ChildrenProp) {
+function TooltipContent(props: TooltipPrimitive.TooltipContentProps & ClassProp & ChildrenProp & { onClick?: (e: MouseEvent) => void }) {
 	const [_, others] = splitProps(props, ["class", "children"]);
 	const c = children(() => props.children);
 	return (

@@ -48,14 +48,17 @@ struct CFMod {
     download_count: f64,
     categories: Vec<CFCategory>,
     class_id: Option<i64>,
-    gallery: Option<Vec<CFGallery>>,
+    screenshots: Option<Vec<CFScreenshot>>,
     date_created: String,
     date_modified: String,
 }
 
 #[derive(Deserialize)]
-struct CFGallery {
+#[allow(dead_code)]
+struct CFScreenshot {
     url: String,
+    #[serde(default)]
+    thumbnail_url: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -508,8 +511,9 @@ impl ResourceSource for CurseForgeSource {
                     .collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
+                featured_gallery: item.screenshots.as_ref().and_then(|shots| shots.first().map(|s| s.url.clone())),
                 gallery: item
-                    .gallery
+                    .screenshots
                     .unwrap_or_default()
                     .into_iter()
                     .map(|s| s.url)
@@ -519,9 +523,11 @@ impl ResourceSource for CurseForgeSource {
             })
             .collect();
 
+        let total_hits = response.pagination.total_count as u64;
+
         Ok(SearchResponse {
             hits,
-            total_hits: response.pagination.total_count as u64,
+            total_hits,
         })
     }
 
@@ -596,8 +602,9 @@ impl ResourceSource for CurseForgeSource {
                 .collect(),
             web_url: item.links.website_url,
             external_ids: None,
+            featured_gallery: item.screenshots.as_ref().and_then(|shots| shots.first().map(|s| s.url.clone())),
             gallery: item
-                .gallery
+                .screenshots
                 .unwrap_or_default()
                 .into_iter()
                 .map(|s| s.url)
@@ -665,8 +672,9 @@ impl ResourceSource for CurseForgeSource {
                     .collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
+                featured_gallery: item.screenshots.as_ref().and_then(|shots| shots.first().map(|s| s.url.clone())),
                 gallery: item
-                    .gallery
+                    .screenshots
                     .unwrap_or_default()
                     .into_iter()
                     .map(|s| s.url)
