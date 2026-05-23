@@ -37,6 +37,14 @@
 	}
 }
 
+[data-ui-chrome-enabled="false"] .sidebar {
+	padding-left: 12px;
+}
+
+[data-ui-chrome-enabled="false"] .sidebar--open {
+	grid-gap: 10px;
+}
+
 .sidebar__root {
 	width: fit-content;
 	height: 100%;

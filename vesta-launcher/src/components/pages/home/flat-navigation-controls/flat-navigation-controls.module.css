@@ -31,7 +31,7 @@
 }
 
 .flat-navigation-controls__button:hover:not(:disabled) {
-	background: hsl(var(--hue-secondary) 70% 46% / 22%);
+	background: hsl(var(--color__primary-hue) 70% 46% / 16%);
 	opacity: 1;
 }
 
