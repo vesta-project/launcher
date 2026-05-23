@@ -270,17 +270,37 @@ const ResourceCard: Component<{
 	let tagsRef: HTMLDivElement | undefined;
 
 	createEffect(() => {
-		props.viewMode;
 		const el = tagsRef;
 		if (!el) return;
 
+		// Track viewMode dependency synchronously
+		tagLimit();
+
 		queueMicrotask(() => {
+			const currentEl = tagsRef;
+			if (!currentEl) return;
+
+			const children = Array.from(currentEl.children) as HTMLElement[];
 			const limit = tagLimit();
-			let count = limit;
-			while (count > 1 && el.scrollWidth > el.clientWidth) {
+			let count = Math.min(limit, children.length);
+
+			if (currentEl.scrollWidth <= currentEl.clientWidth) {
+				setEffectiveLimit(count);
+				return;
+			}
+
+			// Measure cumulatively: find the max count that fits
+			while (count > 1) {
+				let w = 0;
+				for (let i = 0; i < count; i++) {
+					if (i > 0) w += 4;
+					w += children[i].getBoundingClientRect().width;
+				}
+				if (w <= currentEl.clientWidth) break;
 				count--;
 			}
-			setEffectiveLimit(count);
+
+			setEffectiveLimit(Math.max(1, count));
 		});
 	});
 

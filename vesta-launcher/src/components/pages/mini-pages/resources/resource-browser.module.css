@@ -72,7 +72,7 @@
     left: 12px;
     width: 16px;
     height: 16px;
-    default-events: none;
+    pointer-events: none;
     z-index: 10;
     opacity: 0.5;
 }
@@ -95,7 +95,7 @@
 
 .instance-selector-wrapper.disabled {
     opacity: 0.5;
-    default-events: none;
+    pointer-events: none;
 }
 
 .instance-icon-trigger {
@@ -627,7 +627,7 @@
     right: 0;
     height: 20px;
     background: linear-gradient(to top, var(--surface-base), transparent);
-    default-events: none;
+    pointer-events: none;
 }
 
 /* Fallback banner — dot-grid pattern tinted by icon hue, theme-aware */
@@ -997,7 +997,7 @@
 
 /* ---- Skeleton Loading ---- */
 .skeleton-card {
-    default-events: none;
+    pointer-events: none;
 }
 
 .resource-card.grid .skeleton-bg {

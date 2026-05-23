@@ -343,6 +343,7 @@ export const resources = {
 			});
 		} catch (e) {
 			console.error("Failed to search resources:", e);
+			throw e;
 		} finally {
 			setResourceStore("loading", false);
 		}
