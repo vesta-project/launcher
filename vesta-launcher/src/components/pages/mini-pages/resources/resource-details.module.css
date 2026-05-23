@@ -220,14 +220,14 @@
     font-size: 13px;
     font-weight: 600;
     border-radius: 4px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .source-btn:hover:not(.active) {
@@ -971,14 +971,14 @@
     color: var(--text-secondary);
     font-weight: 700;
     font-size: 14px;
-    cursor: pointer;
+    cursor: default;
     border-bottom: 1px solid transparent;
     transition:
         background 0.18s ease,
         color 0.18s ease;
     user-select: none;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .description :global(.spoiler.is-visible)::before {
@@ -1241,13 +1241,13 @@
     padding: 10px;
     background: var(--surface-low);
     border-radius: 8px;
-    cursor: pointer;
+    cursor: default;
     transition:
         background-color 0.2s ease,
         transform 0.1s ease;
     border: 1px solid transparent;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .dependency-item:hover {

@@ -46,7 +46,7 @@
     display: flex;
     align-items: center;
     gap: 4px;
-    cursor: pointer;
+    cursor: default;
     color: var(--text-tertiary);
     transition: all 0.15s ease;
     padding: 2px 0;
@@ -55,7 +55,7 @@
     background: transparent;
     border: none;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .active-uuid-container:hover {
@@ -144,14 +144,14 @@
     gap: 8px;
     padding: 6px 8px;
     border-radius: var(--radius-sm);
-    cursor: pointer;
+    cursor: default;
     transition: all 0.1s ease;
     border: none;
     width: 100%;
     justify-content: flex-start;
     text-align: left;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .account-item:hover {

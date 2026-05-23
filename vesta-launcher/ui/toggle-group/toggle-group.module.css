@@ -25,10 +25,10 @@
     border-radius: 0;
     border: none;
     background: none;
-    cursor: pointer;
+    cursor: default;
     transition: 200ms;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .toggle-group__item:hover {

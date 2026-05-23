@@ -13,10 +13,10 @@
     background: var(--surface-raised);
     border: var(--border-width-subtle) solid var(--border-subtle);
     border-radius: 12px;
-    cursor: pointer;
+    cursor: default;
     transition: all 200ms ease;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
     &:hover {
         border-color: var(--border-strong);
         transform: translateY(-2px);
@@ -241,10 +241,10 @@
     border: var(--border-width-subtle) solid hsl(0 60% 45% / 0.35);
     padding: 2px 4px;
     border-radius: 4px;
-    cursor: pointer;
+    cursor: default;
     user-select: none;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
     &:hover,
     &:focus-visible {
         background: hsl(0 50% 40% / 0.15);

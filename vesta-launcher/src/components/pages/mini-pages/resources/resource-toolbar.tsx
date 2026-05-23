@@ -6,15 +6,9 @@ import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
-import { TextField } from "@ui/text-field/text-field";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import { TextField } from "@ui/text-field/text-field";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS } from "@utils/instances";
 import { batch, createMemo, Show } from "solid-js";
@@ -81,13 +75,10 @@ export function ResourceToolbar(props: {
 						});
 					}}
 					optionValue={(v) => v}
-					optionTextValue={(v) =>
-						RESOURCE_TYPES.find((t) => t.value === v)?.label || v
-					}
+					optionTextValue={(v) => RESOURCE_TYPES.find((t) => t.value === v)?.label || v}
 					itemComponent={(p) => (
 						<SelectItem item={p.item}>
-							{RESOURCE_TYPES.find((t) => t.value === p.item.rawValue)?.label ||
-								p.item.rawValue}
+							{RESOURCE_TYPES.find((t) => t.value === p.item.rawValue)?.label || p.item.rawValue}
 						</SelectItem>
 					)}
 				>
@@ -150,8 +141,7 @@ export function ResourceToolbar(props: {
 						<span>CurseForge</span>
 					</button>
 				</div>
-
-				</div>
+			</div>
 
 			{/* Row 2: Instance picker, Filter button, Active chips */}
 			<div class={styles["toolbar-row-controls"]}>
@@ -163,15 +153,11 @@ export function ResourceToolbar(props: {
 				>
 					<Select<any>
 						disabled={isModpack()}
-						options={[
-							{ id: "none", name: "No Instance" } as any,
-							...instancesState.instances,
-						]}
+						options={[{ id: "none", name: "No Instance" } as any, ...instancesState.instances]}
 						value={
 							resources.state.selectedInstanceId
-								? instancesState.instances.find(
-										(i) => i.id === resources.state.selectedInstanceId,
-									) || ({ id: "none", name: "No Instance" } as any)
+								? instancesState.instances.find((i) => i.id === resources.state.selectedInstanceId) ||
+									({ id: "none", name: "No Instance" } as any)
 								: ({ id: "none", name: "No Instance" } as any)
 						}
 						onChange={(instance: any) => {
@@ -237,22 +223,36 @@ export function ResourceToolbar(props: {
 						)}
 					>
 						<SelectTrigger class={styles["instance-icon-trigger"]}>
-							<Show when={selectedInstance()} fallback={
-								<div class={styles["instance-trigger-content"]}>
-									<div class={styles["instance-icon-placeholder"]}>
-										<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-											<rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-											<line x1="8" y1="21" x2="16" y2="21"/>
-											<line x1="12" y1="17" x2="12" y2="21"/>
-										</svg>
+							<Show
+								when={selectedInstance()}
+								fallback={
+									<div class={styles["instance-trigger-content"]}>
+										<div class={styles["instance-icon-placeholder"]}>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												width="16"
+												height="16"
+												viewBox="0 0 24 24"
+												fill="none"
+												stroke="currentColor"
+												stroke-width="2"
+												stroke-linecap="round"
+												stroke-linejoin="round"
+											>
+												<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+												<line x1="8" y1="21" x2="16" y2="21" />
+												<line x1="12" y1="17" x2="12" y2="21" />
+											</svg>
+										</div>
+										<span class={styles["instance-trigger-name"]}>Select an instance</span>
 									</div>
-									<span class={styles["instance-trigger-name"]}>Select an instance</span>
-								</div>
-							}>
+								}
+							>
 								<div class={styles["instance-trigger-content"]}>
-									<Show when={instanceIconUrl()} fallback={
-										<div class={styles["instance-icon-placeholder"]}>{instanceDisplayChar()}</div>
-									}>
+									<Show
+										when={instanceIconUrl()}
+										fallback={<div class={styles["instance-icon-placeholder"]}>{instanceDisplayChar()}</div>}
+									>
 										<div
 											class={styles["instance-item-icon"]}
 											style={{

@@ -1,12 +1,10 @@
-import { For, Show } from "solid-js";
 import { Skeleton } from "@ui/skeleton/skeleton";
+import { For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
 
 export function ResourceSkeletonGrid(props: { count: number; viewMode: "grid" | "list" }) {
 	return (
-		<div
-			class={props.viewMode === "grid" ? styles["resource-grid"] : styles["resource-list"]}
-		>
+		<div class={props.viewMode === "grid" ? styles["resource-grid"] : styles["resource-list"]}>
 			<For each={Array.from({ length: props.count })}>
 				{() => (
 					<div
@@ -25,9 +23,7 @@ export function ResourceSkeletonGrid(props: { count: number; viewMode: "grid" | 
 								<Skeleton class={styles["skeleton-summary"]} />
 								<div class={styles["card-row-3"]}>
 									<div class={styles["card-tags"]}>
-										<For each={[1, 2, 3, 4]}>
-											{() => <Skeleton class={styles["skeleton-tag"]} />}
-										</For>
+										<For each={[1, 2, 3, 4]}>{() => <Skeleton class={styles["skeleton-tag"]} />}</For>
 									</div>
 									<Skeleton class={styles["skeleton-button"]} />
 								</div>
@@ -45,9 +41,7 @@ export function ResourceSkeletonGrid(props: { count: number; viewMode: "grid" | 
 								</div>
 								<Skeleton class={styles["skeleton-summary"]} />
 								<div class={styles["card-list-tags"]}>
-									<For each={[1, 2, 3]}>
-										{() => <Skeleton class={styles["skeleton-tag"]} />}
-									</For>
+									<For each={[1, 2, 3]}>{() => <Skeleton class={styles["skeleton-tag"]} />}</For>
 								</div>
 							</div>
 						</Show>

@@ -52,11 +52,11 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     flex-shrink: 0;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .uploadSkinButton:hover {
@@ -127,10 +127,10 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .narrowViewIcon svg {
@@ -244,11 +244,11 @@
     padding: 4px 8px;
     margin-left: -8px;
     border-radius: 6px;
-    cursor: pointer;
+    cursor: default;
     transition: background 0.2s;
     width: fit-content;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .uuidRow:hover {
@@ -331,10 +331,10 @@
     background: var(--surface-overlay);
     border: var(--border-width-subtle) solid var(--border-subtle);
     color: var(--text-muted);
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .iconAction:hover {
@@ -354,10 +354,10 @@
     color: var(--text-secondary);
     font-weight: 600;
     font-size: 14px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .switchTrigger:hover {
@@ -415,10 +415,10 @@
     border: var(--border-width-subtle) solid var(--border-subtle);
     color: var(--text-base);
     font-weight: 600;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .switchButton:hover {
@@ -456,7 +456,7 @@
     align-items: center;
     gap: 12px;
     padding: 10px 12px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     background: transparent;
     border: none;
@@ -467,7 +467,7 @@
     font-size: 14px;
     text-align: left;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .switcherItem:hover {
@@ -496,10 +496,10 @@
     text-align: left;
     background: transparent;
     border: none;
-    cursor: pointer;
+    cursor: default;
     width: 100%;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .switcherAdd:hover {
@@ -638,10 +638,10 @@
     color: var(--text-muted);
     border: none;
     background: transparent;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .toggleBtn.active {
@@ -674,7 +674,7 @@
     overflow: hidden;
     border: 2px solid transparent;
     background: var(--surface-overlay);
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     padding: 0;
     display: flex;
@@ -683,7 +683,7 @@
     justify-content: center;
     position: relative;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .skinItem:hover {
@@ -754,9 +754,9 @@
     opacity: 0;
     transition: all 0.2s;
     z-index: 10;
-    cursor: pointer;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
+    cursor: default;
 }
 
 .viewRawButton svg {
@@ -790,14 +790,14 @@
     border-radius: 10px;
     overflow: hidden;
     border: 2px solid transparent;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
     /* Mojang capes are 10x16. */
     background: var(--surface-overlay);
 
@@ -912,7 +912,7 @@
     border: none;
     font-weight: 700;
     font-size: 13px;
-    cursor: pointer;
+    cursor: default;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -920,7 +920,7 @@
     transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.3);
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .actionButtonsRow {
@@ -945,10 +945,10 @@
     border-radius: 10px;
     font-size: 12px;
     font-weight: 700;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .detailsToggle:hover {
@@ -970,10 +970,10 @@
     color: var(--text-base);
     font-weight: 700;
     font-size: 13px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .revertButton:hover:not(:disabled) {
@@ -1092,14 +1092,14 @@
     font-size: 12px;
     font-weight: 700;
     border: var(--border-width-subtle) solid var(--border-subtle);
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     gap: 6px;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .toolbarRevertButton {

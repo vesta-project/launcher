@@ -1,152 +1,151 @@
 .launcher-button {
-    --button-color: var(--secondary-low);
-    --button-fg: var(--text-primary);
-    --button-text: var(--text-primary);
-    --button-border: var(--border-subtle);
+	--button-color: var(--secondary-low);
+	--button-fg: var(--text-primary);
+	--button-text: var(--text-primary);
+	--button-border: var(--border-subtle);
 
-    border: var(--button-border-width, var(--border-width-subtle)) solid
-        transparent;
-    border-radius: 0.5rem;
-    user-select: none;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    white-space: nowrap;
-    transition:
-        background-color 180ms ease,
-        border-color 180ms ease,
-        color 180ms ease,
-        box-shadow 180ms ease,
-        transform 180ms ease;
-    color: var(--button-text);
+	border: var(--button-border-width, var(--border-width-subtle)) solid transparent;
+	border-radius: 0.5rem;
+	user-select: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	white-space: nowrap;
+	transition:
+		background-color 180ms ease,
+		border-color 180ms ease,
+		color 180ms ease,
+		box-shadow 180ms ease,
+		transform 180ms ease;
+	color: var(--button-text);
 }
 
 .launcher-button:hover:not(:disabled) {
-    transform: translateY(-1px);
+	transform: translateY(-1px);
 }
 
 .launcher-button:hover:not(:disabled) > * {
-    transform: none;
+	transform: none;
 }
 
 .launcher-button:active:not(:disabled) {
-    transition-duration: 50ms;
+	transition-duration: 50ms;
 }
 
 .launcher-button:focus-visible {
-    outline: 2px solid var(--border-focus, hsl(var(--color__primary-hue) 70% 50% / 0.8));
-    outline-offset: 2px;
+	outline: 2px solid var(--border-focus, hsl(var(--color__primary-hue) 70% 50% / 0.8));
+	outline-offset: 2px;
 }
 
 .launcher-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-    filter: grayscale(50%);
+	opacity: 0.5;
+	cursor: not-allowed;
+	filter: grayscale(50%);
 }
 
 .launcher-button--icon-only {
-    aspect-ratio: 1;
-    height: fit-content;
-    width: fit-content;
+	aspect-ratio: 1;
+	height: fit-content;
+	width: fit-content;
 
-    & svg {
-        width: 1rem;
-        height: 1rem;
-    }
+	& svg {
+		width: 1rem;
+		height: 1rem;
+	}
 }
 
 .launcher-button--solid {
-    background-color: var(--button-color);
-    color: var(--button-fg);
-    border-color: var(--button-border);
+	background-color: var(--button-color);
+	color: var(--button-fg);
+	border-color: var(--button-border);
 }
 
 .launcher-button--outline {
-    background-color: transparent;
-    color: var(--button-text);
-    border-color: var(--button-text);
+	background-color: transparent;
+	color: var(--button-text);
+	border-color: var(--button-text);
 }
 
 .launcher-button--ghost {
-    background-color: transparent;
-    border: none;
-    color: var(--button-text);
+	background-color: transparent;
+	border: none;
+	color: var(--button-text);
 
-    &:hover:not(:disabled) {
-        background-color: hsla(0 0% 100% / 0.1);
-    }
+	&:hover:not(:disabled) {
+		background-color: hsla(0 0% 100% / 0.1);
+	}
 }
 
 .launcher-button--slate {
-    background: var(--surface-base);
-    border-color: var(--border-subtle);
-    color: var(--text-secondary);
+	background: var(--surface-base);
+	border-color: var(--border-subtle);
+	color: var(--text-secondary);
 
-    &:hover:not(:disabled) {
-        background: var(--surface-raised);
-        border-color: var(--border-strong);
-        color: var(--text-primary);
-        filter: none;
-    }
+	&:hover:not(:disabled) {
+		background: var(--surface-raised);
+		border-color: var(--border-strong);
+		color: var(--text-primary);
+		filter: none;
+	}
 }
 
 .launcher-button--shadow {
-    background-color: hsla(0 0% 0% / 0.15);
-    color: var(--button-fg);
-    box-shadow:
-        0 4px 6px -1px rgb(0 0 0 / 0.1),
-        0 2px 4px -2px rgb(0 0 0 / 0.1);
+	background-color: hsla(0 0% 0% / 0.15);
+	color: var(--button-fg);
+	box-shadow:
+		0 4px 6px -1px rgb(0 0 0 / 0.1),
+		0 2px 4px -2px rgb(0 0 0 / 0.1);
 
-    &:hover:not(:disabled) {
-        background-color: hsla(0 0% 0% / 0.2);
-        filter: brightness(110%);
-        box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
+	&:hover:not(:disabled) {
+		background-color: hsla(0 0% 0% / 0.2);
+		filter: brightness(110%);
+		box-shadow: rgb(55 55 55 / 20%) 3px 3px 10px;
 
-        > * {
-            transform: scale(108%);
-        }
-    }
+		> * {
+			transform: scale(108%);
+		}
+	}
 }
 
 /* Size modifications */
 .launcher-button--sm {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.8rem;
+	padding: 0.25rem 0.5rem;
+	font-size: 0.8rem;
 }
 
 .launcher-button--md {
-    padding: 0.5rem 1rem;
-    font-size: 0.95rem;
+	padding: 0.5rem 1rem;
+	font-size: 0.95rem;
 }
 
 .launcher-button--lg {
-    padding: 0.75rem 1.5rem;
-    font-size: 1.1rem;
+	padding: 0.75rem 1.5rem;
+	font-size: 1.1rem;
 }
 
 .launcher-button--xl {
-    padding: 0.75rem 1.5rem;
-    font-size: 1.25rem;
-    font-weight: 700;
+	padding: 0.75rem 1.5rem;
+	font-size: 1.25rem;
+	font-weight: 700;
 }
 
 .launcher-button--loading {
-    cursor: wait;
-    opacity: 0.7;
+	cursor: wait;
+	opacity: 0.7;
 }
 
 @keyframes spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .button-spinner {
-    animation: spin 1s linear infinite;
-    width: 1.2rem;
-    height: 1.2rem;
+	animation: spin 1s linear infinite;
+	width: 1.2rem;
+	height: 1.2rem;
 }

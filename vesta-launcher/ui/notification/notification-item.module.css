@@ -118,12 +118,12 @@
     transition: all 0.15s ease;
     background: transparent;
     border: none;
-    cursor: pointer;
+    cursor: default;
     color: var(--text-tertiary);
     padding: 0;
     z-index: 1;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .container:hover .dismissBtn {

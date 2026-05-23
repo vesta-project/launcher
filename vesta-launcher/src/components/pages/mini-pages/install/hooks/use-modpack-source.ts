@@ -78,31 +78,28 @@ export function useModpackSource(params: UseModpackSourceParams) {
 					: await getModpackInfo(path, params.projectId, params.platform);
 				if (latestRequestId !== requestId) return;
 				setModpackInfo(info);
-				} catch (error) {
-					if (latestRequestId !== requestId) return;
-					console.error("[InstallPage] Metadata fetch error:", error);
-					if (params.projectId || params.projectName) {
-						const versions = params.projectVersions?.();
-						const initialVerId = params.initialVersion || params.selectedModpackVersionId();
-						const selectedVer =
-							versions?.find(
-								(v) => v.id === initialVerId || v.version_number === initialVerId,
-							) || versions?.[0];
+			} catch (error) {
+				if (latestRequestId !== requestId) return;
+				console.error("[InstallPage] Metadata fetch error:", error);
+				if (params.projectId || params.projectName) {
+					const versions = params.projectVersions?.();
+					const initialVerId = params.initialVersion || params.selectedModpackVersionId();
+					const selectedVer =
+						versions?.find((v) => v.id === initialVerId || v.version_number === initialVerId) ||
+						versions?.[0];
 
-						setModpackInfo({
-							name: params.projectName || "Unknown Modpack",
-							version: selectedVer?.version_number || params.initialVersion || "1.0.0",
-							author: params.projectAuthor || "",
-							description: null,
-							iconUrl: params.projectIcon || null,
-							minecraftVersion:
-								selectedVer?.game_versions[0] || params.initialMinecraftVersion || "",
-							modloader:
-								(selectedVer?.loaders[0] as any) || params.initialModloader || "vanilla",
-							modloaderVersion: null,
-							modCount: 0,
-							format: "unknown",
-						});
+					setModpackInfo({
+						name: params.projectName || "Unknown Modpack",
+						version: selectedVer?.version_number || params.initialVersion || "1.0.0",
+						author: params.projectAuthor || "",
+						description: null,
+						iconUrl: params.projectIcon || null,
+						minecraftVersion: selectedVer?.game_versions[0] || params.initialMinecraftVersion || "",
+						modloader: (selectedVer?.loaders[0] as any) || params.initialModloader || "vanilla",
+						modloaderVersion: null,
+						modCount: 0,
+						format: "unknown",
+					});
 				} else {
 					showToast({
 						title: "Metadata Sync Failed",

@@ -1,4 +1,9 @@
-import { findBestVersion, type ResourceVersion, resources, type SourcePlatform } from "@stores/resources";
+import {
+	findBestVersion,
+	type ResourceVersion,
+	resources,
+	type SourcePlatform,
+} from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
 import { type Accessor, batch, createEffect, createResource, untrack } from "solid-js";
 

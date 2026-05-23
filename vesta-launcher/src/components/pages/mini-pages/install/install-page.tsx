@@ -1,7 +1,7 @@
 import { router } from "@components/page-viewer/page-viewer";
-import type { Instance } from "@utils/instances";
 import type { ResourceVersion } from "@stores/resources";
-import { createMemo, createSignal, onMount, Show, createEffect, untrack } from "solid-js";
+import type { Instance } from "@utils/instances";
+import { createEffect, createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { FetchingOverlay } from "./components/FetchingOverlay";
 import { InstallContextBanner } from "./components/InstallContextBanner";
 import { InstallForm } from "./components/InstallForm";
@@ -56,8 +56,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		() => (routeParams().initialModloader as string | undefined) || props.initialModloader,
 	);
 	const effectiveInitialVersionNumber = createMemo(
-		() =>
-			(routeParams().initialVersionNumber as string | undefined) || props.initialVersionNumber,
+		() => (routeParams().initialVersionNumber as string | undefined) || props.initialVersionNumber,
 	);
 	const effectiveProjectName = createMemo(
 		() => (routeParams().projectName as string | undefined) || props.projectName,
@@ -143,15 +142,9 @@ function InstallPage(props: InstallPageRouteProps) {
 			description: info?.description ?? null,
 			iconUrl: info?.iconUrl || effectiveProjectIcon() || null,
 			minecraftVersion:
-				selected.game_versions[0] ||
-				info?.minecraftVersion ||
-				effectiveInitialMinecraftVersion() ||
-				"",
+				selected.game_versions[0] || info?.minecraftVersion || effectiveInitialMinecraftVersion() || "",
 			modloader:
-				(selected.loaders[0] as any) ||
-				info?.modloader ||
-				effectiveInitialModloader() ||
-				"vanilla",
+				(selected.loaders[0] as any) || info?.modloader || effectiveInitialModloader() || "vanilla",
 			modloaderVersion: info?.modloaderVersion || null,
 			modCount: info?.modCount || 0,
 			format: info?.format || effectivePlatform() || "unknown",
@@ -230,14 +223,17 @@ function InstallPage(props: InstallPageRouteProps) {
 				{/* Context banner (modpack info bar) */}
 				<Show
 					when={
-						(effectiveProjectName() || source.modpackPath() || source.modpackUrl()) && !isFetchingMetadata()
+						(effectiveProjectName() || source.modpackPath() || source.modpackUrl()) &&
+						!isFetchingMetadata()
 					}
 				>
 					<InstallContextBanner
 						title={effectiveProjectName() || source.modpackInfo()?.name || "Analyzing modpack details..."}
 						label={effectiveResourceType() || (isModpackMode() ? "Modpack" : "Package")}
 						iconUrl={effectiveProjectIcon() || source.modpackInfo()?.iconUrl}
-							minecraftVersion={source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()}
+						minecraftVersion={
+							source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()
+						}
 						modloader={source.modpackInfo()?.modloader || effectiveInitialModloader()}
 						analyzing={!source.modpackInfo() && !effectiveProjectName()}
 						backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"}
@@ -249,9 +245,7 @@ function InstallPage(props: InstallPageRouteProps) {
 				<FetchingOverlay
 					isVisible={isFetchingMetadata()}
 					title={
-						source.isFetchingMetadata()
-							? "Fetching modpack details..."
-							: "Loading available versions..."
+						source.isFetchingMetadata() ? "Fetching modpack details..." : "Loading available versions..."
 					}
 					message={
 						source.isFetchingMetadata()
@@ -281,11 +275,11 @@ function InstallPage(props: InstallPageRouteProps) {
 							props.initialIcon || source.modpackInfo()?.iconUrl || effectiveProjectIcon() || undefined
 						}
 						originalIcon={source.originalIcon()}
-					initialVersion={
-						isModpackMode()
-							? effectiveInitialMinecraftVersion() || source.modpackInfo()?.minecraftVersion || ""
-							: props.initialVersion
-					}
+						initialVersion={
+							isModpackMode()
+								? effectiveInitialMinecraftVersion() || source.modpackInfo()?.minecraftVersion || ""
+								: props.initialVersion
+						}
 						initialModloader={effectiveInitialModloader() || source.modpackInfo()?.modloader}
 						initialModloaderVersion={
 							source.modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined

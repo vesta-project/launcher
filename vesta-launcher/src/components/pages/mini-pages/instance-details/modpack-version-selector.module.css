@@ -314,10 +314,10 @@
     border: 1px solid var(--border-subtle);
     border-radius: 1.25rem;
     transition: all 0.2s ease;
-    cursor: pointer;
+    cursor: default;
     width: 100%;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .triggerCard:hover {

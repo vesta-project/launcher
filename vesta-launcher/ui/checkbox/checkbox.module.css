@@ -2,7 +2,7 @@
     display: inline-flex;
     align-items: center;
     gap: 0.5em;
-    cursor: pointer;
+    cursor: default;
     border-radius: 6px;
     padding: 0.5rem;
     position: relative;
@@ -10,7 +10,7 @@
     transition-duration: 150ms;
     transition-timing-function: ease-in-out;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .checkbox__input {
@@ -39,9 +39,9 @@
         border-color 0.2s,
         background-color 0.2s,
         color 0.2s;
-    cursor: pointer;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
+    cursor: default;
 }
 
 .checkbox__control:focus-within {

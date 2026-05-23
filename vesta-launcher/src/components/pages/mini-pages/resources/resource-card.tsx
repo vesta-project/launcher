@@ -1,5 +1,5 @@
-import HeartIcon from "@assets/heart.svg";
 import DownloadIcon from "@assets/download-compact.svg";
+import HeartIcon from "@assets/heart.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
@@ -11,12 +11,8 @@ import {
 } from "@stores/resources";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
-import {
-	Tooltip,
-	TooltipContent,
-	TooltipTrigger,
-} from "@ui/tooltip/tooltip";
 import { showToast } from "@ui/toast/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
 
@@ -40,9 +36,7 @@ const ResourceCard: Component<{
 			if (irRemoteId === mainId) return true;
 
 			if (ir.hash && props.project.source !== ir.platform) {
-				const versions = resources.state.versions.filter(
-					(v) => v.project_id === props.project.id,
-				);
+				const versions = resources.state.versions.filter((v) => v.project_id === props.project.id);
 				if (versions.some((v) => v.hash === ir.hash)) return true;
 			}
 
@@ -50,10 +44,7 @@ const ResourceCard: Component<{
 				if (irRemoteId === id.toLowerCase()) return true;
 			}
 
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
+			return ir.resource_type === resType && ir.display_name.toLowerCase() === projectName;
 		});
 	});
 
@@ -72,10 +63,7 @@ const ResourceCard: Component<{
 			for (const id of Object.values(extIds)) {
 				if (irRemoteId === id.toLowerCase()) return true;
 			}
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
+			return ir.resource_type === resType && ir.display_name.toLowerCase() === projectName;
 		});
 	});
 
@@ -85,8 +73,9 @@ const ResourceCard: Component<{
 
 	const [localInstalling, setLocalInstalling] = createSignal(false);
 	const [confirmUninstall, setConfirmUninstall] = createSignal(false);
-	const [latestCompatibleVersion, setLatestCompatibleVersion] =
-		createSignal<ResourceVersion | null>(null);
+	const [latestCompatibleVersion, setLatestCompatibleVersion] = createSignal<ResourceVersion | null>(
+		null,
+	);
 	const installing = () => localInstalling() || isInstallingProject();
 
 	const isUpdateAvailable = createMemo(() => {
@@ -94,12 +83,9 @@ const ResourceCard: Component<{
 		const latest = latestCompatibleVersion();
 		if (!installed || !latest) return false;
 
-		if (installed.hash && latest.hash && installed.hash === latest.hash)
-			return false;
+		if (installed.hash && latest.hash && installed.hash === latest.hash) return false;
 
-		if (
-			installed.platform.toLowerCase() === props.project.source.toLowerCase()
-		) {
+		if (installed.platform.toLowerCase() === props.project.source.toLowerCase()) {
 			return installed.remote_version_id !== latest.id;
 		}
 		return installed.current_version !== latest.version_number;
@@ -112,10 +98,7 @@ const ResourceCard: Component<{
 			const inst = instancesState.instances.find((i) => i.id === instanceId);
 			if (inst) {
 				try {
-					const versions = await resources.getVersions(
-						project.source,
-						project.id,
-					);
+					const versions = await resources.getVersions(project.source, project.id);
 					const best = findBestVersion(
 						versions,
 						inst.minecraftVersion,
@@ -153,11 +136,7 @@ const ResourceCard: Component<{
 			return { type: "compatible" as const };
 		}
 
-		if (
-			resType === "shader" ||
-			resType === "resourcepack" ||
-			resType === "datapack"
-		)
+		if (resType === "shader" || resType === "resourcepack" || resType === "datapack")
 			return { type: "compatible" as const };
 
 		const categories = props.project.categories.map((c) => c.toLowerCase());
@@ -166,8 +145,7 @@ const ResourceCard: Component<{
 		const hasQuilt = categories.includes("quilt");
 		const hasNeoForge = categories.includes("neoforge");
 
-		if (!hasFabric && !hasForge && !hasQuilt && !hasNeoForge)
-			return { type: "compatible" as const };
+		if (!hasFabric && !hasForge && !hasQuilt && !hasNeoForge) return { type: "compatible" as const };
 
 		if (instLoader === "fabric") {
 			if (hasFabric) return { type: "compatible" as const };
@@ -265,7 +243,7 @@ const ResourceCard: Component<{
 		),
 	);
 
-	const tagLimit = () => props.viewMode === "grid" ? 2 : 3;
+	const tagLimit = () => (props.viewMode === "grid" ? 2 : 3);
 	const [effectiveLimit, setEffectiveLimit] = createSignal(tagLimit());
 	let tagsRef: HTMLDivElement | undefined;
 
@@ -389,10 +367,7 @@ const ResourceCard: Component<{
 		if (!instanceId) {
 			setLocalInstalling(true);
 			try {
-				const versions = await resources.getVersions(
-					props.project.source,
-					props.project.id,
-				);
+				const versions = await resources.getVersions(props.project.source, props.project.id);
 				resources.setRequestInstall(props.project, versions);
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
@@ -408,10 +383,7 @@ const ResourceCard: Component<{
 
 		setLocalInstalling(true);
 		try {
-			const versions = await resources.getVersions(
-				props.project.source,
-				props.project.id,
-			);
+			const versions = await resources.getVersions(props.project.source, props.project.id);
 			const best = findBestVersion(
 				versions,
 				instance.minecraftVersion,
@@ -421,9 +393,7 @@ const ResourceCard: Component<{
 			);
 			if (best) {
 				const instLoader = instance.modloader?.toLowerCase() || "";
-				const hasDirectLoader = best.loaders.some(
-					(l) => l.toLowerCase() === instLoader,
-				);
+				const hasDirectLoader = best.loaders.some((l) => l.toLowerCase() === instLoader);
 
 				if (
 					instLoader === "quilt" &&
@@ -467,17 +437,13 @@ const ResourceCard: Component<{
 		const categoryObj = () =>
 			resources.state.availableCategories.length > 0
 				? resources.state.availableCategories.find(
-						(c) =>
-							c.name.toLowerCase() === tagLower ||
-							c.id.toLowerCase() === tagLower,
+						(c) => c.name.toLowerCase() === tagLower || c.id.toLowerCase() === tagLower,
 					)
 				: null;
 
 		const isActive = () =>
 			resources.state.availableCategories.length > 0
-				? resources.state.categories.includes(
-						(categoryObj()?.id || tag).toLowerCase(),
-					)
+				? resources.state.categories.includes((categoryObj()?.id || tag).toLowerCase())
 				: false;
 
 		return (
@@ -512,10 +478,7 @@ const ResourceCard: Component<{
 					</div>
 				</Show>
 				<Show when={!bgImage()}>
-					<div
-						class={styles["card-image-fallback"]}
-						style={{ "--fallback-hue": String(iconHue()) }}
-					/>
+					<div class={styles["card-image-fallback"]} style={{ "--fallback-hue": String(iconHue()) }} />
 				</Show>
 				<div class={styles["card-content"]}>
 					<div class={styles["card-row-1"]}>
@@ -527,9 +490,7 @@ const ResourceCard: Component<{
 										{(() => {
 											const name = props.project.name || "?";
 											const match = name.match(/[a-zA-Z]/);
-											return match
-												? match[0].toUpperCase()
-												: name.charAt(0).toUpperCase();
+											return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 										})()}
 									</div>
 								}
@@ -545,12 +506,7 @@ const ResourceCard: Component<{
 									{props.project.download_count.toLocaleString()}
 									<DownloadIcon />
 								</span>
-								<Show
-									when={
-										props.project.source === "modrinth" &&
-										(props.project.follower_count || 0) > 0
-									}
-								>
+								<Show when={props.project.source === "modrinth" && (props.project.follower_count || 0) > 0}>
 									<span class={styles["card-stats-item"]}>
 										{(props.project.follower_count || 0).toLocaleString()}
 										<HeartIcon />
@@ -563,39 +519,26 @@ const ResourceCard: Component<{
 						<p class={styles["card-description"]}>{props.project.summary}</p>
 					</Show>
 					<div class={styles["card-row-3"]}>
-						<Show
-							when={
-								displayCategories().length > 0
-							}
-						>
+						<Show when={displayCategories().length > 0}>
 							<div class={styles["card-tags-row"]}>
 								<div class={styles["card-tags"]} ref={tagsRef}>
 									<For
 										each={displayCategories().slice(
 											0,
-										Math.min(effectiveLimit(), displayCategories().length),
-									)}
-								>
-									{Tag}
-								</For>
-							</div>
-							<Show
-								when={
-									displayCategories().length > effectiveLimit()
-								}
-							>
-								<Tooltip>
-									<TooltipTrigger
-										as="span"
-										class={styles["resource-tag-more"]}
+											Math.min(effectiveLimit(), displayCategories().length),
+										)}
 									>
-										+{displayCategories().length - effectiveLimit()}
-									</TooltipTrigger>
-									<TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
-										<div class={styles["tooltip-tags"]}>
-											<For each={displayCategories().slice(effectiveLimit())}>
-													{Tag}
-												</For>
+										{Tag}
+									</For>
+								</div>
+								<Show when={displayCategories().length > effectiveLimit()}>
+									<Tooltip>
+										<TooltipTrigger as="span" class={styles["resource-tag-more"]}>
+											+{displayCategories().length - effectiveLimit()}
+										</TooltipTrigger>
+										<TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
+											<div class={styles["tooltip-tags"]}>
+												<For each={displayCategories().slice(effectiveLimit())}>{Tag}</For>
 											</div>
 										</TooltipContent>
 									</Tooltip>
@@ -605,10 +548,7 @@ const ResourceCard: Component<{
 						<div class={styles["resource-card-actions"]}>
 							<Button
 								onClick={handleQuickInstall}
-								disabled={
-									installing() ||
-									(compatibility().type === "incompatible" && !isInstalled())
-								}
+								disabled={installing() || (compatibility().type === "incompatible" && !isInstalled())}
 								size="sm"
 								variant={buttonVariant()}
 								color={buttonColor()}
@@ -629,9 +569,7 @@ const ResourceCard: Component<{
 								{(() => {
 									const name = props.project.name || "?";
 									const match = name.match(/[a-zA-Z]/);
-									return match
-										? match[0].toUpperCase()
-										: name.charAt(0).toUpperCase();
+									return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
 								})()}
 							</div>
 						}
@@ -646,13 +584,10 @@ const ResourceCard: Component<{
 							<span class={styles["card-list-meta"]}>
 								<span>by {props.project.author}</span>
 								<span>·</span>
-								<span>{props.project.download_count.toLocaleString()} <DownloadIcon /></span>
-								<Show
-									when={
-										props.project.source === "modrinth" &&
-										(props.project.follower_count || 0) > 0
-									}
-								>
+								<span>
+									{props.project.download_count.toLocaleString()} <DownloadIcon />
+								</span>
+								<Show when={props.project.source === "modrinth" && (props.project.follower_count || 0) > 0}>
 									<span>{(props.project.follower_count || 0).toLocaleString()}</span>
 									<HeartIcon />
 								</Show>
@@ -661,10 +596,7 @@ const ResourceCard: Component<{
 						<div class={styles["card-list-actions"]}>
 							<Button
 								onClick={handleQuickInstall}
-								disabled={
-									installing() ||
-									(compatibility().type === "incompatible" && !isInstalled())
-								}
+								disabled={installing() || (compatibility().type === "incompatible" && !isInstalled())}
 								size="sm"
 								variant={buttonVariant()}
 								color={buttonColor()}
@@ -677,35 +609,23 @@ const ResourceCard: Component<{
 					<Show when={props.project.summary}>
 						<p class={styles["card-list-desc"]}>{props.project.summary}</p>
 					</Show>
-					<Show
-						when={
-							displayCategories().length > 0
-						}
-					>
+					<Show when={displayCategories().length > 0}>
 						<div class={styles["card-list-tags-row"]}>
 							<div class={styles["card-list-tags"]}>
 								<For
-									each={displayCategories().slice(
-										0,
-										Math.min(effectiveLimit(), displayCategories().length),
-									)}
+									each={displayCategories().slice(0, Math.min(effectiveLimit(), displayCategories().length))}
 								>
 									{Tag}
 								</For>
 							</div>
 							<Show when={displayCategories().length > effectiveLimit()}>
 								<Tooltip>
-									<TooltipTrigger
-										as="span"
-										class={styles["resource-tag-more"]}
-									>
+									<TooltipTrigger as="span" class={styles["resource-tag-more"]}>
 										+{displayCategories().length - effectiveLimit()}
 									</TooltipTrigger>
 									<TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
 										<div class={styles["tooltip-tags"]}>
-											<For each={displayCategories().slice(effectiveLimit())}>
-												{Tag}
-											</For>
+											<For each={displayCategories().slice(effectiveLimit())}>{Tag}</For>
 										</div>
 									</TooltipContent>
 								</Tooltip>

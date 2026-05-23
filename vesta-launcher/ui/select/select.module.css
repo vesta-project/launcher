@@ -16,9 +16,9 @@
         box-shadow 150ms ease,
         border-color 150ms ease,
         background-color 150ms ease;
-    cursor: pointer;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
+    cursor: default;
 }
 
 .select__trigger:focus {

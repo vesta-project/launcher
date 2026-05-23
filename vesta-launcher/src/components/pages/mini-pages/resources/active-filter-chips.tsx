@@ -1,13 +1,11 @@
-import { For, Show } from "solid-js";
 import { resources } from "@stores/resources";
+import { For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
 
 export function ActiveFilterChips(props: { router?: any }) {
 	const hasActiveFilters = () => {
 		return (
-			resources.state.gameVersion ||
-			resources.state.loader ||
-			resources.state.categories.length > 0
+			resources.state.gameVersion || resources.state.loader || resources.state.categories.length > 0
 		);
 	};
 
@@ -28,8 +26,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 
 		if (resources.state.loader) {
 			const loaderName =
-				resources.state.loader.charAt(0).toUpperCase() +
-				resources.state.loader.slice(1);
+				resources.state.loader.charAt(0).toUpperCase() + resources.state.loader.slice(1);
 			result.push({
 				key: "loader",
 				label: loaderName,
@@ -62,11 +59,7 @@ export function ActiveFilterChips(props: { router?: any }) {
 		<Show when={hasActiveFilters()}>
 			<For each={chips()}>
 				{(chip) => (
-					<button
-						class={styles["filter-chip"]}
-						onClick={chip.onRemove}
-						type="button"
-					>
+					<button class={styles["filter-chip"]} onClick={chip.onRemove} type="button">
 						<span class={styles["filter-chip-label"]}>{chip.label}</span>
 						<svg
 							class={styles["filter-chip-x"]}

@@ -1,102 +1,94 @@
 .sidebar-button {
-    position: relative;
-    height: 40px;
-    width: 40px;
-    border-radius: 6px;
+	position: relative;
+	height: 40px;
+	width: 40px;
+	border-radius: 6px;
 
-    transition:
-        box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
-        background-color 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
-        transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-    cursor: default;
+	transition:
+		box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+		background-color 0.3s cubic-bezier(0.25, 0.8, 0.25, 1),
+		transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+	cursor: default;
 
-    & > svg {
-        transition: transform 0.3s ease;
-    }
+	& > svg {
+		transition: transform 0.3s ease;
+	}
 
-    &:hover {
-        box-shadow:
-            0 4px 12px rgba(0, 0, 0, 0.08),
-            0 0 1px rgba(0, 0, 0, 0.1);
-        background-color: rgba(0, 0, 0, 0.03);
+	&:hover {
+		box-shadow:
+			0 4px 12px rgba(0, 0, 0, 0.08),
+			0 0 1px rgba(0, 0, 0, 0.1);
+		background-color: rgba(0, 0, 0, 0.03);
 
-        & > svg {
-            transform: scale(1.08);
-        }
-    }
+		& > svg {
+			transform: scale(1.08);
+		}
+	}
 
-    &:active {
-        transform: scale(0.95);
-        transition-duration: 0.3s;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    }
+	&:active {
+		transform: scale(0.95);
+		transition-duration: 0.3s;
+		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+	}
 }
 
 .sidebar-profile-button {
-    background-color: transparent;
-    border: 2px solid hsla(0, 0%, 100%, 0.15);
-    box-sizing: border-box;
-    aspect-ratio: 1;
+	background-color: transparent;
+	border: 2px solid hsla(0, 0%, 100%, 0.15);
+	box-sizing: border-box;
+	aspect-ratio: 1;
 }
 
 .profile-loading-spinner {
-    width: 20px;
-    height: 20px;
-    border: 2px solid hsl(0 0% 100% / 0.3);
-    border-top-color: white;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
+	width: 20px;
+	height: 20px;
+	border: 2px solid hsl(0 0% 100% / 0.3);
+	border-top-color: white;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .sidebar-action-button {
-    padding: 10px;
-    background: linear-gradient(
-        to bottom,
-        hsl(0deg 0% 71% / 1%),
-        hsl(0deg 0% 40% / 1%)
-    );
-    transition-property: background-color;
-    transition-duration: 20ms;
-    transition-timing-function: linear;
+	padding: 10px;
+	background: linear-gradient(to bottom, hsl(0deg 0% 71% / 1%), hsl(0deg 0% 40% / 1%));
+	transition-property: background-color;
+	transition-duration: 20ms;
+	transition-timing-function: linear;
 
-    & svg path {
-        transition-property: fill;
-        transition-duration: 20ms;
-        transition-timing-function: linear;
-        fill: var(--icon-secondary);
-    }
+	& svg path {
+		transition-property: fill;
+		transition-duration: 20ms;
+		transition-timing-function: linear;
+		fill: var(--icon-secondary);
+	}
 
-    &:hover {
-        & svg path {
-            fill: var(--icon-primary);
-        }
+	&:hover {
+		& svg path {
+			fill: var(--icon-primary);
+		}
 
-        background: linear-gradient(
-            -45deg,
-            hsl(0deg 0% 71% / 9%),
-            hsl(0deg 0% 40% / 9%)
-        );
-    }
+		background: linear-gradient(-45deg, hsl(0deg 0% 71% / 9%), hsl(0deg 0% 40% / 9%));
+	}
 }
 
 .button-notify-red {
-    position: relative;
+	position: relative;
 
-    &::after {
-        content: "";
-        display: block;
-        width: 14px;
-        height: 14px;
-        background-color: var(--semantic-error);
-        border-radius: 50%;
-        position: absolute;
-        top: -3px;
-        right: -3px;
-    }
+	&::after {
+		content: "";
+		display: block;
+		width: 14px;
+		height: 14px;
+		background-color: var(--semantic-error);
+		border-radius: 50%;
+		position: absolute;
+		top: -3px;
+		right: -3px;
+	}
 }

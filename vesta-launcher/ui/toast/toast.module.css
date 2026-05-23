@@ -60,11 +60,11 @@
     flex-shrink: 0;
     padding: 3px;
     margin-left: auto;
-    cursor: pointer;
+    cursor: default;
     border-radius: 3px;
     border: 1px solid transparent;
     cursor: default;
-    cursor: pointer;
+    cursor: default;
     &:hover {
         border: 1px solid hsl(var(--color__primary-hue) 20% 60% / 5%);
     }

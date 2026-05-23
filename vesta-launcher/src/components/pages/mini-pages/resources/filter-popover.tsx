@@ -11,13 +11,7 @@ import {
 	ComboboxItem,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
-import {
-	Select,
-	SelectContent,
-	SelectItem,
-	SelectTrigger,
-	SelectValue,
-} from "@ui/select/select";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { sanitizeSvg } from "@utils/security";
 import { For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
@@ -120,11 +114,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 								icon: c.icon_url,
 								displayIndex: c.display_index ?? 0,
 							}))
-							.sort(
-								(a, b) =>
-									a.displayIndex - b.displayIndex ||
-									a.name.localeCompare(b.name),
-							),
+							.sort((a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name)),
 					});
 				} else {
 					generalGroup.items.push({
@@ -136,14 +126,10 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 				}
 			}
 
-			result.sort(
-				(a, b) =>
-					a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
-			);
+			result.sort((a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name));
 			if (generalGroup.items.length > 0) {
 				generalGroup.items.sort(
-					(a, b) =>
-						a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
+					(a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
 				);
 				result.unshift(generalGroup);
 			}
@@ -174,8 +160,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 	};
 
 	const shouldShowLoader = () =>
-		resources.state.resourceType === "mod" ||
-		resources.state.resourceType === "modpack";
+		resources.state.resourceType === "mod" || resources.state.resourceType === "modpack";
 
 	const toggleGroupExpand = (groupId: string, e: MouseEvent) => {
 		e.stopPropagation();
@@ -184,220 +169,194 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 
 	return (
 		<div
-			ref={(el) => { scrollRef = el; }}
+			ref={(el) => {
+				scrollRef = el;
+			}}
 			class={styles["filter-popover-scrollable"]}
 		>
 			<div class={styles["filter-popover-content"]}>
-			<div class={styles["filter-popover-section"]}>
-				<label class={styles["filter-label"]}>Minecraft Version</label>
-				<Combobox
-					options={gameVersions()}
-					value={resources.state.gameVersion || "All versions"}
-					onChange={(v: string | null) => {
-						const val = v === "All versions" || !v ? null : v;
-						resources.setGameVersion(val);
-						resources.setOffset(0);
-						activeRouter()?.updateQuery("gameVersion", val);
-					}}
-					itemComponent={(p) => (
-						<ComboboxItem item={p.item}>
-							{String(p.item.rawValue)}
-						</ComboboxItem>
-					)}
-				>
-					<ComboboxControl class={styles["filter-combobox"]}>
-						<ComboboxInput />
-						<ComboboxTrigger />
-					</ComboboxControl>
-					<ComboboxContent />
-				</Combobox>
-			</div>
-
-			<Show when={shouldShowLoader()}>
 				<div class={styles["filter-popover-section"]}>
-					<label class={styles["filter-label"]}>Mod Loader</label>
-					<Select
-						options={["All Loaders", ...LOADERS]}
-						value={
-							LOADERS.find((l) => l.toLowerCase() === resources.state.loader) ||
-							"All Loaders"
-						}
+					<label class={styles["filter-label"]}>Minecraft Version</label>
+					<Combobox
+						options={gameVersions()}
+						value={resources.state.gameVersion || "All versions"}
 						onChange={(v: string | null) => {
-							const val = v === "All Loaders" || !v ? null : v.toLowerCase();
-							resources.setLoader(val);
+							const val = v === "All versions" || !v ? null : v;
+							resources.setGameVersion(val);
 							resources.setOffset(0);
-							activeRouter()?.updateQuery("loader", val);
+							activeRouter()?.updateQuery("gameVersion", val);
 						}}
-						itemComponent={(p) => (
-							<SelectItem item={p.item}>
-								{String(p.item.rawValue)}
-							</SelectItem>
-						)}
+						itemComponent={(p) => <ComboboxItem item={p.item}>{String(p.item.rawValue)}</ComboboxItem>}
 					>
-						<SelectTrigger class={styles["filter-select"]}>
-							<SelectValue<string>>
-								{(s) => String(s.selectedOption() || "All Loaders")}
-							</SelectValue>
-						</SelectTrigger>
-						<SelectContent />
-					</Select>
+						<ComboboxControl class={styles["filter-combobox"]}>
+							<ComboboxInput />
+							<ComboboxTrigger />
+						</ComboboxControl>
+						<ComboboxContent />
+					</Combobox>
 				</div>
-			</Show>
 
-			<Show when={availableCategories().length > 0}>
-				<div class={styles["filter-popover-section"]}>
-					<label class={styles["filter-label"]}>Categories</label>
-					<div class={styles["category-groups-popover"]}>
-						<For each={availableCategories()}>
-							{(group) => (
-								<div class={styles["category-group"]}>
-									<Show when={group.name !== ""}>
-										<div
-											class={styles["category-group-header"]}
-											classList={{ [styles["not-clickable"]]: !group.id }}
-										>
+				<Show when={shouldShowLoader()}>
+					<div class={styles["filter-popover-section"]}>
+						<label class={styles["filter-label"]}>Mod Loader</label>
+						<Select
+							options={["All Loaders", ...LOADERS]}
+							value={LOADERS.find((l) => l.toLowerCase() === resources.state.loader) || "All Loaders"}
+							onChange={(v: string | null) => {
+								const val = v === "All Loaders" || !v ? null : v.toLowerCase();
+								resources.setLoader(val);
+								resources.setOffset(0);
+								activeRouter()?.updateQuery("loader", val);
+							}}
+							itemComponent={(p) => <SelectItem item={p.item}>{String(p.item.rawValue)}</SelectItem>}
+						>
+							<SelectTrigger class={styles["filter-select"]}>
+								<SelectValue<string>>{(s) => String(s.selectedOption() || "All Loaders")}</SelectValue>
+							</SelectTrigger>
+							<SelectContent />
+						</Select>
+					</div>
+				</Show>
+
+				<Show when={availableCategories().length > 0}>
+					<div class={styles["filter-popover-section"]}>
+						<label class={styles["filter-label"]}>Categories</label>
+						<div class={styles["category-groups-popover"]}>
+							<For each={availableCategories()}>
+								{(group) => (
+									<div class={styles["category-group"]}>
+										<Show when={group.name !== ""}>
 											<div
-												class={styles["category-group-title"]}
-												title={group.id}
-												classList={{
-													[styles.clickable]: group.id !== undefined,
-													[styles.active]:
-														group.id !== undefined &&
-														resources.state.categories.includes(group.id),
-												}}
-												onClick={() => {
-													if (group.id) {
-														resources.toggleCategory(group.id);
-														resources.setOffset(0);
-														activeRouter()?.updateQuery(
-															"categories",
-															resources.state.categories,
-														);
-													}
-												}}
+												class={styles["category-group-header"]}
+												classList={{ [styles["not-clickable"]]: !group.id }}
 											>
-												<Show when={group.icon}>
-													<div class={styles["category-tag-icon"]}>
-														<Show
-															when={group.icon?.startsWith("http")}
-															fallback={
-																<div
-																	class={styles["category-tag-icon-svg"]}
-																	innerHTML={sanitizeSvg(group.icon || "")}
-																/>
-															}
-														>
-															<img
-																src={group.icon || ""}
-																class={styles["category-tag-icon-img"]}
-																alt={group.name}
-															/>
-														</Show>
-													</div>
-												</Show>
-												<span>{group.name}</span>
-											</div>
-											<Show
-												when={
-													group.items.length > 0 &&
-													resources.state.activeSource === "curseforge"
-												}
-											>
-												<button
-													class={styles["expand-toggle"]}
+												<div
+													class={styles["category-group-title"]}
+													title={group.id}
 													classList={{
-														[styles.expanded]:
-															resources.state.expandedCategoryGroups.includes(
+														[styles.clickable]: group.id !== undefined,
+														[styles.active]:
+															group.id !== undefined && resources.state.categories.includes(group.id),
+													}}
+													onClick={() => {
+														if (group.id) {
+															resources.toggleCategory(group.id);
+															resources.setOffset(0);
+															activeRouter()?.updateQuery("categories", resources.state.categories);
+														}
+													}}
+												>
+													<Show when={group.icon}>
+														<div class={styles["category-tag-icon"]}>
+															<Show
+																when={group.icon?.startsWith("http")}
+																fallback={
+																	<div
+																		class={styles["category-tag-icon-svg"]}
+																		innerHTML={sanitizeSvg(group.icon || "")}
+																	/>
+																}
+															>
+																<img
+																	src={group.icon || ""}
+																	class={styles["category-tag-icon-img"]}
+																	alt={group.name}
+																/>
+															</Show>
+														</div>
+													</Show>
+													<span>{group.name}</span>
+												</div>
+												<Show when={group.items.length > 0 && resources.state.activeSource === "curseforge"}>
+													<button
+														class={styles["expand-toggle"]}
+														classList={{
+															[styles.expanded]: resources.state.expandedCategoryGroups.includes(
 																group.id || group.name,
 															),
-													}}
-													onClick={(e) =>
-														toggleGroupExpand(group.id || group.name, e)
-													}
-												>
-													<svg
-														xmlns="http://www.w3.org/2000/svg"
-														width="12"
-														height="12"
-														viewBox="0 0 24 24"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="2"
-														stroke-linecap="round"
-														stroke-linejoin="round"
-													>
-														<polyline points="6 9 12 15 18 9" />
-													</svg>
-												</button>
-											</Show>
-										</div>
-									</Show>
-									<Show
-										when={
-											resources.state.expandedCategoryGroups.includes(
-												group.id || group.name,
-											) || resources.state.activeSource !== "curseforge"
-										}
-									>
-										<div class={styles["category-grid"]}>
-											<For each={group.items}>
-												{(cat) => (
-													<Badge
-														variant="theme"
-														class={styles["resource-tag"] + " " + styles["category-tag"]}
-														active={resources.state.categories.includes(cat.id)}
-														title={cat.id}
-														onClick={() => {
-															resources.toggleCategory(cat.id);
-															resources.setOffset(0);
 														}}
+														onClick={(e) => toggleGroupExpand(group.id || group.name, e)}
 													>
-														<Show when={cat.icon}>
-															<div class={styles["category-tag-icon"]}>
-																<Show
-																	when={cat.icon?.startsWith("http")}
-																	fallback={
-																		<div
-																			class={styles["category-tag-icon-svg"]}
-																			innerHTML={sanitizeSvg(cat.icon || "")}
+														<svg
+															xmlns="http://www.w3.org/2000/svg"
+															width="12"
+															height="12"
+															viewBox="0 0 24 24"
+															fill="none"
+															stroke="currentColor"
+															stroke-width="2"
+															stroke-linecap="round"
+															stroke-linejoin="round"
+														>
+															<polyline points="6 9 12 15 18 9" />
+														</svg>
+													</button>
+												</Show>
+											</div>
+										</Show>
+										<Show
+											when={
+												resources.state.expandedCategoryGroups.includes(group.id || group.name) ||
+												resources.state.activeSource !== "curseforge"
+											}
+										>
+											<div class={styles["category-grid"]}>
+												<For each={group.items}>
+													{(cat) => (
+														<Badge
+															variant="theme"
+															class={styles["resource-tag"] + " " + styles["category-tag"]}
+															active={resources.state.categories.includes(cat.id)}
+															title={cat.id}
+															onClick={() => {
+																resources.toggleCategory(cat.id);
+																resources.setOffset(0);
+															}}
+														>
+															<Show when={cat.icon}>
+																<div class={styles["category-tag-icon"]}>
+																	<Show
+																		when={cat.icon?.startsWith("http")}
+																		fallback={
+																			<div
+																				class={styles["category-tag-icon-svg"]}
+																				innerHTML={sanitizeSvg(cat.icon || "")}
+																			/>
+																		}
+																	>
+																		<img
+																			src={cat.icon || ""}
+																			class={styles["category-tag-icon-img"]}
+																			alt={cat.name}
 																		/>
-																	}
-																>
-																	<img
-																		src={cat.icon || ""}
-																		class={styles["category-tag-icon-img"]}
-																		alt={cat.name}
-																	/>
-																</Show>
-															</div>
-														</Show>
-														<span class={styles["category-tag-text"]}>
-															{cat.name}
-														</span>
-													</Badge>
-												)}
-											</For>
-										</div>
-									</Show>
-								</div>
-							)}
-						</For>
+																	</Show>
+																</div>
+															</Show>
+															<span class={styles["category-tag-text"]}>{cat.name}</span>
+														</Badge>
+													)}
+												</For>
+											</div>
+										</Show>
+									</div>
+								)}
+							</For>
+						</div>
 					</div>
-				</div>
-			</Show>
+				</Show>
 
-			<div class={styles["filter-popover-footer"]}>
-				<button
-					class={styles["filter-popover-reset"]}
-					onClick={() => {
-						resources.resetFilters();
-					}}
-					type="button"
-				>
-					Reset Filters
-				</button>
+				<div class={styles["filter-popover-footer"]}>
+					<button
+						class={styles["filter-popover-reset"]}
+						onClick={() => {
+							resources.resetFilters();
+						}}
+						type="button"
+					>
+						Reset Filters
+					</button>
+				</div>
 			</div>
-		</div>
 		</div>
 	);
 }

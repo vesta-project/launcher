@@ -30,13 +30,13 @@
     background: var(--surface-low);
     border: 1px solid var(--border);
     border-radius: 10px;
-    cursor: pointer;
+    cursor: default;
     transition: all 0.2s ease;
     text-align: left;
     width: 100%;
     color: var(--text);
     cursor: default;
-    cursor: pointer;
+    cursor: default;
 }
 
 .instance-select-item:hover:not(.disabled) {

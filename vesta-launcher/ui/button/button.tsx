@@ -65,33 +65,33 @@ function Button(p: ButtonProps) {
 					[styles["launcher-button--icon-only"]]: local.icon_only,
 					[local.class ?? ""]: true,
 				}}
-				style={
-					(() => {
-						const cv =
-							local.color === "none"
-								? "var(--secondary-low)"
-								: local.color === "secondary"
-									? "var(--surface-raised)"
-									: `var(--${local.color})`;
-						const fg =
-							local.color === "none" || local.color === "secondary"
-								? "var(--text-primary)"
-								: "var(--text-on-accent)";
-						const txt = local.color !== "none" && local.color !== "secondary" ? cv : "var(--text-primary)";
-						const bdr =
-							local.color === "none" || local.color === "secondary" ? "var(--border-subtle)" : "transparent";
+				style={(() => {
+					const cv =
+						local.color === "none"
+							? "var(--secondary-low)"
+							: local.color === "secondary"
+								? "var(--surface-raised)"
+								: `var(--${local.color})`;
+					const fg =
+						local.color === "none" || local.color === "secondary"
+							? "var(--text-primary)"
+							: "var(--text-on-accent)";
+					const txt = local.color !== "none" && local.color !== "secondary" ? cv : "var(--text-primary)";
+					const bdr =
+						local.color === "none" || local.color === "secondary"
+							? "var(--border-subtle)"
+							: "transparent";
 
-						return typeof local.style === "string"
-							? `--button-color: ${cv}; --button-fg: ${fg}; --button-border: ${bdr}; --button-text: ${txt}; ${local.style}`
-							: {
-									"--button-color": cv,
-									"--button-fg": fg,
-									"--button-border": bdr,
-									"--button-text": txt,
-									...(local.style as any),
-								};
-					})()
-				}
+					return typeof local.style === "string"
+						? `--button-color: ${cv}; --button-fg: ${fg}; --button-border: ${bdr}; --button-text: ${txt}; ${local.style}`
+						: {
+								"--button-color": cv,
+								"--button-fg": fg,
+								"--button-border": bdr,
+								"--button-text": txt,
+								...(local.style as any),
+							};
+				})()}
 				onClick={handleClick}
 				disabled={props.disabled}
 				{...(rest as ButtonPrimitive.ButtonRootProps)}
