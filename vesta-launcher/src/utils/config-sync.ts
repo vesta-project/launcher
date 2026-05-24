@@ -155,7 +155,7 @@ export const [currentThemeConfig, setCurrentThemeConfig] = createStore<Partial<A
 	theme_background_opacity: 25,
 });
 
-export const [uiChromeModeEnabled, _setUiChromeModeEnabled] = createSignal(false);
+export const [uiChromeModeEnabled, _setUiChromeModeEnabled] = createSignal(true);
 
 function syncUiChromeAttribute(enabled: boolean): void {
 	document.documentElement.dataset.uiChromeEnabled = enabled ? "true" : "false";
@@ -437,7 +437,7 @@ export function applyConfigSnapshot(config: Record<string, any>): void {
 	if (typeof config.ui_chrome_mode_enabled === "boolean") {
 		setUiChromeModeEnabled(config.ui_chrome_mode_enabled);
 	} else {
-		syncUiChromeAttribute(false);
+		setUiChromeModeEnabled(true);
 	}
 }
 

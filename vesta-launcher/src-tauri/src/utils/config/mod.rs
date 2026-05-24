@@ -333,7 +333,7 @@ impl Default for AppConfig {
             theme_gradient_type: None, // theme_gradient_type - let preset decide
             theme_border_width: None,                     // theme_border_width - let preset decide
             theme_data: Some("{\"id\":\"vesta\",\"name\":\"Vesta\",\"description\":\"Signature teal to purple to orange gradient\",\"primaryHue\":180,\"opacity\":0,\"grainStrength\":30,\"borderWidth\":1,\"style\":\"glass\",\"gradientEnabled\":true,\"rotation\":180,\"gradientType\":\"linear\",\"gradientHarmony\":\"triadic\",\"allowHueChange\":false,\"allowStyleChange\":false,\"allowBorderChange\":false,\"customCss\":\":root {\\n\\t\\t\\t\\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\\n\\t\\t\\t}\"}".to_string()),
-            ui_chrome_mode_enabled: false,
+            ui_chrome_mode_enabled: true,
 
             setup_completed: false,
             setup_step: 0,
