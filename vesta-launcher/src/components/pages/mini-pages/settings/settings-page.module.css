@@ -34,13 +34,13 @@
 }
 
 .settings-tab-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding-bottom: 40px;
-    overflow-y: auto;
-    overflow-x: clip;
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	padding-bottom: 40px;
+	overflow-y: auto;
+	overflow-x: clip;
 }
 
 .settings-section {
@@ -75,28 +75,18 @@
 }
 
 .theme-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 6px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	margin-bottom: 12px;
+	flex-wrap: nowrap;
+	overflow: hidden;
 }
 
-.theme-toolbar__left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-wrap: wrap;
-}
-
-.theme-toolbar__toggles {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    min-width: 0;
+.theme-toolbar__spacer {
+	flex: 1;
+	min-width: 8px;
 }
 
 .theme-search-trigger {
@@ -143,21 +133,6 @@
 .theme-toolbar-icon {
     width: 16px;
     height: 16px;
-}
-
-@media (max-width: 840px) {
-    .theme-toolbar {
-        align-items: stretch;
-    }
-
-    .theme-toolbar__left {
-        flex: 1 1 100%;
-    }
-
-    .theme-search-input--expanded {
-        flex: 1 1 220px;
-        width: 100%;
-    }
 }
 
 .theme-empty-state {

@@ -194,16 +194,48 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 
 	return (
 		<div class={styles["settings-tab-content"]}>
-			<section class={styles["settings-section"]}>
-				<div
-					style={{
-						display: "flex",
-						"justify-content": "space-between",
-						"align-items": "center",
-					}}
-				>
-					<h2>Theme Presets</h2>
-					<div style={{ display: "flex", gap: "8px" }}>
+			<SettingsCard>
+				<div class={styles["theme-toolbar"]}>
+					<Button
+						variant="slate"
+						size="icon"
+						icon_only={true}
+						class={styles["theme-search-trigger"]}
+						onClick={expandSearch}
+						title="Search themes"
+						aria-label="Search themes"
+					>
+						<SearchIcon class={styles["theme-toolbar-icon"]} />
+					</Button>
+					<Show when={isSearchExpanded()}>
+						<input
+							ref={(element) => {
+								searchInputRef = element;
+							}}
+							type="text"
+							value={props.themeSearchQuery}
+							onInput={(event) => props.onThemeSearchQueryChange(event.currentTarget.value)}
+							onBlur={collapseSearchIfEmpty}
+							placeholder="Search themes"
+							class={`${styles["theme-search-input"]} ${styles["theme-search-input--expanded"]}`}
+						/>
+					</Show>
+					<Show when={!isSearchExpanded()}>
+						<Show when={props.hasImportedThemes}>
+							<ToggleGroup
+								value={props.themeFilterMode}
+								onChange={(value) => {
+									if (value) {
+										props.onThemeFilterModeChange(value as ThemeFilterMode);
+									}
+								}}
+							>
+								<ToggleGroupItem value="all">All</ToggleGroupItem>
+								<ToggleGroupItem value="builtin">Defaults</ToggleGroupItem>
+								<ToggleGroupItem value="imported">Imported</ToggleGroupItem>
+							</ToggleGroup>
+						</Show>
+						<div class={styles["theme-toolbar__spacer"]} />
 						<Button variant="ghost" size="sm" onClick={props.handleImportTheme}>
 							Import
 						</Button>
@@ -217,69 +249,22 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 								Export
 							</Button>
 						</Show>
-					</div>
-				</div>
-				<p class={styles["section-description"]}>
-					Choose a pre-designed theme or create your own custom look.
-				</p>
-				<div class={styles["theme-toolbar"]}>
-					<div class={styles["theme-toolbar__left"]}>
-						<Button
-							variant="slate"
-							size="icon"
-							icon_only={true}
-							class={styles["theme-search-trigger"]}
-							onClick={expandSearch}
-							title="Search themes"
-							aria-label="Search themes"
+						<ToggleGroup
+							value={props.themeViewMode}
+							onChange={(value) => {
+								if (value) {
+									props.onThemeViewModeChange(value as ThemeViewMode);
+								}
+							}}
 						>
-							<SearchIcon class={styles["theme-toolbar-icon"]} />
-						</Button>
-						<Show when={isSearchExpanded()}>
-							<input
-								ref={(element) => {
-									searchInputRef = element;
-								}}
-								type="text"
-								value={props.themeSearchQuery}
-								onInput={(event) => props.onThemeSearchQueryChange(event.currentTarget.value)}
-								onBlur={collapseSearchIfEmpty}
-								placeholder="Search themes"
-								class={`${styles["theme-search-input"]} ${styles["theme-search-input--expanded"]}`}
-							/>
-						</Show>
-						<div class={styles["theme-toolbar__toggles"]}>
-							<Show when={props.hasImportedThemes}>
-								<ToggleGroup
-									value={props.themeFilterMode}
-									onChange={(value) => {
-										if (value) {
-											props.onThemeFilterModeChange(value as ThemeFilterMode);
-										}
-									}}
-								>
-									<ToggleGroupItem value="all">All</ToggleGroupItem>
-									<ToggleGroupItem value="builtin">Defaults</ToggleGroupItem>
-									<ToggleGroupItem value="imported">Imported</ToggleGroupItem>
-								</ToggleGroup>
-							</Show>
-						</div>
-					</div>
-					<ToggleGroup
-						value={props.themeViewMode}
-						onChange={(value) => {
-							if (value) {
-								props.onThemeViewModeChange(value as ThemeViewMode);
-							}
-						}}
-					>
-						<ToggleGroupItem value="grid" title="Grid view" aria-label="Grid view">
-							<GridIcon class={styles["theme-toolbar-icon"]} />
-						</ToggleGroupItem>
-						<ToggleGroupItem value="list" title="List view" aria-label="List view">
-							<ListIcon class={styles["theme-toolbar-icon"]} />
-						</ToggleGroupItem>
-					</ToggleGroup>
+							<ToggleGroupItem value="grid" title="Grid view" aria-label="Grid view">
+								<GridIcon class={styles["theme-toolbar-icon"]} />
+							</ToggleGroupItem>
+							<ToggleGroupItem value="list" title="List view" aria-label="List view">
+								<ListIcon class={styles["theme-toolbar-icon"]} />
+							</ToggleGroupItem>
+						</ToggleGroup>
+					</Show>
 				</div>
 				<div
 					class={styles["theme-preset-grid"]}
@@ -307,7 +292,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				<Show when={props.themes.length === 0}>
 					<div class={styles["theme-empty-state"]}>No themes match your current filters.</div>
 				</Show>
-			</section>
+			</SettingsCard>
 
 			<Show when={props.canChangeHue}>
 				<SettingsCard

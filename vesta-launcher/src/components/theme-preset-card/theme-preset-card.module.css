@@ -1,14 +1,14 @@
 .theme-preset-card-wrapper {
     position: relative;
-    width: 180px;
+    width: 100%;
 }
 
 .theme-preset-card {
     all: unset;
-    position: relative; /* needed for pseudo elements */
+    position: relative;
     display: flex;
     flex-direction: column;
-    width: 180px;
+    width: 100%;
     box-sizing: border-box;
     background: var(--surface-raised);
     border: var(--border-width-subtle) solid var(--border-subtle);

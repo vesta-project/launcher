@@ -16,7 +16,7 @@ export const SettingsCard: Component<SettingsCardProps> = (props) => {
 
 	return (
 		<section
-			class={`${styles["settings-card"]} ${variant() !== "transparent" ? "liquid-glass" : ""}`}
+			class={`${styles["settings-card"]}`}
 			classList={{
 				[styles["settings-card--destructive"]]: props.destructive,
 				[styles[`settings-card--${variant()}`]]: true,

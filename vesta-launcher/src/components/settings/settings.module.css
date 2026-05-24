@@ -1,33 +1,38 @@
 .settings-card {
 	padding: 16px;
-	background: var(--surface-base);
-	backdrop-filter: var(--liquid-backdrop-filter);
-	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
-	border-radius: 12px;
-	border: var(--border-width-subtle) solid var(--border-subtle);
+	margin-bottom: 0;
+	background: transparent;
+	border: none;
+	border-bottom: 1px solid var(--border-subtle);
+	border-radius: 0;
+	box-shadow: none;
 	flex-shrink: 0;
 	display: flex;
 	flex-direction: column;
 	width: 100%;
 	max-width: 100%;
 	box-sizing: border-box;
-	box-shadow: var(--elevation-soft);
+}
+
+.settings-card:last-child {
+	border-bottom: none;
 }
 
 .settings-card--destructive {
 	border-color: var(--destructive);
 	background: var(--destructive-5);
+	border-bottom: none;
 }
 
 .settings-card--compact {
-	padding: 12px 16px;
-	gap: 8px;
+	padding: 8px 0;
+	border-bottom: none;
 }
 
 .settings-card--transparent {
 	background: transparent;
 	backdrop-filter: none;
-	border: none;
+	border-bottom: none;
 	padding: 0;
 	box-shadow: none;
 }
@@ -35,19 +40,20 @@
 .settings-card--bordered {
 	background: var(--surface-overlay);
 	border: var(--border-width-subtle) solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
-	box-shadow: var(--elevation-medium);
+	border-bottom: var(--border-width-subtle) solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
+	box-shadow: none;
 }
 
 .settings-card-header {
-	margin-bottom: 10px;
+	margin-bottom: 14px;
 	width: 100%;
 	display: flex;
 	flex-direction: column;
-	align-items: flex-start; /* Ensure header and subheader stick to the left */
+	align-items: flex-start;
 }
 
 .settings-card-header--compact {
-	margin-bottom: 4px;
+	margin-bottom: 6px;
 }
 
 .settings-card-header--top {
@@ -60,12 +66,13 @@
 }
 
 .settings-card-title {
-	font-size: var(--font-small);
-	font-weight: 600;
+	font-size: var(--font-medium);
+	font-weight: 700;
 	margin: 0;
 	color: var(--text-primary);
 	text-align: left;
-	line-height: 1.1;
+	line-height: 1.2;
+	letter-spacing: 0.01em;
 }
 
 .settings-card-subheader {
@@ -127,8 +134,8 @@
 }
 
 .settings-field-label {
-	font-size: var(--font-small);
-	font-weight: 600;
+	font-size: var(--font-xsmall);
+	font-weight: 500;
 	color: var(--text-primary);
 	text-align: left;
 }
