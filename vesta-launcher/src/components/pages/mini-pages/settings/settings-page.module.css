@@ -1,60 +1,7 @@
 .settings-page {
-    padding: 24px;
+    position: relative;
     width: 100%;
     height: 100%;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 0; /* Remove gap since tabs handle spacing */
-    overflow: auto;
-}
-
-.settings-tabs {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    padding: 0.2rem;
-}
-
-@media (min-width: 800px) {
-    .settings-tabs {
-        flex-direction: row;
-        gap: 32px;
-        height: 100%;
-        overflow: hidden;
-    }
-
-    .settings-tabs .tabs-list {
-        flex-direction: column;
-        width: 200px;
-        min-width: 200px;
-        flex-shrink: 0;
-        margin-bottom: 0;
-        height: fit-content;
-        align-items: stretch;
-        background: var(--surface-low);
-        border: var(--border-width-subtle) solid var(--border-subtle);
-        padding: 6px;
-        gap: 4px;
-    }
-
-    .settings-tabs .tabs-trigger {
-        width: 100%;
-        text-align: left;
-        justify-content: flex-start;
-        padding: 10px 14px;
-        border-radius: 6px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .settings-tabs .tabs-content {
-        flex: 1;
-        padding-bottom: 0;
-        overflow-y: auto;
-        padding-right: 8px; /* Room for scrollbar */
-    }
 }
 
 .settings-loading {

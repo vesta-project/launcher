@@ -1,98 +1,18 @@
 /* Instance Details Mini Page - Using Vesta CSS Variables */
 .instance-details-page {
-    display: flex;
+    position: relative;
     width: 100%;
     height: 100%;
     color: var(--text-color);
 }
 
-/* Left sidebar with tabs */
-.instance-details-sidebar {
-    width: 200px;
-    min-width: 200px;
-    background: hsl(
-        var(--liquid-tint-color) / 0.3
-    ); /* Much lighter liquid glass background */
-    backdrop-filter: var(--liquid-backdrop-filter);
-    -webkit-backdrop-filter: var(--liquid-backdrop-filter);
-    display: flex;
-    flex-direction: column;
-    padding: 1.5rem 1rem;
-    gap: 0.5rem;
-    border-right: none; /* Remove regular border */
-    box-shadow:
-        2px 0 20px hsl(0 0% 0% / 0.4),
-        /* Strong shadow border on right */ inset -1px 0 0
-            hsl(var(--color__primary-hue) 60% 80% / 0.2); /* Subtle inner highlight */
-    position: relative;
-}
-
-.instance-tabs {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-}
-
-.instance-tabs button {
-    background: transparent;
-    border: none;
-    color: var(--text-secondary);
-    opacity: 0.8;
-    padding: 0.75rem 1rem;
-    border-radius: 8px;
-    cursor: default;
-    font-size: var(--font-xsmall);
-    text-align: left;
-    transition: all 0.15s ease;
-    cursor: default;
-    cursor: default;
-}
-
-.instance-tabs button:hover {
-    background: hsl(
-        var(--color__primary-hue) 30% 20% / 0.4
-    ); /* Darker hover with transparency */
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    color: var(--text-primary);
-    transform: translateX(4px); /* Subtle slide effect */
-    box-shadow: inset 0 0 20px hsl(var(--color__primary-hue) 60% 70% / 0.1);
-    opacity: 1;
-}
-
-.instance-tabs button.active {
-    background: hsl(var(--color__primary-hue) 60% 40% / 0.6);
-    backdrop-filter: blur(15px);
-    -webkit-backdrop-filter: blur(15px);
-    color: var(--text-primary);
-    box-shadow:
-        inset 0 0 20px hsl(var(--color__primary-hue) 70% 50% / 0.3),
-        0 4px 12px hsl(0 0% 0% / 0.3);
-    transform: translateX(4px);
-    opacity: 1;
-}
-
-/* Main content area */
-.instance-details-content {
-    flex: 1;
-    overflow-y: auto; /* Holistic scrolling for the entire page */
-    overflow-x: hidden;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg-glass);
-    color: var(--text-primary);
-}
-
 /* Fix for Console Tab to prevent page scrolling and fill height */
-.instance-details-content:has(.tab-console) {
-    overflow-y: hidden;
-}
-
-.instance-details-content:has(.tab-console) .content-wrapper {
+.instance-details-page:has(.tab-console) .content-wrapper {
     height: 100%;
     padding-bottom: 0;
     display: flex;
     flex-direction: column;
+    overflow-y: hidden;
 }
 
 .instance-tab-content {

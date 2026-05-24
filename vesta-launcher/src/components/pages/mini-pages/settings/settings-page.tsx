@@ -18,8 +18,9 @@ import {
 	enable as enableAutostart,
 } from "@tauri-apps/plugin-autostart";
 import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import { PageSidebar } from "@components/page-sidebar/page-sidebar";
 import LauncherButton from "@ui/button/button";
-import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from "@ui/tabs/tabs";
+import { TabsContent } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
 import {
@@ -188,7 +189,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	const [closeToTray, setCloseToTray] = createSignal(false);
 	const [instanceDefaults, setInstanceDefaults] = createSignal<Partial<AppConfig>>({});
 	const [selectedTab, setSelectedTab] = createSignal(activeTab());
-	const [isDesktop, setIsDesktop] = createSignal(window.innerWidth >= 800);
 	const totalRam = systemMemory;
 
 	// Persistence debounce (100ms) - only for database writes
@@ -549,10 +549,6 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	};
 
 	onMount(async () => {
-		const handleResize = () => setIsDesktop(window.innerWidth >= 800);
-		window.addEventListener("resize", handleResize);
-		onCleanup(() => window.removeEventListener("resize", handleResize));
-
 		await refreshThemeCatalog();
 		const capabilities = await loadWindowEffectCapabilities();
 		if (capabilities?.supportedEffects?.length) {
@@ -1448,48 +1444,31 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		}
 	};
 
+	const settingsTabs = [
+		{ value: "general", label: "General" },
+		{ value: "account", label: "Account" },
+		{ value: "appearance", label: "Appearance" },
+		{ value: "java", label: "Java" },
+		{ value: "notifications", label: "Notifications" },
+		{ value: "defaults", label: "Defaults" },
+		{ value: "developer", label: "Developer" },
+		{ value: "help", label: "Help" },
+	];
+
 	return (
 		<div class={styles["settings-page"]}>
 			<Show
 				when={!loading()}
 				fallback={<div class={styles["settings-loading"]}>Loading settings...</div>}
 			>
-				<Tabs
-					class={styles["settings-tabs"]}
-					orientation={isDesktop() ? "vertical" : "horizontal"}
-					value={selectedTab()}
-					onChange={(v) => {
+				<PageSidebar
+					tabs={settingsTabs}
+					activeTab={selectedTab()}
+					onTabChange={(v) => {
 						setSelectedTab(v);
 						activeRouter()?.updateQuery("activeTab", v, true);
 					}}
 				>
-					<TabsList class={styles["tabs-list"]}>
-						<TabsIndicator />
-						<TabsTrigger class={styles["tabs-trigger"]} value="general">
-							General
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="account">
-							Account
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="appearance">
-							Appearance
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="java">
-							Java
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="notifications">
-							Notifications
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="defaults">
-							Defaults
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="developer">
-							Developer
-						</TabsTrigger>
-						<TabsTrigger class={styles["tabs-trigger"]} value="help">
-							Help
-						</TabsTrigger>
-					</TabsList>
 
 					<TabsContent class={styles["tabs-content"]} value="general">
 						<Suspense
@@ -1652,7 +1631,7 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 							</SettingsCard>
 						</div>
 					</TabsContent>
-				</Tabs>
+				</PageSidebar>
 			</Show>
 		</div>
 	);

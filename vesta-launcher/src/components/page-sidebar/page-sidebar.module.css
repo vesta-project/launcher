@@ -1,0 +1,126 @@
+.root {
+	height: 100%;
+}
+
+.layout {
+	display: flex;
+	width: 100%;
+	height: 100%;
+	position: relative;
+}
+
+.sidebar {
+	width: 160px;
+	min-width: 160px;
+	background: hsl(var(--liquid-tint-color) / 0.3);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	-webkit-backdrop-filter: var(--liquid-backdrop-filter);
+	display: flex;
+	flex-direction: column;
+	padding: 0.75rem 0.5rem;
+	border-right: none;
+	box-shadow:
+		2px 0 20px hsl(0 0% 0% / 0.4),
+		inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2);
+	position: relative;
+	z-index: 2;
+}
+
+.nav {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.button {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	opacity: 0.8;
+	padding: 0.625rem 0.75rem;
+	border-radius: 6px;
+	cursor: default;
+	font-size: var(--font-xsmall);
+	font-weight: 500;
+	text-align: left;
+	transition:
+		background 0.15s ease,
+		color 0.15s ease,
+		opacity 0.15s ease;
+	width: 100%;
+}
+
+.button:hover {
+	background: hsl(var(--color__primary-hue) 25% 25% / 0.25);
+}
+
+.button:disabled {
+	opacity: 0.35;
+	cursor: not-allowed;
+}
+
+.active {
+	background: hsl(var(--color__primary-hue) 40% 30% / 0.35);
+	color: var(--text-primary);
+	opacity: 1;
+}
+
+.content {
+	flex: 1;
+	overflow-y: auto;
+	overflow-x: hidden;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg-glass);
+}
+
+.overlay {
+	position: absolute;
+	inset: 0;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 99;
+}
+
+.mobileToggle {
+	position: absolute;
+	top: 8px;
+	left: 8px;
+	z-index: 10;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	border-radius: 8px;
+	border: 1px solid var(--border-subtle);
+	background: var(--surface-overlay);
+	color: var(--text-secondary);
+	cursor: default;
+	transition:
+		background 0.15s ease,
+		color 0.15s ease;
+}
+
+.mobileToggle:hover {
+	background: var(--surface-raised);
+	color: var(--text-primary);
+}
+
+@media (max-width: 600px) {
+	.sidebar {
+		position: absolute;
+		left: -160px;
+		top: 0;
+		bottom: 0;
+		height: 100%;
+		z-index: 100;
+		transition: left 0.25s ease;
+		box-shadow:
+			2px 0 20px hsl(0 0% 0% / 0.4),
+			inset -1px 0 0 hsl(var(--color__primary-hue) 60% 80% / 0.2);
+	}
+
+	.sidebar.mobileOpen {
+		left: 0;
+	}
+}

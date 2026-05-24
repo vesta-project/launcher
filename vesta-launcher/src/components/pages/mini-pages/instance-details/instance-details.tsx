@@ -25,9 +25,11 @@ import {
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { PageSidebar } from "@components/page-sidebar/page-sidebar";
 import { ResourceAvatar } from "@ui/avatar";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
+import { TabsContent } from "@ui/tabs/tabs";
 import { Checkbox } from "@ui/checkbox/checkbox";
 import { ExportDialog } from "@ui/export-dialog";
 import { Skeleton } from "@ui/skeleton/skeleton";
@@ -1970,6 +1972,15 @@ export default function InstanceDetails(
 	};
 
 	// Handle tab changes - use updateQuery for stable state preservation
+	const instanceTabs = [
+		{ value: "home", label: "Home" },
+		{ value: "console", label: "Console" },
+		{ value: "resources", label: "Resources" },
+		{ value: "screenshots", label: "Screenshots" },
+		{ value: "versioning", label: "Version" },
+		{ value: "settings", label: "Settings" },
+	];
+
 	const handleTabChange = (tab: TabType) => {
 		if (tab === activeTab()) return;
 		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
@@ -1977,48 +1988,7 @@ export default function InstanceDetails(
 
 	return (
 		<div class={styles["instance-details-page"]}>
-			<aside class={styles["instance-details-sidebar"]}>
-				<nav class={styles["instance-tabs"]}>
-					<button
-						classList={{ [styles.active]: activeTab() === "home" }}
-						onClick={() => handleTabChange("home")}
-					>
-						Home
-					</button>
-					<button
-						classList={{ [styles.active]: activeTab() === "console" }}
-						onClick={() => handleTabChange("console")}
-					>
-						Console
-					</button>
-					<button
-						classList={{ [styles.active]: activeTab() === "resources" }}
-						onClick={() => handleTabChange("resources")}
-					>
-						Resources
-					</button>
-					<button
-						classList={{ [styles.active]: activeTab() === "screenshots" }}
-						onClick={() => handleTabChange("screenshots")}
-					>
-						Screenshots
-					</button>
-					<button
-						classList={{ [styles.active]: activeTab() === "versioning" }}
-						onClick={() => handleTabChange("versioning")}
-					>
-						Version
-					</button>
-					<button
-						classList={{ [styles.active]: activeTab() === "settings" }}
-						onClick={() => handleTabChange("settings")}
-					>
-						Settings
-					</button>
-				</nav>
-			</aside>
-
-			<main class={styles["instance-details-content"]}>
+			<PageSidebar tabs={instanceTabs} activeTab={activeTab()} onTabChange={(v) => handleTabChange(v as TabType)}>
 				<div class={styles["content-wrapper"]}>
 					<Show when={instance.loading && !instance.latest}>
 						<div class={styles["instance-loading"]}>
@@ -2164,7 +2134,7 @@ export default function InstanceDetails(
 								</header>
 
 								<div class={styles["instance-tab-content"]}>
-									<Show when={activeTab() === "home"}>
+									<TabsContent value="home">
 										<Show when={instance.loading && !instance.latest}>
 											<div class={styles["skeleton-grid"]}>
 												{Array.from({ length: 4 }).map(() => (
@@ -2179,18 +2149,18 @@ export default function InstanceDetails(
 												isRunning={isRunning()}
 											/>
 										</Show>
-									</Show>
+									</TabsContent>
 
-									<Show when={activeTab() === "console"}>
+									<TabsContent value="console">
 										<Show when={instance.loading && !instance.latest}>
 											<Skeleton class={styles["skeleton-console"]} />
 										</Show>
 										<Show when={instance.latest}>
 											<ConsoleTab instanceSlug={slug()} openLogsFolder={openLogsFolder} />
 										</Show>
-									</Show>
+									</TabsContent>
 
-									<Show when={activeTab() === "resources"}>
+									<TabsContent value="resources">
 										<ResourcesTab
 											instance={inst()}
 											resourceTypeFilter={resourceTypeFilter()}
@@ -2209,13 +2179,13 @@ export default function InstanceDetails(
 											checkingUpdates={checkingUpdates()}
 											checkUpdates={checkUpdates}
 										/>
-									</Show>
+									</TabsContent>
 
-									<Show when={activeTab() === "screenshots"}>
+									<TabsContent value="screenshots">
 										<ScreenshotsTab instanceIdSlug={slug()} />
-									</Show>
+									</TabsContent>
 
-									<Show when={activeTab() === "versioning"}>
+									<TabsContent value="versioning">
 										<Show when={instance.latest}>
 											<VersioningTab
 												instance={inst()}
@@ -2255,9 +2225,9 @@ export default function InstanceDetails(
 												mcVersions={mcVersions}
 											/>
 										</Show>
-									</Show>
+									</TabsContent>
 
-									<Show when={activeTab() === "settings"}>
+									<TabsContent value="settings">
 										<Show when={instance.loading && !instance.latest}>
 											<div class={styles["skeleton-settings"]}>
 												<Skeleton class={styles["skeleton-field"]} />
@@ -2331,13 +2301,13 @@ export default function InstanceDetails(
 												showToast={showToast}
 											/>
 										</Show>
-									</Show>
+									</TabsContent>
 								</div>
 							</>
 						)}
 					</Show>
 				</div>
-			</main>
+			</PageSidebar>
 
 			<FloatingSaveFooter
 				show={isDirty()}
