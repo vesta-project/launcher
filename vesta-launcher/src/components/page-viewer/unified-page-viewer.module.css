@@ -3,6 +3,8 @@
 	flex-direction: column;
 	width: 100%;
 	height: 100%;
+	min-width: 0;
+	min-height: 0;
 	background: transparent;
 	color: var(--page-viewer-nav-color, var(--theme-text));
 	overflow: hidden;
@@ -170,6 +172,8 @@
 	position: relative;
 	overflow: auto;
 	width: 100%;
+	min-width: 0;
+	min-height: 0;
 }
 
 .page-viewer-reload-overlay {

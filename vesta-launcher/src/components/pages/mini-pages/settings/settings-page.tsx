@@ -27,6 +27,8 @@ import {
 	currentThemeConfig,
 	onConfigUpdate,
 	saveThemeUpdate as persistThemeUpdate,
+	setUiChromeModeEnabled,
+	uiChromeModeEnabled,
 } from "@utils/config-sync";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import {
@@ -59,6 +61,7 @@ import {
 	setCustomThemes,
 	type ThemeConfig,
 	type ThemeVariableValue,
+	type UiChromeMode,
 	upsertCustomTheme,
 	validateTheme,
 } from "../../../../themes/presets";
@@ -248,6 +251,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 	);
 	const [backgroundOpacity, setBackgroundOpacity] = createSignal(
 		currentThemeConfig.theme_background_opacity ?? 12,
+	);
+	const uiChromeMode = createMemo<UiChromeMode>(() =>
+		uiChromeModeEnabled() ? "windowed" : "flat",
 	);
 	const [windowEffect, setWindowEffect] = createSignal(
 		normalizeWindowEffectForCurrentOS(currentThemeConfig.theme_window_effect || "none"),
@@ -879,6 +885,23 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 			setBackgroundOpacity(newValue);
 		});
 		saveThemeUpdate({ backgroundOpacity: newValue }, live);
+	};
+
+	const handleUiChromeModeChange = async (mode: UiChromeMode) => {
+		const enabled = mode === "windowed";
+		setUiChromeModeEnabled(enabled);
+
+		if (!hasTauriRuntime()) return;
+
+		try {
+			await invoke("update_config_fields", {
+				updates: {
+					ui_chrome_mode_enabled: enabled,
+				},
+			});
+		} catch (error) {
+			console.error("Failed to persist UI chrome mode:", error);
+		}
 	};
 
 	const handleWindowEffectChange = (val: string) => {
@@ -1542,6 +1565,8 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleBorderThicknessChange={handleBorderThicknessChange}
 								backgroundOpacity={backgroundOpacity()}
 								handleBackgroundOpacityChange={handleBackgroundOpacityChange}
+						uiChromeMode={uiChromeMode()}
+						handleUiChromeModeChange={handleUiChromeModeChange}
 								windowEffect={windowEffect()}
 								windowEffectOptions={windowEffectOptions()}
 								handleWindowEffectChange={handleWindowEffectChange}

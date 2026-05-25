@@ -1,34 +1,29 @@
 import BellIcon from "@assets/bell.svg";
+import LibraryIcon from "@assets/cube.svg";
 import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
-import { router } from "@components/page-viewer/page-viewer";
+import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
 import { AccountPopover } from "@components/pages/home/sidebar/account-popover/account-popover";
 import {
 	SidebarActionButton,
-	SidebarPageButton,
 	SidebarProfileButton,
 } from "@components/pages/home/sidebar/sidebar-buttons/sidebar-buttons";
 import { SidebarNotifications } from "@components/pages/home/sidebar/sidebar-notifications/sidebar-notifications";
-import { instancesState } from "@stores/instances";
 import { type PinnedPage, pinning } from "@stores/pinning";
-import { invoke } from "@tauri-apps/api/core";
 import { Popover, PopoverAnchor } from "@ui/popover/popover";
 import { Separator } from "@ui/separator/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
-	closeAlert,
-	createNotification,
 	listNotifications,
-	notifications,
 	PROGRESS_INDETERMINATE,
 	persistentNotificationTrigger,
-	showAlert,
 } from "@utils/notifications";
-import { startAppTutorial } from "@utils/tutorial";
+import type { UiChromeMode } from "~/themes/presets";
 import {
 	createEffect,
+	createMemo,
 	createResource,
 	createSignal,
 	For,
@@ -37,7 +32,6 @@ import {
 	Show,
 } from "solid-js";
 import { PinnedItem } from "./pinned-items";
-// Transition and getOsType are unused in this file; remove imports to clean code.
 import styles from "./sidebar.module.css";
 
 interface SidebarProps {
@@ -45,6 +39,7 @@ interface SidebarProps {
 	open: boolean;
 	openChanged: (value: boolean) => void;
 	os: string;
+	uiChromeMode: UiChromeMode;
 }
 
 function Sidebar(props: SidebarProps) {
@@ -57,9 +52,32 @@ function Sidebar(props: SidebarProps) {
 		setTimeout(() => setReady(true), 1000);
 	});
 
-	const openPage = (path: string, routeProps?: Record<string, any>) => {
-		router()?.navigate(path, {}, routeProps);
+	const isFlatChrome = createMemo(() => props.uiChromeMode === "flat");
+
+	const openPage = (
+		path: string,
+		params?: Record<string, any>,
+		routeProps?: Record<string, any>,
+	) => {
+		router()?.navigate(path, params ?? {}, routeProps);
 		props.setPageViewerOpen(true);
+		props.openChanged(false);
+	};
+
+	const activeSection = createMemo(() => {
+		if (!pageViewerOpen()) return isFlatChrome() ? "library" : "";
+
+		const path = router()?.currentPath.get() ?? "";
+		if (path.startsWith("/install")) return "create";
+		if (path.startsWith("/resources") || path.startsWith("/resource-details")) return "explore";
+		if (path.startsWith("/config") || path.startsWith("/login")) return "settings";
+		if (path.startsWith("/instance")) return "library";
+		return "";
+	});
+
+	const openLibrary = () => {
+		props.setPageViewerOpen(false);
+		props.openChanged(false);
 	};
 
 	const onExploreClicked = () => {
@@ -143,16 +161,15 @@ function Sidebar(props: SidebarProps) {
 							onAddAccount={async () => {
 								setAccountMenuOpen(false);
 
-								// Guest mode check for redirect to onboarding
 								try {
 									const { getActiveAccount } = await import("@utils/auth");
 									const account = await getActiveAccount();
 									if (account?.account_type === ACCOUNT_TYPE_GUEST) {
-										window.location.href = "/?login=true"; // Send back to onboarding for real login
+										window.location.href = "/?login=true";
 										return;
 									}
-								} catch (e) {
-									console.error("Failed to check guest status for Add Account:", e);
+								} catch (error) {
+									console.error("Failed to check guest status for Add Account:", error);
 								}
 
 								openPage("/login");
@@ -160,9 +177,21 @@ function Sidebar(props: SidebarProps) {
 						/>
 					</Popover>
 					<div class={`${styles["sidebar__section"]} ${styles["actions"]}`}>
+						<Show when={isFlatChrome()}>
+							<SidebarActionButton
+								id={"sidebar-library"}
+								tooltip_text={"Library"}
+								class={activeSection() === "library" ? styles["sidebar-tab-active"] : undefined}
+								onClick={openLibrary}
+							>
+								<LibraryIcon />
+							</SidebarActionButton>
+						</Show>
+
 						<SidebarActionButton
 							id={"sidebar-new"}
 							tooltip_text={"New Instance"}
+							class={activeSection() === "create" ? styles["sidebar-tab-active"] : undefined}
 							onClick={() => openPage("/install/source")}
 						>
 							<PlusIcon />
@@ -171,6 +200,7 @@ function Sidebar(props: SidebarProps) {
 						<SidebarActionButton
 							id={"sidebar-explore"}
 							tooltip_text={"Explore"}
+							class={activeSection() === "explore" ? styles["sidebar-tab-active"] : undefined}
 							onClick={onExploreClicked}
 						>
 							<SearchIcon />
@@ -184,8 +214,6 @@ function Sidebar(props: SidebarProps) {
 								</div>
 							</div>
 						</Show>
-
-						{/* Deleted placeholder SidebarPageButton */}
 					</div>
 				</div>
 				<div class={styles["sidebar__section"]}>
@@ -223,6 +251,7 @@ function Sidebar(props: SidebarProps) {
 					<SidebarActionButton
 						id={"sidebar-settings"}
 						tooltip_text={"Settings"}
+						class={activeSection() === "settings" ? styles["sidebar-tab-active"] : undefined}
 						onClick={() => openPage("/config")}
 					>
 						<GearIcon />
