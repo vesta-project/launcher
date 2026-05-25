@@ -15,6 +15,14 @@ export type {
 	ThemeVariableType,
 	ThemeVariableValue,
 } from "./types";
+export {
+	DEFAULT_UI_CHROME_MODE,
+	normalizeUiChromeMode,
+	resolveUiChromeMode,
+	setUiChromeModeInThemeData,
+	type UiChromeMode,
+} from "./ui-chrome";
+// TODO: Remove these exports once all consumers read ui_chrome_mode_enabled from app config
 
 /**
  * Vesta Launcher Theme System - Theme Management

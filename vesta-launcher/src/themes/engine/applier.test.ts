@@ -93,4 +93,5 @@ describe("applyTheme background and effect behavior", () => {
 		expect(root.style.getPropertyValue("--background-color").trim()).toBe("");
 		expect(root.style.getPropertyValue("--background-image").trim()).toBe("");
 	});
+
 });

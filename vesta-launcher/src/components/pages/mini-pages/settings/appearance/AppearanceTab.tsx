@@ -10,9 +10,11 @@ import {
 	type StyleMode,
 	type ThemeConfig,
 	type ThemeVariableValue,
+	type UiChromeMode,
 } from "../../../../../themes/presets";
 import { ThemePresetCard } from "../../../../theme-preset-card/theme-preset-card";
 import styles from "../settings-page.module.css";
+import { UiChromeModeControl } from "./UiChromeModeControl";
 
 type ThemeFilterMode = "all" | "builtin" | "imported";
 type ThemeViewMode = "grid" | "list";
@@ -128,6 +130,8 @@ export interface AppearanceSettingsTabProps {
 	handleBorderThicknessChange: (val: number[], live?: boolean) => void;
 	backgroundOpacity: number;
 	handleBackgroundOpacityChange: (val: number[], live?: boolean) => void;
+	uiChromeMode: UiChromeMode;
+	handleUiChromeModeChange: (mode: UiChromeMode) => void;
 	windowEffect: string;
 	windowEffectOptions: string[];
 	handleWindowEffectChange: (val: string) => void;
@@ -308,6 +312,11 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 					<div class={styles["theme-empty-state"]}>No themes match your current filters.</div>
 				</Show>
 			</section>
+
+			<UiChromeModeControl
+				value={props.uiChromeMode}
+				onChange={props.handleUiChromeModeChange}
+			/>
 
 			<Show when={props.canChangeHue}>
 				<SettingsCard

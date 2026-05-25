@@ -1,6 +1,7 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
-import { PageViewer, pageViewerOpen, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { PageViewer, pageViewerOpen, router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
+import FlatNavigationControls from "@components/pages/home/flat-navigation-controls/flat-navigation-controls";
 import {
 	initializeInstances,
 	instancesError,
@@ -12,9 +13,10 @@ import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
+import { uiChromeModeEnabled } from "@utils/config-sync";
 import { useOs } from "@utils/os";
 import { startAppTutorial } from "@utils/tutorial";
-import { createEffect, createSignal, For, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./home.module.css";
 import Sidebar from "./sidebar/sidebar";
 
@@ -23,6 +25,30 @@ const [sidebarOpen, setSidebarOpen] = createSignal(false);
 
 function HomePage() {
 	const os = useOs();
+	const isFlatChrome = createMemo(() => !uiChromeModeEnabled());
+	const sectionTitle = createMemo(() => {
+		if (!isFlatChrome()) return undefined;
+		if (!pageViewerOpen()) return "Library";
+
+		const r = router();
+		const path = r?.currentPath.get() ?? "";
+		const params = r?.currentParams.get() ?? {};
+		if (path.startsWith("/config")) {
+			const settingsTabs: Record<string, string> = {
+				general: "Settings",
+				account: "Account",
+				appearance: "Appearance",
+				java: "Java",
+				notifications: "Notifications",
+				defaults: "Defaults",
+				developer: "Developer",
+				help: "Help",
+			};
+			return settingsTabs[String(params.activeTab ?? "general")] ?? "Settings";
+		}
+
+		return r?.customName.get() || r?.currentElement().name || "Library";
+	});
 
 	onMount(async () => {
 		void initializePinning();
@@ -53,15 +79,39 @@ function HomePage() {
 
 	return (
 		<div class={styles["home__root"]} draggable={false}>
-			<TitleBar os={os()} />
-			<Sidebar
-				os={os()}
-				setPageViewerOpen={setPageViewerOpen}
-				openChanged={setSidebarOpen}
-				open={sidebarOpen()}
-			/>
-			<MainMenu />
-			<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
+			<TitleBar os={os()} sectionTitle={sectionTitle()} />
+			<Show when={isFlatChrome()}>
+				<FlatNavigationControls />
+			</Show>
+		<Sidebar
+			os={os()}
+			setPageViewerOpen={setPageViewerOpen}
+			openChanged={setSidebarOpen}
+			open={sidebarOpen()}
+			uiChromeMode={isFlatChrome() ? "flat" : "windowed"}
+		/>
+			<Show
+				when={isFlatChrome()}
+				fallback={
+					<>
+						<MainMenu />
+						<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
+					</>
+				}
+			>
+				<Show
+					when={!pageViewerOpen()}
+					fallback={
+						<PageViewer
+							open={pageViewerOpen()}
+							viewChanged={() => setPageViewerOpen(false)}
+							embedded
+						/>
+					}
+				>
+					<MainMenu />
+				</Show>
+			</Show>
 			<Toaster
 				class={styles["home__toaster"]}
 				style={{ visibility: sidebarOpen() ? "hidden" : "visible" }}
