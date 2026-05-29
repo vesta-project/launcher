@@ -1193,21 +1193,21 @@
     width: 44px !important;
     height: 44px !important;
     border-radius: 50% !important;
-    background: var(--bg-surface) !important;
-    border: 1px solid var(--border-subtle) !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4) !important;
+    background: color-mix(in srgb, var(--bg-surface) 75%, var(--text-primary)) !important;
+    border: 2px solid var(--terminal-gutter-border) !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    color: var(--text-secondary) !important;
+    color: var(--terminal-text) !important;
 }
 
 .scroll-btn-round:hover {
     transform: scale(1.1);
-    border-color: var(--color__primary-hue) !important;
-    background: var(--bg-surface-hover) !important;
-    color: var(--color__primary-hue) !important;
+    border-color: var(--color__primary) !important;
+    background: color-mix(in srgb, var(--bg-surface) 60%, var(--text-primary)) !important;
+    color: var(--color__primary) !important;
 }
 
 .scroll-btn-round:active {
