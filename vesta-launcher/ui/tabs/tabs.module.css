@@ -75,8 +75,10 @@
 .tabs__content {
 	outline: none;
 	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
 	padding-bottom: 24px; /* Extra bottom padding for scrolling */
-	overflow: auto;
 
 	&:focus-visible {
 		outline: 2px solid var(--accent-primary);

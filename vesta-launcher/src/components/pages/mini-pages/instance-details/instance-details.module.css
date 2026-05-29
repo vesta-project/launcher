@@ -3,15 +3,9 @@
     position: relative;
     width: 100%;
     height: 100%;
-    color: var(--text-color);
-}
-
-/* Fix for Console Tab to prevent page scrolling and fill height */
-.instance-details-page:has(.tab-console) .content-wrapper {
-    height: 100%;
     display: flex;
     flex-direction: column;
-    overflow-y: hidden;
+    color: var(--text-color);
 }
 
 .instance-tab-content {
@@ -22,6 +16,7 @@
     position: relative;
     z-index: 1;
 }
+
 
 /* Common tab layout */
 .tab-home {
@@ -133,30 +128,18 @@
     letter-spacing: 0.05em;
 }
 
-.tab-console {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    min-height: 400px; /* Console needs its own height in the flow */
-    padding: 0 24px;
-}
-
-/* Make console scrollbar thumb show pointer to indicate draggable thumb */
-.tab-console ::-webkit-scrollbar-thumb {
-    cursor: default;
-}
-.tab-console ::-webkit-scrollbar {
-    width: 10px;
-}
-.tab-console ::-webkit-scrollbar-track {
-    background: transparent;
-}
 
 .content-wrapper {
-    padding: 0;
+    padding: 24px 0 0;
     display: flex;
     flex-direction: column;
+    flex: 1;
+}
+
+.content-wrapper--console {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .instance-loading,
@@ -176,12 +159,13 @@
     position: relative;
     height: 300px;
     min-height: 300px;
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;
     overflow: hidden;
     border-radius: 16px;
-    margin: 24px 24px 24px;
+    margin: 0 24px 24px;
     background: var(--bg-surface);
     border: var(--border-width-subtle) solid var(--border-subtle);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -192,7 +176,7 @@
 .instance-details-header.shrunk {
     height: 80px;
     min-height: 80px;
-    margin: 24px 24px 16px;
+    margin: 0 24px 16px;
     border-radius: 12px;
 }
 
@@ -772,11 +756,42 @@
     display: flex;
     flex-direction: column;
     min-height: 0;
-    background: var(--bg-surface);
-    border-radius: 12px;
-    border: 1px solid var(--border-subtle);
     overflow: hidden;
-    margin-bottom: 24px;
+    border-radius: 12px;
+    margin: 0 24px;
+    position: relative;
+    box-shadow: inset 0 0 0 1px var(--border-subtle), inset 0 2px 8px rgba(0, 0, 0, 0.12);
+    --terminal-bg: color-mix(in srgb, var(--bg-surface) 95%, var(--text-primary));
+    --terminal-text: var(--text-primary);
+    --terminal-gutter-bg: color-mix(in srgb, var(--bg-surface) 90%, var(--text-primary));
+    --terminal-gutter-border: var(--border-subtle);
+    --terminal-time: var(--text-tertiary);
+    --terminal-msg: var(--text-primary);
+}
+
+.tab-console ::-webkit-scrollbar {
+    width: 10px;
+}
+
+.tab-console ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.tab-console ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--text-primary) 12%, transparent);
+    border-radius: 5px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+}
+
+/* Console header merges toolbar + filters */
+.console-header {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+    z-index: 10;
 }
 
 .console-toolbar {
@@ -784,9 +799,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 8px 16px;
-    background: var(--bg-surface);
-    border-bottom: 1px solid var(--border-subtle);
-    z-index: 10;
+    gap: 12px;
+    min-height: 40px;
 }
 
 .console-toolbar-left {
@@ -824,7 +838,7 @@
 .console-title {
     font-size: var(--font-small);
     font-weight: 600;
-    color: var(--text-primary);
+    color: var(--text-secondary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -911,6 +925,18 @@
 .console-search-field input {
     padding-left: 36px !important;
     height: 32px !important;
+    background: var(--terminal-bg) !important;
+    color: var(--terminal-text) !important;
+    border-color: var(--terminal-gutter-border) !important;
+}
+
+.console-search-field input::placeholder {
+    color: var(--terminal-time) !important;
+}
+
+.console-search-field input:focus {
+    border-color: var(--color__primary) !important;
+    box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 58% 55% / 10%) !important;
 }
 
 .search-input-wrapper {
@@ -953,15 +979,13 @@
     display: flex;
     gap: 8px;
     padding: 10px 16px;
-    background: var(--bg-subtle-overlay);
-    border-bottom: 1px solid var(--border-subtle);
     flex-wrap: wrap;
 }
 
 .filter-tag {
-    padding: 4px 10px;
-    border-radius: 6px;
-    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
     font-weight: 600;
     background: var(--bg-surface-hover);
     color: var(--text-secondary);
@@ -969,8 +993,6 @@
     cursor: default;
     text-transform: uppercase;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    cursor: default;
-    cursor: default;
 }
 
 .filter-tag:hover {
@@ -980,28 +1002,33 @@
 
 .filter-tag.active {
     background: var(--level-color);
-    color: white;
+    color: var(--text-primary);
     border-color: transparent;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
-.console-viewport-container {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+.filter-tag--warn.active {
+    color: white;
+}
+
+.filter-tag--info.active {
+    background: var(--text-primary);
+    color: var(--bg-surface);
+}
+
+.filter-tag--debug.active {
+    background: color-mix(in srgb, var(--text-secondary) 60%, var(--bg-surface));
 }
 
 .console-output {
     flex: 1;
-    background: #0d0d0d;
+    min-height: 0;
+    background: var(--terminal-bg);
+    color: var(--terminal-text);
     font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.6;
     overflow-y: auto;
-    color: #e0e0e0;
     position: relative;
     padding: 12px 0;
     user-select: text;
@@ -1016,19 +1043,19 @@
 }
 
 .console-line-wrapper:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: color-mix(in srgb, var(--text-primary) 5%, transparent);
 }
 
 .console-gutter {
     width: 50px;
     min-width: 50px;
-    background: #151515;
-    color: #555;
+    background: var(--terminal-gutter-bg);
+    color: var(--terminal-time);
     font-size: 11px;
     padding: 4px 10px;
     text-align: right;
     user-select: none;
-    border-right: 1px solid #222;
+    border-right: 1px solid var(--terminal-gutter-border);
 }
 
 .console-line-content {
@@ -1039,7 +1066,7 @@
 }
 
 .log-time {
-    color: #888;
+    color: var(--terminal-time);
     margin-right: 8px;
     font-weight: 500;
 }
@@ -1049,8 +1076,25 @@
     font-weight: 700;
 }
 
+.log-level--error,
+.log-level--fatal {
+    color: var(--semantic-error);
+}
+
+.log-level--warn {
+    color: color-mix(in srgb, var(--semantic-warning) 60%, var(--text-primary));
+}
+
+.log-level--info {
+    color: var(--text-primary);
+}
+
+.log-level--debug {
+    color: var(--text-secondary);
+}
+
 .log-message {
-    color: #eee;
+    color: var(--terminal-msg);
     user-select: text;
 }
 
@@ -1079,8 +1123,8 @@
 }
 
 .history-popover-header {
-    padding: 12px;
-    font-size: var(--font-xsmall);
+    padding: 10px 12px;
+    font-size: 11px;
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
@@ -1107,23 +1151,28 @@
     border-radius: 8px;
     transition: background 0.2s ease;
     text-align: left;
-    cursor: default;
-    cursor: default;
 }
 
 .history-item:hover {
     background: var(--bg-surface-hover);
 }
 
+.history-item.active {
+    background: hsl(var(--color__primary-hue) 60% 40% / 0.2);
+    color: hsl(var(--color__primary-hue) 60% 70%);
+    font-weight: 600;
+}
+
 .history-name {
-    font-size: var(--font-small);
+    font-size: 12px;
     font-weight: 600;
     margin-bottom: 2px;
 }
 
 .history-meta {
-    font-size: var(--font-xxsmall);
-    opacity: 0.6;
+    font-size: 10px;
+    color: var(--text-tertiary);
+    opacity: 0.7;
 }
 
 /* Scroll Controls */
@@ -1170,152 +1219,6 @@
     height: 20px;
 }
 
-.filter-tag {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 10px;
-    font-weight: 700;
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-secondary);
-    border: 1px solid transparent;
-    cursor: default;
-    text-transform: uppercase;
-    transition: all 0.15s ease;
-    cursor: default;
-    cursor: default;
-}
-
-.filter-tag:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.filter-tag.active {
-    background: var(--level-color);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.2);
-}
-
-.console-line-wrapper {
-    display: flex;
-    width: 100%;
-    min-height: 20px;
-    transition: background 0.1s ease;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
-}
-
-.console-line-wrapper:hover {
-    background: rgba(255, 255, 255, 0.03);
-}
-
-.console-gutter {
-    width: 45px;
-    min-width: 45px;
-    background: rgba(0, 0, 0, 0.2);
-    color: var(--text-tertiary);
-    font-size: 11px;
-    padding: 2px 8px;
-    text-align: right;
-    user-select: none;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.console-line-content {
-    flex: 1;
-    padding: 2px 8px;
-    white-space: pre-wrap;
-    word-break: break-all;
-    font-size: 13px;
-}
-
-.log-time {
-    color: var(--text-tertiary);
-    margin-right: 6px;
-}
-
-.log-level {
-    font-weight: 600;
-    margin-right: 6px;
-}
-
-.console-history-dropdown {
-    position: relative;
-}
-
-.console-history-dropdown:hover .dropdown-content {
-    display: flex;
-}
-
-.dropdown-content {
-    display: none;
-    position: absolute;
-    top: 100%;
-    right: 0;
-    background: var(--bg-surface);
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    min-width: 250px;
-    max-height: 300px;
-    overflow-y: auto;
-    flex-direction: column;
-    z-index: 100;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-    padding: 6px;
-    gap: 2px;
-}
-
-.history-item {
-    display: flex;
-    flex-direction: column;
-    padding: 8px 12px;
-    background: transparent;
-    border: none;
-    border-radius: 6px;
-    color: var(--text-color);
-    text-align: left;
-    cursor: default;
-    transition: all 0.15s ease;
-    cursor: default;
-    cursor: default;
-}
-
-.history-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
-
-.history-item.active {
-    background: hsl(var(--color__primary-hue) 60% 40% / 0.2);
-    color: hsl(var(--color__primary-hue) 60% 70%);
-    font-weight: 600;
-}
-
-.history-name {
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.history-meta {
-    font-size: 10px;
-    color: var(--text-tertiary);
-}
-
-.console-line {
-    white-space: pre-wrap;
-    word-break: break-all;
-    margin-bottom: 2px;
-}
-
-.console-placeholder {
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0.4;
-    font-style: italic;
-}
-
 /* Settings Tab */
 .tab-settings {
     display: flex;
@@ -1350,13 +1253,15 @@
     display: flex;
     flex-direction: column;
     width: 100%;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     padding: 0 24px 24px;
     --toolbar-height: 114px;
 }
 
 /* Resources Toolbar */
 .resources-toolbar {
+    flex-shrink: 0;
     display: flex;
     flex-direction: column;
     background: hsl(
@@ -2144,14 +2049,17 @@
 }
 
 .vesta-table-container {
+    flex: 1;
+    min-height: 0;
     width: 100%;
     position: relative;
     border: 1px solid var(--border-subtle);
     border-top: none;
-    border-radius: 0 0 12px 12px; /* Keep bottom corners rounded */
+    border-radius: 0 0 12px 12px;
     background: var(--bg-surface-subtle);
     margin-top: 0;
-    overflow: clip; /* Fix: 'clip' allows sticky to work unlike 'hidden' in some browsers, but keeps radius active */
+    overflow-y: auto;
+    overflow-x: auto;
 }
 
 .vesta-table {
@@ -2169,7 +2077,7 @@
  */
 .vesta-table th {
     position: sticky;
-    top: var(--toolbar-height);
+    top: 0;
     z-index: 4;
     background: hsl(var(--color__primary-hue) 15% 10% / 1) !important;
     text-align: left;
@@ -2184,7 +2092,7 @@
 
 .vesta-table th:first-child {
     left: 0;
-    top: var(--toolbar-height);
+    top: 0;
     z-index: 5;
     width: 64px;
     min-width: 64px;
@@ -2195,7 +2103,7 @@
 
 .vesta-table th:nth-child(2) {
     left: 64px;
-    top: var(--toolbar-height);
+    top: 0;
     z-index: 5;
     width: 250px;
     background: var(--bg-surface) !important;
@@ -2737,14 +2645,22 @@
 }
 
 .console-empty {
-    flex: 1;
+    box-sizing: border-box;
+    height: 100%;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 3rem;
+    padding: 24px;
     text-align: center;
     color: var(--text-tertiary);
+    gap: 8px;
+}
+
+.console-empty-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
 }
 
 .empty-icon {
@@ -2753,6 +2669,7 @@
     margin-bottom: 1.5rem;
     opacity: 0.2;
     color: var(--text-primary);
+    flex-shrink: 0;
 }
 
 .empty-icon svg {
@@ -2772,4 +2689,25 @@
     font-size: 0.9rem;
     max-width: 300px;
     line-height: 1.5;
+}
+
+@media (max-height: 400px) {
+    .console-empty {
+        padding: 12px;
+        gap: 4px;
+    }
+
+    .empty-icon {
+        width: 32px;
+        height: 32px;
+        margin-bottom: 0.5rem;
+    }
+
+    .console-empty h3 {
+        font-size: 0.95rem;
+    }
+
+    .console-empty p {
+        font-size: 0.8rem;
+    }
 }

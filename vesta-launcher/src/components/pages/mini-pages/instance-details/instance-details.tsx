@@ -1989,7 +1989,10 @@ export default function InstanceDetails(
 	return (
 		<div class={styles["instance-details-page"]}>
 			<PageSidebar tabs={instanceTabs} activeTab={activeTab()} onTabChange={(v) => handleTabChange(v as TabType)}>
-				<div class={styles["content-wrapper"]}>
+				<div
+					class={styles["content-wrapper"]}
+					classList={{ [styles["content-wrapper--console"]]: activeTab() === "console" }}
+				>
 					<Show when={instance.loading && !instance.latest}>
 						<div class={styles["instance-loading"]}>
 							<Skeleton class={styles["skeleton-header"]} />
