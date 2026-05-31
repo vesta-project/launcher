@@ -1,20 +1,53 @@
 import { PolymorphicProps } from "@kobalte/core";
 import * as ToggleGroupPrimitive from "@kobalte/core/toggle-group";
+import { getButtonStyleVars, type ButtonColor } from "@ui/button/button-style";
 import { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { children, splitProps, ValidComponent } from "solid-js";
+import { splitProps, ValidComponent } from "solid-js";
 import styles from "./toggle-group.module.css";
 
 type ToggleGroupRootProps<T extends ValidComponent = "div"> =
-	ToggleGroupPrimitive.ToggleGroupRootProps<T> & ClassProp & ChildrenProp;
+	ToggleGroupPrimitive.ToggleGroupRootProps<T> &
+	ClassProp &
+	ChildrenProp & {
+		color?: ButtonColor;
+		variant?: "solid" | "outline" | "ghost" | "shadow" | "slate";
+	};
 
 function ToggleGroup<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,
 ) {
-	const [local, rest] = splitProps(props as any, ["class", "children"]);
+	const [local, rest] = splitProps(props as any, ["class", "children", "color", "variant", "style"]);
+	const buttonVars = getButtonStyleVars(local.color || "secondary");
 
 	return (
-		<ToggleGroupPrimitive.Root class={clsx(styles["toggle-group"], local.class)} {...rest}>
+		<ToggleGroupPrimitive.Root
+			class={clsx(
+				"v-toggle-group",
+				styles["toggle-group"],
+				styles[`toggle-group--${local.variant || "solid"}`],
+				local.class,
+			)}
+			data-variant={local.variant || "solid"}
+			style={(() => {
+				const groupVars = {
+					"--toggle-group-shell-bg": buttonVars["--button-color"],
+					"--toggle-group-shell-border": buttonVars["--button-border"],
+					"--toggle-group-shell-fg": buttonVars["--button-text"],
+					"--toggle-group-accent": buttonVars["--button-color"],
+				};
+
+				return typeof local.style === "string"
+					? `${Object.entries(groupVars)
+							.map(([key, value]) => `${key}: ${value};`)
+							.join(" ")} ${local.style}`
+					: {
+							...groupVars,
+							...(local.style as any),
+						};
+			})()}
+			{...rest}
+		>
 			{local.children}
 		</ToggleGroupPrimitive.Root>
 	);
@@ -24,17 +57,34 @@ type ToggleGroupItemProps = ToggleGroupPrimitive.ToggleGroupItemProps &
 	ClassProp &
 	ChildrenProp & {
 		value: string;
+		size?: "sm" | "md" | "lg" | "xl" | "icon";
+		icon_only?: boolean;
 	};
 
 function ToggleGroupItem<T extends ValidComponent = "button">(
 	props: PolymorphicProps<T, ToggleGroupItemProps>,
 ) {
-	const [local, rest] = splitProps(props as any, ["class", "children", "value"]);
+	const [local, rest] = splitProps(props as any, [
+		"class",
+		"children",
+		"value",
+		"size",
+		"icon_only",
+		"aria-label",
+		"style",
+	]);
 	return (
 		<ToggleGroupPrimitive.Item
 			value={local.value}
-			aria-label={local.value}
-			class={clsx(styles["toggle-group__item"], local.class)}
+			aria-label={local["aria-label"] ?? local.value}
+			class={clsx(
+				"v-toggle-group__item",
+				styles["toggle-group__item"],
+				styles[`toggle-group__item--${local.size || "md"}`],
+				local.icon_only ? styles["toggle-group__item--icon-only"] : "",
+				local.class,
+			)}
+			style={local.style}
 			{...rest}
 		>
 			{local.children}

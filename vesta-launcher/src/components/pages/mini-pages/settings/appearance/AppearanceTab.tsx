@@ -263,10 +263,10 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 								}
 							}}
 						>
-							<ToggleGroupItem value="grid" title="Grid view" aria-label="Grid view">
+							<ToggleGroupItem value="grid" icon_only={true} title="Grid view" aria-label="Grid view">
 								<GridIcon class={styles["theme-toolbar-icon"]} />
 							</ToggleGroupItem>
-							<ToggleGroupItem value="list" title="List view" aria-label="List view">
+							<ToggleGroupItem value="list" icon_only={true} title="List view" aria-label="List view">
 								<ListIcon class={styles["theme-toolbar-icon"]} />
 							</ToggleGroupItem>
 						</ToggleGroup>
