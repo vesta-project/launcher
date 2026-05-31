@@ -1,4 +1,5 @@
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import { invoke } from "@tauri-apps/api/core";
 import {
 	NumberField,
@@ -48,6 +49,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 
 	return (
 		<div class={styles["settings-tab-content"]}>
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard header="Accessibility">
 				{/*TODO: Turn a model like this into a component*/}
 				{osReducedMotion() && (
@@ -230,6 +232,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					}}
 				/>
 			</SettingsCard>
+			</div>
 		</div>
 	);
 }

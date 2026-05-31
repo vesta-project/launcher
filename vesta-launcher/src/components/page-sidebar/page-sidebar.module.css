@@ -65,8 +65,10 @@
 	opacity: 1;
 }
 
+/* Horizontal gutters are owned by tab wrappers via --page-gutter-x, not this container. */
 .content {
 	flex: 1;
+	min-height: 0;
 	overflow-y: auto;
 	overflow-x: hidden;
 	display: flex;

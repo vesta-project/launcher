@@ -1,4 +1,5 @@
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import Button from "@ui/button/button";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
@@ -197,7 +198,8 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 	};
 
 	return (
-		<div class={styles["settings-tab-content"]}>
+		<div class={`${styles["settings-tab-content"]} ${styles["settings-tab-content--wide"]}`}>
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard>
 				<div class={styles["theme-toolbar"]}>
 					<Button
@@ -608,6 +610,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 					)}
 				</For>
 			</Show>
+			</div>
 		</div>
 	);
 }

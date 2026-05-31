@@ -87,6 +87,14 @@ body {
 	--button-border-width: 1px;
 	--border-radius-main: 12px;
 
+	/* Page layout (settings, instance-details tabs) */
+	--page-gutter-x: 24px;
+	--page-gutter-bottom: 24px;
+	--page-content-max: 960px;
+	--page-content-max-wide: 1200px;
+	--page-panel-radius: 12px;
+	--page-hero-radius: 16px;
+
 	/* Text Colors */
 	--text-primary: hsl(var(--color__primary-hue) 5% var(--lightness-text-primary));
 	--text-secondary: hsl(var(--color__primary-hue) 5% var(--lightness-text-secondary));

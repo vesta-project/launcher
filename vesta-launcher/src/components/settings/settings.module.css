@@ -1,9 +1,17 @@
+.settings-panel {
+	background: var(--card-background);
+	border: 1px solid var(--border-subtle);
+	border-radius: var(--page-panel-radius);
+	overflow: hidden;
+	width: 100%;
+}
+
 .settings-card {
-	padding: 16px;
+	padding: 20px 24px;
 	margin-bottom: 0;
 	background: transparent;
 	border: none;
-	border-bottom: 1px solid var(--border-subtle);
+	border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
 	border-radius: 0;
 	box-shadow: none;
 	flex-shrink: 0;

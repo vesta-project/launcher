@@ -33,14 +33,33 @@
     }
 }
 
-.settings-tab-content {
+.tabs-content {
+	display: flex;
+	flex-direction: column;
 	flex: 1;
+	min-height: 0;
+	width: 100%;
+}
+
+.settings-tab-content {
 	display: flex;
 	flex-direction: column;
 	gap: 0;
-	padding-bottom: 40px;
-	overflow-y: auto;
-	overflow-x: clip;
+	padding: 16px var(--page-gutter-x) var(--page-gutter-bottom);
+	max-width: var(--page-content-max);
+	width: 100%;
+	margin-inline: auto;
+	box-sizing: border-box;
+}
+
+.settings-tab-content--fill {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.settings-tab-content--wide {
+	max-width: var(--page-content-max-wide);
 }
 
 .settings-section {
@@ -64,7 +83,8 @@
 
 .theme-preset-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
+    justify-content: start;
     gap: 16px;
     margin-top: 8px;
     overflow-x: clip;
@@ -254,7 +274,8 @@
 
 .java-options-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 320px));
+    justify-content: start;
     gap: 12px;
 }
 

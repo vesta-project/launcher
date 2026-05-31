@@ -1,5 +1,6 @@
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import {
@@ -13,8 +14,8 @@ import {
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
 import { Show } from "solid-js";
-import styles from "../instance-details.module.css";
 import { ModpackVersionSelector } from "../modpack-version-selector";
+import styles from "./versioning-tab.module.css";
 
 interface VersioningTabProps {
 	instance: any;
@@ -98,61 +99,56 @@ export const VersioningTab = (props: VersioningTabProps) => {
 
 	return (
 		<div class={styles["tab-versioning"]}>
-			<Show when={inst().modpackId}>
-				<SettingsCard
-					header="Modpack Version"
-					subHeader={`Project ID: ${inst().modpackId}`}
-					variant="bordered"
-				>
-					<div class={styles["modpack-hero"]} onClick={navigateToModpack}>
-						<div class={styles["modpack-hero-icon-container"]}>
-							<ResourceAvatar
-								icon={inst().modpackIconUrl}
-								name={inst().name}
-								class={styles["modpack-hero-icon"]}
+			<div class={panelStyles["settings-panel"]}>
+				<Show when={inst().modpackId}>
+					<SettingsCard header="Modpack Version" subHeader={`Project ID: ${inst().modpackId}`}>
+						<div class={styles["versioning-stack"]}>
+							<div class={styles["modpack-hero"]} onClick={navigateToModpack}>
+								<div class={styles["modpack-hero-icon-container"]}>
+									<ResourceAvatar
+										icon={inst().modpackIconUrl}
+										name={inst().name}
+										class={styles["modpack-hero-icon"]}
+									/>
+								</div>
+								<div class={styles["modpack-hero-info"]}>
+									<div class={styles["modpack-hero-header"]}>
+										<h3 class={styles["modpack-hero-title"]}>{inst().name}</h3>
+										<Button
+											variant="ghost"
+											size="sm"
+											onClick={(e: MouseEvent) => {
+												e.stopPropagation();
+												props.handleUnlink();
+											}}
+										>
+											Unlink
+										</Button>
+									</div>
+									<p class={styles["modpack-hero-subtitle"]}>
+										{inst().modpackPlatform === "modrinth" ? "Modrinth" : "CurseForge"} •{" "}
+										{inst().minecraftVersion}
+									</p>
+								</div>
+							</div>
+
+							<ModpackVersionSelector
+								versions={props.modpackVersions()}
+								loading={props.modpackVersions.loading}
+								currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
+								onVersionSelect={props.handleModpackVersionSelect}
+								onUpdate={props.rolloutModpackUpdate}
+								disabled={props.busy || props.isInstalling || props.isGuest}
 							/>
 						</div>
-						<div class={styles["modpack-hero-info"]}>
-							<div class={styles["modpack-hero-header"]}>
-								<h3 class={styles["modpack-hero-title"]}>{inst().name}</h3>
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={(e: MouseEvent) => {
-										e.stopPropagation();
-										props.handleUnlink();
-									}}
-								>
-									Unlink
-								</Button>
-							</div>
-							<p class={styles["modpack-hero-subtitle"]}>
-								{inst().modpackPlatform === "modrinth" ? "Modrinth" : "CurseForge"} •{" "}
-								{inst().minecraftVersion}
-							</p>
-						</div>
-					</div>
+					</SettingsCard>
+				</Show>
 
-					<ModpackVersionSelector
-						versions={props.modpackVersions()}
-						loading={props.modpackVersions.loading}
-						currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
-						onVersionSelect={props.handleModpackVersionSelect}
-						onUpdate={props.rolloutModpackUpdate}
-						disabled={props.busy || props.isInstalling || props.isGuest}
-					/>
-				</SettingsCard>
-			</Show>
-
-			<Show when={!inst().modpackId}>
-				<SettingsCard
-					header="Core Configuration"
-					subHeader="Define the Minecraft version and modloader for this instance."
-					variant="bordered"
-				>
-					<div class={styles["versioning-game-options"]}>
-						<div class={styles["versioning-section-title"]}>Game Options</div>
-
+				<Show when={!inst().modpackId}>
+					<SettingsCard
+						header="Core Configuration"
+						subHeader="Define the Minecraft version and modloader for this instance."
+					>
 						<SettingsField
 							label="Modloader"
 							description="Choose between Vanilla, Forge, Fabric, or others."
@@ -277,72 +273,72 @@ export const VersioningTab = (props: VersioningTabProps) => {
 								</Button>
 							</div>
 						</Show>
-					</div>
-				</SettingsCard>
-			</Show>
-
-			<SettingsCard header="General Operations">
-				<SettingsField
-					label="Export Instance"
-					description="Pack this instance into a file for sharing or backup."
-					actionLabel="Export..."
-					onAction={() => props.setShowExportDialog(true)}
-					disabled={props.isGuest}
-				/>
-				<SettingsField
-					label="Duplicate Instance"
-					description="Create an exact clone of this instance."
-					actionLabel="Duplicate"
-					onAction={props.handleDuplicate}
-				/>
-				<SettingsField
-					label={inst().modpackId ? "Repair Files" : "Repair Instance"}
-					description={
-						inst().modpackId
-							? "Verify all modpack assets and re-download missing files."
-							: "Force a re-check of all files and re-download any missing components."
-					}
-					actionLabel="Repair"
-					onAction={() => props.repairInstance(inst().id)}
-				/>
-			</SettingsCard>
-
-			<SettingsCard header="Danger Zone" destructive>
-				<Show when={inst().modpackId}>
-					<SettingsField
-						label="Unlink Connection"
-						description="Disconnect from the source to manage files manually. This is irreversible."
-						actionLabel="Unlink"
-						destructive
-						onAction={props.handleUnlink}
-						disabled={props.busy || props.isInstalling || props.isGuest}
-					/>
+					</SettingsCard>
 				</Show>
-				<SettingsField
-					label="Hard Reset"
-					description={
-						<span>
-							Reinstalls the game from scratch. This <strong>permanently deletes</strong> your worlds,
-							configs, and screenshots!
-						</span>
-					}
-					actionLabel="Reset"
-					destructive
-					onAction={props.handleHardReset}
-				/>
-				<SettingsField
-					label="Uninstall Instance"
-					description={
-						<span>
-							Remove this instance and all its files from your computer. This action is{" "}
-							<strong>permanent and irreversible</strong>.
-						</span>
-					}
-					actionLabel="Uninstall"
-					destructive
-					onAction={props.handleUninstall}
-				/>
-			</SettingsCard>
+
+				<SettingsCard header="General Operations">
+					<SettingsField
+						label="Export Instance"
+						description="Pack this instance into a file for sharing or backup."
+						actionLabel="Export..."
+						onAction={() => props.setShowExportDialog(true)}
+						disabled={props.isGuest}
+					/>
+					<SettingsField
+						label="Duplicate Instance"
+						description="Create an exact clone of this instance."
+						actionLabel="Duplicate"
+						onAction={props.handleDuplicate}
+					/>
+					<SettingsField
+						label={inst().modpackId ? "Repair Files" : "Repair Instance"}
+						description={
+							inst().modpackId
+								? "Verify all modpack assets and re-download missing files."
+								: "Force a re-check of all files and re-download any missing components."
+						}
+						actionLabel="Repair"
+						onAction={() => props.repairInstance(inst().id)}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header="Danger Zone" destructive>
+					<Show when={inst().modpackId}>
+						<SettingsField
+							label="Unlink Connection"
+							description="Disconnect from the source to manage files manually. This is irreversible."
+							actionLabel="Unlink"
+							destructive
+							onAction={props.handleUnlink}
+							disabled={props.busy || props.isInstalling || props.isGuest}
+						/>
+					</Show>
+					<SettingsField
+						label="Hard Reset"
+						description={
+							<span>
+								Reinstalls the game from scratch. This <strong>permanently deletes</strong> your worlds,
+								configs, and screenshots!
+							</span>
+						}
+						actionLabel="Reset"
+						destructive
+						onAction={props.handleHardReset}
+					/>
+					<SettingsField
+						label="Uninstall Instance"
+						description={
+							<span>
+								Remove this instance and all its files from your computer. This action is{" "}
+								<strong>permanent and irreversible</strong>.
+							</span>
+						}
+						actionLabel="Uninstall"
+						destructive
+						onAction={props.handleUninstall}
+					/>
+				</SettingsCard>
+			</div>
 		</div>
 	);
 };

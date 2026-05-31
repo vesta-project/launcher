@@ -1635,26 +1635,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 								handleDebugToggle={handleDebugToggle}
 								handleOpenAppSettingsLocation={handleOpenAppData}
 								handleOpenRuntimeStorageLocation={handleOpenRuntimeStorageLocation}
+								navigate={(path: string) => activeRouter()?.navigate(path)}
 							/>
 						</Suspense>
-						<div class={styles["settings-tab-content"]}>
-							<SettingsCard header="Navigation Test">
-								<div style="display: flex; gap: 12px; flex-wrap: wrap;">
-									<LauncherButton onClick={() => activeRouter()?.navigate("/install")}>
-										Navigate to Install
-									</LauncherButton>
-									<LauncherButton onClick={() => activeRouter()?.navigate("/file-drop")}>
-										Navigate to File Drop Test
-									</LauncherButton>
-									<LauncherButton onClick={() => activeRouter()?.navigate("/task-test")}>
-										Navigate to Task System Test
-									</LauncherButton>
-									<LauncherButton onClick={() => activeRouter()?.navigate("/notification-test")}>
-										Navigate to Notification Test
-									</LauncherButton>
-								</div>
-							</SettingsCard>
-						</div>
 					</TabsContent>
 				</PageSidebar>
 			</Show>
