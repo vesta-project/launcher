@@ -1,206 +1,209 @@
 .settings-panel {
-	background: var(--card-background);
-	border: 1px solid var(--border-subtle);
-	border-radius: var(--page-panel-radius);
-	overflow: hidden;
-	width: 100%;
+    background: var(--card-background);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--page-panel-radius);
+    overflow: hidden;
+    width: 100%;
 }
 
 .settings-card {
-	padding: 20px 24px;
-	margin-bottom: 0;
-	background: transparent;
-	border: none;
-	border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
-	border-radius: 0;
-	box-shadow: none;
-	flex-shrink: 0;
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	max-width: 100%;
-	box-sizing: border-box;
+    padding: 20px 24px;
+    margin-bottom: 0;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid
+        color-mix(in srgb, var(--border-subtle) 50%, transparent);
+    border-radius: 0;
+    box-shadow: none;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
 }
 
 .settings-card:last-child {
-	border-bottom: none;
+    border-bottom: none;
 }
 
 .settings-card--destructive {
-	border-color: var(--destructive);
-	background: var(--destructive-5);
-	border-bottom: none;
+    border-color: var(--destructive);
+    background: var(--destructive-5);
+    border-bottom: none;
 }
 
 .settings-card--compact {
-	padding: 8px 0;
-	border-bottom: none;
+    padding: 8px 0;
+    border-bottom: none;
 }
 
 .settings-card--transparent {
-	background: transparent;
-	backdrop-filter: none;
-	border-bottom: none;
-	padding: 0;
-	box-shadow: none;
+    background: transparent;
+    backdrop-filter: none;
+    border-bottom: none;
+    padding: 0;
+    box-shadow: none;
 }
 
 .settings-card--bordered {
-	background: var(--surface-overlay);
-	border: var(--border-width-subtle) solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
-	border-bottom: var(--border-width-subtle) solid color-mix(in srgb, var(--accent-primary) 35%, transparent);
-	box-shadow: none;
+    background: var(--surface-overlay);
+    border: var(--border-width-subtle) solid
+        color-mix(in srgb, var(--accent-primary) 35%, transparent);
+    border-bottom: var(--border-width-subtle) solid
+        color-mix(in srgb, var(--accent-primary) 35%, transparent);
+    box-shadow: none;
 }
 
 .settings-card-header {
-	margin-bottom: 14px;
-	width: 100%;
-	display: flex;
-	flex-direction: column;
-	align-items: flex-start;
+    margin-bottom: 14px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
 }
 
 .settings-card-header--compact {
-	margin-bottom: 6px;
+    margin-bottom: 6px;
 }
 
 .settings-card-header--top {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	width: 100%;
-	justify-content: flex-start;
-	min-height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    justify-content: flex-start;
+    min-height: 20px;
 }
 
 .settings-card-title {
-	font-size: var(--font-medium);
-	font-weight: 700;
-	margin: 0;
-	color: var(--text-primary);
-	text-align: left;
-	line-height: 1.2;
-	letter-spacing: 0.01em;
+    font-size: var(--font-medium);
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+    text-align: left;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
 }
 
 .settings-card-subheader {
-	font-size: var(--font-xxsmall);
-	color: var(--text-secondary);
-	opacity: 0.7;
-	margin-top: 2px;
-	line-height: 1.3;
-	text-align: left;
+    font-size: var(--font-xxsmall);
+    color: var(--text-secondary);
+    opacity: 0.7;
+    margin-top: 2px;
+    line-height: 1.3;
+    text-align: left;
 }
 
 .settings-card-content {
-	display: flex;
-	flex-direction: column;
+    display: flex;
+    flex-direction: column;
 }
 
 .settings-field {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-	padding: 10px 0;
-	width: 100%;
-	box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 10px 0;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .settings-field--disabled {
-	opacity: 0.5;
-	pointer-events: none;
+    opacity: 0.5;
+    pointer-events: none;
 }
 
 .disabled {
-	opacity: 0.6;
-	pointer-events: none;
+    opacity: 0.6;
+    pointer-events: none;
 }
 
 .settings-field-header {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 1rem;
-	width: 100%;
-	min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    width: 100%;
+    min-width: 0;
 }
 
 .settings-field-info {
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-	flex: 1;
-	min-width: 0;
-	text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    min-width: 0;
+    text-align: left;
 }
 
 .settings-field-label-wrapper {
-	display: flex;
-	align-items: center;
-	min-height: 24px;
-	text-align: left;
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+    text-align: left;
 }
 
 .settings-field-label {
-	font-size: var(--font-xsmall);
-	font-weight: 500;
-	color: var(--text-primary);
-	text-align: left;
+    font-size: var(--font-small);
+    font-weight: 500;
+    color: var(--text-primary);
+    text-align: left;
 }
 
 .settings-field-description {
-	font-size: var(--font-xsmall);
-	color: var(--text-secondary);
-	opacity: 0.8;
-	line-height: 1.4;
-	margin-top: 2px;
-	text-align: left;
+    font-size: var(--font-xsmall);
+    color: var(--text-secondary);
+    opacity: 0.8;
+    line-height: 1.4;
+    margin-top: 2px;
+    text-align: left;
 }
 
 .settings-field-header-right {
-	display: flex;
-	align-items: center;
-	justify-content: flex-end;
-	gap: 8px;
-	flex-shrink: 0;
-	min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-shrink: 0;
+    min-width: 0;
 }
 
 .settings-field-header-right > * {
-	min-width: 0;
+    min-width: 0;
 }
 
 .settings-field-body {
-	display: flex;
-	flex-direction: column;
-	gap: 8px;
-	width: 100%;
-	align-items: stretch;
-	min-width: 0;
-	--combobox-control-width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+    align-items: stretch;
+    min-width: 0;
+    --combobox-control-width: 100%;
 }
 
 .settings-field-body > * {
-	width: 100%;
-	min-width: 0;
+    width: 100%;
+    min-width: 0;
 }
 
 @media (max-width: 800px) {
-	.settings-field {
-		gap: 12px;
-	}
+    .settings-field {
+        gap: 12px;
+    }
 
-	.settings-field-header {
-		align-items: flex-start;
-		flex-wrap: wrap;
-		row-gap: 8px;
-	}
+    .settings-field-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+        row-gap: 8px;
+    }
 
-	.settings-field-header-right {
-		margin-left: auto;
-	}
+    .settings-field-header-right {
+        margin-left: auto;
+    }
 
-	.settings-field-label-wrapper {
-		min-height: 0;
-	}
+    .settings-field-label-wrapper {
+        min-height: 0;
+    }
 }

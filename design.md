@@ -104,12 +104,12 @@ All colors derive from a configurable `--color__primary-hue` (default **180 / te
 ### Sizing
 | Token | Size | Usage |
 |---|---|---|
-| `--font-xxsmall` | 0.75rem (12px) | Labels, timestamps |
-| `--font-xsmall` | 0.85rem (13.6px) | Secondary text, dropdown items |
-| `--font-small` | 1rem (16px) | Body, card titles |
-| `--font-medium` | 1.25rem (20px) | Section headings |
-| `--font-large` | 2rem (32px) | Large headings |
-| `--font-xlarge` | 4rem (64px) | Hero/display text |
+| `--font-xxsmall` | 0.75rem | Labels, timestamps |
+| `--font-xsmall` | 0.9rem | Secondary text, dropdown items |
+| `--font-small` | 0.95rem | Body, card titles |
+| `--font-medium` | 1.15rem | Section headings |
+| `--font-large` | 1.5rem | Large headings |
+| `--font-xlarge` | 2rem | Hero/display text |
 
 ### Weights
 - **400–500:** Body, tab labels
