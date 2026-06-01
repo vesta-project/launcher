@@ -172,7 +172,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 				</header>
 			</Show>
 
-			<main class={styles["page-viewer-content"]}>
+			<main class={styles["page-viewer-content"]} data-page-scroll-container>
 				<Show when={isReloading()}>
 					<div class={styles["page-viewer-reload-overlay"]}>
 						<div class={styles["page-viewer-reload-spinner"]} />

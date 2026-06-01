@@ -144,10 +144,11 @@ class MiniRouter {
 				setHistoryFuture(value);
 			},
 			push: (entry: HistoryEntry) => {
-				if (this.currentPath.get() !== "") {
+				const previousPath = this.currentPath.get();
+				if (previousPath !== "") {
 					const newPast = [...getHistoryPast()];
 					newPast.push({
-						path: this.currentPath.get(),
+						path: previousPath,
 						params: this.currentParams.get(),
 						props: this.getSnapshot(), // Use snapshot to capture live state
 					});
@@ -156,7 +157,10 @@ class MiniRouter {
 				setCurrentPath(entry.path);
 				setCurrentParams(entry.params);
 				setCurrentPathProps(entry.props);
-				setCustomName(null);
+				// Only clear custom name when navigating to a different path (don't clear on tab/query pushes)
+				if (entry.path !== previousPath) {
+					setCustomName(null);
+				}
 			},
 			clear: () => {
 				setHistoryPast([]);
