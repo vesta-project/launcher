@@ -83,8 +83,10 @@
 
 .theme-preset-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
-    justify-content: start;
+    /* Allow cards to flexibly fill available space but remain small when stacked.
+       Auto-fit + minmax lets cards be full-width on narrow screens and form multiple
+       compact columns on wider viewports without imposing a fixed max width. */
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
     margin-top: 8px;
     overflow-x: clip;
