@@ -168,6 +168,14 @@
 .details-play-button[data-color="destructive"] {
     --button-color: var(--destructive);
     background-color: var(--destructive) !important;
+    box-shadow: 0 4px 20px
+        color-mix(in srgb, var(--destructive) 20%, transparent);
+}
+
+.details-play-button[data-color="destructive"]:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px
+        color-mix(in srgb, var(--destructive) 30%, transparent);
 }
 
 .instance-details-header.shrunk .details-play-button {
@@ -2334,7 +2342,9 @@
     background: transparent;
     color: var(--text-tertiary);
     cursor: default;
-    transition: background-color 150ms ease, color 150ms ease;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
     outline: none;
 }
 
@@ -2374,7 +2384,11 @@
 
 .row-actions-separator {
     height: 1px;
-    background-color: color-mix(in srgb, var(--border-subtle) 30%, transparent) !important;
+    background-color: color-mix(
+        in srgb,
+        var(--border-subtle) 30%,
+        transparent
+    ) !important;
     margin: 4px 8px;
 }
 
