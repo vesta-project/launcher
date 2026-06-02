@@ -3,12 +3,10 @@ import { invoke } from "@tauri-apps/api/core";
 import {
 	getCanonicalBackStep,
 	getNextOnboardingStep,
-	isGuestOrDemoAccountType,
 	isSkippableAuthenticatedAccount,
 	normalizeOnboardingStep,
 	ONBOARDING_STEP,
 	type OnboardingStep,
-	shouldRecoverLegacyGuestCompletion,
 } from "../init-flow";
 
 type NavigationDirection = "forward" | "backward" | "direct";

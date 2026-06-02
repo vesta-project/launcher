@@ -1,4 +1,3 @@
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import Button from "@ui/button/button";
 import { TextFieldInput, TextFieldLabel, TextFieldRoot } from "@ui/text-field/text-field";
 import { createInstance, DEFAULT_ICONS, getStableIconId, installInstance, type Instance, type CreateInstanceData } from "@utils/instances";

@@ -362,7 +362,7 @@ const SLIDES: Slide[] = [
 
 function LearnStep(props: LearnStepProps) {
   const [currentSlide, setCurrentSlide] = createSignal(0);
-  const [direction, setDirection] = createSignal<"left" | "right">("right");
+  const [, setDirection] = createSignal<"left" | "right">("right");
 
   const goForward = () => {
     if (currentSlide() < SLIDES.length - 1) {
