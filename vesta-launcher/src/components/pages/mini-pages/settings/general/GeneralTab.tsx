@@ -1,6 +1,28 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
-import { invoke } from "@tauri-apps/api/core";
+import {
+	autoInstallDependencies,
+	autostartEnabled,
+	closeToTray,
+	discordPresenceEnabled,
+	getCacheSizeDisplay,
+	handleAutoInstallDepsToggle,
+	handleAutostartToggle,
+	handleClearCache,
+	handleCloseToTrayToggle,
+	handleDiscordToggle,
+	handleGpuToggle,
+	handleMaxDownloadThreadsChange,
+	handleOpenAppData,
+	handleReducedMotionToggle,
+	handleShowTrayIconToggle,
+	handleTelemetryToggle,
+	maxDownloadThreads,
+	reducedMotion,
+	showTrayIcon,
+	telemetryEnabled,
+	useDedicatedGpu,
+} from "@stores/settings";
 import {
 	NumberField,
 	NumberFieldDecrementTrigger,
@@ -9,41 +31,18 @@ import {
 	NumberFieldInput,
 } from "@ui/number-field/number-field";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
-import { hasTauriRuntime } from "@utils/tauri-runtime";
+import { invoke } from "@tauri-apps/api/core";
+import { router } from "@components/page-viewer/page-viewer";
 import { createEffect, createSignal } from "solid-js";
 import styles from "../settings-page.module.css";
 
-interface GeneralSettingsTabProps {
-	reducedMotion: boolean;
-	handleReducedMotionToggle: (checked: boolean) => void;
-	discordPresenceEnabled: boolean;
-	handleDiscordToggle: (checked: boolean) => void;
-	telemetryEnabled: boolean;
-	handleTelemetryToggle: (checked: boolean) => void;
-	autoInstallDependencies: boolean;
-	handleAutoInstallDepsToggle: (checked: boolean) => void;
-	maxDownloadThreads: number;
-	setMaxDownloadThreads: (val: number) => void;
-	handleOpenAppData: () => void;
-	cacheSizeValue: string;
-	handleClearCache: () => void;
-	showTrayIcon: boolean;
-	handleShowTrayIconToggle: (checked: boolean) => void;
-	closeToTray: boolean;
-	handleCloseToTrayToggle: (checked: boolean) => void;
-	autostartEnabled: boolean;
-	handleAutostartToggle: (checked: boolean) => void;
-	navigateToImporter: () => void;
-}
-
-export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
+export function GeneralSettingsTab() {
 	const privacyPolicyUrl =
 		"https://github.com/vesta-project/launcher/blob/main/docs/legal/PRIVACY_POLICY.md";
 
 	const [osReducedMotion, setOsReducedMotion] = createSignal(false);
 
 	createEffect(() => {
-		// Check if OS has reduced motion enabled
 		setOsReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 	});
 
@@ -51,7 +50,6 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard header="Accessibility">
-				{/*TODO: Turn a model like this into a component*/}
 				{osReducedMotion() && (
 					<div
 						style={{
@@ -74,7 +72,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Reduced Motion"
 					description="Disable UI animations for a faster and cleaner experience."
 					headerRight={
-						<Switch checked={props.reducedMotion} onCheckedChange={props.handleReducedMotionToggle}>
+						<Switch checked={reducedMotion()} onCheckedChange={handleReducedMotionToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -95,7 +93,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 						</>
 					}
 					headerRight={
-						<Switch checked={props.telemetryEnabled} onCheckedChange={props.handleTelemetryToggle}>
+						<Switch checked={telemetryEnabled()} onCheckedChange={handleTelemetryToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -106,7 +104,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Discord Rich Presence"
 					description="Show your current game and status on Discord."
 					headerRight={
-						<Switch checked={props.discordPresenceEnabled} onCheckedChange={props.handleDiscordToggle}>
+						<Switch checked={discordPresenceEnabled()} onCheckedChange={handleDiscordToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -115,14 +113,28 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 				/>
 			</SettingsCard>
 
-			<SettingsCard header="Resources">
+			<SettingsCard header="Performance" subHeader="Optimization settings for game performance.">
+				<SettingsField
+					label="Use Dedicated GPU"
+					description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
+					headerRight={
+						<Switch checked={useDedicatedGpu()} onCheckedChange={handleGpuToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					}
+				/>
+			</SettingsCard>
+
+				<SettingsCard header="Resources">
 				<SettingsField
 					label="Automatically Install Dependencies"
 					description="Automatically download and install required mods and engines when adding a new resource."
 					headerRight={
 						<Switch
-							checked={props.autoInstallDependencies}
-							onCheckedChange={props.handleAutoInstallDepsToggle}
+							checked={autoInstallDependencies()}
+							onCheckedChange={handleAutoInstallDepsToggle}
 						>
 							<SwitchControl>
 								<SwitchThumb />
@@ -135,16 +147,8 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					description="Number of simultaneous downloads when installing resources."
 					headerRight={
 						<NumberField
-							value={props.maxDownloadThreads}
-							onRawValueChange={async (val) => {
-								props.setMaxDownloadThreads(val);
-								if (hasTauriRuntime()) {
-									await invoke("update_config_field", {
-										field: "max_download_threads",
-										value: val,
-									});
-								}
-							}}
+							value={maxDownloadThreads()}
+							onRawValueChange={(val) => handleMaxDownloadThreadsChange(val)}
 							minValue={1}
 							maxValue={16}
 						>
@@ -163,13 +167,13 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="AppData Directory"
 					description="Open the folder where Vesta Launcher stores its data."
 					actionLabel="Open Folder"
-					onAction={props.handleOpenAppData}
+					onAction={handleOpenAppData}
 				/>
 				<SettingsField
 					label="Clear Cache"
-					description={`Stored data: ${props.cacheSizeValue || "..."}. Clear metadata and temporary files to fix sync issues.`}
+					description={`Stored data: ${getCacheSizeDisplay() || "..."}. Clear metadata and temporary files to fix sync issues.`}
 					actionLabel="Clear Now"
-					onAction={props.handleClearCache}
+					onAction={handleClearCache}
 				/>
 			</SettingsCard>
 
@@ -178,7 +182,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Launch On System Startup"
 					description="Start Vesta Launcher automatically when you sign in."
 					headerRight={
-						<Switch checked={props.autostartEnabled} onCheckedChange={props.handleAutostartToggle}>
+						<Switch checked={autostartEnabled()} onCheckedChange={handleAutostartToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -189,7 +193,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Show Tray Icon"
 					description="Display the launcher icon in the system tray."
 					headerRight={
-						<Switch checked={props.showTrayIcon} onCheckedChange={props.handleShowTrayIconToggle}>
+						<Switch checked={showTrayIcon()} onCheckedChange={handleShowTrayIconToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -200,7 +204,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Close Button Hides To Tray"
 					description="When enabled, clicking the window close button hides the launcher to tray instead of requesting app exit."
 					headerRight={
-						<Switch checked={props.closeToTray} onCheckedChange={props.handleCloseToTrayToggle}>
+						<Switch checked={closeToTray()} onCheckedChange={handleCloseToTrayToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -214,7 +218,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					label="Launcher Import"
 					description="Open the launcher import flow to bring in instances from other launchers."
 					actionLabel="Open Importer"
-					onAction={props.navigateToImporter}
+					onAction={() => router()?.navigate("/install/import")}
 				/>
 				<SettingsField
 					label="Reset Onboarding"
@@ -225,7 +229,7 @@ export function GeneralSettingsTab(props: GeneralSettingsTabProps) {
 					onAction={async () => {
 						try {
 							await invoke("reset_onboarding");
-							window.location.href = "/"; // Force reload to root
+							window.location.href = "/";
 						} catch (e) {
 							console.error("Failed to reset onboarding:", e);
 						}

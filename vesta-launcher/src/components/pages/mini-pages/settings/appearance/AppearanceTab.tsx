@@ -1,11 +1,59 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
+import {
+	backgroundHue,
+	backgroundOpacity,
+	borderThickness,
+	canChangeBorder,
+	canChangeHue,
+	canChangeStyle,
+	filteredThemeCatalog,
+	getThemeSource,
+	gradientEnabled,
+	gradientHarmony,
+	gradientType,
+	grainStrength,
+	handleBackgroundOpacityChange,
+	handleBorderThicknessChange,
+	handleDeleteImportedTheme,
+	handleExportTheme,
+	handleGradientHarmonyChange,
+	handleGradientToggle,
+	handleGradientTypeChange,
+	handleGrainStrengthChange,
+	handleHueChange,
+	handleImportTheme,
+	handleOpacityChange,
+	handlePresetSelect,
+	handleRotationChange,
+	handleStyleModeChange,
+	handleUiChromeModeChange,
+	handleVariableChange,
+	handleWindowEffectChange,
+	hasImportedThemes,
+	opacity,
+	rotation,
+	showAdvancedControls,
+	styleMode,
+	themeFilterMode,
+	themeId,
+	themeSearchQuery,
+	themeViewMode,
+	setThemeFilterMode,
+	setThemeSearchQuery,
+	setThemeViewMode,
+	uiChromeMode,
+	userVariablesSnapshot,
+	windowEffect,
+	windowEffectOptions,
+} from "@stores/settings";
 import Button from "@ui/button/button";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import {
+	getThemeById,
 	type GradientHarmony,
 	isBuiltinThemeId,
 	type StyleMode,
@@ -94,63 +142,15 @@ interface ThemeVariableViewModel {
 	options?: Array<{ label: string; value: string }>;
 }
 
-export interface AppearanceSettingsTabProps {
-	themes: ThemeConfig[];
-	themeId: string;
-	themeSearchQuery: string;
-	onThemeSearchQueryChange: (value: string) => void;
-	themeFilterMode: ThemeFilterMode;
-	onThemeFilterModeChange: (value: ThemeFilterMode) => void;
-	themeViewMode: ThemeViewMode;
-	onThemeViewModeChange: (value: ThemeViewMode) => void;
-	hasImportedThemes: boolean;
-	handleDeleteTheme: (themeId: string) => void;
-	canExportTheme: boolean;
-	handlePresetSelect: (id: string) => void;
-	canChangeHue: boolean;
-	canChangeStyle: boolean;
-	canChangeBorder: boolean;
-	showAdvancedControls: boolean;
-	backgroundHue: number;
-	handleHueChange: (val: number[], live?: boolean) => void;
-	styleMode: StyleMode;
-	handleStyleChange: (mode: StyleMode) => void;
-	opacity: number;
-	handleOpacityChange: (val: number[], live?: boolean) => void;
-	grainStrength: number;
-	handleGrainStrengthChange: (val: number[], live?: boolean) => void;
-	gradientEnabled: boolean;
-	handleGradientToggle: (checked: boolean) => void;
-	gradientType: "linear" | "radial";
-	handleGradientTypeChange: (val: "linear" | "radial") => void;
-	rotation: number;
-	handleRotationChange: (val: number[], live?: boolean) => void;
-	gradientHarmony: GradientHarmony;
-	handleGradientHarmonyChange: (val: GradientHarmony) => void;
-	borderThickness: number;
-	handleBorderThicknessChange: (val: number[], live?: boolean) => void;
-	backgroundOpacity: number;
-	handleBackgroundOpacityChange: (val: number[], live?: boolean) => void;
-	uiChromeMode: UiChromeMode;
-	handleUiChromeModeChange: (mode: UiChromeMode) => void;
-	windowEffect: string;
-	windowEffectOptions: string[];
-	handleWindowEffectChange: (val: string) => void;
-	handleImportTheme: () => void;
-	handleExportTheme: () => void;
-	themeVariables?: ThemeVariableViewModel[];
-	handleVariableChange: (key: string, val: ThemeVariableValue, live?: boolean) => void;
-}
-
-export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
+export function AppearanceSettingsTab() {
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(
-		props.themeSearchQuery.trim().length > 0,
+		themeSearchQuery().trim().length > 0,
 	);
 	let searchInputRef: HTMLInputElement | undefined;
 	let blurTimer: ReturnType<typeof setTimeout> | undefined;
 
 	createEffect(() => {
-		if (props.themeSearchQuery.trim().length > 0) {
+		if (themeSearchQuery().trim().length > 0) {
 			setIsSearchExpanded(true);
 		}
 	});
@@ -167,7 +167,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 	const collapseSearchIfEmpty = () => {
 		if (blurTimer) clearTimeout(blurTimer);
 		blurTimer = setTimeout(() => {
-			if (props.themeSearchQuery.trim().length === 0) {
+			if (themeSearchQuery().trim().length === 0) {
 				setIsSearchExpanded(false);
 			}
 		}, 120);
@@ -219,20 +219,20 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 								searchInputRef = element;
 							}}
 							type="text"
-							value={props.themeSearchQuery}
-							onInput={(event) => props.onThemeSearchQueryChange(event.currentTarget.value)}
+							value={themeSearchQuery()}
+							onInput={(event) => setThemeSearchQuery(event.currentTarget.value)}
 							onBlur={collapseSearchIfEmpty}
 							placeholder="Search themes"
 							class={`${styles["theme-search-input"]} ${styles["theme-search-input--expanded"]}`}
 						/>
 					</Show>
 					<Show when={!isSearchExpanded()}>
-						<Show when={props.hasImportedThemes}>
+						<Show when={hasImportedThemes()}>
 							<ToggleGroup
-								value={props.themeFilterMode}
+								value={themeFilterMode()}
 								onChange={(value) => {
 									if (value) {
-										props.onThemeFilterModeChange(value as ThemeFilterMode);
+										setThemeFilterMode(value as ThemeFilterMode);
 									}
 								}}
 							>
@@ -242,24 +242,24 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 							</ToggleGroup>
 						</Show>
 						<div class={styles["theme-toolbar__spacer"]} />
-						<Button variant="ghost" size="sm" onClick={props.handleImportTheme}>
+						<Button variant="ghost" size="sm" onClick={handleImportTheme}>
 							Import
 						</Button>
-						<Show when={props.canExportTheme}>
+						<Show when={themeId() === "custom"}>
 							<Button
 								variant="ghost"
 								size="sm"
-								onClick={props.handleExportTheme}
+								onClick={handleExportTheme}
 								title="Export current custom theme"
 							>
 								Export
 							</Button>
 						</Show>
 						<ToggleGroup
-							value={props.themeViewMode}
+							value={themeViewMode()}
 							onChange={(value) => {
 								if (value) {
-									props.onThemeViewModeChange(value as ThemeViewMode);
+									setThemeViewMode(value as ThemeViewMode);
 								}
 							}}
 						>
@@ -275,37 +275,37 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				<div
 					class={styles["theme-preset-grid"]}
 					classList={{
-						[styles["theme-preset-grid--list"]]: props.themeViewMode === "list",
+						[styles["theme-preset-grid--list"]]: themeViewMode() === "list",
 					}}
 				>
-					<For each={props.themes}>
+					<For each={filteredThemeCatalog()}>
 						{(theme) => {
 							const source = theme.source ?? (isBuiltinThemeId(theme.id) ? "builtin" : "imported");
 							return (
 								<ThemePresetCard
 									theme={theme}
 									source={source}
-									viewMode={props.themeViewMode}
-									isSelected={props.themeId === theme.id}
+									viewMode={themeViewMode()}
+									isSelected={themeId() === theme.id}
 									isDeletable={source === "imported"}
-									onDelete={() => props.handleDeleteTheme(theme.id)}
-									onClick={() => props.handlePresetSelect(theme.id)}
+									onDelete={() => handleDeleteImportedTheme(theme.id)}
+									onClick={() => handlePresetSelect(theme.id)}
 								/>
 							);
 						}}
 					</For>
 				</div>
-				<Show when={props.themes.length === 0}>
+				<Show when={filteredThemeCatalog().length === 0}>
 					<div class={styles["theme-empty-state"]}>No themes match your current filters.</div>
 				</Show>
 			</SettingsCard>
 
 			<UiChromeModeControl
-				value={props.uiChromeMode}
-				onChange={props.handleUiChromeModeChange}
+				value={uiChromeMode()}
+				onChange={handleUiChromeModeChange}
 			/>
 
-			<Show when={props.canChangeHue}>
+			<Show when={canChangeHue()}>
 				<SettingsCard
 					header="Customize Colors"
 					subHeader="Adjust the primary color hue to personalize your theme."
@@ -316,16 +316,16 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						body={
 							<div class={styles["hue-customization"]}>
 								<Slider
-									value={[props.backgroundHue]}
-									onInput={(val: any) => props.handleHueChange(val, true)}
-									onChange={(val) => props.handleHueChange(val, false)}
+									value={[backgroundHue()]}
+									onInput={(val: any) => handleHueChange(val, true)}
+									onChange={(val) => handleHueChange(val, false)}
 									minValue={0}
 									maxValue={360}
 									step={1}
 									class={styles["slider--hue"]}
 								>
 									<div class={styles["slider__header"]}>
-										<div class={styles["slider__value-label"]}>{props.backgroundHue}°</div>
+										<div class={styles["slider__value-label"]}>{backgroundHue()}°</div>
 									</div>
 									<SliderTrack class={styles["slider-track-hue"]}>
 										<SliderThumb />
@@ -343,13 +343,13 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 					description="OS-native background blur."
 					headerRight={
 						<ToggleGroup
-							value={props.windowEffect || "none"}
+							value={windowEffect() || "none"}
 							onChange={(val) => {
-								if (val) props.handleWindowEffectChange(val as string);
+								if (val) handleWindowEffectChange(val as string);
 							}}
 							style={{ "flex-wrap": "wrap" }}
 						>
-							<For each={props.windowEffectOptions}>
+							<For each={windowEffectOptions()}>
 								{(effect) => (
 									<ToggleGroupItem value={effect}>{getWindowEffectLabel(effect)}</ToggleGroupItem>
 								)}
@@ -362,16 +362,16 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 					description="Lower this value to reveal the native window effect underneath the launcher."
 					body={
 						<Slider
-							value={[props.backgroundOpacity !== undefined ? props.backgroundOpacity : 12]}
-							onInput={(val: any) => props.handleBackgroundOpacityChange(val, true)}
-							onChange={(val) => props.handleBackgroundOpacityChange(val, false)}
+							value={[backgroundOpacity() !== undefined ? backgroundOpacity() : 12]}
+							onInput={(val: any) => handleBackgroundOpacityChange(val, true)}
+							onChange={(val) => handleBackgroundOpacityChange(val, false)}
 							minValue={0}
 							maxValue={100}
 							step={1}
 						>
 							<div class={styles["slider__header"]}>
 								<div class={styles["slider__value-label"]}>
-									{props.backgroundOpacity !== undefined ? props.backgroundOpacity : 12}%
+									{backgroundOpacity() !== undefined ? backgroundOpacity() : 12}%
 								</div>
 							</div>
 							<SliderTrack>
@@ -383,17 +383,17 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 				/>
 			</SettingsCard>
 
-			<Show when={props.showAdvancedControls}>
+			<Show when={showAdvancedControls()}>
 				<SettingsCard header="Advanced Style" subHeader="Fine-tune the visual style and effects.">
-					<Show when={props.canChangeStyle}>
+					<Show when={canChangeStyle()}>
 						<SettingsField
 							label="Material Style"
 							description="Glass keeps depth, Frosted obscures behind-content, Flat removes translucency."
 							headerRight={
 								<ToggleGroup
-									value={props.styleMode}
+									value={styleMode()}
 									onChange={(val) => {
-										if (val) props.handleStyleChange(val as StyleMode);
+										if (val) handleStyleModeChange(val as StyleMode);
 									}}
 								>
 									<ToggleGroupItem value="glass">Glass</ToggleGroupItem>
@@ -409,15 +409,15 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						description="Adjust panel transparency and blur intensity (0 = translucent, 100 = opaque)."
 						body={
 							<Slider
-								value={[props.opacity]}
-								onInput={(val: any) => props.handleOpacityChange(val, true)}
-								onChange={(val) => props.opacity !== val[0] && props.handleOpacityChange(val, false)}
+								value={[opacity()]}
+								onInput={(val: any) => handleOpacityChange(val, true)}
+								onChange={(val) => opacity() !== val[0] && handleOpacityChange(val, false)}
 								minValue={0}
 								maxValue={100}
 								step={1}
 							>
 								<div class={styles["slider__header"]}>
-									<div class={styles["slider__value-label"]}>{props.opacity}%</div>
+									<div class={styles["slider__value-label"]}>{opacity()}%</div>
 								</div>
 								<SliderTrack>
 									<SliderFill />
@@ -427,21 +427,21 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						}
 					/>
 
-					<Show when={props.styleMode !== "flat"}>
+					<Show when={styleMode() !== "flat"}>
 						<SettingsField
 							label="Material Grain"
 							description="Change the intensity of the material texture overlay. Only applies to Glass and Frosted styles."
 							body={
 								<Slider
-									value={[props.grainStrength]}
-									onInput={(val: any) => props.handleGrainStrengthChange(val, true)}
-									onChange={(val) => props.handleGrainStrengthChange(val, false)}
+									value={[grainStrength()]}
+									onInput={(val: any) => handleGrainStrengthChange(val, true)}
+									onChange={(val) => handleGrainStrengthChange(val, false)}
 									minValue={0}
 									maxValue={100}
 									step={1}
 								>
 									<div class={styles["slider__header"]}>
-										<div class={styles["slider__value-label"]}>{props.grainStrength}%</div>
+										<div class={styles["slider__value-label"]}>{grainStrength()}%</div>
 									</div>
 									<SliderTrack>
 										<SliderFill />
@@ -457,8 +457,8 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						description="Enable animated background gradient"
 						headerRight={
 							<Switch
-								checked={props.gradientEnabled ?? false}
-								onCheckedChange={props.handleGradientToggle}
+								checked={gradientEnabled() ?? false}
+								onCheckedChange={handleGradientToggle}
 							>
 								<SwitchControl>
 									<SwitchThumb />
@@ -466,15 +466,15 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 							</Switch>
 						}
 					/>
-					<Show when={props.gradientEnabled}>
+					<Show when={gradientEnabled()}>
 						<SettingsField
 							label="Gradient Type"
 							description="Linear or circular background"
 							headerRight={
 								<ToggleGroup
-									value={props.gradientType ?? "linear"}
+									value={gradientType() ?? "linear"}
 									onChange={(val) => {
-										if (val) props.handleGradientTypeChange(val as "linear" | "radial");
+										if (val) handleGradientTypeChange(val as "linear" | "radial");
 									}}
 								>
 									<ToggleGroupItem value="linear">Linear</ToggleGroupItem>
@@ -488,16 +488,16 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 							description="Angle of the background gradient"
 							body={
 								<Slider
-									value={[props.rotation ?? 135]}
-									onInput={(val: any) => props.handleRotationChange(val, true)}
-									onChange={(val) => props.handleRotationChange(val, false)}
+									value={[rotation() ?? 135]}
+									onInput={(val: any) => handleRotationChange(val, true)}
+									onChange={(val) => handleRotationChange(val, false)}
 									minValue={0}
 									maxValue={360}
 									step={1}
 									class={styles["slider--angle"]}
 								>
 									<div class={styles["slider__header"]}>
-										<div class={styles["slider__value-label"]}>{props.rotation}°</div>
+										<div class={styles["slider__value-label"]}>{rotation()}°</div>
 									</div>
 									<SliderTrack>
 										<SliderFill />
@@ -513,9 +513,9 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 							helpTopic="GRADIENT_HARMONY"
 							headerRight={
 								<ToggleGroup
-									value={props.gradientHarmony ?? "none"}
+									value={gradientHarmony() ?? "none"}
 									onChange={(val) => {
-										if (val) props.handleGradientHarmonyChange(val as GradientHarmony);
+										if (val) handleGradientHarmonyChange(val as GradientHarmony);
 									}}
 								>
 									<ToggleGroupItem value="none">None</ToggleGroupItem>
@@ -527,22 +527,22 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 						/>
 					</Show>
 
-					<Show when={props.canChangeBorder}>
+					<Show when={canChangeBorder()}>
 						<SettingsField
 							label="Border Sharpness"
 							description="Thickness of system borders and separator lines (0-6px)"
 							body={
 								<Slider
-									value={[props.borderThickness ?? 1]}
-									onInput={(val: any) => props.handleBorderThicknessChange(val, true)}
-									onChange={(val) => props.handleBorderThicknessChange(val, false)}
+									value={[borderThickness() ?? 1]}
+									onInput={(val: any) => handleBorderThicknessChange(val, true)}
+									onChange={(val) => handleBorderThicknessChange(val, false)}
 									minValue={0}
 									maxValue={6}
 									step={0.5}
 								>
 									<div class={styles["slider__header"]}>
 										<div class={styles["slider__value-label"]}>
-											{props.borderThickness === 0 ? "None" : `${(props.borderThickness ?? 1).toString()}px`}
+											{borderThickness() === 0 ? "None" : `${(borderThickness() ?? 1).toString()}px`}
 										</div>
 									</div>
 									<SliderTrack>
@@ -555,7 +555,14 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 					</Show>
 				</SettingsCard>
 
-				<For each={props.themeVariables}>
+				<For each={
+					themeId()
+						? getThemeById(themeId())?.variables?.map((variable) => ({
+								...variable,
+								value: userVariablesSnapshot()[variable.key] ?? variable.default,
+							}))
+						: []
+				}>
 					{(group) => (
 						<SettingsCard header={group.name} subHeader={group.description}>
 							<SettingsField
@@ -565,7 +572,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 									group.type === "boolean" ? (
 										<Switch
 											checked={Boolean(group.value)}
-											onCheckedChange={(val: boolean) => props.handleVariableChange(group.key, val)}
+											onCheckedChange={(val: boolean) => handleVariableChange(group.key, val)}
 										>
 											<SwitchControl>
 												<SwitchThumb />
@@ -574,7 +581,7 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 									) : group.type === "select" ? (
 										<ToggleGroup
 											value={String(group.value)}
-											onChange={(val) => val && props.handleVariableChange(group.key, val)}
+											onChange={(val) => val && handleVariableChange(group.key, val)}
 										>
 											<For each={group.options}>
 												{(opt) => <ToggleGroupItem value={opt.value}>{opt.label}</ToggleGroupItem>}
@@ -586,8 +593,8 @@ export function AppearanceSettingsTab(props: AppearanceSettingsTabProps) {
 									group.type === "number" ? (
 										<Slider
 											value={[group.value as number]}
-											onInput={(val: any) => props.handleVariableChange(group.key, val[0], true)}
-											onChange={(val) => props.handleVariableChange(group.key, val[0], false)}
+											onInput={(val: any) => handleVariableChange(group.key, val[0], true)}
+											onChange={(val) => handleVariableChange(group.key, val[0], false)}
 											minValue={group.min ?? 0}
 											maxValue={group.max ?? 100}
 											step={group.step ?? 1}
