@@ -1,46 +1,46 @@
 import { describe, expect, it } from "vitest";
 import {
 	getCanonicalBackStep,
-	getNextInitStep,
-	getPreviousInitStep,
-	INIT_STEPS,
+	getNextOnboardingStep,
+	getPreviousOnboardingStep,
+	ONBOARDING_STEP,
 	isGuestOrDemoAccountType,
 	isSkippableAuthenticatedAccount,
-	normalizeInitStep,
+	normalizeOnboardingStep,
 	shouldRecoverLegacyGuestCompletion,
 } from "./init-flow";
 
 describe("init-flow", () => {
-	it("normalizes invalid step values to welcome", () => {
-		expect(normalizeInitStep(undefined)).toBe(INIT_STEPS.WELCOME);
-		expect(normalizeInitStep("not-a-number")).toBe(INIT_STEPS.WELCOME);
-		expect(normalizeInitStep(-12)).toBe(INIT_STEPS.WELCOME);
+	it("normalizes invalid step values to splash", () => {
+		expect(normalizeOnboardingStep(undefined)).toBe(ONBOARDING_STEP.SPLASH);
+		expect(normalizeOnboardingStep("not-a-number")).toBe(ONBOARDING_STEP.SPLASH);
+		expect(normalizeOnboardingStep(-12)).toBe(ONBOARDING_STEP.SPLASH);
 	});
 
 	it("normalizes out-of-range values to boundaries", () => {
-		expect(normalizeInitStep(999)).toBe(INIT_STEPS.FINISHED);
-		expect(normalizeInitStep(3.9)).toBe(INIT_STEPS.JAVA);
+		expect(normalizeOnboardingStep(999)).toBe(ONBOARDING_STEP.COMPLETE);
+		expect(normalizeOnboardingStep(3.9)).toBe(ONBOARDING_STEP.LEARN);
 	});
 
 	it("returns bounded next and previous steps", () => {
-		expect(getNextInitStep(INIT_STEPS.WELCOME)).toBe(INIT_STEPS.GUIDE);
-		expect(getNextInitStep(INIT_STEPS.FINISHED)).toBe(INIT_STEPS.FINISHED);
+		expect(getNextOnboardingStep(ONBOARDING_STEP.SPLASH)).toBe(ONBOARDING_STEP.CREDITS);
+		expect(getNextOnboardingStep(ONBOARDING_STEP.COMPLETE)).toBe(ONBOARDING_STEP.COMPLETE);
 
-		expect(getPreviousInitStep(INIT_STEPS.LOGIN)).toBe(INIT_STEPS.GUIDE);
-		expect(getPreviousInitStep(INIT_STEPS.WELCOME)).toBe(INIT_STEPS.WELCOME);
+		expect(getPreviousOnboardingStep(ONBOARDING_STEP.AUTH)).toBe(ONBOARDING_STEP.CREDITS);
+		expect(getPreviousOnboardingStep(ONBOARDING_STEP.SPLASH)).toBe(ONBOARDING_STEP.SPLASH);
 	});
 
-	it("routes login back target based on guide visitation", () => {
-		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, false)).toBe(INIT_STEPS.WELCOME);
-		expect(getCanonicalBackStep(INIT_STEPS.LOGIN, true)).toBe(INIT_STEPS.GUIDE);
+	it("routes auth back target based on learn visitation", () => {
+		expect(getCanonicalBackStep(ONBOARDING_STEP.AUTH, false)).toBe(ONBOARDING_STEP.SPLASH);
+		expect(getCanonicalBackStep(ONBOARDING_STEP.AUTH, true)).toBe(ONBOARDING_STEP.LEARN);
 	});
 
 	it("detects stale guest completion states for recovery", () => {
-		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.WELCOME)).toBe(true);
-		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.GUIDE)).toBe(true);
-		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.LOGIN)).toBe(true);
-		expect(shouldRecoverLegacyGuestCompletion(true, INIT_STEPS.JAVA)).toBe(false);
-		expect(shouldRecoverLegacyGuestCompletion(false, INIT_STEPS.LOGIN)).toBe(false);
+		expect(shouldRecoverLegacyGuestCompletion(true, ONBOARDING_STEP.SPLASH)).toBe(true);
+		expect(shouldRecoverLegacyGuestCompletion(true, ONBOARDING_STEP.CREDITS)).toBe(true);
+		expect(shouldRecoverLegacyGuestCompletion(true, ONBOARDING_STEP.AUTH)).toBe(true);
+		expect(shouldRecoverLegacyGuestCompletion(true, ONBOARDING_STEP.THEME)).toBe(false);
+		expect(shouldRecoverLegacyGuestCompletion(false, ONBOARDING_STEP.AUTH)).toBe(false);
 	});
 
 	it("treats guest and demo accounts as non-skippable auth sessions", () => {

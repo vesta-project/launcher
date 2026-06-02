@@ -10,6 +10,7 @@ interface ThemePresetCardProps {
 	isDeletable?: boolean;
 	onDelete?: () => void;
 	onClick: () => void;
+	compact?: boolean;
 }
 
 /**
@@ -32,6 +33,7 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 				classList={{
 					[styles["theme-preset-card--selected"]]: props.isSelected,
 					[styles["theme-preset-card--list"]]: props.viewMode === "list",
+					[styles["theme-preset-card--compact"]]: props.compact,
 				}}
 				onClick={props.onClick}
 				data-preview-style={previewStyle()}
@@ -80,9 +82,11 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 						</div>
 					</Show>
 					<span class={styles["theme-preset-card__name"]}>{props.theme.name}</span>
+				<Show when={!props.compact}>
 					<span class={styles["theme-preset-card__description"]}>
 						{props.theme.author ? `by ${props.theme.author}` : props.theme.description || previewStyle()}
 					</span>
+				</Show>
 				</div>
 			</button>
 			<Show when={props.isDeletable && props.onDelete}>

@@ -1,0 +1,497 @@
+/* Home Intro Overlay */
+.home-intro-overlay {
+	position: fixed;
+	top: 32px;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10000;
+	display: flex;
+	flex-direction: column;
+	pointer-events: none;
+}
+
+.home-intro-backdrop {
+	position: fixed;
+	top: 32px;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0, 0, 0, 0.5);
+	pointer-events: all;
+	transition: background 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.home-intro-backdrop--light {
+	background: rgba(0, 0, 0, 0.03);
+	pointer-events: none;
+}
+
+.home-intro-skip {
+	position: fixed;
+	top: 44px;
+	right: 16px;
+	z-index: 10002;
+	background: var(--bg-glass);
+	backdrop-filter: var(--glass-blur);
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	color: var(--text-primary);
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	opacity: 0.75;
+	transition: opacity 0.2s ease, background 0.2s ease;
+	padding: 8px 14px;
+	border-radius: 8px;
+	pointer-events: all;
+	box-shadow: var(--elevation-subtle);
+}
+
+.home-intro-skip:hover {
+	opacity: 1;
+	background: var(--interactive-base);
+	color: white;
+}
+
+/* Ring Highlight */
+.home-intro-ring {
+	position: fixed;
+	z-index: 10001;
+	border-radius: 14px;
+	border: 2px solid var(--accent-primary);
+	pointer-events: none;
+	animation:
+		ring-enter 0.4s cubic-bezier(0.22, 1, 0.36, 1) both,
+		ring-pulse 1.8s ease-out 0.4s infinite;
+}
+
+@keyframes ring-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.85);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+
+@keyframes ring-pulse {
+	0% {
+		box-shadow:
+			0 0 0 0 hsla(var(--color__primary-hue) 70% 50% / 0.4),
+			inset 0 0 0 0 hsla(var(--color__primary-hue) 70% 50% / 0.1);
+	}
+	70% {
+		box-shadow:
+			0 0 0 12px hsla(var(--color__primary-hue) 70% 50% / 0),
+			inset 0 0 0 4px hsla(var(--color__primary-hue) 70% 50% / 0);
+	}
+	100% {
+		box-shadow:
+			0 0 0 0 hsla(var(--color__primary-hue) 70% 50% / 0),
+			inset 0 0 0 0 hsla(var(--color__primary-hue) 70% 50% / 0);
+	}
+}
+
+/* Tooltip */
+.home-intro-tooltip {
+	position: fixed;
+	z-index: 10003;
+	background: var(--bg-glass);
+	backdrop-filter: var(--glass-blur);
+	border: var(--border-width-strong) solid var(--border-subtle);
+	border-radius: 14px;
+	padding: 20px;
+	max-width: 280px;
+	box-shadow: var(--elevation-strong);
+	pointer-events: all;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.home-intro-tooltip-title {
+	font-size: 16px;
+	font-weight: 700;
+	margin: 0;
+	color: var(--text-primary);
+}
+
+.home-intro-tooltip-desc {
+	font-size: 13px;
+	line-height: 1.5;
+	margin: 0;
+	color: var(--text-primary);
+	opacity: 0.65;
+}
+
+.home-intro-tooltip-btn {
+	width: 100%;
+	height: 40px;
+	background: var(--accent-primary);
+	border: none;
+	border-radius: 10px;
+	color: white;
+	font-size: 14px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: opacity 0.2s ease;
+	margin-top: 4px;
+}
+
+.home-intro-tooltip-btn:hover {
+	opacity: 0.9;
+}
+
+.home-intro-tooltip--enter {
+	animation: tooltip-enter-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.home-intro-tooltip--enter-right {
+	animation: tooltip-enter-right 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes tooltip-enter-up {
+	from {
+		opacity: 0;
+		transform: translateY(16px) scale(0.96);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+@keyframes tooltip-enter-right {
+	from {
+		opacity: 0;
+		transform: translateX(30px) scale(0.94);
+	}
+	to {
+		opacity: 1;
+		transform: translateX(0) scale(1);
+	}
+}
+
+/* Modal */
+.home-intro-modal {
+	position: fixed;
+	top: 32px;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 10003;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	pointer-events: none;
+}
+
+.home-intro-modal-card {
+	background: var(--bg-glass);
+	backdrop-filter: var(--glass-blur);
+	border: var(--border-width-strong) solid var(--border-subtle);
+	border-radius: 20px;
+	padding: 40px;
+	max-width: 400px;
+	width: 90%;
+	text-align: center;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	box-shadow: var(--elevation-strong);
+	pointer-events: all;
+}
+
+.home-intro-modal-card--enter {
+	animation: modal-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes modal-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.9) translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+.home-intro-modal-icon {
+	width: 56px;
+	height: 56px;
+	color: var(--accent-primary);
+}
+
+.home-intro-modal-title {
+	font-size: clamp(22px, 3vh, 28px);
+	font-weight: 800;
+	margin: 0;
+	background: linear-gradient(160deg, var(--text-primary) 20%, var(--primary) 100%);
+	background-clip: text;
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+}
+
+.home-intro-modal-desc {
+	font-size: 14px;
+	line-height: 1.5;
+	margin: 0;
+	color: var(--text-primary);
+	opacity: 0.6;
+	max-width: 320px;
+}
+
+.home-intro-modal-btn {
+	width: 100%;
+	max-width: 240px;
+	height: 44px;
+	background: var(--accent-primary);
+	border: none;
+	border-radius: 12px;
+	color: white;
+	font-size: 15px;
+	font-weight: 700;
+	cursor: pointer;
+	transition: opacity 0.2s ease;
+	margin-top: 4px;
+}
+
+.home-intro-modal-btn:hover {
+	opacity: 0.9;
+}
+
+/* Demo Instance Card — visually identical to real InstanceCard */
+.demo-instance-card {
+	--instance-card-overlay-top: hsl(0 0% 0% / 0.42);
+	--instance-card-overlay-bottom-strong: hsl(0 0% 0% / 0.58);
+	--instance-card-overlay-bottom-soft: hsl(0 0% 0% / 0.24);
+	--instance-card-text-main: hsl(0 0% 98%);
+	--instance-card-text-muted: hsl(0 0% 92% / 0.8);
+	--instance-card-play-surface: hsl(0 0% 100% / 0.1);
+	--instance-card-play-surface-hover: hsl(0 0% 100% / 0.2);
+	--instance-card-glass-border: hsl(0 0% 100% / 0.08);
+	--instance-card-glass-highlight: hsl(0 0% 100% / 0.04);
+
+	padding: 16px;
+	font-weight: bold;
+	font-size: var(--font-small);
+	user-select: none;
+	display: flex;
+	flex-flow: column;
+	justify-content: space-between;
+	position: relative;
+	overflow: hidden;
+	overflow-wrap: break-word;
+	background: none;
+	border: 1px solid var(--instance-card-glass-border);
+	border-radius: 8px;
+	box-shadow:
+		0 2px 6px hsl(0 0% 0% / 0.12),
+		inset 0 1px 0 var(--instance-card-glass-highlight);
+	transition:
+		box-shadow 0.15s ease,
+		transform 0.18s cubic-bezier(0.4, 1, 0.7, 1);
+	will-change: transform, box-shadow;
+	color: var(--instance-card-text-main);
+	text-shadow:
+		0 1px 4px hsl(0 0% 0% / 0.75),
+		0 2px 12px hsl(0 0% 0% / 0.6),
+		0 4px 20px hsl(0 0% 0% / 0.35);
+	width: 100%;
+	aspect-ratio: 1;
+	max-width: 200px;
+	max-height: 200px;
+	cursor: default;
+	animation: demo-card-enter 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes demo-card-enter {
+	from {
+		opacity: 0;
+		transform: scale(0.6) translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1) translateY(0);
+	}
+}
+
+.demo-instance-card::before {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background: linear-gradient(
+		160deg,
+		hsl(0 0% 100% / 0.06) 0%,
+		transparent 40%
+	);
+	pointer-events: none;
+	z-index: 1;
+}
+
+.demo-instance-card::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border-radius: inherit;
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			rgb(175 175 175 / 10%) 0%,
+			rgb(159 159 159 / 10%) 20%,
+			rgb(36 35 35 / 30%) 45.5%,
+			rgb(0 0 0 / 65%) 100%
+		),
+		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+	background-repeat: no-repeat;
+	background-position: center center;
+	background-size: cover;
+	transform: scale(1);
+	transition: transform 0.45s cubic-bezier(0.4, 1, 0.7, 1);
+	will-change: transform;
+	z-index: 0;
+}
+
+.demo-instance-card > * {
+	position: relative;
+	z-index: 2;
+}
+
+.demo-instance-card:hover {
+	box-shadow:
+		0 8px 24px hsl(0 0% 0% / 0.18),
+		inset 0 1px 0 var(--instance-card-glass-highlight);
+	transform: scale(1.03);
+}
+
+.demo-instance-card:hover::after {
+	transform: scale(1.03);
+}
+
+.demo-instance-card__top {
+	display: flex;
+	justify-content: flex-end;
+	align-items: center;
+	background: linear-gradient(
+		to bottom,
+		var(--instance-card-overlay-top) 0%,
+		transparent 100%
+	);
+	padding: 16px;
+	margin: -16px -16px 0 -16px;
+	border-radius: 7px 7px 0 0;
+	min-height: 48px;
+}
+
+.demo-play-button {
+	--liquid-noise-opacity-multiplier: 0.72;
+	height: 36px;
+	width: 36px;
+	border: var(--border-width-subtle) solid var(--border-subtle);
+	border-radius: 8px;
+	padding: 0;
+	background: var(--instance-card-play-surface);
+	backdrop-filter: var(--liquid-backdrop-filter);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	box-shadow:
+		0 4px 6px -1px hsl(0 0% 0% / 0.1),
+		0 2px 4px -1px hsl(0 0% 0% / 0.06);
+	flex-shrink: 0;
+	position: relative;
+	overflow: clip;
+	opacity: 0;
+	transform: scale(0.9);
+	pointer-events: none;
+	line-height: 1;
+	font-size: 0;
+	cursor: default;
+}
+
+.demo-play-button svg {
+	fill: var(--instance-card-text-main);
+	width: 14px;
+	height: 14px;
+	transition: transform 0.2s ease;
+	display: block;
+	flex-shrink: 0;
+}
+
+.demo-instance-card:hover .demo-play-button {
+	opacity: 1;
+	transform: scale(1);
+	pointer-events: none;
+}
+
+.demo-instance-card__bottom {
+	display: flex;
+	flex-flow: column;
+	align-items: flex-start;
+	text-align: left;
+	font-weight: normal;
+	gap: 4px;
+	background: linear-gradient(
+		to top,
+		var(--instance-card-overlay-bottom-strong) 0%,
+		var(--instance-card-overlay-bottom-soft) 52%,
+		transparent 100%
+	);
+	padding: 24px 16px 16px 16px;
+	margin: 0 -16px -16px -16px;
+	border-radius: 0 0 7px 7px;
+}
+
+.demo-instance-card__name {
+	margin: 0;
+	padding: 0;
+	width: 100%;
+	line-height: 1.2;
+	font-weight: 800;
+	font-size: var(--font-small);
+	overflow-wrap: break-word;
+	word-break: break-word;
+	white-space: normal;
+	color: inherit;
+}
+
+.demo-instance-card__meta {
+	display: flex;
+	justify-content: flex-start;
+	align-items: center;
+	gap: 8px;
+	height: fit-content;
+	font-size: var(--font-xxsmall);
+	width: 100%;
+}
+
+.demo-instance-card__meta p {
+	margin: 0;
+	padding: 0;
+	color: var(--instance-card-text-muted);
+}
+
+.demo-modloader-badge {
+	text-transform: capitalize;
+	color: var(--instance-card-text-muted);
+	font-size: var(--font-xxsmall);
+}
+
+/* Light theme overrides for demo cards */
+:root[data-theme="light"] .demo-instance-card {
+	--instance-card-overlay-top: hsl(var(--color__primary-hue) 20% 26% / 0.18);
+	--instance-card-overlay-bottom-strong: hsl(var(--color__primary-hue) 24% 20% / 0.34);
+	--instance-card-overlay-bottom-soft: hsl(var(--color__primary-hue) 20% 30% / 0.12);
+	--instance-card-text-main: hsl(var(--color__primary-hue) 5% 95%);
+	--instance-card-text-muted: hsl(var(--color__primary-hue) 6% 92% / 0.8);
+	--instance-card-play-surface: hsl(var(--color__primary-hue) 14% 22% / 0.42);
+	--instance-card-play-surface-hover: hsl(var(--color__primary-hue) 16% 24% / 0.52);
+	--instance-card-glass-border: hsl(0 0% 100% / 0.12);
+	--instance-card-glass-highlight: hsl(0 0% 100% / 0.06);
+}

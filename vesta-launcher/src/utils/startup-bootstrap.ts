@@ -1,9 +1,9 @@
 import {
-	INIT_STEPS,
-	type InitStep,
+	ONBOARDING_STEP,
+	type OnboardingStep,
 	isGuestOrDemoAccountType,
 	isSkippableAuthenticatedAccount,
-	normalizeInitStep,
+	normalizeOnboardingStep,
 	shouldRecoverLegacyGuestCompletion,
 } from "@components/pages/init/init-flow";
 import { initTheme } from "@components/theming";
@@ -14,7 +14,7 @@ export type StartupTarget = "home" | "init";
 export type StartupAtmosphereState = "active" | "fading" | "off";
 
 export interface InitBootstrapState {
-	initStep: InitStep;
+	initStep: OnboardingStep;
 	loginOnly: boolean;
 	guideVisited: boolean;
 	atmosphereState: StartupAtmosphereState;
@@ -32,8 +32,8 @@ function getForceLoginRequested(): boolean {
 	return searchParams.get("login") === "true";
 }
 
-function resolveAtmosphereState(step: InitStep): StartupAtmosphereState {
-	return step <= INIT_STEPS.APPEARANCE ? "active" : "off";
+function resolveAtmosphereState(step: OnboardingStep): StartupAtmosphereState {
+	return step <= ONBOARDING_STEP.THEME ? "active" : "off";
 }
 
 function isRootPath(pathname: string): boolean {
@@ -68,7 +68,7 @@ export function consumeInitBootstrapState(): InitBootstrapState | null {
 
 interface StartupConfig {
 	setup_completed?: boolean;
-	setup_step?: InitStep | number | null;
+	setup_step?: OnboardingStep | number | null;
 }
 
 interface StartupAccount {
@@ -83,13 +83,13 @@ async function resolveInitStateFromConfigAndAccount(
 	const hasValidAccount = isSkippableAuthenticatedAccount(account);
 	const forceGuestLoginOnly = forceLoginRequested && isGuestOrDemoAccountType(account?.account_type);
 	let setupCompleted = Boolean(config.setup_completed);
-	let setupStep = normalizeInitStep(config.setup_step);
+	let setupStep = normalizeOnboardingStep(config.setup_step);
 
 	if (shouldRecoverLegacyGuestCompletion(setupCompleted, setupStep)) {
 		try {
 			await invoke("reset_onboarding");
 			setupCompleted = false;
-			setupStep = INIT_STEPS.WELCOME;
+			setupStep = ONBOARDING_STEP.SPLASH;
 		} catch (error) {
 			console.error("Failed to recover legacy guest completion state:", error);
 		}
@@ -99,7 +99,7 @@ async function resolveInitStateFromConfigAndAccount(
 		return {
 			target: "init",
 			initState: {
-				initStep: INIT_STEPS.LOGIN,
+				initStep: ONBOARDING_STEP.AUTH,
 				loginOnly: true,
 				guideVisited: false,
 				atmosphereState: "off",
@@ -112,7 +112,7 @@ async function resolveInitStateFromConfigAndAccount(
 			return {
 				target: "home",
 				initState: {
-					initStep: INIT_STEPS.LOGIN,
+					initStep: ONBOARDING_STEP.AUTH,
 					loginOnly: false,
 					guideVisited: false,
 					atmosphereState: "off",
@@ -123,7 +123,7 @@ async function resolveInitStateFromConfigAndAccount(
 		return {
 			target: "init",
 			initState: {
-				initStep: INIT_STEPS.LOGIN,
+				initStep: ONBOARDING_STEP.AUTH,
 				loginOnly: true,
 				guideVisited: false,
 				atmosphereState: "off",
@@ -132,9 +132,9 @@ async function resolveInitStateFromConfigAndAccount(
 	}
 
 	let resumeStep = setupStep;
-	if (resumeStep === INIT_STEPS.LOGIN && hasValidAccount) {
-		resumeStep = INIT_STEPS.JAVA;
-		await invoke("set_setup_step", { step: INIT_STEPS.JAVA });
+	if (resumeStep === ONBOARDING_STEP.AUTH && hasValidAccount) {
+		resumeStep = ONBOARDING_STEP.THEME;
+		await invoke("set_setup_step", { step: ONBOARDING_STEP.THEME });
 	}
 
 	return {
@@ -142,7 +142,7 @@ async function resolveInitStateFromConfigAndAccount(
 		initState: {
 			initStep: resumeStep,
 			loginOnly: false,
-			guideVisited: resumeStep === INIT_STEPS.GUIDE,
+			guideVisited: resumeStep === ONBOARDING_STEP.LEARN,
 			atmosphereState: resolveAtmosphereState(resumeStep),
 		},
 	};
