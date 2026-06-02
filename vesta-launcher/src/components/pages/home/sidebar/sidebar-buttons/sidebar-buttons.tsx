@@ -58,7 +58,7 @@ interface SidebarProfileButtonProps extends SidebarButtonProps {
 
 function SidebarProfileButton(props: SidebarProfileButtonProps) {
 	const c = children(() => props.children);
-	const [_, others] = splitProps(props, ["children", "onAccountMenuToggle", "open"]);
+	const [local, others] = splitProps(props, ["children", "class", "onAccountMenuToggle", "open"]);
 
 	const [avatarTimestamp, setAvatarTimestamp] = createSignal(Date.now());
 
@@ -144,7 +144,7 @@ function SidebarProfileButton(props: SidebarProfileButtonProps) {
 
 	return (
 		<SidebarButton
-			class={styles["sidebar-profile-button"]}
+			class={clsx(styles["sidebar-profile-button"], local.class)}
 			onClick={toggleMenu}
 			style={{
 				"background-image": avatarUrl()
@@ -167,26 +167,13 @@ interface SidebarActionButtonProps extends SidebarButtonProps {}
 
 function SidebarActionButton(props: SidebarActionButtonProps) {
 	const c = children(() => props.children);
-	const [_, others] = splitProps(props, ["children"]);
+	const [local, others] = splitProps(props, ["children", "class"]);
 
 	return (
-		<SidebarButton class={styles["sidebar-action-button"]} {...others}>
+		<SidebarButton class={clsx(styles["sidebar-action-button"], local.class)} {...others}>
 			{c()}
 		</SidebarButton>
 	);
 }
 
-interface SidebarPageButtonProps extends SidebarButtonProps {}
-
-function SidebarPageButton(props: SidebarPageButtonProps) {
-	const c = children(() => props.children);
-	const [_, others] = splitProps(props, ["children"]);
-
-	return (
-		<SidebarButton style={{ background: "green" }} {...others}>
-			{c()}
-		</SidebarButton>
-	);
-}
-
-export { SidebarActionButton, SidebarPageButton, SidebarProfileButton };
+export { SidebarActionButton, SidebarProfileButton };

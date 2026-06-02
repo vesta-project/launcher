@@ -17,7 +17,7 @@ const [router, setRouter] = createRoot(() =>
 	),
 );
 
-function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => void }) {
+function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => void; embedded?: boolean }) {
 	const mini_router = router();
 
 	const onPopOut = () => {
@@ -77,15 +77,22 @@ function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => v
 
 	return (
 		<Show when={props.open !== undefined ? props.open : pageViewerOpen()}>
-			<div class={styles["page-viewer-wrapper"]}>
-				<div class={`${styles["page-viewer-root"]} liquid-glass`}>
+			<div
+				class={styles["page-viewer-wrapper"]}
+				classList={{ [styles["page-viewer-wrapper--embedded"]]: props.embedded }}
+			>
+				<div
+					class={`${styles["page-viewer-root"]}${props.embedded ? "" : " liquid-glass"}`}
+				>
 					<UnifiedPageViewer
 						router={mini_router}
 						onClose={() => {
 							setPageViewerOpen(false);
 							props.viewChanged?.(false);
 						}}
-						onPopOut={onPopOut}
+						hideCloseButton={props.embedded}
+						hideNavbar={props.embedded}
+						onPopOut={props.embedded ? undefined : onPopOut}
 					/>
 				</div>
 			</div>

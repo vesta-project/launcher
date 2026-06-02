@@ -2,7 +2,7 @@ import type { ResourceVersion } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
 import { getModpackInfo, getModpackInfoFromUrl, type ModpackInfo } from "@utils/modpacks";
-import { type Accessor, batch, createEffect, createMemo, createSignal } from "solid-js";
+import { type Accessor, batch, createEffect, createMemo, createSignal, untrack } from "solid-js";
 
 interface UseModpackSourceParams {
 	projectId?: string;
@@ -11,6 +11,8 @@ interface UseModpackSourceParams {
 	projectIcon?: string;
 	projectAuthor?: string;
 	initialVersion?: string;
+	initialVersionNumber?: string;
+	initialMinecraftVersion?: string;
 	initialModloader?: string;
 	initialModloaderVersion?: string;
 	originalIcon?: string;
@@ -38,9 +40,33 @@ export function useModpackSource(params: UseModpackSourceParams) {
 		if (!url && !path) {
 			latestRequestId += 1;
 			setIsFetchingMetadata(false);
-			setModpackInfo(undefined);
+			if (params.projectId || params.projectName) {
+				setModpackInfo({
+					name: params.projectName || "Unknown Modpack",
+					version: params.initialVersionNumber || params.initialVersion || "1.0.0",
+					author: params.projectAuthor || null,
+					description: null,
+					iconUrl: params.projectIcon || null,
+					minecraftVersion: params.initialMinecraftVersion || "",
+					modloader: params.initialModloader || "vanilla",
+					modloaderVersion: null,
+					modCount: 0,
+					format: params.platform || "unknown",
+					modpackId: params.projectId,
+					modpackPlatform: params.platform,
+				});
+			} else {
+				setModpackInfo(undefined);
+			}
 			return;
 		}
+
+		// If modpackInfo was already constructed from project params
+		// (has modpackId set), and the URL/path was set programmatically
+		// by useProjectVersions rather than explicit user input,
+		// skip the download fetch.
+		const currentInfo = untrack(() => modpackInfo());
+		if (currentInfo && currentInfo.modpackId) return;
 
 		const fetchDetails = async () => {
 			const requestId = latestRequestId + 1;
@@ -68,7 +94,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 						author: params.projectAuthor || "",
 						description: null,
 						iconUrl: params.projectIcon || null,
-						minecraftVersion: selectedVer?.game_versions[0] || "",
+						minecraftVersion: selectedVer?.game_versions[0] || params.initialMinecraftVersion || "",
 						modloader: (selectedVer?.loaders[0] as any) || params.initialModloader || "vanilla",
 						modloaderVersion: null,
 						modCount: 0,
@@ -102,8 +128,11 @@ export function useModpackSource(params: UseModpackSourceParams) {
 				filters: [{ name: "Modpack", extensions: ["zip", "mrpack"] }],
 			});
 			if (res && typeof res === "string") {
-				setModpackPath(res);
-				setModpackUrl("");
+				batch(() => {
+					setModpackInfo(undefined);
+					setModpackPath(res);
+					setModpackUrl("");
+				});
 			}
 		} catch (error) {
 			console.error("[InstallPage] Import error:", error);
@@ -113,9 +142,12 @@ export function useModpackSource(params: UseModpackSourceParams) {
 	const handleUrlSubmit = () => {
 		const value = urlInputValue().trim();
 		if (!value) return false;
-		setModpackUrl(value);
-		setModpackPath("");
-		setUrlInputValue("");
+		batch(() => {
+			setModpackInfo(undefined);
+			setModpackUrl(value);
+			setModpackPath("");
+			setUrlInputValue("");
+		});
 		return true;
 	};
 

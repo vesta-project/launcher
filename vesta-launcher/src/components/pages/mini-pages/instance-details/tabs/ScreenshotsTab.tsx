@@ -13,6 +13,7 @@ import {
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
+import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
 import { createResource, createSignal, For, Show, Suspense } from "solid-js";
 import styles from "./ScreenshotsTab.module.css";
@@ -105,22 +106,61 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 		<div class={styles.container}>
 			<div class={styles.toolbar}>
 				<div class={styles.group}>
-					<Button
-						variant={viewMode() === "grid" ? "solid" : "ghost"}
-						size="sm"
-						onClick={() => setViewMode("grid")}
-						title="Grid View"
+					<ToggleGroup
+						value={viewMode()}
+						onChange={(next) => {
+							if (next) setViewMode(next as "grid" | "list");
+						}}
 					>
-						Grid
-					</Button>
-					<Button
-						variant={viewMode() === "list" ? "solid" : "ghost"}
-						size="sm"
-						onClick={() => setViewMode("list")}
-						title="List View"
-					>
-						List
-					</Button>
+						<ToggleGroupItem
+							value="list"
+							icon_only={true}
+							title="List View"
+							aria-label="List View"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<line x1="8" y1="6" x2="21" y2="6" />
+								<line x1="8" y1="12" x2="21" y2="12" />
+								<line x1="8" y1="18" x2="21" y2="18" />
+								<line x1="3" y1="6" x2="3.01" y2="6" />
+								<line x1="3" y1="12" x2="3.01" y2="12" />
+								<line x1="3" y1="18" x2="3.01" y2="18" />
+							</svg>
+						</ToggleGroupItem>
+						<ToggleGroupItem
+							value="grid"
+							icon_only={true}
+							title="Grid View"
+							aria-label="Grid View"
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="14"
+								height="14"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+								stroke-width="2"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							>
+								<rect x="3" y="3" width="7" height="7" />
+								<rect x="14" y="3" width="7" height="7" />
+								<rect x="14" y="14" width="7" height="7" />
+								<rect x="3" y="14" width="7" height="7" />
+							</svg>
+						</ToggleGroupItem>
+					</ToggleGroup>
 				</div>
 
 				<div class={styles.group}>
@@ -152,8 +192,7 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 						</SelectTrigger>
 						<SelectContent />
 					</Select>
-
-					<Button variant="ghost" size="sm" onClick={refetch} title="Refresh">
+					<Button variant="slate" size="sm" icon_only={true} onClick={refetch} title="Refresh screenshots">
 						<RefreshIcon />
 					</Button>
 				</div>

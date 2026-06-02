@@ -1,4 +1,5 @@
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { For, Show } from "solid-js";
@@ -16,7 +17,8 @@ interface JavaSettingsTabProps {
 
 export function JavaSettingsTab(props: JavaSettingsTabProps) {
 	return (
-		<div class={styles["settings-tab-content"]}>
+		<div class={`${styles["settings-tab-content"]} ${styles["settings-tab-content--wide"]}`}>
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard
 				header="Java Environments"
 				subHeader="Global defaults for each Java version. Instances follow these by default."
@@ -82,6 +84,7 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 					}
 				/>
 			</SettingsCard>
+			</div>
 		</div>
 	);
 }

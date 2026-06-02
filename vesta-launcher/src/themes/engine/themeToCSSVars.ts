@@ -10,8 +10,6 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		"--background-opacity":
 			theme.backgroundOpacity !== undefined ? (theme.backgroundOpacity / 100).toFixed(2) : "0.25",
 		"--rotation": `${theme.rotation ?? 135}deg`,
-		"--gradient-type": theme.gradientType || "linear",
-		"--gradient-enabled": theme.gradientEnabled ? "1" : "0",
 	};
 
 	// Calculate harmony hues

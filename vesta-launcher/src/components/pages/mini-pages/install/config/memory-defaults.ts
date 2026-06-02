@@ -28,11 +28,16 @@ export function calculateRecommendedMemory(
 	}
 
 	let maxMb: number;
-	if (modCount <= 0) maxMb = 4096; // Vanilla / unknown
-	else if (modCount < 30) maxMb = 4096; // Light
-	else if (modCount < 50) maxMb = 6144; // Light-medium
-	else if (modCount < 150) maxMb = 8192; // Medium
-	else if (modCount < 300) maxMb = 10240; // Heavy
+	if (modCount <= 0)
+		maxMb = 4096; // Vanilla / unknown
+	else if (modCount < 30)
+		maxMb = 4096; // Light
+	else if (modCount < 50)
+		maxMb = 6144; // Light-medium
+	else if (modCount < 150)
+		maxMb = 8192; // Medium
+	else if (modCount < 300)
+		maxMb = 10240; // Heavy
 	else maxMb = 12288; // Expert-level (300+)
 
 	// Never exceed ~60% of system RAM, never go below 4 GB

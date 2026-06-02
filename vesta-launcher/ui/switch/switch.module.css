@@ -1,94 +1,96 @@
 .switch {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.5rem;
-	cursor: pointer;
-	position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: default;
+    position: relative;
 }
 
 .switch__input {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-	border-width: 0;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 .switch__input:focus-visible + .switch__control {
-	outline: none;
-	box-shadow: 0 0 0 2px var(--border-focus);
+    outline: none;
+    box-shadow: 0 0 0 2px var(--border-focus);
 }
 
 .switch__control {
-	position: relative;
-	display: inline-flex;
-	align-items: center;
-	width: 44px;
-	height: 24px;
-	flex-shrink: 0;
-	border-radius: 9999px;
-	border: var(--border-width-subtle) solid var(--switch-track-border);
-	background-color: var(--switch-track-off);
-	cursor: pointer;
-	transition: background-color 150ms ease-in-out;
-	pointer-events: auto; /* ensure control receives pointer events */
-	z-index: 1; /* bring above potential overlays */
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 44px;
+    height: 24px;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    border: var(--border-width-subtle) solid var(--switch-track-border);
+    background-color: var(--switch-track-off);
+    cursor: default;
+    transition: background-color 150ms ease-in-out;
+    pointer-events: auto; /* ensure control receives pointer events */
+    z-index: 1; /* bring above potential overlays */
+    cursor: default;
+    cursor: default;
 }
 
 .switch__control[data-checked] {
-	background-color: var(--switch-track-on);
-	border-color: var(--switch-track-on);
+    background-color: var(--switch-track-on);
+    border-color: var(--switch-track-on);
 }
 
 .switch__control[data-disabled] {
-	cursor: not-allowed;
-	opacity: 0.5;
+    cursor: not-allowed;
+    opacity: 0.5;
 }
 
 .switch__thumb {
-	display: block;
-	width: 18px;
-	height: 18px;
-	background-color: var(--switch-thumb);
-	border-radius: 9999px;
-	box-shadow: var(--switch-thumb-shadow);
-	transform: translateX(2px);
-	transition: transform 180ms ease-in-out;
-	pointer-events: none;
-	z-index: 2; /* above control */
+    display: block;
+    width: 18px;
+    height: 18px;
+    background-color: var(--switch-thumb);
+    border-radius: 9999px;
+    box-shadow: var(--switch-thumb-shadow);
+    transform: translateX(2px);
+    transition: transform 180ms ease-in-out;
+    pointer-events: none;
+    z-index: 2; /* above control */
 }
 
 .switch__thumb[data-checked] {
-	transform: translateX(22px);
-	background-color: var(--switch-thumb-on);
+    transform: translateX(22px);
+    background-color: var(--switch-thumb-on);
 }
 
 .switch__label {
-	font-size: 0.875rem;
-	font-weight: 500;
-	line-height: 1.25;
-	user-select: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25;
+    user-select: none;
 }
 
 .switch__label[data-disabled] {
-	cursor: not-allowed;
-	opacity: 0.7;
+    cursor: not-allowed;
+    opacity: 0.7;
 }
 
 .switch[data-disabled] {
-	cursor: not-allowed;
+    cursor: not-allowed;
 }
 
 /* Optional: Add hover state for non-disabled switches */
 .switch__control:not([data-disabled]):hover {
-	background-color: var(--switch-track-off-hover);
+    background-color: var(--switch-track-off-hover);
 }
 
 .switch__control[data-checked]:not([data-disabled]):hover {
-	background-color: var(--switch-track-on-hover);
-	border-color: var(--switch-track-on-hover);
+    background-color: var(--switch-track-on-hover);
+    border-color: var(--switch-track-on-hover);
 }

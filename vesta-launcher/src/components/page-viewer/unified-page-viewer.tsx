@@ -44,6 +44,8 @@ interface UnifiedPageViewerProps {
 	onClose?: () => void;
 	onPopOut?: () => void;
 	showWindowControls?: boolean;
+	hideCloseButton?: boolean;
+	hideNavbar?: boolean;
 	titleSuffix?: string;
 	extraNavbarActions?: JSX.Element;
 	windowControls?: JSX.Element;
@@ -104,71 +106,73 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 
 	return (
 		<div class={styles["unified-page-viewer-root"]} data-os={props.os}>
-			<header
-				class={`${styles["page-viewer-navbar"]} grain-overlay`}
-				data-tauri-drag-region={props.showWindowControls}
-			>
-				<Show when={isMac()}>
-					<div
-						class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}
-					>
-						{props.windowControls}
-					</div>
-				</Show>
-				<div class={styles["page-viewer-navbar-left"]}>
-					<NavbarButton onClick={handleBack} text="Back" disabled={!canGoBack()}>
-						<BackArrowIcon />
-					</NavbarButton>
-					<NavbarButton
-						onClick={() => props.router.forwards()}
-						text="Forward"
-						disabled={!canGoForward()}
-					>
-						<ForwardsArrowIcon />
-					</NavbarButton>
-					<Show when={props.router.getRefetch()}>
-						<NavbarButton onClick={() => props.router.reload()} text="Reload" loading={isReloading()}>
-							<RefreshIcon />
-						</NavbarButton>
-					</Show>
-				</div>
-
-				<div
-					class={styles["page-viewer-navbar-center"]}
+			<Show when={!props.hideNavbar}>
+				<header
+					class={`${styles["page-viewer-navbar"]} grain-overlay`}
 					data-tauri-drag-region={props.showWindowControls}
 				>
-					<span class={styles["page-viewer-title"]} data-tauri-drag-region={props.showWindowControls}>
-						{props.router.customName.get() || props.router.currentElement().name}
-						{props.titleSuffix && ` - ${props.titleSuffix}`}
-					</span>
-				</div>
-
-				<div class={styles["page-viewer-navbar-right"]}>
-					{props.extraNavbarActions}
-
-					<PageOptionsMenu router={props.router} />
-
-					<Show when={props.onPopOut}>
-						<NavbarButton onClick={props.onPopOut} text="Open in new window">
-							<OpenIcon />
+					<Show when={isMac()}>
+						<div
+							class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}
+						>
+							{props.windowControls}
+						</div>
+					</Show>
+					<div class={styles["page-viewer-navbar-left"]}>
+						<NavbarButton onClick={handleBack} text="Back" disabled={!canGoBack()}>
+							<BackArrowIcon />
 						</NavbarButton>
-					</Show>
-
-					<Show when={props.onClose && !props.windowControls}>
-						<NavbarButton onClick={handleClose} text="Close">
-							<CloseIcon />
+						<NavbarButton
+							onClick={() => props.router.forwards()}
+							text="Forward"
+							disabled={!canGoForward()}
+						>
+							<ForwardsArrowIcon />
 						</NavbarButton>
-					</Show>
+						<Show when={props.router.getRefetch()}>
+							<NavbarButton onClick={() => props.router.reload()} text="Reload" loading={isReloading()}>
+								<RefreshIcon />
+							</NavbarButton>
+						</Show>
+					</div>
 
-					<Show when={!isMac()}>
-						<div class={styles["page-viewer-window-controls-wrapper"]}>{props.windowControls}</div>
-					</Show>
+					<div
+						class={styles["page-viewer-navbar-center"]}
+						data-tauri-drag-region={props.showWindowControls}
+					>
+						<span class={styles["page-viewer-title"]} data-tauri-drag-region={props.showWindowControls}>
+							{props.router.customName.get() || props.router.currentElement().name}
+							{props.titleSuffix && ` - ${props.titleSuffix}`}
+						</span>
+					</div>
 
-					{props.children}
-				</div>
-			</header>
+					<div class={styles["page-viewer-navbar-right"]}>
+						{props.extraNavbarActions}
 
-			<main class={styles["page-viewer-content"]}>
+						<PageOptionsMenu router={props.router} />
+
+						<Show when={props.onPopOut}>
+							<NavbarButton onClick={props.onPopOut} text="Open in new window">
+								<OpenIcon />
+							</NavbarButton>
+						</Show>
+
+						<Show when={props.onClose && !props.windowControls && !props.hideCloseButton}>
+							<NavbarButton onClick={handleClose} text="Close">
+								<CloseIcon />
+							</NavbarButton>
+						</Show>
+
+						<Show when={!isMac()}>
+							<div class={styles["page-viewer-window-controls-wrapper"]}>{props.windowControls}</div>
+						</Show>
+
+						{props.children}
+					</div>
+				</header>
+			</Show>
+
+			<main class={styles["page-viewer-content"]} data-page-scroll-container>
 				<Show when={isReloading()}>
 					<div class={styles["page-viewer-reload-overlay"]}>
 						<div class={styles["page-viewer-reload-spinner"]} />

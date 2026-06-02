@@ -2,7 +2,6 @@ import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
 import PlayIcon from "@assets/play.svg";
 import KillIcon from "@assets/rounded-square.svg";
-import TrashIcon from "@assets/trash.svg";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
@@ -30,9 +29,10 @@ import {
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { PageSidebar } from "@components/page-sidebar/page-sidebar";
 import { ResourceAvatar } from "@ui/avatar";
-import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
+import { TabsContent } from "@ui/tabs/tabs";
 import { Checkbox } from "@ui/checkbox/checkbox";
 import { ExportDialog } from "@ui/export-dialog";
 import { Skeleton } from "@ui/skeleton/skeleton";
@@ -44,7 +44,9 @@ import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
   DEFAULT_ICONS,
   duplicateInstance,
+  getInstance,
   getInstanceBySlug,
+  getInstanceSlug,
   getMinecraftVersions,
   getStableIconId,
   installInstance,
@@ -58,6 +60,7 @@ import {
   updateInstance,
   updateInstanceModpackVersion,
 } from "@utils/instances";
+import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
   describeSelectionAdjustments,
   getAllModloaders,
@@ -98,7 +101,8 @@ type TabType =
   | "screenshots";
 
 interface InstanceDetailsProps {
-  slug?: string; // Optional - can come from props or router params
+  id?: number;
+  slug?: string; // Optional fallback - can come from props or router params
   activeTab?: TabType;
   initialData?: any;
   initialName?: string;
@@ -248,15 +252,57 @@ export default function InstanceDetails(
 ) {
   const activeRouter = createMemo(() => props.router || router());
 
+  // Handle id/slug from props first, then fallback to router params
+  const getIdentifier = () => {
+    if (props.id !== undefined) return `id:${props.id}`;
+    if (props.slug) return `slug:${props.slug}`;
+    const params = activeRouter()?.currentParams.get();
+    const id = params?.id as string | undefined;
+    if (id) return `id:${id}`;
+    const slug = params?.slug as string | undefined;
+    if (slug) return `slug:${slug}`;
+    return "";
+  };
+
+  const paramsKey = createMemo(() => {
+    const k = getIdentifier();
+    return k;
+  });
+
+  const [instance, { refetch }] = createResource(paramsKey, async (key) => {
+    if (!key) {
+      return undefined;
+    }
+    try {
+      let inst: Instance | undefined;
+      if (key.startsWith("id:")) {
+        const id = parseInt(key.slice(3), 10);
+        inst = await getInstance(id);
+      } else if (key.startsWith("slug:")) {
+        const slugVal = key.slice(5);
+        inst = await getInstanceBySlug(slugVal);
+      }
+      return inst;
+    } catch (e) {
+      console.error("[InstanceDetails] Error fetching instance:", e);
+      throw e;
+    }
+  });
+
+  const slug = createMemo(() => {
+    const inst = instance();
+    return inst ? getInstanceSlug(inst) : "";
+  });
+
   const isPinned = createMemo(() =>
-    props.slug ? isPinnedInStore("instance", props.slug) : false,
+    slug() ? isPinnedInStore("instance", slug()) : false,
   );
 
   const handlePin = async () => {
-    if (!props.slug) return;
+    if (!slug()) return;
     if (isPinned()) {
       const pin = pinning.pins.find(
-        (p) => p.page_type === "instance" && p.target_id === props.slug,
+        (p) => p.page_type === "instance" && p.target_id === slug(),
       );
       if (pin) unpinPage(pin.id);
     } else {
@@ -264,7 +310,7 @@ export default function InstanceDetails(
       if (!inst) return;
       await pinPage({
         page_type: "instance",
-        target_id: props.slug,
+        target_id: slug(),
         label: inst.name,
         icon_url: inst.iconPath || inst.modpackIconUrl || null,
         platform: null,
@@ -272,36 +318,6 @@ export default function InstanceDetails(
       });
     }
   };
-
-  // Handle slug from props first, then fallback to router params
-  const getSlug = () => {
-    if (props.slug) return props.slug;
-    const params = activeRouter()?.currentParams.get();
-    return params?.slug as string | undefined;
-  };
-
-  const slug = createMemo(() => {
-    const s = getSlug();
-    console.log("[InstanceDetails] Derived slug:", s);
-    return s || "";
-  });
-
-  const [instance, { refetch }] = createResource(slug, async (s) => {
-    if (!s) {
-      console.warn("[InstanceDetails] No slug provided to resource fetcher");
-      return undefined;
-    }
-    console.log("[InstanceDetails] Fetching instance for slug:", s);
-    try {
-      const inst = await getInstanceBySlug(s);
-      if (!inst)
-        console.warn("[InstanceDetails] Backend returned null for slug:", s);
-      return inst;
-    } catch (e) {
-      console.error("[InstanceDetails] Error fetching instance:", e);
-      throw e;
-    }
-  });
 
   const [
     installedResources,
@@ -544,11 +560,10 @@ export default function InstanceDetails(
 
   const inst = () => instance();
   const isLaunchingGlobal = createMemo(
-    () =>
-      (props.slug ? instancesState.launchingIds[props.slug] : false) || false,
+    () => (slug() ? instancesState.launchingIds[slug()] : false) || false,
   );
   const isRunningGlobal = createMemo(
-    () => (props.slug ? instancesState.runningIds[props.slug] : false) || false,
+    () => (slug() ? instancesState.runningIds[slug()] : false) || false,
   );
 
   const isDirty = createMemo(() => {
@@ -1092,10 +1107,13 @@ export default function InstanceDetails(
   const [resourceTypeFilter, setResourceTypeFilter] =
     createSignal<string>("All");
   const [resourceSearch, setResourceSearch] = createSignal("");
+  const [isCompactTable, setIsCompactTable] = createSignal(false);
   const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>(
     {},
   );
   const [checkingUpdates, setCheckingUpdates] = createSignal(false);
+  const [checkingPerResource, setCheckingPerResource] = createSignal<Set<number>>(new Set());
+  const [checkedPerResource, setCheckedPerResource] = createSignal<Set<number>>(new Set());
   const [totalRam, setTotalRam] = createSignal(16384);
 
   onMount(async () => {
@@ -1689,7 +1707,7 @@ export default function InstanceDetails(
   const columns = [
     columnHelper.display({
       id: "select",
-      size: 64, // Sync with CSS
+      size: 48, // Sync with CSS
       header: ({ table }) => (
         <div
           class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}
@@ -1729,95 +1747,48 @@ export default function InstanceDetails(
         </div>
       ),
     }),
-    columnHelper.accessor("display_name", {
-      header: "Name",
-      size: 150, // Default size makes it flexible in ResourcesTab
-      cell: (info) => (
-        <div class={styles["res-info-cell"]}>
-          <div class={styles["res-title-group"]}>
-            <span class={styles["res-title"]}>{info.getValue()}</span>
-            <span class={styles["res-path"]}>
-              {info.row.original.local_path.split(/[\\/]/).pop()}
-            </span>
-          </div>
-        </div>
-      ),
-    }),
-    columnHelper.accessor("resource_type", {
-      header: "Type",
-      size: 90,
+columnHelper.accessor("display_name", {
+			header: "Name",
       cell: (info) => {
-        const type = info.getValue().toLowerCase();
-        const variant =
-          type === "mod"
-            ? "info"
-            : type === "resourcepack"
-              ? "success"
-              : type === "shader" || type === "shaderpack"
-                ? "warning"
-                : type === "datapack"
-                  ? "accent"
-                  : "secondary";
-        return <Badge variant={variant}>{info.getValue()}</Badge>;
-      },
-    }),
-    columnHelper.accessor("current_version", {
-      header: "Version",
-      size: 110,
-      cell: (info) => {
-        const currentUpdate = () => updates()[info.row.original.id];
+        const displayName = info.getValue();
+        const fileName = info.row.original.local_path.split(/[\\/]/).pop() ?? "";
         return (
-          <div class={styles["version-cell"]}>
-            <span>{info.getValue()}</span>
-            <Show when={currentUpdate()}>
+          <div class={styles["res-info-cell"]}>
+            <div class={styles["res-title-group"]}>
               <Tooltip placement="top">
-                <TooltipTrigger
-                  as={Button}
-                  variant="ghost"
-                  class={styles["update-btn"]}
-                  disabled={busy()}
-                  onClick={(e: MouseEvent) => {
-                    e.stopPropagation();
-                    const u = currentUpdate();
-                    if (u) handleUpdate(info.row.original, u);
-                  }}
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4m4-5 5 5 5-5m-5 5V3" />
-                  </svg>
+                <TooltipTrigger as="span" class={styles["res-title"]}>
+                  {displayName}
                 </TooltipTrigger>
-                <TooltipContent>
-                  Update to {currentUpdate()?.version_number}
-                </TooltipContent>
+                <TooltipContent>{displayName}</TooltipContent>
               </Tooltip>
-            </Show>
+              <Tooltip placement="top">
+                <TooltipTrigger as="span" class={styles["res-path"]}>
+                  {fileName}
+                </TooltipTrigger>
+                <TooltipContent>{fileName}</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         );
       },
     }),
-    columnHelper.accessor("is_enabled", {
-      header: () => <div style="text-align: right; width: 100%;">Enabled</div>,
-      size: 80,
-      cell: (info) => (
-        <div
-          style="display: flex; justify-content: flex-end; width: 100%;"
-          onClick={(e: MouseEvent) => e.stopPropagation()}
-        >
-          <Switch
+		columnHelper.accessor("current_version", {
+			header: "Version",
+			cell: (info) => (
+        <span class={styles["col-version-text"]}>{info.getValue()}</span>
+      ),
+		}),
+		columnHelper.accessor("is_enabled", {
+			header: () => <div style="text-align: center; width: 100%;">Enabled</div>,
+			cell: (info) => (
+				<div
+					class={styles["col-enabled"]}
+					onClick={(e: MouseEvent) => e.stopPropagation()}
+				>
+					<Switch
             checked={info.getValue()}
             onCheckedChange={async (enabled: boolean) => {
               const previous = installedResources.latest;
-              // Optimistic update
               mutateResources((prev) =>
                 prev?.map((r) =>
                   r.id === info.row.original.id
@@ -1831,11 +1802,9 @@ export default function InstanceDetails(
                   resourceId: info.row.original.id,
                   enabled,
                 });
-                // Silently refetch in background to stay in sync
                 refetchResources();
               } catch (e) {
                 console.error("Failed to toggle resource:", e);
-                // Rollback
                 mutateResources(previous);
               }
             }}
@@ -1847,45 +1816,77 @@ export default function InstanceDetails(
         </div>
       ),
     }),
-    columnHelper.display({
-      id: "actions",
-      header: "",
-      size: 50,
+		columnHelper.display({
+			id: "actions",
+			header: "",
+      size: 48,
       cell: (info) => (
-        <div style="display: flex; justify-content: flex-end;">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={async () => {
+        <div class={styles["row-actions-cell"]}>
+          <ResourceRowActions
+            resource={info.row.original}
+            update={updates()[info.row.original.id]}
+            isCheckingForUpdates={checkingPerResource().has(info.row.original.id)}
+            hasCheckedForUpdates={checkedPerResource().has(info.row.original.id)}
+            showVersionInfo={isCompactTable()}
+            currentVersion={info.row.original.current_version}
+            busy={busy()}
+            onUpdate={handleUpdate}
+            onDelete={async (resource) => {
               if (
                 await dialogStore.confirm(
                   "Delete Resource",
-                  `Are you sure you want to delete ${info.row.original.display_name}? This will remove the file from your instance.`,
+                  `Are you sure you want to delete ${resource.display_name}? This will remove the file from your instance.`,
                   { severity: "warning", isDestructive: true },
                 )
               ) {
                 const previous = installedResources.latest;
-                // Optimistic remove
                 mutateResources((prev) =>
-                  prev?.filter((r) => r.id !== info.row.original.id),
+                  prev?.filter((r) => r.id !== resource.id),
                 );
 
                 try {
                   await invoke("delete_resource", {
-                    instanceId: info.row.original.instance_id,
-                    resourceId: info.row.original.id,
+                    instanceId: resource.instance_id,
+                    resourceId: resource.id,
                   });
                   refetchResources();
                 } catch (e) {
                   console.error("Failed to delete resource:", e);
-                  // Rollback
                   mutateResources(previous);
                 }
               }
             }}
-          >
-            <TrashIcon />
-          </Button>
+            onCheckUpdates={async (resource) => {
+              setCheckingPerResource((prev) => new Set([...prev, resource.id]));
+              const inst = instance();
+              if (!inst) return;
+              try {
+                const versions = await resources.getVersions(
+                  resource.platform as any,
+                  resource.remote_id,
+                  true,
+                );
+                const best = findBestVersion(
+                  versions,
+                  inst.minecraftVersion,
+                  inst.modloader,
+                  resource.release_type,
+                );
+                if (best && String(best.id) !== String(resource.remote_version_id)) {
+                  setUpdates((prev) => ({ ...prev, [resource.id]: best }));
+                }
+              } catch (e) {
+                console.error(`Failed to check updates for ${resource.display_name}:`, e);
+              } finally {
+                setCheckingPerResource((prev) => {
+                  const next = new Set(prev);
+                  next.delete(resource.id);
+                  return next;
+                });
+                setCheckedPerResource((prev) => new Set([...prev, resource.id]));
+              }
+            }}
+          />
         </div>
       ),
     }),
@@ -1915,6 +1916,9 @@ export default function InstanceDetails(
       return {
         rowSelection: resources.state.selection,
         sorting: resources.state.sorting,
+        columnVisibility: {
+          current_version: !isCompactTable(),
+        },
       };
     },
     onRowSelectionChange: (updater) => {
@@ -2051,6 +2055,11 @@ export default function InstanceDetails(
       }
     } catch (e) {
       console.error("Action failed:", e);
+      showToast({
+        title: "Action Failed",
+        description: String(e),
+        severity: "error",
+      });
     }
     setBusy(false);
   };
@@ -2072,7 +2081,7 @@ export default function InstanceDetails(
     if (!inst) return;
     setSaving(true);
     try {
-      const fresh = await getInstanceBySlug(slug());
+      const fresh = await getInstance(inst.id);
       fresh.name = name();
       fresh.iconPath = iconPath();
       fresh.javaArgs = javaArgs() || null;
@@ -2140,6 +2149,15 @@ export default function InstanceDetails(
   };
 
   // Handle tab changes - use updateQuery for stable state preservation
+  const instanceTabs = [
+    { value: "home", label: "Home" },
+    { value: "console", label: "Console" },
+    { value: "resources", label: "Resources" },
+    { value: "screenshots", label: "Screenshots" },
+    { value: "versioning", label: "Version" },
+    { value: "settings", label: "Settings" },
+  ];
+
   const handleTabChange = (tab: TabType) => {
     if (tab === activeTab()) return;
     activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
@@ -2147,49 +2165,17 @@ export default function InstanceDetails(
 
   return (
     <div class={styles["instance-details-page"]}>
-      <aside class={styles["instance-details-sidebar"]}>
-        <nav class={styles["instance-tabs"]}>
-          <button
-            classList={{ [styles.active]: activeTab() === "home" }}
-            onClick={() => handleTabChange("home")}
-          >
-            Home
-          </button>
-          <button
-            classList={{ [styles.active]: activeTab() === "console" }}
-            onClick={() => handleTabChange("console")}
-          >
-            Console
-          </button>
-          <button
-            classList={{ [styles.active]: activeTab() === "resources" }}
-            onClick={() => handleTabChange("resources")}
-          >
-            Resources
-          </button>
-          <button
-            classList={{ [styles.active]: activeTab() === "screenshots" }}
-            onClick={() => handleTabChange("screenshots")}
-          >
-            Screenshots
-          </button>
-          <button
-            classList={{ [styles.active]: activeTab() === "versioning" }}
-            onClick={() => handleTabChange("versioning")}
-          >
-            Version
-          </button>
-          <button
-            classList={{ [styles.active]: activeTab() === "settings" }}
-            onClick={() => handleTabChange("settings")}
-          >
-            Settings
-          </button>
-        </nav>
-      </aside>
-
-      <main class={styles["instance-details-content"]}>
-        <div class={styles["content-wrapper"]}>
+      <PageSidebar
+        tabs={instanceTabs}
+        activeTab={activeTab()}
+        onTabChange={(v) => handleTabChange(v as TabType)}
+      >
+        <div
+          class={styles["content-wrapper"]}
+          classList={{
+            [styles["content-wrapper--console"]]: activeTab() === "console",
+          }}
+        >
           <Show when={instance.loading && !instance.latest}>
             <div class={styles["instance-loading"]}>
               <Skeleton class={styles["skeleton-header"]} />
@@ -2248,29 +2234,28 @@ export default function InstanceDetails(
                           {inst().minecraftVersion} •{" "}
                           {inst().modloader || "Vanilla"}
                           <Show when={inst().modpackId}>
-                            <Badge
-                              variant="default"
-                              round={true}
-                              title={`Linked to ${inst().modpackPlatform} modpack`}
-                              style={{ "margin-left": "8px" }}
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="12"
-                                height="12"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                stroke-width="2"
-                                stroke-linecap="round"
-                                stroke-linejoin="round"
-                                style="margin-right: 4px; opacity: 0.8;"
-                              >
-                                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
-                                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
-                              </svg>
-                              Linked
-                            </Badge>
+                            <Tooltip placement="top">
+                              <TooltipTrigger>
+                                <svg
+                                  class={styles["linked-icon"]}
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  viewBox="0 0 24 24"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  stroke-width="2"
+                                  stroke-linecap="round"
+                                  stroke-linejoin="round"
+                                  onClick={() => handleTabChange("versioning")}
+                                >
+                                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                                </svg>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                Linked to a{" "}
+                                {inst().modpackPlatform?.toLowerCase()} modpack
+                              </TooltipContent>
+                            </Tooltip>
                           </Show>
                         </p>
                       </div>
@@ -2354,7 +2339,7 @@ export default function InstanceDetails(
                 </header>
 
                 <div class={styles["instance-tab-content"]}>
-                  <Show when={activeTab() === "home"}>
+                  <TabsContent value="home">
                     <Show when={instance.loading && !instance.latest}>
                       <div class={styles["skeleton-grid"]}>
                         {Array.from({ length: 4 }).map(() => (
@@ -2369,9 +2354,9 @@ export default function InstanceDetails(
                         isRunning={isRunning()}
                       />
                     </Show>
-                  </Show>
+                  </TabsContent>
 
-                  <Show when={activeTab() === "console"}>
+                  <TabsContent value="console">
                     <Show when={instance.loading && !instance.latest}>
                       <Skeleton class={styles["skeleton-console"]} />
                     </Show>
@@ -2381,9 +2366,9 @@ export default function InstanceDetails(
                         openLogsFolder={openLogsFolder}
                       />
                     </Show>
-                  </Show>
+                  </TabsContent>
 
-                  <Show when={activeTab() === "resources"}>
+                  <TabsContent value="resources">
                     <ResourcesTab
                       instance={inst()}
                       resourceTypeFilter={resourceTypeFilter()}
@@ -2401,14 +2386,15 @@ export default function InstanceDetails(
                       busy={busy()}
                       checkingUpdates={checkingUpdates()}
                       checkUpdates={checkUpdates}
+                      onCompactChange={setIsCompactTable}
                     />
-                  </Show>
+                  </TabsContent>
 
-                  <Show when={activeTab() === "screenshots"}>
+                  <TabsContent value="screenshots">
                     <ScreenshotsTab instanceIdSlug={slug()} />
-                  </Show>
+                  </TabsContent>
 
-                  <Show when={activeTab() === "versioning"}>
+                  <TabsContent value="versioning">
                     <Show when={instance.latest}>
                       <VersioningTab
                         instance={inst()}
@@ -2458,9 +2444,9 @@ export default function InstanceDetails(
                         mcVersions={mcVersions}
                       />
                     </Show>
-                  </Show>
+                  </TabsContent>
 
-                  <Show when={activeTab() === "settings"}>
+                  <TabsContent value="settings">
                     <Show when={instance.loading && !instance.latest}>
                       <div class={styles["skeleton-settings"]}>
                         <Skeleton class={styles["skeleton-field"]} />
@@ -2538,13 +2524,13 @@ export default function InstanceDetails(
                         showToast={showToast}
                       />
                     </Show>
-                  </Show>
+                  </TabsContent>
                 </div>
               </>
             )}
           </Show>
         </div>
-      </main>
+      </PageSidebar>
 
       <FloatingSaveFooter
         show={isDirty()}

@@ -3,7 +3,10 @@ import { normalizeWindowEffectForCurrentOS } from "./effects";
 import { themeToCSSVars } from "./themeToCSSVars";
 import { startThemeTransition, type ThemeApplyOptions } from "./transitionManager";
 
-export type { ThemeApplyOptions, ThemeApplyTransition } from "./transitionManager";
+export type {
+	ThemeApplyOptions,
+	ThemeApplyTransition,
+} from "./transitionManager";
 
 const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
 
@@ -18,6 +21,21 @@ function clearStartupFallbackIfActive(root: HTMLElement, style: CSSStyleDeclarat
 	root.removeAttribute(STARTUP_FALLBACK_ATTR);
 }
 
+/**
+ * Applies background-image and background-color CSS variables based on
+ * the gradient and window-effect state.
+ *
+ * Decision matrix:
+ *
+ *   --background-image  ← gradient on → CSS default gradient (remove inline)
+ *                       ← gradient off → solid tint-with-opacity gradient
+ *
+ *   --background-color  ← effect active → transparent (OS provides base color)
+ *                       ← effect none   → --app-background-tint (we provide base color)
+ *
+ * The CSS rules in styles.css (data-window-effect selectors on #app) read these
+ * variables and set the actual background-color / background-image properties.
+ */
 function applyBackgroundState(
 	theme: ThemeConfig,
 	effectToSet: string,
@@ -25,38 +43,23 @@ function applyBackgroundState(
 	style: CSSStyleDeclaration,
 ): void {
 	const isWindowEffectEnabled = effectToSet !== "none" && effectToSet !== "";
-	const solidOverlayWithOpacity =
-		"linear-gradient(hsl(var(--color__primary-hue) 12% var(--lightness-surface-base) / var(--background-opacity)), hsl(var(--color__primary-hue) 12% var(--lightness-surface-base) / var(--background-opacity)))";
+
+	root.setAttribute("data-gradient", theme.gradientEnabled ? "1" : "0");
 
 	if (theme.gradientEnabled) {
-		root.setAttribute("data-gradient", "1");
 		style.removeProperty("--background-image");
 	} else {
-		root.setAttribute("data-gradient", "0");
-		if (isWindowEffectEnabled) {
-			// Keep opacity control active even without gradient when native effects are enabled.
-			style.setProperty("--background-image", solidOverlayWithOpacity);
-		} else {
-			// Keep a solid fill available when there is no native window effect.
-			style.setProperty(
-				"--background-image",
-				"linear-gradient(var(--app-background-tint), var(--app-background-tint))",
-			);
-		}
+		style.setProperty(
+			"--background-image",
+			"linear-gradient(var(--app-background-tint-with-opacity), var(--app-background-tint-with-opacity))",
+		);
 	}
 
 	if (isWindowEffectEnabled) {
-		// Native effects should always reveal the OS material with no static app tint.
 		style.removeProperty("--background-color");
-		return;
+	} else {
+		style.setProperty("--background-color", "var(--app-background-tint)");
 	}
-
-	if (theme.gradientEnabled) {
-		style.removeProperty("--background-color");
-		return;
-	}
-
-	style.setProperty("--background-color", "var(--app-background-tint)");
 }
 
 export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}): void {

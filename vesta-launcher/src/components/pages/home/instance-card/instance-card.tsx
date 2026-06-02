@@ -328,7 +328,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	// Navigate to instance details page using mini-router
 	const openInstanceDetails = () => {
-		router()?.navigate("/instance", { slug: instanceSlug });
+		router()?.navigate("/instance", { id: props.instance.id });
 		setPageViewerOpen(true);
 	};
 

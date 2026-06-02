@@ -139,6 +139,7 @@ fn main() {
             commands::app::set_tray_icon_visibility,
             commands::app::set_minimize_to_tray,
             commands::app::show_window_from_tray,
+            commands::app::clear_window_startup_background,
             commands::app::parse_vesta_url,
             commands::app::get_window_effect_capabilities,
             commands::app::set_window_effect,

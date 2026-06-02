@@ -38,7 +38,7 @@
 	flex-grow: 1;
 	border-radius: 9999px;
 	background-color: hsl(var(--color__primary-hue) 20% 30%);
-	cursor: pointer;
+	cursor: default;
 }
 
 .slider__track[data-disabled] {

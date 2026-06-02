@@ -4,6 +4,7 @@ import { ChildrenProp } from "@ui/props";
 import { Tooltip, TooltipContent, TooltipPlacement, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { children, mergeProps, Show, splitProps } from "solid-js";
 import styles from "./button.module.css";
+import { getButtonStyleVars } from "./button-style";
 
 export interface ButtonProps
 	extends PolymorphicProps<"button", ButtonPrimitive.ButtonRootProps & ChildrenProp> {
@@ -47,21 +48,6 @@ function Button(p: ButtonProps) {
 		}
 	};
 
-	const buttonColorVar =
-		local.color === "none"
-			? "var(--secondary-low)"
-			: local.color === "secondary"
-				? "var(--surface-raised)"
-				: `var(--${local.color})`;
-	const buttonFgVar =
-		local.color === "none" || local.color === "secondary"
-			? "var(--text-primary)"
-			: "var(--text-on-accent)";
-	const buttonTextVar =
-		local.color !== "none" && local.color !== "secondary" ? buttonColorVar : "var(--text-primary)";
-	const buttonBorderVar =
-		local.color === "none" || local.color === "secondary" ? "var(--border-subtle)" : "transparent";
-
 	return (
 		<Tooltip placement={props.tooltip_placement}>
 			<TooltipTrigger
@@ -80,17 +66,16 @@ function Button(p: ButtonProps) {
 					[styles["launcher-button--icon-only"]]: local.icon_only,
 					[local.class ?? ""]: true,
 				}}
-				style={
-					typeof local.style === "string"
-						? `--button-color: ${buttonColorVar}; --button-fg: ${buttonFgVar}; --button-border: ${buttonBorderVar}; --button-text: ${buttonTextVar}; ${local.style}`
+				style={(() => {
+					const buttonVars = getButtonStyleVars(local.color);
+
+					return typeof local.style === "string"
+						? `--button-color: ${buttonVars["--button-color"]}; --button-fg: ${buttonVars["--button-fg"]}; --button-border: ${buttonVars["--button-border"]}; --button-text: ${buttonVars["--button-text"]}; ${local.style}`
 						: {
-								"--button-color": buttonColorVar,
-								"--button-fg": buttonFgVar,
-								"--button-border": buttonBorderVar,
-								"--button-text": buttonTextVar,
+								...buttonVars,
 								...(local.style as any),
-							}
-				}
+							};
+				})()}
 				onClick={handleClick}
 				disabled={props.disabled}
 				{...(rest as ButtonPrimitive.ButtonRootProps)}

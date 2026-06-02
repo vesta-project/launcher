@@ -1,5 +1,5 @@
 .container {
-	padding: 0;
+	padding: 0 24px 24px;
 	display: flex;
 	flex-direction: column;
 	gap: 16px;
@@ -46,7 +46,7 @@
 	border: 1px solid var(--border);
 	border-radius: 8px;
 	overflow: hidden;
-	cursor: pointer;
+	cursor: default;
 	transition: all 0.2s ease;
 }
 
@@ -101,7 +101,7 @@
 	background: var(--surface-low);
 	border: 1px solid var(--border);
 	border-radius: 6px;
-	cursor: pointer;
+	cursor: default;
 	transition: all 0.2s;
 }
 

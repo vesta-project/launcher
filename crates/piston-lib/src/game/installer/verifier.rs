@@ -4,7 +4,7 @@ use crate::game::installer::types::{
 use anyhow::Result;
 use sha1::{Digest, Sha1};
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
 /// Maximum number of asset objects to spot-check (randomly sampled).
@@ -49,42 +49,13 @@ fn verify_jre_executable(java_path: &Path) -> bool {
 }
 
 /// Verify asset objects exist and spot-check their SHA1 hashes.
+/// `asset_index_id` should come from the manifest's `assetIndex.id` field.
 /// Returns a list of VerificationIssues found.
-fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<VerificationIssue> {
+fn verify_asset_objects(
+    assets_dir: &Path,
+    asset_index_id: &str,
+) -> Vec<VerificationIssue> {
     let mut issues = Vec::new();
-
-    // Find the asset index to know what objects are expected
-    let installed_id = spec.installed_version_id();
-    let version_json_path = spec
-        .versions_dir()
-        .join(&installed_id)
-        .join(format!("{}.json", installed_id));
-
-    let index_content = match std::fs::read_to_string(&version_json_path) {
-        Ok(c) => c,
-        Err(_) => {
-            // Try vanilla version path
-            let vanilla_path = spec
-                .versions_dir()
-                .join(&spec.version_id)
-                .join(format!("{}.json", spec.version_id));
-            match std::fs::read_to_string(&vanilla_path) {
-                Ok(c) => c,
-                Err(_) => return issues, // Can't verify assets without version JSON
-            }
-        }
-    };
-
-    let parsed: serde_json::Value = match serde_json::from_str(&index_content) {
-        Ok(v) => v,
-        Err(_) => return issues,
-    };
-
-    let asset_index_id = parsed
-        .get("assetIndex")
-        .and_then(|a| a.get("id"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("legacy");
 
     let index_path = assets_dir
         .join("indexes")
@@ -103,7 +74,17 @@ fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<Verificati
         }
     };
 
-    let index: serde_json::Value = match serde_json::from_str(&index_content) {
+    #[derive(serde::Deserialize)]
+    struct AssetIndexFile {
+        objects: std::collections::HashMap<String, AssetIndexEntry>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct AssetIndexEntry {
+        hash: String,
+    }
+
+    let index: AssetIndexFile = match serde_json::from_str(&index_content) {
         Ok(v) => v,
         Err(_) => {
             issues.push(VerificationIssue {
@@ -116,10 +97,7 @@ fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<Verificati
         }
     };
 
-    let objects = match index.get("objects").and_then(|o| o.as_object()) {
-        Some(o) => o,
-        None => return issues, // Legacy format without objects
-    };
+    let objects = index.objects;
 
     let total_expected = objects.len();
     let objects_dir = assets_dir.join("objects");
@@ -127,10 +105,8 @@ fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<Verificati
     let mut missing_count = 0usize;
     let mut mismatch_count = 0usize;
 
-    // Collect entries for spot-check sampling
-    let entries: Vec<(&String, &serde_json::Value)> = objects.iter().collect();
+    let entries: Vec<(&String, &AssetIndexEntry)> = objects.iter().collect();
 
-    // If spot-checking, randomly select a subset
     let check_set: Vec<usize> =
         if ASSET_SPOT_CHECK_COUNT > 0 && entries.len() > ASSET_SPOT_CHECK_COUNT {
             use std::collections::HashSet;
@@ -139,7 +115,6 @@ fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<Verificati
                 .duration_since(UNIX_EPOCH)
                 .map(|d| d.as_nanos() as u64)
                 .unwrap_or(42);
-            // Simple deterministic sampling based on time seed
             let mut indices = HashSet::new();
             let mut rng = seed;
             while indices.len() < ASSET_SPOT_CHECK_COUNT {
@@ -157,10 +132,7 @@ fn verify_asset_objects(assets_dir: &Path, spec: &InstallSpec) -> Vec<Verificati
 
     for idx in &check_set {
         let (asset_name, asset_obj) = entries[*idx];
-        let hash = match asset_obj.get("hash").and_then(|h| h.as_str()) {
-            Some(h) => h,
-            None => continue,
-        };
+        let hash = &asset_obj.hash;
         let Some(hash_prefix) = hash.get(..2) else {
             log::warn!(
                 "[verifier] Asset object hash too short to derive path: name={} hash={}",
@@ -440,7 +412,8 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
             log::info!("[verifier] Asset index found: id={}", asset_index_id);
             // Deep check: verify asset objects (only in Full scope)
             if spec.repair_scope == RepairScope::Full {
-                let asset_issues = verify_asset_objects(&spec.assets_dir(), spec);
+                let asset_issues =
+                    verify_asset_objects(&spec.assets_dir(), &ai.id);
                 checked += asset_issues.len();
                 issues.extend(asset_issues);
             }
@@ -647,27 +620,6 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     })
 }
 
-fn library_is_native(lib: &serde_json::Value, name: &str) -> bool {
-    if lib.get("is_native").and_then(|v| v.as_bool()) == Some(true) {
-        return true;
-    }
-
-    let name_lower = name.to_lowercase();
-    let parts_count = name.split(':').count();
-    name_lower.contains(":natives-")
-        || name_lower.contains(":native-")
-        || (name_lower.contains("natives-") && parts_count > 3)
-        || (name_lower.contains("native-") && parts_count > 3)
-        || (parts_count > 3 && {
-            let cl = name.split(':').nth(3).unwrap_or("").to_lowercase();
-            cl.starts_with("osx-")
-                || cl.starts_with("macos-")
-                || cl.starts_with("linux-")
-                || cl.starts_with("windows-")
-                || cl.starts_with("win-")
-        })
-}
-
 fn count_native_binaries(dir: &Path, os: crate::game::installer::types::OsType) -> usize {
     let mut count = 0usize;
     let mut stack = vec![dir.to_path_buf()];
@@ -710,112 +662,6 @@ fn is_native_binary_for_os(path: &Path, os: crate::game::installer::types::OsTyp
         | crate::game::installer::types::OsType::LinuxArm32
         | crate::game::installer::types::OsType::LinuxArm64 => ext == "so",
     }
-}
-
-fn library_artifact_path(lib: &serde_json::Value) -> Option<PathBuf> {
-    // UnifiedManifest format: path is directly on the library object
-    if let Some(path) = lib.get("path").and_then(|v| v.as_str()) {
-        return Some(Path::new(path).to_path_buf());
-    }
-
-    // Mojang/VersionManifest format: path is under downloads.artifact.path
-    lib.get("downloads")
-        .and_then(|v| v.get("artifact"))
-        .and_then(|v| v.get("path"))
-        .and_then(|v| v.as_str())
-        .map(Path::new)
-        .map(Path::to_path_buf)
-}
-
-/// Check whether a library's `rules` field allows it on the given OS.
-/// This mirrors Modrinth's `parse_rules` + `parse_rule` but operates on raw
-/// JSON so the verifier doesn't need to parse the full typed manifest.
-///
-/// Rule evaluation:
-/// - No rules → always included
-/// - Allow + match → include
-/// - Allow + no match → exclude (rule says "only include if...")
-/// - Disallow + match → exclude
-/// - Disallow + no match → neutral (rule doesn't apply)
-/// - ALL rules are Disallow and NONE match → include (default-allow)
-fn library_allowed_by_rules(
-    lib: &serde_json::Value,
-    os: crate::game::installer::types::OsType,
-) -> bool {
-    let Some(rules) = lib.get("rules").and_then(|v| v.as_array()) else {
-        return true; // No rules → include
-    };
-
-    let os_name = os.os_name();
-    let target_arch = os.rust_arch_str();
-
-    let mut results: Vec<Option<bool>> = rules
-        .iter()
-        .map(|rule| {
-            let matches = rule_matches_os_json(rule, os_name, target_arch);
-            match rule.get("action").and_then(|v| v.as_str()) {
-                Some("allow") => Some(matches),
-                Some("disallow") => {
-                    if matches {
-                        Some(false)
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            }
-        })
-        .collect();
-
-    // If every rule is a disallow, add a synthetic allow (default-allow)
-    let all_disallow = rules
-        .iter()
-        .all(|r| r.get("action").and_then(|v| v.as_str()) == Some("disallow"));
-    if all_disallow {
-        results.push(Some(true));
-    }
-
-    // Include if: at least one explicit true AND no explicit false
-    !(results.iter().any(|r| r == &Some(false)) || results.iter().all(|r| r.is_none()))
-}
-
-/// Check whether a single rule object matches the current OS + arch.
-/// Mirrors `rule_matches`.
-fn rule_matches_os_json(rule: &serde_json::Value, os_name: &str, target_arch: &str) -> bool {
-    // Check OS constraints
-    if let Some(os_rule) = rule.get("os") {
-        if let Some(name) = os_rule.get("name").and_then(|v| v.as_str()) {
-            // Handle "osx"/"macos" interchangeability in rule definitions
-            let name_matches = name == os_name
-                || (os_name == "osx" && name == "macos")
-                || (name == "osx" && os_name == "macos");
-            if !name_matches {
-                return false;
-            }
-        }
-        if let Some(arch) = os_rule.get("arch").and_then(|v| v.as_str()) {
-            // Normalize arch: "x64"/"amd64" → "x86_64", "arm64" → "aarch64"
-            let normalized = match arch {
-                "x64" | "amd64" => "x86_64",
-                "arm64" => "aarch64",
-                other => other,
-            };
-            if normalized != target_arch {
-                return false;
-            }
-        }
-    }
-
-    // Check feature constraints — is_demo_user / has_custom_resolution
-    // are always false for normal launchers, so any feature requirement
-    // means the rule does NOT match.
-    if let Some(features) = rule.get("features").and_then(|v| v.as_object()) {
-        if features.contains_key("is_demo_user") || features.contains_key("has_custom_resolution") {
-            return false;
-        }
-    }
-
-    true
 }
 
 #[cfg(test)]

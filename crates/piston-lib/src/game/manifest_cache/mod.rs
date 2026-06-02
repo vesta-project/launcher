@@ -62,10 +62,7 @@ impl ManifestCache {
         Self {
             entries: RwLock::new(HashMap::new()),
             cache_dir,
-            client: reqwest::Client::builder()
-                .user_agent("VestaLauncher/1.0")
-                .build()
-                .expect("Failed to build HTTP client"),
+            client: crate::client::shared_client().clone(),
             offline: false,
         }
     }
@@ -76,10 +73,7 @@ impl ManifestCache {
         Self {
             entries: RwLock::new(HashMap::new()),
             cache_dir,
-            client: reqwest::Client::builder()
-                .user_agent("VestaLauncher/1.0")
-                .build()
-                .expect("Failed to build HTTP client"),
+            client: crate::client::shared_client().clone(),
             offline: true,
         }
     }

@@ -9,9 +9,9 @@ use crate::game::modpack::parser::{extract_overrides_with_config_policy, get_mod
 use crate::game::modpack::types::ModpackMod;
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
-use reqwest::Client;
 use std::path::Path;
 use std::sync::Arc;
+use tokio::task;
 
 pub struct ModpackResolvedCF {
     pub url: String,
@@ -144,17 +144,16 @@ impl ModpackInstaller {
                 "Downloading modpack resources",
                 Some(metadata.mods.len() as u32),
             );
-            let client = Client::new();
-            let downloader = BatchDownloader::new(client, 8);
+            let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
 
             let mut artifacts = Vec::new();
             let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();
-            for mod_entry in metadata.mods.clone() {
+            for mod_entry in &metadata.mods {
                 match mod_entry {
                     ModpackMod::Modrinth {
-                        path,
+                        ref path,
                         urls,
-                        hashes,
+                        ref hashes,
                         size: _,
                     } => {
                         if !urls.is_empty() {
@@ -167,19 +166,19 @@ impl ModpackInstaller {
                                     .unwrap_or("unknown")
                                     .to_string(),
                                 label: format!("mod-modrinth-{}", urls[0]),
-                                urls,
+                                urls: urls.clone(),
                                 path: target_path,
                                 sha1,
                             });
                         }
                     }
                     ModpackMod::CurseForge {
-                        project_id,
+                        ref project_id,
                         file_id,
                         required: _,
-                        hash,
+                        ref hash,
                     } => {
-                        curseforge_jobs.push((project_id, file_id, hash));
+                        curseforge_jobs.push((*project_id, *file_id, hash.clone()));
                     }
                 }
             }
@@ -291,9 +290,13 @@ impl ModpackInstaller {
                                 mod_entry.sha1 = sha1.clone();
                                 *url = download_url.clone().unwrap_or_default();
                                 // Grab file size from disk after download
-                                mod_entry.size = std::fs::metadata(game_dir.join(relative_path))
-                                    .ok()
-                                    .map(|m| m.len());
+                                let gd = game_dir.to_path_buf();
+                                let rp = relative_path.clone();
+                                mod_entry.size = task::spawn_blocking(move || {
+                                    std::fs::metadata(gd.join(&rp)).ok().map(|m| m.len())
+                                })
+                                .await
+                                .context("spawn_blocking panicked")?;
                                 break;
                             }
                         }
@@ -407,8 +410,7 @@ impl ModpackInstaller {
                 Some(diff.resources_to_fix.len() as u32),
             );
 
-            let client = Client::new();
-            let downloader = BatchDownloader::new(client.clone(), 8);
+            let downloader = BatchDownloader::new(crate::client::shared_client().clone(), 8);
             let mut artifacts = Vec::new();
             let mut curseforge_jobs: Vec<(Option<u32>, u32, Option<String>)> = Vec::new();
 
@@ -531,9 +533,13 @@ impl ModpackInstaller {
                             mod_entry.path = relative_path.clone();
                             mod_entry.sha1 = sha1.clone();
                             *url = download_url.clone().unwrap_or_default();
-                            mod_entry.size = std::fs::metadata(game_dir.join(relative_path))
-                                .ok()
-                                .map(|m| m.len());
+                            let gd = game_dir.to_path_buf();
+                            let rp = relative_path.clone();
+                            mod_entry.size = task::spawn_blocking(move || {
+                                std::fs::metadata(gd.join(&rp)).ok().map(|m| m.len())
+                            })
+                            .await
+                            .context("spawn_blocking panicked")?;
                             break;
                         }
                     }

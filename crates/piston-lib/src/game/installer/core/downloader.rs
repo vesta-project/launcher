@@ -158,8 +158,6 @@ async fn download_with_validation(
         reporter.update_bytes(downloaded, total_size);
     }
     file.flush().await?;
-    // Ensure data is flushed to disk
-    file.sync_all().await?;
     drop(file);
 
     // Validate SHA1 if provided
@@ -206,39 +204,7 @@ async fn download_with_validation(
 
 /// Download a file to memory and return the bytes
 pub async fn download_to_memory(url: &str, expected_sha1: Option<&str>) -> Result<Vec<u8>> {
-    log::debug!("Downloading to memory: {}", url);
-
-    // Convenience wrapper that creates its own client. For bulk downloads prefer
-    // `download_to_memory_with_client` to reuse a single Client.
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(120)) // TODO: Restore config value
-        .build()?;
-
-    let response = client.get(url).send().await?;
-
-    if !response.status().is_success() {
-        anyhow::bail!("HTTP error {}: {}", response.status(), url);
-    }
-
-    let bytes = response.bytes().await?;
-
-    // Validate SHA1 if provided
-    if let Some(expected) = expected_sha1 {
-        let mut hasher = Sha1::new();
-        hasher.update(&bytes);
-        let computed = format!("{:x}", hasher.finalize());
-
-        if computed.to_lowercase() != expected.to_lowercase() {
-            anyhow::bail!(
-                "SHA1 mismatch for {}: expected {}, got {}",
-                url,
-                expected,
-                computed
-            );
-        }
-    }
-
-    Ok(bytes.to_vec())
+    download_to_memory_with_client(crate::client::shared_client(), url, expected_sha1, None).await
 }
 
 /// Download a file to memory using an existing Client and return the bytes
@@ -334,22 +300,7 @@ async fn download_to_memory_internal(
 
 /// Download JSON and deserialize
 pub async fn download_json<T: serde::de::DeserializeOwned>(url: &str) -> Result<T> {
-    log::debug!("Downloading JSON: {}", url);
-
-    // Convenience wrapper that creates its own client. Callers that perform many
-    // requests should use `download_json_with_client` with a shared Client.
-    let client = Client::builder()
-        .timeout(std::time::Duration::from_secs(120)) // TODO: Restore config value
-        .build()?;
-
-    let response = client.get(url).send().await?;
-
-    if !response.status().is_success() {
-        anyhow::bail!("HTTP error {}: {}", response.status(), url);
-    }
-
-    let data = response.json().await?;
-    Ok(data)
+    download_json_with_client(crate::client::shared_client(), url).await
 }
 
 /// Download JSON using an existing Client and deserialize
@@ -368,45 +319,53 @@ pub async fn download_json_with_client<T: serde::de::DeserializeOwned>(
     Ok(data)
 }
 
-/// Extract a zip archive to a directory
-pub async fn extract_zip(zip_bytes: &[u8], dest_dir: &Path) -> Result<()> {
+/// Extract a zip archive to a directory (runs on blocking thread pool)
+pub async fn extract_zip(zip_bytes: Vec<u8>, dest_dir: &Path) -> Result<()> {
     use std::io::Cursor;
 
     log::debug!("Extracting zip to: {:?}", dest_dir);
 
     create_dir_all(dest_dir).await?;
 
-    let cursor = Cursor::new(zip_bytes);
-    let mut archive = zip::ZipArchive::new(cursor)?;
+    let dest_dir = dest_dir.to_path_buf();
+    tokio::task::spawn_blocking(move || {
+        let cursor = Cursor::new(zip_bytes);
+        let mut archive = zip::ZipArchive::new(cursor)?;
 
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = dest_dir.join(file.name());
+        for i in 0..archive.len() {
+            let mut file = archive.by_index(i)?;
+            let name = file.name();
+            if name.starts_with('/') || name.contains("..") || name.starts_with('\\') {
+                anyhow::bail!("Zip entry escapes destination: {}", name);
+            }
+            let outpath = dest_dir.join(name);
 
-        if file.name().ends_with('/') {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(p) = outpath.parent() {
-                if !p.exists() {
-                    std::fs::create_dir_all(p)?;
+            if file.name().ends_with('/') {
+                std::fs::create_dir_all(&outpath)?;
+            } else {
+                if let Some(p) = outpath.parent() {
+                    if !p.exists() {
+                        std::fs::create_dir_all(p)?;
+                    }
+                }
+                let mut outfile = std::fs::File::create(&outpath)?;
+                std::io::copy(&mut file, &mut outfile)?;
+            }
+
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                if let Some(mode) = file.unix_mode() {
+                    std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
                 }
             }
-            let mut outfile = std::fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
         }
 
-        // Set permissions on Unix
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if let Some(mode) = file.unix_mode() {
-                std::fs::set_permissions(&outpath, std::fs::Permissions::from_mode(mode))?;
-            }
-        }
-    }
-
-    log::debug!("Zip extraction complete");
-    Ok(())
+        log::debug!("Zip extraction complete");
+        Ok(())
+    })
+    .await
+    .map_err(|e| anyhow::anyhow!("Zip extraction failed: {}", e))?
 }
 
 /// Ensure there's a client JAR available for a loader-installed variant
@@ -415,6 +374,7 @@ pub async fn extract_zip(zip_bytes: &[u8], dest_dir: &Path) -> Result<()> {
 pub async fn ensure_installed_client(
     spec: &crate::game::installer::types::InstallSpec,
     installed_id: &str,
+    client: &Client,
     reporter: Option<&dyn crate::game::installer::types::ProgressReporter>,
 ) -> Result<()> {
     // Paths
@@ -484,11 +444,6 @@ pub async fn ensure_installed_client(
         installed_jar.display()
     );
 
-    // Use a lightweight client; reuse progress reporter when given
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(120))
-        .build()?;
-
     // If we were passed a reporter, use it to provide progress; otherwise create a noop reporter
     let rep: &dyn crate::game::installer::types::ProgressReporter = match reporter {
         Some(r) => r,
@@ -496,7 +451,7 @@ pub async fn ensure_installed_client(
     };
 
     // Use existing download_to_path helper
-    download_to_path(&client, client_url, &installed_jar, sha1, rep).await?;
+    download_to_path(client, client_url, &installed_jar, sha1, rep).await?;
 
     Ok(())
 }
@@ -580,7 +535,7 @@ mod tests {
         let installed_id = "forge-loader-47.2.0-1.20.1";
 
         // Call helper
-        ensure_installed_client(&spec, installed_id, None)
+        ensure_installed_client(&spec, installed_id, crate::client::shared_client(), None)
             .await
             .unwrap();
 
@@ -626,7 +581,7 @@ mod tests {
 
         let installed_id = "forge-loader-47.2.0-1.20.1";
         // Should not overwrite existing file
-        ensure_installed_client(&spec, installed_id, None)
+        ensure_installed_client(&spec, installed_id, crate::client::shared_client(), None)
             .await
             .unwrap();
         let contents = std::fs::read_to_string(installed_jar).unwrap();

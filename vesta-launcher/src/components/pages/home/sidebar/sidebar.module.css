@@ -1,12 +1,5 @@
 .sidebar {
-	/* If the background gradient is not in a variable, the background would be transparent */
-	--bg: linear-gradient(
-		90deg,
-		hsl(var(--color__primary-hue) 100% 7% / calc(var(--gradient-enabled) * 0.05)) 0%,
-		hsl(var(--color__primary-hue) 81% 40% / calc(var(--gradient-enabled) * 0.05)) 35%,
-		hsl(var(--color__primary-hue) 81% 40% / calc(var(--gradient-enabled) * 0.05)) 100%
-	);
-	color: contrast-color(var(--bg));
+	color: contrast-color(var(--sidebar-bg));
 
 	z-index: var(--z-sidebar);
 	padding: 13px 0 13px 13px;
@@ -61,6 +54,14 @@
 	}
 }
 
+[data-ui-chrome-enabled="false"] .sidebar {
+	padding-left: 12px;
+}
+
+[data-ui-chrome-enabled="false"] .sidebar--open {
+	grid-gap: 10px;
+}
+
 .sidebar__root {
 	width: fit-content;
 	height: 100%;
@@ -81,7 +82,6 @@
 	scrollbar-width: none;
 	-ms-overflow-style: none;
 
-	/* Mask gradient for top/bottom scrolling indication */
 	mask-image: linear-gradient(
 		to bottom,
 		transparent,
@@ -147,7 +147,42 @@
 	flex-direction: column;
 }
 
-/* Notification badge (unread count) */
+[data-ui-chrome-enabled="false"] .actions {
+	gap: 10px;
+}
+
+[data-ui-chrome-enabled="false"] .sidebar-tab-active {
+	background: hsl(var(--color__primary-hue) 70% 46% / 0.18) !important;
+	box-shadow:
+		inset 0 0 0 1px hsl(var(--color__primary-hue) 80% 68% / 0.35),
+		0 8px 22px hsl(var(--color__primary-hue) 70% 42% / 0.12);
+}
+
+[data-ui-chrome-enabled="false"] .sidebar-tab-active::before {
+	content: "";
+	position: absolute;
+	left: -7px;
+	top: 9px;
+	bottom: 9px;
+	width: 3px;
+	border-radius: 999px;
+	background: hsl(var(--color__primary-hue) 80% 66%);
+	box-shadow: 0 0 12px hsl(var(--color__primary-hue) 80% 58% / 0.75);
+}
+
+[data-ui-chrome-enabled="false"] .sidebar-tab-active svg path {
+	fill: var(--icon-primary) !important;
+}
+
+[data-ui-chrome-enabled="false"] .sidebar-tab-active svg {
+	color: var(--icon-primary);
+	transform: scale(0.94);
+}
+
+[data-ui-chrome-enabled="false"] .sidebar-tab-active:hover svg {
+	transform: scale(0.98);
+}
+
 .notification-badge {
 	position: absolute;
 	top: -6px;
@@ -166,7 +201,6 @@
 	box-shadow: 0 2px 4px hsl(0 0% 0% / 0.3);
 }
 
-/* Notification spinner (active tasks) */
 .notification-spinner {
 	position: absolute;
 	top: -4px;

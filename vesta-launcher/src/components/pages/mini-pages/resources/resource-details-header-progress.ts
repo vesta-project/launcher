@@ -6,21 +6,19 @@ export const RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX = 900;
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
 export function computeHeaderCollapseProgress(
-	scrollTop: number,
-	maxScroll: number,
+	scrollOffset: number,
+	maxScroll = Number.POSITIVE_INFINITY,
 	targetRangePx = HEADER_COLLAPSE_RANGE_PX,
 ): number {
-	if (!Number.isFinite(scrollTop) || !Number.isFinite(maxScroll)) return 0;
-	if (targetRangePx <= 0 || maxScroll <= 0) return 0;
+	if (!Number.isFinite(scrollOffset) || scrollOffset <= 0) return 0;
+	if (targetRangePx <= 0) return 0;
 
-	const boundedTop = Math.min(Math.max(scrollTop, 0), maxScroll);
-	if (boundedTop <= 0) return 0;
+	const effectiveRange =
+		Number.isFinite(maxScroll) && maxScroll > 0 && maxScroll < targetRangePx
+			? maxScroll
+			: targetRangePx;
 
-	// If content is short, use available scroll range so compact mode can still be reached.
-	const effectiveRange = maxScroll < targetRangePx ? maxScroll : targetRangePx;
-	if (effectiveRange <= 0) return 0;
-
-	return clamp01(boundedTop / effectiveRange);
+	return clamp01(scrollOffset / effectiveRange);
 }
 
 export function deriveHeaderCompactState(
