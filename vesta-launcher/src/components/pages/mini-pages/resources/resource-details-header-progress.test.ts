@@ -6,9 +6,14 @@ import {
 } from "./resource-details-header-progress";
 
 describe("computeHeaderCollapseProgress", () => {
-	it("returns zero when no scrolling is possible", () => {
+	it("returns zero when offset is zero", () => {
 		expect(computeHeaderCollapseProgress(0, 0)).toBe(0);
-		expect(computeHeaderCollapseProgress(50, 0)).toBe(0);
+		expect(computeHeaderCollapseProgress(0, 500)).toBe(0);
+	});
+
+	it("allows progress when content does not overflow", () => {
+		expect(computeHeaderCollapseProgress(36, 0)).toBeCloseTo(0.5, 5);
+		expect(computeHeaderCollapseProgress(72, 0)).toBe(1);
 	});
 
 	it("uses collapse range for long content", () => {
@@ -27,7 +32,7 @@ describe("computeHeaderCollapseProgress", () => {
 		expect(computeHeaderCollapseProgress(-50, 300)).toBe(0);
 		expect(computeHeaderCollapseProgress(999, 300)).toBe(1);
 		expect(computeHeaderCollapseProgress(Number.NaN, 300)).toBe(0);
-		expect(computeHeaderCollapseProgress(12, Number.POSITIVE_INFINITY)).toBe(0);
+		expect(computeHeaderCollapseProgress(12, Number.POSITIVE_INFINITY)).toBeCloseTo(12 / 72, 5);
 	});
 
 	it("keeps the default target range stable", () => {

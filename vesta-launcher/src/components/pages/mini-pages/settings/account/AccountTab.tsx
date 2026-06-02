@@ -18,6 +18,7 @@ import { getActiveAccount, setActiveAccount as persistActiveAccount } from "@uti
 import { onConfigUpdate } from "@utils/config-sync";
 import { createNotification } from "@utils/notifications";
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import pageStyles from "../settings-page.module.css";
 import styles from "./AccountTab.module.css";
 
 interface Account {
@@ -912,6 +913,7 @@ export function AccountSettingsTab() {
 	};
 
 	return (
+		<div class={`${pageStyles["settings-tab-content"]} ${pageStyles["settings-tab-content--wide"]} ${pageStyles["settings-tab-content--fill"]}`}>
 		<div class={styles.container}>
 			<Show when={activeAccount()} fallback={<div class={styles.noAccount}>No account connected</div>}>
 				{(active) => (
@@ -1280,6 +1282,7 @@ export function AccountSettingsTab() {
 				scale={4}
 				pixelated={true}
 			/>
+		</div>
 		</div>
 	);
 }

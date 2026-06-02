@@ -68,24 +68,10 @@ export default function DebugTestPage() {
 						if (typeof val === "string") setToggleValue(val);
 					}}
 				>
-					<ToggleGroupItem
-						value="one"
-						style={{
-							padding: "8px 16px",
-							border: "1px solid #444",
-							background: toggleValue() === "one" ? "var(--primary)" : "transparent",
-						}}
-					>
+					<ToggleGroupItem value="one">
 						Option One
 					</ToggleGroupItem>
-					<ToggleGroupItem
-						value="two"
-						style={{
-							padding: "8px 16px",
-							border: "1px solid #444",
-							background: toggleValue() === "two" ? "var(--primary)" : "transparent",
-						}}
-					>
+					<ToggleGroupItem value="two">
 						Option Two
 					</ToggleGroupItem>
 				</ToggleGroup>

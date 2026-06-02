@@ -34,7 +34,6 @@ export function ModloaderSwitcher(props: ModloaderSwitcherProps) {
 					<ToggleGroupItem
 						value={option.value}
 						disabled={props.disabled || option.disabled}
-						class={styles["modloader-switcher__item"]}
 						classList={{
 							[styles["modloader-switcher__item--unsupported"]]: option.supported === false,
 						}}

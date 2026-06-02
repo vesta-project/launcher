@@ -1,60 +1,7 @@
 .settings-page {
-    padding: 24px;
+    position: relative;
     width: 100%;
     height: 100%;
-    box-sizing: border-box;
-    display: flex;
-    flex-direction: column;
-    gap: 0; /* Remove gap since tabs handle spacing */
-    overflow: auto;
-}
-
-.settings-tabs {
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    padding: 0.2rem;
-}
-
-@media (min-width: 800px) {
-    .settings-tabs {
-        flex-direction: row;
-        gap: 32px;
-        height: 100%;
-        overflow: hidden;
-    }
-
-    .settings-tabs .tabs-list {
-        flex-direction: column;
-        width: 200px;
-        min-width: 200px;
-        flex-shrink: 0;
-        margin-bottom: 0;
-        height: fit-content;
-        align-items: stretch;
-        background: var(--surface-low);
-        border: var(--border-width-subtle) solid var(--border-subtle);
-        padding: 6px;
-        gap: 4px;
-    }
-
-    .settings-tabs .tabs-trigger {
-        width: 100%;
-        text-align: left;
-        justify-content: flex-start;
-        padding: 10px 14px;
-        border-radius: 6px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-    }
-
-    .settings-tabs .tabs-content {
-        flex: 1;
-        padding-bottom: 0;
-        overflow-y: auto;
-        padding-right: 8px; /* Room for scrollbar */
-    }
 }
 
 .settings-loading {
@@ -86,14 +33,33 @@
     }
 }
 
+.tabs-content {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	width: 100%;
+}
+
 .settings-tab-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
-    padding-bottom: 40px;
-    overflow-y: auto;
-    overflow-x: clip;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	padding: 16px var(--page-gutter-x) var(--page-gutter-bottom);
+	max-width: var(--page-content-max);
+	width: 100%;
+	margin-inline: auto;
+	box-sizing: border-box;
+}
+
+.settings-tab-content--fill {
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.settings-tab-content--wide {
+	max-width: var(--page-content-max-wide);
 }
 
 .settings-section {
@@ -117,7 +83,10 @@
 
 .theme-preset-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    /* Allow cards to flexibly fill available space but remain small when stacked.
+       Auto-fit + minmax lets cards be full-width on narrow screens and form multiple
+       compact columns on wider viewports without imposing a fixed max width. */
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
     margin-top: 8px;
     overflow-x: clip;
@@ -128,28 +97,18 @@
 }
 
 .theme-toolbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    flex-wrap: wrap;
-    margin-top: 6px;
+	display: flex;
+	align-items: center;
+	justify-content: flex-start;
+	gap: 8px;
+	margin-bottom: 12px;
+	flex-wrap: nowrap;
+	overflow: hidden;
 }
 
-.theme-toolbar__left {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-wrap: wrap;
-}
-
-.theme-toolbar__toggles {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    min-width: 0;
+.theme-toolbar__spacer {
+	flex: 1;
+	min-width: 8px;
 }
 
 .theme-search-trigger {
@@ -196,21 +155,6 @@
 .theme-toolbar-icon {
     width: 16px;
     height: 16px;
-}
-
-@media (max-width: 840px) {
-    .theme-toolbar {
-        align-items: stretch;
-    }
-
-    .theme-toolbar__left {
-        flex: 1 1 100%;
-    }
-
-    .theme-search-input--expanded {
-        flex: 1 1 220px;
-        width: 100%;
-    }
 }
 
 .theme-empty-state {
@@ -332,7 +276,8 @@
 
 .java-options-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(240px, 320px));
+    justify-content: start;
     gap: 12px;
 }
 

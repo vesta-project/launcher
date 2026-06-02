@@ -4,6 +4,7 @@ import { ChildrenProp } from "@ui/props";
 import { Tooltip, TooltipContent, TooltipPlacement, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { children, mergeProps, Show, splitProps } from "solid-js";
 import styles from "./button.module.css";
+import { getButtonStyleVars } from "./button-style";
 
 export interface ButtonProps
 	extends PolymorphicProps<"button", ButtonPrimitive.ButtonRootProps & ChildrenProp> {
@@ -66,29 +67,12 @@ function Button(p: ButtonProps) {
 					[local.class ?? ""]: true,
 				}}
 				style={(() => {
-					const cv =
-						local.color === "none"
-							? "var(--secondary-low)"
-							: local.color === "secondary"
-								? "var(--surface-raised)"
-								: `var(--${local.color})`;
-					const fg =
-						local.color === "none" || local.color === "secondary"
-							? "var(--text-primary)"
-							: "var(--text-on-accent)";
-					const txt = local.color !== "none" && local.color !== "secondary" ? cv : "var(--text-primary)";
-					const bdr =
-						local.color === "none" || local.color === "secondary"
-							? "var(--border-subtle)"
-							: "transparent";
+					const buttonVars = getButtonStyleVars(local.color);
 
 					return typeof local.style === "string"
-						? `--button-color: ${cv}; --button-fg: ${fg}; --button-border: ${bdr}; --button-text: ${txt}; ${local.style}`
+						? `--button-color: ${buttonVars["--button-color"]}; --button-fg: ${buttonVars["--button-fg"]}; --button-border: ${buttonVars["--button-border"]}; --button-text: ${buttonVars["--button-text"]}; ${local.style}`
 						: {
-								"--button-color": cv,
-								"--button-fg": fg,
-								"--button-border": bdr,
-								"--button-text": txt,
+								...buttonVars,
 								...(local.style as any),
 							};
 				})()}

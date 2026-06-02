@@ -1,5 +1,6 @@
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { openExternal } from "@utils/external-link";
@@ -20,6 +21,7 @@ interface HelpSettingsTabProps {
 export function HelpSettingsTab(props: HelpSettingsTabProps) {
 	return (
 		<div class={styles["settings-tab-content"]}>
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard header="Minecraft Modding">
 				<SettingsField
 					label="Documentation"
@@ -127,6 +129,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					</a>
 				</div>
 			</SettingsCard>
+			</div>
 		</div>
 	);
 }

@@ -1,9 +1,10 @@
 ﻿.container {
     display: grid;
     grid-template-columns: 1fr minmax(320px, 30%);
-    height: 100%;
+    flex: 1;
+    min-height: 0;
     overflow: hidden;
-    padding: 20px;
+    padding: 0;
     gap: 12px;
     position: relative;
     animation: fadeIn 0.4s ease-out;

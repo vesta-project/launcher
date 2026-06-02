@@ -1,4 +1,5 @@
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import {
 	NumberField,
 	NumberFieldDecrementTrigger,
@@ -26,6 +27,7 @@ export const InstanceDefaultsTab: Component<{
 
 	return (
 		<div class={styles["settings-tab-content"]}>
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard header="Resolution Defaults" subHeader="Default window size for new instances.">
 				<SettingsField
 					label="Game Window"
@@ -272,6 +274,7 @@ export const InstanceDefaultsTab: Component<{
 					/>
 				</div>
 			</SettingsCard>
+			</div>
 		</div>
 	);
 };

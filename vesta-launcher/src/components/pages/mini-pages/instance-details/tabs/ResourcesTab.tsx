@@ -3,9 +3,44 @@ import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import { flexRender } from "@tanstack/solid-table";
 import Button from "@ui/button/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import { For, Show } from "solid-js";
+import { createEffect, createSignal, For, Show } from "solid-js";
+import {
+	createContainerQuery,
+	RESOURCES_FILTER_COMPACT_WIDTH,
+	RESOURCES_TABLE_COMPACT_WIDTH,
+} from "@utils/media-query";
 import styles from "../instance-details.module.css";
+
+const FILTER_OPTIONS = [
+	{ id: "All", label: "All" },
+	{ id: "mod", label: "Mods" },
+	{ id: "resourcepack", label: "Packs" },
+	{ id: "shader", label: "Shaders" },
+	{ id: "datapack", label: "Datapacks" },
+];
+
+const COLUMN_WIDTHS: Record<string, string | undefined> = {
+	select: "48px",
+	display_name: undefined,
+	current_version: "96px",
+	is_enabled: "56px",
+	actions: "48px",
+};
+
+const COLUMN_CLASS: Record<string, string> = {
+	select: "col-select",
+	display_name: "col-display_name",
+	current_version: "col-current_version",
+	is_enabled: "col-is_enabled",
+	actions: "col-actions",
+};
+
+function getColumnClass(columnId: string): string | undefined {
+	const key = COLUMN_CLASS[columnId];
+	return key ? styles[key] : undefined;
+}
 
 interface ResourcesTabProps {
 	instance: any;
@@ -24,39 +59,73 @@ interface ResourcesTabProps {
 	busy: boolean;
 	checkingUpdates: boolean;
 	checkUpdates: () => void;
+	onCompactChange?: (compact: boolean) => void;
 }
 
 export const ResourcesTab = (props: ResourcesTabProps) => {
 	const selectionCount = () =>
 		Object.values(props.resourcesStore.state.selection).filter((v) => v).length;
 
+	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
+	const isCompactTable = createContainerQuery(panelRef, RESOURCES_TABLE_COMPACT_WIDTH);
+	const isFilterCompact = createContainerQuery(panelRef, RESOURCES_FILTER_COMPACT_WIDTH);
+
+	createEffect(() => {
+		props.onCompactChange?.(isCompactTable());
+	});
+
+	const handleSearchInput = (e: InputEvent) => {
+		const target = e.currentTarget as HTMLInputElement;
+		props.setResourceSearch(target.value);
+	};
+
 	return (
-		<section class={styles["tab-resources"]}>
+		<section ref={setPanelRef} class={styles["tab-resources"]}>
 			<div class={styles["resources-toolbar"]}>
 				<div class={styles["toolbar-search-filter"]}>
-					<div class={styles["filter-group"]}>
-						<For
-							each={[
-								{ id: "All", label: "All" },
-								{ id: "mod", label: "Mods" },
-								{ id: "resourcepack", label: "Packs" },
-								{ id: "shader", label: "Shaders" },
-								{ id: "datapack", label: "Datapacks" },
-							]}
-						>
-							{(option) => (
-								<button
-									class={styles["filter-btn"]}
-									classList={{
-										[styles.active]: props.resourceTypeFilter === option.id,
-									}}
-									onClick={() => props.setResourceTypeFilter(option.id)}
-								>
-									{option.label}
-								</button>
-							)}
-						</For>
-					</div>
+					<Show when={!isFilterCompact()}>
+						<div class={styles["filter-group"]}>
+							<For each={FILTER_OPTIONS}>
+								{(option) => (
+									<button
+										class={styles["filter-btn"]}
+										classList={{
+											[styles.active]: props.resourceTypeFilter === option.id,
+										}}
+										onClick={() => props.setResourceTypeFilter(option.id)}
+									>
+										{option.label}
+									</button>
+								)}
+							</For>
+						</div>
+					</Show>
+
+					<Show when={isFilterCompact()}>
+						<div class={styles["mobile-filter-select"]}>
+							<Select
+								value={props.resourceTypeFilter}
+								onChange={(val: string | null) => {
+									if (val !== null) props.setResourceTypeFilter(val);
+								}}
+								options={FILTER_OPTIONS.map((o) => o.id)}
+								itemComponent={(p) => (
+									<SelectItem item={p.item}>
+										{FILTER_OPTIONS.find((o) => o.id === p.item.rawValue)?.label}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger>
+									<SelectValue<string>>
+										{(state) =>
+											FILTER_OPTIONS.find((o) => o.id === state.selectedOption())?.label || "All"
+										}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
+						</div>
+					</Show>
 
 					<div class={styles["resources-search"]}>
 						<div class={styles["search-input-wrapper"]}>
@@ -65,7 +134,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								type="text"
 								placeholder="Search resources..."
 								value={props.resourceSearch}
-								onInput={(e) => props.setResourceSearch(e.currentTarget.value)}
+								onInput={handleSearchInput}
 							/>
 						</div>
 					</div>
@@ -80,25 +149,25 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								class={styles["check-updates-btn"]}
 								onClick={props.checkUpdates}
 								disabled={props.busy || props.checkingUpdates}
+								tooltip_text="Check for available updates"
 							>
 								<Show
 									when={props.checkingUpdates}
 									fallback={
 										<>
 											<ReloadIcon class={styles["check-updates-icon"]} />
-											Check Updates
+											<span>Check Updates</span>
 										</>
 									}
 								>
 									<span class={styles["checking-updates-spinner"]} />
-									Checking...
+									<span>Checking...</span>
 								</Show>
 							</Button>
 
 							<Button
 								size="sm"
 								variant="outline"
-								class={styles["browse-resources-btn"]}
 								onClick={() => {
 									const inst = props.instance;
 									if (inst) {
@@ -108,6 +177,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										props.router?.navigate("/resources");
 									}
 								}}
+								tooltip_text="Browse and add resources"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -125,7 +195,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									<line x1="11" y1="8" x2="11" y2="14" />
 									<line x1="8" y1="11" x2="14" y2="11" />
 								</svg>
-								Browse
+								<span>Browse</span>
 							</Button>
 						</div>
 					</Show>
@@ -153,7 +223,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										<line x1="6" y1="6" x2="18" y2="18" />
 									</svg>
 								</button>
-								<span class={styles["selection-count"]}>{selectionCount()} resources selected</span>
+								<span class={styles["selection-count"]}>
+									{selectionCount()} resources selected
+								</span>
 							</div>
 							<div class={styles["selection-actions"]}>
 								<Button
@@ -161,6 +233,11 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									variant="ghost"
 									onClick={props.handleBatchUpdate}
 									disabled={props.busy || props.selectedToUpdateCount === 0}
+									tooltip_text={
+										isCompactTable()
+											? `Update ${props.selectedToUpdateCount} selected`
+											: undefined
+									}
 								>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -177,7 +254,12 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										<polyline points="7 10 12 15 17 10" />
 										<line x1="12" y1="15" x2="12" y2="3" />
 									</svg>
-									Update ({props.selectedToUpdateCount})
+									<Show
+										when={!isCompactTable()}
+										fallback={<span>({props.selectedToUpdateCount})</span>}
+									>
+										<span>Update ({props.selectedToUpdateCount})</span>
+									</Show>
 								</Button>
 								<Button
 									size="sm"
@@ -185,9 +267,11 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									class={styles["delete-selected"]}
 									onClick={props.handleBatchDelete}
 									disabled={props.busy}
+									tooltip_text={isCompactTable() ? "Delete selected" : undefined}
+									icon_only={isCompactTable()}
 								>
 									<TrashIcon />
-									Delete Selected
+									<Show when={!isCompactTable()}>Delete Selected</Show>
 								</Button>
 							</div>
 						</div>
@@ -207,6 +291,19 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 						}}
 					>
 						<table class={styles["vesta-table"]}>
+							<colgroup>
+								<For each={props.table.getVisibleLeafColumns()}>
+									{(col) => (
+										<col
+											style={
+												COLUMN_WIDTHS[col.id]
+													? { width: COLUMN_WIDTHS[col.id] }
+													: undefined
+											}
+										/>
+									)}
+								</For>
+							</colgroup>
 							<thead>
 								<For each={props.table.getHeaderGroups()}>
 									{(headerGroup) => (
@@ -214,18 +311,21 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 											<For each={headerGroup.headers}>
 												{(header) => (
 													<th
-														style={{
-															width: header.getSize() !== 150 ? `${header.getSize()}px` : undefined,
+														class={getColumnClass(header.column.id)}
+														classList={{
+															[styles["can-sort"]]: header.column.getCanSort(),
 														}}
 													>
 														<Show when={!header.isPlaceholder}>
 															<div
-																classList={{
-																	[styles["can-sort"]]: header.column.getCanSort(),
-																}}
-																onClick={header.column.getToggleSortingHandler()}
+																onClick={
+																	header.column.getToggleSortingHandler()
+																}
 															>
-																{flexRender(header.column.columnDef.header, header.getContext())}
+																{flexRender(
+																	header.column.columnDef.header,
+																	header.getContext(),
+																)}
 															</div>
 														</Show>
 													</th>
@@ -240,13 +340,22 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									{(row) => (
 										<tr
 											onClick={(e) => props.onRowClick(row, e)}
-											style={{ cursor: "pointer" }}
+											style={{ cursor: "default" }}
 											classList={{
 												[styles["row-selected"]]: row.getIsSelected(),
+												[styles["row-disabled"]]:
+													!row.original.is_enabled,
 											}}
 										>
 											<For each={row.getVisibleCells()}>
-												{(cell) => <td>{flexRender(cell.column.columnDef.cell, cell.getContext())}</td>}
+												{(cell) => (
+													<td class={getColumnClass(cell.column.id)}>
+														{flexRender(
+															cell.column.columnDef.cell,
+															cell.getContext(),
+														)}
+													</td>
+												)}
 											</For>
 										</tr>
 									)}
