@@ -711,6 +711,17 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                             // Check for exit_status.json to get accurate exit time and exit code
                             let exit_status_path =
                                 run_state.game_dir.join(".vesta").join("exit_status.json");
+                            let stop_requested = match piston_lib::utils::stop_intent::consume_stop_requested(&run_state.game_dir) {
+                                Ok(value) => value,
+                                Err(e) => {
+                                    log::warn!(
+                                        "Failed to consume stop-request marker for {}: {}",
+                                        run_state.instance_id,
+                                        e
+                                    );
+                                    false
+                                }
+                            };
                             let mut crashed = false;
 
                             if exit_status_path.exists() {
@@ -725,7 +736,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                                 );
 
                                                 // Check for crashes if exit code is non-zero
-                                                if exit_status.exit_code != 0 {
+                                                if exit_status.exit_code != 0 && !stop_requested {
                                                     // Convert started_at string to SystemTime for crash detection
                                                     let launch_start_time =
                                                         match chrono::DateTime::parse_from_rfc3339(

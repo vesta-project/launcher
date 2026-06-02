@@ -16,9 +16,6 @@ use std::process::Stdio;
 use std::sync::Arc;
 use tokio::io::AsyncBufReadExt;
 
-#[cfg(unix)]
-use sysinfo::{Pid as SysPid, ProcessRefreshKind, ProcessStatus, ProcessesToUpdate, System};
-
 #[cfg(windows)]
 use windows_sys::Win32::Foundation::HWND;
 #[cfg(windows)]
@@ -64,43 +61,6 @@ fn is_process_stalled_windows(pid: u32) -> bool {
     } else {
         false
     }
-}
-
-#[cfg(unix)]
-fn is_process_stalled_unix(pid: i32) -> bool {
-    let mut system = System::new();
-    let pid_sys = SysPid::from(pid as usize);
-
-    system.refresh_processes_specifics(
-        ProcessesToUpdate::Some(&[pid_sys]),
-        true,
-        ProcessRefreshKind::nothing().with_cpu(),
-    );
-
-    if let Some(proc1) = system.process(pid_sys) {
-        if matches!(
-            proc1.status(),
-            ProcessStatus::Dead | ProcessStatus::Zombie | ProcessStatus::Stop
-        ) {
-            return true;
-        }
-
-        let cpu1 = proc1.cpu_usage();
-        std::thread::sleep(std::time::Duration::from_secs(1));
-        system.refresh_processes_specifics(
-            ProcessesToUpdate::Some(&[pid_sys]),
-            true,
-            ProcessRefreshKind::nothing().with_cpu(),
-        );
-
-        if let Some(proc2) = system.process(pid_sys) {
-            let cpu2 = proc2.cpu_usage();
-            return cpu1 < 0.1 && cpu2 < 0.1;
-        }
-    }
-
-    // If process disappeared or could not be read, treat as stalled/dead
-    true
 }
 
 /// Launch the game
@@ -182,6 +142,14 @@ pub async fn launch_game(
 
     // 2. Verify Java installation
     verify_java(&spec.java_path).context("Java verification failed")?;
+
+    if let Err(e) = crate::utils::stop_intent::clear_stop_requested(&spec.game_dir) {
+        log::warn!(
+            "Failed to clear stop-request marker for {}: {}",
+            spec.instance_id,
+            e
+        );
+    }
 
     // 3. Extract natives
     log::debug!("Extracting native libraries");
@@ -634,6 +602,35 @@ fn verify_java(java_path: &Path) -> Result<()> {
     Ok(())
 }
 
+/// Send a signal to a game instance process, preferring the process group when the PID is
+/// its group leader (requires `command.detach()` / `setsid()` at launch).
+#[cfg(unix)]
+fn signal_instance(pid: u32, signal: nix::sys::signal::Signal) -> Result<()> {
+    use nix::sys::signal::kill;
+    use nix::unistd::{getpgid, Pid};
+
+    let pid = pid as i32;
+    let leader = Pid::from_raw(pid);
+    let use_group = getpgid(Some(leader))
+        .map(|pgid| pgid == leader)
+        .unwrap_or(false);
+
+    let target = if use_group {
+        Pid::from_raw(-pid)
+    } else {
+        leader
+    };
+
+    match kill(target, signal) {
+        Ok(()) => Ok(()),
+        Err(e) if use_group => {
+            log::warn!("Process-group signal failed ({e}); falling back to single PID");
+            kill(leader, signal).map_err(Into::into)
+        }
+        Err(e) => Err(e.into()),
+    }
+}
+
 /// Kill a running game instance
 pub async fn kill_instance(instance_id: &str) -> Result<String> {
     use crate::game::launcher::registry::{get_instance, unregister_instance};
@@ -644,29 +641,30 @@ pub async fn kill_instance(instance_id: &str) -> Result<String> {
 
     log::info!("Killing instance: {} (PID {})", instance_id, instance.pid);
 
+    if let Err(e) = crate::utils::stop_intent::mark_stop_requested(&instance.game_dir) {
+        log::warn!(
+            "Failed to mark stop request for {}: {}",
+            instance_id,
+            e
+        );
+    }
+
     #[cfg(unix)]
     let message = {
-        use nix::sys::signal::{kill, Signal};
-        use nix::unistd::Pid;
+        use nix::sys::signal::Signal;
 
-        let pid = Pid::from_raw(instance.pid as i32);
-        let stalled = is_process_stalled_unix(instance.pid as i32);
+        if let Err(e) = signal_instance(instance.pid, Signal::SIGTERM) {
+            log::warn!("Failed to send SIGTERM for {}: {}", instance_id, e);
+        }
 
-        if stalled {
-            log::warn!("Process appears stalled; sending SIGKILL");
-            kill(pid, Signal::SIGKILL).context("Failed to send SIGKILL")?;
-            "Process stalled - killed with SIGKILL".to_string()
+        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+
+        if crate::game::launcher::registry::is_instance_running(instance_id).await? {
+            log::warn!("Process didn't respond to SIGTERM, sending SIGKILL");
+            signal_instance(instance.pid, Signal::SIGKILL).context("Failed to send SIGKILL")?;
+            "Graceful close failed - killed with SIGKILL".to_string()
         } else {
-            kill(pid, Signal::SIGTERM).context("Failed to send SIGTERM")?;
-            tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-            if crate::game::launcher::registry::is_instance_running(instance_id).await? {
-                log::warn!("Process didn't respond to SIGTERM, sending SIGKILL");
-                kill(pid, Signal::SIGKILL).context("Failed to send SIGKILL")?;
-                "Graceful close failed - killed with SIGKILL".to_string()
-            } else {
-                "Gracefully killed with SIGTERM".to_string()
-            }
+            "Gracefully killed with SIGTERM".to_string()
         }
     };
 

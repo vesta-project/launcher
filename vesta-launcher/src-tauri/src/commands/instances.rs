@@ -1808,6 +1808,19 @@ pub async fn launch_instance(
                         // Check exit status
                         let exit_status_path =
                             game_dir_monitor.join(".vesta").join("exit_status.json");
+                        let stop_requested = match piston_lib::utils::stop_intent::consume_stop_requested(
+                            &game_dir_monitor,
+                        ) {
+                            Ok(value) => value,
+                            Err(e) => {
+                                log::warn!(
+                                    "Failed to consume stop-request marker for {}: {}",
+                                    instance_id_monitor,
+                                    e
+                                );
+                                false
+                            }
+                        };
                         let (exited_at_ts, exit_code) = if exit_status_path.exists() {
                             let path_for_blocking = exit_status_path.clone();
                             match tokio::task::spawn_blocking(move || {
@@ -1848,7 +1861,7 @@ pub async fn launch_instance(
                         };
 
                         let mut is_crashed = false;
-                        if exit_code != 0 {
+                        if exit_code != 0 && !stop_requested {
                             let log_file = game_dir_monitor.join("logs").join("latest.log");
                             if let Some(crash_info) = crate::utils::crash_parser::detect_crash(
                                 &game_dir_monitor,
@@ -1919,7 +1932,14 @@ pub async fn kill_instance(app_handle: tauri::AppHandle, inst: Instance) -> Resu
             );
             Ok(message)
         }
-        Err(e) => Err(format!("Failed to kill instance: {}", e)),
+        Err(e) => {
+            if let Some(game_dir) = inst.game_directory.as_ref() {
+                let _ = piston_lib::utils::stop_intent::clear_stop_requested(std::path::Path::new(
+                    game_dir,
+                ));
+            }
+            Err(format!("Failed to kill instance: {}", e))
+        }
     }
 }
 
