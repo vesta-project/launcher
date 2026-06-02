@@ -1,4 +1,5 @@
 import { SettingsCard } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
@@ -75,6 +76,7 @@ export const NotificationSettingsTab = () => {
 				</span>
 			</div>
 
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard header="Subscription Sources">
 				<div class={styles["subscriptions-list"]}>
 					<For each={subscriptions()} fallback={<div>No subscriptions found.</div>}>
@@ -155,6 +157,7 @@ export const NotificationSettingsTab = () => {
 				</p>
 				<Button onClick={checkNow}>Check for Updates Now</Button>
 			</SettingsCard>
+			</div>
 		</div>
 	);
 };

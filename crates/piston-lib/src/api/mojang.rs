@@ -3,7 +3,7 @@
 //! Provides methods to fetch user profile data, skins, and verify game ownership.
 
 use anyhow::{Context, Result};
-use reqwest::{Client, multipart};
+use reqwest::multipart;
 use log::{debug, error};
 use serde::{Deserialize, Serialize};
 
@@ -41,7 +41,7 @@ pub struct ProfileCape {
 
 /// Fetch Minecraft profile using bearer token
 pub async fn get_minecraft_profile(bearer_token: &str) -> Result<MinecraftProfile> {
-    let client = Client::new();
+    let client = crate::client::shared_client();
 
     let url = format!("{}/minecraft/profile", MOJANG_API_BASE);
     let response = client
@@ -68,7 +68,7 @@ pub async fn get_minecraft_profile(bearer_token: &str) -> Result<MinecraftProfil
 
 /// Verify game ownership
 pub async fn verify_game_ownership(bearer_token: &str) -> Result<bool> {
-    let client = Client::new();
+    let client = crate::client::shared_client();
 
     let response = client
         .get(format!("{}/entitlements/mcstore", MOJANG_API_BASE))
@@ -82,7 +82,7 @@ pub async fn verify_game_ownership(bearer_token: &str) -> Result<bool> {
 
 /// Upload a new skin to Mojang
 pub async fn upload_skin(bearer_token: &str, variant: &str, file_bytes: Vec<u8>) -> Result<()> {
-    let client = Client::new();
+    let client = crate::client::shared_client();
     let file_len = file_bytes.len();
     debug!("upload_skin: preparing skin upload ({} bytes)", file_len);
     let part = multipart::Part::bytes(file_bytes)
@@ -110,7 +110,7 @@ pub async fn upload_skin(bearer_token: &str, variant: &str, file_bytes: Vec<u8>)
 
 /// Reset skin to default
 pub async fn reset_skin(bearer_token: &str) -> Result<()> {
-    let client = Client::new();
+    let client = crate::client::shared_client();
     let response = client
         .delete(format!("{}/minecraft/profile/skins/active", MOJANG_API_BASE))
         .bearer_auth(bearer_token)
@@ -127,7 +127,7 @@ pub async fn reset_skin(bearer_token: &str) -> Result<()> {
 
 /// Change active cape
 pub async fn change_cape(bearer_token: &str, cape_id: &str) -> Result<()> {
-    let client = Client::new();
+    let client = crate::client::shared_client();
     let response = client
         .put(format!("{}/minecraft/profile/capes/active", MOJANG_API_BASE))
         .bearer_auth(bearer_token)
@@ -145,7 +145,7 @@ pub async fn change_cape(bearer_token: &str, cape_id: &str) -> Result<()> {
 
 /// Hide active cape
 pub async fn hide_cape(bearer_token: &str) -> Result<()> {
-    let client = Client::new();
+    let client = crate::client::shared_client();
     let response = client
         .delete(format!("{}/minecraft/profile/capes/active", MOJANG_API_BASE))
         .bearer_auth(bearer_token)

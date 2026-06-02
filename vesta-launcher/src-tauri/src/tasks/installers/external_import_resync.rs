@@ -458,8 +458,13 @@ async fn apply_launcher_hints(
             .await
             .map_err(|e| format!("Failed to load hinted version {}: {}", hint.version_id, e))?;
 
-        let meta = std::fs::metadata(&local_path)
-            .map_err(|e| format!("Failed to stat hinted file {:?}: {}", local_path, e))?;
+        let meta = tokio::task::spawn_blocking({
+            let local_path = local_path.clone();
+            move || std::fs::metadata(&local_path)
+        })
+        .await
+        .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+        .map_err(|e| format!("Failed to stat hinted file {:?}: {}", local_path, e))?;
         let file_size = meta.len() as i64;
         let file_mtime = meta
             .modified()

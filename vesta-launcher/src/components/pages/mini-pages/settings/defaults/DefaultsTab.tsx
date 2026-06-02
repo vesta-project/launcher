@@ -1,4 +1,5 @@
 import { SettingsCard, SettingsField } from "@components/settings";
+import panelStyles from "@components/settings/settings.module.css";
 import {
 	NumberField,
 	NumberFieldDecrementTrigger,
@@ -26,6 +27,7 @@ export const InstanceDefaultsTab: Component<{
 
 	return (
 		<div class={styles["settings-tab-content"]}>
+			<div class={panelStyles["settings-panel"]}>
 			<SettingsCard header="Resolution Defaults" subHeader="Default window size for new instances.">
 				<SettingsField
 					label="Game Window"
@@ -165,9 +167,7 @@ export const InstanceDefaultsTab: Component<{
 							optionValue="value"
 							optionTextValue="label"
 							value={props.config.default_launcher_action_on_launch || "stay-open"}
-							onChange={(value) =>
-								props.updateConfig("default_launcher_action_on_launch", value)
-							}
+							onChange={(value) => props.updateConfig("default_launcher_action_on_launch", value)}
 							itemComponent={(selectProps) => (
 								<SelectItem item={selectProps.item}>{selectProps.item.rawValue.label}</SelectItem>
 							)}
@@ -274,6 +274,7 @@ export const InstanceDefaultsTab: Component<{
 					/>
 				</div>
 			</SettingsCard>
+			</div>
 		</div>
 	);
 };

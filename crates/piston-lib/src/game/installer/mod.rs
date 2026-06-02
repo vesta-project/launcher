@@ -15,7 +15,6 @@ use crate::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion}
 use crate::game::installer::core::pipeline::process_and_download_libraries;
 use crate::game::java_policy::preferred_java_major;
 use cache::{ArtifactCache, InstallArtifactRef};
-use reqwest::Client;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -152,11 +151,7 @@ pub async fn install_instance(
     // ------------------------------------------------------------------
     // Phase 1: Load version info + optional modloader profile
     // ------------------------------------------------------------------
-    let client = Client::builder()
-        .pool_max_idle_per_host(8)
-        .tcp_keepalive(Some(std::time::Duration::from_secs(30)))
-        .timeout(std::time::Duration::from_secs(120))
-        .build()?;
+    let client = crate::client::shared_client();
 
     // 1a. Fetch / use cached version info
     reporter.start_step("Loading version metadata", None);
@@ -204,8 +199,8 @@ pub async fn install_instance(
         .await?;
     }
 
-    let version_info: serde_json::Value =
-        serde_json::from_str(&std::fs::read_to_string(&version_json_path)?)?;
+    let version_json_bytes = tokio::fs::read_to_string(&version_json_path).await?;
+    let version_info: serde_json::Value = serde_json::from_str(&version_json_bytes)?;
 
     // 1b. If modloader, resolve version and fetch profile
     let loader_profile =
@@ -297,7 +292,12 @@ pub async fn install_instance(
         reporter.start_step("Downloading assets", None);
         reporter.set_percent(30);
 
-        let asset_index_content = std::fs::read_to_string(&asset_index_path)?;
+        let asset_index_path = asset_index_path.clone();
+        let asset_index_content = tokio::task::spawn_blocking(move || {
+            std::fs::read_to_string(&asset_index_path)
+        })
+        .await
+        .context("spawn_blocking panicked")??;
         let asset_index_parsed: serde_json::Value = serde_json::from_str(&asset_index_content)?;
 
         if let Some(objects) = asset_index_parsed
@@ -359,9 +359,9 @@ pub async fn install_instance(
     reporter.start_step("Downloading libraries", None);
     reporter.set_percent(40);
 
-    // Parse vanilla manifest
+    // Parse vanilla manifest from the already-loaded JSON
     let vanilla_manifest: crate::game::launcher::version_parser::VersionManifest =
-        serde_json::from_str(&std::fs::read_to_string(&version_json_path)?)?;
+        serde_json::from_value(version_info.clone())?;
 
     // Convert loader profile to VersionManifest if present
     // (borrow the profile so we can still use it for processors later)
@@ -417,7 +417,7 @@ pub async fn install_instance(
     let java_ver = JavaVersion::new(preferred);
 
     if spec.java_path.is_none() {
-        get_or_install_jre(&spec.jre_dir(), &java_ver, &*reporter).await?;
+        get_or_install_jre(&spec.jre_dir(), &java_ver, client, &*reporter).await?;
     }
 
     // ------------------------------------------------------------------

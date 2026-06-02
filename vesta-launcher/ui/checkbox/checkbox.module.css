@@ -1,95 +1,99 @@
 .checkbox {
-	display: inline-flex;
-	align-items: center;
-	gap: 0.5em;
-	cursor: pointer;
-	border-radius: 6px;
-	padding: 0.5rem;
-	position: relative;
-	transition-property: background-color, color;
-	transition-duration: 150ms;
-	transition-timing-function: ease-in-out;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    cursor: default;
+    border-radius: 6px;
+    padding: 0.5rem;
+    position: relative;
+    transition-property: background-color, color;
+    transition-duration: 150ms;
+    transition-timing-function: ease-in-out;
+    cursor: default;
+    cursor: default;
 }
 
 .checkbox__input {
-	position: absolute;
-	width: 1px;
-	height: 1px;
-	padding: 0;
-	margin: -1px;
-	overflow: hidden;
-	clip: rect(0, 0, 0, 0);
-	white-space: nowrap;
-	border-width: 0;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
 }
 
 .checkbox__control {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: 1.5em;
-	height: 1.5em;
-	border: var(--border-width-strong) solid var(--border-subtle);
-	border-radius: 6px;
-	background: var(--surface-base);
-	color: var(--text-primary);
-	transition:
-		border-color 0.2s,
-		background-color 0.2s,
-		color 0.2s;
-	cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5em;
+    height: 1.5em;
+    border: var(--border-width-strong) solid var(--border-subtle);
+    border-radius: 6px;
+    background: var(--surface-base);
+    color: var(--text-primary);
+    transition:
+        border-color 0.2s,
+        background-color 0.2s,
+        color 0.2s;
+    cursor: default;
+    cursor: default;
+    cursor: default;
 }
 
 .checkbox__control:focus-within {
-	border-color: var(--border-focus);
-	box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 60% 50% / 0.06);
+    border-color: var(--border-focus);
+    box-shadow: 0 0 0 3px hsl(var(--color__primary-hue) 60% 50% / 0.06);
 }
 
 .checkbox__icon {
-	width: 1.2em;
-	height: 1.2em;
-	display: block;
-	color: currentColor; /* inherit from control for proper theming */
+    width: 1.2em;
+    height: 1.2em;
+    display: block;
+    color: currentColor; /* inherit from control for proper theming */
 }
 
 .checkbox:hover,
 .checkbox:focus-visible {
-	background-color: var(--surface-overlay);
+    background-color: var(--surface-overlay);
 }
 
 .checkbox[data-checked],
 .checkbox[data-indeterminate] {
-	/* Just background on hover/base, don't force accent color on the whole wrapper */
+    /* Just background on hover/base, don't force accent color on the whole wrapper */
 }
 
 .checkbox[data-checked] .checkbox__control,
 .checkbox[data-indeterminate] .checkbox__control {
-	background-color: var(--accent-primary);
-	border-color: var(--accent-primary);
-	border-width: var(--border-width-strong);
-	color: var(--text-on-accent);
+    background-color: var(--accent-primary);
+    border-color: var(--accent-primary);
+    border-width: var(--border-width-strong);
+    color: var(--text-on-accent);
 }
 
 .checkbox-group {
-	display: flex;
-	flex-direction: column;
-	gap: 0.5em;
-	border: none;
-	margin: 0;
-	padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5em;
+    border: none;
+    margin: 0;
+    padding: 0;
 }
 
 .checkbox-group__label {
-	display: flex;
-	align-items: center;
-	gap: 6px;
-	font-weight: bold;
-	margin-bottom: 0.25em;
-	color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: bold;
+    margin-bottom: 0.25em;
+    color: var(--text-primary);
 }
 
 .checkbox-group__items {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 1em;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1em;
 }

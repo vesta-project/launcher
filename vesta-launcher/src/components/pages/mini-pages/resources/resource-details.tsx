@@ -1,5 +1,6 @@
 import BellIcon from "@assets/bell.svg";
 import CurseForgeIcon from "@assets/curseforge.svg";
+import DownloadIcon from "@assets/download-compact.svg";
 import HeartIcon from "@assets/heart.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
@@ -33,12 +34,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@ui/select/select";
-import {
-  Switch,
-  SwitchControl,
-  SwitchLabel,
-  SwitchThumb,
-} from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
@@ -63,11 +58,9 @@ import {
 } from "solid-js";
 import InstanceSelectionDialog from "./instance-selection-dialog";
 import styles from "./resource-details.module.css";
-import {
-  computeHeaderCollapseProgress,
-  deriveHeaderCompactState,
-  RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX,
-} from "./resource-details-header-progress";
+import { createHeaderCollapseController } from "./resource-details-header-scroll";
+import { RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX } from "./resource-details-header-progress";
+import { VersionFilterBar } from "./version-filter-bar/version-filter-bar";
 
 /// Frontend cache for ResourceProject data to avoid re-fetching from the backend API
 /// on repeated navigations within the same session.
@@ -105,6 +98,173 @@ marked.setOptions({
   gfm: true,
   breaks: false,
 });
+
+const HeaderCategoryTags: Component<{
+  project: ResourceProject;
+  onBrowseType: () => void;
+  router?: MiniRouter;
+}> = (props) => {
+  const activeRouter = createMemo(() => props.router || router());
+
+  const tags = createMemo(() => {
+    const p = props.project;
+    const items: {
+      key: string;
+      label: string;
+      onClick: (e: MouseEvent) => void;
+    }[] = [
+      {
+        key: "__type__",
+        label: p.resource_type,
+        onClick: (e) => {
+          e.stopPropagation();
+          props.onBrowseType();
+        },
+      },
+    ];
+
+    for (const cat of p.categories) {
+      const categoryObj =
+        resources.state.availableCategories.length > 0
+          ? resources.state.availableCategories.find(
+              (c) =>
+                c.name.toLowerCase() === cat.toLowerCase() ||
+                c.id.toLowerCase() === cat.toLowerCase(),
+            )
+          : null;
+      const filterId = categoryObj?.id || cat;
+      items.push({
+        key: filterId,
+        label: categoryObj?.name || cat,
+        onClick: (e) => {
+          e.stopPropagation();
+          resources.setType(p.resource_type);
+          resources.setSource(p.source);
+          resources.setQuery("");
+          resources.setCategories([filterId]);
+          resources.setOffset(0);
+          activeRouter()?.navigate("/resources");
+        },
+      });
+    }
+
+    return items;
+  });
+
+  const [effectiveLimit, setEffectiveLimit] = createSignal(999);
+  let tagsRef: HTMLDivElement | undefined;
+  let rowRef: HTMLDivElement | undefined;
+
+  const measureTags = () => {
+    const allTags = tags();
+    if (allTags.length === 0) {
+      setEffectiveLimit(0);
+      return;
+    }
+
+    setEffectiveLimit(allTags.length);
+
+    queueMicrotask(() => {
+      const el = tagsRef;
+      const row = rowRef;
+      const currentTags = tags();
+      if (!el || !row || currentTags.length === 0) return;
+
+      const children = Array.from(el.children) as HTMLElement[];
+      let count = Math.min(currentTags.length, children.length);
+
+      if (el.scrollWidth <= el.clientWidth && count === currentTags.length) {
+        setEffectiveLimit(count);
+        return;
+      }
+
+      const moreReserve = currentTags.length > 1 ? 36 : 0;
+      const available = row.clientWidth - moreReserve;
+
+      while (count > 1) {
+        let width = 0;
+        for (let i = 0; i < count; i++) {
+          if (i > 0) width += 4;
+          width += children[i]?.getBoundingClientRect().width ?? 0;
+        }
+        if (width <= available) break;
+        count--;
+      }
+
+      setEffectiveLimit(Math.max(1, count));
+    });
+  };
+
+  createEffect(() => {
+    tags();
+    measureTags();
+  });
+
+  createEffect(() => {
+    const row = rowRef;
+    if (!row || typeof ResizeObserver === "undefined") return;
+
+    const ro = new ResizeObserver(() => measureTags());
+    ro.observe(row);
+    onCleanup(() => ro.disconnect());
+  });
+
+  return (
+    <Show when={tags().length > 0}>
+      <div class={styles["tag-row"]} ref={rowRef}>
+        <div class={styles["tag-list"]} ref={tagsRef}>
+          <For
+            each={tags().slice(0, Math.min(effectiveLimit(), tags().length))}
+          >
+            {(tag) => (
+              <Badge
+                variant="theme"
+                round
+                clickable
+                onClick={tag.onClick}
+              >
+                <span
+                  classList={{ [styles.capitalize]: tag.key === "__type__" }}
+                >
+                  {tag.label}
+                </span>
+              </Badge>
+            )}
+          </For>
+        </div>
+        <Show when={tags().length > effectiveLimit()}>
+          <Tooltip>
+            <TooltipTrigger as="span" class={styles["tag-more"]}>
+              +{tags().length - effectiveLimit()}
+            </TooltipTrigger>
+            <TooltipContent onClick={(e: MouseEvent) => e.stopPropagation()}>
+              <div class={styles["tag-tooltip"]}>
+                <For each={tags().slice(effectiveLimit())}>
+                  {(tag) => (
+                    <Badge
+                      variant="theme"
+                      round
+                      clickable
+                      onClick={tag.onClick}
+                    >
+                      <span
+                        classList={{
+                          [styles.capitalize]: tag.key === "__type__",
+                        }}
+                      >
+                        {tag.label}
+                      </span>
+                    </Badge>
+                  )}
+                </For>
+              </div>
+            </TooltipContent>
+          </Tooltip>
+        </Show>
+      </div>
+    </Show>
+  );
+};
 
 const VersionTags = (props: { versions: string[] }) => {
   const limit = 2;
@@ -265,7 +425,11 @@ const ResourceDetailsPage: Component<{
   });
 
   const [versionFilter, setVersionFilter] = createSignal("");
-  const [includeUnstable, setIncludeUnstable] = createSignal(false);
+  const [versionReleaseTypes, setVersionReleaseTypes] = createSignal(
+    new Set<string>(),
+  );
+  const [versionLoaders, setVersionLoaders] = createSignal(new Set<string>());
+  const [gameVersionChips, setGameVersionChips] = createSignal<string[]>([]);
   const [selectedGalleryItem, setSelectedGalleryItem] = createSignal<
     string | null
   >(null);
@@ -275,14 +439,19 @@ const ResourceDetailsPage: Component<{
     null,
   );
   const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
-  const [headerCollapseProgress, setHeaderCollapseProgress] = createSignal(0);
-  const [isHeaderCompact, setIsHeaderCompact] = createSignal(false);
   const [isDesktopHeaderAnimation, setIsDesktopHeaderAnimation] =
     createSignal(true);
-  let headerScrollContainerRef: HTMLDivElement | undefined;
-  let headerLayoutRef: HTMLDivElement | undefined;
-  let headerScrollRaf: number | null = null;
-  let headerMeasureRaf: number | null = null;
+  const [headerStackEl, setHeaderStackEl] = createSignal<
+    HTMLElement | undefined
+  >();
+
+  const headerCollapse = createHeaderCollapseController({
+    isDesktop: isDesktopHeaderAnimation,
+    classNames: {
+      compact: styles.compact,
+      floating: styles["is-floating"],
+    },
+  });
 
   // Register refetch so the navbar reload button works
   onMount(() => {
@@ -379,6 +548,16 @@ const ResourceDetailsPage: Component<{
     refetchSubscriptions();
   };
 
+  const handleBrowseByType = () => {
+    const p = project();
+    if (!p) return;
+
+    resources.setType(p.resource_type);
+    resources.setSource(p.source);
+    resources.setQuery("");
+    activeRouter()?.navigate("/resources");
+  };
+
   const [peerProject] = createResource(project, async (p: ResourceProject) => {
     if (!p) return null;
     try {
@@ -390,6 +569,26 @@ const ResourceDetailsPage: Component<{
       return null;
     }
   });
+
+  const canSwitchToPlatform = (target: SourcePlatform) => {
+    const current = project()?.source;
+    if (current === target) return true;
+    const peer = peerProject();
+    return !!peer && peer.source === target;
+  };
+
+  const navigateToPlatform = (target: SourcePlatform) => {
+    if (project()?.source === target) return;
+    const peer = peerProject();
+    if (peer && peer.source === target) {
+      activeRouter()?.navigate("/resource-details", {
+        projectId: peer.id,
+        platform: target,
+        name: peer.name,
+        iconUrl: peer.icon_url,
+      });
+    }
+  };
 
   const [dependencyData] = createResource(
     () => ({
@@ -595,7 +794,9 @@ const ResourceDetailsPage: Component<{
             activeRouter()?.removeQuery("activeTab");
           }
           setVersionFilter("");
-          setIncludeUnstable(false);
+          setVersionReleaseTypes(new Set<string>());
+          setVersionLoaders(new Set<string>());
+          setGameVersionChips([]);
           setVersionPage(1);
           setSelectedGalleryItem(null);
         }
@@ -638,6 +839,38 @@ const ResourceDetailsPage: Component<{
     });
   });
 
+  const uniqueGameVersions = createMemo(() => {
+    const seen = new Set<string>();
+    for (const v of resources.state.versions) {
+      for (const gv of v.game_versions) {
+        seen.add(gv);
+      }
+    }
+    return Array.from(seen).sort((a, b) => {
+      const pa = a.split(".").map(Number);
+      const pb = b.split(".").map(Number);
+      for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+        const va = pa[i] || 0;
+        const vb = pb[i] || 0;
+        if (va !== vb) return vb - va;
+      }
+      return 0;
+    });
+  });
+
+  const uniqueLoaders = createMemo(() => {
+    const seen = new Set<string>();
+    for (const v of resources.state.versions) {
+      for (const l of v.loaders) {
+        const lower = l.toLowerCase();
+        if (lower && lower !== "vanilla") {
+          seen.add(l);
+        }
+      }
+    }
+    return Array.from(seen).sort();
+  });
+
   const hasCompatibleUnstableVersions = createMemo(() =>
     compatibilityFilteredVersions().some((v) => v.release_type !== "release"),
   );
@@ -646,8 +879,57 @@ const ResourceDetailsPage: Component<{
     const query = versionFilter().trim().toLowerCase();
     let list = compatibilityFilteredVersions();
 
-    if (!includeUnstable()) {
-      list = list.filter((v) => v.release_type === "release");
+    const releaseTypes = versionReleaseTypes();
+    if (releaseTypes.size > 0) {
+      list = list.filter((v) => releaseTypes.has(v.release_type));
+    }
+
+    const loaders = versionLoaders();
+    if (loaders.size > 0) {
+      list = list.filter((v) =>
+        v.loaders.some((l) => loaders.has(l.toLowerCase())),
+      );
+    }
+
+    const chips = gameVersionChips();
+    if (chips.length > 0) {
+      list = list.filter((v) =>
+        chips.some((chip) => {
+          if (chip.startsWith("range:")) {
+            const rangeStr = chip.slice("range:".length);
+            const parts = rangeStr.split("...");
+            if (parts.length !== 2) return false;
+            const start = parts[0];
+            const end = parts[1];
+            return v.game_versions.some((gv) => {
+              try {
+                const pa = gv.split(".").map(Number);
+                const ps = start.split(".").map(Number);
+                const pe = end.split(".").map(Number);
+                for (
+                  let i = 0;
+                  i < Math.max(pa.length, ps.length, pe.length);
+                  i++
+                ) {
+                  const va = pa[i] || 0;
+                  const vs = ps[i] || 0;
+                  const ve = pe[i] || 0;
+                  if (va < vs) return false;
+                  if (va > ve) return true;
+                }
+                return true;
+              } catch {
+                return false;
+              }
+            });
+          }
+          if (chip.startsWith("mc:")) {
+            const gv = chip.slice("mc:".length);
+            return v.game_versions.some((v2) => v2 === gv);
+          }
+          return v.game_versions.some((v2) => v2 === chip);
+        }),
+      );
     }
 
     if (query) {
@@ -693,11 +975,14 @@ const ResourceDetailsPage: Component<{
       };
     }
 
-    if (!includeUnstable() && hasCompatibleUnstableVersions()) {
+    if (
+      gameVersionChips().length > 0 ||
+      versionLoaders().size > 0 ||
+      versionReleaseTypes().size > 0
+    ) {
       return {
-        title: "Only unstable versions are available",
-        description:
-          "Enable Include Unstable Versions to show beta and alpha builds for this selection.",
+        title: "No versions match your filters",
+        description: "Try clearing the version chips or loader filters.",
       };
     }
 
@@ -967,7 +1252,9 @@ const ResourceDetailsPage: Component<{
     // Clear stale project data so the old resource isn't briefly visible while loading
     setProject(undefined);
     setVersionFilter("");
-    setIncludeUnstable(false);
+    setVersionReleaseTypes(new Set<string>());
+    setVersionLoaders(new Set<string>());
+    setGameVersionChips([]);
     setVersionPage(1);
     setManualVersionId(null);
     setSelectedGalleryItem(null);
@@ -1062,8 +1349,9 @@ const ResourceDetailsPage: Component<{
         projectIcon: p.icon_url || undefined,
         projectAuthor: p.author,
         initialVersion: version.id,
+        initialVersionNumber: version.version_number,
         initialModloader: version.loaders[0],
-        modpackUrl: version.download_url,
+        initialMinecraftVersion: version.game_versions[0],
       });
       return;
     }
@@ -1314,20 +1602,25 @@ const ResourceDetailsPage: Component<{
   createEffect(() => {
     const html = renderedDescription();
     const isVisible = activeTab() === "description";
-    const container = headerScrollContainerRef;
-    if (!isVisible || !html || !container) return;
+    const scrollContainer = headerCollapse.getScrollContainer();
+    const layoutRoot = headerCollapse.getPageRoot();
+    if (!isVisible || !html || !scrollContainer || !layoutRoot) return;
 
     requestAnimationFrame(() => {
-      const headerEl = container.querySelector<HTMLElement>(
-        "." + styles["resource-details-header"],
+      const stackEl = layoutRoot.querySelector<HTMLElement>(
+        "." + styles["header-stack"],
       );
-      const headerHeight = headerEl?.offsetHeight ?? 72;
+      const spacerEl = stackEl?.querySelector<HTMLElement>(
+        "." + styles["header-spacer"],
+      );
+      const headerHeight =
+        spacerEl?.offsetHeight ?? stackEl?.offsetHeight ?? 168;
       const neededRange = Math.min(72, headerHeight);
-      const currentScroll = container.scrollHeight - container.clientHeight;
+      const currentScroll =
+        scrollContainer.scrollHeight - scrollContainer.clientHeight;
 
-      // Add spacer only when content doesn't already scroll enough
       if (currentScroll < neededRange) {
-        const descEl = container.querySelector<HTMLElement>(
+        const descEl = layoutRoot.querySelector<HTMLElement>(
           "." + styles.description,
         );
         if (descEl) {
@@ -1337,50 +1630,6 @@ const ResourceDetailsPage: Component<{
     });
   });
 
-  const resetHeaderCollapse = () => {
-    setHeaderCollapseProgress(0);
-    setIsHeaderCompact(false);
-  };
-
-  const runHeaderCollapseUpdate = (target: HTMLElement) => {
-    if (!isDesktopHeaderAnimation()) {
-      resetHeaderCollapse();
-      return;
-    }
-
-    const nextProgress = computeHeaderCollapseProgress(
-      target.scrollTop,
-      target.scrollHeight - target.clientHeight,
-    );
-
-    setHeaderCollapseProgress((previous) =>
-      Math.abs(previous - nextProgress) < 0.001 ? previous : nextProgress,
-    );
-
-    setIsHeaderCompact((previous) =>
-      deriveHeaderCompactState(nextProgress, previous),
-    );
-  };
-
-  const scheduleHeaderCollapseUpdate = (target?: HTMLElement | null) => {
-    const element = target || headerScrollContainerRef;
-    if (!element) return;
-
-    if (headerScrollRaf !== null) {
-      cancelAnimationFrame(headerScrollRaf);
-    }
-
-    headerScrollRaf = requestAnimationFrame(() => {
-      headerScrollRaf = null;
-      runHeaderCollapseUpdate(element);
-    });
-  };
-
-  const handleScroll = (e: Event) => {
-    if (!isDesktopHeaderAnimation()) return;
-    scheduleHeaderCollapseUpdate(e.currentTarget as HTMLElement);
-  };
-
   onMount(() => {
     if (typeof window === "undefined") return;
 
@@ -1389,57 +1638,15 @@ const ResourceDetailsPage: Component<{
     );
 
     const applyLayoutMode = () => {
-      const desktop = !mq.matches;
-      setIsDesktopHeaderAnimation(desktop);
-
-      if (!desktop) {
-        resetHeaderCollapse();
-        return;
-      }
-
-      scheduleHeaderCollapseUpdate();
-    };
-
-    const handleViewportChange = () => {
-      if (headerMeasureRaf !== null) {
-        cancelAnimationFrame(headerMeasureRaf);
-      }
-
-      headerMeasureRaf = requestAnimationFrame(() => {
-        headerMeasureRaf = null;
-        applyLayoutMode();
-      });
+      setIsDesktopHeaderAnimation(!mq.matches);
+      headerCollapse.scheduleUpdate();
     };
 
     applyLayoutMode();
-
-    mq.addEventListener("change", handleViewportChange);
-
-    const resizeObserver =
-      typeof ResizeObserver !== "undefined"
-        ? new ResizeObserver(() => {
-            scheduleHeaderCollapseUpdate();
-          })
-        : null;
-
-    if (resizeObserver) {
-      if (headerScrollContainerRef)
-        resizeObserver.observe(headerScrollContainerRef);
-      if (headerLayoutRef) resizeObserver.observe(headerLayoutRef);
-    }
+    mq.addEventListener("change", applyLayoutMode);
 
     onCleanup(() => {
-      mq.removeEventListener("change", handleViewportChange);
-
-      resizeObserver?.disconnect();
-
-      if (headerScrollRaf !== null) {
-        cancelAnimationFrame(headerScrollRaf);
-      }
-
-      if (headerMeasureRaf !== null) {
-        cancelAnimationFrame(headerMeasureRaf);
-      }
+      mq.removeEventListener("change", applyLayoutMode);
     });
   });
 
@@ -1447,63 +1654,99 @@ const ResourceDetailsPage: Component<{
     on(
       () => [activeTab(), project()?.id, loading()] as const,
       () => {
-        scheduleHeaderCollapseUpdate();
+        headerCollapse.scheduleUpdate();
       },
     ),
   );
+
+  const syncHeaderSpacer = () => {
+    const stack = headerStackEl();
+    if (!stack) return;
+
+    const header = stack.querySelector<HTMLElement>(
+      `.${styles["resource-details-header"]}`,
+    );
+    const spacer = stack.querySelector<HTMLElement>(
+      `.${styles["header-spacer"]}`,
+    );
+    if (!header || !spacer) return;
+
+    if (
+      typeof window !== "undefined" &&
+      window.matchMedia(
+        `(max-width: ${RESOURCE_DETAILS_MOBILE_BREAKPOINT_PX}px)`,
+      ).matches
+    ) {
+      spacer.style.height = "";
+      return;
+    }
+
+    spacer.style.height = `${header.offsetHeight}px`;
+  };
+
+  createEffect(() => {
+    project();
+    headerStackEl();
+    isDesktopHeaderAnimation();
+    queueMicrotask(syncHeaderSpacer);
+  });
+
+  createEffect(() => {
+    const stack = headerStackEl();
+    if (!stack || typeof ResizeObserver === "undefined") return;
+
+    const header = stack.querySelector<HTMLElement>(
+      `.${styles["resource-details-header"]}`,
+    );
+    if (!header) return;
+
+    const ro = new ResizeObserver(() => syncHeaderSpacer());
+    ro.observe(header);
+    syncHeaderSpacer();
+
+    onCleanup(() => ro.disconnect());
+  });
 
   const sidebarContent = () => (
     <div class={styles["sidebar-scrollable-area"]}>
       <div class={styles["sidebar-section"]}>
         <div class={styles["sidebar-instance-picker"]}>
-          <Show when={peerProject()}>
-            <div class={styles["source-toggle"]}>
-              <button
-                class={styles["source-btn"]}
-                classList={{
-                  [styles.active]: project()?.source === "modrinth",
-                }}
-                onClick={() => {
-                  if (project()?.source === "modrinth") return;
-                  const peer = peerProject();
-                  if (peer && peer.source === "modrinth") {
-                    activeRouter()?.navigate("/resource-details", {
-                      projectId: peer.id,
-                      platform: "modrinth",
-                      name: peer.name,
-                      iconUrl: peer.icon_url,
-                    });
-                  }
-                }}
-                title="Modrinth"
-              >
-                <ModrinthIcon width="14" height="14" />
-                <span>Modrinth</span>
-              </button>
-              <button
-                class={styles["source-btn"]}
-                classList={{
-                  [styles.active]: project()?.source === "curseforge",
-                }}
-                onClick={() => {
-                  if (project()?.source === "curseforge") return;
-                  const peer = peerProject();
-                  if (peer && peer.source === "curseforge") {
-                    activeRouter()?.navigate("/resource-details", {
-                      projectId: peer.id,
-                      platform: "curseforge",
-                      name: peer.name,
-                      iconUrl: peer.icon_url,
-                    });
-                  }
-                }}
-                title="CurseForge"
-              >
-                <CurseForgeIcon width="14" height="14" />
-                <span>CurseForge</span>
-              </button>
-            </div>
-          </Show>
+          <div class={styles["source-toggle"]}>
+            <button
+              type="button"
+              class={styles["source-btn"]}
+              classList={{
+                [styles.active]: project()?.source === "modrinth",
+              }}
+              disabled={!canSwitchToPlatform("modrinth")}
+              title={
+                canSwitchToPlatform("modrinth")
+                  ? "Modrinth"
+                  : "Not available on Modrinth"
+              }
+              onClick={() => navigateToPlatform("modrinth")}
+            >
+              <ModrinthIcon width="14" height="14" />
+              <span>Modrinth</span>
+            </button>
+            <button
+              type="button"
+              class={styles["source-btn"]}
+              classList={{
+                [styles.active]: project()?.source === "curseforge",
+              }}
+              disabled={!canSwitchToPlatform("curseforge")}
+              title={
+                canSwitchToPlatform("curseforge")
+                  ? "CurseForge"
+                  : "Not available on CurseForge"
+              }
+              onClick={() => navigateToPlatform("curseforge")}
+            >
+              <CurseForgeIcon width="14" height="14" />
+              <span>CurseForge</span>
+            </button>
+          </div>
           <Show
             when={!isModpack()}
             fallback={
@@ -1512,7 +1755,6 @@ const ResourceDetailsPage: Component<{
               </div>
             }
           >
-            <span class={styles["picker-label"]}>Target Instance:</span>
             <Select<any>
               options={[
                 { id: null, name: "No Instance" },
@@ -1719,59 +1961,32 @@ const ResourceDetailsPage: Component<{
       </div>
 
       <div class={styles["sidebar-section"]}>
-        <h3 class={styles["sidebar-title"]}>Information</h3>
-        <div class={styles["sidebar-metadata"]}>
-          <Show when={!peerProject()}>
-            <div class={styles["meta-item"]}>
-              <span class={styles["label"]}>Platform</span>
-              <span class={`${styles["value"]} ${styles["capitalize"]}`}>
-                {project()?.source}
-              </span>
-            </div>
-          </Show>
+        <div class={styles["sidebar-section-header"]}>
+          <h3 class={styles["section-title"]}>Details</h3>
+        </div>
+        <div class={styles["sidebar-info-list"]}>
           <Show when={project()?.published_at}>
-            <div class={styles["meta-item"]}>
-              <span class={styles["label"]}>Released</span>
-              <span class={styles["value"]}>
+            <div class={styles["sidebar-info-row"]}>
+              <span class={styles["field-label"]}>Published</span>
+              <span
+                class={styles["sidebar-info-value"]}
+                title={`Published ${formatDate(project()?.published_at || "")}`}
+              >
                 {formatDate(project()?.published_at || "")}
               </span>
             </div>
           </Show>
-          <Show
-            when={project()?.authors && (project()?.authors?.length ?? 0) > 1}
-          >
-            <div class={styles["meta-item"]}>
-              <span class={styles["label"]}>Authors</span>
-              <span class={styles["value"]}>
-                {project()?.authors?.join(", ")}
+          <Show when={project()?.updated_at}>
+            <div class={styles["sidebar-info-row"]}>
+              <span class={styles["field-label"]}>Updated</span>
+              <span
+                class={styles["sidebar-info-value"]}
+                title={`Updated ${formatDate(project()?.updated_at || "")}`}
+              >
+                {formatDate(project()?.updated_at || "")}
               </span>
             </div>
           </Show>
-          <div class={styles["meta-item"]}>
-            <span class={styles["label"]}>Downloads</span>
-            <span class={styles["value"]}>
-              {project()?.download_count.toLocaleString()}
-            </span>
-          </div>
-          <div class={styles["meta-item"]}>
-            <span class={styles["label"]}>Type</span>
-            <div class={styles["value-group"]}>
-              <span class={`${styles["value"]} ${styles["capitalize"]}`}>
-                {project()?.resource_type}
-              </span>
-              <Show
-                when={
-                  project()?.categories?.some(
-                    (c) => c.toLowerCase() === "datapack",
-                  ) && project()?.resource_type !== "datapack"
-                }
-              >
-                <span class={`${styles["value"]} ${styles["capitalize"]}`}>
-                  , Datapack
-                </span>
-              </Show>
-            </div>
-          </div>
         </div>
       </div>
 
@@ -1779,7 +1994,7 @@ const ResourceDetailsPage: Component<{
         class={`${styles["sidebar-section"]} ${styles["recent-versions-section"]} ${styles["hide-mobile"]}`}
       >
         <div class={styles["sidebar-section-header"]}>
-          <h3 class={styles["sidebar-title"]}>Recent Versions</h3>
+          <h3 class={styles["section-title"]}>Recent Versions</h3>
           <button
             class={styles["view-all-link"]}
             onClick={() =>
@@ -1989,186 +2204,120 @@ const ResourceDetailsPage: Component<{
           <div
             class={styles["resource-details"]}
             classList={{ [styles["is-reloading"]]: loading() }}
+            ref={(el) => headerCollapse.setPageRoot(el ?? undefined)}
           >
-            <div
-              class={styles["resource-details-left"]}
-              ref={(el) => {
-                headerScrollContainerRef = el;
-              }}
-              onScroll={handleScroll}
-            >
+            <div class={styles["resource-details-left"]}>
               <div
-                class={`${styles["resource-details-header"]} ${styles["theme-card"]}`}
-                classList={{
-                  [styles.compact]: isHeaderCompact(),
-                  [styles["is-floating"]]: headerCollapseProgress() > 0.01,
-                }}
-                style={{
-                  "--header-collapse-progress": `${headerCollapseProgress()}`,
+                class={styles["header-stack"]}
+                ref={(el) => {
+                  headerCollapse.setHeaderEl(el ?? undefined);
+                  setHeaderStackEl(el ?? undefined);
                 }}
               >
-                <div class={styles["project-header-info"]}>
-                  <Show when={project()?.icon_url}>
-                    <img
-                      src={project()?.icon_url ?? ""}
-                      alt={project()?.name}
-                      class={styles["project-icon"]}
-                    />
-                  </Show>
-                  <div class={styles["project-header-text"]}>
-                    <div class={styles["project-title-row"]}>
-                      <div class={styles["project-title-group"]}>
+                <div class={styles["header-spacer"]} aria-hidden="true" />
+                <div class={styles["resource-details-header"]}>
+                  <div class={styles["project-header-info"]}>
+                    <Show when={project()?.icon_url}>
+                      <img
+                        src={project()?.icon_url ?? ""}
+                        alt={project()?.name}
+                        class={styles["project-icon"]}
+                      />
+                    </Show>
+                    <div class={styles["project-header-text"]}>
+                      <div class={styles["project-title-line"]}>
                         <h1 class={styles["project-title"]}>
                           {project()?.name}
                         </h1>
-                        <span class={styles["compact-author"]}>
-                          By{" "}
-                          {project()?.authors &&
-                          (project()?.authors?.length ?? 0) > 0
-                            ? project()?.authors?.[0]
-                            : project()?.author}
-                        </span>
-                        <Show
-                          when={isProjectInstalled() || isProjectInstalling()}
-                        >
-                          <Badge variant="success">
-                            {isProjectInstalling()
-                              ? "Installing..."
-                              : "Installed"}
-                          </Badge>
+                        <Show when={isProjectInstalling()}>
+                          <Badge variant="success">Installing...</Badge>
                         </Show>
                       </div>
-                      <div class={styles["header-link-group"]}>
-                        <Button
-                          variant={isFollowing() ? "solid" : "outline"}
-                          size="icon"
-                          onClick={handleFollowToggle}
-                          class={styles["header-web-link"]}
-                          tooltip_text={
-                            isFollowing()
-                              ? "Disable update notifications"
-                              : "Receive notifications for updates"
-                          }
-                          tooltip_placement="left"
-                        >
-                          <BellIcon
-                            width="16"
-                            height="16"
-                            style={{
-                              fill: isFollowing() ? "currentColor" : "none",
-                              stroke: "currentColor",
-                            }}
-                          />
-                        </Button>
-                      </div>
-                    </div>
-                    <div class={styles["project-subtitle-row"]}>
-                      <div class={styles["subtitle-left"]}>
-                        <p class={styles.author}>
-                          By{" "}
-                          {project()?.authors &&
-                          (project()?.authors?.length ?? 0) > 0
-                            ? project()?.authors?.[0]
-                            : project()?.author}
-                        </p>
-                        <Show
-                          when={
-                            project()?.follower_count !== undefined &&
-                            project()?.source !== "curseforge"
-                          }
-                        >
-                          <span class={styles["stat-item"]}>
-                            <HeartIcon />
-                            {project()?.follower_count.toLocaleString()}
+                      <div class={styles["project-meta-row"]}>
+                        <div class={styles["meta-stats"]}>
+                          <span class={styles["meta-item"]}>
+                            By{" "}
+                            {project()?.authors &&
+                            (project()?.authors?.length ?? 0) > 0
+                              ? project()?.authors?.[0]
+                              : project()?.author}
                           </span>
-                        </Show>
-                        <Show when={project()?.updated_at}>
-                          <span class={styles["stat-item"]}>
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              width="14"
-                              height="14"
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              stroke-width="2"
-                              stroke-linecap="round"
-                              stroke-linejoin="round"
-                            >
-                              <circle cx="12" cy="12" r="10"></circle>
-                              <polyline points="12 6 12 12 16 14"></polyline>
-                            </svg>
-                            Updated {formatDate(project()?.updated_at || "")}
-                          </span>
-                        </Show>
-                      </div>
-                      <div class={styles["subtitle-right"]}>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => openExternal(project()?.web_url ?? "")}
-                          class={styles["header-web-link"]}
-                          tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
-                          tooltip_placement="left"
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="16"
-                            height="16"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
+                          <Show when={(project()?.download_count ?? 0) > 0}>
+                            <span class={styles["meta-item"]}>
+                              <DownloadIcon width="14" height="14" />
+                              {(
+                                project()?.download_count ?? 0
+                              ).toLocaleString()}
+                            </span>
+                          </Show>
+                          <Show
+                            when={
+                              project()?.follower_count !== undefined &&
+                              project()?.source !== "curseforge"
+                            }
                           >
-                            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
-                            <polyline points="15 3 21 3 21 9"></polyline>
-                            <line x1="10" y1="14" x2="21" y2="3"></line>
-                          </svg>
-                        </Button>
+                            <span class={styles["meta-item"]}>
+                              <HeartIcon width="14" height="14" />
+                              {project()?.follower_count.toLocaleString()}
+                            </span>
+                          </Show>
+                        </div>
+                        <Show when={project()}>
+                          <HeaderCategoryTags
+                            project={project()!}
+                            onBrowseType={handleBrowseByType}
+                            router={activeRouter()}
+                          />
+                        </Show>
                       </div>
                     </div>
-                    <div class={styles["project-categories"]}>
-                      <For each={project()?.categories}>
-                        {(cat) => {
-                          // Find the category object in availableCategories if possible to get its real ID/Slug
-                          const categoryObj = createMemo(() =>
-                            resources.state.availableCategories.length > 0
-                              ? resources.state.availableCategories.find(
-                                  (c) =>
-                                    c.name.toLowerCase() ===
-                                      cat.toLowerCase() ||
-                                    c.id.toLowerCase() === cat.toLowerCase(),
-                                )
-                              : null,
-                          );
-
-                          return (
-                            <Badge
-                              variant="theme"
-                              round
-                              clickable
-                              onClick={() => {
-                                const p = project();
-                                if (p) {
-                                  resources.setType(p.resource_type);
-                                  resources.setSource(p.source);
-                                }
-                                resources.setQuery("");
-                                // Use the ID from the category object if found, otherwise fallback to the string
-                                const filterId = categoryObj()?.id || cat;
-                                resources.setCategories([filterId]);
-                                resources.setOffset(0);
-                                activeRouter()?.navigate("/resources");
-                              }}
-                            >
-                              {categoryObj()?.name || cat}
-                            </Badge>
-                          );
+                  </div>
+                  <div class={styles["header-link-group"]}>
+                    <Button
+                      variant="slate"
+                      size="icon"
+                      onClick={() => openExternal(project()?.web_url ?? "")}
+                      class={styles["header-action-btn"]}
+                      tooltip_text={`View on ${project()?.source === "modrinth" ? "Modrinth" : "CurseForge"}`}
+                      tooltip_placement="left"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                        <polyline points="15 3 21 3 21 9"></polyline>
+                        <line x1="10" y1="14" x2="21" y2="3"></line>
+                      </svg>
+                    </Button>
+                    <Button
+                      variant="slate"
+                      size="icon"
+                      onClick={handleFollowToggle}
+                      class={`${styles["header-action-btn"]} ${styles["header-action-btn--notify"]}`}
+                      tooltip_text={
+                        isFollowing()
+                          ? "Disable update notifications"
+                          : "Receive notifications for updates"
+                      }
+                      tooltip_placement="left"
+                    >
+                      <BellIcon
+                        width="16"
+                        height="16"
+                        style={{
+                          fill: isFollowing() ? "currentColor" : "none",
+                          stroke: "currentColor",
                         }}
-                      </For>
-                    </div>
+                      />
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -2182,12 +2331,7 @@ const ResourceDetailsPage: Component<{
                 </div>
               </div>
 
-              <div
-                class={styles["resource-details-layout"]}
-                ref={(el) => {
-                  headerLayoutRef = el;
-                }}
-              >
+              <div class={styles["resource-details-layout"]}>
                 <div
                   class={`${styles["resource-details-main"]} ${styles["theme-card"]}`}
                 >
@@ -2504,45 +2648,26 @@ const ResourceDetailsPage: Component<{
 
                       <Show when={activeTab() === "versions"}>
                         <div class={styles["version-page"]}>
-                          <div class={styles["version-filters"]}>
-                            <input
-                              type="text"
-                              placeholder="Filter versions (e.g. 1.21.1, Fabric)..."
-                              value={versionFilter()}
-                              onInput={(e) => {
-                                setVersionFilter(e.currentTarget.value);
-                                setVersionPage(1);
-                              }}
-                              class={styles["version-search-input"]}
-                            />
-                            <div class={styles["version-filter-toggles"]}>
-                              <Switch
-                                checked={includeUnstable()}
-                                onCheckedChange={(checked: boolean) => {
-                                  setIncludeUnstable(checked);
-                                  setVersionPage(1);
-                                }}
-                                class={styles["version-switch"]}
-                              >
-                                <SwitchControl
-                                  class={styles["version-switch__control"]}
-                                >
-                                  <SwitchThumb
-                                    class={styles["version-switch__thumb"]}
-                                  />
-                                </SwitchControl>
-                                <SwitchLabel
-                                  class={styles["version-switch__label"]}
-                                >
-                                  Include Unstable Versions
-                                </SwitchLabel>
-                              </Switch>
-                              <span class={styles["version-filter-count"]}>
-                                {filteredVersions().length} /{" "}
-                                {resources.state.versions.length} shown
-                              </span>
-                            </div>
-                          </div>
+                          <VersionFilterBar
+                            searchText={versionFilter()}
+                            onSearchTextChange={(text) => {
+                              setVersionFilter(text);
+                            }}
+                            selectedVersions={gameVersionChips()}
+                            onSelectedVersionsChange={setGameVersionChips}
+                            availableVersions={uniqueGameVersions()}
+                            releaseTypes={versionReleaseTypes()}
+                            onReleaseTypesChange={(types) => {
+                              setVersionReleaseTypes(new Set(types));
+                            }}
+                            loaders={versionLoaders()}
+                            onLoadersChange={(loaders) => {
+                              setVersionLoaders(new Set(loaders));
+                            }}
+                            availableLoaders={uniqueLoaders()}
+                            totalCount={resources.state.versions.length}
+                            filteredCount={filteredVersions().length}
+                          />
 
                           <Show when={selectedInstance() && !isModpack()}>
                             <div
@@ -2627,7 +2752,7 @@ const ResourceDetailsPage: Component<{
                                         class={styles["version-loaders-row"]}
                                       >
                                         <div class={styles["meta-group"]}>
-                                          <span class={styles["meta-label"]}>
+                                          <span class={styles["field-label"]}>
                                             Versions
                                           </span>
                                           <VersionTags
@@ -2635,7 +2760,7 @@ const ResourceDetailsPage: Component<{
                                           />
                                         </div>
                                         <div class={styles["meta-group"]}>
-                                          <span class={styles["meta-label"]}>
+                                          <span class={styles["field-label"]}>
                                             Loaders
                                           </span>
                                           <div class={styles["version-meta"]}>

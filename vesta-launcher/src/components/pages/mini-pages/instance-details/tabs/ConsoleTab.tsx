@@ -59,6 +59,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 	const [isScrollable, setIsScrollable] = createSignal(false);
 	const [atBottom, setAtBottom] = createSignal(true);
 	const [isSearchExpanded, setIsSearchExpanded] = createSignal(false);
+	const hasFilters = () =>
+		consoleStore.state.filterLevels.length < 4 || consoleStore.state.searchQuery.length > 0;
 
 	onMount(async () => {
 		const cleanup = await consoleStore.init(props.instanceSlug);
@@ -117,6 +119,8 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 				return "var(--semantic-error)";
 			case "WARN":
 				return "var(--semantic-warning)";
+			case "INFO":
+				return "var(--semantic-info)";
 			case "DEBUG":
 				return "var(--text-secondary)";
 			default:
@@ -136,154 +140,155 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 
 	return (
 		<section class={styles["tab-console"]}>
-			<div class={styles["console-toolbar"]}>
-				<div class={styles["console-toolbar-left"]}>
-					<span class={styles["console-title"]}>
-						{consoleStore.state.isLive
-							? "Viewing Session Logs"
-							: consoleStore.state.currentLogPath
-								? `Viewing Historical Log: ${consoleStore.state.currentLogPath.split(/[/\\]/).pop()}`
-								: "Viewing Historical Logs"}
-					</span>
-					<Show when={!consoleStore.state.isLive && instancesState.runningIds[props.instanceSlug]}>
-						<Tooltip placement="top">
-							<TooltipTrigger>
-								<Button
-									variant="ghost"
-									size="sm"
-									onClick={() => consoleStore.goLive(props.instanceSlug)}
-									class={styles["console-back-live"]}
-								>
-									<RefreshIcon /> Switch to Live
-								</Button>
-							</TooltipTrigger>
-							<TooltipContent>Switch back to live logs</TooltipContent>
-						</Tooltip>
-					</Show>
-				</div>
-
-				<div class={styles["console-toolbar-buttons"]}>
-					<div class={styles["console-search-container"]}>
-						<div
-							class={styles["console-search-wrapper"]}
-							classList={{ [styles.expanded]: isSearchExpanded() }}
-						>
-							<Button
-								size="sm"
-								variant="ghost"
-								icon_only
-								class={styles["mobile-search-trigger"]}
-								onClick={() => {
-									setIsSearchExpanded(true);
-									// Focus the input after expanding
-									const input = document.querySelector(
-										`.${styles["console-search-field"]} input`,
-									) as HTMLInputElement;
-									input?.focus();
-								}}
-							>
-								<SearchIcon />
-							</Button>
-							<div class={styles["search-input-wrapper"]}>
-								<SearchIcon class={styles["search-icon-fixed"]} />
-								<TextField
-									placeholder="Search logs..."
-									value={consoleStore.state.searchQuery}
-									onInput={(e) => consoleStore.setSearch(e.currentTarget.value)}
-									class={styles["console-search-field"]}
-									onFocus={() => setIsSearchExpanded(true)}
-									onBlur={() => {
-										setTimeout(() => setIsSearchExpanded(false), 200);
-									}}
-								/>
-							</div>
-						</div>
+			<div class={styles["console-header"]}>
+				<div class={styles["console-toolbar"]}>
+					<div class={styles["console-toolbar-left"]}>
+						<span class={styles["console-title"]}>
+							{consoleStore.state.isLive
+								? "Viewing Session Logs"
+								: consoleStore.state.currentLogPath
+									? `Viewing Historical Log: ${consoleStore.state.currentLogPath.split(/[/\\]/).pop()}`
+									: "Viewing Historical Logs"}
+						</span>
+						<Show when={!consoleStore.state.isLive && instancesState.runningIds[props.instanceSlug]}>
+							<Tooltip placement="top">
+								<TooltipTrigger>
+									<Button
+										variant="ghost"
+										size="sm"
+										onClick={() => consoleStore.goLive(props.instanceSlug)}
+										class={styles["console-back-live"]}
+									>
+										<RefreshIcon /> Switch to Live
+									</Button>
+								</TooltipTrigger>
+								<TooltipContent>Switch back to live logs</TooltipContent>
+							</Tooltip>
+						</Show>
 					</div>
 
-					<Tooltip placement="top">
-						<TooltipTrigger
-							as={Button}
-							variant="ghost"
-							size="md"
-							onClick={props.openLogsFolder}
-							class={styles["console-tool-btn"]}
-						>
-							<FolderIcon />
-						</TooltipTrigger>
-						<TooltipContent>Open logs folder</TooltipContent>
-					</Tooltip>
-
-					<Popover open={historyOpen()} onOpenChange={setHistoryOpen}>
-						<Tooltip placement="top">
-							<TooltipTrigger>
-								<PopoverTrigger
-									as={Button}
+					<div class={styles["console-toolbar-buttons"]}>
+						<div class={styles["console-search-container"]}>
+							<div
+								class={styles["console-search-wrapper"]}
+								classList={{ [styles.expanded]: isSearchExpanded() }}
+							>
+								<Button
+									size="sm"
 									variant="ghost"
-									size="md"
-									class={clsx(styles["console-tool-btn"], historyOpen() && styles["active"])}
+									icon_only
+									class={styles["mobile-search-trigger"]}
+									onClick={() => {
+										setIsSearchExpanded(true);
+										const input = document.querySelector(
+											`.${styles["console-search-field"]} input`,
+										) as HTMLInputElement;
+										input?.focus();
+									}}
 								>
-									<HistoryIcon />
-								</PopoverTrigger>
-							</TooltipTrigger>
-							<TooltipContent>Log History</TooltipContent>
-						</Tooltip>
-						<PopoverContent class={styles["console-history-popover"]}>
-							<div class={styles["history-popover-header"]}>Select Log File</div>
-							<div class={styles["history-popover-list"]}>
-								<For each={consoleStore.state.history}>
-									{(file) => (
-										<button
-											onClick={() => {
-												consoleStore.viewHistoricalLog(file.path);
-												setHistoryOpen(false);
-											}}
-											class={clsx(
-												styles["history-item"],
-												consoleStore.state.currentLogPath === file.path && styles["active"],
-											)}
-										>
-											<span class={styles["history-name"]}>{file.name}</span>
-											<span class={styles["history-meta"]}>{(file.size / 1024).toFixed(1)} KB</span>
-										</button>
-									)}
-								</For>
+									<SearchIcon />
+								</Button>
+								<div class={styles["search-input-wrapper"]}>
+									<SearchIcon class={styles["search-icon-fixed"]} />
+									<TextField
+										placeholder="Search logs..."
+										value={consoleStore.state.searchQuery}
+										onInput={(e) => consoleStore.setSearch(e.currentTarget.value)}
+										class={styles["console-search-field"]}
+										onFocus={() => setIsSearchExpanded(true)}
+										onBlur={() => {
+											setTimeout(() => setIsSearchExpanded(false), 200);
+										}}
+									/>
+								</div>
 							</div>
-						</PopoverContent>
-					</Popover>
+						</div>
 
-					<Tooltip placement="top">
-						<TooltipTrigger
-							as={Button}
-							variant="ghost"
-							size="md"
-							onClick={() => consoleStore.clear()}
-							class={clsx(styles["console-tool-btn"], styles["console-tool-btn-trash"])}
-						>
-							<TrashIcon />
-						</TooltipTrigger>
-						<TooltipContent>Clear console view</TooltipContent>
-					</Tooltip>
+						<Tooltip placement="top">
+							<TooltipTrigger
+								as={Button}
+								variant="ghost"
+								size="md"
+								onClick={props.openLogsFolder}
+								class={styles["console-tool-btn"]}
+							>
+								<FolderIcon />
+							</TooltipTrigger>
+							<TooltipContent>Open logs folder</TooltipContent>
+						</Tooltip>
+
+						<Popover open={historyOpen()} onOpenChange={setHistoryOpen}>
+							<Tooltip placement="top">
+								<TooltipTrigger>
+									<PopoverTrigger
+										as={Button}
+										variant="ghost"
+										size="md"
+										class={clsx(styles["console-tool-btn"], historyOpen() && styles["active"])}
+									>
+										<HistoryIcon />
+									</PopoverTrigger>
+								</TooltipTrigger>
+								<TooltipContent>Log History</TooltipContent>
+							</Tooltip>
+							<PopoverContent class={styles["console-history-popover"]}>
+								<div class={styles["history-popover-header"]}>Select Log File</div>
+								<div class={styles["history-popover-list"]}>
+									<For each={consoleStore.state.history}>
+										{(file) => (
+											<button
+												onClick={() => {
+													consoleStore.viewHistoricalLog(file.path);
+													setHistoryOpen(false);
+												}}
+												class={clsx(
+													styles["history-item"],
+													consoleStore.state.currentLogPath === file.path && styles["active"],
+												)}
+											>
+												<span class={styles["history-name"]}>{file.name}</span>
+												<span class={styles["history-meta"]}>{(file.size / 1024).toFixed(1)} KB</span>
+											</button>
+										)}
+									</For>
+								</div>
+							</PopoverContent>
+						</Popover>
+
+						<Tooltip placement="top">
+							<TooltipTrigger
+								as={Button}
+								variant="ghost"
+								size="md"
+								onClick={() => consoleStore.clear()}
+								class={clsx(styles["console-tool-btn"], styles["console-tool-btn-trash"])}
+							>
+								<TrashIcon />
+							</TooltipTrigger>
+							<TooltipContent>Clear console view</TooltipContent>
+						</Tooltip>
+					</div>
+				</div>
+
+				<div class={styles["console-filters"]}>
+					<For each={["INFO", "WARN", "ERROR", "DEBUG"] as LogLevel[]}>
+						{(level) => (
+							<button
+								onClick={() => consoleStore.toggleFilterLevel(level)}
+								class={clsx(
+									styles["filter-tag"],
+									styles[`filter-tag--${level.toLowerCase()}`],
+									consoleStore.state.filterLevels.includes(level) && styles["active"],
+								)}
+								style={{ "--level-color": getLevelColor(level) }}
+							>
+								{level}
+							</button>
+						)}
+					</For>
 				</div>
 			</div>
 
-			<div class={styles["console-filters"]}>
-				<For each={["INFO", "WARN", "ERROR", "DEBUG"] as LogLevel[]}>
-					{(level) => (
-						<button
-							onClick={() => consoleStore.toggleFilterLevel(level)}
-							class={clsx(
-								styles["filter-tag"],
-								consoleStore.state.filterLevels.includes(level) && styles["active"],
-							)}
-							style={{ "--level-color": getLevelColor(level) }}
-						>
-							{level}
-						</button>
-					)}
-				</For>
-			</div>
-
-			<div class={styles["console-viewport-container"]}>
 				<div
 					class={clsx(styles["console-output"], styles["v2"])}
 					ref={outputRef}
@@ -294,16 +299,65 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						when={filteredLines().length > 0 || consoleStore.state.isCatchingUp}
 						fallback={
 							<div class={styles["console-empty"]}>
-								<h3>
-									{instancesState.runningIds[props.instanceSlug]
-										? "Waiting for game output..."
-										: "No logs to display"}
-								</h3>
-								<p>
-									{consoleStore.state.searchQuery
-										? "Try adjusting your search or filters."
-										: "The log is currently empty or still being initialized."}
-								</p>
+								<svg
+									class={styles["empty-icon"]}
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.5"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<polyline points="4 17 10 11 4 5" />
+									<line x1="12" y1="19" x2="20" y2="19" />
+								</svg>
+								<Show
+									when={hasFilters() && filteredLines().length === 0 && !consoleStore.state.isCatchingUp}
+								>
+									<h3>No matching logs</h3>
+									<p>Try adjusting your search query or filter levels.</p>
+									<div class={styles["console-empty-actions"]}>
+										<Button
+											variant="slate"
+											size="sm"
+											onClick={() => consoleStore.setSearch("")}
+										>
+											Clear Search
+										</Button>
+										<Button
+											variant="slate"
+											size="sm"
+											onClick={() => {
+												["INFO", "WARN", "ERROR", "DEBUG"].forEach((l) =>
+													consoleStore.toggleFilterLevel(l as LogLevel),
+												);
+											}}
+										>
+											Reset Filters
+										</Button>
+									</div>
+								</Show>
+								<Show
+									when={
+										!hasFilters() && instancesState.runningIds[props.instanceSlug]
+									}
+								>
+									<h3>Waiting for game output...</h3>
+									<p>The console will display logs once the game starts producing output.</p>
+								</Show>
+								<Show
+									when={
+										!hasFilters() && !instancesState.runningIds[props.instanceSlug]
+									}
+								>
+									<h3>No logs to display</h3>
+									<p>Launch the instance to see game output here.</p>
+									<div class={styles["console-empty-actions"]}>
+										<Button variant="slate" size="sm" onClick={props.openLogsFolder}>
+											Open Logs Folder
+										</Button>
+									</div>
+								</Show>
 							</div>
 						}
 					>
@@ -316,11 +370,11 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 											<Show when={line.timestamp}>
 												<span class={styles["log-time"]}>[{line.timestamp}]</span>
 											</Show>
-											<Show when={line.level !== "UNKNOWN"}>
-												<span class={styles["log-level"]} style={{ color: getLevelColor(line.level) }}>
-													[{line.thread}/{line.level}]:
-												</span>
-											</Show>
+										<Show when={line.level !== "UNKNOWN"}>
+											<span class={clsx(styles["log-level"], styles[`log-level--${line.level.toLowerCase()}`])}>
+												[{line.thread}/{line.level}]:
+											</span>
+										</Show>
 											<span class={styles["log-message"]}>{line.message}</span>
 										</div>
 									</div>
@@ -349,7 +403,6 @@ export const ConsoleTab = (props: ConsoleTabProps) => {
 						</Tooltip>
 					</div>
 				</Show>
-			</div>
 		</section>
 	);
 };

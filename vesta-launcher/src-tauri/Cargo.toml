@@ -16,7 +16,6 @@ dotenvy = "0.15"
 
 [dependencies]
 piston-lib = { path = "../../crates/piston-lib" }
-slug = "0.1"
 
 # Database - Diesel ORM
 diesel = { version = "2.3.6", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }

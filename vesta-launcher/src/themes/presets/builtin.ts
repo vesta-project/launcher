@@ -5,186 +5,201 @@ import type { ThemeConfig } from "../types";
  * These are curated themes with pre-tested contrast and accessibility
  */
 export const PRESET_THEMES: ThemeConfig[] = [
-	{
-		id: "vesta",
-		name: "Vesta",
-		description: "Signature teal to purple to orange gradient",
-		primaryHue: 180,
-		opacity: 0,
-		grainStrength: 30,
-		borderWidth: 1,
-		style: "glass",
-		gradientEnabled: true,
-		rotation: 180,
-		gradientType: "linear",
-		gradientHarmony: "triadic",
-		customCss: `
+  {
+    id: "vesta",
+    name: "Vesta",
+    description: "Signature teal to purple to orange gradient",
+    primaryHue: 180,
+    opacity: 0,
+    grainStrength: 30,
+    borderWidth: 1,
+    style: "glass",
+    gradientEnabled: true,
+    rotation: 180,
+    gradientType: "linear",
+    gradientHarmony: "triadic",
+    customCss: `
             :root {
                 --theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));
             }
         `,
-		allowHueChange: false, // Locked to signature colors
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	{
-		id: "solar",
-		name: "Solar",
-		description: "Signature warm orange frosted finish with soft diffusion",
-		primaryHue: 40,
-		opacity: 50,
-		grainStrength: 65,
-		borderWidth: 1,
-		style: "frosted",
-		gradientEnabled: false,
-		allowHueChange: false, // Locked to signature orange
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	{
-		id: "neon",
-		name: "Neon",
-		description: "Signature electric pink glass with vibrant gradient",
-		primaryHue: 300,
-		opacity: 0,
-		grainStrength: 25,
-		borderWidth: 1,
-		style: "glass",
-		gradientEnabled: true,
-		rotation: 135,
-		gradientType: "linear",
-		gradientHarmony: "complementary",
-		allowHueChange: false, // Locked to signature pink
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	{
-		id: "classic",
-		name: "Classic",
-		description: "Clean customizable theme - Maximum accessibility",
-		primaryHue: 210,
-		opacity: 100,
-		grainStrength: 0,
-		borderWidth: 1,
-		style: "flat",
-		gradientEnabled: false,
-		allowHueChange: true, // Customizable
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	{
-		id: "forest",
-		name: "Forest",
-		description: "Signature natural green with soft grain",
-		primaryHue: 140,
-		opacity: 50,
-		grainStrength: 58,
-		borderWidth: 1,
-		style: "frosted",
-		gradientEnabled: true,
-		rotation: 90,
-		gradientType: "linear",
-		gradientHarmony: "analogous",
-		allowHueChange: false, // Locked to signature green
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	{
-		id: "sunset",
-		name: "Sunset",
-		description: "Signature warm gradient from purple to orange",
-		primaryHue: 270,
-		opacity: 0,
-		grainStrength: 26,
-		borderWidth: 1,
-		style: "glass",
-		gradientEnabled: true,
-		rotation: 180,
-		gradientType: "linear",
-		gradientHarmony: "triadic",
-		allowHueChange: false, // Locked to signature purple/orange
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	// {
-	// 	id: "prism",
-	// 	name: "Prism",
-	// 	description: "Technicolor glass with reactive variables",
-	// 	author: "Vesta Team",
-	// 	primaryHue: 200,
-	// 	opacity: 20,
-	// 	borderWidth: 1,
-	// 	style: "glass",
-	// 	gradientEnabled: true,
-	// 	rotation: 45,
-	// 	gradientType: "linear",
-	// 	gradientHarmony: "triadic",
-	// 	allowHueChange: true,
-	// 	allowStyleChange: false,
-	// 	allowBorderChange: false,
-	// 	variables: [
-	// 		{
-	// 			name: "Glow Intensity",
-	// 			key: "glow-intensity",
-	// 			type: "number",
-	// 			min: 0,
-	// 			max: 100,
-	// 			default: 50,
-	// 			unit: "%",
-	// 		},
-	// 		{
-	// 			name: "Glass Blur",
-	// 			key: "glass-blur",
-	// 			type: "number",
-	// 			min: 0,
-	// 			max: 40,
-	// 			default: 12,
-	// 			unit: "px",
-	// 		},
-	// 		{
-	// 			name: "Edge Sharpness",
-	// 			key: "edge-sharpness",
-	// 			type: "number",
-	// 			min: 0,
-	// 			max: 100,
-	// 			default: 50,
-	// 			unit: "%",
-	// 		},
-	// 	],
-	// 	customCss: `
-	//         :root {
-	//             --effect-glow-strength: calc(var(--theme-var-glow-intensity) / 100);
-	//             --glass-blur-radius: calc(var(--theme-var-glass-blur) * 1px);
-	//             --border-opacity: calc(var(--theme-var-edge-sharpness) / 100);
+    allowHueChange: false, // Locked to signature colors
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  {
+    id: "solar",
+    name: "Solar",
+    description: "Signature warm orange frosted finish with soft diffusion",
+    primaryHue: 40,
+    opacity: 50,
+    grainStrength: 65,
+    borderWidth: 1,
+    style: "frosted",
+    gradientEnabled: false,
+    allowHueChange: false, // Locked to signature orange
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  {
+    id: "neon",
+    name: "Neon",
+    description: "Signature electric pink glass with vibrant gradient",
+    primaryHue: 300,
+    opacity: 0,
+    grainStrength: 25,
+    borderWidth: 1,
+    style: "glass",
+    gradientEnabled: true,
+    rotation: 135,
+    gradientType: "linear",
+    gradientHarmony: "complementary",
+    allowHueChange: false, // Locked to signature pink
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  {
+    id: "classic",
+    name: "Classic",
+    description: "Clean customizable theme - Maximum accessibility",
+    primaryHue: 210,
+    opacity: 100,
+    grainStrength: 0,
+    borderWidth: 1,
+    style: "flat",
+    gradientEnabled: false,
+    allowHueChange: true, // Customizable
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  {
+    id: "forest",
+    name: "Forest",
+    description: "Signature natural green with soft grain",
+    primaryHue: 140,
+    opacity: 50,
+    grainStrength: 58,
+    borderWidth: 1,
+    style: "frosted",
+    gradientEnabled: true,
+    rotation: 90,
+    gradientType: "linear",
+    gradientHarmony: "analogous",
+    allowHueChange: false, // Locked to signature green
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  {
+    id: "sunset",
+    name: "Sunset",
+    description: "Signature warm gradient from purple to orange",
+    primaryHue: 270,
+    opacity: 0,
+    grainStrength: 26,
+    borderWidth: 1,
+    style: "glass",
+    gradientEnabled: true,
+    rotation: 180,
+    gradientType: "linear",
+    gradientHarmony: "triadic",
+    allowHueChange: false, // Locked to signature purple/orange
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  // {
+  // 	id: "prism",
+  // 	name: "Prism",
+  // 	description: "Technicolor glass with reactive variables",
+  // 	author: "Vesta Team",
+  // 	primaryHue: 200,
+  // 	opacity: 20,
+  // 	borderWidth: 1,
+  // 	style: "glass",
+  // 	gradientEnabled: true,
+  // 	rotation: 45,
+  // 	gradientType: "linear",
+  // 	gradientHarmony: "triadic",
+  // 	allowHueChange: true,
+  // 	allowStyleChange: false,
+  // 	allowBorderChange: false,
+  // 	variables: [
+  // 		{
+  // 			name: "Glow Intensity",
+  // 			key: "glow-intensity",
+  // 			type: "number",
+  // 			min: 0,
+  // 			max: 100,
+  // 			default: 50,
+  // 			unit: "%",
+  // 		},
+  // 		{
+  // 			name: "Glass Blur",
+  // 			key: "glass-blur",
+  // 			type: "number",
+  // 			min: 0,
+  // 			max: 40,
+  // 			default: 12,
+  // 			unit: "px",
+  // 		},
+  // 		{
+  // 			name: "Edge Sharpness",
+  // 			key: "edge-sharpness",
+  // 			type: "number",
+  // 			min: 0,
+  // 			max: 100,
+  // 			default: 50,
+  // 			unit: "%",
+  // 		},
+  // 	],
+  // 	customCss: `
+  //         :root {
+  //             --effect-glow-strength: calc(var(--theme-var-glow-intensity) / 100);
+  //             --glass-blur-radius: calc(var(--theme-var-glass-blur) * 1px);
+  //             --border-opacity: calc(var(--theme-var-edge-sharpness) / 100);
 
-	//             --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
-	//             --effect-blur: var(--glass-blur-radius);
-	//             --elevation-strong: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
-	//             --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
-	//             --background-opacity: 0.15;
-	//         }
-	//     `,
-	// },
-	{
-		id: "midnight",
-		name: "Midnight",
-		description: "Ultra-dark Midnight mode — pure black surfaces for true blacks",
-		primaryHue: 240, // Dark blue for midnight theme preview
-		opacity: 100,
-		grainStrength: 0,
-		borderWidth: 0,
-		style: "flat",
-		colorScheme: "dark",
-		gradientEnabled: false,
-		allowHueChange: true, // Allow hue change for accents
-		allowStyleChange: false,
-		allowBorderChange: false,
-		customCss: `:root {
+  //             --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
+  //             --effect-blur: var(--glass-blur-radius);
+  //             --elevation-strong: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
+  //             --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
+  //             --background-opacity: 0.15;
+  //         }
+  //     `,
+  // },
+  {
+    id: "midnight",
+    name: "Midnight",
+    description:
+      "Ultra-dark Midnight mode — pure black surfaces for true blacks",
+    primaryHue: 240, // Dark blue for midnight theme preview
+    opacity: 100,
+    grainStrength: 0,
+    borderWidth: 0,
+    style: "flat",
+    colorScheme: "dark",
+    gradientEnabled: false,
+    allowHueChange: true, // Allow hue change for accents
+    allowStyleChange: false,
+    allowBorderChange: false,
+    customCss: `:root {
             /* Force truly black surfaces for Midnight panels using the computed variables */
             --surface-base-computed: hsl(0 0% 0%);
-            --surface-raised-computed: hsl(0 0% 2%);
-            --surface-overlay-computed: hsl(0 0% 3%);
+            --surface-raised-computed: hsl(0 0% 3%);
+            --surface-overlay-computed: hsl(0 0% 6%);
             --surface-sunken-computed: hsl(0 0% 0%);
+
+            /* Ensure app background and titlebars are truly black */
+            --app-background-tint: hsl(0 0% 0%);
+            --app-background-tint-with-opacity: hsl(0 0% 0% / 1);
+            --background-color: var(--app-background-tint);
+            --background-image: none;
+
+            /* Page viewer / titlebar adjustments */
+            --page-viewer-nav-bg: hsl(0 0% 0% / 1);
+            --page-viewer-nav-color: hsl(0 0% 100%);
+
+            /* Sidebar */
+            --sidebar-bg: var(--surface-base);
+            --sidebar-hover: var(--surface-raised);
 
             /* Midnight palette overrides */
             --text-primary: hsl(0 0% 100%);
@@ -193,10 +208,10 @@ export const PRESET_THEMES: ThemeConfig[] = [
             --text-disabled: hsl(0 0% 30%);
 
             /* Accent mapping (Primary hue is maintained from config) */
-            --accent-primary: hsl(var(--color__primary-hue) 50% 50%);
-            --accent-primary-hover: hsl(var(--color__primary-hue) 60% 60%);
-            --interactive-base: hsl(var(--color__primary-hue) 50% 50%);
-            --interactive-hover: hsl(var(--color__primary-hue) 60% 60%);
+            --accent-primary: hsl(var(--color__primary-hue) 80% 35%);
+            --accent-primary-hover: hsl(var(--color__primary-hue) 85% 40%);
+            --interactive-base: hsl(var(--color__primary-hue) 80% 35%);
+            --interactive-hover: hsl(var(--color__primary-hue) 85% 40%);
 
             /* Refined borders for true black look */
             --border-subtle: hsl(var(--color__primary-hue) 10% 15% / 0.5);
@@ -235,36 +250,36 @@ export const PRESET_THEMES: ThemeConfig[] = [
                 pointer-events: none;
             }
         `,
-	},
-	{
-		id: "oldschool",
-		name: "Old School",
-		description: "Classic customizable design with strong borders",
-		primaryHue: 210,
-		opacity: 100,
-		grainStrength: 0,
-		borderWidth: 2,
-		style: "flat",
-		gradientEnabled: false,
-		allowHueChange: true, // Customizable
-		allowStyleChange: false,
-		allowBorderChange: false,
-	},
-	{
-		id: "custom",
-		name: "Custom",
-		description: "Unlock all controls to craft your own theme",
-		primaryHue: 220,
-		opacity: 0,
-		grainStrength: 40,
-		borderWidth: 1,
-		style: "glass",
-		gradientEnabled: true,
-		rotation: 135,
-		gradientType: "linear",
-		gradientHarmony: "none",
-		allowHueChange: true,
-		allowStyleChange: true,
-		allowBorderChange: true,
-	},
+  },
+  {
+    id: "oldschool",
+    name: "Old School",
+    description: "Classic customizable design with strong borders",
+    primaryHue: 210,
+    opacity: 100,
+    grainStrength: 0,
+    borderWidth: 2,
+    style: "flat",
+    gradientEnabled: false,
+    allowHueChange: true, // Customizable
+    allowStyleChange: false,
+    allowBorderChange: false,
+  },
+  {
+    id: "custom",
+    name: "Custom",
+    description: "Unlock all controls to craft your own theme",
+    primaryHue: 220,
+    opacity: 0,
+    grainStrength: 40,
+    borderWidth: 1,
+    style: "glass",
+    gradientEnabled: true,
+    rotation: 135,
+    gradientType: "linear",
+    gradientHarmony: "none",
+    allowHueChange: true,
+    allowStyleChange: true,
+    allowBorderChange: true,
+  },
 ];

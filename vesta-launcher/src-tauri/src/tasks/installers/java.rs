@@ -54,11 +54,12 @@ impl Task for DownloadJavaTask {
             let reporter = TaskProgressReporter {
                 ctx: ctx.clone(),
                 last_percent: std::sync::atomic::AtomicI32::new(-1),
+                last_emit: std::sync::Mutex::new(std::time::Instant::now()),
             };
 
             let version = JavaVersion::new(major);
 
-            let java_path = get_or_install_jre(&jre_dir, &version, &reporter)
+            let java_path = get_or_install_jre(&jre_dir, &version, piston_lib::client::shared_client(), &reporter)
                 .await
                 .map_err(|e| e.to_string())?;
 
@@ -93,6 +94,7 @@ impl Task for DownloadJavaTask {
 struct TaskProgressReporter {
     ctx: TaskContext,
     last_percent: std::sync::atomic::AtomicI32,
+    last_emit: std::sync::Mutex<std::time::Instant>,
 }
 
 impl ProgressReporter for TaskProgressReporter {
@@ -114,9 +116,26 @@ impl ProgressReporter for TaskProgressReporter {
     }
 
     fn set_percent(&self, percent: i32) {
-        self.last_percent
-            .store(percent, std::sync::atomic::Ordering::Relaxed);
-        self.ctx.update_progress(percent, None, None);
+        const MIN_INTERVAL_MS: u64 = 150;
+        const MIN_PERCENT_DELTA: i32 = 1;
+
+        let prev = self.last_percent.load(std::sync::atomic::Ordering::Relaxed);
+        let mut allow = percent == 0 || percent == 100;
+        if !allow {
+            let delta = percent - prev;
+            if delta.abs() >= MIN_PERCENT_DELTA {
+                let mut guard = self.last_emit.lock().unwrap();
+                if guard.elapsed() >= std::time::Duration::from_millis(MIN_INTERVAL_MS) {
+                    *guard = std::time::Instant::now();
+                    allow = true;
+                }
+            }
+        }
+        if allow {
+            self.last_percent
+                .store(percent, std::sync::atomic::Ordering::Relaxed);
+            self.ctx.update_progress(percent, None, None);
+        }
     }
 
     fn set_message(&self, message: &str) {

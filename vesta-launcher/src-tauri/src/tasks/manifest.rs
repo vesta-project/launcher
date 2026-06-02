@@ -98,11 +98,11 @@ impl Task for GenerateManifestTask {
                 Some(5),
             );
 
-            let network_manager = app.state::<crate::utils::network::NetworkManager>();
-            let network_status = network_manager.get_status();
+            let network_status = app
+                .state::<crate::utils::network::NetworkManager>()
+                .get_status();
 
             // Load or fetch metadata (ManifestCache handles freshness via ETag)
-            let start = std::time::Instant::now();
             let metadata_res = if force_refresh {
                 log::info!("Force refreshing PistonMetadata (bypassing cache)...");
                 // Delete cache to force fresh fetch
@@ -119,9 +119,6 @@ impl Task for GenerateManifestTask {
                 );
                 piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&data_dir).await
             };
-
-            network_manager
-                .report_request_result(start.elapsed().as_millis(), metadata_res.is_ok());
 
             let metadata = metadata_res.map_err(|e| {
                 log::error!("Failed to load/fetch metadata: {}", e);

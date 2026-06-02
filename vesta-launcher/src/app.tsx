@@ -431,13 +431,18 @@ function Root(props: ChildrenProp) {
 						const { instancesState, setLaunching, initializeInstances } = await import(
 							"@stores/instances"
 						);
+						const { launchInstance } = await import("@utils/instances");
 						await initializeInstances();
 						const inst = instancesState.instances.find(
 							(inst) => (inst as any).slug === slug || inst.name.toLowerCase().replace(/ /g, "-") === slug,
 						);
 						if (inst) {
 							setLaunching(slug, true);
-							await invoke("launch_instance", { instanceData: inst });
+							try {
+								await launchInstance(inst);
+							} catch (err) {
+								setLaunching(slug, false);
+							}
 						}
 						i++;
 					} else if (arg === "--open-instance" && args[i + 1]) {

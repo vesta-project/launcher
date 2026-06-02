@@ -1,88 +1,105 @@
 <!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
-    <link rel="icon" type="image/svg+xml" href="/src/assets/logo.svg" />
-    <title>Vesta Launcher</title>
-    <script>
-      (function() {
-        const os = window.__VESTA_OS__ || new URLSearchParams(window.location.search).get('os');
-        if (os) {
-          document.documentElement.setAttribute('data-os', os);
-        }
-        if (!document.documentElement.getAttribute('data-window-effect')) {
-          document.documentElement.setAttribute('data-window-effect', 'none');
-        }
-      })();
-    </script>
-    <style>
-      html,
-      body,
-      #app {
-        margin: 0;
-        width: 100%;
-        height: 100%;
-      }
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#000000" />
+        <link rel="icon" type="image/svg+xml" href="/public/tauri.svg" />
+        <title>Vesta Launcher</title>
+        <script>
+            (function () {
+                const os =
+                    window.__VESTA_OS__ ||
+                    new URLSearchParams(window.location.search).get("os");
+                if (os) {
+                    document.documentElement.setAttribute("data-os", os);
+                }
+                if (
+                    !document.documentElement.getAttribute("data-window-effect")
+                ) {
+                    document.documentElement.setAttribute(
+                        "data-window-effect",
+                        "none",
+                    );
+                }
+            })();
+        </script>
+        <style>
+            html,
+            body,
+            #app {
+                margin: 0;
+                width: 100%;
+                height: 100%;
+            }
 
-      :root {
-        --window-surface-radius: 0px;
-      }
+            :root {
+                --window-surface-radius: 0px;
+            }
 
-      :root[data-os="macos"] {
-        --window-surface-radius: 12px;
-      }
+            :root[data-os="macos"] {
+                --window-surface-radius: 12px;
+            }
 
-      #startup-loader {
-        position: fixed;
-        inset: 0;
-        z-index: 9999;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        gap: 10px;
-        background: #141414;
-        color: rgba(255, 255, 255, 0.78);
-        font: 500 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        border-radius: var(--window-surface-radius);
-        clip-path: inset(0 round var(--window-surface-radius));
-        isolation: isolate;
-        overflow: clip;
-      }
+            #startup-loader {
+                position: fixed;
+                inset: 0;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: 10px;
+                background: #141414;
+                color: rgba(255, 255, 255, 0.78);
+                font:
+                    500 14px/1.4 system-ui,
+                    -apple-system,
+                    Segoe UI,
+                    Roboto,
+                    sans-serif;
+                border-radius: var(--window-surface-radius);
+                clip-path: inset(0 round var(--window-surface-radius));
+                isolation: isolate;
+                overflow: clip;
+            }
 
-      @supports not (overflow: clip) {
-        #startup-loader {
-          overflow: hidden;
-        }
-      }
+            @supports not (overflow: clip) {
+                #startup-loader {
+                    overflow: hidden;
+                }
+            }
 
-      #startup-loader .startup-loader-spinner {
-        width: clamp(88px, 16vmin, 132px);
-        height: clamp(88px, 16vmin, 132px);
-        display: block;
-        filter: drop-shadow(0 8px 24px rgb(0 0 0 / 25%));
-      }
+            #startup-loader .startup-loader-spinner {
+                width: clamp(88px, 16vmin, 132px);
+                height: clamp(88px, 16vmin, 132px);
+                display: block;
+                filter: drop-shadow(0 8px 24px rgb(0 0 0 / 25%));
+            }
 
-      #startup-loader .startup-loader-label {
-        opacity: 0.72;
-      }
-    </style>
-  </head>
+            #startup-loader .startup-loader-label {
+                opacity: 0.72;
+            }
+        </style>
+    </head>
 
-  <body>
-    <noscript>You need to enable JavaScript to run this app.</noscript>
-    <div id="startup-loader" role="status" aria-live="polite" data-tauri-drag-region>
-      <img
-        class="startup-loader-spinner"
-        src="/src/assets/spinner-fancy.svg"
-        alt=""
-      />
-      <p class="startup-loader-label">Loading Vesta...</p>
-    </div>
-    <div id="app"></div>
+    <body>
+        <noscript>You need to enable JavaScript to run this app.</noscript>
+        <div
+            id="startup-loader"
+            role="status"
+            aria-live="polite"
+            data-tauri-drag-region
+        >
+            <img
+                class="startup-loader-spinner"
+                src="/src/assets/spinner-fancy.svg"
+                alt=""
+            />
+            <p class="startup-loader-label">Loading Vesta...</p>
+        </div>
+        <div id="app"></div>
 
-    <script src="/src/index.tsx" type="module"></script>
-  </body>
+        <script src="/src/index.tsx" type="module"></script>
+    </body>
 </html>

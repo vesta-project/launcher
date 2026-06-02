@@ -104,26 +104,20 @@ pub async fn get_resource_categories(
 #[tauri::command]
 pub async fn search_resources(
     resource_manager: State<'_, ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
     platform: SourcePlatform,
     query: SearchQuery,
 ) -> Result<SearchResponse> {
-    let start = std::time::Instant::now();
     let res = resource_manager.search(platform, query).await;
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
     Ok(res?)
 }
 
 #[tauri::command]
 pub async fn get_resource_project(
     resource_manager: State<'_, ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
     platform: SourcePlatform,
     id: String,
 ) -> Result<ResourceProject> {
-    let start = std::time::Instant::now();
     let res = resource_manager.get_project(platform, &id).await;
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
     Ok(res?)
 }
 
@@ -159,17 +153,14 @@ pub async fn resolve_image_url(
 ) -> Result<String> {
     // 1. Check cache
     {
-        let cache = resource_manager.image_cache.lock().await;
+        let cache = resource_manager.image_cache.read().await;
         if let Some(cached) = cache.get(&url) {
             return Ok(cached.clone());
         }
     }
 
     // 2. Download image with 8s timeout
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(IMAGE_DOWNLOAD_TIMEOUT_SECS))
-        .build()
-        .context("Failed to build HTTP client")?;
+    let client = piston_lib::client::shared_client();
     let response = client
         .get(&url)
         .send()
@@ -205,7 +196,7 @@ pub async fn resolve_image_url(
 
     // 4. Store in cache
     {
-        let mut cache = resource_manager.image_cache.lock().await;
+        let mut cache = resource_manager.image_cache.write().await;
         cache.insert(url, data_url.clone());
     }
 
@@ -227,7 +218,7 @@ pub async fn resolve_image_urls(
     // 1. Check cache for all URLs
     let mut uncached: Vec<(usize, String)> = Vec::new();
     {
-        let cache = resource_manager.image_cache.lock().await;
+        let cache = resource_manager.image_cache.read().await;
         for (i, url) in urls.iter().enumerate() {
             if let Some(cached) = cache.get(url) {
                 results[i] = Some(cached.clone());
@@ -242,10 +233,7 @@ pub async fn resolve_image_urls(
     }
 
     // 2. Build a reusable HTTP client
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(IMAGE_DOWNLOAD_TIMEOUT_SECS))
-        .build()
-        .context("Failed to build HTTP client")?;
+    let client = piston_lib::client::shared_client();
 
     // 3. Download all uncached URLs concurrently
     let downloads = uncached.iter().map(|(_, url)| {
@@ -296,7 +284,7 @@ pub async fn resolve_image_urls(
 
     // 4. Store results in cache and populate the output vector
     {
-        let mut cache = resource_manager.image_cache.lock().await;
+        let mut cache = resource_manager.image_cache.write().await;
         for ((idx, _original_url), (url, data_url)) in uncached.iter().zip(downloaded.iter()) {
             if let Some(data_url) = data_url {
                 cache.insert(url.clone(), data_url.clone());

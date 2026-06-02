@@ -53,6 +53,7 @@ diesel::table! {
         theme_window_effect -> Nullable<Text>,
         theme_background_opacity -> Nullable<Integer>,
         theme_data -> Nullable<Text>,
+        ui_chrome_mode_enabled -> Bool,
     }
 }
 

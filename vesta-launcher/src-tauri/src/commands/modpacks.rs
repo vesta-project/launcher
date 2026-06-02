@@ -21,7 +21,6 @@ use piston_lib::game::modpack::parser::get_modpack_metadata;
 use piston_lib::game::modpack::types::ModpackFormat;
 use serde_json;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 use tauri::{command, AppHandle, State};
 use tempfile::NamedTempFile;
 
@@ -51,9 +50,7 @@ pub async fn get_modpack_info(
     target_id: Option<String>,
     target_platform: Option<String>,
     resource_manager: State<'_, crate::resources::ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
 ) -> Result<ModpackInfo, String> {
-    let start = std::time::Instant::now();
     let res = (async {
         let path_buf = PathBuf::from(path);
     if !path_buf.exists() {
@@ -370,8 +367,6 @@ pub async fn get_modpack_info(
     Ok(info)
 }).await;
 
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
-
     let info_val = res.map_err(|e| e.to_string())?;
     Ok(info_val)
 }
@@ -557,21 +552,14 @@ pub async fn get_modpack_info_from_url(
     target_id: Option<String>,
     target_platform: Option<String>,
     resource_manager: State<'_, crate::resources::ResourceManager>,
-    nm: State<'_, crate::utils::network::NetworkManager>,
 ) -> Result<ModpackInfo, String> {
-    let start = std::time::Instant::now();
-    let res = (async {
+    (async {
         log::info!(
             "[get_modpack_info_from_url] Fetching info for: {} (id override: {:?})",
             url,
             target_id
         );
-    let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = piston_lib::client::shared_client();
 
     // Optimization: Try to get metadata from Modrinth API first to avoid downloading large ZIPs
     if url.contains("modrinth.com/") {
@@ -836,7 +824,7 @@ pub async fn get_modpack_info_from_url(
     }
 
     // Fallback: Download and parse physical ZIP
-    let (final_url, icon_url) = resolve_modpack_resource(&client, &url).await;
+    let (final_url, icon_url) = resolve_modpack_resource(client, &url).await;
     log::info!(
         "[get_modpack_info_from_url] Falling back to ZIP download. Resolved: {} -> {}",
         url,
@@ -886,7 +874,6 @@ pub async fn get_modpack_info_from_url(
         target_id,
         target_platform,
         resource_manager,
-        nm.clone(),
     )
     .await?;
     if icon_url.is_some() {
@@ -894,10 +881,7 @@ pub async fn get_modpack_info_from_url(
     }
 
     Ok(info)
-}).await;
-
-    nm.report_request_result(start.elapsed().as_millis(), res.is_ok());
-    res
+}).await
 }
 
 async fn prepare_instance(
@@ -1198,7 +1182,13 @@ pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandid
     }
 
     // 2. Scan all folders in game_dir except standard Minecraft internals
-    if let Ok(entries) = std::fs::read_dir(&game_dir) {
+    let entries = tokio::task::spawn_blocking({
+        let game_dir = game_dir.clone();
+        move || std::fs::read_dir(&game_dir)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+    if let Ok(entries) = entries {
         let skip_folders = [
             "logs",
             "backups",
@@ -1231,7 +1221,12 @@ pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandid
                 // Recursively add files
                 let mut stack = vec![path];
                 while let Some(current) = stack.pop() {
-                    if let Ok(sub_entries) = std::fs::read_dir(&current) {
+                        let sub_entries = tokio::task::spawn_blocking(move || {
+                            std::fs::read_dir(&current)
+                        })
+                        .await
+                        .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+                        if let Ok(sub_entries) = sub_entries {
                         for sub_entry in sub_entries.flatten() {
                             let sub_path = sub_entry.path();
                             if sub_path.is_dir() {
@@ -1444,14 +1439,9 @@ pub async fn install_modpack_from_url(
     metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
     task_manager: State<'_, TaskManager>,
 ) -> Result<i32, String> {
-    let client = reqwest::Client::builder()
-        .user_agent("VestaLauncher/0.1.0")
-        .connect_timeout(Duration::from_secs(10))
-        .timeout(Duration::from_secs(30))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = piston_lib::client::shared_client();
 
-    let (final_url, _) = resolve_modpack_resource(&client, &url).await;
+    let (final_url, _) = resolve_modpack_resource(client, &url).await;
     log::info!(
         "[install_modpack_from_url] Resolved URL: {} -> {}",
         url,
