@@ -4,6 +4,7 @@
 	grid-template-rows: 32px 1fr;
 	width: 100%;
 	height: 100%;
+	transition: grid-template-columns 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 
 	& > :global(.titlebar):is(:global(.titlebar--right)) {
 		padding-left: 56px;
@@ -39,6 +40,14 @@
 			padding: 40px;
 			transition: grid-template-columns 0.5s ease-in-out;
 		}
+	}
+}
+
+.home__root--intro-no-sidebar {
+	grid-template-columns: 0px 1fr;
+
+	& > .main-menu {
+		grid-column: 1 / 3;
 	}
 }
 

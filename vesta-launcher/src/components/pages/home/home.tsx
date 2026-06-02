@@ -9,15 +9,22 @@ import {
 	instancesLoading,
 	instances as instancesStore,
 } from "@stores/instances";
+import {
+	homeIntroShowDemoCards,
+	homeIntroSidebarVisible,
+	homeIntroVisible,
+	setHomeIntroVisible,
+} from "@stores/home-intro";
 import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
 import { uiChromeModeEnabled } from "@utils/config-sync";
 import { useOs } from "@utils/os";
-import { startAppTutorial } from "@utils/tutorial";
 import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
 import styles from "./home.module.css";
+import { DemoInstanceCards } from "./home-intro/demo-instance-cards";
+import HomeIntro from "./home-intro/home-intro";
 import Sidebar from "./sidebar/sidebar";
 
 // Module-level signals for sidebar state
@@ -65,9 +72,8 @@ function HomePage() {
 
 		const config = await invoke<any>("get_config");
 		if (!config.tutorial_completed) {
-			// Small delay to ensure UI is ready
 			setTimeout(() => {
-				startAppTutorial();
+				setHomeIntroVisible(true);
 			}, 1000);
 		}
 	});
@@ -77,19 +83,29 @@ function HomePage() {
 		clearToasts();
 	});
 
+	const introActive = () => homeIntroVisible();
+	const sidebarForcedHidden = () => introActive() && !homeIntroSidebarVisible();
+
 	return (
-		<div class={styles["home__root"]} draggable={false}>
+		<div
+			class={styles["home__root"]}
+			classList={{
+				[styles["home__root--intro-no-sidebar"]]: sidebarForcedHidden(),
+			}}
+			draggable={false}
+		>
 			<TitleBar os={os()} sectionTitle={sectionTitle()} />
 			<Show when={isFlatChrome()}>
 				<FlatNavigationControls />
 			</Show>
-		<Sidebar
-			os={os()}
-			setPageViewerOpen={setPageViewerOpen}
-			openChanged={setSidebarOpen}
-			open={sidebarOpen()}
-			uiChromeMode={isFlatChrome() ? "flat" : "windowed"}
-		/>
+			<Sidebar
+				os={os()}
+				setPageViewerOpen={setPageViewerOpen}
+				openChanged={setSidebarOpen}
+				open={sidebarOpen()}
+				uiChromeMode={isFlatChrome() ? "flat" : "windowed"}
+				introForcedHidden={sidebarForcedHidden()}
+			/>
 			<Show
 				when={isFlatChrome()}
 				fallback={
@@ -116,6 +132,9 @@ function HomePage() {
 				class={styles["home__toaster"]}
 				style={{ visibility: sidebarOpen() ? "hidden" : "visible" }}
 			/>
+			<Show when={homeIntroVisible()}>
+				<HomeIntro onComplete={() => setHomeIntroVisible(false)} />
+			</Show>
 		</div>
 	);
 }
@@ -169,12 +188,15 @@ function MainMenu() {
 							Failed to load instances: {String(instancesError())}
 						</p>
 					</Show>
-					<Show when={!instancesLoading() && instancesStore().length === 0}>
+					<Show when={!instancesLoading() && instancesStore().length === 0 && !homeIntroShowDemoCards()}>
 						<p style={{ color: "#888", padding: "20px" }}>
 							No instances found. Create one to get started!
 						</p>
 					</Show>
 					<For each={instancesStore()}>{(instance) => <InstanceCard instance={instance} />}</For>
+					<Show when={homeIntroShowDemoCards()}>
+						<DemoInstanceCards />
+					</Show>
 				</div>
 			</div>
 		</div>
