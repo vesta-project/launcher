@@ -215,7 +215,6 @@ function InitPage() {
 
 function TelemetryToggle(props: { show: boolean }) {
   const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
-  const [visible, setVisible] = createSignal(false);
 
   onMount(() => {
     void (async () => {

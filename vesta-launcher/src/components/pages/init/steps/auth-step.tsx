@@ -6,17 +6,14 @@ import {
   listenToAuthEvents,
   startLogin,
   cancelLogin,
-  ACCOUNT_TYPE_GUEST,
   type AuthStage,
 } from "@utils/auth";
 import { invoke } from "@tauri-apps/api/core";
 import {
   createSignal,
-  Match,
   onCleanup,
   onMount,
   Show,
-  Switch,
 } from "solid-js";
 import styles from "../init.module.css";
 
