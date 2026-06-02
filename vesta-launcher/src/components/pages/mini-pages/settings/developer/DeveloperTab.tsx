@@ -1,22 +1,20 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
+import {
+	debugLogging,
+	handleClearCache,
+	handleDebugToggle,
+	handleOpenAppData,
+	handleOpenRuntimeStorageLocation,
+} from "@stores/settings";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { showToast } from "@ui/toast/toast";
 import { simulateUpdateProcess } from "@utils/updater";
-import { Show } from "solid-js";
 import styles from "../settings-page.module.css";
 
-interface DeveloperSettingsTabProps {
-	debugLogging: boolean;
-	handleDebugToggle: (checked: boolean) => void;
-	handleOpenAppSettingsLocation: () => void;
-	handleOpenRuntimeStorageLocation: () => void;
-	navigate?: (path: string) => void;
-}
-
-export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
+export function DeveloperSettingsTab() {
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
@@ -25,13 +23,13 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					label="Open App Settings Location"
 					description="Open the directory where Vesta stores app configuration and data files."
 					actionLabel="Open Folder"
-					onAction={props.handleOpenAppSettingsLocation}
+					onAction={handleOpenAppData}
 				/>
 				<SettingsField
 					label="Open Runtime Storage Location"
 					description="Open the Local AppData-style folder where runtime cache data (player heads, account capes, etc.) is stored."
 					actionLabel="Open Folder"
-					onAction={props.handleOpenRuntimeStorageLocation}
+					onAction={handleOpenRuntimeStorageLocation}
 				/>
 			</SettingsCard>
 
@@ -40,7 +38,7 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					label="Debug Logging"
 					description="Enable verbose logging for troubleshooting"
 					headerRight={
-						<Switch checked={props.debugLogging} onCheckedChange={props.handleDebugToggle}>
+						<Switch checked={debugLogging()} onCheckedChange={handleDebugToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -169,23 +167,6 @@ export function DeveloperSettingsTab(props: DeveloperSettingsTabProps) {
 					}
 				/>
 			</SettingsCard>
-
-			<Show when={props.navigate}>
-				<SettingsCard header="Navigation Test">
-					<div style="display: flex; gap: 12px; flex-wrap: wrap;">
-						<LauncherButton onClick={() => props.navigate?.("/install")}>Navigate to Install</LauncherButton>
-						<LauncherButton onClick={() => props.navigate?.("/file-drop")}>
-							Navigate to File Drop Test
-						</LauncherButton>
-						<LauncherButton onClick={() => props.navigate?.("/task-test")}>
-							Navigate to Task System Test
-						</LauncherButton>
-						<LauncherButton onClick={() => props.navigate?.("/notification-test")}>
-							Navigate to Notification Test
-						</LauncherButton>
-					</div>
-				</SettingsCard>
-			</Show>
 			</div>
 		</div>
 	);

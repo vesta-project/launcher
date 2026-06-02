@@ -1,6 +1,15 @@
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
+import {
+	autoUpdateEnabled,
+	debugLogging,
+	handleAutoUpdateToggle,
+	handleDebugToggle,
+	handleStartupCheckToggle,
+	startupCheckUpdates,
+	version,
+} from "@stores/settings";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { openExternal } from "@utils/external-link";
@@ -8,17 +17,7 @@ import { restartHomeIntro } from "@stores/home-intro";
 import { checkForAppUpdates } from "@utils/updater";
 import styles from "../settings-page.module.css";
 
-interface HelpSettingsTabProps {
-	close?: () => void;
-	navigate: (path: string) => void;
-	autoUpdateEnabled: boolean;
-	handleAutoUpdateToggle: (checked: boolean) => void;
-	startupCheckUpdates: boolean;
-	handleStartupCheckToggle: (checked: boolean) => void;
-	version: string;
-}
-
-export function HelpSettingsTab(props: HelpSettingsTabProps) {
+export function HelpSettingsTab(props: { close?: () => void }) {
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
@@ -27,7 +26,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Documentation"
 					description="Technical overview of modding frameworks, runtime environments, and configuration."
 					headerRight={
-						<LauncherButton onClick={() => props.navigate("/modding-guide")}>View Docs</LauncherButton>
+						<LauncherButton onClick={() => router()?.navigate("/modding-guide")}>View Docs</LauncherButton>
 					}
 				/>
 			</SettingsCard>
@@ -68,7 +67,7 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Automatic Updates"
 					description="Download and install updates automatically in the background"
 					headerRight={
-						<Switch checked={props.autoUpdateEnabled} onCheckedChange={props.handleAutoUpdateToggle}>
+						<Switch checked={autoUpdateEnabled()} onCheckedChange={handleAutoUpdateToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -79,7 +78,18 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 					label="Check on Startup"
 					description="Check for new versions when the launcher starts"
 					headerRight={
-						<Switch checked={props.startupCheckUpdates} onCheckedChange={props.handleStartupCheckToggle}>
+						<Switch checked={startupCheckUpdates()} onCheckedChange={handleStartupCheckToggle}>
+							<SwitchControl>
+								<SwitchThumb />
+							</SwitchControl>
+						</Switch>
+					}
+				/>
+				<SettingsField
+					label="Debug Logging"
+					description="Enable verbose logging for troubleshooting"
+					headerRight={
+						<Switch checked={debugLogging()} onCheckedChange={handleDebugToggle}>
 							<SwitchControl>
 								<SwitchThumb />
 							</SwitchControl>
@@ -103,12 +113,12 @@ export function HelpSettingsTab(props: HelpSettingsTabProps) {
 								gap: "0.5rem",
 							}}
 						>
-							<span>{props.version || "..."}</span>
+							<span>{version() || "..."}</span>
 							<LauncherButton
 								variant="ghost"
 								size="sm"
 								onClick={() => {
-									router().navigate("/changelog");
+									router()?.navigate("/changelog");
 									setPageViewerOpen(true);
 								}}
 							>

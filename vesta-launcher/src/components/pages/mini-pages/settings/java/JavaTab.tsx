@@ -1,21 +1,13 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
+import { getRequirements, isScanning, javaOptions, refreshJavas } from "@stores/settings";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { For, Show } from "solid-js";
 import styles from "../settings-page.module.css";
 import { JavaOptionCard } from "./JavaOptionCard";
 
-interface JavaSettingsTabProps {
-	requirements: any[];
-	javaOptions: any[];
-	isScanning: boolean;
-	refreshJavas: () => void;
-	useDedicatedGpu: boolean;
-	handleGpuToggle: (checked: boolean) => void;
-}
-
-export function JavaSettingsTab(props: JavaSettingsTabProps) {
+export function JavaSettingsTab() {
 	return (
 		<div class={`${styles["settings-tab-content"]} ${styles["settings-tab-content--wide"]}`}>
 			<div class={panelStyles["settings-panel"]}>
@@ -25,18 +17,13 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 				helpTopic="JAVA_MANAGED"
 			>
 				<div class={styles["section-actions"]} style={{ "margin-bottom": "16px" }}>
-					<LauncherButton
-						onClick={props.refreshJavas}
-						disabled={props.isScanning}
-						variant="ghost"
-						size="sm"
-					>
-						{props.isScanning ? "Scanning..." : "Rescan System"}
+					<LauncherButton onClick={refreshJavas} disabled={isScanning()} variant="ghost" size="sm">
+						{isScanning() ? "Scanning..." : "Rescan System"}
 					</LauncherButton>
 				</div>
 
 				<Show
-					when={props.requirements.length > 0}
+					when={getRequirements().length > 0}
 					fallback={
 						<div class={styles["settings-loading-state"]}>
 							<div class={styles["spinner"]}></div>
@@ -46,10 +33,10 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 					}
 				>
 					<div class={styles["java-requirements-list"]}>
-						<For each={props.requirements}>
+						<For each={getRequirements()}>
 							{(req: any) => {
 								const versionOptions = () =>
-									props.javaOptions.filter((option) => option.version === req.major_version);
+									javaOptions().filter((option) => option.version === req.major_version);
 
 								return (
 									<div class={styles["java-req-item"]}>
@@ -66,23 +53,6 @@ export function JavaSettingsTab(props: JavaSettingsTabProps) {
 						</For>
 					</div>
 				</Show>
-			</SettingsCard>
-
-			<SettingsCard
-				header="Performance & Graphics"
-				subHeader="Optimization settings for game performance."
-			>
-				<SettingsField
-					label="Use Dedicated GPU"
-					description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
-					headerRight={
-						<Switch checked={props.useDedicatedGpu} onCheckedChange={props.handleGpuToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
 			</SettingsCard>
 			</div>
 		</div>
