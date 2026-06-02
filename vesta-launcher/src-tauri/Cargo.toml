@@ -9,18 +9,18 @@ description.workspace = true
 
 [build-dependencies]
 tauri-build = { version = "2.6", features = [] }
-diesel = { version = "2.3.6", features = ["sqlite", "r2d2"] }
-diesel_migrations = "2.3.1"
-libsqlite3-sys = { version = "0.36", features = ["bundled"] }
+diesel = { version = "2.3.9", features = ["sqlite", "r2d2"] }
+diesel_migrations = "2.3.2"
+libsqlite3-sys = { version = "0.37.0", features = ["bundled"] }
 dotenvy = "0.15"
 
 [dependencies]
 piston-lib = { path = "../../crates/piston-lib" }
 
 # Database - Diesel ORM
-diesel = { version = "2.3.6", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
+diesel = { version = "2.3.9", features = ["sqlite", "r2d2", "64-column-tables", "chrono"] }
 diesel_migrations = { version = "2.3.1", features = ["sqlite"] }
-libsqlite3-sys = { version = "0.36", features = ["bundled"] }
+libsqlite3-sys = { version = "0.37.0", features = ["bundled"] }
 
 tauri = { version = "2.11", features = [
     "protocol-asset",
@@ -33,7 +33,7 @@ serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["full"] }
 futures = "0.3"
 
-tauri-plugin-os = "2"
+tauri-plugin-os = "2.3.2"
 tauri-plugin-log = "2.8"
 tauri-plugin-shell = "2.3"
 tauri-plugin-dialog = "2.7"
@@ -41,12 +41,12 @@ tauri-plugin-deep-link = "2.4"
 tauri-plugin-macos-permissions = "2.3"
 tauri-plugin-updater = "2.10"
 tauri-plugin-sentry = "0.5"
-sentry = "0.42.0"
-sentry-rust-minidump = "0.13.0"
+sentry = "0.42"
+sentry-rust-minidump = "0.13"
 
 
 anyhow = "1.0"
-anyhow-tauri = "1.0.0"
+anyhow-tauri = "1.0.1"
 thiserror = "2.0.18"
 chrono = "0.4"
 log = "0.4"
@@ -57,7 +57,7 @@ open = "5.3.1"
 urlencoding = "2.1"
 url = "2.5"
 which = "8.0.0"
-sysinfo = "0.38.0"
+sysinfo = "0.39.3"
 reqwest = { version = "0.11", features = ["json", "stream"] }
 image = { version = "0.25", features = ["png", "jpeg", "ico"] }
 base64 = "0.22"
@@ -65,11 +65,11 @@ futures-util = "0.3"
 async-trait = "0.1"
 dotenvy = "0.15"
 notify = "8.1.0"
-sha1 = "0.10"
-sha2 = "0.10"
+sha1 = "0.11.0"
+sha2 = "0.11.0"
 feed-rs = "2.3"
 html-escape = "0.2"
-rayon = "1.10"
+rayon = "1.12.0"
 
 # OAuth2 and Microsoft authentication
 oauth2 = "4.4.2"
@@ -79,12 +79,12 @@ lazy_static = "1.5"
 walkdir = "2.5.0"
 murmur2 = "0.1.0"
 tempfile = "3"
-uuid = { version = "1.20.0", features = ["v3", "v4", "v1", "serde"] }
+uuid = { version = "1.23.2", features = ["v3", "v4", "v1", "serde"] }
 tauri-plugin-clipboard-manager = "2.3"
 flate2 = "1.1.9"
 tauri-plugin-fs = "2.5"
 hex = "0.4.3"
-rand = "0.10.0"
+rand = "0.10.1"
 window-vibrancy = "0.7.1"
 
 [target."cfg(target_os = \"macos\")".dependencies]
@@ -99,4 +99,4 @@ tauri-plugin-autostart = "2.5"
 tauri-plugin-window-state = "2.4"
 
 [dev-dependencies]
-tempfile = "3.24.0" 
+tempfile = "3.27.0" 

@@ -202,7 +202,7 @@ impl Task for ResourceDownloadTask {
 
             // 4. Verification (Hash check)
             if !version.hash.is_empty() {
-                let computed = format!("{:x}", hasher.finalize());
+                let computed = hex::encode(hasher.finalize());
                 if computed.to_lowercase() != version.hash.to_lowercase() {
                     let _ = fs::remove_file(&temp_file_path).await;
                     return Err(format!(
