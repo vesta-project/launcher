@@ -32,14 +32,22 @@ export function getNextOnboardingStep(step: OnboardingStep): OnboardingStep {
 	if (step >= MAX_STEP) {
 		return MAX_STEP;
 	}
-	return (step + 1) as OnboardingStep;
+	const next = (step + 1) as OnboardingStep;
+	if (next === ONBOARDING_STEP.LEARN) {
+		return (next + 1) as OnboardingStep;
+	}
+	return next;
 }
 
 export function getPreviousOnboardingStep(step: OnboardingStep): OnboardingStep {
 	if (step <= MIN_STEP) {
 		return MIN_STEP;
 	}
-	return (step - 1) as OnboardingStep;
+	const prev = (step - 1) as OnboardingStep;
+	if (prev === ONBOARDING_STEP.LEARN) {
+		return (prev - 1) as OnboardingStep;
+	}
+	return prev;
 }
 
 export function getCanonicalBackStep(
@@ -47,7 +55,7 @@ export function getCanonicalBackStep(
 	learnCompleted: boolean,
 ): OnboardingStep {
 	if (step === ONBOARDING_STEP.AUTH) {
-		return learnCompleted ? ONBOARDING_STEP.LEARN : ONBOARDING_STEP.SPLASH;
+		return ONBOARDING_STEP.SPLASH;
 	}
 	return getPreviousOnboardingStep(step);
 }

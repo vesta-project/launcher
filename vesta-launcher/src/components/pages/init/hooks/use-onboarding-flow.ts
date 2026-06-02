@@ -120,7 +120,7 @@ export function useOnboardingFlow(initialState: Partial<OnboardingFlowState> = {
 		}
 
 		if (direction === "backward") {
-			return learnCompleted() ? ONBOARDING_STEP.LEARN : ONBOARDING_STEP.SPLASH;
+			return ONBOARDING_STEP.SPLASH;
 		}
 
 		return ONBOARDING_STEP.THEME;
