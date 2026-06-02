@@ -39,6 +39,7 @@ export function SidebarButton(props: SidebarButtonProps) {
 			{/* @ts-ignore error with the props. But the props are valid.*/}
 			<TooltipTrigger
 				as={Button}
+				id={props.id}
 				class={clsx(styles["sidebar-button"], local.class)}
 				onClick={props.onClick}
 				{...others}
