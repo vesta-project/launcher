@@ -1,7 +1,7 @@
 name: Release
 
 concurrency:
-  group: 'release-${{ github.ref }}'
+  group: "release-${{ github.ref }}"
   cancel-in-progress: true
 
 on:
@@ -42,14 +42,14 @@ jobs:
     permissions:
       contents: write
     outputs:
-      new_version: '${{ steps.bump.outputs.version }}'
+      new_version: "${{ steps.bump.outputs.version }}"
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - uses: oven-sh/setup-bun@v1
-      
+
       - id: bump
         name: Bump Version and Tag
         run: |
@@ -87,32 +87,32 @@ jobs:
       matrix:
         include:
           - platform: windows-latest
-            args: '--target x86_64-pc-windows-msvc'
+            args: "--target x86_64-pc-windows-msvc"
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
             name: Windows x64
             target: x86_64-pc-windows-msvc
           - platform: windows-11-arm
-            args: '--target aarch64-pc-windows-msvc'
+            args: "--target aarch64-pc-windows-msvc"
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_windows == 'true') }}
             name: Windows ARM64
             target: aarch64-pc-windows-msvc
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
+            args: "--target x86_64-apple-darwin"
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
             name: macOS x64
             target: x86_64-apple-darwin
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
+            args: "--target aarch64-apple-darwin"
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_macos == 'true') }}
             name: macOS ARM64
             target: aarch64-apple-darwin
           - platform: ubuntu-latest
-            args: '--target x86_64-unknown-linux-gnu'
+            args: "--target x86_64-unknown-linux-gnu"
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
             name: Linux x64
             target: x86_64-unknown-linux-gnu
           - platform: ubuntu-24.04-arm
-            args: '--target aarch64-unknown-linux-gnu'
+            args: "--target aarch64-unknown-linux-gnu"
             enabled: ${{ github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.build_linux == 'true') }}
             name: Linux ARM64
             target: aarch64-unknown-linux-gnu
@@ -128,7 +128,7 @@ jobs:
             REF="${{ github.ref }}"
           fi
           echo "ref=$REF" >> $GITHUB_OUTPUT
-          
+
           echo "::group::Target Resolution"
           echo "Resolved Ref: $REF"
           echo "Platform: ${{ matrix.name }}"
@@ -187,6 +187,8 @@ jobs:
         if: matrix.enabled
         uses: Swatinem/rust-cache@v2
         with:
+          prefix-key: "v4"
+          shared-key: "vesta-tauri-${{ matrix.target }}"
           workspaces: |
             . -> target
             vesta-launcher/src-tauri -> target
@@ -219,10 +221,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          RUSTFLAGS: ${{ contains(matrix.target, 'apple-darwin') && '-C embed-bitcode=no -C lto=no' || '' }}
+          CARGO_PROFILE_RELEASE_LTO: ${{ contains(matrix.target, 'apple-darwin') && 'false' || 'true' }}
         run: |
           echo "::group::Building Tauri App for ${{ matrix.target }}"
           cd vesta-launcher
-          
+
           if [ "${{ matrix.platform }}" == "macos-latest" ]; then
             bun run tauri build --target ${{ matrix.target }}
           elif [[ "${{ matrix.platform }}" == "ubuntu"* ]]; then
@@ -260,7 +264,7 @@ jobs:
             -name "*.sig" \
           \) -print0 | while IFS= read -r -d '' file; do
             filename=$(basename "$file")
-            
+
             is_sig=false
             if [[ "$filename" == *.sig ]]; then
               is_sig=true
@@ -268,10 +272,10 @@ jobs:
             else
               base_file="$filename"
             fi
-            
+
             ext="${base_file##*.}"
             target_name=""
-            
+
             case "$ext" in
               msi)
                 if [[ "${{ matrix.target }}" == *"aarch64"* ]]; then
@@ -327,7 +331,7 @@ jobs:
                 fi
                 ;;
             esac
-            
+
             if [ -n "$target_name" ]; then
               if [ "$is_sig" = true ]; then target_name="$target_name.sig"; fi
               echo "Uploading $filename as $target_name"
@@ -343,7 +347,7 @@ jobs:
         if: matrix.enabled
         uses: actions/upload-artifact@v4
         with:
-          name: 'build-artifacts-${{ matrix.name }}'
+          name: "build-artifacts-${{ matrix.name }}"
           # Explicitly filter ONLY the bundled files so we don't grab 200+ raw macOS .app folder contents
           path: |
             target/${{ matrix.target }}/release/bundle/**/*.msi
@@ -365,7 +369,7 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Validate R2 secrets
         shell: bash
         run: |
@@ -373,13 +377,13 @@ jobs:
             echo "R2 secrets not configured, skipping manifest generation"
             exit 0
           fi
-          
+
       - name: Configure AWS for R2
         run: |
           aws configure set aws_access_key_id ${{ secrets.R2_ACCESS_KEY_ID }}
           aws configure set aws_secret_access_key ${{ secrets.R2_SECRET_ACCESS_KEY }}
           aws configure set region auto
-          
+
       - name: Determine version
         id: version
         shell: bash
@@ -393,7 +397,7 @@ jobs:
             VERSION=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
+
       - name: Generate and upload latest.json
         run: |
           echo "::group::Generating latest.json manifest"
@@ -513,7 +517,7 @@ jobs:
 
           cat latest.json
           echo "::endgroup::"
-          
+
           echo "Uploading latest.json to R2"
           aws s3 cp latest.json s3://vesta-project/launcher/releases/ --endpoint-url https://b30108be91a7d16a9ae5d6c87838cec0.r2.cloudflarestorage.com
 
@@ -527,7 +531,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          
+
       - name: Determine version
         id: version
         shell: bash
@@ -541,12 +545,12 @@ jobs:
             VERSION=$(jq -r '.version' ./vesta-launcher/src-tauri/tauri.conf.json)
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          
+
       - name: Download all build artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
-          
+
       - name: Generate changelog
         id: changelog
         shell: bash
@@ -575,8 +579,8 @@ jobs:
         id: gh_release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: 'v${{ steps.version.outputs.version }}'
-          name: 'Vesta Launcher v${{ steps.version.outputs.version }}'
+          tag_name: "v${{ steps.version.outputs.version }}"
+          name: "Vesta Launcher v${{ steps.version.outputs.version }}"
           body_path: changelog.md
           draft: false
           prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
@@ -587,16 +591,16 @@ jobs:
         shell: bash
         run: |
           echo "::group::Preparing and Uploading Release Assets to GitHub"
-          
+
           # Enable extended pattern matching in bash
           shopt -s globstar extglob nullglob
-          
+
           mkdir -p final_artifacts
-          
+
           # Collect and rename files to prevent name collisions
           for file in artifacts/**/*.@(msi|zip|dmg|deb|AppImage|tar.gz|sig|exe|rpm); do
             filename=$(basename "$file")
-            
+
             # If it's a generic name like "Vesta Launcher.app.tar.gz", we need to make it unique per platform
             if [[ "$filename" == "Vesta Launcher.app.tar.gz"* ]]; then
               # Extract platform from parent directory name
@@ -616,7 +620,7 @@ jobs:
           done
 
           FILES=(final_artifacts/*)
-          
+
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No matching artifacts found to upload!"
             exit 1
@@ -624,12 +628,12 @@ jobs:
 
           echo "Found ${#FILES[@]} files to upload:"
           printf '  - %s\n' "${FILES[@]}"
-          
+
           # Uploading one by one to ensure reliability
           for file in "${FILES[@]}"; do
             echo "Uploading $file..."
             # Using --clobber to replace existing assets of the same name if they exist
             gh release upload "v${{ steps.version.outputs.version }}" "$file" --clobber
           done
-          
+
           echo "::endgroup::"
