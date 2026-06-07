@@ -5,8 +5,6 @@ pub enum FileClass {
     Binary,
     /// Structured text files that support key-value delta merging
     Text,
-    /// Files not present in the old manifest — user assets
-    Untracked,
 }
 
 /// Classify a file path into one of the three sync categories.

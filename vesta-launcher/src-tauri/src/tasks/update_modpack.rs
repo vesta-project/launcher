@@ -5,6 +5,10 @@ use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
 use crate::tasks::manager::{Task, TaskContext};
 use piston_lib::game::modpack::manifest::ModpackManifest;
+use piston_lib::game::modpack::types::ModpackFormat;
+use piston_lib::game::modpack::parser::{
+    read_zip_override_entry, read_zip_override_text,
+};
 use tauri::Manager;
 use tokio::sync::RwLock;
 
@@ -97,8 +101,9 @@ impl Task for UpdateModpackTask {
                 Some(0),
                 Some(6),
             );
-            let (new_manifest, _zip_path) =
+            let (new_manifest, zip_path) =
                 fetch_new_manifest(&app_handle, &inst, &new_version_id).await?;
+            let modpack_format = new_manifest.source;
 
             ctx.update_full(
                 15,
@@ -129,7 +134,7 @@ impl Task for UpdateModpackTask {
             if action_tree.is_empty() && total_actions == 0 {
                 // No changes needed — just update the version metadata
                 ctx.update_full(100, "Modpack is already up to date.".to_string(), Some(6), Some(6));
-                finish_update(&app_handle, &inst, &new_manifest, &new_version_id, &game_dir)
+                finish_update(&app_handle, &inst, &new_manifest, &new_version_id, &game_dir, &zip_path)
                     .await?;
                 return Ok(());
             }
@@ -143,7 +148,13 @@ impl Task for UpdateModpackTask {
             );
 
             // Resolve Merge actions — compare old/current/new file contents
-            resolve_merges(&mut action_tree, &game_dir, &old_manifest, &new_manifest);
+            resolve_merges(
+                &mut action_tree,
+                &game_dir,
+                &old_manifest,
+                &zip_path,
+                modpack_format,
+            );
 
             // ─── Phase 3: Staged Isolation Download ──────────────────────
             ctx.update_full(
@@ -181,7 +192,17 @@ impl Task for UpdateModpackTask {
                             Some(6),
                         );
 
-                        if let Err(e) = stage_file(&app_handle, source, path, &staging, &game_dir).await {
+                        if let Err(e) = stage_file(
+                            &app_handle,
+                            source,
+                            path,
+                            &staging,
+                            &game_dir,
+                            &zip_path,
+                            modpack_format,
+                        )
+                        .await
+                        {
                             log::error!("[UpdateModpackTask] Failed to stage {}: {}", path, e);
                             staging.rollback();
                             return Err(format!("Failed to download {}: {}", path, e));
@@ -292,7 +313,15 @@ impl Task for UpdateModpackTask {
                 Some(5),
                 Some(6),
             );
-            finish_update(&app_handle, &inst, &new_manifest, &new_version_id, &game_dir).await?;
+            finish_update(
+                &app_handle,
+                &inst,
+                &new_manifest,
+                &new_version_id,
+                &game_dir,
+                &zip_path,
+            )
+            .await?;
 
             let skipped_msg = if skipped_delete > 0 {
                 format!(
@@ -416,21 +445,49 @@ async fn fetch_new_manifest(
 fn resolve_merges(
     action_tree: &mut crate::sync::action_tree::ActionTree,
     game_dir: &std::path::Path,
-    _old_manifest: &ModpackManifest,
-    _new_manifest: &ModpackManifest,
+    old_manifest: &ModpackManifest,
+    new_zip_path: &std::path::Path,
+    new_format: ModpackFormat,
 ) {
+    let old_format = old_manifest.source;
+    let old_zip_path = old_manifest.source_zip_path.as_deref();
+
     let mut corrupted_paths: Vec<String> = Vec::new();
     let mut merge_updates: Vec<(usize, String)> = Vec::new();
+    let mut unsupported_paths: Vec<String> = Vec::new();
 
     for (i, action) in action_tree.actions.iter().enumerate() {
         if let SyncAction::Merge { path, .. } = action {
-            let current_content = std::fs::read_to_string(game_dir.join(&path)).ok();
+            let current_content = std::fs::read_to_string(game_dir.join(path)).ok();
+
+            let new_content = read_zip_override_text(new_zip_path, new_format, path).ok();
+            let old_content = old_zip_path.and_then(|zip| {
+                read_zip_override_text(zip, old_format, path).ok()
+            });
+
+            if new_content.is_none() {
+                log::warn!(
+                    "[UpdateModpackTask] Cannot merge {}: new version content missing from ZIP",
+                    path
+                );
+                unsupported_paths.push(path.clone());
+                continue;
+            }
+
+            if old_content.is_none() {
+                log::warn!(
+                    "[UpdateModpackTask] Cannot merge {}: old version ZIP unavailable — preserving user file",
+                    path
+                );
+                unsupported_paths.push(path.clone());
+                continue;
+            }
 
             let result = merge_config(
                 path,
-                None,             // $O$ content not stored, only hashes
+                old_content.as_deref(),
                 current_content.as_deref(),
-                None,             // $N$ content will be resolved in Phase 3
+                new_content.as_deref(),
             );
 
             match result {
@@ -450,6 +507,7 @@ fn resolve_merges(
                         "[UpdateModpackTask] Config {} format not supported for merging — using fallback",
                         path
                     );
+                    unsupported_paths.push(path.clone());
                 }
             }
         }
@@ -458,12 +516,26 @@ fn resolve_merges(
     // Apply merge results after collecting (avoids borrow conflicts)
     for (i, content) in merge_updates {
         if let Some(action) = action_tree.actions.get_mut(i) {
-            if let SyncAction::Merge { path, merged_content, .. } = action {
+            if let SyncAction::Merge {
+                path,
+                merged_content,
+                ..
+            } = action
+            {
                 *merged_content = content;
-                let _ = path; // keep path reference alive
+                let _ = path;
             }
         }
     }
+
+    // Remove merge actions that could not be resolved safely
+    action_tree.actions.retain(|action| {
+        if let SyncAction::Merge { path, .. } = action {
+            !unsupported_paths.contains(path)
+        } else {
+            true
+        }
+    });
 
     // Add corrupted configs
     for path in corrupted_paths {
@@ -477,8 +549,12 @@ async fn stage_file(
     source: &FileSource,
     path: &str,
     staging: &StagingDir,
-    game_dir: &std::path::Path,
+    _game_dir: &std::path::Path,
+    zip_path: &std::path::Path,
+    modpack_format: ModpackFormat,
 ) -> Result<(), String> {
+    crate::sync::paths::validate_staged_relative_path(path).map_err(|e| e.to_string())?;
+
     match source {
         FileSource::Modrinth { url, sha1, filename: _ } => {
             if url.is_empty() {
@@ -516,17 +592,11 @@ async fn stage_file(
                 .map_err(|e| e.to_string())?;
         }
         FileSource::ZipOverride { zip_entry: _ } => {
-            // Override files come from the modpack ZIP.
-            // During Phase 3, we extract them from the ZIP rather than downloading.
-            // For now, if the file exists in the game dir (from a previous install),
-            // we copy it. Actual ZIP extraction happens in the caller.
-            let existing = game_dir.join(path);
-            if existing.exists() {
-                staging
-                    .copy_into_staging(&existing, path)
-                    .map_err(|e| e.to_string())?;
-            }
-            // If it doesn't exist, it will be extracted from the ZIP separately
+            let data = read_zip_override_entry(zip_path, modpack_format, path)
+                .map_err(|e| format!("Failed to extract override {} from ZIP: {}", path, e))?;
+            staging
+                .write_staged(path, &data)
+                .map_err(|e| e.to_string())?;
         }
         FileSource::Generated => {
             // Content is generated in-memory (e.g., merged configs)
@@ -580,11 +650,14 @@ async fn finish_update(
     new_manifest: &ModpackManifest,
     new_version_id: &str,
     game_dir: &std::path::Path,
+    source_zip_path: &std::path::Path,
 ) -> Result<(), String> {
     // Persist the new manifest as $O$ for next update
     // Update the installed_at timestamp to now
     let mut manifest = new_manifest.clone();
     manifest.installed_at = chrono::Utc::now().to_rfc3339();
+    manifest.source_zip_path = Some(source_zip_path.to_path_buf());
+    manifest.backfill_file_hashes(game_dir);
     manifest
         .persist(game_dir)
         .map_err(|e| format!("Failed to persist manifest: {}", e))?;

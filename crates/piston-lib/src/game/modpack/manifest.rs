@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use super::types::{ModpackFormat, ModpackMetadata, ModpackMod};
@@ -70,6 +71,9 @@ pub struct ModpackManifestOverrides {
     /// Config files that were intentionally skipped (preserved user changes)
     #[serde(default)]
     pub skipped_configs: Vec<String>,
+    /// SHA-256 hashes for override files (lowercase relative path → hex hash)
+    #[serde(default)]
+    pub hashes: HashMap<String, String>,
 }
 
 /// Result of diffing the current directory against the manifest.
@@ -153,6 +157,7 @@ impl ModpackManifest {
                 .map(|s| s.to_string())
                 .collect(),
             skipped_configs: skipped_configs.to_vec(),
+            hashes: HashMap::new(),
         };
 
         Self {
@@ -192,6 +197,38 @@ impl ModpackManifest {
             path.display()
         );
         Ok(())
+    }
+
+    /// Compute SHA-256 hashes from disk for all mods and tracked overrides.
+    pub fn backfill_file_hashes(&mut self, game_dir: &Path) {
+        for m in &mut self.mods {
+            let full_path = game_dir.join(&m.path);
+            if full_path.exists() {
+                if let Ok(sha256) = compute_file_sha256(&full_path) {
+                    m.sha256 = Some(sha256);
+                }
+            }
+        }
+
+        for ov in &self.overrides.extracted {
+            let full_path = game_dir.join(ov);
+            if full_path.is_file() {
+                if let Ok(sha256) = compute_file_sha256(&full_path) {
+                    self.overrides
+                        .hashes
+                        .insert(ov.to_lowercase(), sha256);
+                }
+            }
+        }
+    }
+
+    /// Look up the expected SHA-256 for a tracked path from mods or override hashes.
+    pub fn expected_sha256(&self, path: &str) -> Option<String> {
+        let lower = path.to_lowercase();
+        if let Some(m) = self.mods.iter().find(|m| m.path.to_lowercase() == lower) {
+            return m.sha256.clone();
+        }
+        self.overrides.hashes.get(&lower).cloned()
     }
 
     /// Diff the manifest against the current state of the game directory.
@@ -297,7 +334,7 @@ fn compute_file_sha1(path: &Path) -> Result<String, anyhow::Error> {
 }
 
 /// Compute SHA-256 hash of a file (for diff comparison — stronger than SHA-1).
-fn compute_file_sha256(path: &Path) -> Result<String, anyhow::Error> {
+pub fn compute_file_sha256(path: &Path) -> Result<String, anyhow::Error> {
     use sha2::{Digest, Sha256};
     use std::io::Read;
 
