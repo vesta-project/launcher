@@ -835,6 +835,7 @@ impl ResourceSource for CurseForgeSource {
     }
 
     async fn get_version(&self, project_id: &str, version_id: &str) -> Result<ResourceVersion> {
+        // For CurseForge, `version_id` is the mod/file ID (CF API: /mods/{project}/files/{file_id}).
         let numeric_id = if project_id.is_empty() {
             String::new()
         } else if project_id.chars().all(|c| c.is_ascii_digit()) {

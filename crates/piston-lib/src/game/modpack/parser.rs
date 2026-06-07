@@ -453,3 +453,157 @@ fn extract_folder_to_root_with_config_policy<R: Read + std::io::Seek>(
 
     Ok((extracted, skipped))
 }
+
+/// List relative paths of override files inside a modpack ZIP without extracting.
+pub fn list_override_paths<P: AsRef<Path>>(zip_path: P) -> Result<Vec<String>> {
+    let metadata = get_modpack_metadata(&zip_path)?;
+    let file = File::open(zip_path.as_ref())?;
+    let mut archive = ZipArchive::new(file)?;
+    let prefix = detect_modpack_root_prefix(&mut archive)?;
+
+    let mut paths = Vec::new();
+    match metadata.format {
+        ModpackFormat::Modrinth => {
+            paths.extend(list_folder_entries(&mut archive, &format!("{}overrides", prefix))?);
+            paths.extend(list_folder_entries(
+                &mut archive,
+                &format!("{}client-overrides", prefix),
+            )?);
+        }
+        ModpackFormat::CurseForge => {
+            let overrides_folder = read_curseforge_overrides_folder(&mut archive, &prefix)?;
+            paths.extend(list_folder_entries(
+                &mut archive,
+                &format!("{}{}", prefix, overrides_folder),
+            )?);
+        }
+    }
+
+    paths.sort();
+    paths.dedup();
+    Ok(paths)
+}
+
+/// Read a single override file from a modpack ZIP by its game-relative path.
+pub fn read_zip_override_entry<P: AsRef<Path>>(
+    zip_path: P,
+    format: ModpackFormat,
+    relative_path: &str,
+) -> Result<Vec<u8>> {
+    let file = File::open(zip_path.as_ref())?;
+    let mut archive = ZipArchive::new(file)?;
+    let prefix = detect_modpack_root_prefix(&mut archive)?;
+    let normalized = relative_path.replace('\\', "/");
+
+    let candidate_folders = match format {
+        ModpackFormat::Modrinth => vec![
+            format!("{}overrides/{}", prefix, normalized),
+            format!("{}client-overrides/{}", prefix, normalized),
+        ],
+        ModpackFormat::CurseForge => {
+            let overrides_folder = read_curseforge_overrides_folder(&mut archive, &prefix)?;
+            vec![format!("{}{}/{}", prefix, overrides_folder, normalized)]
+        }
+    };
+
+    for entry_name in candidate_folders {
+        if let Ok(mut file) = archive.by_name(&entry_name) {
+            if file.is_dir() {
+                continue;
+            }
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf)?;
+            return Ok(buf);
+        }
+    }
+
+    Err(anyhow!(
+        "Override entry not found in ZIP: {}",
+        relative_path
+    ))
+}
+
+/// Read override file contents as UTF-8 text.
+pub fn read_zip_override_text<P: AsRef<Path>>(
+    zip_path: P,
+    format: ModpackFormat,
+    relative_path: &str,
+) -> Result<String> {
+    let bytes = read_zip_override_entry(zip_path, format, relative_path)?;
+    String::from_utf8(bytes).map_err(|e| anyhow!("Override file is not valid UTF-8: {}", e))
+}
+
+/// Compute SHA-256 hashes for override paths listed inside a modpack ZIP.
+pub fn hash_override_paths_from_zip<P: AsRef<Path>>(
+    zip_path: P,
+    format: ModpackFormat,
+    paths: &[String],
+) -> Result<std::collections::HashMap<String, String>> {
+    use sha2::{Digest, Sha256};
+
+    let mut hashes = std::collections::HashMap::new();
+    for path in paths {
+        let data = read_zip_override_entry(&zip_path, format, path)?;
+        let digest = Sha256::digest(&data);
+        hashes.insert(path.to_lowercase(), format!("{:x}", digest));
+    }
+    Ok(hashes)
+}
+
+fn detect_modpack_root_prefix<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> Result<String> {
+    for i in 0..archive.len() {
+        let name = archive.by_index(i)?.name().to_owned();
+        if name == "modrinth.index.json" || name.ends_with("/modrinth.index.json") {
+            return Ok(name
+                .strip_suffix("modrinth.index.json")
+                .unwrap_or("")
+                .to_string());
+        }
+        if name == "manifest.json" || name.ends_with("/manifest.json") {
+            return Ok(name.strip_suffix("manifest.json").unwrap_or("").to_string());
+        }
+    }
+    Ok(String::new())
+}
+
+fn read_curseforge_overrides_folder<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    prefix: &str,
+) -> Result<String> {
+    let manifest_name = format!("{}manifest.json", prefix);
+    if let Ok(mut file) = archive.by_name(&manifest_name) {
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        let manifest: CurseForgeManifest = serde_json::from_str(&content)?;
+        return Ok(manifest.overrides);
+    }
+    Ok("overrides".to_string())
+}
+
+fn list_folder_entries<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+    folder_name: &str,
+) -> Result<Vec<String>> {
+    let folder_prefix = format!("{}/", folder_name.trim_end_matches('/'));
+    let mut paths = Vec::new();
+
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+        let name = file.name().to_owned();
+        if !name.starts_with(&folder_prefix) || name == folder_prefix {
+            continue;
+        }
+        if file.is_dir() {
+            continue;
+        }
+        let relative = name
+            .strip_prefix(&folder_prefix)
+            .unwrap_or(&name)
+            .replace('\\', "/");
+        if !relative.is_empty() {
+            paths.push(relative);
+        }
+    }
+
+    Ok(paths)
+}

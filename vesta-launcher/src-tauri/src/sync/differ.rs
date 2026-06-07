@@ -56,8 +56,12 @@ impl ThreeWayDiffer {
             let in_old_overrides = old_overrides.contains(lower_path);
             let in_new_overrides = new_overrides.contains(lower_path);
 
-            let old_hash = old_mod.and_then(|m| m.sha256.clone());
-            let new_hash = new_mod.and_then(|m| m.sha256.clone());
+            let old_hash = old_mod
+                .and_then(|m| m.sha256.clone())
+                .or_else(|| old.overrides.hashes.get(lower_path).cloned());
+            let new_hash = new_mod
+                .and_then(|m| m.sha256.clone())
+                .or_else(|| new.overrides.hashes.get(lower_path).cloned());
             let current = current_hashes.get(lower_path);
 
             // Determine the original path (not lowercased) from whichever manifest has it
@@ -95,13 +99,8 @@ impl ThreeWayDiffer {
                         current,
                     );
                 }
-                FileClass::Untracked => {
-                    // Leave completely untouched
-                    tree.add_action(SyncAction::Skip {
-                        path: display_path,
-                        reason: SkipReason::Untracked,
-                    });
-                }
+                // Untracked files (Category C in MODPACK_UPDATING.md) are not in either
+                // manifest and are intentionally excluded from this diff loop.
             }
         }
 
@@ -325,9 +324,7 @@ impl ThreeWayDiffer {
             .iter()
             .filter(|p| is_world_save(p))
             .map(|p| {
-                let hash = current_hashes
-                    .get(&p.to_lowercase())
-                    .map(|fh| fh.sha256.clone());
+                let hash = old.overrides.hashes.get(&p.to_lowercase()).cloned();
                 (p.to_lowercase(), hash)
             })
             .collect();
@@ -338,18 +335,16 @@ impl ThreeWayDiffer {
             }
 
             let lower = n_path.to_lowercase();
-            if let Some(Some(_old_hash)) = old_level_dats.get(&lower) {
-                // We have an old hash for this world
+            if let Some(Some(expected_old_hash)) = old_level_dats.get(&lower) {
                 if let Some(current_fh) = current_hashes.get(&lower) {
-                    let old_hash = old_level_dats.get(&lower).unwrap().as_ref().unwrap();
-                    if current_fh.sha256.to_lowercase() != old_hash.to_lowercase() {
+                    if current_fh.sha256.to_lowercase() != expected_old_hash.to_lowercase() {
                         // User modified their world → rotate it
                         let quarantine = build_quarantine_path(n_path);
                         tree.add_world_collision(n_path.clone(), quarantine.clone());
                         tree.add_action(SyncAction::RotateWorld {
                             original_path: n_path.clone(),
                             quarantine_path: quarantine,
-                            old_level_dat_hash: Some(old_hash.clone()),
+                            old_level_dat_hash: Some(expected_old_hash.clone()),
                         });
                     }
                 }
@@ -461,6 +456,7 @@ mod tests {
             overrides: piston_lib::game::modpack::manifest::ModpackManifestOverrides {
                 extracted: overrides,
                 skipped_configs: vec![],
+                hashes: std::collections::HashMap::new(),
             },
             source_zip_path: None,
         }
@@ -616,5 +612,51 @@ mod tests {
             .filter(|a| matches!(a, SyncAction::Update { .. }))
             .collect();
         assert_eq!(updates.len(), 0, "Should not update on case-only difference");
+    }
+
+    #[test]
+    fn test_world_collision_when_user_modified_level_dat() {
+        let mut override_hashes = std::collections::HashMap::new();
+        override_hashes.insert(
+            "saves/myworld/level.dat".to_string(),
+            "expected_old_hash".to_string(),
+        );
+
+        let old = ModpackManifest {
+            source: piston_lib::game::modpack::types::ModpackFormat::Modrinth,
+            modpack_id: Some("test-pack".into()),
+            name: "Test Pack".into(),
+            version: "1.0.0".into(),
+            installed_at: "2024-01-01T00:00:00Z".into(),
+            minecraft_version: "1.20.1".into(),
+            modloader: piston_lib::game::modpack::manifest::ModpackManifestModloader {
+                loader_type: "fabric".into(),
+                version: Some("0.15.0".into()),
+            },
+            mods: vec![],
+            overrides: piston_lib::game::modpack::manifest::ModpackManifestOverrides {
+                extracted: vec!["saves/MyWorld/level.dat".into()],
+                skipped_configs: vec![],
+                hashes: override_hashes,
+            },
+            source_zip_path: None,
+        };
+        let new = make_test_manifest(vec![], vec!["saves/MyWorld/level.dat".into()]);
+
+        let mut current = HashMap::new();
+        current.insert(
+            "saves/myworld/level.dat".to_string(),
+            FileHash {
+                path: "saves/MyWorld/level.dat".into(),
+                sha256: "user_modified_hash".into(),
+            },
+        );
+
+        let tree = ThreeWayDiffer::diff(&old, &current, &new);
+        assert_eq!(
+            tree.world_collisions.len(),
+            1,
+            "Should detect world collision when level.dat hash differs from manifest"
+        );
     }
 }

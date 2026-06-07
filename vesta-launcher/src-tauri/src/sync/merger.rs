@@ -453,6 +453,23 @@ mod tests {
     }
 
     #[test]
+    fn test_merge_config_empty_new_content_not_used() {
+        let current = "max_fps=144\nrender_distance=12\n";
+        let result = merge_config(
+            "config/test.properties",
+            Some("max_fps=60\nrender_distance=12\n"),
+            Some(current),
+            None,
+        );
+        if let MergeResult::Merged(output) = result {
+            assert!(
+                !output.is_empty(),
+                "Merge with missing new content should not produce empty file when current exists"
+            );
+        }
+    }
+
+    #[test]
     fn test_flatten_json() {
         let content = r#"{"graphics": {"vsync": true, "max_fps": 60}}"#;
         let map = flatten_json(content).unwrap();

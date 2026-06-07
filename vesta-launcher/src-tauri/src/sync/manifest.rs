@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::Path;
 
+use piston_lib::game::modpack::manifest::compute_file_sha256;
+
 /// Represents the SHA-256 hash of a single tracked file on disk.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileHash {
@@ -29,13 +31,26 @@ pub fn build_new_manifest(
     let metadata = piston_lib::game::modpack::parser::get_modpack_metadata(zip_path)
         .context("Failed to parse modpack metadata from ZIP")?;
 
-    let manifest = piston_lib::game::modpack::manifest::ModpackManifest::from_install(
+    let override_paths =
+        piston_lib::game::modpack::parser::list_override_paths(zip_path).unwrap_or_default();
+    let override_pathbufs: Vec<std::path::PathBuf> =
+        override_paths.iter().map(std::path::PathBuf::from).collect();
+
+    let mut manifest = piston_lib::game::modpack::manifest::ModpackManifest::from_install(
         &metadata,
-        &[],           // overrides will be re-extracted during update
-        &[],           // no skipped configs for the target manifest
-        None,          // no source zip path needed for $N$
+        &override_pathbufs,
+        &[],
+        Some(zip_path.to_path_buf()),
         modpack_id,
     );
+
+    if let Ok(hashes) = piston_lib::game::modpack::parser::hash_override_paths_from_zip(
+        zip_path,
+        metadata.format,
+        &override_paths,
+    ) {
+        manifest.overrides.hashes = hashes;
+    }
 
     Ok(manifest)
 }
@@ -53,7 +68,7 @@ pub fn hash_current_directory(
     for m in &manifest.mods {
         let full_path = game_dir.join(&m.path);
         if full_path.exists() {
-            if let Ok(sha256) = compute_sha256_file(&full_path) {
+            if let Ok(sha256) = compute_file_sha256(&full_path) {
                 hashes.insert(
                     m.path.to_lowercase(),
                     FileHash {
@@ -68,7 +83,7 @@ pub fn hash_current_directory(
     for ov in &manifest.overrides.extracted {
         let full_path = game_dir.join(ov);
         if full_path.exists() {
-            if let Ok(sha256) = compute_sha256_file(&full_path) {
+            if let Ok(sha256) = compute_file_sha256(&full_path) {
                 hashes.insert(
                     ov.to_lowercase(),
                     FileHash {
@@ -83,21 +98,12 @@ pub fn hash_current_directory(
     hashes
 }
 
-/// Compute SHA-256 hash of a single file.
-pub fn compute_sha256_file(path: &Path) -> Result<String> {
-    use sha2::{Digest, Sha256};
-    let mut file = std::fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0u8; 8192];
-    use std::io::Read;
-    loop {
-        let n = file.read(&mut buffer)?;
-        if n == 0 {
-            break;
-        }
-        hasher.update(&buffer[..n]);
-    }
-    Ok(format!("{:x}", hasher.finalize()))
+/// Backfill SHA-256 hashes on a manifest from the current game directory.
+pub fn backfill_manifest_hashes(
+    manifest: &mut piston_lib::game::modpack::manifest::ModpackManifest,
+    game_dir: &Path,
+) {
+    manifest.backfill_file_hashes(game_dir);
 }
 
 #[cfg(test)]
@@ -109,7 +115,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let file_path = dir.path().join("test.txt");
         std::fs::write(&file_path, b"hello world").unwrap();
-        let hash = compute_sha256_file(&file_path).unwrap();
+        let hash = compute_file_sha256(&file_path).unwrap();
         assert_eq!(
             hash,
             "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"

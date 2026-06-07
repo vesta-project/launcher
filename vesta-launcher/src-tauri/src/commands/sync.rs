@@ -2,6 +2,7 @@ use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::update_modpack::UpdateModpackTask;
+use piston_lib::game::modpack::manifest::ModpackManifest;
 use tauri::{Manager, State};
 
 /// Check if a modpack update is available for the given instance.
@@ -56,11 +57,18 @@ pub async fn check_modpack_update(
         .as_ref()
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
-    let manifest_path = game_dir
-        .join(".vesta")
-        .join("modpack_manifest.json");
+    let manifest_path = game_dir.join(ModpackManifest::FILE_NAME);
 
     if !manifest_path.exists() {
+        return Ok(ModpackUpdateInfo {
+            current_version: Some(current_version_id.clone()),
+            latest_version: None,
+            update_available: false,
+        });
+    }
+
+    // Ensure manifest is readable (delta update requires a valid persisted manifest)
+    if ModpackManifest::load(&game_dir).is_err() {
         return Ok(ModpackUpdateInfo {
             current_version: Some(current_version_id.clone()),
             latest_version: None,
@@ -71,7 +79,7 @@ pub async fn check_modpack_update(
     // Fetch the latest versions from the platform
     let resource_manager = app_handle.state::<ResourceManager>();
 
-    let versions = resource_manager
+    let mut versions = resource_manager
         .get_versions(platform, &project_id, false, None, None)
         .await
         .map_err(|e| format!("Failed to fetch versions: {}", e))?;
@@ -84,8 +92,15 @@ pub async fn check_modpack_update(
         });
     }
 
-    // The first version is typically the latest
-    let latest = &versions[0];
+    versions.sort_by(|a, b| {
+        b.published_at
+            .cmp(&a.published_at)
+            .then_with(|| b.version_number.cmp(&a.version_number))
+    });
+
+    let latest = versions
+        .first()
+        .expect("versions is non-empty after is_empty check");
     let latest_version_id = latest.id.clone();
     let update_available = latest_version_id != current_version_id;
 
