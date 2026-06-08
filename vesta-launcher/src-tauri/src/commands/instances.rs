@@ -1223,50 +1223,20 @@ pub async fn launch_instance(
         data_dir.clone()
     };
 
-    // Determine game directory
-    // Prefer persisted per-instance game_directory whenever it exists.
-    // This avoids false path recomputation when global directory settings change.
-    let game_dir = if let Some(stored) = instance_data.game_directory.clone() {
-        if !stored.is_empty() && std::path::Path::new(&stored).exists() {
-            stored
-        } else if instance_data.use_global_game_dir {
-            let instances_root = if let Some(ref dir) = app_config.default_game_dir {
-                if !dir.is_empty() && dir != "/" {
-                    std::path::PathBuf::from(dir)
-                } else {
-                    data_dir.join("instances")
-                }
-            } else {
-                data_dir.join("instances")
-            };
-            instances_root
-                .join(&instance_id)
-                .to_string_lossy()
-                .to_string()
-        } else {
-            stored
-        }
-    } else if instance_data.use_global_game_dir {
-        let instances_root = if let Some(ref dir) = app_config.default_game_dir {
-            if !dir.is_empty() && dir != "/" {
-                std::path::PathBuf::from(dir)
-            } else {
-                data_dir.join("instances")
-            }
-        } else {
-            data_dir.join("instances")
-        };
-        instances_root
-            .join(&instance_id)
-            .to_string_lossy()
-            .to_string()
-    } else {
-        data_dir
-            .join("instances")
-            .join(&instance_id)
-            .to_string_lossy()
-            .to_string()
-    };
+    // Determine game directory using the same resolver as duplicate/repair flows.
+    let app_config_dir = crate::utils::db_manager::get_app_config_dir()
+        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
+    let instances_root = crate::utils::instance_helpers::resolve_instances_root(
+        &app_config_dir,
+        app_config.default_game_dir.as_deref(),
+    );
+    let game_dir = crate::utils::instance_helpers::resolve_instance_game_directory(
+        &instance_data,
+        &instances_root,
+        &data_dir,
+    )
+    .to_string_lossy()
+    .to_string();
 
     verify_modpack_resource_presence(&instance_data, &game_dir)?;
 

@@ -1,15 +1,21 @@
 use crate::models::instance::{Instance, NewInstance};
+use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
+use crate::resources::watcher::ResourceWatcher;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::get_vesta_conn;
-use crate::utils::instance_helpers::{compute_unique_name, compute_unique_slug};
+use crate::utils::instance_helpers::{
+    compute_unique_name, compute_unique_slug, copy_directory_recursive, count_files_in_directory,
+    remap_path_under_root, resolve_clone_source_directory, resolve_instances_root,
+};
 use anyhow::Result;
 use chrono::Utc;
+use diesel::dsl::sql;
 use diesel::prelude::*;
+use diesel::sql_types::BigInt;
 use futures::future::BoxFuture;
 use std::path::{Path, PathBuf};
 use tauri::Manager;
-use walkdir::WalkDir;
 
 pub struct CloneInstanceTask {
     source_id: i32,
@@ -30,8 +36,24 @@ impl Task for CloneInstanceTask {
         "Duplicate Instance".to_string()
     }
 
+    fn id(&self) -> Option<String> {
+        Some(format!("clone_instance_{}", self.source_id))
+    }
+
     fn cancellable(&self) -> bool {
         false
+    }
+
+    fn show_completion_notification(&self) -> bool {
+        true
+    }
+
+    fn total_steps(&self) -> i32 {
+        4
+    }
+
+    fn starting_description(&self) -> String {
+        "Preparing to duplicate instance...".to_string()
     }
 
     fn completion_description(&self) -> String {
@@ -45,134 +67,326 @@ impl Task for CloneInstanceTask {
         ctx.set_title("Duplicating Instance".to_string());
 
         Box::pin(async move {
-            let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+            let mut created_instance_id: Option<i32> = None;
+            let mut new_dir = PathBuf::new();
 
-            // 1. Fetch source instance
-            use crate::schema::instance::dsl::*;
-            let source = instance
-                .find(source_id)
-                .first::<Instance>(&mut conn)
-                .map_err(|e| format!("Source instance not found: {}", e))?;
+            let result: Result<(), String> = async {
+                let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
 
-            // 2. Determine new name and slug
-            let existing_instances: Vec<Instance> =
-                instance.load(&mut conn).map_err(|e| e.to_string())?;
-            let mut seen_names = std::collections::HashSet::new();
-            let mut seen_slugs = std::collections::HashSet::new();
-            for inst in existing_instances {
-                seen_names.insert(inst.name.to_lowercase());
-                seen_slugs.insert(inst.slug());
-            }
+                use crate::schema::instance::dsl::*;
+                let source = instance
+                    .find(source_id)
+                    .first::<Instance>(&mut conn)
+                    .map_err(|e| format!("Source instance not found: {}", e))?;
 
-            let base_name = new_name_opt.unwrap_or_else(|| source.name.clone());
-            let final_name = compute_unique_name(&base_name, &seen_names);
-
-            let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
-            let app_config_dir =
-                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
-            let instances_root = config
-                .default_game_dir
-                .as_ref()
-                .map(PathBuf::from)
-                .unwrap_or_else(|| app_config_dir.join("instances"));
-
-            let final_slug = compute_unique_slug(&final_name, &seen_slugs, &instances_root);
-            let new_dir = instances_root.join(&final_slug);
-
-            // 3. Copy files
-            if let Some(ref src_dir_str) = source.game_directory {
-                let src_dir = Path::new(src_dir_str);
-                if src_dir.exists() {
-                    ctx.update_description(format!("Copying files for {}...", final_name));
-
-                    let src_dir_owned = src_dir.to_path_buf();
-                    let new_dir_for_copy = new_dir.clone();
-                    tokio::task::spawn_blocking(move || {
-                        for entry in WalkDir::new(&src_dir_owned).into_iter().filter_map(|e| e.ok()) {
-                            let path = entry.path().to_path_buf();
-                            let relative = match path.strip_prefix(&src_dir_owned) {
-                                Ok(r) => r.to_path_buf(),
-                                Err(e) => return Err(format!("Strip prefix error: {:?}", e)),
-                            };
-                            let target = new_dir_for_copy.join(&relative);
-
-                            if path.is_dir() {
-                                std::fs::create_dir_all(&target).map_err(|e| e.to_string())?;
-                            } else {
-                                std::fs::copy(&path, &target).map_err(|e| e.to_string())?;
-                            }
-                        }
-                        Ok(())
-                    })
-                    .await
-                    .map_err(|e| format!("File copy task panicked: {}", e))??;
+                let existing_instances: Vec<Instance> =
+                    instance.load(&mut conn).map_err(|e| e.to_string())?;
+                let mut seen_names = std::collections::HashSet::new();
+                let mut seen_slugs = std::collections::HashSet::new();
+                for inst in existing_instances {
+                    seen_names.insert(inst.name.to_lowercase());
+                    seen_slugs.insert(inst.slug());
                 }
+
+                let base_name = new_name_opt.unwrap_or_else(|| source.name.clone());
+                let final_name = compute_unique_name(&base_name, &seen_names);
+
+                let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+                let app_config_dir =
+                    crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+                let data_dir = app_config_dir.join("data");
+                let instances_root = resolve_instances_root(
+                    &app_config_dir,
+                    config.default_game_dir.as_deref(),
+                );
+
+                let final_slug = compute_unique_slug(&final_name, &seen_slugs, &instances_root);
+                new_dir = instances_root.join(&final_slug);
+
+                ctx.update_full(
+                    10,
+                    "Locating source instance files...".to_string(),
+                    Some(1),
+                    Some(4),
+                );
+
+                let source_dir = resolve_clone_source_directory(
+                    &source,
+                    &instances_root,
+                    &data_dir,
+                )?;
+
+                let source_file_count = count_files_in_directory(&source_dir);
+                ctx.update_full(
+                    25,
+                    format!("Copying files for {}...", final_name),
+                    Some(2),
+                    Some(4),
+                );
+
+                let source_dir_for_copy = source_dir.clone();
+                let new_dir_for_copy = new_dir.clone();
+                let copied_files = tokio::task::spawn_blocking(move || {
+                    copy_directory_recursive(&source_dir_for_copy, &new_dir_for_copy)
+                })
+                .await
+                .map_err(|e| format!("File copy task panicked: {}", e))??;
+
+                if source_file_count > 0 && copied_files == 0 {
+                    return Err(
+                        "File copy finished but no files were copied from the source instance."
+                            .to_string(),
+                    );
+                }
+
+                ctx.update_full(
+                    55,
+                    "Creating database record...".to_string(),
+                    Some(3),
+                    Some(4),
+                );
+
+                let new_inst = NewInstance {
+                    name: final_name.clone(),
+                    minecraft_version: source.minecraft_version.clone(),
+                    modloader: source.modloader.clone(),
+                    modloader_version: source.modloader_version.clone(),
+                    java_path: source.java_path.clone(),
+                    java_args: source.java_args.clone(),
+                    game_directory: Some(new_dir.to_string_lossy().to_string()),
+                    game_width: source.game_width,
+                    game_height: source.game_height,
+                    min_memory: source.min_memory,
+                    max_memory: source.max_memory,
+                    icon_path: source.icon_path.clone(),
+                    last_played: None,
+                    total_playtime_minutes: 0,
+                    created_at: Some(Utc::now().to_rfc3339()),
+                    updated_at: Some(Utc::now().to_rfc3339()),
+                    installation_status: Some("installed".to_string()),
+                    crashed: None,
+                    crash_details: None,
+                    modpack_id: source.modpack_id.clone(),
+                    modpack_version_id: source.modpack_version_id.clone(),
+                    modpack_platform: source.modpack_platform.clone(),
+                    modpack_icon_url: source.modpack_icon_url.clone(),
+                    icon_data: source.icon_data.clone(),
+                    last_operation: None,
+                    import_source_game_directory: None,
+                    import_launcher_kind: None,
+                    import_instance_path: None,
+                    use_global_resolution: source.use_global_resolution,
+                    use_global_memory: source.use_global_memory,
+                    use_global_java_args: source.use_global_java_args,
+                    use_global_java_path: source.use_global_java_path,
+                    use_global_hooks: source.use_global_hooks,
+                    use_global_environment_variables: source.use_global_environment_variables,
+                    use_global_game_dir: source.use_global_game_dir,
+                    use_global_launcher_action: source.use_global_launcher_action,
+                    launcher_action_on_launch: source.launcher_action_on_launch.clone(),
+                    environment_variables: source.environment_variables.clone(),
+                    pre_launch_hook: source.pre_launch_hook.clone(),
+                    wrapper_command: source.wrapper_command.clone(),
+                    post_exit_hook: source.post_exit_hook.clone(),
+                };
+
+                diesel::insert_into(instance)
+                    .values(&new_inst)
+                    .execute(&mut conn)
+                    .map_err(|e| format!("Failed to insert cloned instance: {}", e))?;
+
+                let inserted_id: i64 = diesel::select(sql::<BigInt>("last_insert_rowid()"))
+                    .get_result(&mut conn)
+                    .map_err(|e| format!("Failed to read inserted instance id: {}", e))?;
+                let inserted_id = inserted_id as i32;
+                created_instance_id = Some(inserted_id);
+
+                clone_installed_resources(
+                    &mut conn,
+                    source_id,
+                    inserted_id,
+                    &source_dir,
+                    &new_dir,
+                )?;
+
+                ctx.update_full(
+                    85,
+                    "Indexing duplicated resources...".to_string(),
+                    Some(4),
+                    Some(4),
+                );
+
+                let inserted_inst = instance
+                    .find(inserted_id)
+                    .first::<Instance>(&mut conn)
+                    .map_err(|e| format!("Failed to fetch cloned instance: {}", e))?;
+
+                let watcher = ctx.app_handle.state::<ResourceWatcher>();
+                if let Err(e) = watcher
+                    .watch_instance(
+                        final_slug.clone(),
+                        inserted_id,
+                        new_dir.to_string_lossy().to_string(),
+                    )
+                    .await
+                {
+                    log::warn!(
+                        "[CloneInstanceTask] Failed to start resource watcher for {}: {}",
+                        final_name,
+                        e
+                    );
+                }
+
+                use tauri::Emitter;
+                let _ = ctx.app_handle.emit(
+                    "core://instance-created",
+                    crate::commands::instances::process_instance_icon(inserted_inst),
+                );
+
+                Ok(())
             }
+            .await;
 
-            // 4. Create new instance in DB
-            let new_inst = NewInstance {
-                name: final_name,
-                minecraft_version: source.minecraft_version.clone(),
-                modloader: source.modloader.clone(),
-                modloader_version: source.modloader_version.clone(),
-                java_path: source.java_path.clone(),
-                java_args: source.java_args.clone(),
-                game_directory: Some(new_dir.to_string_lossy().to_string()),
-                game_width: source.game_width,
-                game_height: source.game_height,
-                min_memory: source.min_memory,
-                max_memory: source.max_memory,
-                icon_path: source.icon_path.clone(),
-                last_played: None,
-                total_playtime_minutes: 0,
-                created_at: Some(Utc::now().to_rfc3339()),
-                updated_at: Some(Utc::now().to_rfc3339()),
-                installation_status: Some("installed".to_string()),
-                crashed: None,
-                crash_details: None,
-                modpack_id: source.modpack_id.clone(),
-                modpack_version_id: source.modpack_version_id.clone(),
-                modpack_platform: source.modpack_platform.clone(),
-                modpack_icon_url: source.modpack_icon_url.clone(),
-                icon_data: source.icon_data.clone(),
-                last_operation: None,
-                import_source_game_directory: None,
-                import_launcher_kind: None,
-                import_instance_path: None,
-                use_global_resolution: source.use_global_resolution,
-                use_global_memory: source.use_global_memory,
-                use_global_java_args: source.use_global_java_args,
-                use_global_java_path: source.use_global_java_path,
-                use_global_hooks: source.use_global_hooks,
-                use_global_environment_variables: source.use_global_environment_variables,
-                use_global_game_dir: source.use_global_game_dir,
-                use_global_launcher_action: source.use_global_launcher_action,
-                launcher_action_on_launch: source.launcher_action_on_launch.clone(),
-                environment_variables: source.environment_variables.clone(),
-                pre_launch_hook: source.pre_launch_hook.clone(),
-                wrapper_command: source.wrapper_command.clone(),
-                post_exit_hook: source.post_exit_hook.clone(),
-            };
-
-            diesel::insert_into(instance)
-                .values(&new_inst)
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to insert cloned instance: {}", e))?;
-
-            // Fetch the inserted instance and emit created event
-            let inserted_inst = instance
-                .order(id.desc())
-                .first::<Instance>(&mut conn)
-                .map_err(|e| format!("Failed to fetch cloned instance: {}", e))?;
-
-            use tauri::Emitter;
-            let _ = ctx.app_handle.emit(
-                "core://instance-created",
-                crate::commands::instances::process_instance_icon(inserted_inst),
-            );
+            if let Err(error) = result {
+                rollback_failed_clone(&ctx.app_handle, created_instance_id, &new_dir).await;
+                return Err(format!(
+                    "{error} The incomplete copy was removed automatically."
+                ));
+            }
 
             Ok(())
         })
+    }
+}
+
+fn clone_installed_resources<C>(
+    conn: &mut C,
+    source_instance_id: i32,
+    dest_instance_id: i32,
+    source_root: &Path,
+    dest_root: &Path,
+) -> Result<(), String>
+where
+    C: diesel::Connection<Backend = diesel::sqlite::Sqlite>
+        + diesel::connection::LoadConnection,
+{
+    use crate::schema::installed_resource::dsl as ir_dsl;
+
+    let source_resources = ir_dsl::installed_resource
+        .filter(ir_dsl::instance_id.eq(source_instance_id))
+        .load::<InstalledResource>(conn)
+        .map_err(|e| format!("Failed to load source resources: {}", e))?;
+
+    for resource in source_resources {
+        let new_local_path =
+            remap_path_under_root(&resource.local_path, source_root, dest_root);
+
+        if !new_local_path.is_empty() && !Path::new(&new_local_path).exists() {
+            log::warn!(
+                "[CloneInstanceTask] Skipping missing cloned resource file: {}",
+                new_local_path
+            );
+            continue;
+        }
+
+        let new_resource = NewInstalledResource {
+            instance_id: dest_instance_id,
+            platform: resource.platform,
+            remote_id: resource.remote_id,
+            remote_version_id: resource.remote_version_id,
+            resource_type: resource.resource_type,
+            local_path: new_local_path,
+            display_name: resource.display_name,
+            current_version: resource.current_version,
+            is_manual: resource.is_manual,
+            is_enabled: resource.is_enabled,
+            last_updated: Utc::now().to_rfc3339(),
+            release_type: resource.release_type,
+            hash: resource.hash,
+            file_size: resource.file_size,
+            file_mtime: resource.file_mtime,
+        };
+
+        diesel::insert_into(ir_dsl::installed_resource)
+            .values(&new_resource)
+            .execute(conn)
+            .map_err(|e| format!("Failed to clone installed resource: {}", e))?;
+    }
+
+    Ok(())
+}
+
+async fn rollback_failed_clone(
+    app_handle: &tauri::AppHandle,
+    instance_id: Option<i32>,
+    game_dir: &Path,
+) {
+    if instance_id.is_none() && !game_dir.exists() {
+        return;
+    }
+
+    log::warn!(
+        "[CloneInstanceTask] Rolling back failed duplicate instance_id={:?} path={}",
+        instance_id,
+        game_dir.display()
+    );
+
+    if let Some(instance_id) = instance_id {
+        let watcher = app_handle.state::<ResourceWatcher>();
+        if let Err(e) = tokio::time::timeout(
+            tokio::time::Duration::from_secs(5),
+            watcher.unwatch_instance(instance_id),
+        )
+        .await
+        {
+            log::warn!(
+                "[CloneInstanceTask] Watcher unwatch timed out during rollback: {}",
+                e
+            );
+        }
+    }
+
+    if game_dir.exists() {
+        let game_dir = game_dir.to_path_buf();
+        if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&game_dir))
+            .await
+        {
+            log::warn!(
+                "[CloneInstanceTask] Failed to await directory removal during rollback: {}",
+                e
+            );
+        }
+    }
+
+    if let Some(instance_id) = instance_id {
+        if let Ok(mut conn) = get_vesta_conn() {
+            use crate::schema::instance::dsl::*;
+            use crate::schema::installed_resource::dsl as ir_dsl;
+
+            let db_result = conn.transaction::<_, diesel::result::Error, _>(|conn| {
+                diesel::delete(
+                    ir_dsl::installed_resource
+                        .filter(ir_dsl::instance_id.eq(instance_id)),
+                )
+                .execute(conn)?;
+                diesel::delete(instance.find(instance_id)).execute(conn)?;
+                Ok(())
+            });
+
+            if let Err(e) = db_result {
+                log::error!(
+                    "[CloneInstanceTask] Failed to roll back database records for instance {}: {}",
+                    instance_id,
+                    e
+                );
+            } else {
+                use tauri::Emitter;
+                let _ = app_handle.emit(
+                    "core://instance-deleted",
+                    serde_json::json!({ "id": instance_id }),
+                );
+            }
+        }
     }
 }
 
