@@ -603,8 +603,8 @@ async fn stage_file(
                 .write_staged(path, &data)
                 .map_err(|e| e.to_string())?;
         }
-        FileSource::ZipOverride { zip_entry: _ } => {
-            let data = read_zip_override_entry(zip_path, modpack_format, path)
+        FileSource::ZipOverride { relative_path } => {
+            let data = read_zip_override_entry(zip_path, modpack_format, relative_path)
                 .map_err(|e| format!("Failed to extract override {} from ZIP: {}", path, e))?;
             staging
                 .write_staged(path, &data)

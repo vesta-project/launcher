@@ -422,12 +422,20 @@ fn extract_folder_to_root_with_config_policy<R: Read + std::io::Seek>(
 
         if name.starts_with(&folder_prefix) && name != folder_prefix {
             let relative_path_str = name.strip_prefix(&folder_prefix).unwrap();
-            let relative_path = PathBuf::from(relative_path_str.replace("\\", "/"));
+            let relative_path_str = relative_path_str.replace('\\', "/");
+            if crate::utils::paths::validate_relative_path(&relative_path_str).is_err() {
+                log::warn!(
+                    "[extract_overrides] Skipping ZIP entry with unsafe path: {}",
+                    relative_path_str
+                );
+                continue;
+            }
+            let relative_path = PathBuf::from(&relative_path_str);
             let target_path = destination.join(&relative_path);
 
             if !file.is_dir()
                 && !force_overwrite_configs
-                && is_config_file(relative_path_str)
+                && is_config_file(&relative_path_str)
                 && target_path.exists()
             {
                 log::info!(
@@ -490,6 +498,7 @@ pub fn read_zip_override_entry<P: AsRef<Path>>(
     format: ModpackFormat,
     relative_path: &str,
 ) -> Result<Vec<u8>> {
+    crate::utils::paths::validate_relative_path(relative_path)?;
     let file = File::open(zip_path.as_ref())?;
     let mut archive = ZipArchive::new(file)?;
     let prefix = detect_modpack_root_prefix(&mut archive)?;
@@ -600,7 +609,7 @@ fn list_folder_entries<R: Read + std::io::Seek>(
             .strip_prefix(&folder_prefix)
             .unwrap_or(&name)
             .replace('\\', "/");
-        if !relative.is_empty() {
+        if !relative.is_empty() && crate::utils::paths::validate_relative_path(&relative).is_ok() {
             paths.push(relative);
         }
     }

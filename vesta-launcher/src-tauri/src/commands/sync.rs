@@ -92,14 +92,17 @@ pub async fn check_modpack_update(
         });
     }
 
-    versions.sort_by(|a, b| {
-        b.published_at
-            .cmp(&a.published_at)
-            .then_with(|| b.version_number.cmp(&a.version_number))
-    });
-
     let latest = versions
-        .first()
+        .iter()
+        .max_by(|a, b| {
+            piston_lib::utils::version::compare_version_candidates(
+                a.published_at.as_deref(),
+                &a.version_number,
+                b.published_at.as_deref(),
+                &b.version_number,
+            )
+            .then_with(|| a.id.cmp(&b.id))
+        })
         .expect("versions is non-empty after is_empty check");
     let latest_version_id = latest.id.clone();
     let update_available = latest_version_id != current_version_id;

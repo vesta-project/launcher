@@ -70,27 +70,47 @@ pub fn hash_current_directory(
         else {
             continue;
         };
-        if let Ok(hash) = hash_file_on_disk(&full_path) {
-            hashes.insert(
-                m.path.to_lowercase(),
-                FileHash {
-                    path: m.path.clone(),
-                    hash,
-                },
-            );
+        match hash_file_on_disk(&full_path) {
+            Ok(hash) => {
+                hashes.insert(
+                    m.path.to_lowercase(),
+                    FileHash {
+                        path: m.path.clone(),
+                        hash,
+                    },
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    "[sync/manifest] Failed to hash current mod {}: {}",
+                    m.path,
+                    e
+                );
+            }
         }
     }
 
     for ov in &manifest.overrides.extracted {
-        let full_path = game_dir.join(ov);
-        if full_path.exists() {
-            if let Ok(hash) = hash_file_on_disk(&full_path) {
+        let Ok(full_path) =
+            piston_lib::utils::paths::join_validated(game_dir, ov)
+        else {
+            continue;
+        };
+        match hash_file_on_disk(&full_path) {
+            Ok(hash) => {
                 hashes.insert(
                     ov.to_lowercase(),
                     FileHash {
                         path: ov.clone(),
                         hash,
                     },
+                );
+            }
+            Err(e) => {
+                log::warn!(
+                    "[sync/manifest] Failed to hash current override {}: {}",
+                    ov,
+                    e
                 );
             }
         }

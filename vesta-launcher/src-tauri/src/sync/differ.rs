@@ -5,7 +5,7 @@ use piston_lib::game::modpack::manifest::{
 };
 
 use super::action_tree::{ActionTree, FileSource, RemoveReason, SkipReason, SyncAction};
-use super::classifier::{classify, is_world_save, FileClass};
+use super::classifier::{classify, is_world_save, world_folder_from_level_dat, FileClass};
 use super::manifest::FileHash;
 
 /// The ThreeWayDiffer takes three data sources:
@@ -191,6 +191,11 @@ impl ThreeWayDiffer {
             (None, None) => {}
         }
 
+        // Mod entries take precedence — overrides are for non-mod paths only.
+        if old_mod.is_some() || new_mod.is_some() {
+            return;
+        }
+
         // Handle overrides (configs, scripts, etc. that aren't mods)
         if in_old_overrides && !in_new_overrides {
             // Override removed — delete if user hasn't modified
@@ -218,7 +223,7 @@ impl ThreeWayDiffer {
             tree.add_action(SyncAction::Add {
                 path: display_path.to_string(),
                 source: FileSource::ZipOverride {
-                    zip_entry: display_path.to_string(),
+                    relative_path: display_path.to_string(),
                 },
                 expected_hash: None,
             });
@@ -253,7 +258,7 @@ impl ThreeWayDiffer {
                             tree.add_action(SyncAction::Add {
                                 path: display_path.to_string(),
                                 source: FileSource::ZipOverride {
-                                    zip_entry: display_path.to_string(),
+                                    relative_path: display_path.to_string(),
                                 },
                                 expected_hash: None,
                             });
@@ -275,7 +280,7 @@ impl ThreeWayDiffer {
                 tree.add_action(SyncAction::Add {
                     path: display_path.to_string(),
                     source: FileSource::ZipOverride {
-                        zip_entry: display_path.to_string(),
+                        relative_path: display_path.to_string(),
                     },
                     expected_hash: None,
                 });
@@ -334,11 +339,13 @@ impl ThreeWayDiffer {
             if let Some(Some(expected_old_hash)) = old_level_dats.get(&lower) {
                 if let Some(current_fh) = current_hashes.get(&lower) {
                     if current_fh.hash.to_lowercase() != expected_old_hash.to_lowercase() {
-                        // User modified their world → rotate it
-                        let quarantine = build_quarantine_path(n_path);
-                        tree.add_world_collision(n_path.clone(), quarantine.clone());
+                        let Some(world_folder) = world_folder_from_level_dat(n_path) else {
+                            continue;
+                        };
+                        let quarantine = build_quarantine_path(&world_folder);
+                        tree.add_world_collision(world_folder.clone(), quarantine.clone());
                         tree.add_action(SyncAction::RotateWorld {
-                            original_path: n_path.clone(),
+                            original_path: world_folder,
                             quarantine_path: quarantine,
                             old_level_dat_hash: Some(expected_old_hash.clone()),
                         });
@@ -417,14 +424,13 @@ fn guess_subfolder(path: &str) -> String {
     }
 }
 
-/// Build a quarantine path for a world save with ISO timestamp.
-fn build_quarantine_path(world_path: &str) -> String {
+/// Build a quarantine path for a world folder (e.g. `saves/MyWorld`).
+fn build_quarantine_path(world_folder: &str) -> String {
     let now = chrono::Utc::now();
     let timestamp = now.format("%Y%m%d_%H%M").to_string();
 
-    // Extract world folder name from path like "saves/MyWorld/level.dat"
-    let parts: Vec<&str> = world_path.split('/').collect();
-    let world_name = if parts.len() >= 2 { parts[1] } else { "world" };
+    let parts: Vec<&str> = world_folder.split('/').collect();
+    let world_name = parts.last().copied().unwrap_or("world");
 
     format!("saves/{}_{}", world_name, timestamp)
 }

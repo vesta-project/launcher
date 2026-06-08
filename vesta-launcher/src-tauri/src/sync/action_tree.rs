@@ -80,8 +80,8 @@ pub enum FileSource {
     },
     /// Extract from the new modpack ZIP (overrides)
     ZipOverride {
-        /// Path within the ZIP to extract
-        zip_entry: String,
+        /// Game-relative path (passed to `read_zip_override_entry`)
+        relative_path: String,
     },
     /// Content generated in-memory (merged configs)
     Generated,
