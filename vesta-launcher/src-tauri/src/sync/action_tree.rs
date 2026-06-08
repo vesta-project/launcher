@@ -7,8 +7,8 @@ pub enum SyncAction {
         path: String,
         /// Where the file content comes from
         source: FileSource,
-        /// Expected SHA-256 after placement
-        expected_sha256: Option<String>,
+        /// Expected sha1 content hash after placement
+        expected_hash: Option<String>,
     },
     /// Update an existing file to the pack's new version.
     Update {
@@ -16,10 +16,10 @@ pub enum SyncAction {
         path: String,
         /// Where the file content comes from
         source: FileSource,
-        /// SHA-256 of the old version (for audit)
-        old_sha256: Option<String>,
-        /// Expected SHA-256 after placement
-        new_sha256: Option<String>,
+        /// Content hash of the old version (for audit)
+        old_hash: Option<String>,
+        /// Expected content hash after placement
+        new_hash: Option<String>,
     },
     /// Remove a file that was in the old manifest but not in the new one.
     Remove {
@@ -27,8 +27,8 @@ pub enum SyncAction {
         path: String,
         /// Why this file is being removed
         reason: RemoveReason,
-        /// Last known SHA-256 (for audit)
-        last_sha256: Option<String>,
+        /// Last known content hash (for safe delete)
+        last_hash: Option<String>,
     },
     /// Merge a text config file — the content has already been resolved.
     Merge {
@@ -36,10 +36,10 @@ pub enum SyncAction {
         path: String,
         /// Resolved content to write
         merged_content: String,
-        /// Original SHA-256 from old manifest
-        old_sha256: Option<String>,
-        /// Expected SHA-256 of merged output (if computable)
-        new_sha256: Option<String>,
+        /// Original content hash from old manifest
+        old_hash: Option<String>,
+        /// Expected content hash of merged output (if computable)
+        new_hash: Option<String>,
     },
     /// Rotate a world save — move user's world aside so the pack's clean copy
     /// can be placed in the original slot.
@@ -48,7 +48,7 @@ pub enum SyncAction {
         original_path: String,
         /// Quarantine target (e.g. "saves/MyWorld_user_20260520_1337")
         quarantine_path: String,
-        /// SHA-256 of the old level.dat for audit
+        /// Content hash of the old level.dat for audit
         old_level_dat_hash: Option<String>,
     },
     /// Skip this file entirely — no action needed.

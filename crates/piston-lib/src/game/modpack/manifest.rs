@@ -40,8 +40,6 @@ pub struct ModpackManifestMod {
     /// Path relative to game_dir
     pub path: String,
     pub sha1: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sha256: Option<String>,
     pub size: Option<u64>,
 }
 
@@ -71,7 +69,7 @@ pub struct ModpackManifestOverrides {
     /// Config files that were intentionally skipped (preserved user changes)
     #[serde(default)]
     pub skipped_configs: Vec<String>,
-    /// SHA-256 hashes for override files (lowercase relative path → hex hash)
+    /// sha1 hashes for override files (lowercase relative path → hex hash)
     #[serde(default)]
     pub hashes: HashMap<String, String>,
 }
@@ -125,7 +123,6 @@ impl ModpackManifest {
                         },
                         path: path.clone(),
                         sha1: hashes.get("sha1").cloned(),
-                        sha256: None,
                         size: Some(*size),
                     }
                 }
@@ -142,7 +139,6 @@ impl ModpackManifest {
                     },
                     path: format!("mods/{}.jar", file_id), // best-effort; actual path resolved at download
                     sha1: hash.clone(),
-                    sha256: None,
                     size: None,
                 },
             })
@@ -199,36 +195,28 @@ impl ModpackManifest {
         Ok(())
     }
 
-    /// Compute SHA-256 hashes from disk for all mods and tracked overrides.
-    pub fn backfill_file_hashes(&mut self, game_dir: &Path) {
-        for m in &mut self.mods {
-            let full_path = game_dir.join(&m.path);
-            if full_path.exists() {
-                if let Ok(sha256) = compute_file_sha256(&full_path) {
-                    m.sha256 = Some(sha256);
-                }
-            }
-        }
-
+    /// Snapshot sha1 hashes for override files on disk.
+    pub fn backfill_override_hashes(&mut self, game_dir: &Path) {
         for ov in &self.overrides.extracted {
             let full_path = game_dir.join(ov);
             if full_path.is_file() {
-                if let Ok(sha256) = compute_file_sha256(&full_path) {
-                    self.overrides
-                        .hashes
-                        .insert(ov.to_lowercase(), sha256);
+                if let Ok(sha1) = compute_file_sha1(&full_path) {
+                    self.overrides.hashes.insert(ov.to_lowercase(), sha1);
                 }
             }
         }
     }
 
-    /// Look up the expected SHA-256 for a tracked path from mods or override hashes.
-    pub fn expected_sha256(&self, path: &str) -> Option<String> {
-        let lower = path.to_lowercase();
-        if let Some(m) = self.mods.iter().find(|m| m.path.to_lowercase() == lower) {
-            return m.sha256.clone();
+    /// Expected sha1 content hash for update diff (mods from index, overrides from hashes).
+    pub fn expected_content_hash(
+        &self,
+        path: &str,
+        mod_entry: Option<&ModpackManifestMod>,
+    ) -> Option<String> {
+        if let Some(m) = mod_entry {
+            return m.sha1.clone();
         }
-        self.overrides.hashes.get(&lower).cloned()
+        self.overrides.hashes.get(&path.to_lowercase()).cloned()
     }
 
     /// Diff the manifest against the current state of the game directory.
@@ -245,30 +233,12 @@ impl ModpackManifest {
             if !full_path.exists() {
                 resources_to_fix.push(m.clone());
             } else if let Some(ref expected_sha1) = m.sha1 {
-                // Verify SHA1
                 match compute_file_sha1(&full_path) {
-                    Ok(computed) if computed.to_lowercase() == expected_sha1.to_lowercase() => {
-                        // OK
-                    }
-                    _ => {
-                        // Also try SHA-256 if available
-                        if let Some(ref expected_sha256) = m.sha256 {
-                            match compute_file_sha256(&full_path) {
-                                Ok(computed)
-                                    if computed.to_lowercase()
-                                        == expected_sha256.to_lowercase() =>
-                                {
-                                    // SHA-256 matched
-                                }
-                                _ => {
-                                    resources_to_fix.push(m.clone());
-                                }
-                            }
-                        } else {
-                            resources_to_fix.push(m.clone());
-                        }
-                    }
+                    Ok(computed) if computed.to_lowercase() == expected_sha1.to_lowercase() => {}
+                    _ => resources_to_fix.push(m.clone()),
                 }
+            } else {
+                resources_to_fix.push(m.clone());
             }
         }
 
@@ -315,31 +285,13 @@ fn is_config_path(path: &str) -> bool {
     config_extensions.iter().any(|ext| lower.ends_with(ext))
 }
 
-/// Compute SHA1 hash of a file (for diff comparison).
-fn compute_file_sha1(path: &Path) -> Result<String, anyhow::Error> {
+/// Compute SHA1 hash of a file (for mod diff comparison — matches modpack index).
+pub fn compute_file_sha1(path: &Path) -> Result<String, anyhow::Error> {
     use sha1::{Digest, Sha1};
     use std::io::Read;
 
     let mut file = std::fs::File::open(path)?;
     let mut hasher = Sha1::new();
-    let mut buffer = [0u8; 8192];
-    loop {
-        let bytes_read = file.read(&mut buffer)?;
-        if bytes_read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..bytes_read]);
-    }
-    Ok(format!("{:x}", hasher.finalize()))
-}
-
-/// Compute SHA-256 hash of a file (for diff comparison — stronger than SHA-1).
-pub fn compute_file_sha256(path: &Path) -> Result<String, anyhow::Error> {
-    use sha2::{Digest, Sha256};
-    use std::io::Read;
-
-    let mut file = std::fs::File::open(path)?;
-    let mut hasher = Sha256::new();
     let mut buffer = [0u8; 8192];
     loop {
         let bytes_read = file.read(&mut buffer)?;

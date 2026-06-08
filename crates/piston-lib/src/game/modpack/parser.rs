@@ -533,18 +533,18 @@ pub fn read_zip_override_text<P: AsRef<Path>>(
     String::from_utf8(bytes).map_err(|e| anyhow!("Override file is not valid UTF-8: {}", e))
 }
 
-/// Compute SHA-256 hashes for override paths listed inside a modpack ZIP.
+/// Compute sha1 hashes for override paths listed inside a modpack ZIP.
 pub fn hash_override_paths_from_zip<P: AsRef<Path>>(
     zip_path: P,
     format: ModpackFormat,
     paths: &[String],
 ) -> Result<std::collections::HashMap<String, String>> {
-    use sha2::{Digest, Sha256};
+    use sha1::{Digest, Sha1};
 
     let mut hashes = std::collections::HashMap::new();
     for path in paths {
         let data = read_zip_override_entry(&zip_path, format, path)?;
-        let digest = Sha256::digest(&data);
+        let digest = Sha1::digest(&data);
         hashes.insert(path.to_lowercase(), format!("{:x}", digest));
     }
     Ok(hashes)

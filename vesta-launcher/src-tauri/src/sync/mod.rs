@@ -1,6 +1,7 @@
 pub mod action_tree;
 pub mod classifier;
 pub mod differ;
+pub mod hash_util;
 pub mod manifest;
 pub mod merger;
 pub mod paths;

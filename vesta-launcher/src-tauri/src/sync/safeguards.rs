@@ -125,12 +125,13 @@ pub fn quarantine_corrupted_config(game_dir: &Path, path: &str) -> Result<String
     Ok(corrupted_path)
 }
 
-/// Delete a file only if it still matches the expected hash.
+/// Delete a file only if it still matches the expected content hash.
+/// Expects sha1 (40 hex chars).
 /// Returns true if the file was deleted.
 pub fn safe_delete_if_unchanged(
     game_dir: &Path,
     path: &str,
-    expected_sha256: Option<&str>,
+    expected_hash: Option<&str>,
 ) -> Result<bool> {
     let full_path = game_dir.join(path);
 
@@ -138,9 +139,9 @@ pub fn safe_delete_if_unchanged(
         return Ok(false);
     }
 
-    if let Some(expected) = expected_sha256 {
-        let actual = crate::utils::hash::calculate_sha256(&full_path)?;
-        if actual.to_lowercase() != expected.to_lowercase() {
+    if let Some(expected) = expected_hash {
+        let matches = super::hash_util::file_matches_hash(&full_path, expected)?;
+        if !matches {
             log::info!(
                 "[safeguards] Not deleting {:?}: hash changed (user modified)",
                 path

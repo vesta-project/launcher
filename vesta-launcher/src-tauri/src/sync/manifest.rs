@@ -2,13 +2,13 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::Path;
 
-use piston_lib::game::modpack::manifest::compute_file_sha256;
+use super::hash_util::hash_file_on_disk;
 
-/// Represents the SHA-256 hash of a single tracked file on disk.
+/// Content hash (sha1) of a tracked file on disk ($C$).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileHash {
     pub path: String,
-    pub sha256: String,
+    pub hash: String,
 }
 
 /// Load the old base manifest ($O$) from an instance's game directory.
@@ -55,10 +55,7 @@ pub fn build_new_manifest(
     Ok(manifest)
 }
 
-/// Compute SHA-256 hashes for every file declared in a manifest.
-/// Scans the physical disk ($C$) to determine the current state of tracked files.
-/// Returns a map of relative_path → FileHash for all manifest entries found on disk.
-/// Files not found on disk are simply omitted from the map.
+/// Hash tracked files on disk ($C$) using sha1.
 pub fn hash_current_directory(
     game_dir: &Path,
     manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
@@ -68,12 +65,12 @@ pub fn hash_current_directory(
     for m in &manifest.mods {
         let full_path = game_dir.join(&m.path);
         if full_path.exists() {
-            if let Ok(sha256) = compute_file_sha256(&full_path) {
+            if let Ok(hash) = hash_file_on_disk(&full_path) {
                 hashes.insert(
                     m.path.to_lowercase(),
                     FileHash {
                         path: m.path.clone(),
-                        sha256,
+                        hash,
                     },
                 );
             }
@@ -83,12 +80,12 @@ pub fn hash_current_directory(
     for ov in &manifest.overrides.extracted {
         let full_path = game_dir.join(ov);
         if full_path.exists() {
-            if let Ok(sha256) = compute_file_sha256(&full_path) {
+            if let Ok(hash) = hash_file_on_disk(&full_path) {
                 hashes.insert(
                     ov.to_lowercase(),
                     FileHash {
                         path: ov.clone(),
-                        sha256,
+                        hash,
                     },
                 );
             }
@@ -98,27 +95,18 @@ pub fn hash_current_directory(
     hashes
 }
 
-/// Backfill SHA-256 hashes on a manifest from the current game directory.
-pub fn backfill_manifest_hashes(
-    manifest: &mut piston_lib::game::modpack::manifest::ModpackManifest,
-    game_dir: &Path,
-) {
-    manifest.backfill_file_hashes(game_dir);
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use piston_lib::game::modpack::manifest::compute_file_sha1;
 
     #[test]
-    fn test_compute_sha256_file() {
+    fn test_hash_file_uses_sha1() {
         let dir = tempfile::tempdir().unwrap();
-        let file_path = dir.path().join("test.txt");
+        let file_path = dir.path().join("test.jar");
         std::fs::write(&file_path, b"hello world").unwrap();
-        let hash = compute_file_sha256(&file_path).unwrap();
-        assert_eq!(
-            hash,
-            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
-        );
+        let hash = hash_file_on_disk(&file_path).unwrap();
+        assert_eq!(hash, compute_file_sha1(&file_path).unwrap());
+        assert_eq!(hash.len(), 40);
     }
 }
