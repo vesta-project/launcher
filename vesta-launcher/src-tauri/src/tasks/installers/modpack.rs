@@ -12,7 +12,7 @@ use crate::tasks::manager::{Task, TaskContext};
 
 use anyhow::Result;
 use piston_lib::game::installer::core::modpack_installer::{
-    ModpackInstaller, ModpackResolvedCF, ModpackResolver,
+    ModpackInstaller, ModpackResolvedCF, ModpackResolvedModrinth, ModpackResolver,
 };
 use tokio::fs;
 
@@ -170,6 +170,38 @@ impl ModpackResolver for PistonModpackResolver {
             );
 
             Ok(resolved)
+        })
+    }
+
+    fn resolve_modrinth(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedModrinth>> {
+        let handle = self.app_handle.clone();
+        let project_id = project_id.to_string();
+        let version_id = version_id.to_string();
+        Box::pin(async move {
+            let rm = handle.state::<ResourceManager>();
+            let version = rm
+                .get_version(SourcePlatform::Modrinth, &project_id, &version_id)
+                .await
+                .map_err(|e| {
+                    anyhow::anyhow!(
+                        "Failed to resolve Modrinth mod {}/{}: {}",
+                        project_id,
+                        version_id,
+                        e
+                    )
+                })?;
+            Ok(ModpackResolvedModrinth {
+                url: version.download_url,
+                sha1: if version.hash.is_empty() {
+                    None
+                } else {
+                    Some(version.hash)
+                },
+            })
         })
     }
 }
@@ -591,4 +623,114 @@ impl Task for InstallModpackTask {
             Ok(())
         })
     }
+}
+
+/// Enrich missing platform mod hashes/urls via [`ModpackResolver`] (Modrinth or CurseForge per entry).
+pub async fn enrich_manifest_platform_hashes(
+    app_handle: &tauri::AppHandle,
+    manifest: &mut piston_lib::game::modpack::manifest::ModpackManifest,
+) {
+    let resolver = PistonModpackResolver::new(app_handle.clone());
+    piston_lib::game::installer::core::modpack_installer::enrich_platform_mod_hashes(
+        manifest,
+        Some(&resolver),
+    )
+    .await;
+}
+
+/// Pre-link manifest mods into `installed_resource` so ResourceWatcher can skip API calls.
+pub fn spawn_manifest_resource_linking(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    game_dir: &std::path::Path,
+    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
+) {
+    use piston_lib::game::modpack::manifest::{ModSource, resolve_mod_path_on_disk};
+
+    let app_handle = app_handle.clone();
+    let game_dir = game_dir.to_path_buf();
+    let mods = manifest.mods.clone();
+
+    tauri::async_runtime::spawn(async move {
+        let rm = app_handle.state::<ResourceManager>();
+
+        for m in mods {
+            let Some(local_path) = resolve_mod_path_on_disk(&game_dir, &m.path) else {
+                continue;
+            };
+
+            let path_meta = local_path.clone();
+            let meta = tokio::task::spawn_blocking(move || std::fs::metadata(&path_meta))
+                .await
+                .ok()
+                .and_then(|r| r.ok())
+                .map_or((0, 0), |file_meta| {
+                    (
+                        file_meta.len() as i64,
+                        file_meta
+                            .modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0),
+                    )
+                });
+
+            match &m.source {
+                ModSource::Modrinth { .. } => {
+                    let Some(sha1) = m.sha1.clone() else {
+                        continue;
+                    };
+                    if let Ok((project, version)) =
+                        rm.get_by_hash(SourcePlatform::Modrinth, &sha1).await
+                    {
+                        let _ = crate::resources::watcher::link_resource_to_db(
+                            &app_handle,
+                            instance_id,
+                            &local_path,
+                            project,
+                            version,
+                            SourcePlatform::Modrinth,
+                            Some(sha1),
+                            meta,
+                        )
+                        .await;
+                    }
+                }
+                ModSource::CurseForge { project_id, file_id, .. } => {
+                    let pid = project_id.map(|p| p.to_string()).unwrap_or_default();
+                    let Ok(version) = rm
+                        .get_version(SourcePlatform::CurseForge, &pid, &file_id.to_string())
+                        .await
+                    else {
+                        continue;
+                    };
+                    let Ok(project) = rm
+                        .get_project(SourcePlatform::CurseForge, &version.project_id)
+                        .await
+                    else {
+                        continue;
+                    };
+                    let hash = m.sha1.clone().or_else(|| {
+                        if version.hash.is_empty() {
+                            None
+                        } else {
+                            Some(version.hash.clone())
+                        }
+                    });
+                    let _ = crate::resources::watcher::link_resource_to_db(
+                        &app_handle,
+                        instance_id,
+                        &local_path,
+                        project,
+                        version,
+                        SourcePlatform::CurseForge,
+                        hash,
+                        meta,
+                    )
+                    .await;
+                }
+            }
+        }
+    });
 }

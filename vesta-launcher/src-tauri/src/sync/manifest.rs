@@ -2,6 +2,8 @@ use anyhow::{Context, Result};
 use std::collections::HashMap;
 use std::path::Path;
 
+use piston_lib::game::modpack::manifest::{ModSource, ModpackManifest};
+
 use super::hash_util::hash_file_on_disk;
 
 /// Content hash (sha1) of a tracked file on disk ($C$).
@@ -63,17 +65,19 @@ pub fn hash_current_directory(
     let mut hashes = HashMap::new();
 
     for m in &manifest.mods {
-        let full_path = game_dir.join(&m.path);
-        if full_path.exists() {
-            if let Ok(hash) = hash_file_on_disk(&full_path) {
-                hashes.insert(
-                    m.path.to_lowercase(),
-                    FileHash {
-                        path: m.path.clone(),
-                        hash,
-                    },
-                );
-            }
+        let Some(full_path) =
+            piston_lib::game::modpack::manifest::resolve_mod_path_on_disk(game_dir, &m.path)
+        else {
+            continue;
+        };
+        if let Ok(hash) = hash_file_on_disk(&full_path) {
+            hashes.insert(
+                m.path.to_lowercase(),
+                FileHash {
+                    path: m.path.clone(),
+                    hash,
+                },
+            );
         }
     }
 
@@ -93,6 +97,95 @@ pub fn hash_current_directory(
     }
 
     hashes
+}
+
+/// Fill missing mod/override sha1 from disk and the ResourceWatcher `installed_resource` cache.
+/// Platform API enrichment is handled by [`crate::tasks::installers::modpack::enrich_manifest_platform_hashes`].
+pub fn backfill_manifest_hashes(
+    manifest: &mut ModpackManifest,
+    game_dir: &Path,
+    instance_id: i32,
+) -> Result<()> {
+    manifest.backfill_mod_sha1(game_dir);
+    manifest.backfill_override_hashes(game_dir);
+    backfill_mod_sha1_from_installed_resources(manifest, game_dir, instance_id)?;
+    Ok(())
+}
+
+fn backfill_mod_sha1_from_installed_resources(
+    manifest: &mut ModpackManifest,
+    game_dir: &Path,
+    instance_id: i32,
+) -> Result<()> {
+    use crate::models::installed_resource::InstalledResource;
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use crate::utils::instance_helpers::normalize_path;
+    use diesel::prelude::*;
+
+    let mut conn = get_vesta_conn()?;
+
+    for m in &mut manifest.mods {
+        if m.sha1.as_ref().is_some_and(|h| !h.is_empty()) {
+            continue;
+        }
+
+        let path_candidates = [
+            normalize_path(&game_dir.join(&m.path)),
+            normalize_path(
+                &game_dir.join(piston_lib::game::modpack::manifest::disabled_mod_path(&m.path)),
+            ),
+        ];
+        let mut found_hash = None;
+        for local_path in &path_candidates {
+            if let Ok(Some(res)) = ir_dsl::installed_resource
+                .filter(ir_dsl::instance_id.eq(instance_id))
+                .filter(ir_dsl::local_path.eq(local_path))
+                .first::<InstalledResource>(&mut conn)
+                .optional()
+            {
+                if let Some(hash) = res.hash.filter(|h| !h.is_empty()) {
+                    found_hash = Some(hash);
+                    break;
+                }
+            }
+        }
+        if let Some(hash) = found_hash {
+            m.sha1 = Some(hash);
+            continue;
+        }
+
+        match &m.source {
+            ModSource::CurseForge { file_id, .. } => {
+                if let Ok(Some(res)) = ir_dsl::installed_resource
+                    .filter(ir_dsl::instance_id.eq(instance_id))
+                    .filter(ir_dsl::platform.eq("curseforge"))
+                    .filter(ir_dsl::remote_version_id.eq(file_id.to_string()))
+                    .first::<InstalledResource>(&mut conn)
+                    .optional()
+                {
+                    if let Some(hash) = res.hash.filter(|h| !h.is_empty()) {
+                        m.sha1 = Some(hash);
+                    }
+                }
+            }
+            ModSource::Modrinth { version_id, .. } => {
+                if let Ok(Some(res)) = ir_dsl::installed_resource
+                    .filter(ir_dsl::instance_id.eq(instance_id))
+                    .filter(ir_dsl::platform.eq("modrinth"))
+                    .filter(ir_dsl::remote_version_id.eq(version_id))
+                    .first::<InstalledResource>(&mut conn)
+                    .optional()
+                {
+                    if let Some(hash) = res.hash.filter(|h| !h.is_empty()) {
+                        m.sha1 = Some(hash);
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
