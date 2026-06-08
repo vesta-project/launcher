@@ -148,7 +148,9 @@ impl UnifiedManifest {
             }
 
             // Determine modloader type for maven resolution
-            let ml_type = if ml.id.contains("forge") {
+            let ml_type = if ml.id.contains("neoforge") {
+                Some("neoforge")
+            } else if ml.id.contains("forge") {
                 Some("forge")
             } else if ml.id.contains("fabric") {
                 Some("fabric")
@@ -632,28 +634,62 @@ fn name_to_path(name: &str) -> String {
         .unwrap_or_else(|_| name.replace('.', "/").replace(':', "/"))
 }
 
-fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
-    let path = name_to_path(name);
+/// Libraries that Modrinth/Mojang host on libraries.minecraft.net even inside Forge profiles.
+fn uses_mojang_libraries_mirror(name: &str) -> bool {
+    name.starts_with("com.mojang")
+        || name.starts_with("net.minecraft")
+        || name.starts_with("org.lwjgl")
+        || name.starts_with("java3d:")
+        || name.starts_with("lzma:")
+        || name.starts_with("com.google.code.gson")
+        || name.starts_with("com.google.guava")
+        || name.starts_with("org.apache.commons")
+        || name.starts_with("commons-")
+        || name.starts_with("commons:")
+        || name.starts_with("io.netty")
+        || name.starts_with("tv.twitch")
+}
+
+fn is_forge_artifact(name: &str) -> bool {
+    name.starts_with("net.minecraftforge") || name.starts_with("com.minecraftforge")
+}
+
+fn is_neoforge_artifact(name: &str) -> bool {
+    name.starts_with("net.neoforged")
+}
+
+/// Pick a Maven base URL when a loader profile library has no `downloads` or `url`.
+/// Modrinth loader JSONs usually include `url: https://launcher-meta.modrinth.com/maven/`;
+/// this fallback only runs for the sparse entries that omit both fields (common on legacy Forge).
+fn resolve_maven_base(name: &str, ml_type: Option<&str>) -> Option<&'static str> {
+    if uses_mojang_libraries_mirror(name) {
+        return Some("https://libraries.minecraft.net/");
+    }
 
     match ml_type {
-        Some("forge") => Some(format!("https://maven.minecraftforge.net/{}", path)),
-        Some("fabric") => Some(format!("https://maven.fabricmc.net/{}", path)),
-        Some("quilt") => Some(format!(
-            "https://maven.quiltmc.org/repository/release/{}",
-            path
-        )),
-        _ => {
-            // Default to libraries.minecraft.net for vanilla-looking things
-            if name.starts_with("com.mojang")
-                || name.starts_with("net.minecraft")
-                || name.starts_with("org.lwjgl")
-            {
-                Some(format!("https://libraries.minecraft.net/{}", path))
-            } else {
-                None
-            }
+        Some("neoforge") if is_neoforge_artifact(name) => {
+            Some("https://maven.neoforged.net/releases/")
         }
+        Some("forge") if is_forge_artifact(name) => Some("https://maven.minecraftforge.net/"),
+        // Match Modrinth loader profiles that point other deps at their Maven mirror.
+        Some("forge") | Some("neoforge") => Some("https://launcher-meta.modrinth.com/maven/"),
+        Some("fabric") => Some("https://maven.fabricmc.net/"),
+        Some("quilt") => Some("https://maven.quiltmc.org/repository/release/"),
+        _ => None,
     }
+}
+
+fn join_maven_url(base: &str, path: &str) -> String {
+    if base.ends_with('/') {
+        format!("{}{}", base, path)
+    } else {
+        format!("{}/{}", base, path)
+    }
+}
+
+fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
+    let path = name_to_path(name);
+    resolve_maven_base(name, ml_type).map(|base| join_maven_url(base, &path))
 }
 
 fn resolve_maven_url_with_classifier(
@@ -662,26 +698,7 @@ fn resolve_maven_url_with_classifier(
     ml_type: Option<&str>,
 ) -> Option<String> {
     let path = name_to_path_with_classifier(name, classifier);
-
-    match ml_type {
-        Some("forge") => Some(format!("https://maven.minecraftforge.net/{}", path)),
-        Some("fabric") => Some(format!("https://maven.fabricmc.net/{}", path)),
-        Some("quilt") => Some(format!(
-            "https://maven.quiltmc.org/repository/release/{}",
-            path
-        )),
-        _ => {
-            // Default to libraries.minecraft.net for vanilla-looking things
-            if name.starts_with("com.mojang")
-                || name.starts_with("net.minecraft")
-                || name.starts_with("org.lwjgl")
-            {
-                Some(format!("https://libraries.minecraft.net/{}", path))
-            } else {
-                None
-            }
-        }
-    }
+    resolve_maven_base(name, ml_type).map(|base| join_maven_url(base, &path))
 }
 
 fn normalize_explicit_url(
@@ -931,5 +948,30 @@ mod tests {
         };
         lib.rules = Some(vec![allow_rule_for_os("linux")]);
         assert!(should_include_library(&lib, OsType::LinuxArm64));
+    }
+
+    #[test]
+    fn forge_sparse_libraries_use_mojang_or_modrinth_mirror_not_forge_maven() {
+        let forge = Some("forge");
+        assert_eq!(
+            resolve_maven_url("net.minecraft:launchwrapper:1.12", forge),
+            Some(
+                "https://libraries.minecraft.net/net/minecraft/launchwrapper/1.12/launchwrapper-1.12.jar"
+                    .to_string()
+            )
+        );
+        assert_eq!(
+            resolve_maven_url("org.scala-lang:scala-library:2.11.1", forge),
+            Some(
+                "https://launcher-meta.modrinth.com/maven/org/scala-lang/scala-library/2.11.1/scala-library-2.11.1.jar"
+                    .to_string()
+            )
+        );
+        let forge_url = resolve_maven_url(
+            "net.minecraftforge:forge:1.8.9-11.15.1.2318-1.8.9",
+            forge,
+        )
+        .expect("forge artifact url");
+        assert!(forge_url.starts_with("https://maven.minecraftforge.net/"));
     }
 }
