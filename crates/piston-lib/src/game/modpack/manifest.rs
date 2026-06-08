@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use crate::utils::paths::{join_validated, path_is_within};
 use super::types::{ModpackFormat, ModpackMetadata, ModpackMod};
 
 /// Persisted manifest recording what a modpack install placed on disk.
@@ -221,10 +222,21 @@ impl ModpackManifest {
     /// Snapshot sha1 hashes for override files on disk.
     pub fn backfill_override_hashes(&mut self, game_dir: &Path) {
         for ov in &self.overrides.extracted {
-            let full_path = game_dir.join(ov);
+            let Ok(full_path) = join_validated(game_dir, ov) else {
+                continue;
+            };
             if full_path.is_file() {
-                if let Ok(sha1) = compute_file_sha1(&full_path) {
-                    self.overrides.hashes.insert(ov.to_lowercase(), sha1);
+                match compute_file_sha1(&full_path) {
+                    Ok(sha1) => {
+                        self.overrides.hashes.insert(ov.to_lowercase(), sha1);
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[modpack-manifest] Failed to backfill override hash for {}: {}",
+                            ov,
+                            e
+                        );
+                    }
                 }
             }
         }
@@ -259,7 +271,15 @@ impl ModpackManifest {
                         match compute_file_sha1(&disk_path) {
                             Ok(computed)
                                 if computed.to_lowercase() == expected_sha1.to_lowercase() => {}
-                            _ => resources_to_fix.push(m.clone()),
+                            Ok(_) => resources_to_fix.push(m.clone()),
+                            Err(e) => {
+                                log::warn!(
+                                    "[modpack-manifest] Failed to hash mod {}: {}",
+                                    m.path,
+                                    e
+                                );
+                                resources_to_fix.push(m.clone());
+                            }
                         }
                     }
                     // Missing manifest sha1 but file present: prepare_for_repair should fill it.
@@ -269,7 +289,14 @@ impl ModpackManifest {
 
         // Check overrides (existence + hash when known)
         for ov in &self.overrides.extracted {
-            let full_path = game_dir.join(ov);
+            let full_path = match join_validated(game_dir, ov) {
+                Ok(p) => p,
+                Err(e) => {
+                    log::warn!("[modpack-manifest] Invalid override path {}: {}", ov, e);
+                    overrides_to_fix.push(ov.clone());
+                    continue;
+                }
+            };
             if !full_path.is_file() {
                 if is_config_path(ov) {
                     configs_would_overwrite.push(ov.clone());
@@ -280,9 +307,17 @@ impl ModpackManifest {
             }
 
             if let Some(expected) = self.overrides.hashes.get(&ov.to_lowercase()) {
-                let hash_ok = compute_file_sha1(&full_path)
-                    .map(|computed| computed.to_lowercase() == expected.to_lowercase())
-                    .unwrap_or(false);
+                let hash_ok = match compute_file_sha1(&full_path) {
+                    Ok(computed) => computed.to_lowercase() == expected.to_lowercase(),
+                    Err(e) => {
+                        log::warn!(
+                            "[modpack-manifest] Failed to hash override {}: {}",
+                            ov,
+                            e
+                        );
+                        false
+                    }
+                };
                 if !hash_ok {
                     if is_config_path(ov) {
                         configs_would_overwrite.push(ov.clone());
@@ -309,11 +344,11 @@ pub fn disabled_mod_path(manifest_path: &str) -> String {
 
 /// Resolve where a manifest mod actually lives on disk (enabled or `.disabled`).
 pub fn resolve_mod_path_on_disk(game_dir: &Path, manifest_path: &str) -> Option<PathBuf> {
-    let enabled = game_dir.join(manifest_path);
+    let enabled = join_validated(game_dir, manifest_path).ok()?;
     if enabled.is_file() {
         return Some(enabled);
     }
-    let disabled = game_dir.join(disabled_mod_path(manifest_path));
+    let disabled = join_validated(game_dir, &disabled_mod_path(manifest_path)).ok()?;
     if disabled.is_file() {
         return Some(disabled);
     }
@@ -321,8 +356,15 @@ pub fn resolve_mod_path_on_disk(game_dir: &Path, manifest_path: &str) -> Option<
 }
 
 /// Target path for re-downloading a mod during repair (preserves disabled state).
-pub fn mod_repair_target_path(game_dir: &Path, manifest_path: &str) -> PathBuf {
-    resolve_mod_path_on_disk(game_dir, manifest_path).unwrap_or_else(|| game_dir.join(manifest_path))
+pub fn mod_repair_target_path(
+    game_dir: &Path,
+    manifest_path: &str,
+) -> anyhow::Result<PathBuf> {
+    if let Some(disk_path) = resolve_mod_path_on_disk(game_dir, manifest_path) {
+        path_is_within(game_dir, &disk_path)?;
+        return Ok(disk_path);
+    }
+    join_validated(game_dir, manifest_path)
 }
 
 /// Check if a path refers to a config file/directory.

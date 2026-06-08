@@ -51,6 +51,17 @@ fn is_config_text(lower_path: &str) -> bool {
 }
 
 /// Determine if a path should be treated as a world save that needs rotation.
+/// World folder path from a `level.dat` path (e.g. `saves/MyWorld/level.dat` → `saves/MyWorld`).
+pub fn world_folder_from_level_dat(path: &str) -> Option<String> {
+    let normalized = path.replace('\\', "/");
+    if !normalized.ends_with("level.dat") {
+        return None;
+    }
+    std::path::Path::new(&normalized)
+        .parent()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+}
+
 pub fn is_world_save(path: &str) -> bool {
     let lower = path.to_lowercase();
     (lower.starts_with("saves/") || lower.starts_with("saves\\"))
@@ -87,6 +98,13 @@ mod tests {
     }
 
     #[test]
+    fn test_world_folder_from_level_dat() {
+        assert_eq!(
+            world_folder_from_level_dat("saves/MyWorld/level.dat").as_deref(),
+            Some("saves/MyWorld")
+        );
+    }
+
     fn test_is_world_save() {
         assert!(is_world_save("saves/MyWorld/level.dat"));
         assert!(!is_world_save("mods/level.dat"));

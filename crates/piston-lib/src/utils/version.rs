@@ -123,6 +123,27 @@ pub fn compare_versions(a: &str, b: &str) -> Ordering {
     Version::new(a).cmp(&Version::new(b))
 }
 
+/// Compare two version candidates for "latest" selection (newer `published_at`, then version number).
+pub fn compare_version_candidates(
+    a_published: Option<&str>,
+    a_version: &str,
+    b_published: Option<&str>,
+    b_version: &str,
+) -> Ordering {
+    match (a_published, b_published) {
+        (Some(pa), Some(pb)) => {
+            let ord = pa.cmp(pb);
+            if ord != Ordering::Equal {
+                return ord;
+            }
+        }
+        (Some(_), None) => return Ordering::Greater,
+        (None, Some(_)) => return Ordering::Less,
+        (None, None) => {}
+    }
+    compare_versions(a_version, b_version)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -148,5 +169,18 @@ mod tests {
         // Third zero issue mentioned by user
         assert_eq!(compare_versions("1.20.0", "1.20.1"), Ordering::Less);
         assert_eq!(compare_versions("1.20", "1.20.0"), Ordering::Less); // 1.20 < 1.20.0 is debatable but usually 1.20.0 is more specific
+    }
+
+    #[test]
+    fn compare_version_candidates_semver_beats_lexicographic() {
+        assert_eq!(
+            compare_version_candidates(
+                Some("2024-01-01"),
+                "10.0.0",
+                Some("2024-01-01"),
+                "2.0.0",
+            ),
+            Ordering::Greater
+        );
     }
 }

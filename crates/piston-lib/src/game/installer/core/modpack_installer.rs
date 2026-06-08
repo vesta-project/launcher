@@ -5,7 +5,9 @@ use crate::game::installer::types::{
 };
 use crate::game::modpack::manifest::ModSource;
 use crate::game::modpack::manifest::ModpackManifest;
-use crate::game::modpack::parser::{extract_overrides_with_config_policy, get_modpack_metadata};
+use crate::game::modpack::parser::{
+    extract_overrides_with_config_policy, get_modpack_metadata, hash_override_paths_from_zip,
+};
 use crate::game::modpack::types::ModpackMod;
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
@@ -319,6 +321,17 @@ impl ModpackInstaller {
                     }
                 }
 
+                let override_path_strs: Vec<String> = override_files
+                    .iter()
+                    .map(|p| p.to_string_lossy().replace('\\', "/"))
+                    .collect();
+                match hash_override_paths_from_zip(zip_path, metadata.format, &override_path_strs) {
+                    Ok(hashes) => manifest.overrides.hashes = hashes,
+                    Err(e) => log::warn!(
+                        "[ModpackInstaller] Failed to hash overrides from ZIP: {}",
+                        e
+                    ),
+                }
                 manifest.backfill_mod_sha1(game_dir);
                 manifest.backfill_override_hashes(game_dir);
 
@@ -452,10 +465,17 @@ impl ModpackInstaller {
                 match &m.source {
                     crate::game::modpack::manifest::ModSource::Modrinth { url, .. } => {
                         if !url.is_empty() {
-                            let target_path =
+                            let Ok(target_path) =
                                 crate::game::modpack::manifest::mod_repair_target_path(
                                     game_dir, &m.path,
+                                )
+                            else {
+                                log::warn!(
+                                    "[ModpackInstaller::repair] Skipping unsafe mod path: {}",
+                                    m.path
                                 );
+                                continue;
+                            };
                             artifacts.push(BatchArtifact {
                                 name: m.path.clone(),
                                 label: format!("repair-modrinth-{}", m.path),
@@ -514,11 +534,18 @@ impl ModpackInstaller {
                                             resolved_cf.subfolder, resolved_cf.filename
                                         )
                                     });
-                                let target_path =
+                                let Ok(target_path) =
                                     crate::game::modpack::manifest::mod_repair_target_path(
                                         game_dir,
                                         &manifest_path,
+                                    )
+                                else {
+                                    log::warn!(
+                                        "[ModpackInstaller::repair] Skipping unsafe mod path: {}",
+                                        manifest_path
                                     );
+                                    continue;
+                                };
                                 let pid_str = project_id
                                     .map(|id| id.to_string())
                                     .unwrap_or_else(|| "unknown".to_string());
