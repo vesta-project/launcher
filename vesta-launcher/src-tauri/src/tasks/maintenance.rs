@@ -399,6 +399,25 @@ impl Task for RepairInstanceTask {
                     log::info!(
                         "[RepairInstanceTask] Found modpack manifest, running modpack repair"
                     );
+                    if let Ok(mut manifest) =
+                        piston_lib::game::modpack::manifest::ModpackManifest::load(&game_dir)
+                    {
+                        if let Err(e) = crate::sync::manifest::backfill_manifest_hashes(
+                            &mut manifest,
+                            &game_dir,
+                            inst_id,
+                        ) {
+                            log::warn!(
+                                "[RepairInstanceTask] Failed to backfill manifest hashes: {}",
+                                e
+                            );
+                        } else if let Err(e) = manifest.persist(&game_dir) {
+                            log::warn!(
+                                "[RepairInstanceTask] Failed to persist backfilled manifest: {}",
+                                e
+                            );
+                        }
+                    }
                     ctx.update_full(
                         85,
                         "Repairing modpack files...".to_string(),
@@ -423,7 +442,15 @@ impl Task for RepairInstanceTask {
                         repair_reporter,
                         Some(resolver),
                     ).await {
-                        Ok(_) => log::info!("[RepairInstanceTask] Modpack repair complete"),
+                        Ok(repaired) => {
+                            log::info!("[RepairInstanceTask] Modpack repair complete");
+                            crate::tasks::installers::modpack::spawn_manifest_resource_linking(
+                                &app_handle,
+                                inst_id,
+                                &game_dir,
+                                &repaired,
+                            );
+                        }
                         Err(e) => {
                             log::warn!("[RepairInstanceTask] Modpack repair failed: {}", e);
                             repair_error = Some(e.to_string());
@@ -530,7 +557,17 @@ impl Task for RepairInstanceTask {
                                             repair_reporter,
                                             Some(resolver),
                                         ).await {
-                                            Ok(_) => log::info!("[RepairInstanceTask] Modpack repair complete"),
+                                            Ok(repaired) => {
+                                                log::info!(
+                                                    "[RepairInstanceTask] Modpack repair complete"
+                                                );
+                                                crate::tasks::installers::modpack::spawn_manifest_resource_linking(
+                                                    &app_handle,
+                                                    inst_id,
+                                                    &game_dir,
+                                                    &repaired,
+                                                );
+                                            }
                                             Err(e) => {
                                                 log::warn!("[RepairInstanceTask] Modpack repair failed: {}", e);
                                                 repair_error = Some(e.to_string());

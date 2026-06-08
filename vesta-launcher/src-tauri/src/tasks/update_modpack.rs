@@ -5,6 +5,9 @@ use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
 use crate::tasks::manager::{Task, TaskContext};
 use piston_lib::game::modpack::manifest::ModpackManifest;
+use crate::tasks::installers::modpack::{
+    enrich_manifest_platform_hashes, spawn_manifest_resource_linking,
+};
 use piston_lib::game::modpack::types::ModpackFormat;
 use piston_lib::game::modpack::parser::{
     read_zip_override_entry, read_zip_override_text,
@@ -92,8 +95,10 @@ impl Task for UpdateModpackTask {
 
             // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
             ctx.update_full(5, "Loading old manifest...".to_string(), Some(0), Some(6));
-            let old_manifest = manifest::load_old_manifest(&game_dir)
+            let mut old_manifest = manifest::load_old_manifest(&game_dir)
                 .map_err(|e| format!("Cannot update: no modpack manifest found. {}", e))?;
+            manifest::backfill_manifest_hashes(&mut old_manifest, &game_dir, instance_id)
+                .map_err(|e| format!("Failed to backfill old manifest hashes: {}", e))?;
 
             ctx.update_full(
                 10,
@@ -435,8 +440,9 @@ async fn fetch_new_manifest(
     }
 
     // Parse and build the new manifest
-    let new_manifest = manifest::build_new_manifest(&zip_path, inst.modpack_id.clone())
+    let mut new_manifest = manifest::build_new_manifest(&zip_path, inst.modpack_id.clone())
         .map_err(|e| format!("Failed to parse new modpack manifest: {}", e))?;
+    enrich_manifest_platform_hashes(app_handle, &mut new_manifest).await;
 
     Ok((new_manifest, zip_path))
 }
@@ -573,20 +579,26 @@ async fn stage_file(
             sha1,
             ..
         } => {
-            let download_url = if url.is_empty() {
-                // Resolve via ResourceManager
-                let rm = app_handle.state::<ResourceManager>();
+            let rm = app_handle.state::<ResourceManager>();
+            let (download_url, verify_sha1) = if url.is_empty() {
                 let pid = project_id.map(|p| p.to_string()).unwrap_or_default();
                 let version = rm
                     .get_version(SourcePlatform::CurseForge, &pid, &file_id.to_string())
                     .await
                     .map_err(|e| format!("Failed to resolve CurseForge URL: {}", e))?;
-                version.download_url
+                let verify = sha1.clone().or_else(|| {
+                    if version.hash.is_empty() {
+                        None
+                    } else {
+                        Some(version.hash.clone())
+                    }
+                });
+                (version.download_url, verify)
             } else {
-                url.clone()
+                (url.clone(), sha1.clone())
             };
 
-            let data = download_bytes(&download_url, sha1.as_deref()).await?;
+            let data = download_bytes(&download_url, verify_sha1.as_deref()).await?;
             staging
                 .write_staged(path, &data)
                 .map_err(|e| e.to_string())?;
@@ -657,10 +669,13 @@ async fn finish_update(
     let mut manifest = new_manifest.clone();
     manifest.installed_at = chrono::Utc::now().to_rfc3339();
     manifest.source_zip_path = Some(source_zip_path.to_path_buf());
-    manifest.backfill_override_hashes(game_dir);
+    manifest::backfill_manifest_hashes(&mut manifest, game_dir, inst.id)
+        .map_err(|e| format!("Failed to backfill manifest hashes: {}", e))?;
     manifest
         .persist(game_dir)
         .map_err(|e| format!("Failed to persist manifest: {}", e))?;
+
+    spawn_manifest_resource_linking(app_handle, inst.id, game_dir, &manifest);
 
     // Update the database
     let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;

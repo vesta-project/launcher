@@ -20,6 +20,11 @@ pub struct ModpackResolvedCF {
     pub sha1: Option<String>,
 }
 
+pub struct ModpackResolvedModrinth {
+    pub url: String,
+    pub sha1: Option<String>,
+}
+
 pub trait ModpackResolver: Send + Sync {
     /// Resolve a CurseForge mod to a download URL and filename
     fn resolve_curseforge(
@@ -28,6 +33,17 @@ pub trait ModpackResolver: Send + Sync {
         file_id: u32,
         hash: Option<String>,
     ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedCF>>;
+
+    /// Resolve a Modrinth mod version to a download URL and sha1.
+    fn resolve_modrinth(
+        &self,
+        _project_id: &str,
+        _version_id: &str,
+    ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedModrinth>> {
+        Box::pin(async {
+            Err(anyhow::anyhow!("Modrinth resolver not configured"))
+        })
+    }
 }
 
 /// Installer for local ZIP modpacks
@@ -303,6 +319,7 @@ impl ModpackInstaller {
                     }
                 }
 
+                manifest.backfill_mod_sha1(game_dir);
                 manifest.backfill_override_hashes(game_dir);
 
                 if let Err(e) = manifest.persist(game_dir) {
@@ -368,9 +385,14 @@ impl ModpackInstaller {
         let mut manifest = ModpackManifest::load(game_dir)
             .context("Failed to load modpack manifest for repair")?;
 
-        let zip_path = manifest.source_zip_path.as_ref().ok_or_else(|| {
-            anyhow::anyhow!("Cannot repair modpack: original ZIP path not available in manifest")
-        })?;
+        let zip_path = manifest
+            .source_zip_path
+            .clone()
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Cannot repair modpack: original ZIP path not available in manifest"
+                )
+            })?;
 
         if !zip_path.exists() {
             return Err(anyhow::anyhow!(
@@ -379,8 +401,18 @@ impl ModpackInstaller {
             ));
         }
 
+        // Disk hashes first; then per-platform API only for Modrinth/CurseForge entries.
+        manifest.prepare_for_repair(game_dir);
+        enrich_platform_mod_hashes(&mut manifest, resolver.as_deref()).await;
+
         let diff = manifest.diff(game_dir);
         if diff.resources_to_fix.is_empty() && diff.overrides_to_fix.is_empty() {
+            if let Err(e) = manifest.persist(game_dir) {
+                log::warn!(
+                    "[ModpackInstaller::repair] Failed to persist backfilled manifest: {}",
+                    e
+                );
+            }
             reporter.set_message("Modpack files are already up to date");
             return Ok(manifest);
         }
@@ -420,7 +452,10 @@ impl ModpackInstaller {
                 match &m.source {
                     crate::game::modpack::manifest::ModSource::Modrinth { url, .. } => {
                         if !url.is_empty() {
-                            let target_path = game_dir.join(&m.path);
+                            let target_path =
+                                crate::game::modpack::manifest::mod_repair_target_path(
+                                    game_dir, &m.path,
+                                );
                             artifacts.push(BatchArtifact {
                                 name: m.path.clone(),
                                 label: format!("repair-modrinth-{}", m.path),
@@ -459,9 +494,31 @@ impl ModpackInstaller {
                     for (project_id, file_id, result) in resolved {
                         match result {
                             Ok(resolved_cf) => {
-                                let target_path = game_dir
-                                    .join(&resolved_cf.subfolder)
-                                    .join(&resolved_cf.filename);
+                                let manifest_path = diff
+                                    .resources_to_fix
+                                    .iter()
+                                    .find(|m| {
+                                        matches!(
+                                            &m.source,
+                                            ModSource::CurseForge {
+                                                project_id: pid,
+                                                file_id: fid,
+                                                ..
+                                            } if *pid == project_id && *fid == file_id
+                                        )
+                                    })
+                                    .map(|m| m.path.clone())
+                                    .unwrap_or_else(|| {
+                                        format!(
+                                            "{}/{}",
+                                            resolved_cf.subfolder, resolved_cf.filename
+                                        )
+                                    });
+                                let target_path =
+                                    crate::game::modpack::manifest::mod_repair_target_path(
+                                        game_dir,
+                                        &manifest_path,
+                                    );
                                 let pid_str = project_id
                                     .map(|id| id.to_string())
                                     .unwrap_or_else(|| "unknown".to_string());
@@ -549,7 +606,7 @@ impl ModpackInstaller {
             }
         }
 
-        manifest.backfill_override_hashes(game_dir);
+        manifest.prepare_for_repair(game_dir);
 
         // Persist the updated manifest so resolved CurseForge data is saved
         if let Err(e) = manifest.persist(game_dir) {
@@ -560,5 +617,91 @@ impl ModpackInstaller {
         }
         reporter.done(true, Some("Modpack repair complete"));
         Ok(manifest)
+    }
+}
+
+/// Fill missing sha1/url from each mod's origin platform API (after disk backfill).
+/// Local override files are not in `mods` and are handled by `prepare_for_repair` only.
+pub async fn enrich_platform_mod_hashes(
+    manifest: &mut ModpackManifest,
+    resolver: Option<&dyn ModpackResolver>,
+) {
+    let Some(resolver) = resolver else {
+        return;
+    };
+
+    for m in &mut manifest.mods {
+        match &mut m.source {
+            ModSource::Modrinth {
+                project_id,
+                version_id,
+                ref mut url,
+            } => {
+                let needs_hash = !m.sha1.as_ref().is_some_and(|h| !h.is_empty());
+                let needs_url = url.is_empty();
+                if !needs_hash && !needs_url {
+                    continue;
+                }
+
+                match resolver.resolve_modrinth(project_id, version_id).await {
+                    Ok(resolved) => {
+                        if needs_hash {
+                            m.sha1 = resolved.sha1.clone();
+                        }
+                        if needs_url {
+                            *url = resolved.url;
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[ModpackInstaller::repair] Failed to enrich Modrinth mod {}/{}: {}",
+                            project_id,
+                            version_id,
+                            e
+                        );
+                    }
+                }
+            }
+            ModSource::CurseForge {
+                project_id,
+                file_id,
+                ref mut url,
+            } => {
+                let needs_hash = !m.sha1.as_ref().is_some_and(|h| !h.is_empty());
+                let needs_url = url.is_empty();
+                let needs_path = m.path == format!("mods/{}.jar", file_id);
+                if !needs_hash && !needs_url && !needs_path {
+                    continue;
+                }
+
+                match resolver
+                    .resolve_curseforge(*project_id, *file_id, m.sha1.clone())
+                    .await
+                {
+                    Ok(resolved) => {
+                        if needs_hash {
+                            m.sha1 = resolved.sha1.clone();
+                        }
+                        if needs_url {
+                            *url = resolved.url;
+                        }
+                        if needs_path {
+                            m.path = format!(
+                                "{}/{}",
+                                resolved.subfolder, resolved.filename
+                            );
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[ModpackInstaller::repair] Failed to enrich CurseForge mod {:?}/{}: {}",
+                            project_id,
+                            file_id,
+                            e
+                        );
+                    }
+                }
+            }
+        }
     }
 }

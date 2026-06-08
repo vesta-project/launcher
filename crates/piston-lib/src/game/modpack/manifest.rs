@@ -195,6 +195,29 @@ impl ModpackManifest {
         Ok(())
     }
 
+    /// Backfill missing hashes from disk before diffing or persisting after repair.
+    /// Covers mods (including `.disabled`) and override files. Platform-hosted mods
+    /// may still need API enrichment afterward; local override-only files do not.
+    pub fn prepare_for_repair(&mut self, game_dir: &Path) {
+        self.backfill_mod_sha1(game_dir);
+        self.backfill_override_hashes(game_dir);
+    }
+
+    /// Snapshot sha1 hashes for mod files on disk when the manifest entry is missing one.
+    /// Checks both the enabled path and the `.disabled` variant.
+    pub fn backfill_mod_sha1(&mut self, game_dir: &Path) {
+        for m in &mut self.mods {
+            if m.sha1.as_ref().is_some_and(|h| !h.is_empty()) {
+                continue;
+            }
+            if let Some(disk_path) = resolve_mod_path_on_disk(game_dir, &m.path) {
+                if let Ok(sha1) = compute_file_sha1(&disk_path) {
+                    m.sha1 = Some(sha1);
+                }
+            }
+        }
+    }
+
     /// Snapshot sha1 hashes for override files on disk.
     pub fn backfill_override_hashes(&mut self, game_dir: &Path) {
         for ov in &self.overrides.extracted {
@@ -227,30 +250,45 @@ impl ModpackManifest {
         let mut configs_would_overwrite = Vec::new();
         let extra_files = Vec::new();
 
-        // Check mods
+        // Check mods (enabled path or `.disabled` variant)
         for m in &self.mods {
-            let full_path = game_dir.join(&m.path);
-            if !full_path.exists() {
-                resources_to_fix.push(m.clone());
-            } else if let Some(ref expected_sha1) = m.sha1 {
-                match compute_file_sha1(&full_path) {
-                    Ok(computed) if computed.to_lowercase() == expected_sha1.to_lowercase() => {}
-                    _ => resources_to_fix.push(m.clone()),
+            match resolve_mod_path_on_disk(game_dir, &m.path) {
+                None => resources_to_fix.push(m.clone()),
+                Some(disk_path) => {
+                    if let Some(ref expected_sha1) = m.sha1 {
+                        match compute_file_sha1(&disk_path) {
+                            Ok(computed)
+                                if computed.to_lowercase() == expected_sha1.to_lowercase() => {}
+                            _ => resources_to_fix.push(m.clone()),
+                        }
+                    }
+                    // Missing manifest sha1 but file present: prepare_for_repair should fill it.
                 }
-            } else {
-                resources_to_fix.push(m.clone());
             }
         }
 
-        // Check overrides
+        // Check overrides (existence + hash when known)
         for ov in &self.overrides.extracted {
             let full_path = game_dir.join(ov);
-            if !full_path.exists() {
-                // Determine if this is a config file
+            if !full_path.is_file() {
                 if is_config_path(ov) {
                     configs_would_overwrite.push(ov.clone());
                 } else {
                     overrides_to_fix.push(ov.clone());
+                }
+                continue;
+            }
+
+            if let Some(expected) = self.overrides.hashes.get(&ov.to_lowercase()) {
+                let hash_ok = compute_file_sha1(&full_path)
+                    .map(|computed| computed.to_lowercase() == expected.to_lowercase())
+                    .unwrap_or(false);
+                if !hash_ok {
+                    if is_config_path(ov) {
+                        configs_would_overwrite.push(ov.clone());
+                    } else {
+                        overrides_to_fix.push(ov.clone());
+                    }
                 }
             }
         }
@@ -262,6 +300,29 @@ impl ModpackManifest {
             extra_files,
         }
     }
+}
+
+/// Path for a disabled mod (`mods/foo.jar` → `mods/foo.jar.disabled`).
+pub fn disabled_mod_path(manifest_path: &str) -> String {
+    format!("{}.disabled", manifest_path)
+}
+
+/// Resolve where a manifest mod actually lives on disk (enabled or `.disabled`).
+pub fn resolve_mod_path_on_disk(game_dir: &Path, manifest_path: &str) -> Option<PathBuf> {
+    let enabled = game_dir.join(manifest_path);
+    if enabled.is_file() {
+        return Some(enabled);
+    }
+    let disabled = game_dir.join(disabled_mod_path(manifest_path));
+    if disabled.is_file() {
+        return Some(disabled);
+    }
+    None
+}
+
+/// Target path for re-downloading a mod during repair (preserves disabled state).
+pub fn mod_repair_target_path(game_dir: &Path, manifest_path: &str) -> PathBuf {
+    resolve_mod_path_on_disk(game_dir, manifest_path).unwrap_or_else(|| game_dir.join(manifest_path))
 }
 
 /// Check if a path refers to a config file/directory.
@@ -319,6 +380,84 @@ fn parse_modrinth_url(url: &str) -> (String, String) {
         .unwrap_or("unknown")
         .to_string();
     (project_id, version_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::modpack::types::ModpackFormat;
+
+    fn sample_mod(path: &str, sha1: Option<&str>) -> ModpackManifestMod {
+        ModpackManifestMod {
+            source: ModSource::Modrinth {
+                project_id: "proj".into(),
+                version_id: "ver".into(),
+                url: "https://cdn.modrinth.com/data/proj/versions/ver/mod.jar".into(),
+            },
+            path: path.into(),
+            sha1: sha1.map(|s| s.to_string()),
+            size: None,
+        }
+    }
+
+    fn empty_manifest(mods: Vec<ModpackManifestMod>) -> ModpackManifest {
+        ModpackManifest {
+            source: ModpackFormat::Modrinth,
+            modpack_id: None,
+            name: "Test".into(),
+            version: "1.0".into(),
+            installed_at: "2024-01-01T00:00:00Z".into(),
+            minecraft_version: "1.20.1".into(),
+            modloader: ModpackManifestModloader {
+                loader_type: "fabric".into(),
+                version: None,
+            },
+            mods,
+            overrides: ModpackManifestOverrides {
+                extracted: vec![],
+                skipped_configs: vec![],
+                hashes: HashMap::new(),
+            },
+            source_zip_path: None,
+        }
+    }
+
+    #[test]
+    fn diff_accepts_disabled_mod_with_matching_hash() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path();
+        let sha1 = compute_file_sha1(&{
+            let p = game_dir.join("mods/foo.jar.disabled");
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(&p, b"mod-bytes").unwrap();
+            p
+        })
+        .unwrap();
+
+        let manifest = empty_manifest(vec![sample_mod("mods/foo.jar", Some(&sha1))]);
+        let diff = manifest.diff(game_dir);
+        assert!(diff.resources_to_fix.is_empty());
+    }
+
+    #[test]
+    fn diff_flags_missing_mod_when_neither_variant_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = empty_manifest(vec![sample_mod("mods/foo.jar", Some("abc"))]);
+        let diff = manifest.diff(dir.path());
+        assert_eq!(diff.resources_to_fix.len(), 1);
+    }
+
+    #[test]
+    fn backfill_mod_sha1_reads_disabled_variant() {
+        let dir = tempfile::tempdir().unwrap();
+        let game_dir = dir.path();
+        std::fs::create_dir_all(game_dir.join("mods")).unwrap();
+        std::fs::write(game_dir.join("mods/foo.jar.disabled"), b"mod-bytes").unwrap();
+
+        let mut manifest = empty_manifest(vec![sample_mod("mods/foo.jar", None)]);
+        manifest.backfill_mod_sha1(game_dir);
+        assert!(manifest.mods[0].sha1.is_some());
+    }
 }
 
 // TODO: Support mixed-format modpack export/repair — a single modpack containing
