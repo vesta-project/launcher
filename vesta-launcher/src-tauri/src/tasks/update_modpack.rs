@@ -272,13 +272,13 @@ impl Task for UpdateModpackTask {
             for action in &action_tree.actions {
                 if let SyncAction::Remove {
                     path,
-                    last_sha256, ..
+                    last_hash, ..
                 } = action
                 {
                     match safeguards::safe_delete_if_unchanged(
                         &game_dir,
                         path,
-                        last_sha256.as_deref(),
+                        last_hash.as_deref(),
                     ) {
                         Ok(true) => deleted_count += 1,
                         Ok(false) => skipped_delete += 1,
@@ -657,7 +657,7 @@ async fn finish_update(
     let mut manifest = new_manifest.clone();
     manifest.installed_at = chrono::Utc::now().to_rfc3339();
     manifest.source_zip_path = Some(source_zip_path.to_path_buf());
-    manifest.backfill_file_hashes(game_dir);
+    manifest.backfill_override_hashes(game_dir);
     manifest
         .persist(game_dir)
         .map_err(|e| format!("Failed to persist manifest: {}", e))?;

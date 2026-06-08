@@ -303,7 +303,7 @@ impl ModpackInstaller {
                     }
                 }
 
-                manifest.backfill_file_hashes(game_dir);
+                manifest.backfill_override_hashes(game_dir);
 
                 if let Err(e) = manifest.persist(game_dir) {
                     log::warn!(
@@ -549,7 +549,7 @@ impl ModpackInstaller {
             }
         }
 
-        manifest.backfill_file_hashes(game_dir);
+        manifest.backfill_override_hashes(game_dir);
 
         // Persist the updated manifest so resolved CurseForge data is saved
         if let Err(e) = manifest.persist(game_dir) {

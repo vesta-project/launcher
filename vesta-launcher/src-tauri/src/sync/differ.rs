@@ -10,7 +10,7 @@ use super::manifest::FileHash;
 
 /// The ThreeWayDiffer takes three data sources:
 ///   $O$ — Old base manifest (what the pack was supposed to look like)
-///   $C$ — Current client directory (SHA-256 hashes of actual files on disk)
+///   $C$ — Current client directory (sha1 hashes of actual files on disk)
 ///   $N$ — New base manifest (what the pack wants to look like now)
 ///
 /// And produces an ActionTree of ADD/UPDATE/REMOVE/MERGE/SKIP actions.
@@ -56,12 +56,8 @@ impl ThreeWayDiffer {
             let in_old_overrides = old_overrides.contains(lower_path);
             let in_new_overrides = new_overrides.contains(lower_path);
 
-            let old_hash = old_mod
-                .and_then(|m| m.sha256.clone())
-                .or_else(|| old.overrides.hashes.get(lower_path).cloned());
-            let new_hash = new_mod
-                .and_then(|m| m.sha256.clone())
-                .or_else(|| new.overrides.hashes.get(lower_path).cloned());
+            let old_hash = old.expected_content_hash(lower_path, old_mod);
+            let new_hash = new.expected_content_hash(lower_path, new_mod);
             let current = current_hashes.get(lower_path);
 
             // Determine the original path (not lowercased) from whichever manifest has it
@@ -122,7 +118,7 @@ impl ThreeWayDiffer {
         new_hash: &Option<String>,
         current: Option<&FileHash>,
     ) {
-        let cur_hash = current.map(|c| &c.sha256);
+        let cur_hash = current.map(|c| &c.hash);
 
         match (old_mod, new_mod) {
             // File in both old and new
@@ -147,8 +143,8 @@ impl ThreeWayDiffer {
                     tree.add_action(SyncAction::Update {
                         path: display_path.to_string(),
                         source: mod_source_to_file_source(new_m),
-                        old_sha256: old_hash.clone(),
-                        new_sha256: new_hash.clone(),
+                        old_hash: old_hash.clone(),
+                        new_hash: new_hash.clone(),
                     });
                 } else {
                     tree.add_action(SyncAction::Skip {
@@ -162,7 +158,7 @@ impl ThreeWayDiffer {
                 tree.add_action(SyncAction::Add {
                     path: display_path.to_string(),
                     source: mod_source_to_file_source(new_m),
-                    expected_sha256: new_hash.clone(),
+                    expected_hash: new_hash.clone(),
                 });
             }
             // File only in old (remove)
@@ -181,7 +177,7 @@ impl ThreeWayDiffer {
                     tree.add_action(SyncAction::Remove {
                         path: display_path.to_string(),
                         reason: RemoveReason::AuthorRemoved,
-                        last_sha256: old_hash.clone(),
+                        last_hash: old_hash.clone(),
                     });
                 } else {
                     tree.add_action(SyncAction::Skip {
@@ -208,7 +204,7 @@ impl ThreeWayDiffer {
                 tree.add_action(SyncAction::Remove {
                     path: display_path.to_string(),
                     reason: RemoveReason::AuthorRemoved,
-                    last_sha256: old_hash.clone(),
+                    last_hash: old_hash.clone(),
                 });
             } else {
                 tree.add_action(SyncAction::Skip {
@@ -224,7 +220,7 @@ impl ThreeWayDiffer {
                 source: FileSource::ZipOverride {
                     zip_entry: display_path.to_string(),
                 },
-                expected_sha256: None,
+                expected_hash: None,
             });
         }
     }
@@ -245,7 +241,7 @@ impl ThreeWayDiffer {
         let in_old = in_old_overrides || old_mod.is_some();
         let in_new = in_new_overrides || new_mod.is_some();
 
-        let cur_hash = current.map(|c| &c.sha256);
+        let cur_hash = current.map(|c| &c.hash);
 
         match (in_old, in_new) {
             // In both → try merge
@@ -259,7 +255,7 @@ impl ThreeWayDiffer {
                                 source: FileSource::ZipOverride {
                                     zip_entry: display_path.to_string(),
                                 },
-                                expected_sha256: None,
+                                expected_hash: None,
                             });
                             return;
                         }
@@ -270,8 +266,8 @@ impl ThreeWayDiffer {
                 tree.add_action(SyncAction::Merge {
                     path: display_path.to_string(),
                     merged_content: String::new(), // Will be resolved in Phase 2
-                    old_sha256: old_hash.clone(),
-                    new_sha256: None,
+                    old_hash: old_hash.clone(),
+                    new_hash: None,
                 });
             }
             // Only in new
@@ -281,7 +277,7 @@ impl ThreeWayDiffer {
                     source: FileSource::ZipOverride {
                         zip_entry: display_path.to_string(),
                     },
-                    expected_sha256: None,
+                    expected_hash: None,
                 });
             }
             // Only in old
@@ -296,7 +292,7 @@ impl ThreeWayDiffer {
                     tree.add_action(SyncAction::Remove {
                         path: display_path.to_string(),
                         reason: RemoveReason::AuthorRemoved,
-                        last_sha256: old_hash.clone(),
+                        last_hash: old_hash.clone(),
                     });
                 } else {
                     tree.add_action(SyncAction::Skip {
@@ -337,7 +333,7 @@ impl ThreeWayDiffer {
             let lower = n_path.to_lowercase();
             if let Some(Some(expected_old_hash)) = old_level_dats.get(&lower) {
                 if let Some(current_fh) = current_hashes.get(&lower) {
-                    if current_fh.sha256.to_lowercase() != expected_old_hash.to_lowercase() {
+                    if current_fh.hash.to_lowercase() != expected_old_hash.to_lowercase() {
                         // User modified their world → rotate it
                         let quarantine = build_quarantine_path(n_path);
                         tree.add_world_collision(n_path.clone(), quarantine.clone());
@@ -462,7 +458,7 @@ mod tests {
         }
     }
 
-    fn make_mod(path: &str, sha1: &str, sha256: &str) -> ModpackManifestMod {
+    fn make_mod(path: &str, sha1: &str) -> ModpackManifestMod {
         ModpackManifestMod {
             source: ModSource::Modrinth {
                 project_id: "test-proj".into(),
@@ -471,22 +467,21 @@ mod tests {
             },
             path: path.to_string(),
             sha1: Some(sha1.to_string()),
-            sha256: Some(sha256.to_string()),
             size: Some(1000),
         }
     }
 
     #[test]
     fn test_diff_mod_unchanged() {
-        let old = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a", "sha256a")], vec![]);
-        let new = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a", "sha256a")], vec![]);
+        let old = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a")], vec![]);
+        let new = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a")], vec![]);
 
         let mut current = HashMap::new();
         current.insert(
             "mods/a.jar".to_string(),
             FileHash {
                 path: "mods/A.jar".into(),
-                sha256: "sha256a".into(),
+                hash: "sha1a".into(),
             },
         );
 
@@ -501,15 +496,15 @@ mod tests {
 
     #[test]
     fn test_diff_mod_updated() {
-        let old = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a", "sha256a")], vec![]);
-        let new = make_test_manifest(vec![make_mod("mods/A.jar", "sha1b", "sha256b")], vec![]);
+        let old = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a")], vec![]);
+        let new = make_test_manifest(vec![make_mod("mods/A.jar", "sha1b")], vec![]);
 
         let mut current = HashMap::new();
         current.insert(
             "mods/a.jar".to_string(),
             FileHash {
                 path: "mods/A.jar".into(),
-                sha256: "sha256a".into(),
+                hash: "sha1a".into(),
             },
         );
 
@@ -525,7 +520,7 @@ mod tests {
     #[test]
     fn test_diff_mod_added() {
         let old = make_test_manifest(vec![], vec![]);
-        let new = make_test_manifest(vec![make_mod("mods/B.jar", "sha1b", "sha256b")], vec![]);
+        let new = make_test_manifest(vec![make_mod("mods/B.jar", "sha1b")], vec![]);
         let current = HashMap::new();
 
         let tree = ThreeWayDiffer::diff(&old, &current, &new);
@@ -539,7 +534,7 @@ mod tests {
 
     #[test]
     fn test_diff_mod_removed() {
-        let old = make_test_manifest(vec![make_mod("mods/C.jar", "sha1c", "sha256c")], vec![]);
+        let old = make_test_manifest(vec![make_mod("mods/C.jar", "sha1c")], vec![]);
         let new = make_test_manifest(vec![], vec![]);
 
         let mut current = HashMap::new();
@@ -547,7 +542,7 @@ mod tests {
             "mods/c.jar".to_string(),
             FileHash {
                 path: "mods/C.jar".into(),
-                sha256: "sha256c".into(),
+                hash: "sha1c".into(),
             },
         );
 
@@ -562,15 +557,15 @@ mod tests {
 
     #[test]
     fn test_diff_user_modified_binary_protected() {
-        let old = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a", "sha256a")], vec![]);
-        let new = make_test_manifest(vec![make_mod("mods/A.jar", "sha1b", "sha256b")], vec![]);
+        let old = make_test_manifest(vec![make_mod("mods/A.jar", "sha1a")], vec![]);
+        let new = make_test_manifest(vec![make_mod("mods/A.jar", "sha1b")], vec![]);
 
         let mut current = HashMap::new();
         current.insert(
             "mods/a.jar".to_string(),
             FileHash {
                 path: "mods/A.jar".into(),
-                sha256: "user_modified_hash".into(),
+                hash: "user_modified_sha1".into(),
             },
         );
 
@@ -586,15 +581,15 @@ mod tests {
 
     #[test]
     fn test_diff_case_insensitive_paths() {
-        let old = make_test_manifest(vec![make_mod("mods/MyMod.jar", "sha1a", "sha256a")], vec![]);
-        let new = make_test_manifest(vec![make_mod("mods/mymod.jar", "sha1a", "sha256a")], vec![]);
+        let old = make_test_manifest(vec![make_mod("mods/MyMod.jar", "sha1a")], vec![]);
+        let new = make_test_manifest(vec![make_mod("mods/mymod.jar", "sha1a")], vec![]);
 
         let mut current = HashMap::new();
         current.insert(
             "mods/mymod.jar".to_string(),
             FileHash {
                 path: "mods/mymod.jar".into(),
-                sha256: "sha256a".into(),
+                hash: "sha1a".into(),
             },
         );
 
@@ -648,7 +643,7 @@ mod tests {
             "saves/myworld/level.dat".to_string(),
             FileHash {
                 path: "saves/MyWorld/level.dat".into(),
-                sha256: "user_modified_hash".into(),
+                hash: "user_modified_hash".into(),
             },
         );
 
