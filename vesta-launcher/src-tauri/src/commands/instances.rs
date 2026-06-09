@@ -12,7 +12,7 @@ use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
@@ -23,6 +23,39 @@ use walkdir::WalkDir;
 lazy_static! {
     static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> =
         Mutex::new(HashMap::new());
+    static ref LAUNCH_IN_PROGRESS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+}
+
+struct LaunchInProgressGuard {
+    instance_id: String,
+}
+
+impl LaunchInProgressGuard {
+    async fn acquire(instance_id: String) -> Result<Self, String> {
+        if piston_lib::game::launcher::is_instance_running(&instance_id)
+            .await
+            .map_err(|e| format!("Failed to check instance run state: {}", e))?
+        {
+            return Err("Instance is already starting or running".to_string());
+        }
+
+        let mut guard = LAUNCH_IN_PROGRESS
+            .lock()
+            .map_err(|_| "Failed to lock launch in-progress guard".to_string())?;
+        if !guard.insert(instance_id.clone()) {
+            return Err("Instance is already starting or running".to_string());
+        }
+
+        Ok(Self { instance_id })
+    }
+}
+
+impl Drop for LaunchInProgressGuard {
+    fn drop(&mut self) {
+        if let Ok(mut guard) = LAUNCH_IN_PROGRESS.lock() {
+            guard.remove(&self.instance_id);
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -1184,6 +1217,15 @@ pub async fn launch_instance(
         ));
     }
 
+    let instance_id = instance_data.slug();
+    let _launch_guard = LaunchInProgressGuard::acquire(instance_id.clone()).await?;
+
+    use tauri::Emitter;
+    let _ = app_handle.emit(
+        "core://instance-launch-request",
+        serde_json::json!({ "instance_id": instance_id }),
+    );
+
     log::info!(
         "[launch_instance] Launch requested for instance: {} (ID: {})",
         instance_data.name,
@@ -1195,9 +1237,6 @@ pub async fn launch_instance(
         instance_data.modloader,
         instance_data.modloader_version
     );
-
-    // Derive a filesystem-safe runtime instance id (slug) from the instance name
-    let instance_id = instance_data.slug();
 
     // Load app configuration for defaults
     let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;

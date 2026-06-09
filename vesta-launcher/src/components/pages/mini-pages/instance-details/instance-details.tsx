@@ -7,7 +7,13 @@ import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
-import { instancesState } from "@stores/instances";
+import {
+  clearRunning,
+  instancesState,
+  isInstanceRunningInStore,
+  setLaunching,
+  setRunning,
+} from "@stores/instances";
 import {
   isPinned as isPinnedInStore,
   pinning,
@@ -565,11 +571,13 @@ export default function InstanceDetails(
   >([]);
 
   const inst = () => instance();
-  const isLaunchingGlobal = createMemo(
-    () => (slug() ? instancesState.launchingIds[slug()] : false) || false,
-  );
   const isRunningGlobal = createMemo(
     () => (slug() ? instancesState.runningIds[slug()] : false) || false,
+  );
+  const isLaunchingGlobal = createMemo(
+    () =>
+      (slug() ? instancesState.launchingIds[slug()] : false) &&
+      !isRunningGlobal(),
   );
 
   const isDirty = createMemo(() => {
@@ -712,13 +720,19 @@ export default function InstanceDetails(
     });
   });
 
-  // Check running state on mount and when instance changes
+  // Seed global running state when the backend reports a live process
   createEffect(async () => {
     const inst = instance();
-    if (inst) {
+    const currentSlug = slug();
+    if (inst && currentSlug && !isInstanceRunningInStore(currentSlug)) {
       try {
         const running = await isInstanceRunning(inst);
-        setIsRunning(running);
+        if (running) {
+          setRunning(currentSlug, {
+            pid: 0,
+            startTime: Math.floor(Date.now() / 1000),
+          });
+        }
       } catch (e) {
         console.error("Failed to check running state:", e);
       }
@@ -848,8 +862,6 @@ export default function InstanceDetails(
 
   const [showExportDialog, setShowExportDialog] = createSignal(false);
 
-  // Running state
-  const [isRunning, setIsRunning] = createSignal(false);
   const [busy, setBusy] = createSignal(false);
 
   const [activeAccount] = createResource<any>(async () => {
@@ -1961,28 +1973,7 @@ columnHelper.accessor("display_name", {
       await listen("core://instance-launched", (ev) => {
         const payload = (ev as { payload: { instance_id?: string } }).payload;
         if (payload.instance_id === slug()) {
-          setIsRunning(true);
-          // Clear console store on new launch
           consoleStore.clear();
-        }
-      }),
-    );
-
-    cleanups.push(
-      await listen("core://instance-killed", (ev) => {
-        const payload = (ev as { payload: { instance_id?: string } }).payload;
-        if (payload.instance_id === slug()) {
-          setIsRunning(false);
-        }
-      }),
-    );
-
-    // Listen for natural process exit (game closed by user)
-    cleanups.push(
-      await listen("core://instance-exited", (ev) => {
-        const payload = (ev as { payload: { instance_id?: string } }).payload;
-        if (payload.instance_id === slug()) {
-          setIsRunning(false);
         }
       }),
     );
@@ -2026,7 +2017,8 @@ columnHelper.accessor("display_name", {
     const inst = instance();
     if (!inst) return "Play Now";
 
-    if (isRunning()) return "Kill Instance";
+    if (isRunningGlobal()) return "Kill Instance";
+    if (isLaunchingGlobal()) return "Warming up...";
     if (isInstalling()) return `${getInstanceOperationLabel(inst)}...`;
 
     if (isInterrupted()) {
@@ -2051,7 +2043,16 @@ columnHelper.accessor("display_name", {
 
   const handlePlay = async () => {
     const inst = instance();
-    if (!inst || busy()) return;
+    const currentSlug = slug();
+    if (!inst || !currentSlug || busy() || isLaunchingGlobal() || isRunningGlobal()) {
+      return;
+    }
+
+    const willLaunch = !isInterrupted() && !needsInstallation();
+    if (willLaunch) {
+      setLaunching(currentSlug, true);
+    }
+
     setBusy(true);
     try {
       if (isInterrupted()) {
@@ -2074,7 +2075,11 @@ columnHelper.accessor("display_name", {
 
   const handleKill = async () => {
     const inst = instance();
-    if (!inst || busy()) return;
+    const currentSlug = slug();
+    if (!inst || !currentSlug || busy()) return;
+
+    setLaunching(currentSlug, false);
+    clearRunning(currentSlug);
     setBusy(true);
     try {
       await killInstance(inst);
@@ -2313,10 +2318,10 @@ columnHelper.accessor("display_name", {
                       </Button>
 
                       <Button
-                        onClick={isRunning() ? handleKill : handlePlay}
-                        disabled={busy() || isInstalling()}
-                        color={isRunning() ? "destructive" : "primary"}
-                        data-color={isRunning() ? "destructive" : "primary"}
+                        onClick={isRunningGlobal() ? handleKill : handlePlay}
+                        disabled={busy() || isInstalling() || isLaunchingGlobal()}
+                        color={isRunningGlobal() ? "destructive" : "primary"}
+                        data-color={isRunningGlobal() ? "destructive" : "primary"}
                         variant="solid"
                         size="lg"
                         title={playButtonText()}
@@ -2324,11 +2329,11 @@ columnHelper.accessor("display_name", {
                         class={styles["details-play-button"]}
                       >
                         <Show
-                          when={busy() || isInstalling()}
+                          when={busy() || isInstalling() || isLaunchingGlobal()}
                           fallback={
                             <span class={styles["details-play-button-icon"]}>
                               <Show
-                                when={isRunning()}
+                                when={isRunningGlobal()}
                                 fallback={<PlayIcon width="16" height="16" />}
                               >
                                 <KillIcon width="14" height="14" />
@@ -2359,7 +2364,7 @@ columnHelper.accessor("display_name", {
                       <HomeTab
                         instance={inst()}
                         installedResources={installedResources() || []}
-                        isRunning={isRunning()}
+                        isRunning={isRunningGlobal()}
                       />
                     </Show>
                   </TabsContent>

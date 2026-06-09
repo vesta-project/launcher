@@ -462,8 +462,21 @@ export async function installInstance(instance: Instance): Promise<void> {
 
 // Launch an instance (placeholder implementation - backend may actually run the game)
 export async function launchInstance(instance: Instance): Promise<void> {
+	const slug = getInstanceSlug(instance);
+	const { instancesState, setLaunching } = await import("@stores/instances");
+
+	if (instancesState.runningIds[slug]) {
+		throw new Error("Instance is already running");
+	}
+
+	// UI may have already set warming optimistically on click.
+	if (!instancesState.launchingIds[slug]) {
+		setLaunching(slug, true);
+	}
+
 	const accountType = (await getActiveAccount())?.account_type?.toLowerCase();
 	if (accountType === "guest" || accountType === "demo") {
+		setLaunching(slug, false);
 		throw new Error(
 			"Guest and demo accounts cannot launch instances. Please sign in with a Microsoft account.",
 		);
@@ -473,12 +486,24 @@ export async function launchInstance(instance: Instance): Promise<void> {
 	try {
 		await invoke("launch_instance", { instanceData: instance });
 		console.log("[launchInstance] Launch command completed");
+		// Belt-and-suspenders: backend emits core://instance-launched, but if that
+		// event was missed we must not leave the UI stuck in "warming".
+		setLaunching(slug, false);
 	} catch (e) {
+		setLaunching(slug, false);
 		console.error("[launchInstance] Launch command failed:", e);
 		throw e;
 	}
 }
+
 export async function killInstance(instance: Instance): Promise<string> {
+	const slug = getInstanceSlug(instance);
+	const { clearRunning, setLaunching } = await import("@stores/instances");
+
+	// Idempotent with optimistic UI clears from click handlers.
+	setLaunching(slug, false);
+	clearRunning(slug);
+
 	console.log("[killInstance] Invoking Tauri command to kill instance:", instance);
 	try {
 		const message = await invoke<string>("kill_instance", { inst: instance });
@@ -486,6 +511,17 @@ export async function killInstance(instance: Instance): Promise<string> {
 		return message;
 	} catch (e) {
 		console.error("[killInstance] Kill command failed:", e);
+		try {
+			if (await isInstanceRunning(instance)) {
+				const { setRunning } = await import("@stores/instances");
+				setRunning(slug, {
+					pid: 0,
+					startTime: Math.floor(Date.now() / 1000),
+				});
+			}
+		} catch (checkError) {
+			console.error("[killInstance] Failed to restore running state:", checkError);
+		}
 		throw e;
 	}
 }

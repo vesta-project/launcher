@@ -10,6 +10,12 @@ import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import {
+	clearRunning,
+	instancesState,
+	setLaunching,
+	setRunning,
+} from "@stores/instances";
 import { listen } from "@tauri-apps/api/event";
 import { Badge } from "@ui/badge";
 import {
@@ -29,19 +35,18 @@ import { resolveResourceUrl } from "@utils/assets";
 import { clearCrashDetails, isInstanceCrashed } from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
-	DEFAULT_ICONS,
 	getInstanceOperationLabel,
 	getInstanceSlug,
 	installInstance,
-	resolveInstanceDisplayIcon,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
+	resolveInstanceDisplayIcon,
 	resumeInstanceOperation,
-	sanitizeInstanceName,
 } from "@utils/instances";
-import { createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import clsx from "clsx";
+import { createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import {
 	handleDuplicate,
 	handleHardReset,
@@ -50,47 +55,40 @@ import {
 } from "../../../../handlers/instance-handler";
 import styles from "./instance-card.module.css";
 
-// getInstanceSlug now imported above
-
 interface InstanceCardProps {
 	instance: Instance;
 }
 
 export default function InstanceCard(props: InstanceCardProps) {
 	const [leaveAnim, setLeaveAnim] = createSignal(false);
-	const [runningIds, setRunningIds] = createSignal<Set<string>>(new Set());
 	const [hasCrashed, setHasCrashed] = createSignal(false);
 	const [showCrashModal, setShowCrashModal] = createSignal(false);
 	const [showExportDialog, setShowExportDialog] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
-	const [launching, setLaunching] = createSignal(false);
 
-	let launchTimeoutId: ReturnType<typeof setTimeout> | null = null;
+	const instanceSlug = () => getInstanceSlug(props.instance);
 
-	const clearLaunchTimeout = () => {
-		if (launchTimeoutId !== null) {
-			clearTimeout(launchTimeoutId);
-			launchTimeoutId = null;
-		}
-	};
+	const storeInstance = createMemo(
+		() => instancesState.instances.find((inst) => inst.id === props.instance.id) ?? props.instance,
+	);
 
-	const startLaunchingState = () => {
-		setLaunching(true);
-		clearLaunchTimeout();
-		launchTimeoutId = setTimeout(() => {
-			setLaunching(false);
-			launchTimeoutId = null;
-		}, 30000);
-	};
+	const isRunning = createMemo(() => !!instancesState.runningIds[instanceSlug()]);
+	const isWarmingUp = createMemo(
+		() => !!instancesState.launchingIds[instanceSlug()] && !isRunning(),
+	);
 
-	const clearLaunchingState = () => {
-		setLaunching(false);
-		clearLaunchTimeout();
-	};
+	const isInstalling = createMemo(() => isInstanceOperationInProgress(storeInstance()));
+	const isInterrupted = createMemo(
+		() => storeInstance().installationStatus === "interrupted",
+	);
+	const isInstalled = createMemo(() => storeInstance().installationStatus === "installed");
+	const isFailed = createMemo(() => {
+		const status = storeInstance().installationStatus;
+		return status === "failed" || status?.startsWith("failed:");
+	});
 
-	const instanceSlug = getInstanceSlug(props.instance);
 	const instanceBackgroundImage = () => {
-		const rawPath = resolveInstanceDisplayIcon(props.instance);
+		const rawPath = resolveInstanceDisplayIcon(storeInstance());
 		if (rawPath.startsWith("linear-gradient")) {
 			return rawPath;
 		}
@@ -102,124 +100,57 @@ export default function InstanceCard(props: InstanceCardProps) {
 		const unlisteners: (() => void)[] = [];
 
 		const setup = async () => {
-			// Check current running status on mount
-			try {
-				const isCurrentlyRunning = await isInstanceRunning(props.instance);
-				if (isCurrentlyRunning) {
-					setRunningIds((prev) => new Set(prev).add(instanceSlug));
+			const slug = instanceSlug();
+			if (!instancesState.runningIds[slug]) {
+				try {
+					const isCurrentlyRunning = await isInstanceRunning(props.instance);
+					if (isCurrentlyRunning) {
+						setRunning(slug, {
+							pid: 0,
+							startTime: Math.floor(Date.now() / 1000),
+						});
+					}
+				} catch (error) {
+					console.error("Failed to check instance running status:", error);
 				}
-			} catch (error) {
-				console.error("Failed to check instance running status:", error);
 			}
 
-			unlisteners.push(
-				await listen("core://instance-launched", (event) => {
-					const payload = (event as any).payload as {
-						name?: string;
-						instance_id?: string;
-						pid?: number;
-					};
-					const id = payload.instance_id || (payload.name ? sanitizeInstanceName(payload.name) : null);
-					if (!id) return;
-
-					if (id === instanceSlug) clearLaunchingState();
-					setRunningIds((prev) => new Set(prev).add(id));
-				}),
-			);
-			unlisteners.push(
-				await listen("core://instance-killed", (event) => {
-					const payload = (event as any).payload as {
-						name?: string;
-						instance_id?: string;
-					};
-					const id = payload.instance_id || (payload.name ? sanitizeInstanceName(payload.name) : null);
-					if (!id) return;
-
-					if (id === instanceSlug) clearLaunchingState();
-					setRunningIds((prev) => {
-						const newSet = new Set(prev);
-						newSet.delete(id);
-						return newSet;
-					});
-				}),
-			);
-			// Also listen for natural process exit (when game closes normally)
-			unlisteners.push(
-				await listen("core://instance-exited", (event) => {
-					const payload = (event as any).payload as {
-						name?: string;
-						instance_id?: string;
-						pid?: number;
-						crashed?: boolean;
-					};
-					const id = payload.instance_id || (payload.name ? sanitizeInstanceName(payload.name) : null);
-					if (!id) return;
-
-					if (id === instanceSlug) clearLaunchingState();
-					setRunningIds((prev) => {
-						const newSet = new Set(prev);
-						newSet.delete(id);
-						return newSet;
-					});
-				}),
-			);
-
-			// Listen for crash events
 			unlisteners.push(
 				await listen("core://instance-crashed", (event) => {
 					const payload = (event as any).payload as {
 						instance_id?: string;
-						crash_type: string;
-						message: string;
-						report_path?: string;
-						timestamp: string;
 					};
-					if (payload.instance_id === instanceSlug) {
+					if (payload.instance_id === slug) {
 						setHasCrashed(true);
-						clearLaunchingState();
+						setLaunching(slug, false);
 					}
 				}),
 			);
 		};
 
-		setup();
+		void setup();
 
 		onCleanup(() => {
-			clearLaunchTimeout();
 			for (const unlisten of unlisteners) {
 				unlisten();
 			}
 		});
 
-		// Check for crash status
-		setHasCrashed(isInstanceCrashed(instanceSlug));
+		setHasCrashed(isInstanceCrashed(instanceSlug()));
 	});
 
-	const isRunning = () => runningIds().has(instanceSlug);
-
-	// Installation status checks
-	const isInstalling = () => isInstanceOperationInProgress(props.instance);
-	const operationLabel = () => getInstanceOperationLabel(props.instance);
-	const isInterrupted = () => props.instance.installationStatus === "interrupted";
-	const isInstalled = () => props.instance.installationStatus === "installed";
-	const isFailed = () =>
-		props.instance.installationStatus === "failed" ||
-		props.instance.installationStatus?.startsWith("failed:");
+	const operationLabel = () => getInstanceOperationLabel(storeInstance());
 
 	const failureReason = () => {
 		if (!isFailed()) return null;
-		const status = props.instance.installationStatus;
+		const status = storeInstance().installationStatus;
 		if (status?.includes(":")) {
 			return status.split(":").slice(1).join(":");
 		}
 		return "Installation failed";
 	};
 
-	const needsInstallation = () => !props.instance.installationStatus || isFailed();
-
-	// Can only launch if installed and not busy/installing/running
-	const _canLaunch = () =>
-		!busy() && !launching() && !isInstalling() && isInstalled() && !isRunning();
+	const needsInstallation = () => !storeInstance().installationStatus || isFailed();
 
 	const playButtonTooltip = () => {
 		if (isInstalling()) {
@@ -228,27 +159,27 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 		if (isInterrupted()) {
 			const op =
-				props.instance.lastOperation === "hard-reset"
+				storeInstance().lastOperation === "hard-reset"
 					? "Hard reset"
-					: props.instance.lastOperation === "update"
+					: storeInstance().lastOperation === "update"
 						? "Update"
-						: props.instance.lastOperation || "Installation";
+						: storeInstance().lastOperation || "Installation";
 			return `${op.slice(0, 1).toUpperCase() + op.slice(1).toLowerCase()} interrupted. Click to resume.`;
 		}
 
-		return needsInstallation()
-			? "Needs Installation"
-			: isRunning()
-				? "Running (click to stop)"
-				: launching()
-					? "Launching..."
-					: "Launch";
+		if (needsInstallation()) return "Needs Installation";
+		if (isRunning()) return "Running (click to stop)";
+		if (isWarmingUp()) return "Warming up...";
+		return "Launch";
 	};
 
 	const toggleRun = async () => {
-		if (busy() || launching()) return;
+		if (busy() || isWarmingUp()) return;
 
 		if (isRunning()) {
+			const slug = instanceSlug();
+			setLaunching(slug, false);
+			clearRunning(slug);
 			setBusy(true);
 			try {
 				await killInstance(props.instance);
@@ -269,10 +200,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 			}
 			setBusy(false);
 		} else {
-			startLaunchingState();
+			const slug = instanceSlug();
+			setLaunching(slug, true);
 			try {
-				// Clear crash flag when attempting to launch
-				clearCrashDetails(instanceSlug);
+				clearCrashDetails(slug);
 				setHasCrashed(false);
 
 				await launchInstance(props.instance);
@@ -290,32 +221,23 @@ export default function InstanceCard(props: InstanceCardProps) {
 					severity: "error",
 					duration: 5000,
 				});
-				clearLaunchingState();
 			}
-			// Note: launching state is cleared when core://instance-launched or core://instance-exited occurs,
-			// but we can also clear it if launchInstance returns (meaning it's 'started')
-			// or if it fails immediately above.
-			// Let's keep it until either event or if it takes too long.
 		}
 	};
 
 	const handleClick = async (e: MouseEvent) => {
 		e.stopPropagation();
 
-		// Prevent double-actions
-		if (busy() || launching()) return;
+		if (busy() || isWarmingUp()) return;
 
-		// If currently installing, just notify user
 		if (isInstalling()) {
 			return;
 		}
 
-		// If needs installation or was interrupted, start/resume installer
 		if (needsInstallation() || isInterrupted()) {
 			setBusy(true);
 			try {
 				if (isInterrupted()) {
-					// Use smart resume logic based on last known operation
 					await resumeInstanceOperation(props.instance);
 				} else {
 					await installInstance(props.instance);
@@ -327,16 +249,14 @@ export default function InstanceCard(props: InstanceCardProps) {
 			return;
 		}
 
-		// Otherwise instance is installed — toggle run (launch or kill)
 		await toggleRun();
 	};
 
-	// Handler for context menu toggle (play/stop)
 	const handleContextToggle = () => {
+		if (busy() || isWarmingUp() || isInstalling()) return;
 		void toggleRun();
 	};
 
-	// Navigate to instance details page using mini-router
 	const openInstanceDetails = () => {
 		router()?.navigate("/instance", { id: props.instance.id });
 		setPageViewerOpen(true);
@@ -346,7 +266,14 @@ export default function InstanceCard(props: InstanceCardProps) {
 		<ContextMenu>
 			<ContextMenuTrigger
 				as="div"
-				class={`${styles["instance-card"]}${isFailed() ? ` ${styles.failed}` : ""}${isInterrupted() ? ` ${styles.interrupted}` : ""}${leaveAnim() ? ` ${styles["instance-card-leave"]}` : ""}`}
+				class={clsx(
+					styles["instance-card"],
+					isFailed() && styles.failed,
+					isInterrupted() && styles.interrupted,
+					isWarmingUp() && styles["instance-card--warming"],
+					isRunning() && !isWarmingUp() && styles["instance-card--running"],
+					leaveAnim() && styles["instance-card-leave"],
+				)}
 				onMouseOver={() => {
 					setLeaveAnim(false);
 				}}
@@ -358,7 +285,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				style={{
 					"--instance-bg-image": instanceBackgroundImage(),
 				}}
-				data-instance={instanceSlug}
+				data-instance={instanceSlug()}
 			>
 				<Switch>
 					<Match when={isInstalling()}>
@@ -420,10 +347,15 @@ export default function InstanceCard(props: InstanceCardProps) {
 					<Match when={true}>
 						<div class={styles["instance-card-top"]}>
 							<div class={styles["instance-card-indicators"]}>
-								<Show when={isRunning()}>
-									<Badge variant="success" dot={true}>
+								<Show when={isWarmingUp()}>
+									<div class={clsx(styles["status-tag"], styles["status-tag--warming"])}>
+										Warming up
+									</div>
+								</Show>
+								<Show when={isRunning() && !isWarmingUp()}>
+									<div class={clsx(styles["status-tag"], styles["status-tag--running"])}>
 										Running
-									</Badge>
+									</div>
 								</Show>
 								<Show when={isInterrupted()}>
 									<Badge variant="warning" dot={true}>
@@ -452,24 +384,28 @@ export default function InstanceCard(props: InstanceCardProps) {
 							<Tooltip placement="top">
 								<TooltipTrigger>
 									<button
-										class={`grain-overlay ${styles["play-button"]} ${
-											isInstalling() || launching()
-												? styles["installing"]
-												: isInterrupted()
-													? styles["resume"]
+										class={clsx(
+											"grain-overlay",
+											styles["play-button"],
+											isInstalling()
+												? styles.installing
+												: isWarmingUp()
+													? styles.warming
+													: isInterrupted()
+													? styles.resume
 													: needsInstallation()
-														? styles["install"]
+														? styles.install
 														: isRunning()
-															? styles["kill"]
-															: styles["launch"]
-										}`}
+															? styles.kill
+															: styles.launch,
+										)}
 										onClick={handleClick}
 										aria-label={playButtonTooltip()}
-										aria-busy={launching()}
+										aria-busy={isWarmingUp()}
 										aria-pressed={isRunning()}
-										disabled={isInstalling() || launching()}
+										disabled={isInstalling() || isWarmingUp()}
 									>
-										{isInstalling() || launching() ? (
+										{isInstalling() || isWarmingUp() ? (
 											<div class={styles["instance-card-spinner"]} />
 										) : isInterrupted() ? (
 											<ReloadIcon />
@@ -488,23 +424,29 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div class={styles["instance-card-bottom"]}>
 							<h1>{props.instance.name}</h1>
 							<div class={styles["instance-card-bottom-version"]}>
-								<p>{props.instance.minecraftVersion}</p>
+								<p>{storeInstance().minecraftVersion}</p>
 								<div class={styles["instance-card-bottom-version-modloader"]}>
 									<Switch fallback="">
-										<Match when={props.instance.modloader === "forge"}>
+										<Match when={storeInstance().modloader === "forge"}>
 											<ForgeLogo />
 										</Match>
-										<Match when={props.instance.modloader === "neoforge"}>
+										<Match when={storeInstance().modloader === "neoforge"}>
 											<NeoForgeLogo />
 										</Match>
-										<Match when={props.instance.modloader === "fabric"}>
+										<Match when={storeInstance().modloader === "fabric"}>
 											<FabricLogo />
 										</Match>
-										<Match when={props.instance.modloader === "quilt"}>
+										<Match when={storeInstance().modloader === "quilt"}>
 											<QuiltLogo />
 										</Match>
-										<Match when={props.instance.modloader && props.instance.modloader !== "vanilla"}>
-											<p style={{ "text-transform": "capitalize" }}>{props.instance.modloader}</p>
+										<Match
+											when={
+												storeInstance().modloader && storeInstance().modloader !== "vanilla"
+											}
+										>
+											<p style={{ "text-transform": "capitalize" }}>
+												{storeInstance().modloader}
+											</p>
 										</Match>
 									</Switch>
 								</div>
@@ -518,7 +460,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					<ContextMenuLabel>Actions</ContextMenuLabel>
 					<ContextMenuSeparator />
 
-					<ContextMenuItem onSelect={handleContextToggle}>
+					<ContextMenuItem onSelect={handleContextToggle} disabled={isWarmingUp()}>
 						<span
 							style={{
 								display: "inline-flex",
@@ -526,7 +468,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 								gap: "0.5rem",
 							}}
 						>
-							{isRunning() ? "Stop" : "Play"}
+							{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}
 						</span>
 						<ContextMenuShortcut>{isRunning() ? "Ctrl-K" : "Ctrl-P"}</ContextMenuShortcut>
 					</ContextMenuItem>
@@ -572,11 +514,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 					<ContextMenuItem>
 						Profile <ContextMenuShortcut>Ctrl-C</ContextMenuShortcut>
 					</ContextMenuItem>
-					{/* Additional menu items can be added here */}
 				</ContextMenuContent>
 			</ContextMenuPortal>
 			<CrashDetailsModal
-				instanceId={instanceSlug}
+				instanceId={instanceSlug()}
 				isOpen={showCrashModal()}
 				onClose={() => setShowCrashModal(false)}
 			/>

@@ -2,7 +2,7 @@ import PlayIcon from "@assets/play.svg";
 import StopIcon from "@assets/rounded-square.svg";
 import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
 import * as HoverCard from "@kobalte/core/hover-card";
-import { instancesState, setLaunching } from "@stores/instances";
+import { clearRunning, instancesState, setLaunching } from "@stores/instances";
 import { type PinnedPage, pinning, unpinPage } from "@stores/pinning";
 import { resources } from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
@@ -128,12 +128,11 @@ export function PinnedItem(props: PinnedItemProps) {
 		const inst = instance();
 		if (!inst || isLaunching() || isRunning()) return;
 
+		setLaunching(getInstanceSlug(inst), true);
 		try {
-			setLaunching(props.pin.target_id, true);
 			await launchInstance(inst);
 		} catch (err) {
 			console.error("Failed to launch instance from sidebar:", err);
-			setLaunching(props.pin.target_id, false);
 			showToast({
 				title: "Launch Failed",
 				description: String(err),
@@ -147,6 +146,9 @@ export function PinnedItem(props: PinnedItemProps) {
 		const inst = instance();
 		if (!inst || !isRunning()) return;
 
+		const slug = getInstanceSlug(inst);
+		setLaunching(slug, false);
+		clearRunning(slug);
 		try {
 			await killInstance(inst);
 		} catch (err) {

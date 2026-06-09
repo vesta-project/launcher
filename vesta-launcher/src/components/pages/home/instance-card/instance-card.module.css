@@ -326,6 +326,15 @@
 	backdrop-filter: var(--liquid-backdrop-filter);
 }
 
+.play-button.warming {
+	pointer-events: none;
+	cursor: default;
+}
+
+.instance-card:hover .play-button.warming {
+	pointer-events: none;
+}
+
 .play-button.launch:hover {
 	background: hsl(var(--hue-success) 70% 50% / 0.3);
 	border-color: hsl(var(--hue-success) 70% 50% / 0.5);
@@ -441,19 +450,74 @@
 	left: 16px;
 	display: flex;
 	flex-direction: column;
-	gap: 3px;
+	gap: 4px;
 	align-items: flex-start;
-	border-radius: 6px;
-	backdrop-filter: blur(var(--blur-subtle));
 	z-index: 2;
 }
 
-.status-dot {
-	width: 5px;
-	height: 5px;
-	border-radius: 50%;
-	background: white;
-	flex-shrink: 0;
+.status-tag {
+	display: inline-block;
+	box-sizing: border-box;
+	min-width: 0;
+	padding: 5px 8px;
+	border-radius: 4px;
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.04em;
+	line-height: 1;
+	text-transform: uppercase;
+	text-align: center;
+	white-space: nowrap;
+	color: var(--instance-card-text-main);
+	background: hsl(0 0% 0% / 0.42);
+	border: 1px solid hsl(0 0% 100% / 0.14);
+	backdrop-filter: blur(var(--blur-subtle));
+	box-shadow: 0 1px 4px hsl(0 0% 0% / 0.28);
+	text-shadow: 0 1px 2px hsl(0 0% 0% / 0.55);
+}
+
+.status-tag--warming {
+	color: hsl(42 90% 90%);
+	border-color: hsl(42 80% 55% / 0.55);
+	background: hsl(42 55% 18% / 0.72);
+}
+
+.status-tag--running {
+	color: hsl(142 55% 90%);
+	border-color: hsl(142 50% 48% / 0.55);
+	background: hsl(142 40% 14% / 0.72);
+}
+
+.instance-card--warming {
+	border-color: hsl(42 85% 52% / 0.55);
+}
+
+.instance-card--warming::after {
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			hsl(42 100% 66% / 0.14) 0%,
+			hsl(42 67% 47% / 0.18) 20%,
+			hsl(42 100% 20% / 0.34) 45.5%,
+			hsl(0 0% 0% / 0.62) 100%
+		),
+		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+}
+
+.instance-card--running {
+	border-color: hsl(142 55% 42% / 0.55);
+}
+
+.instance-card--running::after {
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			hsl(142 70% 50% / 0.12) 0%,
+			hsl(142 50% 30% / 0.16) 20%,
+			hsl(142 60% 12% / 0.34) 45.5%,
+			hsl(0 0% 0% / 0.62) 100%
+		),
+		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
 }
 
 .instance-card.failed {

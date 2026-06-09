@@ -45,7 +45,36 @@ const [instancesState, setInstancesState] = createStore<InstancesState>({
 let initializePromise: Promise<void> | null = null;
 
 export function setLaunching(slug: string, launching: boolean) {
-	setInstancesState("launchingIds", (prev) => ({ ...prev, [slug]: launching }));
+	if (launching) {
+		setInstancesState("launchingIds", slug, true);
+		return;
+	}
+
+	// Solid store: delete nested record keys by setting undefined, not via delete/spread.
+	setInstancesState("launchingIds", slug, undefined!);
+}
+
+export function setRunning(slug: string, meta: RunningMetadata) {
+	// Running supersedes warming; keep maps mutually consistent.
+	setLaunching(slug, false);
+	setInstancesState("runningIds", slug, meta);
+}
+
+/** Launch in progress and not yet registered as running. */
+export function isInstanceWarming(slug: string): boolean {
+	return !!instancesState.launchingIds[slug] && !instancesState.runningIds[slug];
+}
+
+export function clearRunning(slug: string) {
+	setInstancesState("runningIds", slug, undefined!);
+}
+
+export function isInstanceLaunching(slug: string): boolean {
+	return !!instancesState.launchingIds[slug];
+}
+
+export function isInstanceRunningInStore(slug: string): boolean {
+	return !!instancesState.runningIds[slug];
 }
 
 /**
@@ -213,14 +242,17 @@ export function setupInstanceListeners() {
 			},
 		);
 
+		await listen<{ instance_id: string }>("core://instance-killed", (event) => {
+			const slug = event.payload.instance_id;
+			setLaunching(slug, false);
+			clearRunning(slug);
+		});
+
 		// Listen for instance exit/crash
 		await listen<{ instance_id: string; crashed: boolean }>("core://instance-exited", (event) => {
 			const slug = event.payload.instance_id;
 			setLaunching(slug, false);
-			setInstancesState("runningIds", (prev) => {
-				const { [slug]: _removed, ...next } = prev;
-				return next;
-			});
+			clearRunning(slug);
 
 			// Refresh instance metadata if crashed/playtime updated
 			void initializeInstances(true).catch((error) => {

@@ -1,9 +1,14 @@
 import { dialogStore } from "@stores/dialog-store";
-import { removeInstanceOptimistic, restoreInstanceOptimistic } from "@stores/instances";
+import {
+	removeInstanceOptimistic,
+	restoreInstanceOptimistic,
+	setLaunching,
+} from "@stores/instances";
 import { showToast } from "@ui/toast/toast";
 import {
 	deleteInstance,
 	duplicateInstance,
+	getInstanceSlug,
 	Instance,
 	launchInstance,
 	repairInstance,
@@ -126,6 +131,7 @@ export const handleUninstall = async (instance: Instance, onSuccess?: () => void
  * Handles launching an instance.
  */
 export const handleLaunch = async (instance: Instance) => {
+	setLaunching(getInstanceSlug(instance), true);
 	try {
 		await launchInstance(instance);
 		// Notification/Busy state is usually handled by the TaskManager and core events
