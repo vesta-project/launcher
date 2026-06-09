@@ -109,6 +109,22 @@
 
 :root[data-reduced-motion="true"] .header-stack {
     animation: none !important;
+    --header-collapse-progress: 0 !important;
+}
+
+:root[data-reduced-motion="true"] .tag-row,
+:root[data-reduced-motion="true"] .header-action-btn--notify {
+    opacity: 1 !important;
+    max-height: none !important;
+    pointer-events: auto;
+}
+
+:root[data-reduced-motion="true"] .header-stack.compact .tag-row,
+:root[data-reduced-motion="true"] .header-stack.compact .header-action-btn--notify {
+    display: flex !important;
+    opacity: 1 !important;
+    max-height: none !important;
+    pointer-events: auto;
 }
 
 @keyframes resource-details-header-collapse {

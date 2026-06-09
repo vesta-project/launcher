@@ -1606,7 +1606,14 @@ const ResourceDetailsPage: Component<{
     const isVisible = activeTab() === "description";
     const scrollContainer = headerCollapse.getScrollContainer();
     const layoutRoot = headerCollapse.getPageRoot();
-    if (!isVisible || !html || !scrollContainer || !layoutRoot) return;
+    if (
+      !isVisible ||
+      !html ||
+      !scrollContainer ||
+      !layoutRoot ||
+      reducedMotion()
+    )
+      return;
 
     requestAnimationFrame(() => {
       const stackEl = layoutRoot.querySelector<HTMLElement>(

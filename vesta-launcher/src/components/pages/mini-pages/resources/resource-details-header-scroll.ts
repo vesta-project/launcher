@@ -14,6 +14,13 @@ export function shouldUseCssDrivenHeaderProgress(reducedMotion: boolean): boolea
 	return supportsScrollDrivenHeaderCollapse() && !reducedMotion;
 }
 
+export function isHeaderCollapseEnabled(
+	isDesktop: boolean,
+	reducedMotion: boolean,
+): boolean {
+	return isDesktop && !reducedMotion;
+}
+
 export function getScrollParent(el: HTMLElement | null | undefined): HTMLElement | undefined {
 	if (!el) return undefined;
 	let node: HTMLElement | null = el.parentElement;
@@ -125,8 +132,11 @@ export function createHeaderCollapseController(options: {
 		}
 	};
 
+	const isCollapseEnabled = () =>
+		isHeaderCollapseEnabled(options.isDesktop(), options.prefersReducedMotion());
+
 	const runUpdate = (container: HTMLElement) => {
-		if (!options.isDesktop()) {
+		if (!isCollapseEnabled()) {
 			resetHeader();
 			return;
 		}
@@ -160,9 +170,9 @@ export function createHeaderCollapseController(options: {
 
 	createEffect(() => {
 		const root = pageRoot();
-		const desktop = options.isDesktop();
+		const collapseEnabled = isCollapseEnabled();
 
-		if (!root || !desktop) {
+		if (!root || !collapseEnabled) {
 			resetHeader();
 			setScrollContainer(undefined);
 			return;
@@ -206,7 +216,10 @@ export function createHeaderCollapseController(options: {
 	});
 
 	createEffect(() => {
-		if (!options.isDesktop()) return;
+		if (!isCollapseEnabled()) {
+			resetHeader();
+			return;
+		}
 		headerEl();
 		scheduleUpdate();
 	});
@@ -214,6 +227,10 @@ export function createHeaderCollapseController(options: {
 	createEffect(() => {
 		options.prefersReducedMotion();
 		lastProgress = -1;
+		if (!isCollapseEnabled()) {
+			resetHeader();
+			return;
+		}
 		scheduleUpdate();
 	});
 

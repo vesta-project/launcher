@@ -2,10 +2,22 @@ import { describe, expect, it } from "vitest";
 import {
 	applyHeaderCollapseToElement,
 	findPageScrollContainer,
+	isHeaderCollapseEnabled,
 	resetHeaderCollapseElement,
 	shouldUseCssDrivenHeaderProgress,
 	supportsScrollDrivenHeaderCollapse,
 } from "./resource-details-header-scroll";
+
+describe("isHeaderCollapseEnabled", () => {
+	it("is disabled on mobile or when reduced motion is enabled", () => {
+		expect(isHeaderCollapseEnabled(false, false)).toBe(false);
+		expect(isHeaderCollapseEnabled(true, true)).toBe(false);
+	});
+
+	it("is enabled on desktop without reduced motion", () => {
+		expect(isHeaderCollapseEnabled(true, false)).toBe(true);
+	});
+});
 
 describe("shouldUseCssDrivenHeaderProgress", () => {
 	it("returns false when reduced motion is enabled", () => {
