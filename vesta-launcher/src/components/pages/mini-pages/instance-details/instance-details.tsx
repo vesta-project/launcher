@@ -64,6 +64,7 @@ import {
   updateInstanceModpackVersion,
 } from "@utils/instances";
 import type { Instance } from "@utils/instances";
+import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
@@ -1428,8 +1429,28 @@ export default function InstanceDetails(
   };
 
   const rolloutModpackUpdate = async () => {
+    const inst = instance();
     const vid = selectedModpackVersionId();
-    if (!vid) return;
+    if (!inst || !vid) return;
+
+    const targetVersion = modpackVersions()?.find(
+      (version) => String(version.id) === vid,
+    );
+    const nextMcVersion = targetVersion?.game_versions?.[0];
+
+    if (
+      nextMcVersion &&
+      nextMcVersion !== inst.minecraftVersion &&
+      !(await confirmMinecraftVersionChange({
+        instanceName: inst.name,
+        currentVersion: inst.minecraftVersion,
+        nextVersion: nextMcVersion,
+        context: "modpack-update",
+      }))
+    ) {
+      return;
+    }
+
     await updateModpackVersion(vid);
   };
 
@@ -1497,6 +1518,18 @@ export default function InstanceDetails(
           });
         }
       }
+    }
+
+    if (
+      nextMcVersion !== inst.minecraftVersion &&
+      !(await confirmMinecraftVersionChange({
+        instanceName: inst.name,
+        currentVersion: inst.minecraftVersion,
+        nextVersion: nextMcVersion,
+        context: "manual",
+      }))
+    ) {
+      return;
     }
 
     setBusy(true);
