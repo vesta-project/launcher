@@ -136,21 +136,6 @@ impl Task for InstallInstanceTask {
                 game_dir
             );
 
-            let spec = InstallSpec {
-                version_id: instance.minecraft_version.clone(),
-                modloader: parse_modloader(instance.modloader.as_deref().unwrap_or("vanilla")),
-                modloader_version: instance.modloader_version.clone(),
-                data_dir: data_dir.clone(),
-                game_dir: game_dir.clone(),
-                java_path: instance.java_path.as_ref().map(PathBuf::from),
-                dry_run,
-                concurrency: 8,
-                force_overwrite_configs: false,
-                repair_scope: piston_lib::game::installer::types::RepairScope::Full,
-                remediation_policy:
-                    piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
-            };
-
             // Background task to handle pause/resume UI updates
             let pause_app_handle = app_handle.clone();
             let pause_notification_id = notification_id.clone();
@@ -170,6 +155,34 @@ impl Task for InstallInstanceTask {
                     last_step_current: std::sync::atomic::AtomicI32::new(-1),
                     last_step_total: std::sync::atomic::AtomicI32::new(-1),
                 });
+
+            let java_path = if dry_run {
+                instance.java_path.as_ref().map(PathBuf::from)
+            } else {
+                let verified = crate::utils::java::ensure_java_for_instance(
+                    &app_handle,
+                    &instance,
+                    Some(reporter.as_ref()),
+                    None,
+                )
+                .await?;
+                Some(PathBuf::from(verified))
+            };
+
+            let spec = InstallSpec {
+                version_id: instance.minecraft_version.clone(),
+                modloader: parse_modloader(instance.modloader.as_deref().unwrap_or("vanilla")),
+                modloader_version: instance.modloader_version.clone(),
+                data_dir: data_dir.clone(),
+                game_dir: game_dir.clone(),
+                java_path,
+                dry_run,
+                concurrency: 8,
+                force_overwrite_configs: false,
+                repair_scope: piston_lib::game::installer::types::RepairScope::Full,
+                remediation_policy:
+                    piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            };
 
             tauri::async_runtime::spawn(async move {
                 while pause_rx_watcher.changed().await.is_ok() {

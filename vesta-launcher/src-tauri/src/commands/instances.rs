@@ -1208,24 +1208,16 @@ pub async fn launch_instance(
     let data_dir = crate::utils::db_manager::get_app_config_dir()
         .map_err(|e| format!("Failed to get app config dir: {}", e))?;
 
-    // Determine Java path
-    let java_path_str = if !instance_data.use_global_java_path && instance_data.java_path.is_some()
-    {
-        instance_data.java_path.clone().unwrap()
-    } else {
-        // Use global setting if linked or local is missing
-        if let Some(path) = app_config.java_path.clone() {
-            if !path.is_empty() {
-                path
-            } else {
-                self::resolve_java_path_for_version(&app_handle, &instance_data.minecraft_version)
-                    .await?
-            }
-        } else {
-            self::resolve_java_path_for_version(&app_handle, &instance_data.minecraft_version)
-                .await?
-        }
-    };
+    let java_path_str = crate::utils::java::ensure_java_for_instance(
+        &app_handle,
+        &instance_data,
+        None,
+        Some(format!(
+            "repair_managed_java_launch_{}",
+            instance_data.slug()
+        )),
+    )
+    .await?;
 
     // Determine which data_dir to use
     let spec_data_dir = if data_dir.join("data").exists() {
@@ -2450,35 +2442,3 @@ pub async fn update_instance_modpack_version(
     Ok(())
 }
 
-async fn resolve_java_path_for_version(
-    app_handle: &tauri::AppHandle,
-    mc_version: &str,
-) -> Result<String, String> {
-    let required_major =
-        crate::utils::java::resolve_required_java_major(app_handle, mc_version).await?;
-
-    let global_path = (|| -> Option<String> {
-        use crate::schema::config::global_java_paths::dsl::*;
-        use crate::utils::db::get_config_conn;
-        let mut conn = get_config_conn().ok()?;
-        global_java_paths
-            .filter(major_version.eq(required_major as i32))
-            .order((is_active.desc(), id.desc()))
-            .select(path)
-            .first::<String>(&mut conn)
-            .ok()
-    })();
-
-    Ok(global_path.unwrap_or_else(|| {
-        // Try to find java in PATH
-        #[cfg(windows)]
-        let default_java = "java.exe";
-        #[cfg(not(windows))]
-        let default_java = "java";
-
-        which::which(default_java)
-            .ok()
-            .and_then(|p| p.to_str().map(|s| s.to_string()))
-            .unwrap_or_else(|| default_java.to_string())
-    }))
-}

@@ -105,7 +105,7 @@ pub async fn launch_game(
         log::info!("Found loader manifest at: {:?}", manifest_path);
 
         // Try to load as a pre-resolved UnifiedManifest first (this is what our installer writes)
-        match UnifiedManifest::load_from_path(&manifest_path) {
+        match UnifiedManifest::normalize_and_save_if_stale(&manifest_path) {
             Ok(m) => {
                 log::info!("Successfully loaded pre-resolved UnifiedManifest");
                 m

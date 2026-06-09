@@ -223,6 +223,18 @@ impl Task for ImportResourceResyncTask {
                 return Err("Resync cancelled".to_string());
             }
 
+            ctx.update_description("Setting up Java runtime...".to_string());
+            if let Err(e) = crate::utils::java::ensure_java_for_instance(
+                &app_handle,
+                &target_instance,
+                None,
+                None,
+            )
+            .await
+            {
+                return Err(format!("Java setup failed after import: {}", e));
+            }
+
             if target_instance.modpack_id.is_some()
                 && target_instance.modpack_version_id.is_some()
                 && target_instance.modpack_platform.is_some()

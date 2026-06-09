@@ -756,6 +756,10 @@ async fn finish_update(
 
     spawn_manifest_resource_linking(app_handle, inst.id, game_dir, &manifest);
 
+    crate::utils::java::ensure_java_for_instance(app_handle, inst, None, None)
+        .await
+        .map_err(|e| format!("Java setup failed after modpack update: {}", e))?;
+
     // Update the database
     let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
     use crate::schema::instance::dsl as inst_dsl;

@@ -203,12 +203,7 @@ impl UnifiedManifest {
             }
         }
 
-        // Apply architecture-aware native filtering based on policy
-        // On ARM64, if both generic (e.g., "natives-osx") and arch-specific (e.g., "natives-osx-arm64")
-        // variants exist for the same library, skip the generic one.
-        libraries = filter_native_libraries_by_arch_policy(libraries, os);
-
-        UnifiedManifest {
+        let mut manifest = UnifiedManifest {
             id,
             main_class,
             minecraft_version,
@@ -223,7 +218,59 @@ impl UnifiedManifest {
             version_type: vanilla.version_type.clone(),
             is_legacy: crate::game::launcher::version_parser::is_legacy_version(&vanilla),
             logging: vanilla.logging.clone(),
+        };
+        manifest.apply_native_arch_policy(os);
+        manifest
+    }
+
+    /// Drop redundant generic native libraries when an arch-specific variant exists
+    /// for the same Maven group:artifact. Returns true if the library list changed.
+    pub fn apply_native_arch_policy(&mut self, os: OsType) -> bool {
+        let before = self.libraries.len();
+        self.libraries =
+            filter_native_libraries_by_arch_policy(std::mem::take(&mut self.libraries), os);
+        self.libraries.len() != before
+    }
+
+    pub fn save_to_path(&self, path: &std::path::Path) -> anyhow::Result<()> {
+        if path.exists() {
+            let meta = std::fs::symlink_metadata(path)?;
+            if meta.file_type().is_symlink() {
+                anyhow::bail!("refusing to write manifest through symlink: {:?}", path);
+            }
         }
+
+        let parent = path
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("manifest path has no parent: {:?}", path))?;
+        let file_name = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("manifest.json");
+        let temp_path = parent.join(format!(".{file_name}.tmp"));
+
+        let json = serde_json::to_string_pretty(self)?;
+        std::fs::write(&temp_path, json)?;
+        std::fs::rename(&temp_path, path)?;
+        Ok(())
+    }
+
+    /// Load a unified manifest, apply native-arch normalization, and persist when stale.
+    pub fn normalize_and_save_if_stale(path: &std::path::Path) -> anyhow::Result<Self> {
+        let mut manifest = Self::load_from_path(path)?;
+        if manifest.minecraft_version.is_empty() {
+            return Ok(manifest);
+        }
+
+        let os = OsType::current();
+        if manifest.apply_native_arch_policy(os) {
+            log::info!(
+                "[UnifiedManifest] Persisting normalized native libraries to {:?}",
+                path
+            );
+            manifest.save_to_path(path)?;
+        }
+        Ok(manifest)
     }
 
     /// Add processors and data from a Forge install profile
@@ -781,58 +828,41 @@ fn filter_native_libraries_by_arch_policy(
         return libraries;
     }
 
-    // Group native libraries by their base name (without classifier)
-    // to detect when both generic and arch-specific variants exist.
-    //
-    // TODO: This groups by group:artifact:version (first 3 Maven components),
-    // which means DIFFERENT VERSIONS of the same library (e.g. lwjgl:2.9.2
-    // and lwjgl:2.9.4) land in separate groups. On ARM64, if 2.9.2 only has
-    // generic natives ("natives-osx") and 2.9.4 has arch-specific ones
-    // ("natives-osx-arm64"), BOTH get through — and the extraction order
-    // determines which .dylib wins in the natives directory. If the x86_64
-    // one is extracted last, it overwrites the ARM64 one and causes
-    // UnsatisfiedLinkError.
-    //
-    // A more robust fix would group by group:artifact only (any version),
-    // so that a generic native from one version gets removed when an
-    // arch-specific native for the same library exists in any version.
+    // Group OS-matching native libraries by group:artifact (any version).
     let mut base_to_libs: HashMap<String, Vec<&UnifiedLibrary>> = HashMap::new();
     for lib in &libraries {
-        if lib.is_native {
-            // Extract base name without classifier
-            let base = lib.name.split(':').take(3).collect::<Vec<_>>().join(":");
-            base_to_libs.entry(base).or_insert_with(Vec::new).push(lib);
+        if !lib.is_native {
+            continue;
         }
+        if !lib
+            .classifier
+            .as_ref()
+            .is_some_and(|cl| os.classifier_matches(cl))
+        {
+            continue;
+        }
+        let base = maven_group_artifact(&lib.name)
+            .unwrap_or(lib.name.as_str())
+            .to_string();
+        base_to_libs.entry(base).or_insert_with(Vec::new).push(lib);
     }
 
-    // Filter: for each base library group, skip generic natives if arch-specific exist
+    // Filter: for each group, skip generic natives when an arch-specific sibling exists.
     let mut skip_names = std::collections::HashSet::new();
     for libs in base_to_libs.values() {
         let has_arch_specific = libs.iter().any(|lib| {
-            if let Some(cl) = &lib.classifier {
+            lib.classifier.as_ref().is_some_and(|cl| {
                 let cl_lower = cl.to_lowercase();
                 cl_lower.contains("arm64")
                     || cl_lower.contains("aarch64")
                     || cl_lower.contains("aarch_64")
-            } else {
-                false
-            }
+            })
         });
 
         if has_arch_specific {
-            // Mark all generic (no arch specifier) variants for removal
             for lib in libs {
                 if let Some(cl) = &lib.classifier {
-                    let has_arch_specifier = {
-                        let cl_lower = cl.to_lowercase();
-                        cl_lower.contains("arm64")
-                            || cl_lower.contains("aarch64")
-                            || cl_lower.contains("aarch_64")
-                            || cl_lower.contains("x86_64")
-                            || cl_lower.contains("x64")
-                            || cl_lower.contains("amd64")
-                    };
-                    if !has_arch_specifier {
+                    if os.should_skip_generic_native(cl, has_arch_specific) {
                         log::info!(
                             "[NativeArchPolicy] Skipping generic native {} (arch-specific variant exists)",
                             &lib.name
@@ -951,6 +981,134 @@ mod tests {
     }
 
     #[test]
+    fn filter_native_drops_generic_when_arch_specific_exists_across_versions() {
+        let libs = vec![
+            UnifiedLibrary {
+                name: "org.lwjgl.lwjgl:lwjgl-platform:2.9.4-nightly-20150209".to_string(),
+                path: "a.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: true,
+                classifier: Some("natives-osx-arm64".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            },
+            UnifiedLibrary {
+                name: "org.lwjgl.lwjgl:lwjgl-platform:2.9.2-nightly-20140822".to_string(),
+                path: "b.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: true,
+                classifier: Some("natives-osx".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            },
+        ];
+
+        let filtered = filter_native_libraries_by_arch_policy(libs, OsType::MacOSArm64);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered[0].classifier.as_deref(),
+            Some("natives-osx-arm64")
+        );
+    }
+
+    #[test]
+    fn filter_native_keeps_osx_when_only_linux_arm64_sibling_exists() {
+        let libs = vec![
+            UnifiedLibrary {
+                name: "org.lwjgl.lwjgl:lwjgl-platform:2.9.4-nightly-20150209".to_string(),
+                path: "a.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: true,
+                classifier: Some("natives-linux-arm64".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            },
+            UnifiedLibrary {
+                name: "org.lwjgl.lwjgl:lwjgl-platform:2.9.2-nightly-20140822".to_string(),
+                path: "b.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: true,
+                classifier: Some("natives-osx".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            },
+        ];
+
+        let filtered = filter_native_libraries_by_arch_policy(libs, OsType::MacOSArm64);
+        assert_eq!(filtered.len(), 2);
+    }
+
+    #[test]
+    fn normalize_and_save_if_stale_persists_normalized_native_libraries() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("forge-loader-test.json");
+
+        let stale = UnifiedManifest {
+            id: "forge-loader-test".to_string(),
+            main_class: "net.minecraft.launchwrapper.Launch".to_string(),
+            minecraft_version: "1.12.2".to_string(),
+            java_version: None,
+            libraries: vec![
+                UnifiedLibrary {
+                    name: "org.lwjgl.lwjgl:lwjgl-platform:2.9.4-nightly-20150209".to_string(),
+                    path: "a.jar".to_string(),
+                    download_url: None,
+                    sha1: None,
+                    size: None,
+                    is_native: true,
+                    classifier: Some("natives-osx-arm64".to_string()),
+                    extract_rules: None,
+                    include_in_classpath: true,
+                },
+                UnifiedLibrary {
+                    name: "org.lwjgl.lwjgl:lwjgl-platform:2.9.2-nightly-20140822".to_string(),
+                    path: "b.jar".to_string(),
+                    download_url: None,
+                    sha1: None,
+                    size: None,
+                    is_native: true,
+                    classifier: Some("natives-osx".to_string()),
+                    extract_rules: None,
+                    include_in_classpath: true,
+                },
+            ],
+            asset_index: None,
+            game_arguments: vec![],
+            jvm_arguments: vec![],
+            processors: vec![],
+            data: HashMap::new(),
+            assets: None,
+            version_type: None,
+            is_legacy: true,
+            logging: None,
+        };
+
+        stale.save_to_path(&path).expect("write stale manifest");
+
+        let loaded =
+            UnifiedManifest::normalize_and_save_if_stale(&path).expect("normalize manifest");
+        assert_eq!(loaded.libraries.len(), 1);
+        assert_eq!(
+            loaded.libraries[0].classifier.as_deref(),
+            Some("natives-osx-arm64")
+        );
+
+        let on_disk: UnifiedManifest =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(on_disk.libraries.len(), 1);
+
+        let reloaded = UnifiedManifest::load_from_path(&path).expect("reload manifest");
+        assert_eq!(reloaded.libraries.len(), 1);
+    }
+
     fn forge_sparse_libraries_use_mojang_or_modrinth_mirror_not_forge_maven() {
         let forge = Some("forge");
         assert_eq!(

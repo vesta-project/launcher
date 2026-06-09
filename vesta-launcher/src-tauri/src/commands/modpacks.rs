@@ -968,7 +968,7 @@ async fn prepare_instance(
                         current_java_path = Some(gp.path);
                     } else {
                         log::info!(
-                            "[prepare_instance] No recommended Java {} found in global config",
+                            "[prepare_instance] No global Java path for {}; instance will use managed Java via use_global_java_path",
                             recommended_major
                         );
                     }

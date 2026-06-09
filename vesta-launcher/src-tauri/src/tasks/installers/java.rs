@@ -1,14 +1,8 @@
-use crate::models::java::GlobalJavaPath;
 use crate::notifications::models::ProgressUpdate;
-use crate::schema::config::global_java_paths::dsl::*;
 use crate::tasks::manager::{Task, TaskContext};
-use crate::utils::db::get_config_conn;
-use crate::utils::db_manager::get_app_config_dir;
+use crate::utils::java::install_managed_java;
 use anyhow::Result;
-use diesel::prelude::*;
-use piston_lib::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
 use piston_lib::game::installer::types::{NotificationActionSpec, ProgressReporter};
-use tauri::Emitter;
 
 pub struct DownloadJavaTask {
     pub major_version: u32,
@@ -46,46 +40,13 @@ impl Task for DownloadJavaTask {
         let major = self.major_version;
 
         Box::pin(async move {
-            let jre_dir = get_app_config_dir()
-                .map_err(|e| e.to_string())?
-                .join("data")
-                .join("jre");
-
             let reporter = TaskProgressReporter {
                 ctx: ctx.clone(),
                 last_percent: std::sync::atomic::AtomicI32::new(-1),
                 last_emit: std::sync::Mutex::new(std::time::Instant::now()),
             };
 
-            let version = JavaVersion::new(major);
-
-            let java_path = get_or_install_jre(&jre_dir, &version, piston_lib::client::shared_client(), &reporter)
-                .await
-                .map_err(|e| e.to_string())?;
-
-            // Save to database
-            let mut conn = get_config_conn().map_err(|e| e.to_string())?;
-            conn.transaction(|conn| {
-                diesel::sql_query(
-                    "UPDATE global_java_paths SET is_active = 0 WHERE major_version = ?",
-                )
-                .bind::<diesel::sql_types::Integer, _>(major as i32)
-                .execute(conn)?;
-
-                diesel::sql_query(
-                    "INSERT INTO global_java_paths (major_version, path, is_managed, is_active) \
-                     VALUES (?, ?, 1, 1) \
-                     ON CONFLICT(major_version, path) DO UPDATE SET is_active = 1, is_managed = 1",
-                )
-                .bind::<diesel::sql_types::Integer, _>(major as i32)
-                .bind::<diesel::sql_types::Text, _>(&java_path.to_string_lossy().to_string())
-                .execute(conn)?;
-
-                Ok(())
-            })
-            .map_err(|e: diesel::result::Error| e.to_string())?;
-            // Emit event to notify frontend to refetch Java paths
-            let _ = ctx.app_handle.emit("java-paths-updated", ());
+            install_managed_java(&ctx.app_handle, major, &reporter).await?;
             Ok(())
         })
     }

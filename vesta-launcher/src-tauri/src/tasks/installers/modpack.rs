@@ -328,7 +328,7 @@ impl Task for InstallModpackTask {
                 metadata,
                 &game_dir,
                 &data_dir,
-                reporter,
+                reporter.clone(),
                 Some(resolver.clone()),
                 java_path,
             )
@@ -380,18 +380,39 @@ impl Task for InstallModpackTask {
                 .set((
                     inst_dsl::modloader.eq(Some(updated_modloader)),
                     inst_dsl::modloader_version.eq(updated_modloader_version),
-                    inst_dsl::installation_status.eq(Some("installed".to_string())),
                 ))
                 .execute(&mut conn)
             {
                 log::error!("[ModpackTask] Failed to update instance metadata: {}", e);
             }
 
-            // Fetch the updated instance to emit it
-            let final_instance: Instance = inst_dsl::instance
+            let mut final_instance: Instance = inst_dsl::instance
                 .find(instance.id)
                 .first(&mut conn)
                 .map_err(|e| e.to_string())?;
+
+            reporter.set_message("Setting up Java runtime...");
+            crate::utils::java::ensure_java_for_instance(
+                &app_handle,
+                &final_instance,
+                Some(reporter.as_ref()),
+                None,
+            )
+            .await
+            .map_err(|e| format!("Java setup failed after modpack install: {}", e))?;
+
+            if let Err(e) =
+                diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
+                    .set(inst_dsl::installation_status.eq(Some("installed".to_string())))
+                    .execute(&mut conn)
+            {
+                log::error!("[ModpackTask] Failed to update installation status: {}", e);
+            } else {
+                final_instance = inst_dsl::instance
+                    .find(instance.id)
+                    .first(&mut conn)
+                    .map_err(|e| e.to_string())?;
+            }
 
             // Emit update event
             use tauri::Emitter;

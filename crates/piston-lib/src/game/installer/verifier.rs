@@ -332,7 +332,7 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     };
 
     // Try to load a UnifiedManifest (handles both VersionManifest and UnifiedManifest)
-    let unified = match crate::game::launcher::unified_manifest::UnifiedManifest::load_from_path(
+    let unified = match crate::game::launcher::unified_manifest::UnifiedManifest::normalize_and_save_if_stale(
         &manifest_path,
     ) {
         Ok(u) => u,

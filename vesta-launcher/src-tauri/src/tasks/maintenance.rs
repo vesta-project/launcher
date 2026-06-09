@@ -573,6 +573,25 @@ impl Task for RepairInstanceTask {
                 _ => piston_lib::game::installer::types::RepairScope::Full,
             };
 
+            if repair_scope == "full" || repair_scope == "versions" {
+                let installed_id = spec.installed_version_id();
+                let version_manifest_path = spec
+                    .versions_dir()
+                    .join(&installed_id)
+                    .join(format!("{installed_id}.json"));
+                if version_manifest_path.exists() {
+                    if let Err(e) = piston_lib::game::launcher::unified_manifest::UnifiedManifest::normalize_and_save_if_stale(
+                        &version_manifest_path,
+                    ) {
+                        log::warn!(
+                            "[RepairInstanceTask] Failed to normalize version manifest at {:?}: {}",
+                            version_manifest_path,
+                            e
+                        );
+                    }
+                }
+            }
+
             // Run verification (blocking — may take a moment for SHA1 checks)
             ctx.update_progress(20, Some(0), Some(3));
             let verify_result = piston_lib::game::installer::verify_instance(&spec)
@@ -759,6 +778,18 @@ impl Task for RepairInstanceTask {
                 ),
             };
             ctx.update_full(95, final_desc, Some(3), Some(3));
+
+            ctx.update_description("Setting up Java runtime...".to_string());
+            if let Err(e) = crate::utils::java::ensure_java_for_instance(
+                &app_handle,
+                &inst,
+                None,
+                None,
+            )
+            .await
+            {
+                return Err(format!("Java setup failed after repair: {}", e));
+            }
 
             // Update instance status to installed (same as InstallInstanceTask)
             if inst.id > 0 {

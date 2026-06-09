@@ -436,18 +436,9 @@ pub async fn install_instance(
             let installed_dir = spec.versions_dir().join(&installed_id);
             tokio::fs::create_dir_all(&installed_dir).await?;
             let version_json_path = installed_dir.join(format!("{}.json", installed_id));
-
-            // Remove read-only flag if the file exists (left over from a previous install)
-            if version_json_path.exists() {
-                let mut perms = tokio::fs::metadata(&version_json_path).await?.permissions();
-                if perms.readonly() {
-                    perms.set_readonly(false);
-                    tokio::fs::set_permissions(&version_json_path, perms).await?;
-                }
-            }
-
-            let version_json = serde_json::to_string_pretty(&unified)?;
-            tokio::fs::write(&version_json_path, version_json).await?;
+            let unified_for_save = unified.clone();
+            tokio::task::spawn_blocking(move || unified_for_save.save_to_path(&version_json_path))
+                .await??;
         }
     }
 
