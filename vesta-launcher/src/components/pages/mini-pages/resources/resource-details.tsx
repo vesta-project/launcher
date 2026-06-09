@@ -7,6 +7,7 @@ import RightArrowIcon from "@assets/right-arrow.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
+import { reducedMotion } from "@stores/settings";
 import {
   findBestVersion,
   ResourceDependency,
@@ -447,6 +448,7 @@ const ResourceDetailsPage: Component<{
 
   const headerCollapse = createHeaderCollapseController({
     isDesktop: isDesktopHeaderAnimation,
+    prefersReducedMotion: reducedMotion,
     classNames: {
       compact: styles.compact,
       floating: styles["is-floating"],

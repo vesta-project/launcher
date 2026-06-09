@@ -10,6 +10,10 @@ export function supportsScrollDrivenHeaderCollapse(): boolean {
 	return typeof CSS !== "undefined" && CSS.supports("animation-timeline", "scroll()");
 }
 
+export function shouldUseCssDrivenHeaderProgress(reducedMotion: boolean): boolean {
+	return supportsScrollDrivenHeaderCollapse() && !reducedMotion;
+}
+
 export function getScrollParent(el: HTMLElement | null | undefined): HTMLElement | undefined {
 	if (!el) return undefined;
 	let node: HTMLElement | null = el.parentElement;
@@ -87,9 +91,9 @@ export function resetHeaderCollapseElement(
 
 export function createHeaderCollapseController(options: {
 	isDesktop: Accessor<boolean>;
+	prefersReducedMotion: Accessor<boolean>;
 	classNames: HeaderCollapseClassNames;
 }): HeaderCollapseController {
-	const cssDrivenProgress = supportsScrollDrivenHeaderCollapse();
 	const [pageRoot, setPageRoot] = createSignal<HTMLDivElement | undefined>();
 	const [headerEl, setHeaderElement] = createSignal<HTMLElement | undefined>();
 	const [scrollContainer, setScrollContainer] = createSignal<HTMLElement | undefined>();
@@ -97,17 +101,28 @@ export function createHeaderCollapseController(options: {
 	let lastProgress = -1;
 	let scrollRaf: number | null = null;
 
+	const useCssDrivenProgress = () =>
+		shouldUseCssDrivenHeaderProgress(options.prefersReducedMotion());
+
 	const applyToHeader = (progress: number, compact: boolean) => {
 		const header = headerEl();
 		if (!header) return;
-		applyHeaderCollapseToElement(header, progress, compact, options.classNames, cssDrivenProgress);
+		applyHeaderCollapseToElement(
+			header,
+			progress,
+			compact,
+			options.classNames,
+			useCssDrivenProgress(),
+		);
 	};
 
 	const resetHeader = () => {
 		wasCompact = false;
 		lastProgress = -1;
 		const header = headerEl();
-		if (header) resetHeaderCollapseElement(header, options.classNames, cssDrivenProgress);
+		if (header) {
+			resetHeaderCollapseElement(header, options.classNames, useCssDrivenProgress());
+		}
 	};
 
 	const runUpdate = (container: HTMLElement) => {
@@ -193,6 +208,12 @@ export function createHeaderCollapseController(options: {
 	createEffect(() => {
 		if (!options.isDesktop()) return;
 		headerEl();
+		scheduleUpdate();
+	});
+
+	createEffect(() => {
+		options.prefersReducedMotion();
+		lastProgress = -1;
 		scheduleUpdate();
 	});
 

@@ -3,7 +3,21 @@ import {
 	applyHeaderCollapseToElement,
 	findPageScrollContainer,
 	resetHeaderCollapseElement,
+	shouldUseCssDrivenHeaderProgress,
+	supportsScrollDrivenHeaderCollapse,
 } from "./resource-details-header-scroll";
+
+describe("shouldUseCssDrivenHeaderProgress", () => {
+	it("returns false when reduced motion is enabled", () => {
+		expect(shouldUseCssDrivenHeaderProgress(true)).toBe(false);
+	});
+
+	it("matches scroll support when reduced motion is disabled", () => {
+		expect(shouldUseCssDrivenHeaderProgress(false)).toBe(
+			supportsScrollDrivenHeaderCollapse(),
+		);
+	});
+});
 
 describe("findPageScrollContainer", () => {
 	it("prefers the marked page scroll container", () => {
