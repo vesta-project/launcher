@@ -14,6 +14,7 @@ pub mod db_manager;
 mod errors;
 pub mod file_drop;
 pub mod instance_helpers;
+pub mod instance_runtime;
 pub mod process_state;
 pub mod sanitize;
 pub mod texture;

@@ -361,35 +361,25 @@ impl Task for InstallModpackTask {
                 }
             };
 
-            // 1. Ensure the instance has the correct modloader info from the actual modpack metadata
-            // This acts as a recovery if the frontend failed to send the correct metadata.
+            // Sync MC/loader from parsed modpack metadata (recovery if frontend sent stale data).
+            let runtime_fields =
+                crate::utils::instance_runtime::InstanceRuntimeFields::from_metadata(&metadata);
+            log::info!(
+                "[ModpackTask] Finalizing instance runtime: MC {}, loader={:?}",
+                runtime_fields.minecraft_version,
+                runtime_fields.modloader,
+            );
+
+            let mut final_instance =
+                crate::utils::instance_runtime::sync_fields(instance.id, &runtime_fields)
+                .map_err(|e| {
+                    log::error!("[ModpackTask] Failed to sync instance runtime: {}", e);
+                    e
+                })?;
+
             let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl as inst_dsl;
             use diesel::prelude::*;
-
-            let updated_modloader = metadata.modloader_type.to_lowercase();
-            let updated_modloader_version = metadata.modloader_version.clone();
-
-            log::info!(
-                "[ModpackTask] Finalizing instance metadata: loader={}, loader_version={:?}",
-                updated_modloader,
-                updated_modloader_version
-            );
-
-            if let Err(e) = diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
-                .set((
-                    inst_dsl::modloader.eq(Some(updated_modloader)),
-                    inst_dsl::modloader_version.eq(updated_modloader_version),
-                ))
-                .execute(&mut conn)
-            {
-                log::error!("[ModpackTask] Failed to update instance metadata: {}", e);
-            }
-
-            let mut final_instance: Instance = inst_dsl::instance
-                .find(instance.id)
-                .first(&mut conn)
-                .map_err(|e| e.to_string())?;
 
             reporter.set_message("Setting up Java runtime...");
             crate::utils::java::ensure_java_for_instance(

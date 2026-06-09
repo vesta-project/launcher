@@ -516,11 +516,44 @@ impl Task for RepairInstanceTask {
             let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl::*;
 
-            let inst = instance
+            let mut inst = instance
                 .find(inst_id)
                 .first::<Instance>(&mut conn)
                 .map_err(|e| format!("Instance not found: {}", e))?;
             let app_handle = ctx.app_handle.clone();
+
+            let config_dir =
+                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+            let data_dir = config_dir.join("data");
+            let game_dir = inst
+                .game_directory
+                .as_ref()
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+
+            if let Ok(modpack_manifest) =
+                piston_lib::game::modpack::manifest::ModpackManifest::load(&game_dir)
+            {
+                if crate::utils::instance_runtime::runtime_drifts_from_manifest(
+                    &inst,
+                    &modpack_manifest,
+                ) {
+                    log::info!(
+                        "[RepairInstanceTask] Syncing instance runtime from modpack manifest (MC {} → {}, loader {:?} → {} {:?})",
+                        inst.minecraft_version,
+                        modpack_manifest.minecraft_version,
+                        inst.modloader,
+                        modpack_manifest.modloader.loader_type,
+                        modpack_manifest.modloader.version,
+                    );
+                    inst = crate::utils::instance_runtime::sync_fields(
+                        inst.id,
+                        &crate::utils::instance_runtime::InstanceRuntimeFields::from_manifest(
+                            &modpack_manifest,
+                        ),
+                    )?;
+                }
+            }
 
             // Resolve repair scope
             let repair_scope = match scope.as_deref() {
@@ -538,14 +571,6 @@ impl Task for RepairInstanceTask {
                 Some(3),
             );
 
-            let config_dir =
-                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
-            let data_dir = config_dir.join("data");
-            let game_dir = inst
-                .game_directory
-                .as_ref()
-                .map(std::path::PathBuf::from)
-                .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
             let version_id = inst.minecraft_version.clone();
 
             let mut spec = piston_lib::game::installer::types::InstallSpec::new(

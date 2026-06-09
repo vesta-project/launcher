@@ -10,6 +10,7 @@ use piston_lib::game::modpack::manifest::ModpackManifest;
 use crate::tasks::installers::modpack::{
     enrich_manifest_platform_hashes, spawn_manifest_resource_linking,
 };
+use crate::tasks::installers::InstallInstanceTask;
 use piston_lib::game::modpack::types::ModpackFormat;
 use piston_lib::game::modpack::parser::{
     read_zip_override_entry, read_zip_override_text,
@@ -152,8 +153,17 @@ impl Task for UpdateModpackTask {
             if action_tree.is_empty() && total_actions == 0 {
                 // No changes needed — just update the version metadata
                 ctx.update_full(100, "Modpack is already up to date.".to_string(), Some(6), Some(6));
-                finish_update(&app_handle, &inst, &new_manifest, &new_version_id, &game_dir, &zip_path)
-                    .await?;
+                finish_update(
+                    &app_handle,
+                    &ctx,
+                    &inst,
+                    &old_manifest,
+                    &new_manifest,
+                    &new_version_id,
+                    &game_dir,
+                    &zip_path,
+                )
+                .await?;
                 status_guard.mark_success();
                 return Ok(());
             }
@@ -340,7 +350,9 @@ impl Task for UpdateModpackTask {
             );
             finish_update(
                 &app_handle,
+                &ctx,
                 &inst,
+                &old_manifest,
                 &new_manifest,
                 &new_version_id,
                 &game_dir,
@@ -737,14 +749,21 @@ async fn download_bytes(url: &str, expected_sha1: Option<&str>) -> Result<Vec<u8
 /// Finalize the update: persist manifest, update DB, emit events.
 async fn finish_update(
     app_handle: &tauri::AppHandle,
+    ctx: &TaskContext,
     inst: &crate::models::instance::Instance,
+    old_manifest: &ModpackManifest,
     new_manifest: &ModpackManifest,
     new_version_id: &str,
     game_dir: &std::path::Path,
     source_zip_path: &std::path::Path,
 ) -> Result<(), String> {
+    let runtime_changed =
+        crate::utils::instance_runtime::manifest_runtime_identity_changed(
+            old_manifest,
+            new_manifest,
+        );
+
     // Persist the new manifest as $O$ for next update
-    // Update the installed_at timestamp to now
     let mut manifest = new_manifest.clone();
     manifest.installed_at = chrono::Utc::now().to_rfc3339();
     manifest.source_zip_path = Some(source_zip_path.to_path_buf());
@@ -756,11 +775,10 @@ async fn finish_update(
 
     spawn_manifest_resource_linking(app_handle, inst.id, game_dir, &manifest);
 
-    crate::utils::java::ensure_java_for_instance(app_handle, inst, None, None)
-        .await
-        .map_err(|e| format!("Java setup failed after modpack update: {}", e))?;
+    let runtime_fields =
+        crate::utils::instance_runtime::InstanceRuntimeFields::from_manifest(new_manifest);
+    crate::utils::instance_runtime::sync_fields(inst.id, &runtime_fields)?;
 
-    // Update the database
     let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
     use crate::schema::instance::dsl as inst_dsl;
     use diesel::prelude::*;
@@ -771,23 +789,58 @@ async fn finish_update(
             inst_dsl::installation_status.eq(Some("installed".to_string())),
         ))
         .execute(&mut conn)
-        .map_err(|e| format!("Failed to update instance: {}", e))?;
+        .map_err(|e| format!("Failed to update modpack version metadata: {}", e))?;
 
-    // Emit update event
-    let updated: crate::models::instance::Instance = inst_dsl::instance
+    let mut updated = inst_dsl::instance
         .find(inst.id)
-        .first(&mut conn)
+        .first::<crate::models::instance::Instance>(&mut conn)
         .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
 
+    if runtime_changed {
+        log::info!(
+            "[UpdateModpackTask] MC/loader changed {} {}/{} → {} {}/{}; reinstalling runtime",
+            old_manifest.minecraft_version,
+            old_manifest.modloader.loader_type,
+            old_manifest
+                .modloader
+                .version
+                .as_deref()
+                .unwrap_or("?"),
+            new_manifest.minecraft_version,
+            new_manifest.modloader.loader_type,
+            new_manifest
+                .modloader
+                .version
+                .as_deref()
+                .unwrap_or("?"),
+        );
+        ctx.update_description("Reinstalling game runtime for new Minecraft version...".to_string());
+        let mut install_task = InstallInstanceTask::new(updated.clone());
+        install_task.set_update_notification_title(false);
+        install_task.run(ctx.clone()).await?;
+
+        updated = inst_dsl::instance
+            .find(inst.id)
+            .first::<crate::models::instance::Instance>(&mut conn)
+            .map_err(|e| format!("Failed to fetch instance after runtime install: {}", e))?;
+    }
+
+    crate::utils::java::ensure_java_for_instance(app_handle, &updated, None, None)
+        .await
+        .map_err(|e| format!("Java setup failed after modpack update: {}", e))?;
+
     use tauri::Emitter;
+    let _ = app_handle.emit("core://instance-updated", updated.clone());
     let _ = app_handle.emit("core://instance-installed", updated);
 
     clear_pending_modpack_update(game_dir);
 
     log::info!(
-        "[UpdateModpackTask] Update complete: {} → {}",
+        "[UpdateModpackTask] Update complete: {} → {} (MC {} {})",
         inst.modpack_version_id.as_deref().unwrap_or("?"),
-        new_version_id
+        new_version_id,
+        runtime_fields.minecraft_version,
+        runtime_fields.modloader.as_deref().unwrap_or("vanilla"),
     );
 
     Ok(())
