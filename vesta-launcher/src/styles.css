@@ -673,7 +673,10 @@ button {
     }
 }
 
-:root[data-reduced-motion="true"] * {
+:root[data-reduced-motion="true"]
+    *:not(.spinner):not([data-essential-motion]):not([class*="spinner"]):not(
+        [class*="Spinner"]
+    ) {
     animation-duration: 0ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0ms !important;

@@ -137,12 +137,6 @@
 	.play-button:active {
 		transform: none;
 	}
-
-	.instance-card-spinner {
-		animation: none;
-		border-top-color: transparent;
-		border-left-color: var(--instance-card-text-main);
-	}
 }
 
 /* Also respect the explicit data attribute override */
@@ -178,12 +172,6 @@
 
 :root[data-reduced-motion="true"] .play-button:active {
 	transform: none;
-}
-
-:root[data-reduced-motion="true"] .instance-card-spinner {
-	animation: none;
-	border-top-color: transparent;
-	border-left-color: var(--instance-card-text-main);
 }
 
 .instance-card-top {
@@ -403,6 +391,16 @@
 	border-top-color: var(--instance-card-text-main);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
+}
+
+:global(:root[data-reduced-motion="true"]) .instance-card-spinner {
+	animation: spin 1s linear infinite !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.instance-card-spinner {
+		animation: spin 1s linear infinite !important;
+	}
 }
 
 :root[data-theme="light"] .instance-card {

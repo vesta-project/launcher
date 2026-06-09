@@ -290,7 +290,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 				<Switch>
 					<Match when={isInstalling()}>
 						<div class={styles["instance-card-centered"]}>
-							<div class={styles["instance-card-spinner"]}></div>
+							<div
+								class={styles["instance-card-spinner"]}
+								data-essential-motion
+							></div>
 							<h1
 								style={{
 									margin: 0,
@@ -406,7 +409,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 										disabled={isInstalling() || isWarmingUp()}
 									>
 										{isInstalling() || isWarmingUp() ? (
-											<div class={styles["instance-card-spinner"]} />
+											<div
+												class={styles["instance-card-spinner"]}
+												data-essential-motion
+											/>
 										) : isInterrupted() ? (
 											<ReloadIcon />
 										) : needsInstallation() ? (
