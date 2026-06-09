@@ -829,9 +829,12 @@ async fn finish_update(
         .await
         .map_err(|e| format!("Java setup failed after modpack update: {}", e))?;
 
+    let processed = crate::commands::instances::get_instance(inst.id)
+        .map_err(|e| format!("Failed to fetch updated instance for emit: {}", e))?;
+
     use tauri::Emitter;
-    let _ = app_handle.emit("core://instance-updated", updated.clone());
-    let _ = app_handle.emit("core://instance-installed", updated);
+    let _ = app_handle.emit("core://instance-updated", processed.clone());
+    let _ = app_handle.emit("core://instance-installed", processed);
 
     clear_pending_modpack_update(game_dir);
 

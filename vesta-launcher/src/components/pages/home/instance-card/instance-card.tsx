@@ -33,6 +33,7 @@ import {
 	getInstanceOperationLabel,
 	getInstanceSlug,
 	installInstance,
+	resolveInstanceDisplayIcon,
 	isInstanceOperationInProgress,
 	isInstanceRunning,
 	killInstance,
@@ -89,7 +90,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const instanceSlug = getInstanceSlug(props.instance);
 	const instanceBackgroundImage = () => {
-		const rawPath = props.instance.iconPath || DEFAULT_ICONS[0];
+		const rawPath = resolveInstanceDisplayIcon(props.instance);
 		if (rawPath.startsWith("linear-gradient")) {
 			return rawPath;
 		}

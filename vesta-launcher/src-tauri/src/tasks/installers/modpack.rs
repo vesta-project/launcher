@@ -349,9 +349,8 @@ impl Task for InstallModpackTask {
                         .execute(&mut conn);
 
                     // Emit update event to refresh UI with failure reason
-                    if let Ok(updated_inst) = inst_dsl::instance
-                        .find(instance.id)
-                        .first::<Instance>(&mut conn)
+                    if let Ok(updated_inst) =
+                        crate::commands::instances::get_instance(instance.id)
                     {
                         use tauri::Emitter;
                         let _ = app_handle.emit("core://instance-updated", updated_inst);
@@ -406,8 +405,10 @@ impl Task for InstallModpackTask {
 
             // Emit update event
             use tauri::Emitter;
-            let _ = app_handle.emit("core://instance-updated", final_instance.clone());
-            let _ = app_handle.emit("core://instance-installed", final_instance.clone());
+            let emitted = crate::commands::instances::get_instance(instance.id)
+                .unwrap_or(final_instance);
+            let _ = app_handle.emit("core://instance-updated", emitted.clone());
+            let _ = app_handle.emit("core://instance-installed", emitted);
 
             // POST-INSTALL: Link resources to database automatically
             // This prevents the ResourceWatcher from needing to hit the network for every mod

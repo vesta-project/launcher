@@ -78,6 +78,13 @@ export function isDefaultIcon(path: string | null | undefined): boolean {
 	return /placeholder-image(\d+)/i.test(path);
 }
 
+/** Icon path for UI display, matching backend `process_instance_icon` fallbacks. */
+export function resolveInstanceDisplayIcon(
+	inst: Pick<Instance, "iconPath" | "modpackIconUrl">,
+): string {
+	return inst.iconPath || inst.modpackIconUrl || DEFAULT_ICONS[0];
+}
+
 // Instance type matching Rust struct
 export interface Instance {
 	id: number;

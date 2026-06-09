@@ -1,7 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
-import { createDemoInstance, type Instance } from "@utils/instances";
+import {
+	createDemoInstance,
+	DEFAULT_ICONS,
+	resolveInstanceDisplayIcon,
+	type Instance,
+} from "@utils/instances";
 import { createStore, reconcile } from "solid-js/store";
 
 export type { Instance };
@@ -98,10 +103,27 @@ export function initializeInstances(force = false): Promise<void> {
 
 // Update single instance in store
 function updateInstance(updatedInstance: Instance) {
+	const existing = instancesState.instances.find((inst) => inst.id === updatedInstance.id);
+	let normalized = updatedInstance;
+
+	// Event payloads from tasks may omit processed icon_path; keep a usable display icon.
+	if (!normalized.iconPath) {
+		const fallbackIcon = existing
+			? resolveInstanceDisplayIcon({
+					iconPath: existing.iconPath,
+					modpackIconUrl: normalized.modpackIconUrl ?? existing.modpackIconUrl,
+				})
+			: resolveInstanceDisplayIcon(normalized);
+
+		if (fallbackIcon !== DEFAULT_ICONS[0] || normalized.modpackIconUrl) {
+			normalized = { ...normalized, iconPath: fallbackIcon };
+		}
+	}
+
 	setInstancesState(
 		"instances",
-		(inst) => inst.id === updatedInstance.id,
-		reconcile(updatedInstance),
+		(inst) => inst.id === normalized.id,
+		reconcile(normalized),
 	);
 }
 
