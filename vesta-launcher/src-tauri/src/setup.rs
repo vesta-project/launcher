@@ -376,6 +376,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     "hard-reset" => "hard reset",
                     "repair" => "repair",
                     "external-import" => "import migration",
+                    "update" => "modpack update",
                     _ => "installation",
                 };
                 let description = format!(

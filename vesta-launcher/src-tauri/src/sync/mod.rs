@@ -3,6 +3,7 @@ pub mod classifier;
 pub mod differ;
 pub mod hash_util;
 pub mod manifest;
+pub mod manifest_bootstrap;
 pub mod merger;
 pub mod paths;
 pub mod safeguards;

@@ -30,8 +30,10 @@ import { clearCrashDetails, isInstanceCrashed } from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
+	getInstanceOperationLabel,
 	getInstanceSlug,
 	installInstance,
+	isInstanceOperationInProgress,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
@@ -195,7 +197,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const isRunning = () => runningIds().has(instanceSlug);
 
 	// Installation status checks
-	const isInstalling = () => props.instance.installationStatus === "installing";
+	const isInstalling = () => isInstanceOperationInProgress(props.instance);
+	const operationLabel = () => getInstanceOperationLabel(props.instance);
 	const isInterrupted = () => props.instance.installationStatus === "interrupted";
 	const isInstalled = () => props.instance.installationStatus === "installed";
 	const isFailed = () =>
@@ -218,11 +221,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 		!busy() && !launching() && !isInstalling() && isInstalled() && !isRunning();
 
 	const playButtonTooltip = () => {
+		if (isInstalling()) {
+			return `${operationLabel()}...`;
+		}
+
 		if (isInterrupted()) {
 			const op =
 				props.instance.lastOperation === "hard-reset"
 					? "Hard reset"
-					: props.instance.lastOperation || "Installation";
+					: props.instance.lastOperation === "update"
+						? "Update"
+						: props.instance.lastOperation || "Installation";
 			return `${op.slice(0, 1).toUpperCase() + op.slice(1).toLowerCase()} interrupted. Click to resume.`;
 		}
 
@@ -365,6 +374,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 							>
 								{props.instance.name}
 							</h1>
+							<p
+								style={{
+									margin: "6px 0 0",
+									padding: 0,
+									"font-size": "11px",
+									opacity: 0.85,
+									"text-align": "center",
+								}}
+							>
+								{operationLabel()}...
+							</p>
 						</div>
 					</Match>
 					<Match when={isFailed()}>

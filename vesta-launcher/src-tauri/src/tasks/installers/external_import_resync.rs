@@ -223,6 +223,42 @@ impl Task for ImportResourceResyncTask {
                 return Err("Resync cancelled".to_string());
             }
 
+            if target_instance.modpack_id.is_some()
+                && target_instance.modpack_version_id.is_some()
+                && target_instance.modpack_platform.is_some()
+            {
+                if let Err(err) = crate::commands::instances::hydrate_linked_modpack_metadata(
+                    &app_handle,
+                    instance_id,
+                )
+                .await
+                {
+                    log::warn!(
+                        "[external_import_resync] modpack metadata hydration skipped instance_id={} reason={}",
+                        instance_id,
+                        err
+                    );
+                }
+
+                let game_dir = std::path::Path::new(&target_dir);
+                let progress =
+                    crate::sync::manifest_bootstrap::TaskBootstrapProgress(&ctx);
+                if let Err(err) = crate::sync::manifest_bootstrap::ensure_old_manifest(
+                    &app_handle,
+                    &target_instance,
+                    game_dir,
+                    Some(&progress),
+                )
+                .await
+                {
+                    log::warn!(
+                        "[external_import_resync] manifest bootstrap skipped instance_id={} reason={}",
+                        instance_id,
+                        err
+                    );
+                }
+            }
+
             crate::commands::instances::update_installation_status(
                 &app_handle,
                 instance_id,

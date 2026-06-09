@@ -46,10 +46,12 @@ import {
   duplicateInstance,
   getInstance,
   getInstanceBySlug,
+  getInstanceOperationLabel,
   getInstanceSlug,
   getMinecraftVersions,
   getStableIconId,
   installInstance,
+  isInstanceOperationInProgress,
   isDefaultIcon,
   isInstanceRunning,
   killInstance,
@@ -62,6 +64,7 @@ import {
   updateInstanceModpackVersion,
 } from "@utils/instances";
 import type { Instance } from "@utils/instances";
+import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
   describeSelectionAdjustments,
@@ -583,47 +586,15 @@ export default function InstanceDetails(
     );
   });
 
-  const [modpackIconBase64] = createResource(
-    () => {
-      const current = instance();
-      if (!current?.modpackId || !current?.modpackPlatform) return null;
-
-      const platform = current.modpackPlatform.toLowerCase();
-      if (platform !== "modrinth" && platform !== "curseforge") return null;
-
-      return {
-        platform,
-        id: current.modpackId,
-      };
-    },
-    async (modpackRef) => {
-      if (!modpackRef) return null;
-      try {
-        const records: any[] = await invoke(
-          "get_or_hydrate_resource_projects",
-          {
-            refs: [modpackRef],
-            allowNetwork: true,
-            refreshStale: false,
-          },
-        );
-
-        const record = records[0];
-        if (!record?.icon_data) return null;
-
-        const blob = new Blob([new Uint8Array(record.icon_data)]);
-        return new Promise<string>((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => resolve(reader.result as string);
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
-      } catch (e) {
-        console.error("Failed to fetch modpack icon:", e);
-        return null;
-      }
-    },
-  );
+  const modpackIconBase64 = useModpackIcon(() => {
+    const current = instance();
+    if (!current) return null;
+    return {
+      modpackId: current.modpackId,
+      modpackPlatform: current.modpackPlatform,
+      modpackIconUrl: current.modpackIconUrl,
+    };
+  });
 
   // Create uploadedIcons array that includes all custom icons seen this session
   const uploadedIcons = createMemo(() => {
@@ -964,7 +935,7 @@ export default function InstanceDetails(
   // Check if instance is currently being installed/repaired/updated
   const isInstalling = createMemo(() => {
     const inst = instance();
-    return inst?.installationStatus === "installing";
+    return inst ? isInstanceOperationInProgress(inst) : false;
   });
 
   /**
@@ -2023,7 +1994,7 @@ columnHelper.accessor("display_name", {
     if (!inst) return "Play Now";
 
     if (isRunning()) return "Kill Instance";
-    if (isInstalling()) return "Installing...";
+    if (isInstalling()) return `${getInstanceOperationLabel(inst)}...`;
 
     if (isInterrupted()) {
       const op = inst.lastOperation;
@@ -2032,7 +2003,9 @@ columnHelper.accessor("display_name", {
           ? "Reset"
           : op === "repair"
             ? "Repair"
-            : "Installation";
+            : op === "update"
+              ? "Update"
+              : "Installation";
       return `Resume ${opName}`;
     }
 
@@ -2400,6 +2373,7 @@ columnHelper.accessor("display_name", {
                     <Show when={instance.latest}>
                       <VersioningTab
                         instance={inst()}
+                        modpackIcon={() => modpackIconBase64() || inst().modpackIconUrl || null}
                         isGuest={isGuest()}
                         busy={busy()}
                         isInstalling={isInstalling()}

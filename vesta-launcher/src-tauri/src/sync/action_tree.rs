@@ -107,6 +107,10 @@ pub enum SkipReason {
     UserModifiedBinary,
     /// Config key was resolved via merge — no file-level action needed
     ResolvedViaMerge,
+    /// Config/override dropped from the new modpack manifest — keep the local file
+    NotInNewVersion,
+    /// Config/override expected from the new ZIP but missing — keep the local file
+    NotInNewVersionZip,
 }
 
 /// A collection of actions to execute against the game directory.

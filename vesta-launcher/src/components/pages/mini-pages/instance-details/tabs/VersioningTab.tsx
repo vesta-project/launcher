@@ -19,6 +19,7 @@ import styles from "./versioning-tab.module.css";
 
 interface VersioningTabProps {
 	instance: any;
+	modpackIcon: () => string | null;
 	isGuest: boolean;
 	busy: boolean;
 	isInstalling: boolean;
@@ -106,7 +107,7 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							<div class={styles["modpack-hero"]} onClick={navigateToModpack}>
 								<div class={styles["modpack-hero-icon-container"]}>
 									<ResourceAvatar
-										icon={inst().modpackIconUrl}
+										icon={props.modpackIcon()}
 										name={inst().name}
 										class={styles["modpack-hero-icon"]}
 									/>

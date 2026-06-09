@@ -102,9 +102,12 @@ fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(
         || inst.modpack_version_id.is_some();
     let game_path = std::path::Path::new(game_dir);
     let has_manifest = game_path
-        .join(".vesta")
-        .join("modpack_manifest.json")
-        .is_file();
+        .join(piston_lib::game::modpack::manifest::ModpackManifest::FILE_NAME)
+        .is_file()
+        || game_path
+            .join(".vesta")
+            .join("modpack_manifest.json")
+            .is_file();
 
     if !(has_modpack_link || has_manifest) {
         return Ok(());
@@ -1173,6 +1176,14 @@ pub async fn launch_instance(
         }
     }
 
+    if instance_data.installation_status.as_deref() == Some("installing") {
+        let op = instance_data.last_operation.as_deref().unwrap_or("operation");
+        return Err(format!(
+            "Cannot launch while instance is busy ({})",
+            op
+        ));
+    }
+
     log::info!(
         "[launch_instance] Launch requested for instance: {} (ID: {})",
         instance_data.name,
@@ -1976,6 +1987,106 @@ pub fn update_instance_operation(
     Ok(())
 }
 
+/// Fetch platform project metadata for a linked modpack and persist `modpack_icon_url`.
+/// Does not replace a user-imported custom instance icon (`internal://icon`, etc.).
+pub async fn hydrate_linked_modpack_metadata(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+) -> Result<(), String> {
+    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
+    let inst: Instance = instance
+        .find(instance_id)
+        .first(&mut conn)
+        .map_err(|e| format!("Instance not found: {}", e))?;
+
+    let project_id = match inst.modpack_id.as_deref() {
+        Some(project_id_str) if !project_id_str.is_empty() => project_id_str.to_string(),
+        _ => return Ok(()),
+    };
+
+    let platform = match inst.modpack_platform.as_deref() {
+        Some("modrinth") => crate::models::SourcePlatform::Modrinth,
+        Some("curseforge") => crate::models::SourcePlatform::CurseForge,
+        _ => return Ok(()),
+    };
+
+    if inst.modpack_icon_url.is_some() {
+        return Ok(());
+    }
+
+    let resource_manager = app_handle.state::<crate::resources::ResourceManager>();
+    let refs = vec![crate::models::resource::ResourceProjectRef {
+        platform,
+        id: project_id.clone(),
+    }];
+
+    let records = resource_manager
+        .get_or_hydrate_project_records(&refs, true, false)
+        .await
+        .map_err(|e| format!("Failed to hydrate modpack project: {}", e))?;
+
+    let Some(record) = records.first() else {
+        return Ok(());
+    };
+
+    let resolved_modpack_icon_url = record.icon_url.clone();
+    if resolved_modpack_icon_url.is_none() {
+        return Ok(());
+    }
+
+    let preserve_custom_icon = inst
+        .icon_path
+        .as_deref()
+        .is_some_and(|p| p == "internal://icon" || p.starts_with("data:image/"));
+
+    let mut icon_data_update: Option<Vec<u8>> = None;
+    if !preserve_custom_icon && inst.icon_data.is_none() {
+        if let Some(bytes) = record.icon_data.clone().filter(|b| !b.is_empty()) {
+            icon_data_update = Some(bytes);
+        } else if let Some(url) = resolved_modpack_icon_url.as_ref() {
+            if let Ok(bytes) = crate::utils::instance_helpers::download_icon_as_bytes(url).await {
+                icon_data_update = Some(bytes);
+            }
+        }
+    }
+
+    let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
+    if let Some(icon_bytes) = icon_data_update {
+        diesel::update(instance.find(instance_id))
+            .set((
+                modpack_icon_url.eq(&resolved_modpack_icon_url),
+                icon_data.eq(Some(icon_bytes)),
+                updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to update modpack metadata: {}", e))?;
+    } else {
+        diesel::update(instance.find(instance_id))
+            .set((
+                modpack_icon_url.eq(&resolved_modpack_icon_url),
+                updated_at.eq(now),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| format!("Failed to update modpack metadata: {}", e))?;
+    }
+
+    let updated: Instance = instance
+        .find(instance_id)
+        .first(&mut conn)
+        .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
+
+    use tauri::Emitter;
+    let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
+
+    log::info!(
+        "[hydrate_linked_modpack_metadata] Hydrated modpack icon for instance {} project={}",
+        instance_id,
+        project_id
+    );
+
+    Ok(())
+}
+
 /// Update the installation status for an instance
 pub fn update_installation_status(
     app_handle: &tauri::AppHandle,
@@ -2278,6 +2389,36 @@ pub async fn resume_instance_operation(
                 inst.name.clone(),
                 source_game_directory,
             );
+            task_manager.submit(Box::new(task)).await
+        }
+        "update" => {
+            let config_dir =
+                crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+            let data_dir = config_dir.join("data");
+            let game_dir = inst
+                .game_directory
+                .as_ref()
+                .map(std::path::PathBuf::from)
+                .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
+
+            let version_id = crate::tasks::update_modpack::read_pending_modpack_update(&game_dir)
+                .ok_or_else(|| {
+                    "Cannot resume modpack update: no pending version recorded. Open the instance Version tab to retry."
+                        .to_string()
+                })?;
+
+            crate::commands::instances::update_instance_operation(
+                &app_handle,
+                instance_id,
+                "update",
+            )?;
+            crate::commands::instances::update_installation_status(
+                &app_handle,
+                instance_id,
+                "installing",
+            )?;
+
+            let task = crate::tasks::update_modpack::UpdateModpackTask::new(instance_id, version_id);
             task_manager.submit(Box::new(task)).await
         }
         "install" | _ => install_instance(app_handle, task_manager, inst, None).await,

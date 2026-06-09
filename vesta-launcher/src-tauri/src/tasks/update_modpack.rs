@@ -1,5 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
 
 use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
@@ -17,10 +19,11 @@ use tokio::sync::RwLock;
 
 use crate::sync::differ::ThreeWayDiffer;
 use crate::sync::manifest;
+use crate::sync::manifest_bootstrap::{self, TaskBootstrapProgress};
 use crate::sync::merger::{merge_config, MergeResult};
 use crate::sync::safeguards;
 use crate::sync::staging::StagingDir;
-use crate::sync::action_tree::{FileSource, SyncAction};
+use crate::sync::action_tree::{ActionTree, FileSource, SkipReason, SyncAction};
 
 pub struct UpdateModpackTask {
     pub instance_id: i32,
@@ -87,6 +90,9 @@ impl Task for UpdateModpackTask {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
 
+            let mut status_guard =
+                UpdateStatusGuard::new(app_handle.clone(), instance_id, game_dir.clone());
+
             // ─── Safeguard: ensure Minecraft is not running ──────────────
             ctx.update_description("Checking that Minecraft is not running...".to_string());
             if let Err(e) = safeguards::check_instance_not_running(&game_dir) {
@@ -95,8 +101,15 @@ impl Task for UpdateModpackTask {
 
             // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
             ctx.update_full(5, "Loading old manifest...".to_string(), Some(0), Some(6));
-            let mut old_manifest = manifest::load_old_manifest(&game_dir)
-                .map_err(|e| format!("Cannot update: no modpack manifest found. {}", e))?;
+            let progress = TaskBootstrapProgress(&ctx);
+            let mut old_manifest = manifest_bootstrap::ensure_old_manifest(
+                &app_handle,
+                &inst,
+                &game_dir,
+                Some(&progress),
+            )
+            .await
+            .map_err(|e| format!("Cannot update: no modpack manifest found. {}", e))?;
             manifest::backfill_manifest_hashes(&mut old_manifest, &game_dir, instance_id)
                 .map_err(|e| format!("Failed to backfill old manifest hashes: {}", e))?;
 
@@ -141,6 +154,7 @@ impl Task for UpdateModpackTask {
                 ctx.update_full(100, "Modpack is already up to date.".to_string(), Some(6), Some(6));
                 finish_update(&app_handle, &inst, &new_manifest, &new_version_id, &game_dir, &zip_path)
                     .await?;
+                status_guard.mark_success();
                 return Ok(());
             }
 
@@ -157,6 +171,12 @@ impl Task for UpdateModpackTask {
                 &mut action_tree,
                 &game_dir,
                 &old_manifest,
+                &zip_path,
+                modpack_format,
+            );
+            resolve_missing_zip_overrides(
+                &mut action_tree,
+                &game_dir,
                 &zip_path,
                 modpack_format,
             );
@@ -327,6 +347,7 @@ impl Task for UpdateModpackTask {
                 &zip_path,
             )
             .await?;
+            status_guard.mark_success();
 
             let skipped_msg = if skipped_delete > 0 {
                 format!(
@@ -549,6 +570,54 @@ fn resolve_merges(
     }
 }
 
+/// Drop Add/Update ZIP override actions when the new pack archive does not contain the file.
+/// The existing on-disk config is preserved (same policy as unresolved merges).
+fn resolve_missing_zip_overrides(
+    action_tree: &mut ActionTree,
+    game_dir: &std::path::Path,
+    new_zip_path: &std::path::Path,
+    new_format: ModpackFormat,
+) {
+    let mut preserved_count = 0usize;
+
+    for action in &mut action_tree.actions {
+        let (path, source) = match action {
+            SyncAction::Add { path, source, .. } | SyncAction::Update { path, source, .. } => {
+                (path.as_str(), source)
+            }
+            _ => continue,
+        };
+
+        let FileSource::ZipOverride { relative_path } = source else {
+            continue;
+        };
+
+        if read_zip_override_entry(new_zip_path, new_format, relative_path).is_ok() {
+            continue;
+        }
+
+        log::warn!(
+            "[UpdateModpackTask] {} not found in new version ZIP — keeping existing file",
+            path
+        );
+        let preserved_path = path.to_string();
+        let on_disk = game_dir.join(&preserved_path).is_file();
+        if !on_disk {
+            log::info!(
+                "[UpdateModpackTask] {} also missing on disk — no local file to preserve",
+                preserved_path
+            );
+        }
+        *action = SyncAction::Skip {
+            path: preserved_path,
+            reason: SkipReason::NotInNewVersionZip,
+        };
+        preserved_count += 1;
+    }
+
+    action_tree.protected_count += preserved_count;
+}
+
 /// Stage a file: download from platform or extract from ZIP.
 async fn stage_file(
     app_handle: &tauri::AppHandle,
@@ -604,11 +673,21 @@ async fn stage_file(
                 .map_err(|e| e.to_string())?;
         }
         FileSource::ZipOverride { relative_path } => {
-            let data = read_zip_override_entry(zip_path, modpack_format, relative_path)
-                .map_err(|e| format!("Failed to extract override {} from ZIP: {}", path, e))?;
-            staging
-                .write_staged(path, &data)
-                .map_err(|e| e.to_string())?;
+            match read_zip_override_entry(zip_path, modpack_format, relative_path) {
+                Ok(data) => {
+                    staging
+                        .write_staged(path, &data)
+                        .map_err(|e| e.to_string())?;
+                }
+                Err(e) => {
+                    // Defensive: resolve_missing_zip_overrides should have converted these to Skip.
+                    log::warn!(
+                        "[UpdateModpackTask] Override {} missing from ZIP during staging — keeping existing file: {}",
+                        path,
+                        e
+                    );
+                }
+            }
         }
         FileSource::Generated => {
             // Content is generated in-memory (e.g., merged configs)
@@ -699,6 +778,8 @@ async fn finish_update(
     use tauri::Emitter;
     let _ = app_handle.emit("core://instance-installed", updated);
 
+    clear_pending_modpack_update(game_dir);
+
     log::info!(
         "[UpdateModpackTask] Update complete: {} → {}",
         inst.modpack_version_id.as_deref().unwrap_or("?"),
@@ -706,4 +787,89 @@ async fn finish_update(
     );
 
     Ok(())
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct PendingModpackUpdate {
+    version_id: String,
+}
+
+fn pending_update_path(game_dir: &Path) -> PathBuf {
+    game_dir.join(".vesta").join("pending_update.json")
+}
+
+/// Persist the in-flight target version so interrupted updates can be resumed.
+pub fn write_pending_modpack_update(game_dir: &Path, version_id: &str) -> Result<(), String> {
+    let vesta_dir = game_dir.join(".vesta");
+    std::fs::create_dir_all(&vesta_dir).map_err(|e| e.to_string())?;
+    let payload = PendingModpackUpdate {
+        version_id: version_id.to_string(),
+    };
+    let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
+    std::fs::write(pending_update_path(game_dir), json).map_err(|e| e.to_string())
+}
+
+pub fn read_pending_modpack_update(game_dir: &Path) -> Option<String> {
+    let path = pending_update_path(game_dir);
+    let content = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<PendingModpackUpdate>(&content)
+        .ok()
+        .map(|p| p.version_id)
+}
+
+pub fn clear_pending_modpack_update(game_dir: &Path) {
+    let _ = std::fs::remove_file(pending_update_path(game_dir));
+}
+
+async fn restore_instance_after_update_failure(
+    app_handle: &tauri::AppHandle,
+    instance_id: i32,
+    game_dir: &Path,
+) -> Result<(), String> {
+    clear_pending_modpack_update(game_dir);
+    crate::commands::instances::update_installation_status(app_handle, instance_id, "installed")
+}
+
+struct UpdateStatusGuard {
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+    game_dir: PathBuf,
+    succeeded: bool,
+}
+
+impl UpdateStatusGuard {
+    fn new(app_handle: tauri::AppHandle, instance_id: i32, game_dir: PathBuf) -> Self {
+        Self {
+            app_handle,
+            instance_id,
+            game_dir,
+            succeeded: false,
+        }
+    }
+
+    fn mark_success(&mut self) {
+        self.succeeded = true;
+    }
+}
+
+impl Drop for UpdateStatusGuard {
+    fn drop(&mut self) {
+        if self.succeeded {
+            return;
+        }
+        let app_handle = self.app_handle.clone();
+        let instance_id = self.instance_id;
+        let game_dir = self.game_dir.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) =
+                restore_instance_after_update_failure(&app_handle, instance_id, &game_dir).await
+            {
+                log::warn!(
+                    "[UpdateModpackTask] Failed to restore instance {} after update failure: {}",
+                    instance_id,
+                    e
+                );
+            }
+        });
+    }
 }

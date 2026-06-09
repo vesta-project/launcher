@@ -285,27 +285,13 @@ impl ThreeWayDiffer {
                     expected_hash: None,
                 });
             }
-            // Only in old
+            // Only in old — author dropped this config from the new pack; keep local copy
             (true, false) => {
-                let should_remove = match cur_hash {
-                    Some(ch) => old_hash
-                        .as_ref()
-                        .map_or(true, |oh| ch.to_lowercase() == oh.to_lowercase()),
-                    None => true,
-                };
-                if should_remove {
-                    tree.add_action(SyncAction::Remove {
-                        path: display_path.to_string(),
-                        reason: RemoveReason::AuthorRemoved,
-                        last_hash: old_hash.clone(),
-                    });
-                } else {
-                    tree.add_action(SyncAction::Skip {
-                        path: display_path.to_string(),
-                        reason: SkipReason::UserModified,
-                    });
-                    tree.protected_count += 1;
-                }
+                tree.add_action(SyncAction::Skip {
+                    path: display_path.to_string(),
+                    reason: SkipReason::NotInNewVersion,
+                });
+                tree.protected_count += 1;
             }
             (false, false) => {}
         }

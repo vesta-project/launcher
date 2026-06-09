@@ -674,10 +674,8 @@ impl Task for RepairInstanceTask {
                     && inst.modpack_version_id.is_some()
                     && inst.modpack_platform.is_some()
                 {
-                    // Instance is linked to a modpack but no manifest exists.
-                    // Reconstruct the manifest from the modpack source.
                     log::info!(
-                        "[RepairInstanceTask] No manifest found, but instance is linked to modpack {}/{} — reconstructing",
+                        "[RepairInstanceTask] No manifest found, but instance is linked to modpack {}/{} — bootstrapping",
                         inst.modpack_platform.as_deref().unwrap_or("?"),
                         inst.modpack_id.as_deref().unwrap_or("?")
                     );
@@ -688,117 +686,56 @@ impl Task for RepairInstanceTask {
                         Some(3),
                     );
 
-                    // Download the modpack version ZIP and parse its manifest
-                    let version_id = inst.modpack_version_id.as_deref().unwrap_or("");
-                    let project_id = inst.modpack_id.as_deref().unwrap_or("");
-
-                    // Fetch download URL from ResourceManager
-                    let resource_manager = app_handle.state::<crate::resources::ResourceManager>();
-                    let platform_enum = match inst.modpack_platform.as_deref() {
-                        Some("modrinth") => crate::models::SourcePlatform::Modrinth,
-                        _ => crate::models::SourcePlatform::CurseForge,
-                    };
-
-                    match resource_manager
-                        .get_version(platform_enum, project_id, version_id)
-                        .await
+                    let progress =
+                        crate::sync::manifest_bootstrap::TaskBootstrapProgress(&ctx);
+                    match crate::sync::manifest_bootstrap::ensure_old_manifest(
+                        &app_handle,
+                        &inst,
+                        &game_dir,
+                        Some(&progress),
+                    )
+                    .await
                     {
-                        Ok(version) => {
-                            // Download to persistent modpacks cache (same location as InstallModpackTask)
-                            let modpacks_dir =
-                                app_handle.path().app_cache_dir().unwrap().join("modpacks");
-                            let _ = std::fs::create_dir_all(&modpacks_dir);
-                            // Use deterministic name so repeated repairs reuse the cached file
-                            let file_stem = format!("{}-{}", project_id, version_id)
-                                .replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_");
-                            let zip_path = modpacks_dir.join(format!("{}.zip", file_stem));
-
-                            // Only download if not already cached
-                            if !zip_path.exists() {
-                                ctx.update_description(
-                                    "Downloading modpack version...".to_string(),
-                                );
-
-                                let client = piston_lib::client::shared_client();
-                                let silent_reporter =
-                                    piston_lib::game::installer::types::SilentProgressReporter;
-                                if let Err(e) =
-                                    piston_lib::game::installer::core::downloader::download_to_path(
-                                        client,
-                                        &version.download_url,
-                                        &zip_path,
-                                        Some(&version.hash),
-                                        &silent_reporter,
-                                    )
-                                    .await
-                                {
-                                    log::warn!("[RepairInstanceTask] Failed to download modpack version: {}", e);
+                        Ok(_) => {
+                            let repair_reporter: std::sync::Arc<
+                                dyn piston_lib::game::installer::types::ProgressReporter,
+                            > = std::sync::Arc::new(
+                                piston_lib::game::installer::types::SilentProgressReporter,
+                            );
+                            let resolver: std::sync::Arc<
+                                dyn piston_lib::game::installer::core::modpack_installer::ModpackResolver,
+                            > = std::sync::Arc::new(
+                                crate::tasks::installers::modpack::PistonModpackResolver::new(
+                                    app_handle.clone(),
+                                ),
+                            );
+                            match piston_lib::game::installer::core::modpack_installer::ModpackInstaller::repair_modpack(
+                                &game_dir,
+                                false,
+                                repair_reporter,
+                                Some(resolver),
+                            ).await {
+                                Ok(repaired) => {
+                                    log::info!("[RepairInstanceTask] Modpack repair complete");
+                                    crate::tasks::installers::modpack::spawn_manifest_resource_linking(
+                                        &app_handle,
+                                        inst_id,
+                                        &game_dir,
+                                        &repaired,
+                                    );
                                 }
-                            }
-
-                            if zip_path.exists() {
-                                // Parse metadata and build manifest
-                                match piston_lib::game::modpack::parser::get_modpack_metadata(
-                                    &zip_path,
-                                ) {
-                                    Ok(metadata) => {
-                                        let manifest = piston_lib::game::modpack::manifest::ModpackManifest::from_install(
-                                            &metadata,
-                                            &[],
-                                            &[],
-                                            Some(zip_path.clone()),
-                                            inst.modpack_id.clone(),
-                                        );
-                                        // Persist so future repairs find it
-                                        let _ = manifest.persist(&game_dir);
-
-                                        // Now run the repair against the new manifest
-                                        let repair_reporter: std::sync::Arc<
-                                            dyn piston_lib::game::installer::types::ProgressReporter,
-                                        > = std::sync::Arc::new(
-                                            piston_lib::game::installer::types::SilentProgressReporter,
-                                        );
-                                        let resolver: std::sync::Arc<
-                                            dyn piston_lib::game::installer::core::modpack_installer::ModpackResolver,
-                                        > = std::sync::Arc::new(
-                                            crate::tasks::installers::modpack::PistonModpackResolver::new(
-                                                app_handle.clone(),
-                                            ),
-                                        );
-                                        match piston_lib::game::installer::core::modpack_installer::ModpackInstaller::repair_modpack(
-                                            &game_dir,
-                                            false,
-                                            repair_reporter,
-                                            Some(resolver),
-                                        ).await {
-                                            Ok(repaired) => {
-                                                log::info!(
-                                                    "[RepairInstanceTask] Modpack repair complete"
-                                                );
-                                                crate::tasks::installers::modpack::spawn_manifest_resource_linking(
-                                                    &app_handle,
-                                                    inst_id,
-                                                    &game_dir,
-                                                    &repaired,
-                                                );
-                                            }
-                                            Err(e) => {
-                                                log::warn!("[RepairInstanceTask] Modpack repair failed: {}", e);
-                                                repair_error = Some(e.to_string());
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        log::warn!("[RepairInstanceTask] Failed to parse modpack metadata: {}", e);
-                                    }
+                                Err(e) => {
+                                    log::warn!("[RepairInstanceTask] Modpack repair failed: {}", e);
+                                    repair_error = Some(e.to_string());
                                 }
                             }
                         }
                         Err(e) => {
                             log::warn!(
-                                "[RepairInstanceTask] Failed to resolve modpack version: {}",
+                                "[RepairInstanceTask] Failed to bootstrap modpack manifest: {}",
                                 e
                             );
+                            repair_error = Some(e);
                         }
                     }
                 } else {

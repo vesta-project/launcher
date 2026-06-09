@@ -386,11 +386,31 @@ export async function resumeInstanceOperation(instance: Instance): Promise<void>
 		case "hard-reset":
 			await resetInstance(instance.id);
 			break;
+		case "update":
+		case "external-import":
+			await invoke("resume_instance_operation", { instanceId: instance.id });
+			break;
 		case "install":
 		default:
 			await installInstance(instance);
 			break;
 	}
+}
+
+/** True while install/repair/update/hard-reset is in progress (blocks launch). */
+export function isInstanceOperationInProgress(instance: Instance): boolean {
+	return instance.installationStatus === "installing";
+}
+
+export function getInstanceOperationLabel(
+	instance: Instance,
+	fallback = "Installing",
+): string {
+	if (instance.lastOperation === "update") return "Updating";
+	if (instance.lastOperation === "repair") return "Repairing";
+	if (instance.lastOperation === "hard-reset") return "Resetting";
+	if (instance.lastOperation === "external-import") return "Importing";
+	return fallback;
 }
 
 // Delete an instance
