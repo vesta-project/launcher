@@ -166,62 +166,64 @@ pub struct AppConfig {
     pub ui_chrome_mode_enabled: bool,
 }
 
-impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite> for AppConfig {
+impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite>
+    for AppConfig
+{
     // NOTE: Keep this tuple in exact app_config column order from schema/config.rs.
     // When adding a field, update schema order + Row tuple + build assignments together.
     type Row = (
-        i32, // id
-        i32, // background_hue
-        String, // theme
-        String, // language
-        i32, // max_download_threads
-        i32, // default_max_memory
+        i32,            // id
+        i32,            // background_hue
+        String,         // theme
+        String,         // language
+        i32,            // max_download_threads
+        i32,            // default_max_memory
         Option<String>, // java_path
         Option<String>, // default_game_dir
-        bool, // auto_update_enabled
-        bool, // notification_enabled
-        bool, // startup_check_updates
-        bool, // autostart_enabled
-        bool, // show_tray_icon
-        bool, // minimize_to_tray
-        bool, // reduced_motion
-        i32, // last_window_width
-        i32, // last_window_height
-        bool, // debug_logging
-        i32, // notification_retention_days
+        bool,           // auto_update_enabled
+        bool,           // notification_enabled
+        bool,           // startup_check_updates
+        bool,           // autostart_enabled
+        bool,           // show_tray_icon
+        bool,           // minimize_to_tray
+        bool,           // reduced_motion
+        i32,            // last_window_width
+        i32,            // last_window_height
+        bool,           // debug_logging
+        i32,            // notification_retention_days
         Option<String>, // active_account_uuid
-        String, // theme_id
-        String, // theme_mode
-        i32, // theme_primary_hue
-        Option<i32>, // theme_primary_sat
-        Option<i32>, // theme_primary_light
-        String, // theme_style
-        bool, // theme_gradient_enabled
-        Option<i32>, // theme_gradient_angle
+        String,         // theme_id
+        String,         // theme_mode
+        i32,            // theme_primary_hue
+        Option<i32>,    // theme_primary_sat
+        Option<i32>,    // theme_primary_light
+        String,         // theme_style
+        bool,           // theme_gradient_enabled
+        Option<i32>,    // theme_gradient_angle
         Option<String>, // theme_gradient_harmony
         Option<String>, // theme_advanced_overrides
         Option<String>, // theme_gradient_type
-        Option<i32>, // theme_border_width
-        bool, // setup_completed
-        i32, // setup_step
-        bool, // tutorial_completed
-        bool, // use_dedicated_gpu
-        bool, // telemetry_enabled
-        bool, // discord_presence_enabled
-        bool, // auto_install_dependencies
-        i32, // default_width
-        i32, // default_height
+        Option<i32>,    // theme_border_width
+        bool,           // setup_completed
+        i32,            // setup_step
+        bool,           // tutorial_completed
+        bool,           // use_dedicated_gpu
+        bool,           // telemetry_enabled
+        bool,           // discord_presence_enabled
+        bool,           // auto_install_dependencies
+        i32,            // default_width
+        i32,            // default_height
         Option<String>, // default_java_args
         Option<String>, // default_environment_variables
         Option<String>, // default_pre_launch_hook
         Option<String>, // default_wrapper_command
         Option<String>, // default_post_exit_hook
-        i32, // default_min_memory
-        String, // default_launcher_action_on_launch
+        i32,            // default_min_memory
+        String,         // default_launcher_action_on_launch
         Option<String>, // theme_window_effect
-        Option<i32>, // theme_background_opacity
+        Option<i32>,    // theme_background_opacity
         Option<String>, // theme_data
-        bool, // ui_chrome_mode_enabled
+        bool,           // ui_chrome_mode_enabled
     );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -710,7 +712,10 @@ fn apply_payload_to_scalar_fields(config: &mut AppConfig, payload: &Value) -> bo
     }
 
     if obj.get("rotation").is_some() {
-        let next = obj.get("rotation").and_then(|v| v.as_i64()).map(|v| v as i32);
+        let next = obj
+            .get("rotation")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
         if config.theme_gradient_angle != next {
             config.theme_gradient_angle = next;
             changed = true;
@@ -764,7 +769,10 @@ fn apply_payload_to_scalar_fields(config: &mut AppConfig, payload: &Value) -> bo
     }
 
     if obj.get("primarySat").is_some() {
-        let next = obj.get("primarySat").and_then(|v| v.as_i64()).map(|v| v as i32);
+        let next = obj
+            .get("primarySat")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
         if config.theme_primary_sat != next {
             config.theme_primary_sat = next;
             changed = true;
@@ -929,10 +937,7 @@ fn sync_theme_to_account(
 
     // Only sync theme fields that are persisted on the account model
     let is_theme_field = match field {
-        "theme_id"
-        | "theme_data"
-        | "theme_window_effect"
-        | "theme_background_opacity" => true,
+        "theme_id" | "theme_data" | "theme_window_effect" | "theme_background_opacity" => true,
         _ => false,
     };
 

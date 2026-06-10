@@ -40,7 +40,8 @@ pub async fn ensure_old_manifest(
 
     if !is_linked_modpack(inst) {
         return Err(
-            "Cannot load modpack manifest: instance is not linked to a platform modpack.".to_string(),
+            "Cannot load modpack manifest: instance is not linked to a platform modpack."
+                .to_string(),
         );
     }
 
@@ -53,12 +54,8 @@ pub async fn ensure_old_manifest(
 
     bootstrap_manifest_from_linked_version(app_handle, inst, game_dir, progress).await?;
 
-    ModpackManifest::load(game_dir).map_err(|e| {
-        format!(
-            "Failed to load modpack manifest after bootstrap: {}",
-            e
-        )
-    })
+    ModpackManifest::load(game_dir)
+        .map_err(|e| format!("Failed to load modpack manifest after bootstrap: {}", e))
 }
 
 /// Build and persist a manifest from the instance's linked `modpack_version_id` ZIP.
@@ -82,8 +79,8 @@ pub async fn bootstrap_manifest_from_linked_version(
         p.on_description("Preparing modpack manifest...".to_string());
     }
 
-    let zip_path = download_linked_version_zip(app_handle, platform, project_id, version_id, progress)
-        .await?;
+    let zip_path =
+        download_linked_version_zip(app_handle, platform, project_id, version_id, progress).await?;
 
     if let Some(p) = progress {
         p.on_description("Building modpack manifest...".to_string());
@@ -91,12 +88,14 @@ pub async fn bootstrap_manifest_from_linked_version(
 
     let mut manifest =
         manifest::build_new_manifest(&zip_path, inst.modpack_id.clone()).map_err(|e| {
-            format!("Failed to build manifest from linked modpack version: {}", e)
+            format!(
+                "Failed to build manifest from linked modpack version: {}",
+                e
+            )
         })?;
     enrich_manifest_platform_hashes(app_handle, &mut manifest).await;
-    manifest::backfill_manifest_hashes(&mut manifest, game_dir, inst.id).map_err(|e| {
-        format!("Failed to backfill manifest hashes during bootstrap: {}", e)
-    })?;
+    manifest::backfill_manifest_hashes(&mut manifest, game_dir, inst.id)
+        .map_err(|e| format!("Failed to backfill manifest hashes during bootstrap: {}", e))?;
     manifest
         .persist(game_dir)
         .map_err(|e| format!("Failed to persist bootstrapped manifest: {}", e))?;

@@ -19,7 +19,10 @@ pub(super) fn find_app_db(base_path: &Path) -> Option<PathBuf> {
     candidates.into_iter().find(|candidate| candidate.exists())
 }
 
-pub(super) fn read_instances_from_app_db(base_path: &Path, db_path: &Path) -> Vec<ExternalInstanceCandidate> {
+pub(super) fn read_instances_from_app_db(
+    base_path: &Path,
+    db_path: &Path,
+) -> Vec<ExternalInstanceCandidate> {
     let mut out = Vec::new();
     let Ok(mut connection) = SqliteConnection::establish(db_path.to_string_lossy().as_ref()) else {
         return out;
@@ -56,7 +59,10 @@ pub(super) fn read_instances_from_app_db(base_path: &Path, db_path: &Path) -> Ve
             if icon_candidate.is_absolute() {
                 icon_candidate.to_string_lossy().to_string()
             } else {
-                profile_path.join(icon_candidate).to_string_lossy().to_string()
+                profile_path
+                    .join(icon_candidate)
+                    .to_string_lossy()
+                    .to_string()
             }
         });
         let encoded_icon = resolved_icon

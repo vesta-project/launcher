@@ -304,9 +304,11 @@ impl ResourceSource for ModrinthSource {
             external_ids.insert("curseforge".to_string(), cf_id);
         }
 
-        let featured_gallery = project.gallery.as_ref().and_then(|items| {
-            items.iter().find(|i| i.featured == Some(true))
-        }).and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
+        let featured_gallery = project
+            .gallery
+            .as_ref()
+            .and_then(|items| items.iter().find(|i| i.featured == Some(true)))
+            .and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
 
         Ok(ResourceProject {
             id: project.id,
@@ -387,9 +389,11 @@ impl ResourceSource for ModrinthSource {
                     external_ids.insert("curseforge".to_string(), cf_id);
                 }
 
-                let featured_gallery = p.gallery.as_ref().and_then(|items| {
-                    items.iter().find(|i| i.featured == Some(true))
-                }).and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
+                let featured_gallery = p
+                    .gallery
+                    .as_ref()
+                    .and_then(|items| items.iter().find(|i| i.featured == Some(true)))
+                    .and_then(|item| item.raw_url.clone().or_else(|| Some(item.url.clone())));
 
                 ResourceProject {
                     id: p.id,

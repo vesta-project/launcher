@@ -1,5 +1,5 @@
-use crate::models::instance::{Instance, NewInstance};
 use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
+use crate::models::instance::{Instance, NewInstance};
 use crate::resources::watcher::ResourceWatcher;
 use crate::tasks::installers::InstallInstanceTask;
 use crate::tasks::manager::{Task, TaskContext};
@@ -95,10 +95,8 @@ impl Task for CloneInstanceTask {
                 let app_config_dir =
                     crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
                 let data_dir = app_config_dir.join("data");
-                let instances_root = resolve_instances_root(
-                    &app_config_dir,
-                    config.default_game_dir.as_deref(),
-                );
+                let instances_root =
+                    resolve_instances_root(&app_config_dir, config.default_game_dir.as_deref());
 
                 let final_slug = compute_unique_slug(&final_name, &seen_slugs, &instances_root);
                 new_dir = instances_root.join(&final_slug);
@@ -110,11 +108,8 @@ impl Task for CloneInstanceTask {
                     Some(4),
                 );
 
-                let source_dir = resolve_clone_source_directory(
-                    &source,
-                    &instances_root,
-                    &data_dir,
-                )?;
+                let source_dir =
+                    resolve_clone_source_directory(&source, &instances_root, &data_dir)?;
 
                 let source_file_count = count_files_in_directory(&source_dir);
                 ctx.update_full(
@@ -267,8 +262,7 @@ fn clone_installed_resources<C>(
     dest_root: &Path,
 ) -> Result<(), String>
 where
-    C: diesel::Connection<Backend = diesel::sqlite::Sqlite>
-        + diesel::connection::LoadConnection,
+    C: diesel::Connection<Backend = diesel::sqlite::Sqlite> + diesel::connection::LoadConnection,
 {
     use crate::schema::installed_resource::dsl as ir_dsl;
 
@@ -278,8 +272,7 @@ where
         .map_err(|e| format!("Failed to load source resources: {}", e))?;
 
     for resource in source_resources {
-        let new_local_path =
-            remap_path_under_root(&resource.local_path, source_root, dest_root);
+        let new_local_path = remap_path_under_root(&resource.local_path, source_root, dest_root);
 
         if !new_local_path.is_empty() && !Path::new(&new_local_path).exists() {
             log::warn!(
@@ -348,8 +341,8 @@ async fn rollback_failed_clone(
 
     if game_dir.exists() {
         let game_dir = game_dir.to_path_buf();
-        if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&game_dir))
-            .await
+        if let Err(e) =
+            tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&game_dir)).await
         {
             log::warn!(
                 "[CloneInstanceTask] Failed to await directory removal during rollback: {}",
@@ -360,13 +353,12 @@ async fn rollback_failed_clone(
 
     if let Some(instance_id) = instance_id {
         if let Ok(mut conn) = get_vesta_conn() {
-            use crate::schema::instance::dsl::*;
             use crate::schema::installed_resource::dsl as ir_dsl;
+            use crate::schema::instance::dsl::*;
 
             let db_result = conn.transaction::<_, diesel::result::Error, _>(|conn| {
                 diesel::delete(
-                    ir_dsl::installed_resource
-                        .filter(ir_dsl::instance_id.eq(instance_id)),
+                    ir_dsl::installed_resource.filter(ir_dsl::instance_id.eq(instance_id)),
                 )
                 .execute(conn)?;
                 diesel::delete(instance.find(instance_id)).execute(conn)?;
@@ -730,8 +722,7 @@ impl Task for RepairInstanceTask {
                         Some(3),
                     );
 
-                    let progress =
-                        crate::sync::manifest_bootstrap::TaskBootstrapProgress(&ctx);
+                    let progress = crate::sync::manifest_bootstrap::TaskBootstrapProgress(&ctx);
                     match crate::sync::manifest_bootstrap::ensure_old_manifest(
                         &app_handle,
                         &inst,
@@ -805,13 +796,8 @@ impl Task for RepairInstanceTask {
             ctx.update_full(95, final_desc, Some(3), Some(3));
 
             ctx.update_description("Setting up Java runtime...".to_string());
-            if let Err(e) = crate::utils::java::ensure_java_for_instance(
-                &app_handle,
-                &inst,
-                None,
-                None,
-            )
-            .await
+            if let Err(e) =
+                crate::utils::java::ensure_java_for_instance(&app_handle, &inst, None, None).await
             {
                 return Err(format!("Java setup failed after repair: {}", e));
             }

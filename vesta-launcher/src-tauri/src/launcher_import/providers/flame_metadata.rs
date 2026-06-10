@@ -55,7 +55,8 @@ pub fn enrich_flame_metadata(instance: &mut ExternalInstanceCandidate) {
                 pack_id = extract_stringish(&json, &["projectID", "projectId", "project_id"]);
             }
             if version_id.is_none() {
-                version_id = extract_stringish(&json, &["fileID", "fileId", "file_id", "versionId"]);
+                version_id =
+                    extract_stringish(&json, &["fileID", "fileId", "file_id", "versionId"]);
             }
         }
     }
@@ -115,9 +116,7 @@ fn collect_hints_from_value(value: &Value, out: &mut Vec<FlameResourceHint>) {
             if let (Some(project_id), Some(version_id)) = (project_id, version_id) {
                 let file_name = map
                     .iter()
-                    .find(|(k, _)| {
-                        matches_key(k, &["fileName", "filename", "file_name", "path"])
-                    })
+                    .find(|(k, _)| matches_key(k, &["fileName", "filename", "file_name", "path"]))
                     .and_then(|(_, v)| value_to_string(v))
                     .and_then(|v| {
                         std::path::Path::new(&v)

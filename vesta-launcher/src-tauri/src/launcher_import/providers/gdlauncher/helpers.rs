@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use serde_json::Value;
 
 use crate::launcher_import::root_normalization::strip_known_suffixes;
@@ -57,8 +57,10 @@ pub(super) fn parse_carbon_instance(
         };
 
     let icon_path = encode_image_as_data_url(&instance_root.join("icon.png"));
-    let (modpack_platform, modpack_id, modpack_version_id) =
-        parse_modpack_linkage(parsed.modpack.as_ref(), &instance_root.join("packinfo.json"));
+    let (modpack_platform, modpack_id, modpack_version_id) = parse_modpack_linkage(
+        parsed.modpack.as_ref(),
+        &instance_root.join("packinfo.json"),
+    );
 
     ExternalInstanceCandidate {
         id,
@@ -99,17 +101,21 @@ fn parse_modpack_linkage(
         version_id = normalize_modpack_id(modpack.file_id.as_ref());
     }
 
-    if (platform.is_none() || project_id.is_none() || version_id.is_none()) && packinfo_path.is_file() {
+    if (platform.is_none() || project_id.is_none() || version_id.is_none())
+        && packinfo_path.is_file()
+    {
         if let Ok(raw) = std::fs::read_to_string(packinfo_path) {
             if let Ok(json) = serde_json::from_str::<Value>(&raw) {
                 if platform.is_none() {
                     platform = extract_platform(&json);
                 }
                 if project_id.is_none() {
-                    project_id = extract_stringish(&json, &["project_id", "projectId", "projectID"]);
+                    project_id =
+                        extract_stringish(&json, &["project_id", "projectId", "projectID"]);
                 }
                 if version_id.is_none() {
-                    version_id = extract_stringish(&json, &["file_id", "fileId", "fileID", "versionId"]);
+                    version_id =
+                        extract_stringish(&json, &["file_id", "fileId", "fileID", "versionId"]);
                 }
             }
         }

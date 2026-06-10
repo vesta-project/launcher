@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
 use crate::launcher_import::root_normalization::strip_known_suffixes;
 
@@ -56,7 +56,8 @@ pub fn extract_atlauncher_resource_hints(instance_root: &Path) -> Vec<ATResource
 
     let launcher = &parsed.launcher;
 
-    if let (Some(project), Some(version)) = (&launcher.modrinth_project, &launcher.modrinth_version) {
+    if let (Some(project), Some(version)) = (&launcher.modrinth_project, &launcher.modrinth_version)
+    {
         log::debug!(
             "[ATLauncher] extracted modrinth hint: {}/{}",
             project.id,
@@ -70,7 +71,9 @@ pub fn extract_atlauncher_resource_hints(instance_root: &Path) -> Vec<ATResource
         }];
     }
 
-    if let (Some(project), Some(version)) = (&launcher.curseforge_project, &launcher.curseforge_file) {
+    if let (Some(project), Some(version)) =
+        (&launcher.curseforge_project, &launcher.curseforge_file)
+    {
         log::debug!(
             "[ATLauncher] extracted curseforge hint: {}/{}",
             project.id,
@@ -88,14 +91,17 @@ pub fn extract_atlauncher_resource_hints(instance_root: &Path) -> Vec<ATResource
 }
 
 pub(super) fn extract_launcher_link(launcher: &ATLauncherData) -> Option<ATLauncherSourceLink> {
-    if let (Some(project), Some(version)) = (&launcher.modrinth_project, &launcher.modrinth_version) {
+    if let (Some(project), Some(version)) = (&launcher.modrinth_project, &launcher.modrinth_version)
+    {
         return Some(ATLauncherSourceLink::Modrinth {
             project_id: project.id.clone(),
             version_id: version.id.clone(),
         });
     }
 
-    if let (Some(project), Some(version)) = (&launcher.curseforge_project, &launcher.curseforge_file) {
+    if let (Some(project), Some(version)) =
+        (&launcher.curseforge_project, &launcher.curseforge_file)
+    {
         return Some(ATLauncherSourceLink::Curseforge {
             project_id: project.id.clone(),
             version_id: version.id.clone(),
@@ -302,7 +308,8 @@ mod tests {
             }"#,
         );
         let raw = std::fs::read_to_string(file.path()).expect("read temp file");
-        let parsed: ATInstance = serde_json::from_str(&raw).expect("parse instance json with numeric ids");
+        let parsed: ATInstance =
+            serde_json::from_str(&raw).expect("parse instance json with numeric ids");
 
         assert!(matches!(
             extract_instance_link(&parsed),

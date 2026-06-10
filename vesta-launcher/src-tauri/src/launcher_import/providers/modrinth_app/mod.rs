@@ -135,4 +135,3 @@ impl ExternalLauncherProvider for ModrinthAppProvider {
         Ok(instances)
     }
 }
-

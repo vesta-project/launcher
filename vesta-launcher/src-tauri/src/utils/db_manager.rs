@@ -4,11 +4,11 @@
 //! Legacy database initialization has been replaced by Diesel `utils::db`.
 
 use anyhow::Result;
-use directories::BaseDirs;
 use diesel::prelude::*;
 use diesel::sql_query;
-use std::io::ErrorKind;
+use directories::BaseDirs;
 use std::collections::HashSet;
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 fn app_config_folder_name() -> &'static str {
@@ -97,7 +97,10 @@ fn top_level_entry_under(base: &Path, p: &Path) -> Option<PathBuf> {
     Some(base.join(first.as_os_str()))
 }
 
-fn collect_db_owned_legacy_entries(legacy_dir: &Path, config_dir: &Path) -> Result<HashSet<PathBuf>> {
+fn collect_db_owned_legacy_entries(
+    legacy_dir: &Path,
+    config_dir: &Path,
+) -> Result<HashSet<PathBuf>> {
     let mut preserved = HashSet::new();
 
     let vesta_db = config_dir.join("vesta.db");
@@ -134,9 +137,10 @@ fn collect_db_owned_legacy_entries(legacy_dir: &Path, config_dir: &Path) -> Resu
         let db_url = config_db.to_string_lossy().to_string();
         let mut conn = diesel::sqlite::SqliteConnection::establish(&db_url)?;
 
-        let default_dirs = sql_query("SELECT default_game_dir AS path FROM app_config WHERE id = 1")
-            .load::<SinglePathRow>(&mut conn)
-            .unwrap_or_default();
+        let default_dirs =
+            sql_query("SELECT default_game_dir AS path FROM app_config WHERE id = 1")
+                .load::<SinglePathRow>(&mut conn)
+                .unwrap_or_default();
         for row in default_dirs {
             if let Some(p) = row.path {
                 if let Some(top) = top_level_entry_under(legacy_dir, Path::new(&p)) {
@@ -158,7 +162,10 @@ fn move_non_db_owned_entries(legacy_dir: &Path, config_dir: &Path) -> Result<()>
         let file_name_str = file_name.to_string_lossy();
         let dst_path = config_dir.join(&file_name);
 
-        if CONFIG_ARTIFACTS.iter().any(|a| *a == file_name_str.as_ref()) {
+        if CONFIG_ARTIFACTS
+            .iter()
+            .any(|a| *a == file_name_str.as_ref())
+        {
             continue;
         }
         if preserved_entries.contains(&src_path) {
@@ -281,7 +288,11 @@ mod tests {
         migrate_config_artifacts_only(&legacy_dir, &target_dir).expect("migrate config artifacts");
 
         assert!(target_dir.join("app_config.db").exists());
-        assert!(legacy_dir.join("instances").join("my-pack").join("mods").exists());
+        assert!(legacy_dir
+            .join("instances")
+            .join("my-pack")
+            .join("mods")
+            .exists());
         assert!(legacy_dir.exists());
 
         let _ = fs::remove_dir_all(&root);

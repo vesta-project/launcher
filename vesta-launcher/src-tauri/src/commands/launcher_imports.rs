@@ -1,11 +1,11 @@
-use tauri::{AppHandle, State};
 use std::path::Path;
+use tauri::{AppHandle, State};
 
-use crate::launcher_import::ImportManager;
 use crate::launcher_import::types::{
     DetectedLauncher, ExternalInstanceCandidate, ImportExternalInstanceRequest,
     ImportExternalInstanceResponse,
 };
+use crate::launcher_import::ImportManager;
 use crate::models::instance::Instance;
 use crate::resources::ResourceWatcher;
 use crate::tasks::installers::external_import::ImportExternalInstanceTask;

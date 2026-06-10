@@ -33,9 +33,7 @@ pub fn check_instance_not_running(game_dir: &Path) -> Result<()> {
                 .join(" ")
                 .to_lowercase();
 
-            cwd.contains(&game_dir_str)
-                || cmd.contains(&game_dir_str)
-                || cmd.contains("minecraft")
+            cwd.contains(&game_dir_str) || cmd.contains(&game_dir_str) || cmd.contains("minecraft")
         })
         .map(|(pid, proc)| format!("{} ({})", proc.name().to_string_lossy(), pid))
         .collect();
@@ -100,8 +98,12 @@ pub fn rotate_world_save(game_dir: &Path, world_path: &str, quarantine_path: &st
         target_dir
     );
 
-    std::fs::rename(&source_dir, &target_dir)
-        .with_context(|| format!("Failed to rotate world save {:?} to {:?}", source_dir, target_dir))?;
+    std::fs::rename(&source_dir, &target_dir).with_context(|| {
+        format!(
+            "Failed to rotate world save {:?} to {:?}",
+            source_dir, target_dir
+        )
+    })?;
 
     Ok(())
 }

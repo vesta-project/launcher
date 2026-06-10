@@ -342,9 +342,8 @@ fn insert_nested(
 
     if parts.len() == 1 {
         // Leaf node — try to parse the value
-        let parsed: serde_json::Value = serde_json::from_str(value).unwrap_or_else(|_| {
-            serde_json::Value::String(value.to_string())
-        });
+        let parsed: serde_json::Value = serde_json::from_str(value)
+            .unwrap_or_else(|_| serde_json::Value::String(value.to_string()));
         obj.insert(key, parsed);
     } else {
         // Intermediate node

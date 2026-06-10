@@ -4,8 +4,8 @@ pub mod flame_metadata;
 pub mod ftb;
 pub mod gdlauncher;
 pub mod instance_stats;
-pub mod multimc;
 pub mod modrinth_app;
+pub mod multimc;
 pub mod prism;
 pub mod prism_multimc_cfg;
 pub mod technic;
@@ -22,4 +22,3 @@ pub trait ExternalLauncherProvider: Send + Sync {
     fn detect_paths(&self) -> Vec<PathBuf>;
     fn list_instances(&self, base_path: &Path) -> Result<Vec<ExternalInstanceCandidate>>;
 }
-

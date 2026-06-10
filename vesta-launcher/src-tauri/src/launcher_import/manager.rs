@@ -4,13 +4,13 @@ use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
 
-use crate::launcher_import::providers::instance_stats::enrich_candidate_stats;
 use crate::launcher_import::providers::atlauncher::ATLauncherProvider;
 use crate::launcher_import::providers::curseforge::CurseforgeProvider;
 use crate::launcher_import::providers::ftb::FTBProvider;
 use crate::launcher_import::providers::gdlauncher::GDLauncherProvider;
-use crate::launcher_import::providers::multimc::MultiMCProvider;
+use crate::launcher_import::providers::instance_stats::enrich_candidate_stats;
 use crate::launcher_import::providers::modrinth_app::ModrinthAppProvider;
+use crate::launcher_import::providers::multimc::MultiMCProvider;
 use crate::launcher_import::providers::prism::PrismProvider;
 use crate::launcher_import::providers::technic::TechnicProvider;
 use crate::launcher_import::providers::ExternalLauncherProvider;
@@ -38,7 +38,10 @@ impl ImportManager {
     }
 
     pub fn detect_launchers(&self) -> Vec<DetectedLauncher> {
-        log::info!("[launcher_import] detect-start providers={}", self.providers.len());
+        log::info!(
+            "[launcher_import] detect-start providers={}",
+            self.providers.len()
+        );
         let detected = self
             .providers
             .iter()

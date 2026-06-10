@@ -122,7 +122,13 @@ fn parse_modern_instance(
         .or(parsed.install_location.as_ref())
         .or(parsed.install_path.as_ref())
         .map(PathBuf::from)
-        .map(|path| if path.is_absolute() { path } else { base_path.join(path) })
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                base_path.join(path)
+            }
+        })
         .unwrap_or_else(|| instance_root.to_path_buf());
     let loader_name = parsed.base_mod_loader.or(parsed.mod_loader).map(|l| l.name);
     let (modloader, modloader_version) = split_loader(loader_name);
@@ -167,7 +173,13 @@ fn parse_modern_value(
         .or(parsed.install_location.as_ref())
         .or(parsed.install_path.as_ref())
         .map(PathBuf::from)
-        .map(|path| if path.is_absolute() { path } else { base_path.join(path) })
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                base_path.join(path)
+            }
+        })
         .unwrap_or_else(|| root.to_path_buf());
     let loader_name = parsed.base_mod_loader.or(parsed.mod_loader).map(|l| l.name);
     let (modloader, modloader_version) = split_loader(loader_name);
@@ -245,7 +257,10 @@ fn parse_modern_value(
     })
 }
 
-fn parse_legacy_instance(instance_root: &Path, cfg_path: &Path) -> Result<Option<ExternalInstanceCandidate>> {
+fn parse_legacy_instance(
+    instance_root: &Path,
+    cfg_path: &Path,
+) -> Result<Option<ExternalInstanceCandidate>> {
     let raw = std::fs::read_to_string(cfg_path)?;
     let parsed: MinecraftInstance = match serde_json::from_str(&raw) {
         Ok(v) => v,
@@ -285,19 +300,34 @@ fn extract_modpack_ids(
     top_file_id: Option<&Value>,
     installed_modpack: Option<&InstalledModpack>,
 ) -> (Option<String>, Option<String>) {
-    let nested_project_id = installed_modpack
-        .and_then(|pack| {
-            pack.project_id
-                .as_ref()
-                .or(pack.addon_id.as_ref())
-                .or_else(|| pack.installed_file.as_ref().and_then(|f| f.project_id.as_ref()))
-                .or_else(|| pack.latest_file.as_ref().and_then(|f| f.project_id.as_ref()))
-        });
+    let nested_project_id = installed_modpack.and_then(|pack| {
+        pack.project_id
+            .as_ref()
+            .or(pack.addon_id.as_ref())
+            .or_else(|| {
+                pack.installed_file
+                    .as_ref()
+                    .and_then(|f| f.project_id.as_ref())
+            })
+            .or_else(|| {
+                pack.latest_file
+                    .as_ref()
+                    .and_then(|f| f.project_id.as_ref())
+            })
+    });
     let nested_file_id = installed_modpack.and_then(|pack| {
         pack.file_id
             .as_ref()
-            .or_else(|| pack.installed_file.as_ref().and_then(|f| f.file_id.as_ref().or(f.file_uid.as_ref())))
-            .or_else(|| pack.latest_file.as_ref().and_then(|f| f.file_id.as_ref().or(f.file_uid.as_ref())))
+            .or_else(|| {
+                pack.installed_file
+                    .as_ref()
+                    .and_then(|f| f.file_id.as_ref().or(f.file_uid.as_ref()))
+            })
+            .or_else(|| {
+                pack.latest_file
+                    .as_ref()
+                    .and_then(|f| f.file_id.as_ref().or(f.file_uid.as_ref()))
+            })
     });
     (
         normalize_value(top_project_id).or_else(|| normalize_value(nested_project_id)),
@@ -307,7 +337,11 @@ fn extract_modpack_ids(
 
 fn split_loader(loader_name: Option<String>) -> (Option<String>, Option<String>) {
     loader_name
-        .and_then(|loader| loader.split_once('-').map(|(kind, version)| (kind.to_string(), version.to_string())))
+        .and_then(|loader| {
+            loader
+                .split_once('-')
+                .map(|(kind, version)| (kind.to_string(), version.to_string()))
+        })
         .map(|(kind, version)| (Some(kind), Some(version)))
         .unwrap_or((Some("vanilla".to_string()), None))
 }
@@ -320,7 +354,6 @@ fn normalize_value(value: Option<&Value>) -> Option<String> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::resolve_scan_roots;
@@ -332,7 +365,8 @@ mod tests {
         let launcher_root = temp_dir.path().join("CurseForge");
         let game_instances = launcher_root.join("agent/GameInstances");
         fs::create_dir_all(&game_instances).expect("create game instances root");
-        fs::write(game_instances.join("MinecraftGameInstance.json"), b"{}").expect("write data file");
+        fs::write(game_instances.join("MinecraftGameInstance.json"), b"{}")
+            .expect("write data file");
 
         let roots = resolve_scan_roots(&launcher_root);
         assert_eq!(roots, vec![game_instances]);

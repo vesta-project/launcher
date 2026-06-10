@@ -33,10 +33,7 @@ impl NetworkManager {
             }
         });
 
-        Self {
-            status,
-            app_handle,
-        }
+        Self { status, app_handle }
     }
 
     async fn verify_online_static() -> NetworkStatus {
@@ -45,13 +42,7 @@ impl NetworkManager {
         let timeout = std::time::Duration::from_secs(5);
 
         for endpoint in endpoints {
-            if client
-                .head(endpoint)
-                .timeout(timeout)
-                .send()
-                .await
-                .is_ok()
-            {
+            if client.head(endpoint).timeout(timeout).send().await.is_ok() {
                 return NetworkStatus::Online;
             }
         }

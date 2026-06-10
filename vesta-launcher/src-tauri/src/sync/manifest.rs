@@ -35,8 +35,10 @@ pub fn build_new_manifest(
 
     let override_paths =
         piston_lib::game::modpack::parser::list_override_paths(zip_path).unwrap_or_default();
-    let override_pathbufs: Vec<std::path::PathBuf> =
-        override_paths.iter().map(std::path::PathBuf::from).collect();
+    let override_pathbufs: Vec<std::path::PathBuf> = override_paths
+        .iter()
+        .map(std::path::PathBuf::from)
+        .collect();
 
     let mut manifest = piston_lib::game::modpack::manifest::ModpackManifest::from_install(
         &metadata,
@@ -91,9 +93,7 @@ pub fn hash_current_directory(
     }
 
     for ov in &manifest.overrides.extracted {
-        let Ok(full_path) =
-            piston_lib::utils::paths::join_validated(game_dir, ov)
-        else {
+        let Ok(full_path) = piston_lib::utils::paths::join_validated(game_dir, ov) else {
             continue;
         };
         match hash_file_on_disk(&full_path) {
@@ -150,12 +150,13 @@ fn backfill_mod_sha1_from_installed_resources(
             continue;
         }
 
-        let path_candidates = [
-            normalize_path(&game_dir.join(&m.path)),
-            normalize_path(
-                &game_dir.join(piston_lib::game::modpack::manifest::disabled_mod_path(&m.path)),
-            ),
-        ];
+        let path_candidates =
+            [
+                normalize_path(&game_dir.join(&m.path)),
+                normalize_path(&game_dir.join(
+                    piston_lib::game::modpack::manifest::disabled_mod_path(&m.path),
+                )),
+            ];
         let mut found_hash = None;
         for local_path in &path_candidates {
             if let Ok(Some(res)) = ir_dsl::installed_resource

@@ -5,6 +5,7 @@ pub mod auth;
 mod commands;
 pub mod discord;
 mod launcher_import;
+mod logging;
 mod metadata_cache;
 pub mod models;
 mod notifications;
@@ -56,19 +57,6 @@ fn main() {
         }
     }));
 
-    // Configure logging with 30-day retention in the platform-specific launcher config directory
-    let log_plugin = tauri_plugin_log::Builder::new()
-        .targets([
-            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
-            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
-            tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Webview),
-        ])
-        .level(log_level)
-        .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
-        .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
-        .max_file_size(10_000_000) // 10MB per file
-        .build();
-
     #[cfg(not(target_os = "ios"))]
     let _sentry_minidump_guard = if sentry_client.is_some() {
         sentry::Hub::current()
@@ -90,9 +78,11 @@ fn main() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             None,
         ))
-        .setup(setup::init)
+        .setup(move |app| {
+            logging::register_log_plugin(app, log_level)?;
+            setup::init(app)
+        })
         .manage(utils::dialog_manager::DialogManager::new())
-        .plugin(log_plugin)
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())

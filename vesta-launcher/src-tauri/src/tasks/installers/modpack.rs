@@ -349,8 +349,7 @@ impl Task for InstallModpackTask {
                         .execute(&mut conn);
 
                     // Emit update event to refresh UI with failure reason
-                    if let Ok(updated_inst) =
-                        crate::commands::instances::get_instance(instance.id)
+                    if let Ok(updated_inst) = crate::commands::instances::get_instance(instance.id)
                     {
                         use tauri::Emitter;
                         let _ = app_handle.emit("core://instance-updated", updated_inst);
@@ -370,11 +369,12 @@ impl Task for InstallModpackTask {
             );
 
             let mut final_instance =
-                crate::utils::instance_runtime::sync_fields(instance.id, &runtime_fields)
-                .map_err(|e| {
-                    log::error!("[ModpackTask] Failed to sync instance runtime: {}", e);
-                    e
-                })?;
+                crate::utils::instance_runtime::sync_fields(instance.id, &runtime_fields).map_err(
+                    |e| {
+                        log::error!("[ModpackTask] Failed to sync instance runtime: {}", e);
+                        e
+                    },
+                )?;
 
             let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
             use crate::schema::instance::dsl as inst_dsl;
@@ -390,10 +390,9 @@ impl Task for InstallModpackTask {
             .await
             .map_err(|e| format!("Java setup failed after modpack install: {}", e))?;
 
-            if let Err(e) =
-                diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
-                    .set(inst_dsl::installation_status.eq(Some("installed".to_string())))
-                    .execute(&mut conn)
+            if let Err(e) = diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(instance.id)))
+                .set(inst_dsl::installation_status.eq(Some("installed".to_string())))
+                .execute(&mut conn)
             {
                 log::error!("[ModpackTask] Failed to update installation status: {}", e);
             } else {
@@ -405,8 +404,8 @@ impl Task for InstallModpackTask {
 
             // Emit update event
             use tauri::Emitter;
-            let emitted = crate::commands::instances::get_instance(instance.id)
-                .unwrap_or(final_instance);
+            let emitted =
+                crate::commands::instances::get_instance(instance.id).unwrap_or(final_instance);
             let _ = app_handle.emit("core://instance-updated", emitted.clone());
             let _ = app_handle.emit("core://instance-installed", emitted);
 
@@ -440,22 +439,23 @@ impl Task for InstallModpackTask {
                     if local_path.exists() {
                         let hash = crate::utils::hash::calculate_sha1(&local_path).ok();
                         let path_meta = local_path.clone();
-                        let meta = tokio::task::spawn_blocking(move || {
-                            std::fs::metadata(&path_meta)
-                        })
-                        .await
-                        .ok()
-                        .and_then(|r| r.ok())
-                        .map_or((0, 0), |m| {
-                            (
-                                m.len() as i64,
-                                m.modified()
-                                    .ok()
-                                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                    .map(|d| d.as_secs() as i64)
-                                    .unwrap_or(0),
-                            )
-                        });
+                        let meta =
+                            tokio::task::spawn_blocking(move || std::fs::metadata(&path_meta))
+                                .await
+                                .ok()
+                                .and_then(|r| r.ok())
+                                .map_or((0, 0), |m| {
+                                    (
+                                        m.len() as i64,
+                                        m.modified()
+                                            .ok()
+                                            .and_then(|t| {
+                                                t.duration_since(std::time::UNIX_EPOCH).ok()
+                                            })
+                                            .map(|d| d.as_secs() as i64)
+                                            .unwrap_or(0),
+                                    )
+                                });
 
                         let _ = crate::resources::watcher::link_manual_resource_to_db(
                             &app_handle_clone,
@@ -573,25 +573,25 @@ impl Task for InstallModpackTask {
                             let local_path =
                                 game_dir_clone.join(subfolder).join(&version.file_name);
                             if local_path.exists() {
-                                 let path_meta = local_path.clone();
-                                 let meta = tokio::task::spawn_blocking(move || {
-                                     std::fs::metadata(&path_meta)
-                                 })
-                                 .await
-                                 .ok()
-                                 .and_then(|r| r.ok())
-                                 .map_or((0, 0), |m| {
-                                     (
-                                         m.len() as i64,
-                                         m.modified()
-                                             .ok()
-                                             .and_then(|t| {
-                                                 t.duration_since(std::time::UNIX_EPOCH).ok()
-                                             })
-                                             .map(|d| d.as_secs() as i64)
-                                             .unwrap_or(0),
-                                     )
-                                 });
+                                let path_meta = local_path.clone();
+                                let meta = tokio::task::spawn_blocking(move || {
+                                    std::fs::metadata(&path_meta)
+                                })
+                                .await
+                                .ok()
+                                .and_then(|r| r.ok())
+                                .map_or((0, 0), |m| {
+                                    (
+                                        m.len() as i64,
+                                        m.modified()
+                                            .ok()
+                                            .and_then(|t| {
+                                                t.duration_since(std::time::UNIX_EPOCH).ok()
+                                            })
+                                            .map(|d| d.as_secs() as i64)
+                                            .unwrap_or(0),
+                                    )
+                                });
 
                                 let _ = crate::resources::watcher::link_resource_to_db(
                                     &app_handle_clone,
@@ -657,7 +657,7 @@ pub fn spawn_manifest_resource_linking(
     game_dir: &std::path::Path,
     manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
 ) {
-    use piston_lib::game::modpack::manifest::{ModSource, resolve_mod_path_on_disk};
+    use piston_lib::game::modpack::manifest::{resolve_mod_path_on_disk, ModSource};
 
     let app_handle = app_handle.clone();
     let game_dir = game_dir.to_path_buf();
@@ -709,7 +709,11 @@ pub fn spawn_manifest_resource_linking(
                         .await;
                     }
                 }
-                ModSource::CurseForge { project_id, file_id, .. } => {
+                ModSource::CurseForge {
+                    project_id,
+                    file_id,
+                    ..
+                } => {
                     let pid = project_id.map(|p| p.to_string()).unwrap_or_default();
                     let Ok(version) = rm
                         .get_version(SourcePlatform::CurseForge, &pid, &file_id.to_string())

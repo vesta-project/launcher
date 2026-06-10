@@ -75,5 +75,3 @@ pub fn extract_gdlauncher_resource_hints(
     }
     out
 }
-
-

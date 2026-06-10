@@ -137,7 +137,10 @@ fn encode_pack_icon(root: &Path, pack_dir: &Path, pack_slug: &str) -> Option<Str
         pack_dir.join("icon.png"),
         pack_dir.join("icon.jpg"),
         pack_dir.join("logo.png"),
-        root.join("assets").join("packs").join(pack_slug).join("icon.png"),
+        root.join("assets")
+            .join("packs")
+            .join(pack_slug)
+            .join("icon.png"),
     ];
     for icon in candidates {
         if !icon.is_file() {

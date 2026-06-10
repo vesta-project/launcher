@@ -66,4 +66,3 @@ pub struct ImportExternalInstanceRequest {
 pub struct ImportExternalInstanceResponse {
     pub instance_id: i32,
 }
-

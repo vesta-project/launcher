@@ -10,8 +10,8 @@ use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
-use tauri::Manager;
 use tauri::webview::Color;
+use tauri::Manager;
 // use crate::instances::InstanceManager;  // TODO: InstanceManager doesn't exist yet
 use std::fs;
 use std::sync::Arc;
@@ -712,17 +712,20 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                             // Check for exit_status.json to get accurate exit time and exit code
                             let exit_status_path =
                                 run_state.game_dir.join(".vesta").join("exit_status.json");
-                            let stop_requested = match piston_lib::utils::stop_intent::consume_stop_requested(&run_state.game_dir) {
-                                Ok(value) => value,
-                                Err(e) => {
-                                    log::warn!(
-                                        "Failed to consume stop-request marker for {}: {}",
-                                        run_state.instance_id,
-                                        e
-                                    );
-                                    false
-                                }
-                            };
+                            let stop_requested =
+                                match piston_lib::utils::stop_intent::consume_stop_requested(
+                                    &run_state.game_dir,
+                                ) {
+                                    Ok(value) => value,
+                                    Err(e) => {
+                                        log::warn!(
+                                            "Failed to consume stop-request marker for {}: {}",
+                                            run_state.instance_id,
+                                            e
+                                        );
+                                        false
+                                    }
+                                };
                             let mut crashed = false;
 
                             if exit_status_path.exists() {

@@ -23,6 +23,16 @@ This document covers typical developer workflows, code conventions, and where to
   ```
   (Runs Tauri + Vite with hot-reloading.)
 
+### CrabNebula DevTools (development only)
+
+Debug builds include [CrabNebula DevTools](https://devtools.crabnebula.dev) for inspecting invoke calls, console output, and Tauri config. The `vesta:dev` script enables the `devtools` Cargo feature; production builds exclude the crate entirely.
+
+1. Run `bun run vesta:dev`
+2. Look for the CrabNebula WebSocket connection URL in the terminal output
+3. Open that URL, or go to [devtools.crabnebula.dev](https://devtools.crabnebula.dev) and connect manually
+
+The Settings **Debug logging** toggle still controls log verbosity (`Info` vs `Debug`) and requires an app restart. DevTools receives the same log stream as the existing `tauri-plugin-log` setup (stdout, log files, webview).
+
 - **Frontend Only:**
   ```bash
   cd vesta-launcher

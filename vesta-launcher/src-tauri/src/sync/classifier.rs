@@ -64,8 +64,7 @@ pub fn world_folder_from_level_dat(path: &str) -> Option<String> {
 
 pub fn is_world_save(path: &str) -> bool {
     let lower = path.to_lowercase();
-    (lower.starts_with("saves/") || lower.starts_with("saves\\"))
-        && lower.ends_with("level.dat")
+    (lower.starts_with("saves/") || lower.starts_with("saves\\")) && lower.ends_with("level.dat")
 }
 
 #[cfg(test)]
@@ -82,10 +81,7 @@ mod tests {
 
     #[test]
     fn test_classify_text() {
-        assert_eq!(
-            classify("config/modmenu.properties"),
-            FileClass::Text
-        );
+        assert_eq!(classify("config/modmenu.properties"), FileClass::Text);
         assert_eq!(classify("config/sodium-options.json"), FileClass::Text);
         assert_eq!(classify("config/modpack.toml"), FileClass::Text);
         assert_eq!(classify("config/forge.cfg"), FileClass::Text);

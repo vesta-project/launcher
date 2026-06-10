@@ -18,7 +18,8 @@ pub fn enrich_candidate_stats(candidate: &mut ExternalInstanceCandidate) {
     candidate.worlds_count = count_dirs_in_dir(&game_dir.join("saves"));
     candidate.screenshots_count = count_files_in_dir(&game_dir.join("screenshots"));
     candidate.last_played_at_unix_ms = guess_last_played_ms(&game_dir);
-    candidate.game_directory_size_bytes = compute_dir_size_bounded(&game_dir, MAX_SIZE_SCAN_ENTRIES);
+    candidate.game_directory_size_bytes =
+        compute_dir_size_bounded(&game_dir, MAX_SIZE_SCAN_ENTRIES);
 }
 
 fn count_files_in_dir(path: &Path) -> Option<u32> {

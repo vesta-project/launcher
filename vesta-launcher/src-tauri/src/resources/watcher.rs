@@ -215,56 +215,51 @@ impl ResourceWatcher {
             });
         }
         for path in candidates {
-                let app = self.app_handle.clone();
-                let limiter_spawn = scan_limiter.clone();
-                let in_flight_spawn = in_flight_scans.clone();
+            let app = self.app_handle.clone();
+            let limiter_spawn = scan_limiter.clone();
+            let in_flight_spawn = in_flight_scans.clone();
 
-                // Get metadata for quick check
-                let path_meta = path.clone();
-                let (file_size, file_mtime) = tokio::task::spawn_blocking(move || {
-                    std::fs::metadata(&path_meta)
-                })
-                .await
-                .context("spawn_blocking panicked")?
-                .map_or((0, 0), |meta| {
-                    (
-                        meta.len() as i64,
-                        meta.modified()
-                            .ok()
-                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs() as i64)
-                            .unwrap_or(0),
-                    )
-                });
+            // Get metadata for quick check
+            let path_meta = path.clone();
+            let (file_size, file_mtime) =
+                tokio::task::spawn_blocking(move || std::fs::metadata(&path_meta))
+                    .await
+                    .context("spawn_blocking panicked")?
+                    .map_or((0, 0), |meta| {
+                        (
+                            meta.len() as i64,
+                            meta.modified()
+                                .ok()
+                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs() as i64)
+                                .unwrap_or(0),
+                        )
+                    });
 
-                if !mark_in_flight(&in_flight_scans, db_id, &path).await {
-                    summary.skipped += 1;
-                    continue;
-                }
-                join_set.spawn(async move {
-                    let _permit = limiter_spawn
-                        .acquire_owned()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Scan limiter closed: {e}"));
-                    if _permit.is_err() {
-                        clear_in_flight(&in_flight_spawn, db_id, &path).await;
-                        return;
-                    }
-                    // Pass metadata for skip check
-                    if let Err(e) =
-                        identify_and_link_resource(&app, db_id, &path, Some((file_size, file_mtime)))
-                            .await
-                    {
-                        if !e.to_string().contains("FOREIGN KEY") {
-                            log::error!(
-                                "[ResourceWatcher] Failed to identify {:?}: {}",
-                                path,
-                                e
-                            );
-                        }
-                    }
+            if !mark_in_flight(&in_flight_scans, db_id, &path).await {
+                summary.skipped += 1;
+                continue;
+            }
+            join_set.spawn(async move {
+                let _permit = limiter_spawn
+                    .acquire_owned()
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Scan limiter closed: {e}"));
+                if _permit.is_err() {
                     clear_in_flight(&in_flight_spawn, db_id, &path).await;
-                });
+                    return;
+                }
+                // Pass metadata for skip check
+                if let Err(e) =
+                    identify_and_link_resource(&app, db_id, &path, Some((file_size, file_mtime)))
+                        .await
+                {
+                    if !e.to_string().contains("FOREIGN KEY") {
+                        log::error!("[ResourceWatcher] Failed to identify {:?}: {}", path, e);
+                    }
+                }
+                clear_in_flight(&in_flight_spawn, db_id, &path).await;
+            });
         }
         while let Some(joined) = join_set.join_next().await {
             match joined {
@@ -329,7 +324,9 @@ impl ResourceWatcher {
     }
 
     pub async fn refresh_instance(&self, db_id: i32, game_dir: String) -> anyhow::Result<()> {
-        let _ = self.refresh_instance_with_progress(db_id, game_dir, None).await?;
+        let _ = self
+            .refresh_instance_with_progress(db_id, game_dir, None)
+            .await?;
         Ok(())
     }
 
@@ -385,22 +382,21 @@ async fn handle_event(
                     let in_flight_clone = in_flight_scans.clone();
 
                     let path_clone = path.clone();
-                    let (file_size, file_mtime) = tokio::task::spawn_blocking(move || {
-                        std::fs::metadata(&path_clone)
-                    })
-                    .await
-                    .ok()
-                    .and_then(|r| r.ok())
-                    .map_or((0, 0), |meta| {
-                        (
-                            meta.len() as i64,
-                            meta.modified()
-                                .ok()
-                                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs() as i64)
-                                .unwrap_or(0),
-                        )
-                    });
+                    let (file_size, file_mtime) =
+                        tokio::task::spawn_blocking(move || std::fs::metadata(&path_clone))
+                            .await
+                            .ok()
+                            .and_then(|r| r.ok())
+                            .map_or((0, 0), |meta| {
+                                (
+                                    meta.len() as i64,
+                                    meta.modified()
+                                        .ok()
+                                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                                        .map(|d| d.as_secs() as i64)
+                                        .unwrap_or(0),
+                                )
+                            });
 
                     if !mark_in_flight(&in_flight_scans, db_id, &path).await {
                         continue;
@@ -509,11 +505,9 @@ async fn identify_and_link_resource(
         m
     } else {
         let path_owned = path.to_path_buf();
-        let meta_result = tokio::task::spawn_blocking(move || {
-            std::fs::metadata(&path_owned)
-        })
-        .await
-        .context("spawn_blocking panicked")?;
+        let meta_result = tokio::task::spawn_blocking(move || std::fs::metadata(&path_owned))
+            .await
+            .context("spawn_blocking panicked")?;
         match meta_result {
             Ok(meta) => (
                 meta.len() as i64,
@@ -549,7 +543,9 @@ async fn identify_and_link_resource(
                     && res.is_enabled == is_enabled
                 {
                     let unresolved_manual = res.platform == "manual" && res.remote_id.is_empty();
-                    if (!unresolved_manual) && (res.platform != "modpack" || !res.remote_id.is_empty()) {
+                    if (!unresolved_manual)
+                        && (res.platform != "modpack" || !res.remote_id.is_empty())
+                    {
                         log::debug!(
                             "[ResourceWatcher] Metadata match for {}, skipping scan",
                             path_str

@@ -1210,11 +1210,11 @@ pub async fn launch_instance(
     }
 
     if instance_data.installation_status.as_deref() == Some("installing") {
-        let op = instance_data.last_operation.as_deref().unwrap_or("operation");
-        return Err(format!(
-            "Cannot launch while instance is busy ({})",
-            op
-        ));
+        let op = instance_data
+            .last_operation
+            .as_deref()
+            .unwrap_or("operation");
+        return Err(format!("Cannot launch while instance is busy ({})", op));
     }
 
     let instance_id = instance_data.slug();
@@ -1820,19 +1820,20 @@ pub async fn launch_instance(
                         // Check exit status
                         let exit_status_path =
                             game_dir_monitor.join(".vesta").join("exit_status.json");
-                        let stop_requested = match piston_lib::utils::stop_intent::consume_stop_requested(
-                            &game_dir_monitor,
-                        ) {
-                            Ok(value) => value,
-                            Err(e) => {
-                                log::warn!(
-                                    "Failed to consume stop-request marker for {}: {}",
-                                    instance_id_monitor,
-                                    e
-                                );
-                                false
-                            }
-                        };
+                        let stop_requested =
+                            match piston_lib::utils::stop_intent::consume_stop_requested(
+                                &game_dir_monitor,
+                            ) {
+                                Ok(value) => value,
+                                Err(e) => {
+                                    log::warn!(
+                                        "Failed to consume stop-request marker for {}: {}",
+                                        instance_id_monitor,
+                                        e
+                                    );
+                                    false
+                                }
+                            };
                         let (exited_at_ts, exit_code) = if exit_status_path.exists() {
                             let path_for_blocking = exit_status_path.clone();
                             match tokio::task::spawn_blocking(move || {
@@ -2181,8 +2182,8 @@ pub async fn read_instance_log(
 
     tauri::async_runtime::spawn_blocking(move || {
         use std::io::BufRead;
-        let file =
-            std::fs::File::open(&log_file).map_err(|e| format!("Failed to open log file: {}", e))?;
+        let file = std::fs::File::open(&log_file)
+            .map_err(|e| format!("Failed to open log file: {}", e))?;
         let reader = std::io::BufReader::new(file);
 
         let lines: Vec<String> = reader.lines().filter_map(Result::ok).collect();
@@ -2281,8 +2282,8 @@ pub async fn read_specific_log_file(path: String) -> Result<Vec<String>, String>
 
     tauri::async_runtime::spawn_blocking(move || {
         use std::io::{BufRead, BufReader};
-        let file = std::fs::File::open(&path_buf)
-            .map_err(|e| format!("Failed to open file: {}", e))?;
+        let file =
+            std::fs::File::open(&path_buf).map_err(|e| format!("Failed to open file: {}", e))?;
 
         let ext = path_buf.extension().and_then(|s| s.to_str()).unwrap_or("");
 
@@ -2449,7 +2450,8 @@ pub async fn resume_instance_operation(
                 "installing",
             )?;
 
-            let task = crate::tasks::update_modpack::UpdateModpackTask::new(instance_id, version_id);
+            let task =
+                crate::tasks::update_modpack::UpdateModpackTask::new(instance_id, version_id);
             task_manager.submit(Box::new(task)).await
         }
         "install" | _ => install_instance(app_handle, task_manager, inst, None).await,
@@ -2480,4 +2482,3 @@ pub async fn update_instance_modpack_version(
 
     Ok(())
 }
-

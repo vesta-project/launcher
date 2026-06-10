@@ -253,8 +253,7 @@ impl Task for ImportResourceResyncTask {
                 }
 
                 let game_dir = std::path::Path::new(&target_dir);
-                let progress =
-                    crate::sync::manifest_bootstrap::TaskBootstrapProgress(&ctx);
+                let progress = crate::sync::manifest_bootstrap::TaskBootstrapProgress(&ctx);
                 if let Err(err) = crate::sync::manifest_bootstrap::ensure_old_manifest(
                     &app_handle,
                     &target_instance,

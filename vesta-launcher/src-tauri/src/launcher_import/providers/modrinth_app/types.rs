@@ -1,5 +1,5 @@
-use diesel::QueryableByName;
 use diesel::sql_types::{Nullable, Text};
+use diesel::QueryableByName;
 use serde::Deserialize;
 
 #[derive(Debug, Clone)]

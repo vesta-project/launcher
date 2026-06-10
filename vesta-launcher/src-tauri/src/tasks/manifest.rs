@@ -113,10 +113,7 @@ impl Task for GenerateManifestTask {
                 }
                 piston_lib::game::metadata::cache::refresh_metadata(&data_dir).await
             } else {
-                log::info!(
-                    "Fetching PistonMetadata (status: {:?})...",
-                    network_status
-                );
+                log::info!("Fetching PistonMetadata (status: {:?})...", network_status);
                 piston_lib::game::metadata::cache::load_or_fetch_metadata_ext(&data_dir).await
             };
 

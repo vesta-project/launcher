@@ -90,7 +90,12 @@ impl Task for ImportExternalInstanceTask {
             } else {
                 ctx.update_description("Preparing launcher file copy...".to_string());
             }
-            ctx.update_full(5, "Preparing launcher file copy...".to_string(), Some(0), Some(3));
+            ctx.update_full(
+                5,
+                "Preparing launcher file copy...".to_string(),
+                Some(0),
+                Some(3),
+            );
             log::info!("[external_import] copy-start instance_id={}", instance_id);
 
             let watcher = app_handle.state::<ResourceWatcher>();

@@ -73,13 +73,13 @@ impl StagingDir {
     pub fn copy_into_staging(&self, source: &Path, relative_path: &str) -> Result<()> {
         let target = self.staged_path(relative_path)?;
         self.prepare_parent(relative_path)?;
-        std::fs::copy(source, &target).with_context(|| {
-            format!(
-                "Failed to copy {:?} into staging as {:?}",
-                source, target
-            )
-        })?;
-        log::debug!("[staging] Copied into staging: {:?} → {}", source, relative_path);
+        std::fs::copy(source, &target)
+            .with_context(|| format!("Failed to copy {:?} into staging as {:?}", source, target))?;
+        log::debug!(
+            "[staging] Copied into staging: {:?} → {}",
+            source,
+            relative_path
+        );
         Ok(())
     }
 
@@ -88,13 +88,13 @@ impl StagingDir {
     pub fn move_into_staging(&self, source: &Path, relative_path: &str) -> Result<()> {
         let target = self.staged_path(relative_path)?;
         self.prepare_parent(relative_path)?;
-        std::fs::rename(source, &target).with_context(|| {
-            format!(
-                "Failed to move {:?} into staging as {:?}",
-                source, target
-            )
-        })?;
-        log::debug!("[staging] Moved into staging: {:?} → {}", source, relative_path);
+        std::fs::rename(source, &target)
+            .with_context(|| format!("Failed to move {:?} into staging as {:?}", source, target))?;
+        log::debug!(
+            "[staging] Moved into staging: {:?} → {}",
+            source,
+            relative_path
+        );
         Ok(())
     }
 
@@ -155,9 +155,8 @@ impl StagingDir {
                 if let Some(parent) = destination.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
-                std::fs::rename(&path, &destination).with_context(|| {
-                    format!("Failed to move {:?} → {:?}", path, destination)
-                })?;
+                std::fs::rename(&path, &destination)
+                    .with_context(|| format!("Failed to move {:?} → {:?}", path, destination))?;
             }
         }
         Ok(())
@@ -204,9 +203,7 @@ mod tests {
         std::fs::create_dir_all(&game_dir).unwrap();
 
         let staging = StagingDir::new(&game_dir).unwrap();
-        staging
-            .write_staged("mods/test.jar", b"fake jar")
-            .unwrap();
+        staging.write_staged("mods/test.jar", b"fake jar").unwrap();
         staging.rollback();
 
         // Game directory should be untouched
@@ -239,9 +236,7 @@ mod tests {
         std::fs::create_dir_all(&game_dir).unwrap();
 
         let staging = StagingDir::new(&game_dir).unwrap();
-        assert!(staging
-            .write_staged("../outside.txt", b"bad")
-            .is_err());
+        assert!(staging.write_staged("../outside.txt", b"bad").is_err());
         staging.rollback();
         assert!(!dir.path().join("outside.txt").exists());
     }

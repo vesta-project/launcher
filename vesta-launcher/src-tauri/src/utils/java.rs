@@ -114,8 +114,6 @@ pub fn resolve_required_java_from_manifest(
     ))
 }
 
-
-
 pub async fn resolve_required_java_major(
     app_handle: &tauri::AppHandle,
     mc_version: &str,
@@ -209,7 +207,9 @@ pub fn ensure_managed_java_preference(major_version: u32) -> Result<String, Stri
         return Ok(existing.to_string_lossy().to_string());
     }
 
-    Ok(managed_java_executable_path(major_version)?.to_string_lossy().to_string())
+    Ok(managed_java_executable_path(major_version)?
+        .to_string_lossy()
+        .to_string())
 }
 
 pub async fn resolve_java_path_for_version(
@@ -522,8 +522,8 @@ pub async fn ensure_java_available(
         java_path_str
     );
 
-    let client_key = notification_client_key
-        .unwrap_or_else(|| format!("repair_managed_java_{}", major_version));
+    let client_key =
+        notification_client_key.unwrap_or_else(|| format!("repair_managed_java_{}", major_version));
 
     if progress_reporter.is_none() {
         if let Some(nm) = app_handle.try_state::<NotificationManager>() {

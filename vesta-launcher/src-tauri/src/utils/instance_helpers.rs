@@ -156,10 +156,7 @@ pub fn remap_path_under_root(local_path: &str, source_root: &Path, dest_root: &P
 
     let norm_local = normalize_path(path);
     let norm_source = normalize_path(source_root);
-    let source_prefix = format!(
-        "{}/",
-        norm_source.trim_end_matches(['/', '\\'])
-    );
+    let source_prefix = format!("{}/", norm_source.trim_end_matches(['/', '\\']));
 
     let relative = if cfg!(windows) {
         norm_local
@@ -275,8 +272,7 @@ mod tests {
         let mut inst = Instance::default();
         inst.name = "Imported Pack".to_string();
         inst.game_directory = Some(tmp.path().join("missing").to_string_lossy().to_string());
-        inst.import_source_game_directory =
-            Some(import_path.to_string_lossy().to_string());
+        inst.import_source_game_directory = Some(import_path.to_string_lossy().to_string());
 
         let instances_root = tmp.path().join("instances");
         let data_dir = tmp.path().join("data");

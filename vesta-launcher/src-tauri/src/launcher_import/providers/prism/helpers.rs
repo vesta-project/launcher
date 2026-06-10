@@ -1,9 +1,9 @@
 use std::path::{Path, PathBuf};
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 
-use crate::launcher_import::root_normalization::strip_known_suffixes;
 use crate::launcher_import::providers::prism_multimc_cfg::parse_ini_field;
+use crate::launcher_import::root_normalization::strip_known_suffixes;
 use crate::launcher_import::types::ExternalInstanceCandidate;
 
 pub(super) fn infer_launcher_root(base_path: &Path, instances_root: &Path) -> PathBuf {
@@ -26,7 +26,8 @@ pub(super) fn enrich_managed_pack_from_cfg(instance: &mut ExternalInstanceCandid
 
     let managed_pack_type = parse_ini_field(&raw_cfg, "ManagedPackType")
         .map(|v| v.trim_matches('"').to_ascii_lowercase());
-    let managed_pack_id = parse_ini_field(&raw_cfg, "ManagedPackID").map(|v| v.trim_matches('"').to_string());
+    let managed_pack_id =
+        parse_ini_field(&raw_cfg, "ManagedPackID").map(|v| v.trim_matches('"').to_string());
     let managed_pack_version_id =
         parse_ini_field(&raw_cfg, "ManagedPackVersionID").map(|v| v.trim_matches('"').to_string());
 
@@ -48,7 +49,10 @@ pub(super) fn enrich_managed_pack_from_cfg(instance: &mut ExternalInstanceCandid
     }
 }
 
-pub(super) fn resolve_prism_icon(instance: &ExternalInstanceCandidate, icons_root: &Path) -> Option<String> {
+pub(super) fn resolve_prism_icon(
+    instance: &ExternalInstanceCandidate,
+    icons_root: &Path,
+) -> Option<String> {
     if !icons_root.is_dir() {
         return None;
     }

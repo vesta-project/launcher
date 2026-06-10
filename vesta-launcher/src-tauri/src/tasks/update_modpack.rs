@@ -5,26 +5,24 @@ use serde::{Deserialize, Serialize};
 
 use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
-use crate::tasks::manager::{Task, TaskContext};
-use piston_lib::game::modpack::manifest::ModpackManifest;
 use crate::tasks::installers::modpack::{
     enrich_manifest_platform_hashes, spawn_manifest_resource_linking,
 };
 use crate::tasks::installers::InstallInstanceTask;
+use crate::tasks::manager::{Task, TaskContext};
+use piston_lib::game::modpack::manifest::ModpackManifest;
+use piston_lib::game::modpack::parser::{read_zip_override_entry, read_zip_override_text};
 use piston_lib::game::modpack::types::ModpackFormat;
-use piston_lib::game::modpack::parser::{
-    read_zip_override_entry, read_zip_override_text,
-};
 use tauri::Manager;
 use tokio::sync::RwLock;
 
+use crate::sync::action_tree::{ActionTree, FileSource, SkipReason, SyncAction};
 use crate::sync::differ::ThreeWayDiffer;
 use crate::sync::manifest;
 use crate::sync::manifest_bootstrap::{self, TaskBootstrapProgress};
 use crate::sync::merger::{merge_config, MergeResult};
 use crate::sync::safeguards;
 use crate::sync::staging::StagingDir;
-use crate::sync::action_tree::{ActionTree, FileSource, SkipReason, SyncAction};
 
 pub struct UpdateModpackTask {
     pub instance_id: i32,
@@ -152,7 +150,12 @@ impl Task for UpdateModpackTask {
 
             if action_tree.is_empty() && total_actions == 0 {
                 // No changes needed — just update the version metadata
-                ctx.update_full(100, "Modpack is already up to date.".to_string(), Some(6), Some(6));
+                ctx.update_full(
+                    100,
+                    "Modpack is already up to date.".to_string(),
+                    Some(6),
+                    Some(6),
+                );
                 finish_update(
                     &app_handle,
                     &ctx,
@@ -184,12 +187,7 @@ impl Task for UpdateModpackTask {
                 &zip_path,
                 modpack_format,
             );
-            resolve_missing_zip_overrides(
-                &mut action_tree,
-                &game_dir,
-                &zip_path,
-                modpack_format,
-            );
+            resolve_missing_zip_overrides(&mut action_tree, &game_dir, &zip_path, modpack_format);
 
             // ─── Phase 3: Staged Isolation Download ──────────────────────
             ctx.update_full(
@@ -219,7 +217,8 @@ impl Task for UpdateModpackTask {
                     | SyncAction::Update { path, source, .. } => {
                         let mut count = staged_count.write().await;
                         *count += 1;
-                        let progress = 30 + ((*count as f64 / download_count.max(1) as f64) * 30.0) as i32;
+                        let progress =
+                            30 + ((*count as f64 / download_count.max(1) as f64) * 30.0) as i32;
                         ctx.update_full(
                             progress,
                             format!("Downloading: {}", path),
@@ -243,10 +242,15 @@ impl Task for UpdateModpackTask {
                             return Err(format!("Failed to download {}: {}", path, e));
                         }
                     }
-                    SyncAction::Merge { path, merged_content, .. } => {
+                    SyncAction::Merge {
+                        path,
+                        merged_content,
+                        ..
+                    } => {
                         let mut count = staged_count.write().await;
                         *count += 1;
-                        let progress = 30 + ((*count as f64 / download_count.max(1) as f64) * 30.0) as i32;
+                        let progress =
+                            30 + ((*count as f64 / download_count.max(1) as f64) * 30.0) as i32;
                         ctx.update_full(
                             progress,
                             format!("Staging merged config: {}", path),
@@ -256,7 +260,9 @@ impl Task for UpdateModpackTask {
 
                         staging
                             .write_staged(path, merged_content.as_bytes())
-                            .map_err(|e| format!("Failed to stage merged config {}: {}", path, e))?;
+                            .map_err(|e| {
+                                format!("Failed to stage merged config {}: {}", path, e)
+                            })?;
                     }
                     _ => {}
                 }
@@ -271,9 +277,7 @@ impl Task for UpdateModpackTask {
             );
             let mut quarantine_count = 0u32;
             for (original, quarantine) in &action_tree.world_collisions {
-                if let Err(e) =
-                    safeguards::rotate_world_save(&game_dir, original, quarantine)
-                {
+                if let Err(e) = safeguards::rotate_world_save(&game_dir, original, quarantine) {
                     log::error!(
                         "[UpdateModpackTask] Failed to rotate world {}: {}",
                         original,
@@ -306,8 +310,7 @@ impl Task for UpdateModpackTask {
             let mut skipped_delete = 0u32;
             for action in &action_tree.actions {
                 if let SyncAction::Remove {
-                    path,
-                    last_hash, ..
+                    path, last_hash, ..
                 } = action
                 {
                     match safeguards::safe_delete_if_unchanged(
@@ -317,11 +320,9 @@ impl Task for UpdateModpackTask {
                     ) {
                         Ok(true) => deleted_count += 1,
                         Ok(false) => skipped_delete += 1,
-                        Err(e) => log::warn!(
-                            "[UpdateModpackTask] Failed to delete {}: {}",
-                            path,
-                            e
-                        ),
+                        Err(e) => {
+                            log::warn!("[UpdateModpackTask] Failed to delete {}: {}", path, e)
+                        }
                     }
                 }
             }
@@ -339,7 +340,10 @@ impl Task for UpdateModpackTask {
                 Some(6),
             );
             staging.commit().map_err(|e| {
-                format!("Failed to commit update: {}. Your game directory is unchanged.", e)
+                format!(
+                    "Failed to commit update: {}. Your game directory is unchanged.",
+                    e
+                )
             })?;
 
             ctx.update_full(
@@ -362,10 +366,7 @@ impl Task for UpdateModpackTask {
             status_guard.mark_success();
 
             let skipped_msg = if skipped_delete > 0 {
-                format!(
-                    " ({} user-modified files were kept)",
-                    skipped_delete
-                )
+                format!(" ({} user-modified files were kept)", skipped_delete)
             } else {
                 String::new()
             };
@@ -500,9 +501,8 @@ fn resolve_merges(
             let current_content = std::fs::read_to_string(game_dir.join(path)).ok();
 
             let new_content = read_zip_override_text(new_zip_path, new_format, path).ok();
-            let old_content = old_zip_path.and_then(|zip| {
-                read_zip_override_text(zip, old_format, path).ok()
-            });
+            let old_content =
+                old_zip_path.and_then(|zip| read_zip_override_text(zip, old_format, path).ok());
 
             if new_content.is_none() {
                 log::warn!(
@@ -643,7 +643,11 @@ async fn stage_file(
     crate::sync::paths::validate_staged_relative_path(path).map_err(|e| e.to_string())?;
 
     match source {
-        FileSource::Modrinth { url, sha1, filename: _ } => {
+        FileSource::Modrinth {
+            url,
+            sha1,
+            filename: _,
+        } => {
             if url.is_empty() {
                 return Err("Empty Modrinth download URL".to_string());
             }
@@ -737,8 +741,7 @@ async fn download_bytes(url: &str, expected_sha1: Option<&str>) -> Result<Vec<u8
         if actual.to_lowercase() != expected.to_lowercase() {
             return Err(format!(
                 "SHA1 mismatch for download: expected {}, got {}",
-                expected,
-                actual
+                expected, actual
             ));
         }
     }
@@ -757,11 +760,10 @@ async fn finish_update(
     game_dir: &std::path::Path,
     source_zip_path: &std::path::Path,
 ) -> Result<(), String> {
-    let runtime_changed =
-        crate::utils::instance_runtime::manifest_runtime_identity_changed(
-            old_manifest,
-            new_manifest,
-        );
+    let runtime_changed = crate::utils::instance_runtime::manifest_runtime_identity_changed(
+        old_manifest,
+        new_manifest,
+    );
 
     // Persist the new manifest as $O$ for next update
     let mut manifest = new_manifest.clone();
@@ -801,20 +803,14 @@ async fn finish_update(
             "[UpdateModpackTask] MC/loader changed {} {}/{} → {} {}/{}; reinstalling runtime",
             old_manifest.minecraft_version,
             old_manifest.modloader.loader_type,
-            old_manifest
-                .modloader
-                .version
-                .as_deref()
-                .unwrap_or("?"),
+            old_manifest.modloader.version.as_deref().unwrap_or("?"),
             new_manifest.minecraft_version,
             new_manifest.modloader.loader_type,
-            new_manifest
-                .modloader
-                .version
-                .as_deref()
-                .unwrap_or("?"),
+            new_manifest.modloader.version.as_deref().unwrap_or("?"),
         );
-        ctx.update_description("Reinstalling game runtime for new Minecraft version...".to_string());
+        ctx.update_description(
+            "Reinstalling game runtime for new Minecraft version...".to_string(),
+        );
         let mut install_task = InstallInstanceTask::new(updated.clone());
         install_task.set_update_notification_title(false);
         install_task.run(ctx.clone()).await?;

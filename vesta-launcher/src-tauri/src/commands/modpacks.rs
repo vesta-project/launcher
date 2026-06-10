@@ -1221,12 +1221,11 @@ pub async fn list_export_candidates(instance_id: i32) -> Result<Vec<ExportCandid
                 // Recursively add files
                 let mut stack = vec![path];
                 while let Some(current) = stack.pop() {
-                        let sub_entries = tokio::task::spawn_blocking(move || {
-                            std::fs::read_dir(&current)
-                        })
-                        .await
-                        .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
-                        if let Ok(sub_entries) = sub_entries {
+                    let sub_entries =
+                        tokio::task::spawn_blocking(move || std::fs::read_dir(&current))
+                            .await
+                            .map_err(|e| format!("spawn_blocking panicked: {}", e))?;
+                    if let Ok(sub_entries) = sub_entries {
                         for sub_entry in sub_entries.flatten() {
                             let sub_path = sub_entry.path();
                             if sub_path.is_dir() {

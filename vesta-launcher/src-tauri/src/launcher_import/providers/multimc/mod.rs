@@ -4,10 +4,10 @@ use anyhow::Result;
 
 use crate::launcher_import::paths::candidate_paths_for_launcher;
 use crate::launcher_import::providers::flame_metadata::enrich_flame_metadata;
-use crate::launcher_import::providers::ExternalLauncherProvider;
 use crate::launcher_import::providers::prism_multimc_cfg::{
     enrich_mmc_pack_metadata, list_cfg_instances, resolve_instances_root,
 };
+use crate::launcher_import::providers::ExternalLauncherProvider;
 use crate::launcher_import::types::{ExternalInstanceCandidate, LauncherKind};
 
 mod helpers;

@@ -57,10 +57,7 @@ pub fn runtime_drifts_from_manifest(inst: &Instance, manifest: &ModpackManifest)
 }
 
 /// True when two modpack manifests target different Minecraft or loader identities.
-pub fn manifest_runtime_identity_changed(
-    old: &ModpackManifest,
-    new: &ModpackManifest,
-) -> bool {
+pub fn manifest_runtime_identity_changed(old: &ModpackManifest, new: &ModpackManifest) -> bool {
     InstanceRuntimeFields::from_manifest(old) != InstanceRuntimeFields::from_manifest(new)
 }
 
@@ -139,11 +136,8 @@ mod tests {
 
     #[test]
     fn runtime_treats_none_loader_as_vanilla() {
-        let target = InstanceRuntimeFields::from_manifest(&sample_manifest(
-            "1.20.1",
-            "vanilla",
-            None,
-        ));
+        let target =
+            InstanceRuntimeFields::from_manifest(&sample_manifest("1.20.1", "vanilla", None));
         let inst = Instance {
             minecraft_version: "1.20.1".to_string(),
             modloader: None,

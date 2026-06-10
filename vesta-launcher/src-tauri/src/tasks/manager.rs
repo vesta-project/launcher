@@ -504,7 +504,8 @@ impl TaskManager {
 
     pub fn get_active_tasks(&self) -> Vec<String> {
         self.active_tasks
-            .lock().unwrap()
+            .lock()
+            .unwrap()
             .values()
             .cloned()
             .collect()
@@ -585,7 +586,8 @@ impl TaskManager {
             // Update notification actions to show Resume
             let is_cancellable = self
                 .cancellation_tokens
-                .lock().unwrap()
+                .lock()
+                .unwrap()
                 .contains_key(client_key);
             let mut actions = Vec::new();
             if is_cancellable {
@@ -621,7 +623,8 @@ impl TaskManager {
             // Update notification actions to show Pause
             let is_cancellable = self
                 .cancellation_tokens
-                .lock().unwrap()
+                .lock()
+                .unwrap()
                 .contains_key(client_key);
             let mut actions = Vec::new();
             if is_cancellable {

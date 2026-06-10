@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use serde_json::Value;
 
 pub(super) fn encode_icon_as_data_url(icon_path: &Path) -> Option<String> {
@@ -99,7 +99,10 @@ fn collect_instance_path_fields(value: &Value, out: &mut Vec<String>) {
     match value {
         Value::Object(map) => {
             for (key, nested) in map {
-                if TRACKED_FIELDS.iter().any(|known| known.eq_ignore_ascii_case(key)) {
+                if TRACKED_FIELDS
+                    .iter()
+                    .any(|known| known.eq_ignore_ascii_case(key))
+                {
                     if let Some(path) = nested.as_str() {
                         out.push(path.to_string());
                     }

@@ -49,8 +49,7 @@ pub async fn check_modpack_update(
     };
 
     // Check if the manifest exists — needed for delta update
-    let config_dir =
-        crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+    let config_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
     let data_dir = config_dir.join("data");
     let game_dir = inst
         .game_directory
@@ -132,8 +131,7 @@ pub async fn start_modpack_update(
         .first(&mut conn)
         .map_err(|e| format!("Instance not found: {}", e))?;
 
-    let config_dir =
-        crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
+    let config_dir = crate::utils::db_manager::get_app_config_dir().map_err(|e| e.to_string())?;
     let data_dir = config_dir.join("data");
     let game_dir = inst
         .game_directory
@@ -144,11 +142,7 @@ pub async fn start_modpack_update(
     crate::tasks::update_modpack::write_pending_modpack_update(&game_dir, &new_version_id)?;
 
     crate::commands::instances::update_instance_operation(&app_handle, instance_id, "update")?;
-    crate::commands::instances::update_installation_status(
-        &app_handle,
-        instance_id,
-        "installing",
-    )?;
+    crate::commands::instances::update_installation_status(&app_handle, instance_id, "installing")?;
 
     let task = UpdateModpackTask::new(instance_id, new_version_id);
     if let Err(e) = task_manager.submit(Box::new(task)).await {

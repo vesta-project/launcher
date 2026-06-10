@@ -60,15 +60,21 @@ impl ExternalLauncherProvider for FTBProvider {
                 .as_ref()
                 .and_then(|json| extract_stringish(json, &["name", "displayName", "display_name"]))
                 .unwrap_or_else(|| id.clone());
-            let minecraft_version = parsed_json
-                .as_ref()
-                .and_then(|json| extract_stringish(json, &["minecraftVersion", "minecraft_version", "mcVersion"]));
+            let minecraft_version = parsed_json.as_ref().and_then(|json| {
+                extract_stringish(
+                    json,
+                    &["minecraftVersion", "minecraft_version", "mcVersion"],
+                )
+            });
             let modloader = parsed_json
                 .as_ref()
                 .and_then(|json| extract_stringish(json, &["modloader", "modLoader", "loader"]));
-            let parsed_modloader_version = parsed_json
-                .as_ref()
-                .and_then(|json| extract_stringish(json, &["modloaderVersion", "modloader_version", "loaderVersion"]));
+            let parsed_modloader_version = parsed_json.as_ref().and_then(|json| {
+                extract_stringish(
+                    json,
+                    &["modloaderVersion", "modloader_version", "loaderVersion"],
+                )
+            });
             let (modloader, modloader_version) =
                 split_modloader_and_version(modloader, parsed_modloader_version);
 

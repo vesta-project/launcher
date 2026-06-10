@@ -1,8 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 
-use piston_lib::game::modpack::manifest::{
-    ModSource, ModpackManifest, ModpackManifestMod,
-};
+use piston_lib::game::modpack::manifest::{ModSource, ModpackManifest, ModpackManifestMod};
 
 use super::action_tree::{ActionTree, FileSource, RemoveReason, SkipReason, SyncAction};
 use super::classifier::{classify, is_world_save, world_folder_from_level_dat, FileClass};
@@ -94,9 +92,8 @@ impl ThreeWayDiffer {
                         &new_hash,
                         current,
                     );
-                }
-                // Untracked files (Category C in MODPACK_UPDATING.md) are not in either
-                // manifest and are intentionally excluded from this diff loop.
+                } // Untracked files (Category C in MODPACK_UPDATING.md) are not in either
+                  // manifest and are intentionally excluded from this diff loop.
             }
         }
 
@@ -566,7 +563,15 @@ mod tests {
         let skips: Vec<_> = tree
             .actions
             .iter()
-            .filter(|a| matches!(a, SyncAction::Skip { reason: SkipReason::UserModifiedBinary, .. }))
+            .filter(|a| {
+                matches!(
+                    a,
+                    SyncAction::Skip {
+                        reason: SkipReason::UserModifiedBinary,
+                        ..
+                    }
+                )
+            })
             .collect();
         assert_eq!(skips.len(), 1, "Should protect user-modified binary");
     }
@@ -598,7 +603,11 @@ mod tests {
             .iter()
             .filter(|a| matches!(a, SyncAction::Update { .. }))
             .collect();
-        assert_eq!(updates.len(), 0, "Should not update on case-only difference");
+        assert_eq!(
+            updates.len(),
+            0,
+            "Should not update on case-only difference"
+        );
     }
 
     #[test]

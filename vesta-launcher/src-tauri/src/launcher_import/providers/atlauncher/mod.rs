@@ -11,7 +11,9 @@ mod types;
 
 pub use helpers::extract_atlauncher_resource_hints;
 
-use helpers::{encode_png_as_data_url, extract_instance_link, resolve_instances_root, resolve_launcher_root};
+use helpers::{
+    encode_png_as_data_url, extract_instance_link, resolve_instances_root, resolve_launcher_root,
+};
 use types::{ATInstance, ATLauncherSourceLink};
 
 pub struct ATLauncherProvider;
@@ -35,11 +37,17 @@ impl ExternalLauncherProvider for ATLauncherProvider {
         let instances_root = resolve_instances_root(&launcher_root);
 
         if !launcher_root.exists() {
-            log::warn!("[ATLauncher] base_path does not exist: {}", base_path.display());
+            log::warn!(
+                "[ATLauncher] base_path does not exist: {}",
+                base_path.display()
+            );
             return Ok(instances);
         }
 
-        log::debug!("[ATLauncher] scanning instances at: {}", instances_root.display());
+        log::debug!(
+            "[ATLauncher] scanning instances at: {}",
+            instances_root.display()
+        );
 
         for entry in std::fs::read_dir(instances_root)? {
             let entry = entry?;
@@ -55,7 +63,10 @@ impl ExternalLauncherProvider for ATLauncherProvider {
 
             let cfg_path = path.join("instance.json");
             if !cfg_path.exists() {
-                log::debug!("[ATLauncher] instance.json not found for: {}", instance_name);
+                log::debug!(
+                    "[ATLauncher] instance.json not found for: {}",
+                    instance_name
+                );
                 continue;
             }
 
@@ -74,14 +85,16 @@ impl ExternalLauncherProvider for ATLauncherProvider {
 
             let icon_path = encode_png_as_data_url(&path.join("instance.png"));
             let source_link = extract_instance_link(&parsed);
-            
+
             if let Some(ref link) = source_link {
                 log::debug!(
                     "[ATLauncher] found source link for '{}': {:?}",
                     instance_name,
                     match link {
-                        ATLauncherSourceLink::Modrinth { project_id, .. } => format!("modrinth/{}", project_id),
-                        ATLauncherSourceLink::Curseforge { project_id, .. } => format!("curseforge/{}", project_id),
+                        ATLauncherSourceLink::Modrinth { project_id, .. } =>
+                            format!("modrinth/{}", project_id),
+                        ATLauncherSourceLink::Curseforge { project_id, .. } =>
+                            format!("curseforge/{}", project_id),
                     }
                 );
             } else {
@@ -95,11 +108,19 @@ impl ExternalLauncherProvider for ATLauncherProvider {
                 Some(ATLauncherSourceLink::Modrinth {
                     project_id,
                     version_id,
-                }) => (Some("modrinth".to_string()), Some(project_id), Some(version_id)),
+                }) => (
+                    Some("modrinth".to_string()),
+                    Some(project_id),
+                    Some(version_id),
+                ),
                 Some(ATLauncherSourceLink::Curseforge {
                     project_id,
                     version_id,
-                }) => (Some("curseforge".to_string()), Some(project_id), Some(version_id)),
+                }) => (
+                    Some("curseforge".to_string()),
+                    Some(project_id),
+                    Some(version_id),
+                ),
                 None => (None, None, None),
             };
             let loader_version = parsed.launcher.loader_version;

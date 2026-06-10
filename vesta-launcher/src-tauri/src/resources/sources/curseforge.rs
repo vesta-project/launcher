@@ -511,7 +511,10 @@ impl ResourceSource for CurseForgeSource {
                     .collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
-                featured_gallery: item.screenshots.as_ref().and_then(|shots| shots.first().map(|s| s.url.clone())),
+                featured_gallery: item
+                    .screenshots
+                    .as_ref()
+                    .and_then(|shots| shots.first().map(|s| s.url.clone())),
                 gallery: item
                     .screenshots
                     .unwrap_or_default()
@@ -525,10 +528,7 @@ impl ResourceSource for CurseForgeSource {
 
         let total_hits = response.pagination.total_count as u64;
 
-        Ok(SearchResponse {
-            hits,
-            total_hits,
-        })
+        Ok(SearchResponse { hits, total_hits })
     }
 
     async fn get_project(&self, id: &str) -> Result<ResourceProject> {
@@ -602,7 +602,10 @@ impl ResourceSource for CurseForgeSource {
                 .collect(),
             web_url: item.links.website_url,
             external_ids: None,
-            featured_gallery: item.screenshots.as_ref().and_then(|shots| shots.first().map(|s| s.url.clone())),
+            featured_gallery: item
+                .screenshots
+                .as_ref()
+                .and_then(|shots| shots.first().map(|s| s.url.clone())),
             gallery: item
                 .screenshots
                 .unwrap_or_default()
@@ -672,7 +675,10 @@ impl ResourceSource for CurseForgeSource {
                     .collect(),
                 web_url: item.links.website_url,
                 external_ids: None,
-                featured_gallery: item.screenshots.as_ref().and_then(|shots| shots.first().map(|s| s.url.clone())),
+                featured_gallery: item
+                    .screenshots
+                    .as_ref()
+                    .and_then(|shots| shots.first().map(|s| s.url.clone())),
                 gallery: item
                     .screenshots
                     .unwrap_or_default()

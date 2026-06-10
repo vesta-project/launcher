@@ -217,18 +217,19 @@ impl Task for ResourceDownloadTask {
             let final_path_str = normalize_path(&final_path);
 
             // Get metadata from temp file before move
-            let (file_size, file_mtime) = if let Ok(meta) = tokio::fs::metadata(&temp_file_path).await {
-                (
-                    meta.len() as i64,
-                    meta.modified()
-                        .ok()
-                        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs() as i64)
-                        .unwrap_or(0),
-                )
-            } else {
-                (0, 0)
-            };
+            let (file_size, file_mtime) =
+                if let Ok(meta) = tokio::fs::metadata(&temp_file_path).await {
+                    (
+                        meta.len() as i64,
+                        meta.modified()
+                            .ok()
+                            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs() as i64)
+                            .unwrap_or(0),
+                    )
+                } else {
+                    (0, 0)
+                };
 
             // Check for existing database entry to find old file path
             let existing_resource = tauri::async_runtime::spawn_blocking({
