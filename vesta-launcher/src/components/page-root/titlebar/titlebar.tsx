@@ -1,5 +1,5 @@
 import HelpIcon from "@assets/help.svg";
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
 import { WindowControls } from "@tauri-controls-v2/solid";
 import { ACCOUNT_TYPE_GUEST, type Account, getActiveAccount } from "@utils/auth";
@@ -26,11 +26,7 @@ function TitleBar(props: TitleBarProps) {
 	});
 
 	const handleHelpClick = () => {
-		const r = router();
-		if (r) {
-			r.navigate("/config", { activeTab: "help" });
-			setPageViewerOpen(true);
-		}
+		openMiniPage("/config", { activeTab: "help" });
 	};
 
 	return (

@@ -6,7 +6,12 @@ import ForwardsArrowIcon from "@assets/right-arrow.svg";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { children, createMemo, createSignal, type JSX, onCleanup, onMount, Show } from "solid-js";
+import {
+	handleNavigationBack,
+	handleNavigationForward,
+	handleNavigationKeyDown,
+} from "@utils/flat-shell-navigation";
+import { children, createMemo, type JSX, onCleanup, onMount, Show } from "solid-js";
 import styles from "./unified-page-viewer.module.css";
 
 interface NavbarButtonProps {
@@ -54,18 +59,19 @@ interface UnifiedPageViewerProps {
 }
 
 export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
-	const canGoBack = createMemo(() => props.router.canGoBack());
-	const canGoForward = createMemo(() => props.router.canGoForward());
+	const canGoBack = createMemo(() => {
+		props.router.currentPath.get();
+		return props.router.canGoBackReactive();
+	});
+	const canGoForward = createMemo(() => {
+		props.router.currentPath.get();
+		return props.router.canGoForwardReactive();
+	});
 	const isReloading = createMemo(() => props.router.isReloading());
 	const isMac = createMemo(() => props.os === "macos");
 
 	const handleBack = async () => {
-		const canExit = props.router.getCanExit();
-		if (canExit) {
-			const ok = await canExit();
-			if (!ok) return;
-		}
-		props.router.backwards();
+		await handleNavigationBack(props.router);
 	};
 
 	const handleClose = async () => {
@@ -90,9 +96,8 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 				handleClose();
 			}
 		}
-		if (event.altKey) {
-			if (event.key === "ArrowLeft") handleBack();
-			if (event.key === "ArrowRight") props.router.forwards();
+		if (!props.hideNavbar && event.altKey) {
+			void handleNavigationKeyDown(event, props.router);
 		}
 	};
 
@@ -123,7 +128,7 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 							<BackArrowIcon />
 						</NavbarButton>
 						<NavbarButton
-							onClick={() => props.router.forwards()}
+							onClick={() => handleNavigationForward(props.router)}
 							text="Forward"
 							disabled={!canGoForward()}
 						>

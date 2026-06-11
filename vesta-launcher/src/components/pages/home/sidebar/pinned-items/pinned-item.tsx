@@ -1,6 +1,6 @@
 import PlayIcon from "@assets/play.svg";
 import StopIcon from "@assets/rounded-square.svg";
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { openMiniPage } from "@components/page-viewer/page-viewer";
 import * as HoverCard from "@kobalte/core/hover-card";
 import { clearRunning, instancesState, setLaunching } from "@stores/instances";
 import { type PinnedPage, pinning, unpinPage } from "@stores/pinning";
@@ -109,18 +109,17 @@ export function PinnedItem(props: PinnedItemProps) {
 
 	const handleClick = () => {
 		if (props.pin.page_type === "instance") {
-			router()?.navigate("/instance", { slug: props.pin.target_id });
+			openMiniPage("/instance", { slug: props.pin.target_id });
 		} else if (props.pin.page_type === "settings") {
-			router()?.navigate("/config", {});
+			openMiniPage("/config", {});
 		} else {
-			router()?.navigate("/resource-details", {
+			openMiniPage("/resource-details", {
 				projectId: props.pin.target_id,
 				platform: props.pin.platform,
 				name: displayName(),
 				iconUrl: displayIcon() || undefined,
 			});
 		}
-		setPageViewerOpen(true);
 	};
 
 	const handleLaunch = async (e: MouseEvent) => {

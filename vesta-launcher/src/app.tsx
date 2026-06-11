@@ -1,6 +1,6 @@
 import SessionExpiredDialog from "@components/auth/session-expired-dialog";
 import { DialogRoot } from "@components/dialog/dialog-root";
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { openMiniPage, router } from "@components/page-viewer/page-viewer";
 import { FatalPage } from "@components/pages/fatal/fatal-page";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
@@ -105,10 +105,8 @@ export async function handleDeepLink(url: string, navigate: ReturnType<typeof us
 		}
 
 		// Always use the integrated PageViewer in the main window
-		const mini_router = router();
-		if (mini_router) {
-			mini_router.navigate(path, metadata.params);
-			setPageViewerOpen(true);
+		if (router()) {
+			openMiniPage(path, metadata.params);
 		} else {
 			// If router isn't ready, show error - no standalone fallback
 			showToast({
@@ -303,8 +301,16 @@ function Root(props: ChildrenProp) {
 
 		listen<{ path: string }>("core://navigate", (event) => {
 			console.log("[App] Received navigation event:", event.payload);
-			router().navigate(event.payload.path);
-			setPageViewerOpen(true);
+			if (router()) {
+				openMiniPage(event.payload.path);
+			} else {
+				showToast({
+					title: "App Not Ready",
+					description: "Please wait for the app to fully load before navigating.",
+					severity: "error",
+					duration: 5000,
+				});
+			}
 		}).then((unlisten) => {
 			unlistenNavigate = unlisten;
 		});
@@ -447,19 +453,17 @@ function Root(props: ChildrenProp) {
 						i++;
 					} else if (arg === "--open-instance" && args[i + 1]) {
 						const slug = args[i + 1];
-						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
-						router()?.navigate("/instance", { slug });
-						setPageViewerOpen(true);
+						const { openMiniPage } = await import("@components/page-viewer/page-viewer");
+						openMiniPage("/instance", { slug });
 						i++;
 					} else if (arg === "--open-resource" && args[i + 2]) {
 						const platform = args[i + 1];
 						const id = args[i + 2];
-						const { setPageViewerOpen, router } = await import("@components/page-viewer/page-viewer");
-						router()?.navigate("/resource-details", {
+						const { openMiniPage } = await import("@components/page-viewer/page-viewer");
+						openMiniPage("/resource-details", {
 							platform,
 							projectId: id,
 						});
-						setPageViewerOpen(true);
 						i += 2;
 					}
 				}

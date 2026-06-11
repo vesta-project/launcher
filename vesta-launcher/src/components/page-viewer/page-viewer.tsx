@@ -2,11 +2,70 @@ import { MiniRouter } from "@components/page-viewer/mini-router";
 import { miniRouterInvalidPage, miniRouterPaths } from "@components/page-viewer/mini-router-config";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 
+import { uiChromeModeEnabled } from "@utils/config-sync";
+import { futureEntryMatchesTarget, isLibraryPath } from "@utils/flat-shell-navigation";
 import { invoke } from "@tauri-apps/api/core";
-import { createMemo, createRoot, createSignal, onCleanup, onMount, Show } from "solid-js";
+import { createRoot, createSignal, Show } from "solid-js";
 import styles from "./page-viewer.module.css";
 
 const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
+
+function dismissToLibrary() {
+	const miniRouter = router();
+	if (miniRouter && !uiChromeModeEnabled()) {
+		miniRouter.navigateToLibrary();
+		return;
+	}
+	setPageViewerOpen(false);
+}
+
+function resetLibraryNavigationState() {
+	router()?.resetLibrarySlot();
+}
+
+function openMiniPage(
+	path: string,
+	params?: Record<string, unknown>,
+	props?: Record<string, unknown>,
+) {
+	const miniRouter = router();
+	if (!miniRouter) {
+		if (import.meta.env.DEV) {
+			console.warn("[openMiniPage] MiniRouter not ready; navigation dropped:", path);
+		}
+		return;
+	}
+
+	const isFlatChrome = !uiChromeModeEnabled();
+	const targetParams = params ?? {};
+
+	if (!isFlatChrome) {
+		miniRouter.navigate(path, targetParams, props);
+		setPageViewerOpen(true);
+		return;
+	}
+
+	const openingFromLibrary = !pageViewerOpen();
+
+	if (openingFromLibrary) {
+		const [nextFuture] = miniRouter.history.future;
+		// After stepping back to library, future may hold the page to redo; resume via
+		// forward when the sidebar target matches. Library-tab dismiss uses past instead.
+		if (nextFuture && futureEntryMatchesTarget(nextFuture, path, targetParams)) {
+			miniRouter.forwards();
+		} else {
+			miniRouter.navigateFromLibrary(path, targetParams, props);
+		}
+
+		if (!pageViewerOpen() && !isLibraryPath(miniRouter.currentPath.get())) {
+			setPageViewerOpen(true);
+		}
+		return;
+	}
+
+	miniRouter.navigate(path, targetParams, props);
+	setPageViewerOpen(true);
+}
 
 const [router, setRouter] = createRoot(() =>
 	createSignal<MiniRouter>(
@@ -17,17 +76,28 @@ const [router, setRouter] = createRoot(() =>
 	),
 );
 
-function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => void; embedded?: boolean }) {
+interface PageViewerProps {
+	open?: boolean;
+	/**
+	 * Notifies the parent when viewer visibility changes (close, pop-out).
+	 * Windowed and other non-flat callers use this to sync local open state.
+	 * Flat embedded mode omits this: close syncs via dismissToLibrary and the
+	 * shell delegate (pageViewerOpen + onEnterLibrary/onLeaveLibrary).
+	 */
+	viewChanged?: (value: boolean) => void;
+	embedded?: boolean;
+}
+
+function PageViewer(props: PageViewerProps) {
 	const mini_router = router();
 
 	const onPopOut = () => {
 		const currentPath = mini_router.currentPath.get();
 		const currentParams = mini_router.currentParams.get();
-		const currentProps = mini_router.getSnapshot(); // Grab latest live state
+		const currentProps = mini_router.getSnapshot();
 		const historyPast = mini_router.history.past || [];
 		const historyFuture = mini_router.history.future || [];
 
-		// Better serialization: stringify everything
 		const serializeRecord = (rec: Record<string, unknown> | undefined) => {
 			if (!rec) return {};
 			return Object.fromEntries(
@@ -56,7 +126,6 @@ function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => v
 			})),
 		};
 
-		// Use localStorage for large handoff data to avoid URL length limits
 		const handoffId = `handoff_${Date.now()}`;
 		localStorage.setItem(
 			handoffId,
@@ -68,7 +137,7 @@ function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => v
 
 		invoke("launch_window", {
 			path: currentPath,
-			props: { handoffId }, // Pass the ID instead of full data
+			props: { handoffId },
 		});
 
 		setPageViewerOpen(false);
@@ -87,7 +156,11 @@ function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => v
 					<UnifiedPageViewer
 						router={mini_router}
 						onClose={() => {
-							setPageViewerOpen(false);
+							if (props.embedded && !uiChromeModeEnabled()) {
+								dismissToLibrary();
+							} else {
+								setPageViewerOpen(false);
+							}
 							props.viewChanged?.(false);
 						}}
 						hideCloseButton={props.embedded}
@@ -100,4 +173,13 @@ function PageViewer(props: { open?: boolean; viewChanged?: (value: boolean) => v
 	);
 }
 
-export { PageViewer, pageViewerOpen, router, setPageViewerOpen, setRouter };
+export {
+	PageViewer,
+	dismissToLibrary,
+	openMiniPage,
+	pageViewerOpen,
+	resetLibraryNavigationState,
+	router,
+	setPageViewerOpen,
+	setRouter,
+};

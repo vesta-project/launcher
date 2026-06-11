@@ -1,4 +1,4 @@
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 
@@ -95,8 +95,7 @@ export function AccountPopover(props: AccountPopoverProps) {
 
 	const openSettings = () => {
 		props.onClose();
-		router().navigate("/config", { activeTab: "account" });
-		setPageViewerOpen(true);
+		openMiniPage("/config", { activeTab: "account" });
 	};
 
 	return (

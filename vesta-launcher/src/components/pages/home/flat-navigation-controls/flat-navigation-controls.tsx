@@ -1,32 +1,50 @@
 import BackArrowIcon from "@assets/back-arrow.svg";
 import ForwardsArrowIcon from "@assets/right-arrow.svg";
-import { router } from "@components/page-viewer/page-viewer";
-import { createMemo } from "solid-js";
+import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
+import {
+	handleNavigationBack,
+	handleNavigationForward,
+	handleNavigationKeyDown,
+} from "@utils/flat-shell-navigation";
+import { createMemo, onCleanup, onMount } from "solid-js";
 import styles from "./flat-navigation-controls.module.css";
 
 function FlatNavigationControls() {
-	const canGoBack = createMemo(() => router()?.canGoBack() ?? false);
-	const canGoForward = createMemo(() => router()?.canGoForward() ?? false);
+	const canGoBack = createMemo(() => {
+		pageViewerOpen();
+		const r = router();
+		if (!r) return false;
+		r.currentPath.get();
+		return r.canGoBackReactive();
+	});
+
+	const canGoForward = createMemo(() => {
+		pageViewerOpen();
+		const r = router();
+		if (!r) return false;
+		r.currentPath.get();
+		return r.canGoForwardReactive();
+	});
 
 	const handleBackClick = async () => {
 		const r = router();
-		if (!r || !canGoBack()) return;
-
-		const canExit = r.getCanExit();
-		if (canExit) {
-			const ok = await canExit();
-			if (!ok) return;
-		}
-
-		r.backwards();
+		if (!r) return;
+		await handleNavigationBack(r);
 	};
 
 	const handleForwardClick = () => {
 		const r = router();
-		if (!r || !canGoForward()) return;
-
-		r.forwards();
+		if (!r) return;
+		handleNavigationForward(r);
 	};
+
+	onMount(() => {
+		const onKeyDown = (event: KeyboardEvent) => {
+			void handleNavigationKeyDown(event, router());
+		};
+		window.addEventListener("keydown", onKeyDown);
+		onCleanup(() => window.removeEventListener("keydown", onKeyDown));
+	});
 
 	return (
 		<div class={styles["flat-navigation-controls"]}>

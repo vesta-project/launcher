@@ -16,6 +16,13 @@ import {
 	type ValidComponent,
 } from "solid-js";
 
+import {
+	createLibraryEntry,
+	type HistoryEntry,
+	isLibraryEntry,
+	isLibraryPath,
+	type ShellNavigationDelegate,
+} from "@utils/flat-shell-navigation";
 import { Dynamic } from "solid-js/web";
 
 interface RouterComponent<T extends ValidComponent = ValidComponent> {
@@ -30,12 +37,6 @@ interface MiniRouterProps {
 	currentPath?: string;
 	initialParams?: Record<string, unknown>;
 	initialProps?: Record<string, unknown>;
-}
-
-interface HistoryEntry {
-	path: string;
-	params: Record<string, unknown>;
-	props: Record<string, unknown> | undefined;
 }
 
 class MiniRouter {
@@ -66,6 +67,15 @@ class MiniRouter {
 		params?: Record<string, unknown>,
 		props?: Record<string, unknown>,
 	) => void;
+	navigateFromLibrary: (
+		path: string,
+		params?: Record<string, unknown>,
+		props?: Record<string, unknown>,
+	) => void;
+	navigateToLibrary: () => void;
+	isOnLibrarySlot: () => boolean;
+	setLibrarySlot: () => void;
+	resetLibrarySlot: () => void;
 	updateQuery: (key: string, value: unknown, push?: boolean) => void;
 	removeQuery: (key: string, push?: boolean) => void;
 	reload: () => Promise<void>;
@@ -78,12 +88,22 @@ class MiniRouter {
 	setRefetch: (fn: () => Promise<void>) => void;
 	canGoBack: () => boolean;
 	canGoForward: () => boolean;
+	/** Reactive history past stack for Solid memos (tracks signal reads). */
+	historyPast: Accessor<HistoryEntry[]>;
+	/** Reactive history future stack for Solid memos (tracks signal reads). */
+	historyFuture: Accessor<HistoryEntry[]>;
+	/** Reactive can-go-back for button disabled state. */
+	canGoBackReactive: Accessor<boolean>;
+	/** Reactive can-go-forward for button disabled state. */
+	canGoForwardReactive: Accessor<boolean>;
 	generateUrl: () => string;
 	getCanExit: () => (() => Promise<boolean>) | null;
 	setCanExit: (fn: (() => Promise<boolean>) | null) => void;
+	setShellNavigation: (delegate: ShellNavigationDelegate | null) => void;
 	skipNextExitCheck: boolean = false;
 	private refetchFn: (() => Promise<void>) | undefined;
 	private canExitBlock: (() => Promise<boolean>) | null = null;
+	private shellNavigation: ShellNavigationDelegate | null = null;
 
 	constructor(props: MiniRouterProps) {
 		this.paths = props.paths;
@@ -130,6 +150,12 @@ class MiniRouter {
 		const [getHistoryPast, setHistoryPast] = createSignal<HistoryEntry[]>([]);
 		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>([]);
 
+		const applyEntry = (entry: HistoryEntry) => {
+			setCurrentPath(entry.path);
+			setCurrentParams(entry.params);
+			setCurrentPathProps(entry.props);
+		};
+
 		this.history = {
 			get past() {
 				return getHistoryPast();
@@ -145,19 +171,16 @@ class MiniRouter {
 			},
 			push: (entry: HistoryEntry) => {
 				const previousPath = this.currentPath.get();
-				if (previousPath !== "") {
+				if (previousPath !== "" && !isLibraryPath(previousPath)) {
 					const newPast = [...getHistoryPast()];
 					newPast.push({
 						path: previousPath,
 						params: this.currentParams.get(),
-						props: this.getSnapshot(), // Use snapshot to capture live state
+						props: this.getSnapshot(),
 					});
 					setHistoryPast(newPast);
 				}
-				setCurrentPath(entry.path);
-				setCurrentParams(entry.params);
-				setCurrentPathProps(entry.props);
-				// Only clear custom name when navigating to a different path (don't clear on tab/query pushes)
+				applyEntry(entry);
 				if (entry.path !== previousPath) {
 					setCustomName(null);
 				}
@@ -168,14 +191,36 @@ class MiniRouter {
 			},
 		};
 
-		// Refetch management
 		this.setRefetch = (fn: () => Promise<void>) => {
 			this.refetchFn = fn;
 		};
 
 		this.getRefetch = () => this.refetchFn;
 
-		// Helper methods
+		this.setShellNavigation = (delegate) => {
+			this.shellNavigation = delegate;
+		};
+
+		this.isOnLibrarySlot = () => isLibraryPath(this.currentPath.get());
+
+		this.setLibrarySlot = () => {
+			applyEntry(createLibraryEntry());
+		};
+
+		this.resetLibrarySlot = () => {
+			setHistoryPast(getHistoryPast().filter((entry) => !isLibraryEntry(entry)));
+			setHistoryFuture(getHistoryFuture().filter((entry) => !isLibraryEntry(entry)));
+			if (this.isOnLibrarySlot()) {
+				setCurrentPath("");
+				setCurrentParams({});
+				setCurrentPathProps(undefined);
+			}
+		};
+
+		this.historyPast = getHistoryPast;
+		this.historyFuture = getHistoryFuture;
+		this.canGoBackReactive = createMemo(() => getHistoryPast().length > 0);
+		this.canGoForwardReactive = createMemo(() => getHistoryFuture().length > 0);
 		this.canGoBack = () => this.history.past.length > 0;
 		this.canGoForward = () => this.history.future.length > 0;
 
@@ -194,6 +239,44 @@ class MiniRouter {
 			return `vesta://${path}?${searchParams.toString()}`;
 		};
 
+		this.navigateFromLibrary = (
+			path: string,
+			params?: Record<string, unknown>,
+			props?: Record<string, unknown>,
+		) => {
+			setHistoryPast([createLibraryEntry()]);
+			applyEntry({
+				path,
+				params: params || {},
+				props,
+			});
+			setCustomName(null);
+			setHistoryFuture([]);
+			this.shellNavigation?.onLeaveLibrary();
+		};
+
+		this.navigateToLibrary = () => {
+			if (this.isOnLibrarySlot()) {
+				this.shellNavigation?.onEnterLibrary();
+				return;
+			}
+
+			const current: HistoryEntry = {
+				path: this.currentPath.get(),
+				params: this.currentParams.get(),
+				props: this.currentPathProps(),
+			};
+
+			// Library sidebar/tab: jump to the library slot in one step. Push the current
+			// page onto past (not future) so Back on the library screen returns here.
+			// Contrast with backwards() hitting the library sentinel, which walks the
+			// stack one entry at a time and builds future for redo.
+			setHistoryPast([...getHistoryPast(), current]);
+			setHistoryFuture([]);
+			applyEntry(createLibraryEntry());
+			this.shellNavigation?.onEnterLibrary();
+		};
+
 		this.navigate = (
 			path: string,
 			params?: Record<string, unknown>,
@@ -205,10 +288,8 @@ class MiniRouter {
 				props,
 			});
 			this.history.future = [];
-			console.log("Navigating to:", path, "with params:", params, "and props:", props);
 		};
 
-		// Update query params. Can optionally create history entry (for tabs)
 		this.updateQuery = (key: string, value: unknown, push = false) => {
 			const currentParams = this.currentParams.get();
 			const newParams = { ...currentParams };
@@ -229,37 +310,28 @@ class MiniRouter {
 			} else {
 				this.currentParams.set(newParams);
 			}
-
-			console.log(`Updated query param ${key}:`, value, push ? "(push)" : "(replace)");
 		};
 
-		// Remove a query param
 		this.removeQuery = (key: string, push = false) => {
 			this.updateQuery(key, null, push);
 		};
 
-		// Reload current page without creating history entry
 		this.reload = async () => {
 			if (this.refetchFn) {
 				this.setIsReloading(true);
 				try {
 					await this.refetchFn();
-					console.log("Page reloaded");
 				} catch (error) {
 					console.error("Reload failed:", error);
 				} finally {
 					this.setIsReloading(false);
 				}
-			} else {
-				console.log("No refetch callback available");
 			}
 		};
 
-		// NEW METHOD: Update component-specific state without affecting URL
 		this.setState = (state: Record<string, unknown>) => {
 			const newProps = { ...this.currentPathProps(), ...state };
 			this.setCurrentPathProps(newProps);
-			console.log("Updated component state:", state);
 		};
 
 		this.registerStateProvider = (path: string, provider: () => Record<string, unknown>) => {
@@ -274,7 +346,7 @@ class MiniRouter {
 		};
 
 		this.backwards = () => {
-			if (!this.canGoBack()) return;
+			if (this.history.past.length === 0) return;
 
 			const current: HistoryEntry = {
 				path: this.currentPath.get(),
@@ -286,20 +358,37 @@ class MiniRouter {
 			const prev = pastArray.pop();
 			if (!prev) return;
 
+			if (isLibraryEntry(prev)) {
+				// Stepped back onto the library sentinel (in-app back, not library tab).
+				setHistoryPast([]);
+				setHistoryFuture([current, ...getHistoryFuture()]);
+				applyEntry(createLibraryEntry());
+				this.shellNavigation?.onEnterLibrary();
+				return;
+			}
+
 			const newFuture = [current, ...getHistoryFuture()];
 			setHistoryFuture(newFuture);
 			setHistoryPast(pastArray);
 
-			setCurrentPath(prev.path);
-			setCurrentParams(prev.params);
-			setCurrentPathProps(prev.props);
-
-			// Preserve refetchFn across history navigation for cached data
-			// Do NOT clear or call refetchFn when navigating backwards
+			applyEntry(prev);
+			this.shellNavigation?.onLeaveLibrary();
 		};
 
 		this.forwards = () => {
-			if (!this.canGoForward()) return;
+			if (this.history.future.length === 0) return;
+
+			const futureArray = [...getHistoryFuture()];
+			const next = futureArray.shift();
+			if (!next || isLibraryEntry(next)) return;
+
+			if (this.isOnLibrarySlot()) {
+				setHistoryPast([createLibraryEntry()]);
+				applyEntry(next);
+				setHistoryFuture(futureArray);
+				this.shellNavigation?.onLeaveLibrary();
+				return;
+			}
 
 			const current: HistoryEntry = {
 				path: this.currentPath.get(),
@@ -307,26 +396,15 @@ class MiniRouter {
 				props: this.currentPathProps(),
 			};
 
-			const futureArray = [...getHistoryFuture()];
-			const next = futureArray.shift();
-			if (!next) return;
-
-			console.log("Navigating Forward to:", next.path);
-
 			const newPast = [...getHistoryPast(), current];
 			setHistoryPast(newPast);
 			setHistoryFuture(futureArray);
 
-			setCurrentPath(next.path);
-			setCurrentParams(next.params);
-			setCurrentPathProps(next.props);
-
-			// Preserve refetchFn across history navigation for cached data
-			// Do NOT clear or call refetchFn when navigating forwards
+			applyEntry(next);
+			this.shellNavigation?.onLeaveLibrary();
 		};
 	}
 
-	// Getter that returns a reactive JSX element with optional additional props
 	getRouterView(additionalProps?: Record<string, unknown>) {
 		return (
 			<Dynamic
@@ -348,3 +426,5 @@ function CreateMiniRouterPath(
 }
 
 export { CreateMiniRouterPath, MiniRouter };
+// Canonical HistoryEntry lives in flat-shell-navigation to avoid mini-router ↔ utilities cycles.
+export type { HistoryEntry } from "@utils/flat-shell-navigation";

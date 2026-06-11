@@ -1,5 +1,11 @@
 import TitleBar from "@components/page-root/titlebar/titlebar";
-import { PageViewer, pageViewerOpen, router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import {
+	PageViewer,
+	pageViewerOpen,
+	resetLibraryNavigationState,
+	router,
+	setPageViewerOpen,
+} from "@components/page-viewer/page-viewer";
 import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import FlatNavigationControls from "@components/pages/home/flat-navigation-controls/flat-navigation-controls";
 import {
@@ -20,8 +26,9 @@ import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
 import { uiChromeModeEnabled } from "@utils/config-sync";
+import { createFlatShellNavigation, isLibraryPath } from "@utils/flat-shell-navigation";
 import { useOs } from "@utils/os";
-import { createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
 import styles from "./home.module.css";
 import { DemoInstanceCards } from "./home-intro/demo-instance-cards";
 import HomeIntro from "./home-intro/home-intro";
@@ -29,10 +36,12 @@ import Sidebar from "./sidebar/sidebar";
 
 // Module-level signals for sidebar state
 const [sidebarOpen, setSidebarOpen] = createSignal(false);
+let shellEffectPriorFlatChrome: boolean | undefined;
 
 function HomePage() {
 	const os = useOs();
 	const isFlatChrome = createMemo(() => !uiChromeModeEnabled());
+	const flatShellNavigation = createFlatShellNavigation(pageViewerOpen, setPageViewerOpen);
 	const sectionTitle = createMemo(() => {
 		if (!isFlatChrome()) return undefined;
 		if (!pageViewerOpen()) return "Library";
@@ -57,7 +66,27 @@ function HomePage() {
 		return r?.customName.get() || r?.currentElement().name || "Library";
 	});
 
+	function ensureLibrarySlot() {
+		const flat = isFlatChrome();
+		const viewerOpen = pageViewerOpen();
+		if (!flat || viewerOpen) return;
+
+		const r = router();
+		if (!r) return;
+
+		const path = r.currentPath.get();
+		// Only bootstrap an uninitialized router. A real route with the viewer
+		// closed is a navigateFromLibrary transition — do not reset to __library__.
+		if (path !== "" && !isLibraryPath(path)) return;
+
+		if (!r.isOnLibrarySlot()) {
+			r.setLibrarySlot();
+		}
+	}
+
 	onMount(async () => {
+		ensureLibrarySlot();
+
 		void initializePinning();
 
 		if (!instancesInitialized()) {
@@ -81,6 +110,30 @@ function HomePage() {
 	createEffect(() => {
 		sidebarOpen();
 		clearToasts();
+	});
+
+	createEffect(() => {
+		const r = router();
+		if (!r) return;
+
+		const flat = isFlatChrome();
+		if (flat) {
+			r.setShellNavigation(flatShellNavigation);
+		} else {
+			r.setShellNavigation(null);
+			// Only strip flat library state when leaving flat mode — not on every windowed run.
+			if (shellEffectPriorFlatChrome) {
+				resetLibraryNavigationState();
+			}
+		}
+		shellEffectPriorFlatChrome = flat;
+	});
+
+	// Re-run only when the viewer closes — do not subscribe to router path/history.
+	createEffect(() => {
+		if (!isFlatChrome()) return;
+		if (pageViewerOpen()) return;
+		untrack(ensureLibrarySlot);
 	});
 
 	const introActive = () => homeIntroVisible();
@@ -118,11 +171,7 @@ function HomePage() {
 				<Show
 					when={!pageViewerOpen()}
 					fallback={
-						<PageViewer
-							open={pageViewerOpen()}
-							viewChanged={() => setPageViewerOpen(false)}
-							embedded
-						/>
+						<PageViewer open={pageViewerOpen()} embedded />
 					}
 				>
 					<MainMenu />

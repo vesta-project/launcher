@@ -9,7 +9,7 @@ import QuiltLogo from "@assets/quilt-logo.svg";
 import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { openMiniPage } from "@components/page-viewer/page-viewer";
 import {
 	clearRunning,
 	instancesState,
@@ -258,8 +258,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openInstanceDetails = () => {
-		router()?.navigate("/instance", { id: props.instance.id });
-		setPageViewerOpen(true);
+		openMiniPage("/instance", { id: props.instance.id });
 	};
 
 	return (

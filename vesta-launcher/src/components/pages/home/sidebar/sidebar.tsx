@@ -3,7 +3,12 @@ import LibraryIcon from "@assets/cube.svg";
 import GearIcon from "@assets/gear.svg";
 import PlusIcon from "@assets/plus.svg";
 import SearchIcon from "@assets/search.svg";
-import { pageViewerOpen, router } from "@components/page-viewer/page-viewer";
+import {
+	dismissToLibrary,
+	openMiniPage,
+	pageViewerOpen,
+	router,
+} from "@components/page-viewer/page-viewer";
 import { AccountPopover } from "@components/pages/home/sidebar/account-popover/account-popover";
 import {
 	SidebarActionButton,
@@ -60,8 +65,7 @@ function Sidebar(props: SidebarProps) {
 		params?: Record<string, any>,
 		routeProps?: Record<string, any>,
 	) => {
-		router()?.navigate(path, params ?? {}, routeProps);
-		props.setPageViewerOpen(true);
+		openMiniPage(path, params ?? {}, routeProps);
 		props.openChanged(false);
 	};
 
@@ -77,7 +81,11 @@ function Sidebar(props: SidebarProps) {
 	});
 
 	const openLibrary = () => {
-		props.setPageViewerOpen(false);
+		if (isFlatChrome()) {
+			dismissToLibrary();
+		} else {
+			props.setPageViewerOpen(false);
+		}
 		props.openChanged(false);
 	};
 

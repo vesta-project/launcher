@@ -1,4 +1,4 @@
-import { router, setPageViewerOpen } from "@components/page-viewer/page-viewer";
+import { openMiniPage, router } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
@@ -118,8 +118,7 @@ export function HelpSettingsTab(props: { close?: () => void }) {
 								variant="ghost"
 								size="sm"
 								onClick={() => {
-									router()?.navigate("/changelog");
-									setPageViewerOpen(true);
+									openMiniPage("/changelog");
 								}}
 							>
 								View Changelog
