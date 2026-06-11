@@ -1220,6 +1220,12 @@ export async function handleOpenRuntimeStorageLocation() {
 	}
 }
 
+export async function handleOpenLauncherLogs() {
+	if (hasTauriRuntime()) {
+		await invoke("open_logs_folder", { instanceIdSlug: null });
+	}
+}
+
 export async function handleClearCache() {
 	if (hasTauriRuntime()) {
 		try {

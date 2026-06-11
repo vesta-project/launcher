@@ -1058,10 +1058,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn cleanup_old_logs(app_handle: &tauri::AppHandle) {
-    let app_handle_clone = app_handle.clone();
+fn is_launcher_log_file(name: &str) -> bool {
+    name.starts_with("vesta-log-") && name.ends_with(".log")
+}
+
+fn cleanup_old_logs(_app_handle: &tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
-        if let Ok(log_dir) = app_handle_clone.path().app_log_dir() {
+        if let Ok(log_dir) = crate::utils::db_manager::get_launcher_log_dir() {
             log::debug!("Cleaning up old logs in: {:?}", log_dir);
 
             if let Ok(entries) = fs::read_dir(&log_dir) {
@@ -1072,6 +1075,12 @@ fn cleanup_old_logs(app_handle: &tauri::AppHandle) {
                 let retention_secs = 30 * 24 * 60 * 60; // 30 days
 
                 for entry in entries.flatten() {
+                    let file_name = entry.file_name();
+                    let file_name = file_name.to_string_lossy();
+                    if !entry.path().is_file() || !is_launcher_log_file(&file_name) {
+                        continue;
+                    }
+
                     if let Ok(metadata) = entry.metadata() {
                         if let Ok(modified) = metadata.modified() {
                             if let Ok(duration) = modified.duration_since(UNIX_EPOCH) {

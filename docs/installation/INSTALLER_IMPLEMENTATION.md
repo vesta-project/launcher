@@ -90,16 +90,18 @@ logs/                # Application logs (30-day retention)
 ## Logging Infrastructure
 
 ### Configuration
-- **Plugin**: tauri-plugin-log 2.7.1
-- **Targets**: Stdout, LogDir, Webview
-- **Level**: Info
+- **Plugin**: tauri-plugin-log 2.8
+- **Targets**: Stdout, app-data log folder (`get_launcher_log_dir()`), Webview
+- **Session files**: `vesta-log-YYYY-MM-DD_HHMMSS.log` (one file per app launch)
+- **Level**: Info (Debug when Settings → Debug logging is enabled; restart required)
 - **Timezone**: UseLocal
-- **Rotation**: KeepAll with 10MB file limit
-- **Retention**: 30 days (auto-cleanup on startup)
+- **Within-session rotation**: KeepAll with 10MB file limit (splits oversized sessions into additional files)
+- **Retention**: 30 days (auto-cleanup on startup; `vesta-log-*.log` only)
 
 ### Implementation
-- Added to `src-tauri/src/main.rs`
+- Registered in `src-tauri/src/logging.rs` during app setup
 - Cleanup function in `src-tauri/src/setup.rs`
+- Log directory helper in `src-tauri/src/utils/db_manager.rs` (`get_launcher_log_dir()`)
 - Logs async installation progress
 
 ## Dependencies

@@ -235,6 +235,18 @@ pub fn get_app_config_dir() -> Result<PathBuf> {
     Ok(config_dir)
 }
 
+/// Launcher diagnostic log directory under app data.
+/// - Windows: `%APPDATA%/.VestaLauncher/logs`
+/// - macOS: `~/Library/Application Support/VestaLauncher/logs`
+/// - Linux: `~/.config/VestaLauncher/logs`
+pub fn get_launcher_log_dir() -> Result<PathBuf> {
+    let dir = get_app_config_dir()?.join("logs");
+    if !dir.exists() {
+        std::fs::create_dir_all(&dir)?;
+    }
+    Ok(dir)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -223,14 +223,19 @@ pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> 
             config_dir.join("instances").join(&slug_val).join("logs")
         }
     } else {
-        crate::utils::db_manager::get_app_config_dir()
-            .map_err(|e| e.to_string())?
-            .join("logs")
+        crate::utils::db_manager::get_launcher_log_dir().map_err(|e| e.to_string())?
     };
 
-    // Create logs directory if it doesn't exist
-    std::fs::create_dir_all(&logs_path)
-        .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+    if let Some(parent) = logs_path.parent() {
+        if !parent.exists() {
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+        }
+    }
+    if !logs_path.exists() {
+        std::fs::create_dir_all(&logs_path)
+            .map_err(|e| format!("Failed to create logs directory: {}", e))?;
+    }
 
     // Open logs directory in file explorer
     open::that(&logs_path).map_err(|e| {

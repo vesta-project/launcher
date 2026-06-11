@@ -5,6 +5,7 @@ import {
 	handleClearCache,
 	handleDebugToggle,
 	handleOpenAppData,
+	handleOpenLauncherLogs,
 	handleOpenRuntimeStorageLocation,
 } from "@stores/settings";
 import { invoke } from "@tauri-apps/api/core";
@@ -30,6 +31,12 @@ export function DeveloperSettingsTab() {
 					description="Open the Local AppData-style folder where runtime cache data (player heads, account capes, etc.) is stored."
 					actionLabel="Open Folder"
 					onAction={handleOpenRuntimeStorageLocation}
+				/>
+				<SettingsField
+					label="Open Launcher Logs"
+					description="Open launcher diagnostic logs (Rust backend and UI). This is separate from in-game console output."
+					actionLabel="Open Folder"
+					onAction={handleOpenLauncherLogs}
 				/>
 			</SettingsCard>
 

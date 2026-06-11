@@ -33,6 +33,18 @@ Debug builds include [CrabNebula DevTools](https://devtools.crabnebula.dev) for 
 
 The Settings **Debug logging** toggle still controls log verbosity (`Info` vs `Debug`) and requires an app restart. DevTools receives the same log stream as the existing `tauri-plugin-log` setup (stdout, log files, webview).
 
+### Launcher logs
+
+Launcher diagnostic logs (backend Rust + webview console forwarding) are written under `logs/` in the app data folder:
+
+- macOS: `~/Library/Application Support/VestaLauncher/logs/`
+- Linux: `~/.config/VestaLauncher/logs/`
+- Windows: `%APPDATA%/.VestaLauncher/logs/`
+
+Each app launch creates a new session file: `vesta-log-YYYY-MM-DD_HHMMSS.log` (local time). If a single session exceeds 10MB, the plugin splits it into additional timestamped files in the same folder. Files older than 30 days are removed on startup.
+
+In-game console output is separate: it lives under each instance's `game_directory/logs/` (for example `latest.log`). Use Settings → Developer → **Open Launcher Logs** for launcher diagnostics, or the instance Console tab for game logs.
+
 - **Frontend Only:**
   ```bash
   cd vesta-launcher

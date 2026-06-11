@@ -22,7 +22,7 @@ Top-level layout conventions
   - Use `cache/` under the app data folder: e.g., `%APPDATA%\\.VestaLauncher\\cache`.
   - Subfolders: `cache/downloads`, `cache/installers`, `cache/processed`.
 - Logs:
-  - Use `logs/` under app data. Rotate using date-stamped files: `YYYY-MM-DD_HHMMSS.log`.
+  - Use `logs/` under app data. One file per launcher session: `vesta-log-YYYY-MM-DD_HHMMSS.log`.
 - Backups:
   - Use `backups/<iso-timestamp>/` under the app data folder; backups must be minimal (only files likely to be overwritten) and named clearly.
 - Runtimes (optional bundled JREs):
@@ -77,7 +77,7 @@ Mirrors, retries and health checks
 Logging & diagnostics
 
 - Structured logs: produce structured logs (JSON-lines) in addition to human-readable text logs when verbose/debug mode is enabled.
-- Log location: `logs/<iso-timestamp>.log`. Keep a configurable retention policy (e.g., last N logs or last X days).
+- Log location: `logs/vesta-log-YYYY-MM-DD_HHMMSS.log` (one file per app launch). Retain logs for 30 days.
 - Crash reports: collect JVM stdout/stderr and `game/crash-reports` and package them with a short diagnostics manifest that lists the verification state and system info (only with user consent).
 
 Server / headless operation preferences
