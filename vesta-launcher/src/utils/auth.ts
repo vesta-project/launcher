@@ -32,7 +32,6 @@ export interface Account {
 	theme_gradient_angle: number | null;
 	theme_gradient_type: string | null;
 	theme_gradient_harmony: string | null;
-	theme_advanced_overrides: string | null;
 	theme_border_width: number | null;
 	account_type: string;
 	is_expired: boolean;

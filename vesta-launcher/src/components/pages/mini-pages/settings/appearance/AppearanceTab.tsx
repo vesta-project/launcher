@@ -1,6 +1,7 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
+	activeThemeDefinition,
 	backgroundHue,
 	backgroundOpacity,
 	borderThickness,
@@ -195,6 +196,12 @@ export function AppearanceSettingsTab() {
 					.map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
 					.join(" ");
 		}
+	};
+
+	const getNumberVariableValue = (value: ThemeVariableValue, fallback: number, min = 0, max = 100) => {
+		const next = typeof value === "number" ? value : Number(value);
+		const finite = Number.isFinite(next) ? next : fallback;
+		return Math.max(min, Math.min(max, finite));
 	};
 
 	return (
@@ -556,11 +563,8 @@ export function AppearanceSettingsTab() {
 				</SettingsCard>
 
 				<For each={
-					themeId()
-						? getThemeById(themeId())?.variables?.map((variable) => ({
-								...variable,
-								value: userVariablesSnapshot()[variable.key] ?? variable.default,
-							}))
+					activeThemeDefinition()
+						? activeThemeDefinition()?.variables
 						: []
 				}>
 					{(group) => (
@@ -571,7 +575,7 @@ export function AppearanceSettingsTab() {
 								headerRight={
 									group.type === "boolean" ? (
 										<Switch
-											checked={Boolean(group.value)}
+											checked={Boolean(userVariablesSnapshot()[group.key] ?? group.default)}
 											onCheckedChange={(val: boolean) => handleVariableChange(group.key, val)}
 										>
 											<SwitchControl>
@@ -580,7 +584,7 @@ export function AppearanceSettingsTab() {
 										</Switch>
 									) : group.type === "select" ? (
 										<ToggleGroup
-											value={String(group.value)}
+											value={String(userVariablesSnapshot()[group.key] ?? group.default)}
 											onChange={(val) => val && handleVariableChange(group.key, val)}
 										>
 											<For each={group.options}>
@@ -592,16 +596,28 @@ export function AppearanceSettingsTab() {
 								body={
 									group.type === "number" ? (
 										<Slider
-											value={[group.value as number]}
-											onInput={(val: any) => handleVariableChange(group.key, val[0], true)}
-											onChange={(val) => handleVariableChange(group.key, val[0], false)}
+											value={[
+												getNumberVariableValue(
+													userVariablesSnapshot()[group.key] ?? group.default,
+													group.default,
+													group.min,
+													group.max,
+												),
+											]}
+											onChange={(val) => handleVariableChange(group.key, val[0], true)}
+											onChangeEnd={(val) => handleVariableChange(group.key, val[0], false)}
 											minValue={group.min ?? 0}
 											maxValue={group.max ?? 100}
 											step={group.step ?? 1}
 										>
 											<div class={styles["slider__header"]}>
 												<div class={styles["slider__value-label"]}>
-													{group.value}
+													{getNumberVariableValue(
+														userVariablesSnapshot()[group.key] ?? group.default,
+														group.default,
+														group.min,
+														group.max,
+													)}
 													{group.unit || ""}
 												</div>
 											</div>

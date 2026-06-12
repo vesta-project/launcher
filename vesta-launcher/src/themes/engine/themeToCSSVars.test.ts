@@ -75,3 +75,60 @@ describe("themeToCSSVars grain mapping", () => {
 		expect(highSize).toBeLessThan(lowSize);
 	});
 });
+
+describe("themeToCSSVars custom variables", () => {
+	it("emits declared variable defaults", () => {
+		const vars = themeToCSSVars(
+			createTheme({
+				variables: [
+					{
+						name: "Glow Intensity",
+						key: "glow-intensity",
+						type: "number",
+						min: 0,
+						max: 100,
+						default: 50,
+					},
+				],
+			}),
+		);
+
+		expect(vars["--theme-var-glow-intensity"]).toBe("50");
+	});
+
+	it("uses user variable values only for declared variables", () => {
+		const vars = themeToCSSVars(
+			createTheme({
+				variables: [
+					{
+						name: "Glass Blur",
+						key: "glass-blur",
+						type: "number",
+						min: 0,
+						max: 40,
+						default: 12,
+					},
+				],
+				userVariables: {
+					"glass-blur": 18,
+					"stale-var": 99,
+				},
+			}),
+		);
+
+		expect(vars["--theme-var-glass-blur"]).toBe("18");
+		expect(vars["--theme-var-stale-var"]).toBeUndefined();
+	});
+
+	it("does not emit user variables when the theme has no variable definitions", () => {
+		const vars = themeToCSSVars(
+			createTheme({
+				userVariables: {
+					"orphan-var": 1,
+				},
+			}),
+		);
+
+		expect(vars["--theme-var-orphan-var"]).toBeUndefined();
+	});
+});

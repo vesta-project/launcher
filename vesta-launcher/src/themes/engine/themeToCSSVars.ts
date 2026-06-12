@@ -141,20 +141,23 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 		vars["--primary-lightness"] = `${theme.primaryLight}%`;
 	}
 
-	// Apply custom theme variables
-	if (theme.userVariables) {
-		for (const [key, val] of Object.entries(theme.userVariables)) {
-			vars[`--theme-var-${key}`] = typeof val === "boolean" ? (val ? "1" : "0") : String(val);
-		}
-	}
+	const declaredVariableKeys = new Set<string>();
 
-	// Also ensure variables from the theme definition have defaults if not in userVariables
+	// Ensure variables from the theme definition have defaults if not in userVariables.
 	if (theme.variables) {
 		for (const v of theme.variables) {
+			declaredVariableKeys.add(v.key);
 			const key = `--theme-var-${v.key}`;
 			if (!vars[key]) {
 				vars[key] = typeof v.default === "boolean" ? (v.default ? "1" : "0") : String(v.default);
 			}
+		}
+	}
+
+	if (theme.userVariables && declaredVariableKeys.size > 0) {
+		for (const [key, val] of Object.entries(theme.userVariables)) {
+			if (!declaredVariableKeys.has(key)) continue;
+			vars[`--theme-var-${key}`] = typeof val === "boolean" ? (val ? "1" : "0") : String(val);
 		}
 	}
 

@@ -4,6 +4,8 @@ import { getCurrentOsHint, normalizeWindowEffectForCurrentOS } from "./effects";
 import { normalizeStyleMode } from "./parser";
 import { clamp } from "./utils";
 
+const THEME_VARIABLE_KEY_PATTERN = /^[a-zA-Z_][a-zA-Z0-9_-]*$/;
+
 /**
  * Strip malicious or structural-breaking css from user themes.
  */
@@ -56,6 +58,10 @@ export function normalizeUserVariables(
 
 	const normalized: Record<string, ThemeVariableValue> = {};
 	for (const variable of definitions) {
+		if (!THEME_VARIABLE_KEY_PATTERN.test(variable.key)) {
+			continue;
+		}
+
 		const candidate = userVariables?.[variable.key];
 
 		if (variable.type === "number") {
@@ -82,6 +88,13 @@ export function normalizeUserVariables(
 	}
 
 	return normalized;
+}
+
+function normalizeThemeVariables(variables?: ThemeVariable[]): ThemeVariable[] | undefined {
+	if (!variables || variables.length === 0) return undefined;
+
+	const normalized = variables.filter((variable) => THEME_VARIABLE_KEY_PATTERN.test(variable.key));
+	return normalized.length > 0 ? normalized : undefined;
 }
 
 export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
@@ -147,7 +160,7 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 						: "none"),
 		),
 		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
-		variables: theme.variables,
-		userVariables: normalizeUserVariables(theme.userVariables, theme.variables),
+		variables: normalizeThemeVariables(theme.variables),
+		userVariables: normalizeUserVariables(theme.userVariables, normalizeThemeVariables(theme.variables)),
 	};
 }

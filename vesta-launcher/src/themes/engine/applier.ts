@@ -9,6 +9,8 @@ export type {
 } from "./transitionManager";
 
 const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
+const CUSTOM_CSS_TAG_ID = "theme-custom-css";
+const CUSTOM_CSS_OWNER_ATTR = "data-theme-custom-css-owner";
 
 function clearStartupFallbackIfActive(root: HTMLElement, style: CSSStyleDeclaration): void {
 	if (root.getAttribute(STARTUP_FALLBACK_ATTR) !== "1") {
@@ -19,6 +21,38 @@ function clearStartupFallbackIfActive(root: HTMLElement, style: CSSStyleDeclarat
 	style.removeProperty("--background-color");
 	style.removeProperty("--background-image");
 	root.removeAttribute(STARTUP_FALLBACK_ATTR);
+}
+
+function getThemeVarKeysFromStyle(style: CSSStyleDeclaration): string[] {
+	const keys: string[] = [];
+	for (let i = 0; i < style.length; i += 1) {
+		const key = style.item(i);
+		if (key.startsWith("--theme-var-")) {
+			keys.push(key);
+		}
+	}
+	return keys;
+}
+
+function applyCustomCss(theme: ThemeConfig): void {
+	const normalizedCss = (theme.customCss || "").trim();
+	const existing = document.getElementById(CUSTOM_CSS_TAG_ID) as HTMLStyleElement | null;
+
+	if (normalizedCss.length === 0) {
+		existing?.remove();
+		return;
+	}
+
+	const styleTag = existing ?? document.createElement("style");
+	if (!existing) {
+		styleTag.id = CUSTOM_CSS_TAG_ID;
+		document.head.appendChild(styleTag);
+	}
+
+	if (styleTag.textContent !== normalizedCss) {
+		styleTag.textContent = normalizedCss;
+	}
+	styleTag.setAttribute(CUSTOM_CSS_OWNER_ATTR, theme.id);
 }
 
 /**
@@ -84,35 +118,23 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
 	const styleMode = theme.style ?? "glass";
 	const nextThemeVarKeys = Object.keys(vars).filter((key) => key.startsWith("--theme-var-"));
-	const previousThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
+	const previousTrackedThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
 		.split(",")
 		.map((key) => key.trim())
 		.filter((key) => key.length > 0);
+	const previousThemeVarKeys = Array.from(
+		new Set([...previousTrackedThemeVarKeys, ...getThemeVarKeysFromStyle(style)]),
+	);
 	const hasRemovedThemeVars = previousThemeVarKeys.some((key) => !nextThemeVarKeys.includes(key));
 
 	const styleTag = document.getElementById("theme-custom-css") as HTMLStyleElement | null;
 	const currentCustomCss = (styleTag?.textContent || "").trim();
 	const nextCustomCss = (theme.customCss || "").trim();
-	const customCssChanged = currentCustomCss !== nextCustomCss;
-
-	const updateCustomCss = (t: ThemeConfig) => {
-		const tagId = "theme-custom-css";
-		let styleTag = document.getElementById(tagId) as HTMLStyleElement | null;
-		const normalizedCss = (t.customCss || "").trim();
-
-		if (normalizedCss.length > 0) {
-			if (!styleTag) {
-				styleTag = document.createElement("style");
-				styleTag.id = tagId;
-				document.head.appendChild(styleTag);
-			}
-			if (styleTag.textContent !== normalizedCss) {
-				styleTag.textContent = normalizedCss;
-			}
-		} else if (styleTag && styleTag.textContent !== "") {
-			styleTag.textContent = "";
-		}
-	};
+	const customCssOwner = styleTag?.getAttribute(CUSTOM_CSS_OWNER_ATTR) || "";
+	const customCssChanged =
+		currentCustomCss !== nextCustomCss ||
+		(nextCustomCss.length > 0 && customCssOwner !== themeId) ||
+		(nextCustomCss.length === 0 && styleTag !== null);
 
 	// Helper for numeric string comparison with epsilon
 	const numMatch = (a: string, b: string) => {
@@ -147,7 +169,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 		});
 
 		if (!anyVarChanged && !hasRemovedThemeVars && !customCssChanged) {
-			updateCustomCss(theme);
+			applyCustomCss(theme);
 			return;
 		}
 	}
@@ -168,9 +190,9 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 
 	clearStartupFallbackIfActive(root, style);
 
-	updateCustomCss(theme);
 	root.setAttribute("data-theme-id", themeId);
 	root.setAttribute("data-theme-var-keys", nextThemeVarKeys.join(","));
+	applyCustomCss(theme);
 
 	applyBackgroundState(theme, effectToSet, root, style);
 

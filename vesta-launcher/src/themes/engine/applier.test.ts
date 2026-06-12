@@ -36,6 +36,7 @@ describe("applyTheme background and effect behavior", () => {
 		root.removeAttribute("data-style");
 		root.removeAttribute("data-startup-fallback-active");
 		root.setAttribute("data-os", "windows");
+		document.getElementById("theme-custom-css")?.remove();
 	});
 
 	it("keeps opacity-controlled solid overlay when effect is enabled and gradient is disabled", () => {
@@ -94,4 +95,37 @@ describe("applyTheme background and effect behavior", () => {
 		expect(root.style.getPropertyValue("--background-image").trim()).toBe("");
 	});
 
+	it("removes custom css when switching to a theme without custom css", () => {
+		applyTheme(
+			createTheme({
+				id: "midnight",
+				customCss: ':root[data-theme-id="midnight"] { --midnight-only: 1; }',
+			}),
+		);
+
+		expect(document.getElementById("theme-custom-css")?.textContent).toContain("--midnight-only");
+
+		applyTheme(createTheme({ id: "classic", customCss: undefined }));
+
+		expect(document.getElementById("theme-custom-css")).toBeNull();
+		expect(document.documentElement.getAttribute("data-theme-id")).toBe("classic");
+	});
+
+	it("updates custom css when the same theme id changes css text", () => {
+		applyTheme(createTheme({ customCss: ":root { --test-custom-css: 1; }" }));
+		applyTheme(createTheme({ customCss: ":root { --test-custom-css: 2; }" }));
+
+		const styleTag = document.getElementById("theme-custom-css");
+		expect(styleTag?.textContent).toContain("--test-custom-css: 2");
+		expect(styleTag?.getAttribute("data-theme-custom-css-owner")).toBe("test-theme");
+	});
+
+	it("removes stale theme variable properties even when tracking metadata is missing", () => {
+		const root = document.documentElement;
+		root.style.setProperty("--theme-var-stale", "99");
+
+		applyTheme(createTheme({ id: "no-vars", customCss: undefined }));
+
+		expect(root.style.getPropertyValue("--theme-var-stale").trim()).toBe("");
+	});
 });

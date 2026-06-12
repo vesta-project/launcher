@@ -86,12 +86,7 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 		gradientType: themeData.gradientType ?? config.theme_gradient_type ?? baseTheme.gradientType,
 		gradientHarmony:
 			themeData.gradientHarmony ?? config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
-		customCss:
-			themeData.customCss && themeData.customCss.trim().length > 0
-				? themeData.customCss
-				: config.theme_advanced_overrides && config.theme_advanced_overrides.trim().length > 0
-					? config.theme_advanced_overrides
-					: baseTheme.customCss,
+		customCss: themeData.customCss !== undefined ? themeData.customCss : baseTheme.customCss,
 		windowEffect: themeData.windowEffect ?? config.theme_window_effect ?? baseTheme.windowEffect,
 		backgroundOpacity:
 			themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,

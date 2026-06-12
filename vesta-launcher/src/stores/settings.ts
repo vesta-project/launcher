@@ -87,7 +87,6 @@ export interface AppConfig {
 	theme_gradient_angle?: number;
 	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
-	theme_advanced_overrides?: string;
 	theme_window_effect?: string;
 	theme_background_opacity?: number;
 	theme_data?: string;
@@ -318,6 +317,48 @@ export const filteredThemeCatalog = createMemo(() => {
 		.map(({ theme }) => theme);
 });
 
+export const activeThemeDefinition = createMemo<ThemeConfig | undefined>(() => {
+	const id = themeId();
+	const currentTheme = id ? getThemeById(id) : undefined;
+	if (!currentTheme) return undefined;
+
+	const themeData = parseThemeData(currentThemeConfig.theme_data);
+
+	return validateTheme({
+		...currentTheme,
+		id: themeData.id ?? id,
+		name: themeData.name ?? currentTheme.name,
+		author: themeData.author ?? currentTheme.author,
+		description: themeData.description ?? currentTheme.description,
+		primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
+		opacity: opacity() ?? currentTheme.opacity ?? 0,
+		style: styleMode() ?? currentTheme.style,
+		grainStrength: grainStrength() ?? currentTheme.grainStrength,
+		gradientEnabled: (gradientEnabled() ?? currentTheme.gradientEnabled) as boolean,
+		rotation: (rotation() ?? currentTheme.rotation) as number,
+		gradientType: (gradientType() ?? currentTheme.gradientType) as "linear" | "radial",
+		gradientHarmony: (gradientHarmony() ?? currentTheme.gradientHarmony) as GradientHarmony,
+		borderWidth: borderThickness(),
+		backgroundOpacity: backgroundOpacity(),
+		windowEffect: windowEffect(),
+		customCss: themeData.customCss ?? currentTheme.customCss,
+		allowHueChange: themeData.allowHueChange ?? currentTheme.allowHueChange,
+		allowStyleChange: themeData.allowStyleChange ?? currentTheme.allowStyleChange,
+		allowBorderChange: themeData.allowBorderChange ?? currentTheme.allowBorderChange,
+		variables: themeData.variables ?? currentTheme.variables,
+	});
+});
+
+export const activeThemeConfig = createMemo<ThemeConfig | undefined>(() => {
+	const definition = activeThemeDefinition();
+	if (!definition) return undefined;
+
+	return validateTheme({
+		...definition,
+		userVariables: userVariablesSnapshot(),
+	});
+});
+
 createEffect(() => {
 	if (!hasImportedThemes() && themeFilterMode() === "imported") {
 		setThemeFilterMode("all");
@@ -327,27 +368,8 @@ createEffect(() => {
 createEffect(() => {
 	if (loading()) return;
 
-	const id = themeId();
-	const currentTheme = id ? getThemeById(id) : undefined;
-	const activeUserVars = userVariablesSnapshot();
-	if (currentTheme) {
-		const themeToApply = validateTheme({
-			...currentTheme,
-			primaryHue: (backgroundHue() ?? currentTheme.primaryHue) as number,
-			opacity: opacity() ?? currentTheme.opacity ?? 0,
-			style: styleMode() ?? currentTheme.style,
-			grainStrength: grainStrength() ?? currentTheme.grainStrength,
-			gradientEnabled: (gradientEnabled() ?? currentTheme.gradientEnabled) as boolean,
-			rotation: (rotation() ?? currentTheme.rotation) as number,
-			gradientType: (gradientType() ?? currentTheme.gradientType) as "linear" | "radial",
-			gradientHarmony: (gradientHarmony() ?? currentTheme.gradientHarmony) as GradientHarmony,
-			borderWidth: borderThickness(),
-			backgroundOpacity: backgroundOpacity(),
-			windowEffect: windowEffect(),
-			userVariables: activeUserVars,
-		});
-		applyTheme(themeToApply);
-	}
+	const themeToApply = activeThemeConfig();
+	if (themeToApply) applyTheme(themeToApply);
 });
 
 export const javaOptions = createMemo(() => {
@@ -554,6 +576,11 @@ export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = fal
 	const activeWEffect = normalizeWindowEffectForCurrentOS(
 		overrides.windowEffect ?? windowEffect(),
 	);
+	const currentThemeData = parseThemeData(currentThemeConfig.theme_data);
+	const shouldCarryCurrentThemeData = (currentThemeData.id ?? activeThemeId) === activeThemeId;
+	const carriedThemeData = shouldCarryCurrentThemeData ? currentThemeData : {};
+	const activeVariables = overrides.variables ?? carriedThemeData.variables ?? currentTheme?.variables;
+	const activeCustomCss = overrides.customCss ?? carriedThemeData.customCss ?? currentTheme?.customCss;
 	const activeUserVars = overrides.userVariables ?? userVariablesSnapshot();
 
 	const persistenceData = {
@@ -572,11 +599,11 @@ export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = fal
 		borderWidth: activeBWidth,
 		backgroundOpacity: activeBgOp,
 		windowEffect: activeWEffect,
-		customCss: overrides.customCss ?? currentTheme?.customCss,
+		customCss: activeCustomCss,
 		allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
 		allowStyleChange: overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
 		allowBorderChange: overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
-		variables: overrides.variables ?? currentTheme?.variables,
+		variables: activeVariables,
 		userVariables: activeUserVars,
 	};
 
@@ -595,9 +622,11 @@ export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = fal
 			borderWidth: activeBWidth,
 			backgroundOpacity: activeBgOp,
 			windowEffect: activeWEffect,
+			customCss: activeCustomCss,
 			allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
 			allowStyleChange: overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
 			allowBorderChange: overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
+			variables: activeVariables,
 			userVariables: activeUserVars,
 		}),
 		{ transition: applyTransition },

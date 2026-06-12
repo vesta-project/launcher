@@ -185,7 +185,8 @@ export function parseThemeData(raw: unknown): Partial<ThemeDataPayload> {
 	out.borderWidth = getNumber(source.borderWidth ?? source.border_width);
 	out.backgroundOpacity = getNumber(source.backgroundOpacity ?? source.background_opacity);
 	out.windowEffect = getString(source.windowEffect ?? source.window_effect);
-	out.customCss = getString(source.customCss ?? source.custom_css);
+	const customCss = source.customCss ?? source.custom_css;
+	out.customCss = typeof customCss === "string" ? customCss : undefined;
 	out.allowHueChange = getBoolean(source.allowHueChange ?? source.allow_hue_change);
 	out.allowStyleChange = getBoolean(source.allowStyleChange ?? source.allow_style_change);
 	out.allowBorderChange = getBoolean(source.allowBorderChange ?? source.allow_border_change);

@@ -90,7 +90,6 @@ export interface AppThemeConfig {
 	theme_gradient_angle?: number;
 	theme_gradient_type?: "linear" | "radial";
 	theme_gradient_harmony?: GradientHarmony;
-	theme_advanced_overrides?: string;
 	theme_border_width?: number;
 	theme_window_effect?: string;
 	theme_background_opacity?: number;

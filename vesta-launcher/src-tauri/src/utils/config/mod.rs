@@ -132,7 +132,6 @@ pub struct AppConfig {
     pub theme_gradient_enabled: bool, // Enable background gradient
     pub theme_gradient_angle: Option<i32>, // Gradient angle in degrees
     pub theme_gradient_harmony: Option<String>, // "none", "analogous", "complementary", "triadic"
-    pub theme_advanced_overrides: Option<String>, // JSON blob for advanced custom overrides
     pub theme_gradient_type: Option<String>, // "linear" or "radial"
     pub theme_border_width: Option<i32>, // Border thickness in pixels
 
@@ -201,7 +200,6 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         bool,           // theme_gradient_enabled
         Option<i32>,    // theme_gradient_angle
         Option<String>, // theme_gradient_harmony
-        Option<String>, // theme_advanced_overrides
         Option<String>, // theme_gradient_type
         Option<i32>,    // theme_border_width
         bool,           // setup_completed
@@ -260,37 +258,36 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             theme_gradient_enabled: row.26,
             theme_gradient_angle: row.27,
             theme_gradient_harmony: row.28,
-            theme_advanced_overrides: row.29,
-            theme_gradient_type: row.30,
-            theme_border_width: row.31,
+            theme_gradient_type: row.29,
+            theme_border_width: row.30,
 
             // Onboarding fields
-            setup_completed: row.32,
-            setup_step: row.33,
-            tutorial_completed: row.34,
+            setup_completed: row.31,
+            setup_step: row.32,
+            tutorial_completed: row.33,
 
             // Integration and runtime toggles
-            use_dedicated_gpu: row.35,
-            telemetry_enabled: row.36,
-            discord_presence_enabled: row.37,
-            auto_install_dependencies: row.38,
+            use_dedicated_gpu: row.34,
+            telemetry_enabled: row.35,
+            discord_presence_enabled: row.36,
+            auto_install_dependencies: row.37,
 
             // Instance defaults
-            default_width: row.39,
-            default_height: row.40,
-            default_java_args: row.41,
-            default_environment_variables: row.42,
-            default_pre_launch_hook: row.43,
-            default_wrapper_command: row.44,
-            default_post_exit_hook: row.45,
-            default_min_memory: row.46,
-            default_launcher_action_on_launch: row.47,
+            default_width: row.38,
+            default_height: row.39,
+            default_java_args: row.40,
+            default_environment_variables: row.41,
+            default_pre_launch_hook: row.42,
+            default_wrapper_command: row.43,
+            default_post_exit_hook: row.44,
+            default_min_memory: row.45,
+            default_launcher_action_on_launch: row.46,
 
             // Theme extras
-            theme_window_effect: row.48,
-            theme_background_opacity: row.49,
-            theme_data: row.50,
-            ui_chrome_mode_enabled: row.51,
+            theme_window_effect: row.47,
+            theme_background_opacity: row.48,
+            theme_data: row.49,
+            ui_chrome_mode_enabled: row.50,
         })
     }
 }
@@ -329,7 +326,6 @@ impl Default for AppConfig {
             theme_gradient_enabled: true,  // theme_gradient_enabled - enable gradients
             theme_gradient_angle: None,    // theme_gradient_angle - let preset decide
             theme_gradient_harmony: None,  // theme_gradient_harmony - let preset decide
-            theme_advanced_overrides: None, // theme_advanced_overrides - no custom overrides by default
             theme_window_effect: None,
             theme_background_opacity: None,
             theme_gradient_type: None, // theme_gradient_type - let preset decide
@@ -650,11 +646,6 @@ fn payload_from_scalar_fields(config: &AppConfig) -> Value {
         if let Some(v) = &config.theme_window_effect {
             obj.insert("windowEffect".to_string(), Value::String(v.clone()));
         }
-        if let Some(v) = &config.theme_advanced_overrides {
-            if !v.trim().is_empty() {
-                obj.insert("customCss".to_string(), Value::String(v.clone()));
-            }
-        }
     }
 
     payload
@@ -786,14 +777,6 @@ fn apply_payload_to_scalar_fields(config: &mut AppConfig, payload: &Value) -> bo
             .map(|v| v as i32);
         if config.theme_primary_light != next {
             config.theme_primary_light = next;
-            changed = true;
-        }
-    }
-
-    if obj.get("customCss").is_some() {
-        let next = payload_string(obj.get("customCss").unwrap());
-        if config.theme_advanced_overrides != next {
-            config.theme_advanced_overrides = next;
             changed = true;
         }
     }

@@ -106,64 +106,65 @@ export const PRESET_THEMES: ThemeConfig[] = [
     allowStyleChange: false,
     allowBorderChange: false,
   },
+  // The following is an example theme that involves the use of custom css variables. This allows you to make more advanced custom themes.
   // {
-  // 	id: "prism",
-  // 	name: "Prism",
-  // 	description: "Technicolor glass with reactive variables",
-  // 	author: "Vesta Team",
-  // 	primaryHue: 200,
-  // 	opacity: 20,
-  // 	borderWidth: 1,
-  // 	style: "glass",
-  // 	gradientEnabled: true,
-  // 	rotation: 45,
-  // 	gradientType: "linear",
-  // 	gradientHarmony: "triadic",
-  // 	allowHueChange: true,
-  // 	allowStyleChange: false,
-  // 	allowBorderChange: false,
-  // 	variables: [
-  // 		{
-  // 			name: "Glow Intensity",
-  // 			key: "glow-intensity",
-  // 			type: "number",
-  // 			min: 0,
-  // 			max: 100,
-  // 			default: 50,
-  // 			unit: "%",
-  // 		},
-  // 		{
-  // 			name: "Glass Blur",
-  // 			key: "glass-blur",
-  // 			type: "number",
-  // 			min: 0,
-  // 			max: 40,
-  // 			default: 12,
-  // 			unit: "px",
-  // 		},
-  // 		{
-  // 			name: "Edge Sharpness",
-  // 			key: "edge-sharpness",
-  // 			type: "number",
-  // 			min: 0,
-  // 			max: 100,
-  // 			default: 50,
-  // 			unit: "%",
-  // 		},
-  // 	],
-  // 	customCss: `
-  //         :root {
-  //             --effect-glow-strength: calc(var(--theme-var-glow-intensity) / 100);
-  //             --glass-blur-radius: calc(var(--theme-var-glass-blur) * 1px);
-  //             --border-opacity: calc(var(--theme-var-edge-sharpness) / 100);
+  //   id: "prism",
+  //   name: "Prism",
+  //   description: "Technicolor glass with reactive variables",
+  //   author: "Vesta Team",
+  //   primaryHue: 200,
+  //   opacity: 20,
+  //   borderWidth: 1,
+  //   style: "glass",
+  //   gradientEnabled: true,
+  //   rotation: 45,
+  //   gradientType: "linear",
+  //   gradientHarmony: "triadic",
+  //   allowHueChange: true,
+  //   allowStyleChange: false,
+  //   allowBorderChange: false,
+  //   variables: [
+  //     {
+  //       name: "Glow Intensity",
+  //       key: "glow-intensity",
+  //       type: "number",
+  //       min: 0,
+  //       max: 100,
+  //       default: 50,
+  //       unit: "%",
+  //     },
+  //     {
+  //       name: "Glass Blur",
+  //       key: "glass-blur",
+  //       type: "number",
+  //       min: 0,
+  //       max: 40,
+  //       default: 12,
+  //       unit: "px",
+  //     },
+  //     {
+  //       name: "Edge Sharpness",
+  //       key: "edge-sharpness",
+  //       type: "number",
+  //       min: 0,
+  //       max: 100,
+  //       default: 50,
+  //       unit: "%",
+  //     },
+  //   ],
+  //   customCss: `
+  //       :root[data-theme-id="prism"] {
+  //           --effect-glow-strength: calc(var(--theme-var-glow-intensity) / 100);
+  //           --glass-blur-radius: calc(var(--theme-var-glass-blur) * 1px);
+  //           --border-opacity: calc(var(--theme-var-edge-sharpness) / 100);
 
-  //             --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
-  //             --effect-blur: var(--glass-blur-radius);
-  //             --elevation-strong: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
-  //             --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
-  //             --background-opacity: 0.15;
-  //         }
-  //     `,
+  //           --liquid-backdrop-filter: blur(var(--glass-blur-radius)) saturate(1.5);
+  //           --effect-blur: var(--glass-blur-radius);
+  //           --elevation-strong: 0 8px 32px 0 rgba(var(--primary-base), calc(0.3 * var(--effect-glow-strength)));
+  //           --border-glass: hsl(var(--color__primary-hue) 100% 100% / var(--border-opacity));
+  //           --background-opacity: 0.15;
+  //       }
+  //   `,
   // },
   {
     id: "midnight",
@@ -177,10 +178,11 @@ export const PRESET_THEMES: ThemeConfig[] = [
     style: "flat",
     colorScheme: "dark",
     gradientEnabled: false,
+    backgroundOpacity: 20,
     allowHueChange: true, // Allow hue change for accents
     allowStyleChange: false,
     allowBorderChange: false,
-    customCss: `:root {
+    customCss: `:root[data-theme-id="midnight"] {
             /* Force truly black surfaces for Midnight panels using the computed variables */
             --surface-base-computed: hsl(0 0% 0%);
             --surface-raised-computed: hsl(0 0% 3%);
@@ -234,14 +236,14 @@ export const PRESET_THEMES: ThemeConfig[] = [
         }
 
             /* Specific Midnight styling for containers */
-            [class*="page-viewer-root"],
-            [data-popper-positioner] > div {
+            :root[data-theme-id="midnight"] [class*="page-viewer-root"],
+            :root[data-theme-id="midnight"] [data-popper-positioner] > div {
                 border: 1px solid hsl(var(--color__primary-hue) 50% 25% / 0.6) !important;
                 position: relative;
             }
 
-            [class*="page-viewer-root"]::before,
-            [data-popper-positioner] > div::before {
+            :root[data-theme-id="midnight"] [class*="page-viewer-root"]::before,
+            :root[data-theme-id="midnight"] [data-popper-positioner] > div::before {
                 content: "";
                 position: absolute;
                 inset: 0;
