@@ -231,6 +231,13 @@ export function AccountSettingsTab() {
 									url: c.url,
 								})),
 							);
+							const refreshedAccounts = await invoke<Account[]>("get_accounts");
+							setAccounts(refreshedAccounts);
+							const activeUuid = active.uuid.replace(/-/g, "");
+							const refreshedActive =
+								refreshedAccounts.find((account) => account.uuid.replace(/-/g, "") === activeUuid) ||
+								active;
+							setActiveAccount(refreshedActive);
 
 							// Only update preview/snapshot if user hasn't touched anything yet (still matches initial snapshot)
 							const snapshot = savedSnapshot();
@@ -241,15 +248,15 @@ export function AccountSettingsTab() {
 									previewCapeId() === snapshot.capeId &&
 									previewVariant() === snapshot.variant)
 							) {
-								setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
+								setPreviewSkinUrl(res.current_skin_base64 || refreshedActive.skin_url || "");
 								setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
-								setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
+								setPreviewCapeUrl(res.current_cape_base64 || refreshedActive.cape_url || "");
 								setPreviewComputedKey(res.current_skin_id);
 								setPreviewCapeId(res.current_cape_profile_id || null);
 
 								setSavedSnapshot({
-									skinUrl: res.current_skin_base64 || active.skin_url || "",
-									capeUrl: res.current_cape_base64 || active.cape_url || null,
+									skinUrl: res.current_skin_base64 || refreshedActive.skin_url || "",
+									capeUrl: res.current_cape_base64 || refreshedActive.cape_url || null,
 									skinKey: res.current_skin_id || null,
 									capeId: res.current_cape_profile_id || null,
 									variant: (res.current_variant as "classic" | "slim") || "classic",

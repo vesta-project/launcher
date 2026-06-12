@@ -245,7 +245,10 @@ pub async fn sync_account_profile_data(
             .execute(&mut conn);
 
         if let Some(app) = app_handle {
-            let _ = app.emit("core://account-heads-updated", ());
+            let _ = app.emit(
+                "core://account-heads-updated",
+                serde_json::json!({ "uuid": acc.uuid, "force": true }),
+            );
 
             if notify_remote_change && remote_change_detected {
                 let manager = app.state::<crate::notifications::manager::NotificationManager>();

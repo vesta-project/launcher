@@ -54,6 +54,14 @@ fn is_profile_cache_fresh(cached_at: chrono::DateTime<Utc>) -> bool {
     age < Duration::seconds(PROFILE_CACHE_TTL_SECONDS)
 }
 
+fn emit_account_heads_updated(app: &AppHandle, account_uuid: Option<&str>, force: bool) {
+    let payload = match account_uuid {
+        Some(account_id) => serde_json::json!({ "uuid": account_id, "force": force }),
+        None => serde_json::json!({ "force": force }),
+    };
+    let _ = app.emit("core://account-heads-updated", payload);
+}
+
 pub async fn invalidate_account_profile_cache(account_uuid: &str) {
     let normalized_uuid = account_uuid.replace("-", "");
     let mut cache = PROFILE_CACHE.lock().await;
@@ -228,9 +236,7 @@ pub async fn start_guest_session(app_handle: AppHandle) -> Result<(), String> {
     );
 
     // Notify UI
-    app_handle
-        .emit("core://account-heads-updated", ())
-        .map_err(|e| e.to_string())?;
+    emit_account_heads_updated(&app_handle, Some(&guest_uuid), false);
 
     // Create persistent warning notification
     let manager = app_handle.state::<crate::notifications::manager::NotificationManager>();
@@ -333,9 +339,7 @@ pub async fn start_demo_session(app_handle: AppHandle) -> Result<(), String> {
     );
 
     // Notify UI
-    app_handle
-        .emit("core://account-heads-updated", ())
-        .map_err(|e| e.to_string())?;
+    emit_account_heads_updated(&app_handle, Some(&demo_uuid_v), false);
 
     Ok(())
 }
@@ -454,7 +458,22 @@ async fn process_login_completion(
     // Normalize UUID
     let normalized_uuid = profile.id.replace("-", "");
 
-    let skin_url_val = profile.skins.first().map(|s| s.url.clone());
+    let active_skin = profile
+        .skins
+        .iter()
+        .find(|skin| skin.state.eq_ignore_ascii_case("ACTIVE"))
+        .or_else(|| profile.skins.first());
+    let skin_url_val = active_skin.map(|s| s.url.clone());
+    let skin_variant_val = active_skin
+        .map(|s| {
+            if s.variant.eq_ignore_ascii_case("slim") {
+                "slim"
+            } else {
+                "classic"
+            }
+        })
+        .unwrap_or("classic")
+        .to_string();
     let cape_url_val = profile.capes.first().map(|c| c.url.clone());
 
     log::info!(
@@ -468,11 +487,11 @@ async fn process_login_completion(
         get_vesta_conn().map_err(|e| anyhow::anyhow!("Failed to get database: {}", e))?;
 
     // Check if account already exists
-    let existing_count: i64 = account
+    let existing_account = account
         .filter(uuid.eq(&normalized_uuid))
-        .count()
-        .get_result(&mut conn)
-        .unwrap_or(0);
+        .first::<Account>(&mut conn)
+        .optional()
+        .unwrap_or(None);
 
     let now_str = Utc::now().to_rfc3339();
     let current_config = get_app_config().unwrap_or_default();
@@ -487,7 +506,7 @@ async fn process_login_completion(
         .execute(&mut conn)
         .map_err(|e| anyhow::anyhow!("Failed to deactivate other accounts: {}", e))?;
 
-    if existing_count == 0 {
+    if existing_account.is_none() {
         // Insert new account
         log::info!("[auth] Inserting new account for uuid: {}", normalized_uuid);
 
@@ -501,7 +520,7 @@ async fn process_login_completion(
         new_account.is_active = true;
         new_account.skin_url = skin_url_val;
         new_account.cape_url = cape_url_val;
-        new_account.skin_variant = "classic".into();
+        new_account.skin_variant = skin_variant_val.clone();
         new_account.created_at = Some(now_str.clone());
         new_account.updated_at = Some(now_str.clone());
         new_account.theme_id = Some(current_config.theme_id);
@@ -517,6 +536,16 @@ async fn process_login_completion(
 
         log::info!("[auth] Account inserted successfully");
     } else {
+        let existing_skin_url = existing_account
+            .as_ref()
+            .and_then(|acct| acct.skin_url.as_deref());
+        let skin_url_changed = existing_skin_url != skin_url_val.as_deref();
+        let next_skin_data = if skin_url_changed {
+            None
+        } else {
+            existing_account.and_then(|acct| acct.skin_data)
+        };
+
         // Update existing account
         diesel::update(account.filter(uuid.eq(&normalized_uuid)))
             .set((
@@ -526,6 +555,8 @@ async fn process_login_completion(
                 refresh_token.eq(Some(refresh_token_val)),
                 token_expires_at.eq(Some(token_expires_at_val.to_rfc3339())),
                 skin_url.eq(skin_url_val),
+                skin_data.eq(next_skin_data),
+                skin_variant.eq(skin_variant_val.clone()),
                 cape_url.eq(cape_url_val),
                 is_active.eq(true),
                 is_expired.eq(false),
@@ -541,6 +572,8 @@ async fn process_login_completion(
         log::info!("[auth] Account updated successfully");
     }
 
+    invalidate_account_profile_cache(&normalized_uuid).await;
+
     // Update active account in config
     let mut config = get_app_config().context("Failed to get app config")?;
     config.active_account_uuid = Some(normalized_uuid.clone());
@@ -555,8 +588,9 @@ async fn process_login_completion(
         }),
     );
 
-    // Notify UI that accounts might have changed (added/updated)
-    let _ = app_handle.emit("core://account-heads-updated", ());
+    // Notify UI that accounts might have changed (added/updated). Force head
+    // refresh because the same UUID can now point at a different skin URL.
+    emit_account_heads_updated(&app_handle, Some(&normalized_uuid), true);
 
     Ok((normalized_uuid, profile.name))
 }
@@ -1073,14 +1107,6 @@ pub async fn get_player_head_path(
     // Normalize UUID (remove dashes)
     let normalized_uuid = player_uuid.replace("-", "");
 
-    let cache_dir = app
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("player_heads");
-
-    let image_path = cache_dir.join(format!("{}.png", normalized_uuid));
-
     // Look for account texture URL from local DB first to avoid a profile API call.
     let known_url = {
         use crate::schema::account::dsl::*;
@@ -1091,6 +1117,25 @@ pub async fn get_player_head_path(
             .ok()
             .and_then(|acct| acct.skin_url)
     };
+
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| e.to_string())?
+        .join("player_heads");
+
+    let image_filename = match known_url.as_deref() {
+        Some(texture_url) if !texture_url.is_empty() => {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(texture_url.as_bytes());
+            let hash = hex::encode(hasher.finalize());
+            format!("{}-{}.png", normalized_uuid, &hash[..16])
+        }
+        _ => format!("{}.png", normalized_uuid),
+    };
+
+    let image_path = cache_dir.join(image_filename);
 
     let path = piston_lib::api::player::download_player_head(
         &normalized_uuid,
@@ -1121,7 +1166,7 @@ pub async fn preload_account_heads(app: AppHandle) -> Result<(), String> {
     futures::future::join_all(futures).await;
 
     // Emit event so frontend knows heads might have changed
-    let _ = app.emit("core://account-heads-updated", ());
+    emit_account_heads_updated(&app, None, false);
 
     Ok(())
 }
@@ -1163,7 +1208,7 @@ pub fn repair_active_account(app_handle: AppHandle) -> Result<Option<Account>, S
         update_app_config(&config).map_err(|e| e.to_string())?;
 
         // Notify UI
-        let _ = app_handle.emit("core://account-heads-updated", ());
+        emit_account_heads_updated(&app_handle, None, false);
 
         // Trigger full reset (redirects to onboarding)
         let _ = crate::commands::app::close_all_windows_and_reset(app_handle);
