@@ -36,12 +36,14 @@ import Sidebar from "./sidebar/sidebar";
 
 // Module-level signals for sidebar state
 const [sidebarOpen, setSidebarOpen] = createSignal(false);
-let shellEffectPriorFlatChrome: boolean | undefined;
 
 function HomePage() {
 	const os = useOs();
 	const isFlatChrome = createMemo(() => !uiChromeModeEnabled());
-	const flatShellNavigation = createFlatShellNavigation(pageViewerOpen, setPageViewerOpen);
+	const flatShellNavigation = createMemo(() =>
+		createFlatShellNavigation(pageViewerOpen, setPageViewerOpen),
+	);
+	let shellEffectPriorFlatChrome: boolean | undefined;
 	const sectionTitle = createMemo(() => {
 		if (!isFlatChrome()) return undefined;
 		if (!pageViewerOpen()) return "Library";
@@ -118,7 +120,7 @@ function HomePage() {
 
 		const flat = isFlatChrome();
 		if (flat) {
-			r.setShellNavigation(flatShellNavigation);
+			r.setShellNavigation(flatShellNavigation());
 		} else {
 			r.setShellNavigation(null);
 			// Only strip flat library state when leaving flat mode — not on every windowed run.

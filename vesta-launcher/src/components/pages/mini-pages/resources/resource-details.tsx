@@ -473,7 +473,9 @@ const ResourceDetailsPage: Component<{
     };
 
     props.setRefetch?.(handleRefetch);
-    activeRouter()?.setRefetch(handleRefetch);
+    const mountedRouter = activeRouter();
+    mountedRouter?.setRefetch(handleRefetch, "/resource-details");
+    onCleanup(() => mountedRouter?.clearRefetch(handleRefetch));
   });
 
   // --- Dynamic Title Support ---

@@ -13,15 +13,31 @@ pub fn register_log_plugin(
     let session_file_name = format!("vesta-log-{session_stamp}");
     let session_log_path = log_dir.join(format!("{session_file_name}.log"));
 
+    // Devtools bridges tracing/log events through its own subscriber. Sending those
+    // same records back into the app webview can recursively flood the page while
+    // devtools is attached, especially during a full webview reload.
+    #[cfg(all(debug_assertions, feature = "devtools"))]
+    let targets = vec![
+        Target::new(TargetKind::Stdout),
+        Target::new(TargetKind::Folder {
+            path: log_dir.clone(),
+            file_name: Some(session_file_name),
+        }),
+    ];
+
+    #[cfg(not(all(debug_assertions, feature = "devtools")))]
+    let targets = vec![
+        Target::new(TargetKind::Stdout),
+        Target::new(TargetKind::Folder {
+            path: log_dir.clone(),
+            file_name: Some(session_file_name),
+        }),
+        Target::new(TargetKind::Webview),
+    ];
+
+    #[cfg_attr(all(debug_assertions, feature = "devtools"), allow(unused_variables))]
     let (log_plugin, max_level, logger) = tauri_plugin_log::Builder::new()
-        .targets([
-            Target::new(TargetKind::Stdout),
-            Target::new(TargetKind::Folder {
-                path: log_dir.clone(),
-                file_name: Some(session_file_name),
-            }),
-            Target::new(TargetKind::Webview),
-        ])
+        .targets(targets)
         .level(log_level)
         .timezone_strategy(tauri_plugin_log::TimezoneStrategy::UseLocal)
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)

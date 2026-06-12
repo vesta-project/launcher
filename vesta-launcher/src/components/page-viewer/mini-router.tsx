@@ -10,6 +10,7 @@ Refactored to support:
 
 import {
 	type Accessor,
+	batch,
 	createMemo,
 	createSignal,
 	type JSXElement,
@@ -85,7 +86,8 @@ class MiniRouter {
 	forwards: () => void;
 	backwards: () => void;
 	getRefetch: () => (() => Promise<void>) | undefined;
-	setRefetch: (fn: () => Promise<void>) => void;
+	setRefetch: (fn: (() => Promise<void>) | undefined, path?: string) => void;
+	clearRefetch: (fn?: () => Promise<void>) => void;
 	canGoBack: () => boolean;
 	canGoForward: () => boolean;
 	/** Reactive history past stack for Solid memos (tracks signal reads). */
@@ -102,6 +104,7 @@ class MiniRouter {
 	setShellNavigation: (delegate: ShellNavigationDelegate | null) => void;
 	skipNextExitCheck: boolean = false;
 	private refetchFn: (() => Promise<void>) | undefined;
+	private refetchPath: string | undefined;
 	private canExitBlock: (() => Promise<boolean>) | null = null;
 	private shellNavigation: ShellNavigationDelegate | null = null;
 
@@ -151,9 +154,11 @@ class MiniRouter {
 		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>([]);
 
 		const applyEntry = (entry: HistoryEntry) => {
-			setCurrentPath(entry.path);
-			setCurrentParams(entry.params);
-			setCurrentPathProps(entry.props);
+			batch(() => {
+				setCurrentPath(entry.path);
+				setCurrentParams(entry.params);
+				setCurrentPathProps(entry.props);
+			});
 		};
 
 		this.history = {
@@ -171,31 +176,46 @@ class MiniRouter {
 			},
 			push: (entry: HistoryEntry) => {
 				const previousPath = this.currentPath.get();
-				if (previousPath !== "" && !isLibraryPath(previousPath)) {
-					const newPast = [...getHistoryPast()];
-					newPast.push({
-						path: previousPath,
-						params: this.currentParams.get(),
-						props: this.getSnapshot(),
-					});
-					setHistoryPast(newPast);
-				}
-				applyEntry(entry);
-				if (entry.path !== previousPath) {
-					setCustomName(null);
-				}
+				batch(() => {
+					if (previousPath !== "" && !isLibraryPath(previousPath)) {
+						const newPast = [...getHistoryPast()];
+						newPast.push({
+							path: previousPath,
+							params: this.currentParams.get(),
+							props: this.getSnapshot(),
+						});
+						setHistoryPast(newPast);
+					}
+					applyEntry(entry);
+					if (entry.path !== previousPath) {
+						setCustomName(null);
+					}
+				});
 			},
 			clear: () => {
-				setHistoryPast([]);
-				setHistoryFuture([]);
+				batch(() => {
+					setHistoryPast([]);
+					setHistoryFuture([]);
+				});
 			},
 		};
 
-		this.setRefetch = (fn: () => Promise<void>) => {
+		this.setRefetch = (fn: (() => Promise<void>) | undefined, path = this.currentPath.get()) => {
 			this.refetchFn = fn;
+			this.refetchPath = fn ? path : undefined;
 		};
 
-		this.getRefetch = () => this.refetchFn;
+		this.clearRefetch = (fn?: () => Promise<void>) => {
+			if (fn && this.refetchFn !== fn) return;
+			this.refetchFn = undefined;
+			this.refetchPath = undefined;
+		};
+
+		this.getRefetch = () => {
+			if (!this.refetchFn) return undefined;
+			if (this.refetchPath && this.refetchPath !== this.currentPath.get()) return undefined;
+			return this.refetchFn;
+		};
 
 		this.setShellNavigation = (delegate) => {
 			this.shellNavigation = delegate;
@@ -208,13 +228,15 @@ class MiniRouter {
 		};
 
 		this.resetLibrarySlot = () => {
-			setHistoryPast(getHistoryPast().filter((entry) => !isLibraryEntry(entry)));
-			setHistoryFuture(getHistoryFuture().filter((entry) => !isLibraryEntry(entry)));
-			if (this.isOnLibrarySlot()) {
-				setCurrentPath("");
-				setCurrentParams({});
-				setCurrentPathProps(undefined);
-			}
+			batch(() => {
+				setHistoryPast(getHistoryPast().filter((entry) => !isLibraryEntry(entry)));
+				setHistoryFuture(getHistoryFuture().filter((entry) => !isLibraryEntry(entry)));
+				if (this.isOnLibrarySlot()) {
+					setCurrentPath("");
+					setCurrentParams({});
+					setCurrentPathProps(undefined);
+				}
+			});
 		};
 
 		this.historyPast = getHistoryPast;
@@ -244,14 +266,16 @@ class MiniRouter {
 			params?: Record<string, unknown>,
 			props?: Record<string, unknown>,
 		) => {
-			setHistoryPast([createLibraryEntry()]);
-			applyEntry({
-				path,
-				params: params || {},
-				props,
+			batch(() => {
+				setHistoryPast([createLibraryEntry()]);
+				applyEntry({
+					path,
+					params: params || {},
+					props,
+				});
+				setCustomName(null);
+				setHistoryFuture([]);
 			});
-			setCustomName(null);
-			setHistoryFuture([]);
 			this.shellNavigation?.onLeaveLibrary();
 		};
 
@@ -271,9 +295,11 @@ class MiniRouter {
 			// page onto past (not future) so Back on the library screen returns here.
 			// Contrast with backwards() hitting the library sentinel, which walks the
 			// stack one entry at a time and builds future for redo.
-			setHistoryPast([...getHistoryPast(), current]);
-			setHistoryFuture([]);
-			applyEntry(createLibraryEntry());
+			batch(() => {
+				setHistoryPast([...getHistoryPast(), current]);
+				setHistoryFuture([]);
+				applyEntry(createLibraryEntry());
+			});
 			this.shellNavigation?.onEnterLibrary();
 		};
 
@@ -282,12 +308,14 @@ class MiniRouter {
 			params?: Record<string, unknown>,
 			props?: Record<string, unknown>,
 		) => {
-			this.history.push({
-				path,
-				params: params || {},
-				props,
+			batch(() => {
+				this.history.push({
+					path,
+					params: params || {},
+					props,
+				});
+				this.history.future = [];
 			});
-			this.history.future = [];
 		};
 
 		this.updateQuery = (key: string, value: unknown, push = false) => {
@@ -301,12 +329,14 @@ class MiniRouter {
 			}
 
 			if (push) {
-				this.history.push({
-					path: this.currentPath.get(),
-					params: newParams,
-					props: this.getSnapshot(),
+				batch(() => {
+					this.history.push({
+						path: this.currentPath.get(),
+						params: newParams,
+						props: this.getSnapshot(),
+					});
+					this.history.future = [];
 				});
-				this.history.future = [];
 			} else {
 				this.currentParams.set(newParams);
 			}
@@ -317,15 +347,16 @@ class MiniRouter {
 		};
 
 		this.reload = async () => {
-			if (this.refetchFn) {
-				this.setIsReloading(true);
-				try {
-					await this.refetchFn();
-				} catch (error) {
-					console.error("Reload failed:", error);
-				} finally {
-					this.setIsReloading(false);
-				}
+			const refetch = this.getRefetch();
+			if (!refetch || this.isReloading()) return;
+
+			this.setIsReloading(true);
+			try {
+				await refetch();
+			} catch (error) {
+				console.error("Reload failed:", error);
+			} finally {
+				this.setIsReloading(false);
 			}
 		};
 
@@ -360,18 +391,21 @@ class MiniRouter {
 
 			if (isLibraryEntry(prev)) {
 				// Stepped back onto the library sentinel (in-app back, not library tab).
-				setHistoryPast([]);
-				setHistoryFuture([current, ...getHistoryFuture()]);
-				applyEntry(createLibraryEntry());
+				batch(() => {
+					setHistoryPast([]);
+					setHistoryFuture([current, ...getHistoryFuture()]);
+					applyEntry(createLibraryEntry());
+				});
 				this.shellNavigation?.onEnterLibrary();
 				return;
 			}
 
 			const newFuture = [current, ...getHistoryFuture()];
-			setHistoryFuture(newFuture);
-			setHistoryPast(pastArray);
-
-			applyEntry(prev);
+			batch(() => {
+				setHistoryFuture(newFuture);
+				setHistoryPast(pastArray);
+				applyEntry(prev);
+			});
 			this.shellNavigation?.onLeaveLibrary();
 		};
 
@@ -383,9 +417,11 @@ class MiniRouter {
 			if (!next || isLibraryEntry(next)) return;
 
 			if (this.isOnLibrarySlot()) {
-				setHistoryPast([createLibraryEntry()]);
-				applyEntry(next);
-				setHistoryFuture(futureArray);
+				batch(() => {
+					setHistoryPast([createLibraryEntry()]);
+					applyEntry(next);
+					setHistoryFuture(futureArray);
+				});
 				this.shellNavigation?.onLeaveLibrary();
 				return;
 			}
@@ -397,10 +433,11 @@ class MiniRouter {
 			};
 
 			const newPast = [...getHistoryPast(), current];
-			setHistoryPast(newPast);
-			setHistoryFuture(futureArray);
-
-			applyEntry(next);
+			batch(() => {
+				setHistoryPast(newPast);
+				setHistoryFuture(futureArray);
+				applyEntry(next);
+			});
 			this.shellNavigation?.onLeaveLibrary();
 		};
 	}

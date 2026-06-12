@@ -1,6 +1,7 @@
 /* @refresh reload */
 
 import { invoke } from "@tauri-apps/api/core";
+import { router } from "@components/page-viewer/page-viewer";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { initSentryMonitoring } from "@utils/sentry";
 import { applyStartupRouteTarget, bootstrapStartup } from "@utils/startup-bootstrap";
@@ -27,10 +28,22 @@ if ((window as any).__TAURI_INTERNALS__) {
 	}
 }
 
+function isTauriDevWebview() {
+	return Boolean((window as any).__TAURI_INTERNALS__) && import.meta.env.DEV;
+}
+
 // Add Ctrl+R / Cmd+R reload handler
 document.addEventListener("keydown", (e) => {
 	if ((e.ctrlKey || e.metaKey) && e.key === "r") {
+		const miniRouter = router();
 		e.preventDefault();
+		if (miniRouter?.getRefetch()) {
+			void miniRouter.reload();
+			return;
+		}
+		if (isTauriDevWebview()) {
+			return;
+		}
 		window.location.reload();
 	}
 });

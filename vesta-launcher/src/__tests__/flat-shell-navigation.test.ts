@@ -318,3 +318,48 @@ describe("resetLibrarySlot", () => {
 		expect(router.history.past.map((entry) => entry.path)).toEqual(["/config"]);
 	});
 });
+
+describe("route-scoped reload", () => {
+	it("only exposes the refetch handler on the route that registered it", async () => {
+		const { router } = createTestRouter();
+		let reloads = 0;
+
+		router.navigate("/instance", { id: 1 });
+		router.setRefetch(async () => {
+			reloads += 1;
+		}, "/instance");
+
+		await router.reload();
+		expect(reloads).toBe(1);
+
+		router.navigate("/config");
+		expect(router.getRefetch()).toBeUndefined();
+
+		await router.reload();
+		expect(reloads).toBe(1);
+	});
+
+	it("ignores overlapping reload requests", async () => {
+		const { router } = createTestRouter();
+		let reloads = 0;
+		let finishReload: (() => void) | undefined;
+
+		router.navigate("/instance", { id: 1 });
+		router.setRefetch(
+			() =>
+				new Promise<void>((resolve) => {
+					reloads += 1;
+					finishReload = resolve;
+				}),
+			"/instance",
+		);
+
+		const firstReload = router.reload();
+		const secondReload = router.reload();
+		expect(reloads).toBe(1);
+
+		finishReload?.();
+		await Promise.all([firstReload, secondReload]);
+		expect(reloads).toBe(1);
+	});
+});

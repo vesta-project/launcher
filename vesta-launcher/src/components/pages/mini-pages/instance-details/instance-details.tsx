@@ -746,7 +746,8 @@ export default function InstanceDetails(
 
   onMount(() => {
     props.setRefetch?.(handleRefetch);
-    activeRouter()?.setRefetch(handleRefetch);
+    const mountedRouter = activeRouter();
+    mountedRouter?.setRefetch(handleRefetch, "/instance");
 
     // Handle auto-launch from deep links or shortcuts
     const params = activeRouter()?.currentParams.get();
@@ -783,7 +784,8 @@ export default function InstanceDetails(
     });
     onCleanup(() => {
       unlistenPromise.then((unlisten) => unlisten());
-      activeRouter()?.setCanExit(null);
+      mountedRouter?.setCanExit(null);
+      mountedRouter?.clearRefetch(handleRefetch);
     });
 
     // Register state provider for pop-out window handoff
@@ -840,7 +842,6 @@ export default function InstanceDetails(
 
   onCleanup(() => {
     activeRouter()?.customName.set(null);
-    activeRouter()?.setRefetch(() => Promise.resolve());
   });
 
   // Tab state - initialized from query param if available
