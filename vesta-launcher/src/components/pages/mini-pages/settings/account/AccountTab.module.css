@@ -25,13 +25,22 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
-    overflow-y: auto;
+    overflow: hidden;
     min-height: 0;
 }
 
 .browseTabs {
     display: flex;
     flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+
+.browseTabsContent {
+    gap: 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding-right: 4px;
 }
 
 .browseTabsHeader {
@@ -546,6 +555,8 @@
     gap: 20px;
     height: 100%;
     min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding-right: 4px;
 }
 
@@ -601,15 +612,17 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    flex: 1; /* Allow to grow and fill available space */
-    min-height: 0; /* Critical for shrink */
+    flex: 0 1 auto;
+    min-height: 0;
     position: relative;
 }
 
 .visualizerWrapper {
     width: 100%;
-    flex: 1; /* Grow and shrink */
-    min-height: 200px; /* Minimum usable height */
+    flex: 0 1 auto;
+    height: clamp(220px, 42vh, 420px);
+    min-height: 220px;
+    max-height: 420px;
     display: flex;
     justify-content: center;
     align-items: center;
@@ -1131,8 +1144,8 @@
 @media (max-width: 1000px) {
     .container {
         grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
-        overflow-y: hidden;
+        grid-template-rows: auto;
+        overflow-y: auto;
     }
 
     .browseTabsHeader {
@@ -1153,6 +1166,7 @@
 
     .visualizerSidebar {
         height: auto;
+        overflow-y: visible;
     }
 }
 

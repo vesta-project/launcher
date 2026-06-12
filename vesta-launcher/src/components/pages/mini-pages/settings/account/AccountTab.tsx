@@ -1047,7 +1047,7 @@ export function AccountSettingsTab() {
 									</TabsList>
 								</div>
 
-								<TabsContent value="recent">
+								<TabsContent value="recent" class={styles.browseTabsContent}>
 									<section class={styles.contentCard}>
 										<div class={styles.cardHeader}>
 											<h2 class={styles.cardTitle}>Recent Skins</h2>
@@ -1097,15 +1097,15 @@ export function AccountSettingsTab() {
 									</section>
 								</TabsContent>
 
-								<TabsContent value="defaults">
+								<TabsContent value="defaults" class={styles.browseTabsContent}>
 									<For each={defaultCategories()}>{(category) => renderSkinCategorySection(category)}</For>
 								</TabsContent>
 
-								<TabsContent value="events">
+								<TabsContent value="events" class={styles.browseTabsContent}>
 									<For each={eventCategories()}>{(category) => renderSkinCategorySection(category)}</For>
 								</TabsContent>
 
-								<TabsContent value="capes">
+								<TabsContent value="capes" class={styles.browseTabsContent}>
 									<section class={styles.contentCard}>
 										<div class={styles.cardHeader}>
 											<CapeIcon width="20" style="color: var(--primary)" />
