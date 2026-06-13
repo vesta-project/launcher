@@ -21,6 +21,7 @@ use piston_lib::game::modpack::parser::get_modpack_metadata;
 use piston_lib::game::modpack::types::ModpackFormat;
 use serde_json;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use tauri::{command, AppHandle, State};
 use tempfile::NamedTempFile;
 
@@ -44,6 +45,24 @@ pub struct ModpackInfo {
     pub full_metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
 }
 
+async fn run_blocking_modpack_io<T, F>(label: &'static str, f: F) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce() -> anyhow::Result<T> + Send + 'static,
+{
+    let started = Instant::now();
+    let result = tauri::async_runtime::spawn_blocking(f)
+        .await
+        .map_err(|e| format!("{} worker failed: {}", label, e))?
+        .map_err(|e| e.to_string());
+    log::info!(
+        "[modpack-preflight] {} finished in {:?}",
+        label,
+        started.elapsed()
+    );
+    result
+}
+
 #[command]
 pub async fn get_modpack_info(
     path: String,
@@ -57,8 +76,12 @@ pub async fn get_modpack_info(
         return Err("File does not exist".to_string());
     }
 
-    let metadata =
-        get_modpack_metadata(&path_buf).map_err(|e| format!("Failed to parse modpack: {}", e))?;
+    let metadata_path = path_buf.clone();
+    let metadata = run_blocking_modpack_io("parse local modpack metadata", move || {
+        get_modpack_metadata(&metadata_path)
+            .map_err(|e| anyhow::anyhow!("Failed to parse modpack: {}", e))
+    })
+    .await?;
 
     log::info!("[get_modpack_info] Parsed metadata: name={}, version={}, mc={}, loader={:?}, loader_ver={:?}",
         metadata.name, metadata.version, metadata.minecraft_version, metadata.modloader_type, metadata.modloader_version);
@@ -68,7 +91,7 @@ pub async fn get_modpack_info(
         version: metadata.version.clone(),
         author: metadata.author.clone(),
         description: metadata.description.clone(),
-        icon_url: None,
+        icon_url: metadata.icon_url.clone(),
         minecraft_version: metadata.minecraft_version.clone(),
         modloader: metadata.modloader_type.clone(),
         modloader_version: metadata.modloader_version.clone(),
@@ -121,11 +144,17 @@ pub async fn get_modpack_info(
     // This is the most accurate way to detect the project
     log::info!("[get_modpack_info] Attempting fingerprint lookup for modpack identification...");
     for platform in &platforms {
+        let lookup_started = Instant::now();
         let result = match platform {
             SourcePlatform::CurseForge => {
                 let mut found = None;
                 // Try standard CF fingerprint (skipped whitespace)
-                if let Ok(fp) = calculate_curseforge_fingerprint(&path_buf) {
+                let cf_hash_path = path_buf.clone();
+                if let Ok(fp) = run_blocking_modpack_io("calculate CurseForge fingerprint", move || {
+                    calculate_curseforge_fingerprint(&cf_hash_path)
+                })
+                .await
+                {
                     log::info!(
                         "[get_modpack_info] CurseForge fingerprint calculated: {}",
                         fp
@@ -138,7 +167,12 @@ pub async fn get_modpack_info(
 
                 // Try raw Murmur2 if first one fails
                 if found.is_none() {
-                    if let Ok(raw_fp) = calculate_murmur2_raw(&path_buf) {
+                    let raw_hash_path = path_buf.clone();
+                    if let Ok(raw_fp) = run_blocking_modpack_io("calculate raw Murmur2", move || {
+                        calculate_murmur2_raw(&raw_hash_path)
+                    })
+                    .await
+                    {
                         log::info!(
                             "[get_modpack_info] CurseForge RAW Murmur2 calculated: {}",
                             raw_fp
@@ -152,7 +186,12 @@ pub async fn get_modpack_info(
                 found
             }
             SourcePlatform::Modrinth => {
-                if let Ok(hash) = calculate_sha1(&path_buf) {
+                let sha1_path = path_buf.clone();
+                if let Ok(hash) = run_blocking_modpack_io("calculate Modrinth SHA1", move || {
+                    calculate_sha1(&sha1_path)
+                })
+                .await
+                {
                     log::info!("[get_modpack_info] Modrinth SHA1 calculated: {}", hash);
                     resource_manager.get_by_hash(*platform, &hash).await.ok()
                 } else {
@@ -161,6 +200,11 @@ pub async fn get_modpack_info(
                 }
             }
         };
+        log::info!(
+            "[get_modpack_info] {:?} hash lookup finished in {:?}",
+            platform,
+            lookup_started.elapsed()
+        );
 
         if let Some((proj, ver)) = result {
             log::info!(
@@ -821,6 +865,57 @@ pub async fn get_modpack_info_from_url(
                 );
             }
         }
+    }
+
+    if let (Some(tid), Some(tplatform)) = (target_id.clone(), target_platform.clone()) {
+        log::warn!(
+            "[get_modpack_info_from_url] Metadata enrichment failed for known project {}/{}; returning route fallback without downloading ZIP",
+            tplatform,
+            tid
+        );
+
+        let platform_enum = match tplatform.to_lowercase().as_str() {
+            "curseforge" => Some(SourcePlatform::CurseForge),
+            "modrinth" => Some(SourcePlatform::Modrinth),
+            _ => None,
+        };
+
+        let mut fallback_name = "Unknown Modpack".to_string();
+        let mut description = None;
+        let mut icon_url = None;
+        let mut author = None;
+
+        if let Some(platform) = platform_enum {
+            let lookup_started = Instant::now();
+            if let Ok(proj) = resource_manager.get_project(platform, &tid).await {
+                fallback_name = proj.name;
+                description = Some(proj.summary);
+                icon_url = proj.icon_url;
+                author = Some(proj.author);
+            }
+            log::info!(
+                "[get_modpack_info_from_url] Fallback project lookup finished in {:?}",
+                lookup_started.elapsed()
+            );
+        }
+
+        return Ok(ModpackInfo {
+            name: fallback_name,
+            description,
+            version: "1.0.0".to_string(),
+            icon_url,
+            author,
+            minecraft_version: "unknown".to_string(),
+            modloader: "vanilla".to_string(),
+            modloader_version: None,
+            mod_count: 0,
+            recommended_ram_mb: None,
+            format: tplatform.clone(),
+            modpack_id: Some(tid),
+            modpack_version_id: None,
+            modpack_platform: Some(tplatform),
+            full_metadata: None,
+        });
     }
 
     // Fallback: Download and parse physical ZIP

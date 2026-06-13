@@ -27,6 +27,13 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 				} else if (sourcePath) {
 					await installModpackFromZip(sourcePath, data, fullMetadata);
 				}
+			} else if (params.isModpackMode()) {
+				showToast({
+					title: "Modpack Version Still Loading",
+					description: "Wait for a version to finish loading, then try installing again.",
+					severity: "warning",
+				});
+				return;
 			} else {
 				const id = await createInstance(data as any);
 				if (id) {

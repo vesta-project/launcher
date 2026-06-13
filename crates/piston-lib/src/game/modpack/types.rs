@@ -17,8 +17,12 @@ pub struct ModrinthIndex {
     pub dependencies: HashMap<String, String>,
 }
 
-fn default_format_version() -> u32 { 1 }
-fn default_game() -> String { "minecraft".to_string() }
+fn default_format_version() -> u32 {
+    1
+}
+fn default_game() -> String {
+    "minecraft".to_string()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +46,9 @@ pub struct ModrinthEnv {
     pub server: String,
 }
 
-fn default_required() -> String { "required".to_string() }
+fn default_required() -> String {
+    "required".to_string()
+}
 
 /// CurseForge modpack manifest (manifest.json)
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -57,15 +63,24 @@ pub struct CurseForgeManifest {
     pub version: String,
     #[serde(default = "default_author")]
     pub author: String,
+    pub image: Option<String>,
     pub files: Vec<CurseForgeFile>,
     #[serde(default = "default_overrides")]
     pub overrides: String,
 }
 
-fn default_manifest_version() -> u32 { 1 }
-fn default_author() -> String { "Unknown".to_string() }
-fn default_modpack() -> String { "minecraftModpack".to_string() }
-fn default_overrides() -> String { "overrides".to_string() }
+fn default_manifest_version() -> u32 {
+    1
+}
+fn default_author() -> String {
+    "Unknown".to_string()
+}
+fn default_modpack() -> String {
+    "minecraftModpack".to_string()
+}
+fn default_overrides() -> String {
+    "overrides".to_string()
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -128,6 +143,8 @@ pub struct ModpackMetadata {
     pub modloader_type: String, // "vanilla", "fabric", "forge", etc.
     pub modloader_version: Option<String>,
     pub description: Option<String>,
+    #[serde(default)]
+    pub icon_url: Option<String>,
     pub recommended_ram_mb: Option<u32>,
     pub format: ModpackFormat,
     pub mods: Vec<ModpackMod>,

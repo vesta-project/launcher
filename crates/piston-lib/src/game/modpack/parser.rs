@@ -11,6 +11,7 @@ use crate::game::modpack::types::{
 /// Detects the modpack format and returns its metadata from a ZIP file
 pub fn get_modpack_metadata<P: AsRef<Path>>(path: P) -> Result<ModpackMetadata> {
     let path_ref = path.as_ref();
+    let started = std::time::Instant::now();
     log::info!("[get_modpack_metadata] Opening ZIP: {:?}", path_ref);
 
     let file = File::open(path_ref)?;
@@ -20,152 +21,41 @@ pub fn get_modpack_metadata<P: AsRef<Path>>(path: P) -> Result<ModpackMetadata> 
         archive.len()
     );
 
-    // Optimization: check common manifest locations first to avoid a full scan
-    let common_locations = [
-        "modrinth.index.json",
-        "manifest.json",
-        // Sometimes nested in a single top-level folder
-    ];
-
-    for loc in common_locations {
-        if let Ok(mut file) = archive.by_name(loc) {
-            log::info!(
-                "[get_modpack_metadata] Found manifest at common location: {}",
-                loc
-            );
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-
-            if loc == "modrinth.index.json" {
-                if let Ok(index) = serde_json::from_str::<ModrinthIndex>(&content) {
-                    return Ok(metadata_from_modrinth(index));
-                }
-            } else if loc == "manifest.json" {
-                if let Ok(manifest) = serde_json::from_str::<CurseForgeManifest>(&content) {
-                    return Ok(metadata_from_curseforge(manifest));
-                }
-            }
-        }
-    }
-
-    // If not found in common locations, we do the full scan (supporting nested folders)
-    log::info!("[get_modpack_metadata] Manifest not found at root. Scanning all files...");
-    let mut modrinth_data: Option<(String, ModrinthIndex)> = None;
-    let mut curseforge_data: Option<(String, CurseForgeManifest)> = None;
-    let mut last_error: Option<String> = None;
-
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        if file.is_dir() {
-            continue;
-        }
-        let name = file.name().to_owned();
-
-        // Check for modrinth.index.json (must be at root OR in a subfolder)
-        if name == "modrinth.index.json" || name.ends_with("/modrinth.index.json") {
-            log::info!(
-                "[get_modpack_metadata] Found potential Modrinth index: {}",
-                name
-            );
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            let preview: String = content.chars().take(100).collect();
-            log::debug!(
-                "[get_modpack_metadata] Modrinth content (first 100 chars): {}",
-                preview
-            );
-
-            match serde_json::from_str::<ModrinthIndex>(&content) {
-                Ok(index) => {
-                    let prefix = name
-                        .strip_suffix("modrinth.index.json")
-                        .unwrap_or("")
-                        .to_string();
-                    log::info!(
-                        "[get_modpack_metadata] Successfully parsed Modrinth index at prefix: '{}'",
-                        prefix
-                    );
-                    modrinth_data = Some((prefix, index));
-                    break; // Modrinth is primary preference
-                }
-                Err(e) => {
-                    let err_msg = format!(
-                        "Found modrinth.index.json ({}) but failed to parse: {}",
-                        name, e
-                    );
-                    log::warn!("[get_modpack_metadata] {}", err_msg);
-                    last_error = Some(err_msg);
-                }
-            }
-        } else if name == "manifest.json" || name.ends_with("/manifest.json") {
-            log::info!(
-                "[get_modpack_metadata] Found potential CurseForge manifest: {}",
-                name
-            );
-            let mut content = String::new();
-            file.read_to_string(&mut content)?;
-            let preview: String = content.chars().take(100).collect();
-            log::debug!(
-                "[get_modpack_metadata] CurseForge content (first 100 chars): {}",
-                preview
-            );
-
-            match serde_json::from_str::<CurseForgeManifest>(&content) {
-                Ok(manifest) => {
-                    let prefix = name.strip_suffix("manifest.json").unwrap_or("").to_string();
-                    log::info!("[get_modpack_metadata] Successfully parsed CurseForge manifest at prefix: '{}'", prefix);
-                    curseforge_data = Some((prefix, manifest));
-                }
-                Err(e) => {
-                    let err_msg =
-                        format!("Found manifest.json ({}) but failed to parse: {}", name, e);
-                    log::warn!("[get_modpack_metadata] {}", err_msg);
-                    last_error = Some(err_msg);
-                }
-            }
-        }
-    }
-
-    if let Some((prefix, index)) = modrinth_data {
+    if let Ok(mut file) = archive.by_name("modrinth.index.json") {
+        log::info!("[get_modpack_metadata] Found root modrinth.index.json");
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        let index = serde_json::from_str::<ModrinthIndex>(&content)
+            .map_err(|e| anyhow!("Root modrinth.index.json is invalid: {}", e))?;
+        let metadata = metadata_from_modrinth(index);
         log::info!(
-            "[get_modpack_metadata] Returning Modrinth metadata ({} v{})",
-            index.name,
-            index.version_id
+            "[get_modpack_metadata] Parsed root Modrinth metadata in {:?}",
+            started.elapsed()
         );
-        let mut meta = metadata_from_modrinth(index);
-        meta.root_prefix = if prefix.is_empty() {
-            None
-        } else {
-            Some(prefix)
-        };
-        return Ok(meta);
+        return Ok(metadata);
     }
 
-    if let Some((prefix, manifest)) = curseforge_data {
+    if let Ok(mut file) = archive.by_name("manifest.json") {
+        log::info!("[get_modpack_metadata] Found root manifest.json");
+        let mut content = String::new();
+        file.read_to_string(&mut content)?;
+        let manifest = serde_json::from_str::<CurseForgeManifest>(&content)
+            .map_err(|e| anyhow!("Root manifest.json is invalid: {}", e))?;
+        let metadata = metadata_from_curseforge(manifest);
         log::info!(
-            "[get_modpack_metadata] Returning CurseForge metadata ({} v{})",
-            manifest.name,
-            manifest.version
+            "[get_modpack_metadata] Parsed root CurseForge metadata in {:?}",
+            started.elapsed()
         );
-        let mut meta = metadata_from_curseforge(manifest);
-        meta.root_prefix = if prefix.is_empty() {
-            None
-        } else {
-            Some(prefix)
-        };
-        return Ok(meta);
+        return Ok(metadata);
     }
 
-    log::error!(
-        "[get_modpack_metadata] No valid metadata found in ZIP. Searched all {} files.",
-        archive.len()
+    log::warn!(
+        "[get_modpack_metadata] No root modpack manifest found in {:?}; nested manifests are not scanned during normal preflight",
+        started.elapsed()
     );
-    let base_err = "No supported modpack metadata (modrinth.index.json or manifest.json) found or valid in ZIP.".to_string();
-    if let Some(e) = last_error {
-        Err(anyhow!("{}. Last parse error: {}", base_err, e))
-    } else {
-        Err(anyhow!("{}", base_err))
-    }
+    Err(anyhow!(
+        "No root modpack metadata found. Expected modrinth.index.json for .mrpack or manifest.json for CurseForge ZIP at the archive root."
+    ))
 }
 
 fn metadata_from_modrinth(index: ModrinthIndex) -> ModpackMetadata {
@@ -223,6 +113,7 @@ fn metadata_from_modrinth(index: ModrinthIndex) -> ModpackMetadata {
         modloader_type,
         modloader_version,
         description: index.summary,
+        icon_url: None,
         recommended_ram_mb: recommended_ram,
         format: ModpackFormat::Modrinth,
         mods,
@@ -301,10 +192,115 @@ fn metadata_from_curseforge(manifest: CurseForgeManifest) -> ModpackMetadata {
         modloader_type,
         modloader_version,
         description: None,
+        icon_url: manifest.image,
         recommended_ram_mb: recommended_ram,
         format: ModpackFormat::CurseForge,
         mods,
         root_prefix: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+    use tempfile::NamedTempFile;
+    use zip::write::FileOptions;
+
+    fn write_zip(entries: &[(&str, &str)]) -> NamedTempFile {
+        let file = NamedTempFile::new().expect("create temp zip");
+        {
+            let writer = std::fs::File::create(file.path()).expect("open temp zip");
+            let mut zip = zip::ZipWriter::new(writer);
+            for (name, content) in entries {
+                zip.start_file::<&str, ()>(*name, FileOptions::default())
+                    .expect("start zip file");
+                zip.write_all(content.as_bytes()).expect("write zip file");
+            }
+            zip.finish().expect("finish zip");
+        }
+        file
+    }
+
+    #[test]
+    fn parses_root_modrinth_pack() {
+        let zip = write_zip(&[(
+            "modrinth.index.json",
+            r#"{
+                "formatVersion": 1,
+                "game": "minecraft",
+                "versionId": "1.0.0",
+                "name": "Root MR Pack",
+                "files": [],
+                "dependencies": {
+                    "minecraft": "1.20.1",
+                    "fabric-loader": "0.15.0"
+                }
+            }"#,
+        )]);
+
+        let metadata = get_modpack_metadata(zip.path()).expect("parse root mrpack");
+
+        assert_eq!(metadata.name, "Root MR Pack");
+        assert_eq!(metadata.format, ModpackFormat::Modrinth);
+        assert_eq!(metadata.minecraft_version, "1.20.1");
+        assert_eq!(metadata.modloader_type, "fabric");
+        assert_eq!(metadata.root_prefix, None);
+    }
+
+    #[test]
+    fn parses_root_curseforge_pack() {
+        let zip = write_zip(&[(
+            "manifest.json",
+            r#"{
+                "minecraft": {
+                    "version": "1.20.1",
+                    "modLoaders": [{ "id": "forge-47.2.0", "primary": true }]
+                },
+                "manifestType": "minecraftModpack",
+                "manifestVersion": 1,
+                "name": "Root CF Pack",
+                "version": "2.0.0",
+                "author": "Vesta",
+                "image": "https://media.forgecdn.net/avatars/example.gif",
+                "files": [],
+                "overrides": "overrides"
+            }"#,
+        )]);
+
+        let metadata = get_modpack_metadata(zip.path()).expect("parse root curseforge pack");
+
+        assert_eq!(metadata.name, "Root CF Pack");
+        assert_eq!(metadata.format, ModpackFormat::CurseForge);
+        assert_eq!(metadata.minecraft_version, "1.20.1");
+        assert_eq!(metadata.modloader_type, "forge");
+        assert_eq!(metadata.modloader_version.as_deref(), Some("47.2.0"));
+        assert_eq!(
+            metadata.icon_url.as_deref(),
+            Some("https://media.forgecdn.net/avatars/example.gif")
+        );
+        assert_eq!(metadata.root_prefix, None);
+    }
+
+    #[test]
+    fn rejects_nested_only_manifest_without_scanning_for_compatibility() {
+        let zip = write_zip(&[(
+            "wrapped/modrinth.index.json",
+            r#"{
+                "formatVersion": 1,
+                "game": "minecraft",
+                "versionId": "1.0.0",
+                "name": "Nested MR Pack",
+                "files": [],
+                "dependencies": { "minecraft": "1.20.1" }
+            }"#,
+        )]);
+
+        let err = get_modpack_metadata(zip.path()).expect_err("nested manifest should fail");
+        assert!(
+            err.to_string().contains("No root modpack metadata found"),
+            "unexpected error: {err}"
+        );
     }
 }
 
@@ -472,7 +468,10 @@ pub fn list_override_paths<P: AsRef<Path>>(zip_path: P) -> Result<Vec<String>> {
     let mut paths = Vec::new();
     match metadata.format {
         ModpackFormat::Modrinth => {
-            paths.extend(list_folder_entries(&mut archive, &format!("{}overrides", prefix))?);
+            paths.extend(list_folder_entries(
+                &mut archive,
+                &format!("{}overrides", prefix),
+            )?);
             paths.extend(list_folder_entries(
                 &mut archive,
                 &format!("{}client-overrides", prefix),
@@ -559,7 +558,9 @@ pub fn hash_override_paths_from_zip<P: AsRef<Path>>(
     Ok(hashes)
 }
 
-fn detect_modpack_root_prefix<R: Read + std::io::Seek>(archive: &mut ZipArchive<R>) -> Result<String> {
+fn detect_modpack_root_prefix<R: Read + std::io::Seek>(
+    archive: &mut ZipArchive<R>,
+) -> Result<String> {
     for i in 0..archive.len() {
         let name = archive.by_index(i)?.name().to_owned();
         if name == "modrinth.index.json" || name.ends_with("/modrinth.index.json") {

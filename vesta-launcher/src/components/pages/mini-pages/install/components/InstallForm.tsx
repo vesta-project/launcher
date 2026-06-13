@@ -12,7 +12,7 @@ import {
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import { IconPicker } from "@ui/icon-picker/icon-picker";
+import { areIconsEqual, IconPicker } from "@ui/icon-picker/icon-picker";
 import { Separator } from "@ui/separator/separator";
 import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
 import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
@@ -205,16 +205,19 @@ export function InstallForm(props: InstallFormProps) {
 
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
 
+	const suggestedModpackIcon = createMemo(
+		() => props.originalIcon || props.modpackInfo?.iconUrl || props.initialIcon || null,
+	);
+
 	// Create uploadedIcons array that includes all custom icons seen this session
 	const uploadedIcons = createMemo(() => {
 		const result = [...customIconsThisSession()];
+		const suggested = suggestedModpackIcon();
+		if (suggested && !isDefaultIcon(suggested) && !result.some((i) => areIconsEqual(i, suggested))) {
+			result.unshift(suggested);
+		}
 		const current = icon();
-		if (
-			current &&
-			!isDefaultIcon(current) &&
-			current !== props.initialIcon &&
-			!result.includes(current)
-		) {
+		if (current && !isDefaultIcon(current) && !result.some((i) => areIconsEqual(i, current))) {
 			return [current, ...result];
 		}
 		return result;
@@ -223,9 +226,9 @@ export function InstallForm(props: InstallFormProps) {
 	// Track custom icons in session list
 	createEffect(() => {
 		const current = icon();
-		if (current && !isDefaultIcon(current) && current !== props.initialIcon) {
+		if (current && !isDefaultIcon(current) && !areIconsEqual(current, suggestedModpackIcon())) {
 			setCustomIconsThisSession((prev) => {
-				if (prev.includes(current)) return prev;
+				if (prev.some((i) => areIconsEqual(i, current))) return prev;
 				return [current, ...prev];
 			});
 		}
@@ -539,8 +542,10 @@ export function InstallForm(props: InstallFormProps) {
 										setIcon(newIcon);
 										setDirty("icon", true);
 									}}
-									modpackIcon={normalizedIsModpack() || props.projectId ? props.originalIcon : undefined}
-									isSuggestedSelected={!!props.originalIcon && icon() === props.originalIcon}
+									modpackIcon={normalizedIsModpack() || props.projectId ? suggestedModpackIcon() : undefined}
+									isSuggestedSelected={
+										!!suggestedModpackIcon() && areIconsEqual(icon(), suggestedModpackIcon())
+									}
 									uploadedIcons={uploadedIcons()}
 									showHint={!isIconDirty()}
 									triggerProps={{

@@ -88,7 +88,11 @@ impl ModpackInstaller {
             meta
         } else {
             reporter.start_step("Analyzing modpack ZIP", Some(100));
-            get_modpack_metadata(zip_path).context("Failed to parse modpack metadata from ZIP")?
+            let zip_path = zip_path.to_path_buf();
+            task::spawn_blocking(move || get_modpack_metadata(&zip_path))
+                .await
+                .context("metadata parse worker panicked")?
+                .context("Failed to parse modpack metadata from ZIP")?
         };
 
         log::info!(
@@ -136,13 +140,21 @@ impl ModpackInstaller {
         let mut override_files = Vec::new();
         let mut skipped_configs: Vec<String> = Vec::new();
         if !reporter.is_dry_run() {
-            let (extracted, skipped) = extract_overrides_with_config_policy(
-                zip_path,
-                game_dir,
-                metadata.format,
-                metadata.root_prefix.clone(),
-                force_overwrite_configs,
-            )
+            let zip_path = zip_path.to_path_buf();
+            let game_dir = game_dir.to_path_buf();
+            let format = metadata.format;
+            let root_prefix = metadata.root_prefix.clone();
+            let (extracted, skipped) = task::spawn_blocking(move || {
+                extract_overrides_with_config_policy(
+                    zip_path,
+                    game_dir,
+                    format,
+                    root_prefix,
+                    force_overwrite_configs,
+                )
+            })
+            .await
+            .context("override extraction worker panicked")?
             .context("Failed to extract modpack overrides")?;
             override_files = extracted;
             skipped_configs = skipped;
@@ -323,22 +335,29 @@ impl ModpackInstaller {
                     .iter()
                     .map(|p| p.to_string_lossy().replace('\\', "/"))
                     .collect();
-                match hash_override_paths_from_zip(zip_path, metadata.format, &override_path_strs) {
-                    Ok(hashes) => manifest.overrides.hashes = hashes,
-                    Err(e) => log::warn!(
-                        "[ModpackInstaller] Failed to hash overrides from ZIP: {}",
-                        e
-                    ),
-                }
-                manifest.backfill_mod_sha1(game_dir);
-                manifest.backfill_override_hashes(game_dir);
+                let zip_path = zip_path.to_path_buf();
+                let game_dir = game_dir.to_path_buf();
+                let format = metadata.format;
+                task::spawn_blocking(move || {
+                    match hash_override_paths_from_zip(&zip_path, format, &override_path_strs) {
+                        Ok(hashes) => manifest.overrides.hashes = hashes,
+                        Err(e) => log::warn!(
+                            "[ModpackInstaller] Failed to hash overrides from ZIP: {}",
+                            e
+                        ),
+                    }
+                    manifest.backfill_mod_sha1(&game_dir);
+                    manifest.backfill_override_hashes(&game_dir);
 
-                if let Err(e) = manifest.persist(game_dir) {
-                    log::warn!(
-                        "[ModpackInstaller] Failed to persist modpack manifest: {}",
-                        e
-                    );
-                }
+                    if let Err(e) = manifest.persist(&game_dir) {
+                        log::warn!(
+                            "[ModpackInstaller] Failed to persist modpack manifest: {}",
+                            e
+                        );
+                    }
+                })
+                .await
+                .context("manifest finalization worker panicked")?;
             }
         }
 

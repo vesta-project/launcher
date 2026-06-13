@@ -197,15 +197,40 @@ function InstallPage(props: InstallPageRouteProps) {
 	});
 
 	// --- Derived UI state ---
-	const isFetchingMetadata = createMemo(
-		() => source.isFetchingMetadata() || projectVersions.loading,
+	const metadataStatus = createMemo(() => source.metadataStatus());
+	const isFetchingMetadata = createMemo(() => source.isFetchingMetadata());
+	const hasMinimumInstallData = createMemo(
+		() => !isModpackMode() || !!source.modpackInfo() || !!effectiveProjectId(),
 	);
 
-	const showForm = createMemo(
-		() =>
-			!isFetchingMetadata() &&
-			(!isModpackMode() || source.modpackUrl() || source.modpackPath() || effectiveProjectId()),
-	);
+	const showForm = createMemo(() => hasMinimumInstallData() && metadataStatus().phase !== "failed");
+	const isLocalModpackUpload = createMemo(() => !!source.modpackPath() && !effectiveProjectId());
+
+	const goBackFromLocalUpload = () => {
+		const r = activeRouter();
+		if (r?.canGoBack?.()) r.backwards();
+		else r?.navigate("/home");
+	};
+
+	const contextBackLabel = createMemo(() => {
+		if (effectiveProjectId()) return "Back to Browser";
+		if (isLocalModpackUpload()) return "Back";
+		return "Back to Source";
+	});
+
+	const handleContextBack = () => {
+		if (effectiveProjectId()) {
+			activeRouter()?.backwards();
+			return;
+		}
+
+		if (isLocalModpackUpload()) {
+			goBackFromLocalUpload();
+			return;
+		}
+
+		source.resetSource();
+	};
 
 	return (
 		<div class={styles["page-root"]}>
@@ -221,12 +246,7 @@ function InstallPage(props: InstallPageRouteProps) {
 
 			<div class={styles["page-wrapper"]}>
 				{/* Context banner (modpack info bar) */}
-				<Show
-					when={
-						(effectiveProjectName() || source.modpackPath() || source.modpackUrl()) &&
-						!isFetchingMetadata()
-					}
-				>
+				<Show when={effectiveProjectName() || source.modpackPath() || source.modpackUrl()}>
 					<InstallContextBanner
 						title={effectiveProjectName() || source.modpackInfo()?.name || "Analyzing modpack details..."}
 						label={effectiveResourceType() || (isModpackMode() ? "Modpack" : "Package")}
@@ -235,21 +255,29 @@ function InstallPage(props: InstallPageRouteProps) {
 							source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()
 						}
 						modloader={source.modpackInfo()?.modloader || effectiveInitialModloader()}
-						analyzing={!source.modpackInfo() && !effectiveProjectName()}
-						backLabel={effectiveProjectId() ? "Back to Browser" : "Back to Source"}
-						onBack={() => (effectiveProjectId() ? activeRouter()?.backwards() : source.resetSource())}
+						analyzing={isFetchingMetadata() || (!source.modpackInfo() && !effectiveProjectName())}
+						backLabel={contextBackLabel()}
+						onBack={handleContextBack}
 					/>
 				</Show>
 
 				{/* Loading overlay */}
 				<FetchingOverlay
-					isVisible={isFetchingMetadata()}
+					isVisible={isFetchingMetadata() || metadataStatus().phase === "failed"}
 					title={
-						source.isFetchingMetadata() ? "Fetching modpack details..." : "Loading available versions..."
+						metadataStatus().phase === "reading-local-pack"
+							? "Reading modpack manifest..."
+							: metadataStatus().phase === "failed"
+								? "Could not read modpack"
+								: "Fetching modpack details..."
 					}
-					message={
-						source.isFetchingMetadata()
-							? "This usually takes a few seconds as we verify the pack manifest."
+					message={metadataStatus().message}
+					error={metadataStatus().error}
+					variant={metadataStatus().phase === "failed" ? "error" : "loading"}
+					onRetry={metadataStatus().canRetry ? source.retryMetadata : undefined}
+					onChooseAnother={
+						metadataStatus().phase === "failed" && source.modpackPath()
+							? source.handleLocalImport
 							: undefined
 					}
 				/>
@@ -290,7 +318,9 @@ function InstallPage(props: InstallPageRouteProps) {
 						initialJvmArgs={props.initialJvmArgs}
 						onInstall={install.handleInstall}
 						onCancel={() => {
-							if (isModpackMode() && (source.modpackUrl() || source.modpackPath())) source.resetSource();
+							if (isLocalModpackUpload()) goBackFromLocalUpload();
+							else if (isModpackMode() && (source.modpackUrl() || source.modpackPath()))
+								source.resetSource();
 							else if (props.close) props.close();
 							else activeRouter()?.navigate(effectiveProjectName() ? "/resources" : "/home");
 						}}
