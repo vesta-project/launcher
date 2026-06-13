@@ -10,6 +10,7 @@ use diesel::prelude::*;
 use piston_lib::game::installer::core::jre_manager::{self, get_or_install_jre, JavaVersion};
 use piston_lib::game::installer::types::{NotificationActionSpec, ProgressReporter};
 use piston_lib::game::java_policy::LEGACY_JAVA_MAJOR;
+use piston_lib::game::manifest_cache::ManifestCache;
 use piston_lib::game::metadata::PistonMetadata;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicI32, Ordering};
@@ -123,19 +124,23 @@ pub async fn resolve_required_java_major(
     match resolve_required_java_from_manifest(&metadata, mc_version) {
         Ok(major) => return Ok(major),
         Err(e) => {
-            log::warn!(
-                "Java major missing in cached manifest for '{}': {}. Falling back to Mojang detail lookup.",
+            log::info!(
+                "Java major not present in cached aggregate metadata for '{}': {}. Resolving from version detail JSON.",
                 mc_version,
                 e
             );
         }
     }
 
-    let client = piston_lib::client::shared_client();
-    let fetched = piston_lib::game::java_policy::fetch_java_major_for_version(mc_version, client)
+    let data_dir = get_app_config_dir()
+        .map_err(|e| e.to_string())?
+        .join("data");
+    let manifest_cache = ManifestCache::new(data_dir.join("manifests"));
+    let preferred = manifest_cache
+        .resolve_java_major_for_version(mc_version)
         .await
+        .map(preferred_java_major)
         .map_err(|e| e.to_string())?;
-    let preferred = preferred_java_major(fetched);
 
     metadata
         .java_major_version_by_game_version

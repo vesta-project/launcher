@@ -1,7 +1,9 @@
 use super::types::*;
-use crate::game::java_policy::{preferred_java_major, LEGACY_JAVA_MAJOR};
+use crate::game::java_policy::{
+    is_legacy_minecraft_version, preferred_java_major, LEGACY_JAVA_MAJOR,
+};
 use anyhow::{Context, Result};
-use chrono::{Datelike, Utc};
+use chrono::Utc;
 use std::collections::{HashMap, HashSet};
 
 const MODRINTH_MC_MANIFEST_URL: &str =
@@ -10,8 +12,6 @@ const MODRINTH_MC_MANIFEST_URL: &str =
 const MOJANG_MANIFEST_URL: &str = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
 const JAVA_RUNTIME_ALL_URL: &str =
     "https://launchermeta.mojang.com/v1/products/java-runtime/2ec0cc96c44e5a76b9c8b7c39df7210883d12871/all.json";
-const JAVA_METADATA_REQUIRED_YEAR: i32 = 2014;
-const FALLBACK_RUNTIME_JAVA_MAJORS: [u32; 4] = [25, 21, 17, LEGACY_JAVA_MAJOR];
 
 /// Format versions for Modrinth endpoints (same as daedalus CURRENT_*_FORMAT_VERSION)
 const MODRINTH_FABRIC_FORMAT: usize = 0;
@@ -114,19 +114,14 @@ pub async fn fetch_metadata() -> Result<PistonMetadata> {
         },
         required_java_major_versions: fetch_runtime_java_majors(http_client)
             .await
-            .unwrap_or_else(|e| {
-                log::warn!(
-                    "Failed to fetch Java runtimes from launchermeta: {}. Using fallback majors {:?}",
-                    e,
-                    FALLBACK_RUNTIME_JAVA_MAJORS
-                );
-                FALLBACK_RUNTIME_JAVA_MAJORS.to_vec()
-            }),
+            .context("Failed to fetch Java runtimes from launchermeta")?,
         java_major_version_by_game_version: HashMap::new(),
     };
 
     // Sort game versions by release date (latest first)
-    metadata.game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
+    metadata
+        .game_versions
+        .sort_by(|a, b| b.release_time.cmp(&a.release_time));
 
     log::info!(
         "PistonMetadata fetched successfully: {} game versions, {} total loader combinations",
@@ -214,7 +209,6 @@ fn apply_fabric_style_from_modrinth(
     let loader_infos: Vec<LoaderVersionInfo> = dummy
         .loaders
         .iter()
-        
         .map(|l| LoaderVersionInfo {
             version: l.id.clone(),
             stable: l.stable,
@@ -261,7 +255,6 @@ fn apply_forge_style_from_modrinth(
             let loaders: Vec<LoaderVersionInfo> = gv
                 .loaders
                 .iter()
-                
                 .map(|l| LoaderVersionInfo {
                     version: l.id.clone(),
                     stable: l.stable,
@@ -395,7 +388,7 @@ fn java_major_from_version_detail(
         return Ok(java.major_version);
     }
 
-    if is_legacy_mojang_version(version_type, release_time) {
+    if is_legacy_minecraft_version(version_type, release_time) {
         log::warn!(
             "Missing javaVersion for legacy/pre-metadata version '{}' (type '{}', release '{}'), defaulting to Java {}",
             version_id,
@@ -412,16 +405,6 @@ fn java_major_from_version_detail(
         version_type,
         release_time
     )
-}
-
-fn is_legacy_mojang_version(version_type: &str, release_time: &str) -> bool {
-    if matches!(version_type, "old_alpha" | "old_beta") {
-        return true;
-    }
-
-    chrono::DateTime::parse_from_rfc3339(release_time)
-        .map(|dt| dt.year() < JAVA_METADATA_REQUIRED_YEAR)
-        .unwrap_or(false)
 }
 
 fn build_initial_game_versions(manifest: &MojangVersionManifest) -> Vec<GameVersionMetadata> {
@@ -590,17 +573,15 @@ async fn fetch_version_detail(client: &reqwest::Client, url: &str) -> Result<Moj
 // Blacklist re-export helper
 // ============================================================================
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::client::shared_client;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::time::Instant;
-    use wiremock::{Request, Respond};
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+    use wiremock::{Request, Respond};
 
     struct FailThenOkResponder {
         first_status: u16,
@@ -612,15 +593,13 @@ mod tests {
         fn respond(&self, _request: &Request) -> ResponseTemplate {
             let call = self.calls.fetch_add(1, Ordering::SeqCst);
             if call == 0 {
-                let mut resp =
-                    ResponseTemplate::new(self.first_status).set_body_string("retry");
+                let mut resp = ResponseTemplate::new(self.first_status).set_body_string("retry");
                 if let Some(value) = self.retry_after {
                     resp = resp.insert_header("Retry-After", value);
                 }
                 resp
             } else {
-                ResponseTemplate::new(200)
-                    .set_body_json(serde_json::json!({"versions": []}))
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"versions": []}))
             }
         }
     }

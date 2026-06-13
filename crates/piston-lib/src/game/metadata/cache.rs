@@ -33,10 +33,7 @@ pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Optio
                 .join(format!("{slug}.json"))
                 .exists()
         });
-    let java_info_cached = data_dir
-        .join("manifests")
-        .join("java_info.json")
-        .exists();
+    let java_info_cached = data_dir.join("manifests").join("java_info.json").exists();
     if !all_cached || !java_info_cached {
         return Ok(None);
     }
@@ -48,17 +45,15 @@ pub async fn load_cached_metadata_if_present(data_dir: &PathBuf) -> Result<Optio
 /// Force refresh all metadata from sources.
 pub async fn refresh_metadata(data_dir: &PathBuf) -> Result<PistonMetadata> {
     let cache = ManifestCache::new(data_dir.join("manifests"));
-    // For a force refresh, we skip the cache by clearing it first
-    // and then building fresh metadata.
+    // For a force refresh, skip the source manifest cache and rebuild fresh.
+    // Preserve java_info.json: per-version Java requirements are immutable and
+    // expensive to rediscover one version at a time. build_piston_metadata will
+    // still refresh the runtime-major list and merge it with the existing map.
     for slug in crate::game::manifest_cache::MANIFEST_SLUGS {
         let disk_path = data_dir.join("manifests").join(format!("{slug}.json"));
         if disk_path.exists() {
             tokio::fs::remove_file(&disk_path).await.ok();
         }
-    }
-    let java_info_path = data_dir.join("manifests").join("java_info.json");
-    if java_info_path.exists() {
-        tokio::fs::remove_file(&java_info_path).await.ok();
     }
     cache.build_piston_metadata().await
 }

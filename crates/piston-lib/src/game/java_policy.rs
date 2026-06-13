@@ -1,7 +1,32 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use chrono::Datelike;
 use std::collections::HashMap;
 
 pub const LEGACY_JAVA_MAJOR: u32 = 8;
+pub const JAVA_METADATA_REQUIRED_YEAR: i32 = 2014;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct JavaRequirement {
+    pub major_version: u32,
+    pub component: Option<String>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VersionDetail {
+    id: Option<String>,
+    #[serde(rename = "type")]
+    version_type: Option<String>,
+    release_time: Option<String>,
+    java_version: Option<JavaVersionDetail>,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct JavaVersionDetail {
+    major_version: u32,
+    component: Option<String>,
+}
 
 /// Normalize declared Java requirements to launcher policy.
 /// Current policy: treat Java 16 requirements as Java 17.
@@ -11,6 +36,55 @@ pub fn preferred_java_major(major: u32) -> u32 {
     } else {
         major
     }
+}
+
+pub fn is_legacy_minecraft_version(version_type: &str, release_time: &str) -> bool {
+    if matches!(version_type, "old_alpha" | "old_beta") {
+        return true;
+    }
+
+    chrono::DateTime::parse_from_rfc3339(release_time)
+        .map(|dt| dt.year() < JAVA_METADATA_REQUIRED_YEAR)
+        .unwrap_or(false)
+}
+
+pub fn java_requirement_from_version_detail_value(
+    requested_version_id: &str,
+    detail: serde_json::Value,
+) -> Result<JavaRequirement> {
+    let detail: VersionDetail = serde_json::from_value(detail)
+        .context("Failed to parse Minecraft version detail while resolving Java requirement")?;
+    let version_id = detail.id.as_deref().unwrap_or(requested_version_id);
+    let version_type = detail.version_type.as_deref().unwrap_or("unknown");
+    let release_time = detail.release_time.as_deref().unwrap_or("unknown");
+
+    if let Some(java) = detail.java_version {
+        return Ok(JavaRequirement {
+            major_version: preferred_java_major(java.major_version),
+            component: java.component,
+        });
+    }
+
+    if is_legacy_minecraft_version(version_type, release_time) {
+        log::warn!(
+            "Missing javaVersion for legacy/pre-metadata Minecraft version '{}' (type '{}', release '{}'), defaulting to Java {}",
+            version_id,
+            version_type,
+            release_time,
+            LEGACY_JAVA_MAJOR
+        );
+        return Ok(JavaRequirement {
+            major_version: LEGACY_JAVA_MAJOR,
+            component: None,
+        });
+    }
+
+    anyhow::bail!(
+        "Missing javaVersion.majorVersion for non-legacy Minecraft version '{}' (type '{}', release '{}')",
+        version_id,
+        version_type,
+        release_time
+    )
 }
 
 /// Fetch available Java runtime majors from Mojang's runtime manifest.
@@ -67,24 +141,35 @@ pub fn parse_java_major(version: &str) -> Option<u32> {
         .ok()
 }
 
-/// Fetch the Java major version required by a specific Minecraft version.
-/// Uses the Modrinth launcher-meta API (single request), same data source
-/// as the install pipeline.
-pub async fn fetch_java_major_for_version(
+/// Fetch the Java requirement for a specific Minecraft version.
+/// Uses the Modrinth launcher-meta version detail JSON, same data source as
+/// the install pipeline.
+pub async fn fetch_java_requirement_for_version(
     mc_version: &str,
     client: &reqwest::Client,
-) -> Result<u32> {
+) -> Result<JavaRequirement> {
     let url = format!(
         "https://launcher-meta.modrinth.com/minecraft/v0/versions/{}.json",
         mc_version
     );
-    let detail: serde_json::Value = client.get(&url).send().await?.json().await?;
-    let major = detail
-        .get("javaVersion")
-        .and_then(|j| j.get("majorVersion"))
-        .and_then(|m| m.as_u64())
-        .unwrap_or(8) as u32;
-    Ok(preferred_java_major(major))
+    let detail: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    java_requirement_from_version_detail_value(mc_version, detail)
+}
+
+/// Fetch the Java major version required by a specific Minecraft version.
+pub async fn fetch_java_major_for_version(
+    mc_version: &str,
+    client: &reqwest::Client,
+) -> Result<u32> {
+    Ok(fetch_java_requirement_for_version(mc_version, client)
+        .await?
+        .major_version)
 }
 
 #[cfg(test)]
@@ -121,5 +206,49 @@ mod tests {
     fn parse_returns_none_for_garbage() {
         assert_eq!(parse_java_major(""), None);
         assert_eq!(parse_java_major("abc"), None);
+    }
+
+    #[test]
+    fn parses_java_requirement_from_version_detail() {
+        let detail = serde_json::json!({
+            "id": "1.21.1",
+            "type": "release",
+            "releaseTime": "2024-08-08T12:24:45+00:00",
+            "javaVersion": {
+                "component": "java-runtime-delta",
+                "majorVersion": 21
+            }
+        });
+
+        let requirement = java_requirement_from_version_detail_value("1.21.1", detail).unwrap();
+        assert_eq!(requirement.major_version, 21);
+        assert_eq!(requirement.component.as_deref(), Some("java-runtime-delta"));
+    }
+
+    #[test]
+    fn legacy_missing_java_requirement_defaults_to_java_8() {
+        let detail = serde_json::json!({
+            "id": "1.6.4",
+            "type": "release",
+            "releaseTime": "2013-09-19T15:52:37+00:00"
+        });
+
+        let requirement = java_requirement_from_version_detail_value("1.6.4", detail).unwrap();
+        assert_eq!(requirement.major_version, LEGACY_JAVA_MAJOR);
+    }
+
+    #[test]
+    fn modern_missing_java_requirement_errors() {
+        let detail = serde_json::json!({
+            "id": "1.21.1",
+            "type": "release",
+            "releaseTime": "2024-08-08T12:24:45+00:00"
+        });
+
+        let err = java_requirement_from_version_detail_value("1.21.1", detail)
+            .expect_err("modern versions must not silently default to Java 8");
+        assert!(err
+            .to_string()
+            .contains("Missing javaVersion.majorVersion for non-legacy"));
     }
 }

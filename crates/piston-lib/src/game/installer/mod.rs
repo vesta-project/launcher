@@ -13,7 +13,6 @@ use crate::game::installer::core::batch::{BatchArtifact, BatchDownloader};
 use crate::game::installer::core::downloader::download_to_path;
 use crate::game::installer::core::jre_manager::{get_or_install_jre, JavaVersion};
 use crate::game::installer::core::pipeline::process_and_download_libraries;
-use crate::game::java_policy::preferred_java_major;
 use cache::{ArtifactCache, InstallArtifactRef};
 use std::path::Path;
 use std::sync::Arc;
@@ -201,6 +200,18 @@ pub async fn install_instance(
 
     let version_json_bytes = tokio::fs::read_to_string(&version_json_path).await?;
     let version_info: serde_json::Value = serde_json::from_str(&version_json_bytes)?;
+    let manifest_cache =
+        crate::game::manifest_cache::ManifestCache::new(spec.data_dir().join("manifests"));
+    if let Err(e) = manifest_cache
+        .cache_java_requirement_from_version_detail(&spec.version_id, version_info.clone())
+        .await
+    {
+        log::warn!(
+            "Failed to cache Java requirement for {} from version detail: {}",
+            spec.version_id,
+            e
+        );
+    }
 
     // 1b. If modloader, resolve version and fetch profile
     let loader_profile =
@@ -293,11 +304,10 @@ pub async fn install_instance(
         reporter.set_percent(30);
 
         let asset_index_path = asset_index_path.clone();
-        let asset_index_content = tokio::task::spawn_blocking(move || {
-            std::fs::read_to_string(&asset_index_path)
-        })
-        .await
-        .context("spawn_blocking panicked")??;
+        let asset_index_content =
+            tokio::task::spawn_blocking(move || std::fs::read_to_string(&asset_index_path))
+                .await
+                .context("spawn_blocking panicked")??;
         let asset_index_parsed: serde_json::Value = serde_json::from_str(&asset_index_content)?;
 
         if let Some(objects) = asset_index_parsed
@@ -407,14 +417,17 @@ pub async fn install_instance(
     reporter.start_step("Setting up Java runtime", None);
     reporter.set_percent(95);
 
-    let java_major = version_info
-        .get("javaVersion")
-        .and_then(|j| j.get("majorVersion"))
-        .and_then(|m| m.as_u64())
-        .unwrap_or(8) as u32;
-
-    let preferred = preferred_java_major(java_major);
-    let java_ver = JavaVersion::new(preferred);
+    let java_requirement = crate::game::java_policy::java_requirement_from_version_detail_value(
+        &spec.version_id,
+        version_info.clone(),
+    )
+    .with_context(|| {
+        format!(
+            "Failed to resolve Java requirement from version detail for {}",
+            spec.version_id
+        )
+    })?;
+    let java_ver = JavaVersion::new(java_requirement.major_version);
 
     if spec.java_path.is_none() {
         get_or_install_jre(&spec.jre_dir(), &java_ver, client, &*reporter).await?;

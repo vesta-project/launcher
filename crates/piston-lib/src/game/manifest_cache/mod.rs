@@ -26,7 +26,7 @@ pub struct CachedManifest {
 }
 
 /// Cached Java runtime info — persists between sessions for offline use.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Default, Serialize, Deserialize)]
 struct JavaInfoCache {
     required_java_major_versions: Vec<u32>,
     #[serde(default)]
@@ -80,6 +80,84 @@ impl ManifestCache {
 
     fn java_info_path(&self) -> PathBuf {
         self.cache_dir.join("java_info.json")
+    }
+
+    async fn read_java_info_cache(&self) -> Result<JavaInfoCache> {
+        let content = tokio::fs::read_to_string(self.java_info_path()).await?;
+        Ok(serde_json::from_str(&content)?)
+    }
+
+    async fn write_java_info_cache(&self, cache: &JavaInfoCache) -> Result<()> {
+        tokio::fs::create_dir_all(&self.cache_dir).await?;
+        let json = serde_json::to_string(cache)?;
+        tokio::fs::write(self.java_info_path(), json).await?;
+        Ok(())
+    }
+
+    /// Resolve and persist the Java major required by a Minecraft version.
+    /// Uses the on-disk Java info cache first, then fetches the version detail
+    /// JSON when online.
+    pub async fn resolve_java_major_for_version(&self, version_id: &str) -> Result<u32> {
+        let mut cache = self.read_java_info_cache().await.unwrap_or_default();
+
+        if let Some(major) = cache.java_major_version_by_game_version.get(version_id) {
+            return Ok(crate::game::java_policy::preferred_java_major(*major));
+        }
+
+        if self.offline {
+            anyhow::bail!(
+                "Java requirement for Minecraft version '{}' is not cached",
+                version_id
+            );
+        }
+
+        let requirement =
+            crate::game::java_policy::fetch_java_requirement_for_version(version_id, &self.client)
+                .await?;
+        let major = requirement.major_version;
+
+        cache
+            .java_major_version_by_game_version
+            .insert(version_id.to_string(), major);
+        if !cache.required_java_major_versions.contains(&major) {
+            cache.required_java_major_versions.push(major);
+            cache
+                .required_java_major_versions
+                .sort_unstable_by(|a, b| b.cmp(a));
+            cache.required_java_major_versions.dedup();
+        }
+        self.write_java_info_cache(&cache).await?;
+
+        Ok(major)
+    }
+
+    /// Persist a Java requirement from an already-fetched version detail JSON.
+    /// This avoids a second network request during installs, where the version
+    /// detail is already loaded for client/assets/libraries.
+    pub async fn cache_java_requirement_from_version_detail(
+        &self,
+        version_id: &str,
+        detail: serde_json::Value,
+    ) -> Result<u32> {
+        let requirement = crate::game::java_policy::java_requirement_from_version_detail_value(
+            version_id, detail,
+        )?;
+        let major = requirement.major_version;
+        let mut cache = self.read_java_info_cache().await.unwrap_or_default();
+
+        cache
+            .java_major_version_by_game_version
+            .insert(version_id.to_string(), major);
+        if !cache.required_java_major_versions.contains(&major) {
+            cache.required_java_major_versions.push(major);
+            cache
+                .required_java_major_versions
+                .sort_unstable_by(|a, b| b.cmp(a));
+            cache.required_java_major_versions.dedup();
+        }
+
+        self.write_java_info_cache(&cache).await?;
+        Ok(major)
     }
 
     /// Get a manifest by slug, fetching if not cached or stale.
@@ -404,43 +482,62 @@ impl ManifestCache {
         game_versions.sort_by(|a, b| b.release_time.cmp(&a.release_time));
 
         // Java data: from cache when offline, from network otherwise.
-        let (required_java_major_versions, java_major_version_by_game_version) =
-            if self.offline {
-                let path = self.java_info_path();
-                let content = tokio::fs::read_to_string(&path)
-                    .await
-                    .map_err(|e| anyhow::anyhow!("Java info cache not available: {e}"))?;
-                let cache: JavaInfoCache = serde_json::from_str(&content)?;
-                (cache.required_java_major_versions, cache.java_major_version_by_game_version)
-            } else {
-                let required = crate::game::java_policy::fetch_available_runtimes(&self.client)
-                    .await
-                    .unwrap_or_else(|e| {
-                        log::warn!("Failed to fetch Java runtimes: {e}. Falling back to [21, 17, 8]");
-                        vec![21u32, 17, 8]
-                    });
-
-                let mut java_versions = HashMap::new();
-                for v in [&mc_manifest.latest.release, &mc_manifest.latest.snapshot] {
-                    if let Ok(major) =
-                        crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await
+        let (required_java_major_versions, java_major_version_by_game_version) = if self.offline {
+            let path = self.java_info_path();
+            let content = tokio::fs::read_to_string(&path)
+                .await
+                .map_err(|e| anyhow::anyhow!("Java info cache not available: {e}"))?;
+            let cache: JavaInfoCache = serde_json::from_str(&content)?;
+            (
+                cache.required_java_major_versions,
+                cache.java_major_version_by_game_version,
+            )
+        } else {
+            let cached_java_info = self.read_java_info_cache().await.ok();
+            let required = match crate::game::java_policy::fetch_available_runtimes(&self.client)
+                .await
+            {
+                Ok(required) => required,
+                Err(e) => {
+                    if let Some(cached) = cached_java_info
+                        .as_ref()
+                        .filter(|c| !c.required_java_major_versions.is_empty())
                     {
-                        java_versions.insert(v.clone(), major);
+                        log::warn!(
+                                "Failed to fetch Java runtimes: {e}. Using cached Java runtime majors {:?}",
+                                cached.required_java_major_versions
+                            );
+                        cached.required_java_major_versions.clone()
+                    } else {
+                        return Err(anyhow::anyhow!(
+                                "Failed to fetch Java runtimes and no cached Java runtime info is available: {e}"
+                            ));
                     }
                 }
-
-                // Persist to disk for offline use
-                let cache = JavaInfoCache {
-                    required_java_major_versions: required.clone(),
-                    java_major_version_by_game_version: java_versions.clone(),
-                };
-                if let Ok(json) = serde_json::to_string(&cache) {
-                    let path = self.java_info_path();
-                    let _ = tokio::fs::write(&path, json).await;
-                }
-
-                (required, java_versions)
             };
+
+            let mut java_versions = cached_java_info
+                .map(|cache| cache.java_major_version_by_game_version)
+                .unwrap_or_default();
+            for v in [&mc_manifest.latest.release, &mc_manifest.latest.snapshot] {
+                if let Ok(major) =
+                    crate::game::java_policy::fetch_java_major_for_version(v, &self.client).await
+                {
+                    java_versions.insert(v.clone(), major);
+                }
+            }
+
+            // Persist to disk for offline use
+            let cache = JavaInfoCache {
+                required_java_major_versions: required.clone(),
+                java_major_version_by_game_version: java_versions.clone(),
+            };
+            if let Err(e) = self.write_java_info_cache(&cache).await {
+                log::warn!("Failed to persist Java info cache: {e}");
+            }
+
+            (required, java_versions)
+        };
 
         Ok(PistonMetadata {
             last_updated: Utc::now(),
@@ -452,6 +549,97 @@ impl ManifestCache {
             required_java_major_versions,
             java_major_version_by_game_version,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[tokio::test]
+    async fn resolves_cached_java_major_without_network() {
+        let tmp = tempdir().unwrap();
+        let cache_dir = tmp.path().join("manifests");
+        tokio::fs::create_dir_all(&cache_dir).await.unwrap();
+        tokio::fs::write(
+            cache_dir.join("java_info.json"),
+            serde_json::json!({
+                "required_java_major_versions": [21, 17, 8],
+                "java_major_version_by_game_version": {
+                    "1.21.1": 21
+                }
+            })
+            .to_string(),
+        )
+        .await
+        .unwrap();
+
+        let cache = ManifestCache::new_offline(cache_dir);
+        assert_eq!(
+            cache
+                .resolve_java_major_for_version("1.21.1")
+                .await
+                .unwrap(),
+            21
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_offline_java_major_errors() {
+        let tmp = tempdir().unwrap();
+        let cache_dir = tmp.path().join("manifests");
+        tokio::fs::create_dir_all(&cache_dir).await.unwrap();
+        tokio::fs::write(
+            cache_dir.join("java_info.json"),
+            serde_json::json!({
+                "required_java_major_versions": [21, 17, 8],
+                "java_major_version_by_game_version": {}
+            })
+            .to_string(),
+        )
+        .await
+        .unwrap();
+
+        let cache = ManifestCache::new_offline(cache_dir);
+        let err = cache
+            .resolve_java_major_for_version("1.21.1")
+            .await
+            .expect_err("offline cache miss should not fetch");
+        assert!(err.to_string().contains("is not cached"));
+    }
+
+    #[tokio::test]
+    async fn caches_java_requirement_from_existing_detail_json() {
+        let tmp = tempdir().unwrap();
+        let cache_dir = tmp.path().join("manifests");
+        let cache = ManifestCache::new(cache_dir.clone());
+
+        let major = cache
+            .cache_java_requirement_from_version_detail(
+                "1.21.1",
+                serde_json::json!({
+                    "id": "1.21.1",
+                    "type": "release",
+                    "releaseTime": "2024-08-08T12:24:45+00:00",
+                    "javaVersion": {
+                        "component": "java-runtime-delta",
+                        "majorVersion": 21
+                    }
+                }),
+            )
+            .await
+            .unwrap();
+        assert_eq!(major, 21);
+
+        let offline = ManifestCache::new_offline(cache_dir);
+        assert_eq!(
+            offline
+                .resolve_java_major_for_version("1.21.1")
+                .await
+                .unwrap(),
+            21
+        );
     }
 }
 

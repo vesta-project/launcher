@@ -8,7 +8,7 @@ Summary
 Notes from Modrinth code (`packages/app-lib/src/launcher/mod.rs`)
 
 - The launcher checks a `profile.java_path` first; if provided it runs `api::jre::check_jre` to validate the JRE.
-- If no explicit path is provided, the launcher consults `version_info.java_version` (if present) to select a target Java major version. The code maps missing `java_version` to Java 8 by default.
+- If no explicit path is provided, consult the selected Minecraft version detail's `javaVersion` field to select a target Java major version. Missing `javaVersion` should only map to Java 8 for explicit legacy/pre-metadata versions.
 - The launcher stores `JavaVersion` information (including parsed version and architecture) and uses it to set JVM flags and module opens for modern Java versions.
 
 Examples of JVM arg handling (from launcher code)
@@ -43,7 +43,7 @@ Authoritative source examples
 
 - Fabric wiki (Installing Fabric) — explicit recommendations:
   - "For Minecraft 1.17-1.20.4 we recommended using Java 17. For Minecraft 1.20.5 and higher we recommend using Java 21." (Fabric docs / installer pages)
-  - Modrinth launcher code (`packages/app-lib/src/launcher/mod.rs`) — launcher uses `version_info.java_version` when present and defaults to Java 8 when absent; it also adjusts JVM flags for modern Java versions (adds `--add-opens` lines for >=9 and >=25 for JEP 512 cases).
+  - Modrinth launcher metadata — per-version detail JSON exposes `javaVersion.majorVersion`; launcher code also adjusts JVM flags for modern Java versions (adds `--add-opens` lines for >=9 and >=25 for JEP 512 cases).
 
 Detecting and validating Java on Windows (recommended checks)
 
@@ -67,7 +67,7 @@ java -version
 Automatic detection guidance for launchers
 
 - Prefer explicit `java_path` in the profile and run a quick check (`java -version`) to verify the major version and architecture. If it fails, present a clear UI message telling the user which JRE major is required for the selected Minecraft version.
-- If `version_info.java_version` is present in the `version.json`, use that major version where possible. If missing, fall back to the launcher default (Modrinth falls back to Java 8).
+- Use `version_info.java_version` from the version detail JSON where possible. If missing, fall back to Java 8 only for explicit legacy/pre-metadata versions; treat missing Java metadata on modern versions as an error.
 
 Installing a JRE on Windows (suggested options)
 
@@ -178,6 +178,5 @@ java -Djava.awt.headless=true -jar installer.jar install server ...
 - Service account recommendations for servers:
   - Create a dedicated `minecraft` user on Linux and run the installer under that account to avoid permission issues and to simplify backups and upgrades.
   - On Windows, create a service or scheduled task that runs under a specific service account if you plan to automate server lifecycle.
-
 
 

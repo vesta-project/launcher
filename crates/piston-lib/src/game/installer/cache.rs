@@ -315,9 +315,9 @@ fn hash_file(path: &Path) -> Result<(String, u64)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use std::fs::File;
     use std::io::Write;
+    use tempfile::tempdir;
 
     #[test]
     fn test_cache_ingest_and_restore() {
@@ -343,11 +343,11 @@ mod tests {
         let restored_path = tmp.path().join("restored.txt");
         let found_sha = cache.find_component("test-label").unwrap();
         assert_eq!(found_sha, sha);
-        
+
         let success = cache.restore_artifact(&found_sha, &restored_path).unwrap();
         assert!(success);
         assert!(restored_path.exists());
-        
+
         let content = fs::read_to_string(restored_path).unwrap();
         assert_eq!(content, "hello world");
     }
@@ -355,12 +355,12 @@ mod tests {
     #[test]
     fn test_cache_persistence() {
         let tmp = tempdir().unwrap();
-        
+
         {
             let mut cache = ArtifactCache::load_with_labels(tmp.path()).unwrap();
             let file_path = tmp.path().join("test.txt");
             fs::write(&file_path, "persistent content").unwrap();
-            
+
             let sha = cache.ingest_file(&file_path, None, None).unwrap();
             cache.set_label("p-label", sha);
             cache.save().unwrap();

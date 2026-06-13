@@ -89,7 +89,13 @@ pub async fn process_and_download_libraries(
         for (name, path, url, _sha) in &native_specs {
             let full_path = spec.libraries_dir().join(path);
             let exists = full_path.exists();
-            log::info!("Native spec prepared: name={} path={} url={:?} exists={}", name, path, url, exists);
+            log::info!(
+                "Native spec prepared: name={} path={} url={:?} exists={}",
+                name,
+                path,
+                url,
+                exists
+            );
         }
 
         stream::iter(native_specs)
@@ -117,7 +123,11 @@ pub async fn process_and_download_libraries(
                                     format!("Failed to download native: {} ({})", name, url)
                                 })?;
                         } else {
-                            log::error!("Skipping native {} — no download URL available (path={})", name, path);
+                            log::error!(
+                                "Skipping native {} — no download URL available (path={})",
+                                name,
+                                path
+                            );
                             let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
                             let progress =
                                 80 + ((count as f32 / total_natives as f32) * 10.0) as i32;

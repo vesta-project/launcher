@@ -132,45 +132,66 @@ impl BatchDownloader {
 
                         for url in &artifact.urls {
                             let current = downloaded.load(Ordering::SeqCst) + 1;
-                            log::info!("Downloading: {} from {} ({}/{})", artifact.name, url, current, total);
+                            log::info!(
+                                "Downloading: {} from {} ({}/{})",
+                                artifact.name,
+                                url,
+                                current,
+                                total
+                            );
                             reporter.set_message("Downloading resources...");
 
                             let file_reporter = BatchFileProgressReporter {
                                 parent: reporter.clone(),
                             };
-                            
+
                             match download_to_path(
                                 &client,
                                 url,
                                 &artifact.path,
                                 artifact.sha1.as_deref(),
                                 &file_reporter,
-                            ).await {
+                            )
+                            .await
+                            {
                                 Ok(_) => {
                                     success = true;
                                     break;
                                 }
                                 Err(e) => {
-                                    log::warn!("Failed to download {} from {}: {}", artifact.name, url, e);
+                                    log::warn!(
+                                        "Failed to download {} from {}: {}",
+                                        artifact.name,
+                                        url,
+                                        e
+                                    );
                                     last_err = Some(e);
                                 }
                             }
                         }
 
                         if !success {
-                            return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("No download URLs provided for {}", artifact.name)));
+                            return Err(last_err.unwrap_or_else(|| {
+                                anyhow::anyhow!("No download URLs provided for {}", artifact.name)
+                            }));
                         }
                     }
 
                     let count = downloaded.fetch_add(1, Ordering::SeqCst) + 1;
-                    
+
                     // Update progress
-                    let progress = base_progress + ((count as f32 / total as f32) * progress_weight) as i32;
+                    let progress =
+                        base_progress + ((count as f32 / total as f32) * progress_weight) as i32;
                     reporter.set_percent(progress);
                     reporter.set_step_count(count as u32, Some(total as u32));
-                    
+
                     if count % 10 == 0 || count == total {
-                        log::info!("Batch download progress: {}/{} ({}%)", count, total, progress);
+                        log::info!(
+                            "Batch download progress: {}/{} ({}%)",
+                            count,
+                            total,
+                            progress
+                        );
                     }
 
                     Ok(())

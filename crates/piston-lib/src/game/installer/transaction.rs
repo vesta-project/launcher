@@ -69,15 +69,24 @@ impl InstallTransaction {
     // ------------------------------------------------------------------
 
     fn scope_versions(&self) -> bool {
-        matches!(self.scope, TransactionScope::Full | TransactionScope::Versions)
+        matches!(
+            self.scope,
+            TransactionScope::Full | TransactionScope::Versions
+        )
     }
 
     fn scope_libraries(&self) -> bool {
-        matches!(self.scope, TransactionScope::Full | TransactionScope::Libraries)
+        matches!(
+            self.scope,
+            TransactionScope::Full | TransactionScope::Libraries
+        )
     }
 
     fn scope_assets(&self) -> bool {
-        matches!(self.scope, TransactionScope::Full | TransactionScope::Assets)
+        matches!(
+            self.scope,
+            TransactionScope::Full | TransactionScope::Assets
+        )
     }
 
     // ------------------------------------------------------------------
@@ -122,9 +131,8 @@ impl InstallTransaction {
                     })?;
                 }
                 if let Some(parent) = self.backup_libraries_dir.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Create backup libraries parent {:?}", parent)
-                    })?;
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("Create backup libraries parent {:?}", parent))?;
                 }
                 move_dir(&self.target_libraries_dir, &self.backup_libraries_dir).with_context(
                     || {
@@ -146,9 +154,8 @@ impl InstallTransaction {
                     })?;
                 }
                 if let Some(parent) = self.backup_assets_dir.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Create backup assets parent {:?}", parent)
-                    })?;
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("Create backup assets parent {:?}", parent))?;
                 }
                 move_dir(&self.target_assets_dir, &self.backup_assets_dir).with_context(|| {
                     format!(
@@ -159,11 +166,7 @@ impl InstallTransaction {
             }
         }
 
-        log::info!(
-            "[txn:{}] begin (scope={:?})",
-            self.version_id,
-            self.scope
-        );
+        log::info!("[txn:{}] begin (scope={:?})", self.version_id, self.scope);
         Ok(())
     }
 
@@ -195,11 +198,7 @@ impl InstallTransaction {
             fs::remove_dir_all(&self.backup_dir)
                 .with_context(|| format!("Remove backup dir {:?}", self.backup_dir))?;
         }
-        log::info!(
-            "[txn:{}] commit (scope={:?})",
-            self.version_id,
-            self.scope
-        );
+        log::info!("[txn:{}] commit (scope={:?})", self.version_id, self.scope);
         Ok(())
     }
 
@@ -218,9 +217,8 @@ impl InstallTransaction {
             }
             if self.backup_version_dir.exists() {
                 if let Some(parent) = self.target_version_dir.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Recreate versions dir parent {:?}", parent)
-                    })?;
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("Recreate versions dir parent {:?}", parent))?;
                 }
                 move_dir(&self.backup_version_dir, &self.target_version_dir).with_context(
                     || {
@@ -245,9 +243,8 @@ impl InstallTransaction {
             }
             if self.backup_libraries_dir.exists() {
                 if let Some(parent) = self.target_libraries_dir.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Recreate libraries dir parent {:?}", parent)
-                    })?;
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("Recreate libraries dir parent {:?}", parent))?;
                 }
                 move_dir(&self.backup_libraries_dir, &self.target_libraries_dir).with_context(
                     || {
@@ -272,9 +269,8 @@ impl InstallTransaction {
             }
             if self.backup_assets_dir.exists() {
                 if let Some(parent) = self.target_assets_dir.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Recreate assets dir parent {:?}", parent)
-                    })?;
+                    fs::create_dir_all(parent)
+                        .with_context(|| format!("Recreate assets dir parent {:?}", parent))?;
                 }
                 move_dir(&self.backup_assets_dir, &self.target_assets_dir).with_context(|| {
                     format!(

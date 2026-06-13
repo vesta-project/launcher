@@ -51,10 +51,7 @@ fn verify_jre_executable(java_path: &Path) -> bool {
 /// Verify asset objects exist and spot-check their SHA1 hashes.
 /// `asset_index_id` should come from the manifest's `assetIndex.id` field.
 /// Returns a list of VerificationIssues found.
-fn verify_asset_objects(
-    assets_dir: &Path,
-    asset_index_id: &str,
-) -> Vec<VerificationIssue> {
+fn verify_asset_objects(assets_dir: &Path, asset_index_id: &str) -> Vec<VerificationIssue> {
     let mut issues = Vec::new();
 
     let index_path = assets_dir
@@ -332,29 +329,30 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
     };
 
     // Try to load a UnifiedManifest (handles both VersionManifest and UnifiedManifest)
-    let unified = match crate::game::launcher::unified_manifest::UnifiedManifest::normalize_and_save_if_stale(
-        &manifest_path,
-    ) {
-        Ok(u) => u,
-        Err(e) => {
-            log::error!(
-                "[verifier] Failed to parse manifest into unified manifest: {} — {}",
-                manifest_path.display(),
-                e
-            );
-            issues.push(VerificationIssue {
-                kind: VerificationIssueKind::Mismatch,
-                artifact_class: "version-manifest".to_string(),
-                path: manifest_path.to_string_lossy().to_string(),
-                detail: format!("Version manifest could not be parsed: {}", e),
-            });
-            return Ok(VerificationResult {
-                ready: false,
-                checked,
-                issues,
-            });
-        }
-    };
+    let unified =
+        match crate::game::launcher::unified_manifest::UnifiedManifest::normalize_and_save_if_stale(
+            &manifest_path,
+        ) {
+            Ok(u) => u,
+            Err(e) => {
+                log::error!(
+                    "[verifier] Failed to parse manifest into unified manifest: {} — {}",
+                    manifest_path.display(),
+                    e
+                );
+                issues.push(VerificationIssue {
+                    kind: VerificationIssueKind::Mismatch,
+                    artifact_class: "version-manifest".to_string(),
+                    path: manifest_path.to_string_lossy().to_string(),
+                    detail: format!("Version manifest could not be parsed: {}", e),
+                });
+                return Ok(VerificationResult {
+                    ready: false,
+                    checked,
+                    issues,
+                });
+            }
+        };
 
     let installed_jar = spec
         .versions_dir()
@@ -412,8 +410,7 @@ pub fn verify_instance_readiness(spec: &InstallSpec) -> Result<VerificationResul
             log::info!("[verifier] Asset index found: id={}", asset_index_id);
             // Deep check: verify asset objects (only in Full scope)
             if spec.repair_scope == RepairScope::Full {
-                let asset_issues =
-                    verify_asset_objects(&spec.assets_dir(), &ai.id);
+                let asset_issues = verify_asset_objects(&spec.assets_dir(), &ai.id);
                 checked += asset_issues.len();
                 issues.extend(asset_issues);
             }

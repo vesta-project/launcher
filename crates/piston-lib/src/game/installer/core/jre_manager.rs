@@ -388,9 +388,7 @@ pub fn verify_java(path: &Path) -> Result<DetectedJava> {
 fn parse_major_version(version_output: &str) -> Option<u32> {
     use std::sync::OnceLock;
     static RE: OnceLock<regex::Regex> = OnceLock::new();
-    let re = RE.get_or_init(|| {
-        regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).unwrap()
-    });
+    let re = RE.get_or_init(|| regex::Regex::new(r#"version\s+"(\d+)(\.(\d+))?"#).unwrap());
     if let Some(caps) = re.captures(version_output) {
         let major = caps.get(1)?.as_str().parse::<u32>().ok()?;
         if major == 1 {

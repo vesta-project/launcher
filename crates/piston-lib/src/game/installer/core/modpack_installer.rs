@@ -42,9 +42,7 @@ pub trait ModpackResolver: Send + Sync {
         _project_id: &str,
         _version_id: &str,
     ) -> futures::future::BoxFuture<'static, Result<ModpackResolvedModrinth>> {
-        Box::pin(async {
-            Err(anyhow::anyhow!("Modrinth resolver not configured"))
-        })
+        Box::pin(async { Err(anyhow::anyhow!("Modrinth resolver not configured")) })
     }
 }
 
@@ -398,14 +396,9 @@ impl ModpackInstaller {
         let mut manifest = ModpackManifest::load(game_dir)
             .context("Failed to load modpack manifest for repair")?;
 
-        let zip_path = manifest
-            .source_zip_path
-            .clone()
-            .ok_or_else(|| {
-                anyhow::anyhow!(
-                    "Cannot repair modpack: original ZIP path not available in manifest"
-                )
-            })?;
+        let zip_path = manifest.source_zip_path.clone().ok_or_else(|| {
+            anyhow::anyhow!("Cannot repair modpack: original ZIP path not available in manifest")
+        })?;
 
         if !zip_path.exists() {
             return Err(anyhow::anyhow!(
@@ -713,10 +706,7 @@ pub async fn enrich_platform_mod_hashes(
                             *url = resolved.url;
                         }
                         if needs_path {
-                            m.path = format!(
-                                "{}/{}",
-                                resolved.subfolder, resolved.filename
-                            );
+                            m.path = format!("{}/{}", resolved.subfolder, resolved.filename);
                         }
                     }
                     Err(e) => {
