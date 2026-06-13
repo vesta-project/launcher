@@ -10,22 +10,26 @@ import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
+import { openStandaloneMiniPage } from "@components/page-viewer/standalone-launcher";
 import {
 	clearRunning,
 	instancesState,
 	setLaunching,
 	setRunning,
 } from "@stores/instances";
+import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Badge } from "@ui/badge";
 import {
 	ContextMenu,
 	ContextMenuContent,
 	ContextMenuItem,
-	ContextMenuLabel,
 	ContextMenuPortal,
 	ContextMenuSeparator,
-	ContextMenuShortcut,
+	ContextMenuSub,
+	ContextMenuSubContent,
+	ContextMenuSubTrigger,
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { ExportDialog } from "@ui/export-dialog";
@@ -46,7 +50,15 @@ import {
 	resumeInstanceOperation,
 } from "@utils/instances";
 import clsx from "clsx";
-import { createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import {
+	createMemo,
+	createSignal,
+	Match,
+	onCleanup,
+	onMount,
+	Show,
+	Switch,
+} from "solid-js";
 import {
 	handleDuplicate,
 	handleHardReset,
@@ -67,6 +79,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const [busy, setBusy] = createSignal(false);
 
 	const instanceSlug = () => getInstanceSlug(props.instance);
+	const isPinned = createMemo(() => isPinnedInStore("instance", instanceSlug()));
 
 	const storeInstance = createMemo(
 		() => instancesState.instances.find((inst) => inst.id === props.instance.id) ?? props.instance,
@@ -258,7 +271,48 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openInstanceDetails = () => {
-		openMiniPage("/instance", { id: props.instance.id });
+		openMiniPage("/instance", { slug: instanceSlug() });
+	};
+
+	const openInstanceDetailsStandalone = () => {
+		void openStandaloneMiniPage("/instance", { slug: instanceSlug() });
+	};
+
+	const openAddContent = () => {
+		openMiniPage("/resources", { selectedInstanceId: props.instance.id });
+	};
+
+	const openInstanceFolder = async () => {
+		try {
+			await invoke("open_instance_folder", { instanceIdSlug: instanceSlug() });
+		} catch (e) {
+			console.error("Failed to open instance folder:", e);
+			showToast({
+				title: "Open folder failed",
+				description: String(e),
+				severity: "error",
+			});
+		}
+	};
+
+	const handlePinToggle = async () => {
+		const slug = instanceSlug();
+		if (isPinned()) {
+			const pin = pinning.pins.find(
+				(p) => p.page_type === "instance" && p.target_id === slug,
+			);
+			if (pin) await unpinPage(pin.id);
+			return;
+		}
+
+		await pinPage({
+			page_type: "instance",
+			target_id: slug,
+			label: storeInstance().name,
+			icon_url: storeInstance().iconPath || storeInstance().modpackIconUrl || null,
+			platform: null,
+			order_index: pinning.pins.length,
+		});
 	};
 
 	return (
@@ -462,62 +516,84 @@ export default function InstanceCard(props: InstanceCardProps) {
 			</ContextMenuTrigger>
 			<ContextMenuPortal>
 				<ContextMenuContent>
-					<ContextMenuLabel>Actions</ContextMenuLabel>
-					<ContextMenuSeparator />
-
 					<ContextMenuItem onSelect={handleContextToggle} disabled={isWarmingUp()}>
-						<span
-							style={{
-								display: "inline-flex",
-								"align-items": "center",
-								gap: "0.5rem",
-							}}
-						>
-							{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}
-						</span>
-						<ContextMenuShortcut>{isRunning() ? "Ctrl-K" : "Ctrl-P"}</ContextMenuShortcut>
+						<span>{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}</span>
 					</ContextMenuItem>
 
-					<ContextMenuItem
-						onSelect={() => {
-							void handleRepair(props.instance);
-						}}
-					>
-						Repair
-						<ContextMenuShortcut>Ctrl-R</ContextMenuShortcut>
+					<ContextMenuItem onSelect={openInstanceDetails}>
+						<span>Open Details</span>
 					</ContextMenuItem>
 
-					<ContextMenuItem
-						onSelect={() => {
-							handleDuplicate(props.instance);
-						}}
-					>
-						Duplicate
-					</ContextMenuItem>
-
-					<ContextMenuItem onSelect={() => setShowExportDialog(true)}>Export Instance</ContextMenuItem>
-
-					<ContextMenuItem
-						onSelect={() => {
-							handleHardReset(props.instance);
-						}}
-					>
-						Hard Reset
+					<ContextMenuItem onSelect={openInstanceDetailsStandalone}>
+						<span>Open in New Window</span>
 					</ContextMenuItem>
 
 					<ContextMenuSeparator />
 
+					<ContextMenuItem onSelect={openAddContent}>
+						<span>Add Content</span>
+					</ContextMenuItem>
+
 					<ContextMenuItem
+						onSelect={() => {
+							void openInstanceFolder();
+						}}
+					>
+						<span>Open Folder</span>
+					</ContextMenuItem>
+
+					<ContextMenuItem
+						onSelect={() => {
+							void handlePinToggle();
+						}}
+					>
+						<span>{isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}</span>
+					</ContextMenuItem>
+
+					<ContextMenuSub>
+						<ContextMenuSubTrigger>
+							<span>Manage</span>
+						</ContextMenuSubTrigger>
+						<ContextMenuSubContent>
+							<ContextMenuItem
+								onSelect={() => {
+									void handleRepair(props.instance);
+								}}
+							>
+								<span>Repair</span>
+							</ContextMenuItem>
+
+							<ContextMenuItem
+								onSelect={() => {
+									handleDuplicate(props.instance);
+								}}
+							>
+								<span>Duplicate</span>
+							</ContextMenuItem>
+
+							<ContextMenuItem onSelect={() => setShowExportDialog(true)}>
+								<span>Export Instance</span>
+							</ContextMenuItem>
+
+							<ContextMenuItem
+								onSelect={() => {
+									handleHardReset(props.instance);
+								}}
+							>
+								<span>Hard Reset</span>
+							</ContextMenuItem>
+						</ContextMenuSubContent>
+					</ContextMenuSub>
+
+					<ContextMenuSeparator />
+
+					<ContextMenuItem
+						class={styles["menu-item--danger"]}
 						onSelect={() => {
 							handleUninstall(props.instance);
 						}}
 					>
-						Uninstall
-						<ContextMenuShortcut>Ctrl-U</ContextMenuShortcut>
-					</ContextMenuItem>
-
-					<ContextMenuItem>
-						Profile <ContextMenuShortcut>Ctrl-C</ContextMenuShortcut>
+						<span>Uninstall</span>
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenuPortal>

@@ -1,10 +1,10 @@
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { miniRouterInvalidPage, miniRouterPaths } from "@components/page-viewer/mini-router-config";
+import { popOutMiniRouter } from "@components/page-viewer/standalone-launcher";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 
 import { uiChromeModeEnabled } from "@utils/config-sync";
 import { futureEntryMatchesTarget, isLibraryPath } from "@utils/flat-shell-navigation";
-import { invoke } from "@tauri-apps/api/core";
 import { createRoot, createSignal, Show } from "solid-js";
 import styles from "./page-viewer.module.css";
 
@@ -92,53 +92,7 @@ function PageViewer(props: PageViewerProps) {
 	const mini_router = router();
 
 	const onPopOut = () => {
-		const currentPath = mini_router.currentPath.get();
-		const currentParams = mini_router.currentParams.get();
-		const currentProps = mini_router.getSnapshot();
-		const historyPast = mini_router.history.past || [];
-		const historyFuture = mini_router.history.future || [];
-
-		const serializeRecord = (rec: Record<string, unknown> | undefined) => {
-			if (!rec) return {};
-			return Object.fromEntries(
-				Object.entries(rec)
-					.filter(([k]) => k !== "router" && k !== "close" && k !== "setRefetch")
-					.map(([k, v]) => [k, typeof v === "object" ? JSON.stringify(v) : String(v)]),
-			);
-		};
-
-		const allData = {
-			...serializeRecord(currentParams),
-			...serializeRecord(currentProps),
-		};
-
-		const historyData = {
-			path: currentPath,
-			past: historyPast.map((entry) => ({
-				path: entry.path,
-				params: serializeRecord(entry.params),
-				props: serializeRecord(entry.props),
-			})),
-			future: historyFuture.map((entry) => ({
-				path: entry.path,
-				params: serializeRecord(entry.params),
-				props: serializeRecord(entry.props),
-			})),
-		};
-
-		const handoffId = `handoff_${Date.now()}`;
-		localStorage.setItem(
-			handoffId,
-			JSON.stringify({
-				props: allData,
-				history: JSON.stringify(historyData),
-			}),
-		);
-
-		invoke("launch_window", {
-			path: currentPath,
-			props: { handoffId },
-		});
+		void popOutMiniRouter(mini_router);
 
 		setPageViewerOpen(false);
 		props.viewChanged?.(false);

@@ -19,14 +19,16 @@ type ContextMenuContentProps = ContextMenuPrimitive.ContextMenuContentProps &
 function ContextMenuContent<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuContentProps>,
 ) {
-	const [_, rest] = splitProps(props as ContextMenuContentProps, ["class"]);
+	const [local, rest] = splitProps(props as ContextMenuContentProps, ["class", "children"]);
 
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.Content
-				class={clsx(styles["context-menu__content"], "liquid-glass", props.class)}
+				class={clsx(styles["context-menu__content"], "liquid-glass", local.class)}
 				{...rest}
-			/>
+			>
+				{local.children}
+			</ContextMenuPrimitive.Content>
 		</ContextMenuPrimitive.Portal>
 	);
 }
@@ -41,14 +43,33 @@ function ContextMenuLabel(props: ComponentProps<"div">) {
 	);
 }
 
-type ContextMenuItemProps = ContextMenuPrimitive.ContextMenuItemProps & ClassProp;
+type ContextMenuItemProps = ContextMenuPrimitive.ContextMenuItemProps &
+	ClassProp &
+	ChildrenProp & {
+		inset?: boolean;
+	};
 
 function ContextMenuItem<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuItemProps>,
 ) {
-	const [_, rest] = splitProps(props as ContextMenuItemProps, ["class"]);
+	const [local, rest] = splitProps(props as ContextMenuItemProps, [
+		"class",
+		"children",
+		"inset",
+	]);
 
-	return <ContextMenuPrimitive.Item class={styles["context-menu__item"]} {...rest} />;
+	return (
+		<ContextMenuPrimitive.Item
+			class={clsx(
+				styles["context-menu__item"],
+				local.inset && styles["context-menu__item--inset"],
+				local.class,
+			)}
+			{...rest}
+		>
+			{local.children}
+		</ContextMenuPrimitive.Item>
+	);
 }
 
 const ContextMenuItemLabel = ContextMenuPrimitive.ItemLabel;
@@ -64,8 +85,13 @@ type ContextMenuSeparatorProps = ContextMenuPrimitive.ContextMenuSeparatorProps 
 function ContextMenuSeparator<T extends ValidComponent = "hr">(
 	props: PolymorphicProps<T, ContextMenuSeparatorProps>,
 ) {
-	const [, rest] = splitProps(props as ContextMenuSeparatorProps, ["class"]);
-	return <ContextMenuPrimitive.Separator class={styles["context-menu__separator"]} {...rest} />;
+	const [local, rest] = splitProps(props as ContextMenuSeparatorProps, ["class"]);
+	return (
+		<ContextMenuPrimitive.Separator
+			class={clsx(styles["context-menu__separator"], local.class)}
+			{...rest}
+		/>
+	);
 }
 
 const ContextMenuSub = ContextMenuPrimitive.Sub;
@@ -77,10 +103,13 @@ type ContextMenuSubTriggerProps = ContextMenuPrimitive.ContextMenuSubTriggerProp
 function ContextMenuSubTrigger<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuSubTriggerProps>,
 ) {
-	const [_, rest] = splitProps(props as ContextMenuSubTriggerProps, ["class", "children"]);
+	const [local, rest] = splitProps(props as ContextMenuSubTriggerProps, ["class", "children"]);
 	return (
-		<ContextMenuPrimitive.SubTrigger class={styles["context-menu__sub-trigger"]} {...rest}>
-			{props.children}
+		<ContextMenuPrimitive.SubTrigger
+			class={clsx(styles["context-menu__sub-trigger"], local.class)}
+			{...rest}
+		>
+			{local.children}
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
 				viewBox="0 0 24 24"
@@ -97,18 +126,22 @@ function ContextMenuSubTrigger<T extends ValidComponent = "div">(
 	);
 }
 
-type ContextMenuSubContentProps = ContextMenuPrimitive.ContextMenuSubContentProps & ClassProp;
+type ContextMenuSubContentProps = ContextMenuPrimitive.ContextMenuSubContentProps &
+	ClassProp &
+	ChildrenProp;
 
 function ContextMenuSubContent<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ContextMenuSubContentProps>,
 ) {
-	const [, rest] = splitProps(props as ContextMenuSubContentProps, ["class"]);
+	const [local, rest] = splitProps(props as ContextMenuSubContentProps, ["class", "children"]);
 	return (
 		<ContextMenuPrimitive.Portal>
 			<ContextMenuPrimitive.SubContent
-				class={clsx(styles["context-menu__sub-content"], "liquid-glass", props.class)}
+				class={clsx(styles["context-menu__sub-content"], "liquid-glass", local.class)}
 				{...rest}
-			/>
+			>
+				{local.children}
+			</ContextMenuPrimitive.SubContent>
 		</ContextMenuPrimitive.Portal>
 	);
 }

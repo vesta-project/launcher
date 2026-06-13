@@ -42,6 +42,10 @@
 	aspect-ratio: 1;
 }
 
+.menu-item--danger {
+	color: var(--semantic-error);
+}
+
 /* Glass highlight reflection — sits above background image but below content */
 .instance-card::before {
 	content: "";
