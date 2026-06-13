@@ -28,6 +28,7 @@ import { clearToasts, Toaster } from "@ui/toast/toast";
 import { uiChromeModeEnabled } from "@utils/config-sync";
 import { createFlatShellNavigation, isLibraryPath } from "@utils/flat-shell-navigation";
 import { useOs } from "@utils/os";
+import { useWindowFullscreen } from "@utils/window-fullscreen";
 import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
 import styles from "./home.module.css";
 import { DemoInstanceCards } from "./home-intro/demo-instance-cards";
@@ -39,7 +40,9 @@ const [sidebarOpen, setSidebarOpen] = createSignal(false);
 
 function HomePage() {
 	const os = useOs();
+	const isWindowFullscreen = useWindowFullscreen();
 	const isFlatChrome = createMemo(() => !uiChromeModeEnabled());
+	const isMacosFullscreen = createMemo(() => os() === "macos" && isWindowFullscreen());
 	const flatShellNavigation = createMemo(() =>
 		createFlatShellNavigation(pageViewerOpen, setPageViewerOpen),
 	);
@@ -149,7 +152,7 @@ function HomePage() {
 			}}
 			draggable={false}
 		>
-			<TitleBar os={os()} sectionTitle={sectionTitle()} />
+			<TitleBar os={os()} sectionTitle={sectionTitle()} macosFullscreen={isMacosFullscreen()} />
 			<Show when={isFlatChrome()}>
 				<FlatNavigationControls />
 			</Show>
@@ -160,6 +163,7 @@ function HomePage() {
 				open={sidebarOpen()}
 				uiChromeMode={isFlatChrome() ? "flat" : "windowed"}
 				introForcedHidden={sidebarForcedHidden()}
+				macosFullscreen={isMacosFullscreen()}
 			/>
 			<Show
 				when={isFlatChrome()}

@@ -55,6 +55,7 @@ interface UnifiedPageViewerProps {
 	extraNavbarActions?: JSX.Element;
 	windowControls?: JSX.Element;
 	os?: string;
+	macosFullscreen?: boolean;
 	children?: JSX.Element;
 }
 
@@ -118,7 +119,12 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 				>
 					<Show when={isMac()}>
 						<div
-							class={`${styles["page-viewer-window-controls-wrapper"]} ${styles["page-viewer-controls-wrapper--mac"]}`}
+							classList={{
+								[styles["page-viewer-window-controls-wrapper"]]: true,
+								[styles["page-viewer-controls-wrapper--mac"]]: true,
+								[styles["page-viewer-controls-wrapper--macos-fullscreen"]]:
+									props.macosFullscreen === true,
+							}}
 						>
 							{props.windowControls}
 						</div>

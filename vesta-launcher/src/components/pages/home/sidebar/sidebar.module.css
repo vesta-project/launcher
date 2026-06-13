@@ -29,6 +29,11 @@
 		height: calc(100% - 32px);
 	}
 
+	&:is(.sidebar--macos-fullscreen) {
+		top: 0;
+		height: 100%;
+	}
+
 	&:is(.sidebar--open) {
 		z-index: var(--z-sidebar-open);
 		transition:

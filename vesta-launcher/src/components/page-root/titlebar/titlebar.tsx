@@ -13,6 +13,7 @@ interface TitleBarProps {
 	class?: string;
 	os: string;
 	sectionTitle?: string;
+	macosFullscreen?: boolean;
 }
 
 function TitleBar(props: TitleBarProps) {
@@ -33,7 +34,7 @@ function TitleBar(props: TitleBarProps) {
 		<div
 			classList={{
 				[styles.titlebar]: true,
-				[styles["titlebar--right"]]: props.os !== "macos",
+				[styles["titlebar--right"]]: props.os !== "macos" || props.macosFullscreen === true,
 				[styles["titlebar--white"]]: props.os === "windows",
 				[props.class ?? ""]: !!props.class,
 			}}

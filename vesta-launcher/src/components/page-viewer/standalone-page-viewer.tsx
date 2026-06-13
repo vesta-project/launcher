@@ -6,12 +6,15 @@ import { useSearchParams } from "@solidjs/router";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WindowControls } from "@tauri-controls-v2/solid";
 import { useOs } from "@utils/os";
+import { useWindowFullscreen } from "@utils/window-fullscreen";
 import { createMemo, onCleanup, onMount, Show } from "solid-js";
 import styles from "./standalone-page-viewer.module.css";
 
 function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
 	const osType = useOs();
+	const isWindowFullscreen = useWindowFullscreen();
+	const isMacosFullscreen = createMemo(() => osType() === "macos" && isWindowFullscreen());
 
 	const tryParse = (val: string) => {
 		if (typeof val !== "string") return val;
@@ -172,6 +175,7 @@ function StandalonePageViewer() {
 					showWindowControls={true}
 					titleSuffix="Standalone"
 					os={osType()}
+					macosFullscreen={isMacosFullscreen()}
 					onClose={() => getCurrentWindow().close()}
 					windowControls={
 						<Show when={osType() !== "macos"}>

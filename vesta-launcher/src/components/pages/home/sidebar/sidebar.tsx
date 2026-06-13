@@ -46,6 +46,7 @@ interface SidebarProps {
 	os: string;
 	introForcedHidden?: boolean;
 	uiChromeMode: UiChromeMode;
+	macosFullscreen?: boolean;
 }
 
 function Sidebar(props: SidebarProps) {
@@ -154,6 +155,7 @@ function Sidebar(props: SidebarProps) {
 				[styles["sidebar--open"]]: props.open,
 				[styles["sidebar--intro-hidden"]]: props.introForcedHidden === true,
 				[styles["sidebar--intro-visible"]]: props.introForcedHidden === false,
+				[styles["sidebar--macos-fullscreen"]]: props.macosFullscreen === true,
 			}}
 		>
 			<div class={styles["sidebar__root"]}>

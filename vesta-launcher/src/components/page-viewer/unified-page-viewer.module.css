@@ -87,6 +87,12 @@
     flex-shrink: 0;
 }
 
+.page-viewer-controls-wrapper--macos-fullscreen {
+    padding-right: 0;
+    margin-left: 0;
+    width: 0;
+}
+
 .page-viewer-window-controls-wrapper button {
     pointer-events: auto !important;
 }
