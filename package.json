@@ -1,27 +1,28 @@
 {
-	"name": "vestaproject",
-	"module": "index.ts",
-	"devDependencies": {
-		"@biomejs/biome": "2.4.12",
-		"@types/bun": "^1.3.11",
-		"@types/chroma-js": "^3.1.2",
-		"@types/node": "^25.5.2"
-	},
-	"peerDependencies": {
-		"typescript": "^5.4.5"
-	},
-	"scripts": {
-		"vesta:dev": "cd vesta-launcher && bun run tauri dev -- --features devtools",
-		"vesta:build": "cd vesta-launcher && bun run tauri build",
-		"version:bump": "bun run scripts/bump-version.ts",
-		"install": "cd vesta-launcher && bun install",
-		"i": "cd vesta-launcher && bun i",
-		"cmd": "cd vesta-launcher &&"
-	},
-	"type": "module",
-	"dependencies": {
-		"@niobrix/solidjs-skinview3d": "^1.0.0",
-		"@tauri-controls-v2/solid": "^0.4.4",
-		"chroma-js": "^3.2.0"
-	}
+  "name": "vestaproject",
+  "module": "index.ts",
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/bun": "^1.3.11",
+    "@types/chroma-js": "^3.1.2",
+    "@types/node": "^25.5.2"
+  },
+  "peerDependencies": {
+    "typescript": "^5.4.5"
+  },
+  "scripts": {
+    "vesta:dev": "cd vesta-launcher && bun run tauri dev",
+    "vesta:dev:tools": "cd vesta-launcher && bun run tauri dev -- --features devtools",
+    "vesta:build": "cd vesta-launcher && bun run tauri build",
+    "version:bump": "bun run scripts/bump-version.ts",
+    "install": "cd vesta-launcher && bun install",
+    "i": "cd vesta-launcher && bun i",
+    "cmd": "cd vesta-launcher &&"
+  },
+  "type": "module",
+  "dependencies": {
+    "@niobrix/solidjs-skinview3d": "^1.0.0",
+    "@tauri-controls-v2/solid": "^0.4.4",
+    "chroma-js": "^3.2.0"
+  }
 }
