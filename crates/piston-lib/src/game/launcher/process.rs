@@ -187,13 +187,9 @@ pub async fn launch_game(
     // 5. Build classpath (now guaranteed to succeed)
     log::debug!("Building classpath");
 
-    let mut classpath = build_classpath_filtered(
-        &libraries_for_classpath,
-        &spec.libraries_dir(),
-        os,
-        &[],
-    )
-    .context("Failed to build classpath")?;
+    let mut classpath =
+        build_classpath_filtered(&libraries_for_classpath, &spec.libraries_dir(), os, &[])
+            .context("Failed to build classpath")?;
 
     // Add the game JAR to classpath. Prefer a modloader-installed JAR (e.g.
     // versions/fabric-loader-.../fabric-loader-....jar) and fall back to the
@@ -642,11 +638,7 @@ pub async fn kill_instance(instance_id: &str) -> Result<String> {
     log::info!("Killing instance: {} (PID {})", instance_id, instance.pid);
 
     if let Err(e) = crate::utils::stop_intent::mark_stop_requested(&instance.game_dir) {
-        log::warn!(
-            "Failed to mark stop request for {}: {}",
-            instance_id,
-            e
-        );
+        log::warn!("Failed to mark stop request for {}: {}", instance_id, e);
     }
 
     #[cfg(unix)]

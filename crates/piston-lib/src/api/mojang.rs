@@ -3,8 +3,8 @@
 //! Provides methods to fetch user profile data, skins, and verify game ownership.
 
 use anyhow::{Context, Result};
-use reqwest::multipart;
 use log::{debug, error};
+use reqwest::multipart;
 use serde::{Deserialize, Serialize};
 
 const MOJANG_API_BASE: &str = "https://api.minecraftservices.com";
@@ -112,7 +112,10 @@ pub async fn upload_skin(bearer_token: &str, variant: &str, file_bytes: Vec<u8>)
 pub async fn reset_skin(bearer_token: &str) -> Result<()> {
     let client = crate::client::shared_client();
     let response = client
-        .delete(format!("{}/minecraft/profile/skins/active", MOJANG_API_BASE))
+        .delete(format!(
+            "{}/minecraft/profile/skins/active",
+            MOJANG_API_BASE
+        ))
         .bearer_auth(bearer_token)
         .send()
         .await
@@ -129,7 +132,10 @@ pub async fn reset_skin(bearer_token: &str) -> Result<()> {
 pub async fn change_cape(bearer_token: &str, cape_id: &str) -> Result<()> {
     let client = crate::client::shared_client();
     let response = client
-        .put(format!("{}/minecraft/profile/capes/active", MOJANG_API_BASE))
+        .put(format!(
+            "{}/minecraft/profile/capes/active",
+            MOJANG_API_BASE
+        ))
         .bearer_auth(bearer_token)
         .json(&serde_json::json!({ "capeId": cape_id }))
         .send()
@@ -147,7 +153,10 @@ pub async fn change_cape(bearer_token: &str, cape_id: &str) -> Result<()> {
 pub async fn hide_cape(bearer_token: &str) -> Result<()> {
     let client = crate::client::shared_client();
     let response = client
-        .delete(format!("{}/minecraft/profile/capes/active", MOJANG_API_BASE))
+        .delete(format!(
+            "{}/minecraft/profile/capes/active",
+            MOJANG_API_BASE
+        ))
         .bearer_auth(bearer_token)
         .send()
         .await

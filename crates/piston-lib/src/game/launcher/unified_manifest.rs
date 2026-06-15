@@ -1009,10 +1009,7 @@ mod tests {
 
         let filtered = filter_native_libraries_by_arch_policy(libs, OsType::MacOSArm64);
         assert_eq!(filtered.len(), 1);
-        assert_eq!(
-            filtered[0].classifier.as_deref(),
-            Some("natives-osx-arm64")
-        );
+        assert_eq!(filtered[0].classifier.as_deref(), Some("natives-osx-arm64"));
     }
 
     #[test]
@@ -1125,11 +1122,9 @@ mod tests {
                     .to_string()
             )
         );
-        let forge_url = resolve_maven_url(
-            "net.minecraftforge:forge:1.8.9-11.15.1.2318-1.8.9",
-            forge,
-        )
-        .expect("forge artifact url");
+        let forge_url =
+            resolve_maven_url("net.minecraftforge:forge:1.8.9-11.15.1.2318-1.8.9", forge)
+                .expect("forge artifact url");
         assert!(forge_url.starts_with("https://maven.minecraftforge.net/"));
     }
 }

@@ -492,7 +492,9 @@ pub async fn apply_preset_skin(
             .map_err(|e| format!("Failed to decode base64 preset skin: {}", e))?
     } else {
         // Only use reqwest for actual URLs
-        let response = reqwest::get(&texture_url)
+        let response = piston_lib::client::shared_client()
+            .get(&texture_url)
+            .send()
             .await
             .map_err(|e| format!("Failed to download preset skin ({}): {}", texture_url, e))?;
         response
@@ -606,7 +608,9 @@ pub async fn change_skin_variant(
         .find(|s| s.state == "ACTIVE")
         .ok_or_else(|| "No active skin found to change variant".to_string())?;
 
-    let response = reqwest::get(&active_skin.url)
+    let response = piston_lib::client::shared_client()
+        .get(&active_skin.url)
+        .send()
         .await
         .map_err(|e| format!("Failed to download current skin: {}", e))?;
     let file_bytes = response
@@ -640,7 +644,9 @@ pub async fn change_skin_variant(
 #[command]
 pub async fn compute_texture_key_from_url(texture_url: String) -> Result<(String, String), String> {
     // Download the texture URL and compute the same texture_key used elsewhere
-    let response = reqwest::get(&texture_url)
+    let response = piston_lib::client::shared_client()
+        .get(&texture_url)
+        .send()
         .await
         .map_err(|e| format!("Failed to download texture URL {}: {}", texture_url, e))?;
 
@@ -733,12 +739,16 @@ pub async fn sync_current_skin_history(
 
     // 2. Download the texture and compute its content key
     // This allows us to link the server skin to existing history/presets by actual image content.
-    let response = reqwest::get(&active_skin.url).await.map_err(|e| {
-        format!(
-            "sync_current_skin_history: failed to download skin from mojang: {}",
-            e
-        )
-    })?;
+    let response = piston_lib::client::shared_client()
+        .get(&active_skin.url)
+        .send()
+        .await
+        .map_err(|e| {
+            format!(
+                "sync_current_skin_history: failed to download skin from mojang: {}",
+                e
+            )
+        })?;
 
     if !response.status().is_success() {
         return Err(format!(

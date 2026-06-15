@@ -450,6 +450,125 @@ pub async fn refresh_network_status(
     Ok(status)
 }
 
+#[derive(serde::Deserialize)]
+pub struct ProxyTestInput {
+    pub enabled: bool,
+    pub url: Option<String>,
+}
+
+#[derive(serde::Serialize)]
+pub struct ProxyTestResult {
+    pub ok: bool,
+    pub status: crate::utils::network::NetworkStatus,
+    pub message: String,
+    pub detail: Option<String>,
+}
+
+fn redact_proxy_test_message(message: &str, proxy_url: Option<&str>) -> String {
+    let redacted = piston_lib::client::redact_configured_proxy_secrets(message);
+    if let Some(proxy_url) = proxy_url {
+        redacted.replace(proxy_url, &piston_lib::client::redact_proxy_url(proxy_url))
+    } else {
+        redacted
+    }
+}
+
+#[tauri::command]
+pub async fn test_proxy_connection(input: ProxyTestInput) -> Result<ProxyTestResult, String> {
+    let proxy_url = if input.enabled {
+        let url = input
+            .url
+            .as_deref()
+            .map(str::trim)
+            .filter(|url| !url.is_empty())
+            .ok_or_else(|| "Proxy URL is required when proxy is enabled".to_string())?;
+        piston_lib::client::validate_proxy_url(url)?;
+        Some(url.to_string())
+    } else {
+        None
+    };
+
+    let client =
+        piston_lib::client::build_client_with_proxy(proxy_url.as_deref()).map_err(|e| {
+            format!(
+                "Failed to build HTTP client: {}",
+                redact_proxy_test_message(&e.to_string(), proxy_url.as_deref())
+            )
+        })?;
+    let endpoints = [
+        "https://api.modrinth.com/v2/tag/game_version",
+        "https://aka.ms",
+    ];
+    let timeout = std::time::Duration::from_secs(8);
+    let mut last_error: Option<(String, String)> = None;
+
+    for endpoint in endpoints {
+        match client.get(endpoint).timeout(timeout).send().await {
+            Ok(response)
+                if response.status().is_success() || response.status().is_redirection() =>
+            {
+                return Ok(ProxyTestResult {
+                    ok: true,
+                    status: crate::utils::network::NetworkStatus::Online,
+                    message: "Proxy connection works".to_string(),
+                    detail: None,
+                });
+            }
+            Ok(response) => {
+                log::warn!(
+                    "Proxy test endpoint {} returned HTTP {}",
+                    endpoint,
+                    response.status()
+                );
+            }
+            Err(e) => {
+                let redacted_error =
+                    redact_proxy_test_message(&e.to_string(), proxy_url.as_deref());
+                log::warn!(
+                    "Proxy test endpoint {} failed: {}",
+                    endpoint,
+                    redacted_error
+                );
+                last_error = Some((endpoint.to_string(), redacted_error));
+            }
+        }
+    }
+
+    if let Some((endpoint, error)) = last_error {
+        let lower = error.to_ascii_lowercase();
+        if lower.contains("certificate")
+            || lower.contains("cert")
+            || lower.contains("unknown issuer")
+            || lower.contains("invalid peer")
+        {
+            return Ok(ProxyTestResult {
+                ok: false,
+                status: crate::utils::network::NetworkStatus::Offline,
+                message: "Proxy connection failed".to_string(),
+                detail: Some(
+                    "TLS verification failed. For HTTPS inspection proxies like mitmproxy, trust the proxy CA certificate and restart Vesta Launcher."
+                        .to_string(),
+                ),
+            });
+        }
+
+        log::warn!("Proxy test failed after checking {}: {}", endpoint, error);
+        return Ok(ProxyTestResult {
+            ok: false,
+            status: crate::utils::network::NetworkStatus::Offline,
+            message: "Proxy connection failed".to_string(),
+            detail: Some("No test endpoint could be reached. See logs for details.".to_string()),
+        });
+    }
+
+    Ok(ProxyTestResult {
+        ok: false,
+        status: crate::utils::network::NetworkStatus::Offline,
+        message: "Proxy connection failed".to_string(),
+        detail: Some("No test endpoint could be reached. See logs for details.".to_string()),
+    })
+}
+
 #[tauri::command]
 pub fn get_tray_settings() -> Result<TraySettings, String> {
     let config = crate::utils::config::get_app_config()

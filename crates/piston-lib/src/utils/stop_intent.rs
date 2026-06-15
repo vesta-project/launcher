@@ -24,7 +24,8 @@ pub fn mark_stop_requested(game_dir: &Path) -> Result<()> {
     let path = stop_requested_file(game_dir);
 
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).context("Failed to create stop-request marker directory")?;
+        std::fs::create_dir_all(parent)
+            .context("Failed to create stop-request marker directory")?;
     }
 
     std::fs::write(&path, chrono::Utc::now().to_rfc3339())

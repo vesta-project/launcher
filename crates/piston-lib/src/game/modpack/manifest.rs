@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::utils::paths::{join_validated, path_is_within};
 use super::types::{ModpackFormat, ModpackMetadata, ModpackMod};
+use crate::utils::paths::{join_validated, path_is_within};
 
 /// Persisted manifest recording what a modpack install placed on disk.
 /// This is the source of truth for repair: diff the current directory
@@ -310,11 +310,7 @@ impl ModpackManifest {
                 let hash_ok = match compute_file_sha1(&full_path) {
                     Ok(computed) => computed.to_lowercase() == expected.to_lowercase(),
                     Err(e) => {
-                        log::warn!(
-                            "[modpack-manifest] Failed to hash override {}: {}",
-                            ov,
-                            e
-                        );
+                        log::warn!("[modpack-manifest] Failed to hash override {}: {}", ov, e);
                         false
                     }
                 };
@@ -356,10 +352,7 @@ pub fn resolve_mod_path_on_disk(game_dir: &Path, manifest_path: &str) -> Option<
 }
 
 /// Target path for re-downloading a mod during repair (preserves disabled state).
-pub fn mod_repair_target_path(
-    game_dir: &Path,
-    manifest_path: &str,
-) -> anyhow::Result<PathBuf> {
+pub fn mod_repair_target_path(game_dir: &Path, manifest_path: &str) -> anyhow::Result<PathBuf> {
     if let Some(disk_path) = resolve_mod_path_on_disk(game_dir, manifest_path) {
         path_is_within(game_dir, &disk_path)?;
         return Ok(disk_path);

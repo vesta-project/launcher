@@ -346,7 +346,8 @@ pub async fn resolve_version_chain(version_id: &str, data_dir: &Path) -> Result<
             let pb = parent.clone();
             let listing = tokio::task::spawn_blocking(move || -> std::io::Result<Vec<String>> {
                 let rd = std::fs::read_dir(&pb)?;
-                Ok(rd.flatten()
+                Ok(rd
+                    .flatten()
                     .filter_map(|entry| entry.file_name().into_string().ok())
                     .collect())
             })

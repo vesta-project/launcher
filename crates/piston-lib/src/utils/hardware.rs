@@ -1,6 +1,6 @@
-use sysinfo::System;
 use once_cell::sync::Lazy;
 use std::sync::Mutex;
+use sysinfo::System;
 
 static SYSTEM: Lazy<Mutex<System>> = Lazy::new(|| {
     let mut sys = System::new();

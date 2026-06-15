@@ -1,0 +1,3 @@
+ALTER TABLE app_config ADD COLUMN proxy_enabled BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE app_config ADD COLUMN proxy_url TEXT;
+ALTER TABLE app_config ADD COLUMN proxy_apply_to_games BOOLEAN NOT NULL DEFAULT 0;

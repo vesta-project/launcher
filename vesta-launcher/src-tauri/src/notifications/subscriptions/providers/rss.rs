@@ -72,7 +72,12 @@ impl SubscriptionProvider for RSSProvider {
             .as_deref()
             .ok_or_else(|| anyhow::anyhow!("RSS provider requires a target_url"))?;
 
-        let response = reqwest::get(url).await?.bytes().await?;
+        let response = piston_lib::client::shared_client()
+            .get(url)
+            .send()
+            .await?
+            .bytes()
+            .await?;
         let feed = feed_rs::parser::parse(&response[..])?;
 
         // Filter by categories if present in metadata

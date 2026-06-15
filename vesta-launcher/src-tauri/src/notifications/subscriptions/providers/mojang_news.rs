@@ -49,7 +49,7 @@ impl SubscriptionProvider for MojangNewsProvider {
         sub: &NotificationSubscription,
     ) -> Result<Vec<NotificationUpdateItem>> {
         let url = sub.target_url.as_deref().unwrap_or(MOJANG_NEWS_URL);
-        let response = reqwest::get(url).await?;
+        let response = piston_lib::client::shared_client().get(url).send().await?;
 
         if !response.status().is_success() {
             return Err(anyhow::anyhow!(

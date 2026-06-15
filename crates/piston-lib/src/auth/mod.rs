@@ -6,15 +6,14 @@
 use anyhow::{Context, Result};
 use oauth2::TokenResponse;
 use oauth2::{
+    basic::BasicErrorResponseType,
     basic::{BasicClient, BasicTokenResponse},
-    reqwest::async_http_client,
     AuthUrl, ClientId, DeviceAuthorizationUrl, DeviceCodeErrorResponse, RefreshToken,
     RequestTokenError, Scope, StandardDeviceAuthorizationResponse, TokenUrl,
-    basic::BasicErrorResponseType,
 };
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
 use thiserror::Error;
+use uuid::Uuid;
 
 /// Authentication errors
 #[derive(Debug, Error)]
@@ -68,7 +67,7 @@ pub async fn get_device_code(client: &BasicClient) -> Result<StandardDeviceAutho
         .exchange_device_code()
         .context("Failed to create device code request")?
         .add_scopes(scopes)
-        .request_async(async_http_client)
+        .request_async(crate::client::oauth_http_client)
         .await
         .map_err(|e| anyhow::anyhow!("Failed to request device code: {:?}", e))?;
 
@@ -97,7 +96,7 @@ pub async fn poll_for_token(
 > {
     client
         .exchange_device_access_token(&device_code)
-        .request_async(async_http_client, tokio::time::sleep, None)
+        .request_async(crate::client::oauth_http_client, tokio::time::sleep, None)
         .await
 }
 
@@ -109,7 +108,7 @@ pub async fn refresh_access_token(
     log::info!("[auth] Attempting to refresh Microsoft access token");
     match client
         .exchange_refresh_token(&RefreshToken::new(refresh_token))
-        .request_async(async_http_client)
+        .request_async(crate::client::oauth_http_client)
         .await
     {
         Ok(token) => {
@@ -120,19 +119,31 @@ pub async fn refresh_access_token(
             Ok(token)
         }
         Err(e) => {
-            log::error!("[auth] Failed to refresh Microsoft access token: {:?}", e);
-            
+            let redacted_error =
+                crate::client::redact_configured_proxy_secrets(&format!("{:?}", e));
+            log::error!(
+                "[auth] Failed to refresh Microsoft access token: {}",
+                redacted_error
+            );
+
             match e {
                 RequestTokenError::ServerResponse(err) => {
                     if err.error() == &BasicErrorResponseType::InvalidGrant {
                         return Err(PistonAuthError::SessionExpired);
                     }
-                    Err(PistonAuthError::Other(format!("Server reported error: {:?}", err)))
-                },
-                RequestTokenError::Request(req) => {
-                    Err(PistonAuthError::NetworkError(format!("Network error: {:?}", req)))
-                },
-                _ => Err(PistonAuthError::Other(format!("Failed to refresh access token: {:?}", e))),
+                    Err(PistonAuthError::Other(format!(
+                        "Server reported error: {:?}",
+                        err
+                    )))
+                }
+                RequestTokenError::Request(_) => Err(PistonAuthError::NetworkError(format!(
+                    "Network error: {}",
+                    redacted_error
+                ))),
+                _ => Err(PistonAuthError::Other(format!(
+                    "Failed to refresh access token: {}",
+                    redacted_error
+                ))),
             }
         }
     }
@@ -143,7 +154,8 @@ pub async fn exchange_for_minecraft_token(
     microsoft_access_token: &str,
 ) -> Result<minecraft_msa_auth::MinecraftAuthenticationResponse> {
     // minecraft-msa-auth uses reqwest 0.12, so we use reqwest12 alias
-    let client = reqwest12::Client::new();
+    let client = crate::client::build_configured_reqwest12_client()
+        .context("Failed to build proxy-aware Minecraft auth client")?;
     log::info!("[auth] Exchanging Microsoft access token for Minecraft token");
     let response = match minecraft_msa_auth::MinecraftAuthorizationFlow::new(client)
         .exchange_microsoft_token(microsoft_access_token)
@@ -154,10 +166,15 @@ pub async fn exchange_for_minecraft_token(
             resp
         }
         Err(e) => {
-            log::error!("[auth] Failed to exchange for Minecraft token: {:?}", e);
+            let redacted_error =
+                crate::client::redact_configured_proxy_secrets(&format!("{:?}", e));
+            log::error!(
+                "[auth] Failed to exchange for Minecraft token: {}",
+                redacted_error
+            );
             return Err(anyhow::anyhow!(
-                "Failed to exchange for Minecraft token: {:?}",
-                e
+                "Failed to exchange for Minecraft token: {}",
+                redacted_error
             ));
         }
     };
@@ -168,6 +185,9 @@ pub async fn exchange_for_minecraft_token(
 /// Generate a Minecraft-compatible offline UUID for a given username.
 /// This matches Prism Launcher and official Minecraft behavior for offline mode.
 pub fn generate_offline_uuid(username: &str) -> String {
-    let uuid = Uuid::new_v3(&Uuid::nil(), format!("OfflinePlayer:{}", username).as_bytes());
+    let uuid = Uuid::new_v3(
+        &Uuid::nil(),
+        format!("OfflinePlayer:{}", username).as_bytes(),
+    );
     uuid.to_string()
 }

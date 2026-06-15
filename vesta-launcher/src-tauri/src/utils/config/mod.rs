@@ -163,6 +163,9 @@ pub struct AppConfig {
     pub theme_background_opacity: Option<i32>,
     pub theme_data: Option<String>,
     pub ui_chrome_mode_enabled: bool,
+    pub proxy_enabled: bool,
+    pub proxy_url: Option<String>,
+    pub proxy_apply_to_games: bool,
 }
 
 impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite>
@@ -222,6 +225,9 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         Option<i32>,    // theme_background_opacity
         Option<String>, // theme_data
         bool,           // ui_chrome_mode_enabled
+        bool,           // proxy_enabled
+        Option<String>, // proxy_url
+        bool,           // proxy_apply_to_games
     );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -288,6 +294,9 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             theme_background_opacity: row.48,
             theme_data: row.49,
             ui_chrome_mode_enabled: row.50,
+            proxy_enabled: row.51,
+            proxy_url: row.52,
+            proxy_apply_to_games: row.53,
         })
     }
 }
@@ -332,6 +341,9 @@ impl Default for AppConfig {
             theme_border_width: None,                     // theme_border_width - let preset decide
             theme_data: Some("{\"id\":\"vesta\",\"name\":\"Vesta\",\"description\":\"Signature teal to purple to orange gradient\",\"primaryHue\":180,\"opacity\":0,\"grainStrength\":30,\"borderWidth\":1,\"style\":\"glass\",\"gradientEnabled\":true,\"rotation\":180,\"gradientType\":\"linear\",\"gradientHarmony\":\"triadic\",\"allowHueChange\":false,\"allowStyleChange\":false,\"allowBorderChange\":false,\"customCss\":\":root {\\n\\t\\t\\t\\t--theme-bg-gradient: linear-gradient(180deg, hsl(180 100% 50%), hsl(280 100% 25%), hsl(35 100% 50%));\\n\\t\\t\\t}\"}".to_string()),
             ui_chrome_mode_enabled: true,
+            proxy_enabled: false,
+            proxy_url: None,
+            proxy_apply_to_games: false,
 
             setup_completed: false,
             setup_step: 0,

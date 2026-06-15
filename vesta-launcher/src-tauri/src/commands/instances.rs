@@ -124,6 +124,141 @@ fn apply_launcher_action_after_launch(
     }
 }
 
+fn game_proxy_jvm_args(app_config: &crate::utils::config::AppConfig) -> Vec<String> {
+    if !app_config.proxy_enabled || !app_config.proxy_apply_to_games {
+        return Vec::new();
+    }
+
+    let Some(proxy_url) = app_config.proxy_url.as_deref() else {
+        return Vec::new();
+    };
+
+    let parsed = match piston_lib::client::validate_proxy_url(proxy_url) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            log::warn!(
+                "Skipping game proxy JVM args because proxy URL is invalid: {}",
+                e
+            );
+            return Vec::new();
+        }
+    };
+
+    if parsed.has_credentials {
+        log::warn!(
+            "Game proxy credentials are not injected into JVM arguments; host/port only will be used"
+        );
+    }
+
+    match parsed.scheme.as_str() {
+        "http" | "https" => vec![
+            format!("-Dhttp.proxyHost={}", parsed.host),
+            format!("-Dhttp.proxyPort={}", parsed.port),
+            format!("-Dhttps.proxyHost={}", parsed.host),
+            format!("-Dhttps.proxyPort={}", parsed.port),
+        ],
+        "socks5" | "socks5h" => vec![
+            format!("-DsocksProxyHost={}", parsed.host),
+            format!("-DsocksProxyPort={}", parsed.port),
+        ],
+        _ => Vec::new(),
+    }
+}
+
+fn parse_user_jvm_args(raw_args: Option<String>) -> Result<Vec<String>, String> {
+    let Some(args) = raw_args else {
+        return Ok(Vec::new());
+    };
+
+    let trimmed = args.trim();
+    if trimmed.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    shlex::split(trimmed)
+        .ok_or_else(|| "JVM arguments contain malformed quotes or escapes".to_string())
+}
+
+#[cfg(test)]
+mod proxy_launch_tests {
+    use super::{game_proxy_jvm_args, parse_user_jvm_args};
+
+    #[test]
+    fn game_proxy_args_are_disabled_by_default() {
+        let config = crate::utils::config::AppConfig::default();
+        assert!(game_proxy_jvm_args(&config).is_empty());
+    }
+
+    #[test]
+    fn game_proxy_args_include_http_and_https_properties() {
+        let mut config = crate::utils::config::AppConfig::default();
+        config.proxy_enabled = true;
+        config.proxy_apply_to_games = true;
+        config.proxy_url = Some("http://127.0.0.1:8080".to_string());
+
+        assert_eq!(
+            game_proxy_jvm_args(&config),
+            vec![
+                "-Dhttp.proxyHost=127.0.0.1",
+                "-Dhttp.proxyPort=8080",
+                "-Dhttps.proxyHost=127.0.0.1",
+                "-Dhttps.proxyPort=8080",
+            ]
+        );
+    }
+
+    #[test]
+    fn game_proxy_args_include_socks_properties_without_credentials() {
+        let mut config = crate::utils::config::AppConfig::default();
+        config.proxy_enabled = true;
+        config.proxy_apply_to_games = true;
+        config.proxy_url = Some("socks5h://user:pass@example.test:1081".to_string());
+
+        assert_eq!(
+            game_proxy_jvm_args(&config),
+            vec!["-DsocksProxyHost=example.test", "-DsocksProxyPort=1081",]
+        );
+    }
+
+    #[test]
+    fn parses_quoted_user_jvm_args() {
+        assert_eq!(
+            parse_user_jvm_args(Some(r#"-Dfoo="a b" -Xmx2G"#.to_string())).unwrap(),
+            vec!["-Dfoo=a b", "-Xmx2G"]
+        );
+    }
+
+    #[test]
+    fn parses_paths_with_spaces() {
+        assert_eq!(
+            parse_user_jvm_args(Some(
+                r#"-Djava.library.path="/tmp/path with spaces""#.to_string()
+            ))
+            .unwrap(),
+            vec!["-Djava.library.path=/tmp/path with spaces"]
+        );
+    }
+
+    #[test]
+    fn rejects_malformed_user_jvm_args() {
+        assert!(parse_user_jvm_args(Some(r#"-Dfoo="unterminated"#.to_string())).is_err());
+    }
+
+    #[test]
+    fn appends_game_proxy_args_after_user_jvm_args() {
+        let mut config = crate::utils::config::AppConfig::default();
+        config.proxy_enabled = true;
+        config.proxy_apply_to_games = true;
+        config.proxy_url = Some("http://127.0.0.1:8080".to_string());
+
+        let mut args = parse_user_jvm_args(Some("-Xmx2G".to_string())).unwrap();
+        args.extend(game_proxy_jvm_args(&config));
+
+        assert_eq!(args[0], "-Xmx2G");
+        assert!(args.contains(&"-Dhttp.proxyHost=127.0.0.1".to_string()));
+    }
+}
+
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
@@ -1308,9 +1443,14 @@ pub async fn launch_instance(
     } else {
         instance_data.java_args.clone()
     };
+    let mut resolved_jvm_args = parse_user_jvm_args(java_args_raw)?;
+    resolved_jvm_args.extend(game_proxy_jvm_args(&app_config));
 
     // Resolve Environment Variables
+    #[cfg(any(target_os = "linux", target_os = "windows"))]
     let mut env_vars = crate::utils::hooks::resolve_env_vars(&app_config, &instance_data);
+    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
+    let env_vars = crate::utils::hooks::resolve_env_vars(&app_config, &instance_data);
 
     // Resolve Hooks
     let res_pre_launch_hook = if instance_data.use_global_hooks {
@@ -1635,9 +1775,7 @@ pub async fn launch_instance(
         xuid: None,
         client_id: piston_lib::auth::CLIENT_ID.to_string(),
         user_type: "msa".to_string(),
-        jvm_args: java_args_raw
-            .map(|args| args.split_whitespace().map(|s| s.to_string()).collect())
-            .unwrap_or_default(),
+        jvm_args: resolved_jvm_args,
         game_args: vec![],
         window_width: Some(res_width as u32),
         window_height: Some(res_height as u32),

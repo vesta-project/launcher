@@ -197,6 +197,9 @@
     width: 100%;
     min-width: 0;
     min-height: 0;
+    z-index: 1;
+    isolation: isolate;
+    transform: translateZ(0);
 }
 
 .page-viewer-reload-overlay {

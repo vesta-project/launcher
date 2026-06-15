@@ -120,7 +120,9 @@ pub async fn cache_cape_from_url(
     let bytes = if cape_url.starts_with("data:") {
         decode_data_uri_bytes(cape_url)?
     } else {
-        let response = reqwest::get(cape_url)
+        let response = piston_lib::client::shared_client()
+            .get(cape_url)
+            .send()
             .await
             .map_err(|e| format!("Failed to download cape image: {}", e))?;
 

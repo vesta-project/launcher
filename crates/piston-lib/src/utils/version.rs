@@ -29,7 +29,7 @@ impl Version {
                         parts.push(Part::String(part_str));
                     }
                 }
-                
+
                 if c == '.' || c == '-' {
                     current_start = i + 1;
                     // Reset numeric based on next char if possible, or just wait for next iteration
@@ -153,16 +153,22 @@ mod tests {
         assert_eq!(compare_versions("1.0.0", "1.0.1"), Ordering::Less);
         assert_eq!(compare_versions("1.0.1", "1.0.0"), Ordering::Greater);
         assert_eq!(compare_versions("1.0.0", "1.0.0"), Ordering::Equal);
-        
+
         // Beta/Suffix tests
         assert_eq!(compare_versions("1.0.0-beta.1", "1.0.0"), Ordering::Less);
-        assert_eq!(compare_versions("1.0.0-beta.1", "1.0.0-beta.2"), Ordering::Less);
-        assert_eq!(compare_versions("1.0.0-alpha.1", "1.0.0-beta.1"), Ordering::Less);
-        
+        assert_eq!(
+            compare_versions("1.0.0-beta.1", "1.0.0-beta.2"),
+            Ordering::Less
+        );
+        assert_eq!(
+            compare_versions("1.0.0-alpha.1", "1.0.0-beta.1"),
+            Ordering::Less
+        );
+
         // Complex versions
         assert_eq!(compare_versions("0.14.22", "0.14.21"), Ordering::Greater);
         assert_eq!(compare_versions("47.2.0", "47.1.0"), Ordering::Greater);
-        
+
         // Mixed beta strings
         assert_eq!(compare_versions("0.0.0-beta.0", "0.0.0"), Ordering::Less);
 
@@ -174,12 +180,7 @@ mod tests {
     #[test]
     fn compare_version_candidates_semver_beats_lexicographic() {
         assert_eq!(
-            compare_version_candidates(
-                Some("2024-01-01"),
-                "10.0.0",
-                Some("2024-01-01"),
-                "2.0.0",
-            ),
+            compare_version_candidates(Some("2024-01-01"), "10.0.0", Some("2024-01-01"), "2.0.0",),
             Ordering::Greater
         );
     }

@@ -15,6 +15,19 @@ let isDownloading = false;
 let isChecking = false;
 let isDownloaded = false;
 
+async function getUpdaterCheckOptions() {
+	const config = await invoke<any>("get_config");
+	const proxyUrl =
+		config.proxy_enabled && typeof config.proxy_url === "string" && config.proxy_url.trim()
+			? config.proxy_url.trim()
+			: undefined;
+
+	return {
+		config,
+		options: proxyUrl ? { proxy: proxyUrl } : undefined,
+	};
+}
+
 export function initUpdateListener() {
 	if (isListenerInitialized) return;
 
@@ -210,13 +223,13 @@ export async function checkForAppUpdates(silent = false) {
 	isChecking = true;
 	initUpdateListener();
 	try {
-		const update = await check();
+		const { config, options } = await getUpdaterCheckOptions();
+		const update = await check(options);
 
 		if (update) {
 			isDownloaded = false;
 			pendingUpdate = update;
 
-			const config = await invoke<any>("get_config");
 			const autoUpdate = config.auto_update_enabled ?? true;
 
 			if (autoUpdate) {

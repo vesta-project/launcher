@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use base64::{engine::general_purpose, Engine as _};
 use image::imageops;
-use reqwest;
 use serde::Deserialize;
 use std::path::PathBuf;
 use tokio::fs;
@@ -73,7 +72,7 @@ pub async fn download_player_head(
                 "https://sessionserver.mojang.com/session/minecraft/profile/{}",
                 normalized_uuid
             );
-            let resp = reqwest::get(&url).await?;
+            let resp = crate::client::shared_client().get(&url).send().await?;
             if resp.status().is_success() {
                 // Parse as much as we can but treat any error as "no skin"
                 resp.json::<SessionProfile>()
@@ -104,7 +103,9 @@ pub async fn download_player_head(
                 "https://minotar.net/{}/{}/{}.png",
                 endpoint, normalized_uuid, size
             );
-            let response = reqwest::get(&fallback_url)
+            let response = crate::client::shared_client()
+                .get(&fallback_url)
+                .send()
                 .await
                 .context("Failed to fallback to minotar player head")?;
 
@@ -124,7 +125,13 @@ pub async fn download_player_head(
     };
 
     // 2. Download raw skin bytes
-    let skin_bytes = reqwest::get(&target_url).await?.bytes().await?.to_vec();
+    let skin_bytes = crate::client::shared_client()
+        .get(&target_url)
+        .send()
+        .await?
+        .bytes()
+        .await?
+        .to_vec();
 
     // 3. Process Image
     let img = image::load_from_memory(&skin_bytes).context("Failed to load skin from memory")?;

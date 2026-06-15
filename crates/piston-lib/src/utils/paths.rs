@@ -40,18 +40,14 @@ pub fn validate_relative_path(path: &str) -> Result<PathBuf> {
 
 /// Verify that `candidate` is equal to or nested under `root`.
 pub fn path_is_within(root: &Path, candidate: &Path) -> Result<()> {
-    let root = root
-        .components()
-        .fold(PathBuf::new(), |mut acc, c| {
-            acc.push(c);
-            acc
-        });
-    let candidate = candidate
-        .components()
-        .fold(PathBuf::new(), |mut acc, c| {
-            acc.push(c);
-            acc
-        });
+    let root = root.components().fold(PathBuf::new(), |mut acc, c| {
+        acc.push(c);
+        acc
+    });
+    let candidate = candidate.components().fold(PathBuf::new(), |mut acc, c| {
+        acc.push(c);
+        acc
+    });
 
     if candidate == root {
         return Ok(());
@@ -61,32 +57,20 @@ pub fn path_is_within(root: &Path, candidate: &Path) -> Result<()> {
     for component in candidate.components() {
         match root_iter.next() {
             Some(expected) if expected == component => continue,
-            Some(_) => bail!(
-                "Path escapes root: {:?} is not under {:?}",
-                candidate,
-                root
-            ),
+            Some(_) => bail!("Path escapes root: {:?} is not under {:?}", candidate, root),
             None => return Ok(()),
         }
     }
 
-    bail!(
-        "Path escapes root: {:?} is not under {:?}",
-        candidate,
-        root
-    )
+    bail!("Path escapes root: {:?} is not under {:?}", candidate, root)
 }
 
 /// Join `root` with a validated relative path and verify containment.
 pub fn join_validated(root: &Path, relative_path: &str) -> Result<PathBuf> {
     let relative = validate_relative_path(relative_path)?;
     let joined = root.join(&relative);
-    path_is_within(root, &joined).with_context(|| {
-        format!(
-            "Validated path {:?} escapes root {:?}",
-            relative_path, root
-        )
-    })?;
+    path_is_within(root, &joined)
+        .with_context(|| format!("Validated path {:?} escapes root {:?}", relative_path, root))?;
     Ok(joined)
 }
 

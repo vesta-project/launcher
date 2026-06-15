@@ -10,9 +10,21 @@ export const SwitchLabel = SwitchPrimitive.Label;
 
 // Backwards-compatible wrapper: keep supporting <Switch checked=...> while encouraging <Switch.Root>
 export function Switch(props: any) {
+	const [local, rest] = splitProps(props, ["onCheckedChange", "children"]);
+	const handleChange = (value: boolean | Event) => {
+		if (!local.onCheckedChange) return;
+		if (typeof value === "boolean") {
+			local.onCheckedChange(value);
+			return;
+		}
+
+		const target = value.currentTarget as HTMLInputElement | null;
+		local.onCheckedChange(Boolean(target?.checked));
+	};
+
 	return (
-		<SwitchPrimitive.Root {...props} onChange={props.onCheckedChange}>
-			{props.children}
+		<SwitchPrimitive.Root {...rest} onChange={handleChange}>
+			{local.children}
 		</SwitchPrimitive.Root>
 	);
 }

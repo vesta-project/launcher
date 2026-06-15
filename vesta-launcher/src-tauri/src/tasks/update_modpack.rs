@@ -432,10 +432,7 @@ async fn fetch_new_manifest(
     if !zip_path.exists() {
         use reqwest::Url;
 
-        let client = reqwest::Client::builder()
-            .user_agent("VestaLauncher/0.1.0")
-            .build()
-            .map_err(|e| e.to_string())?;
+        let client = piston_lib::client::shared_client();
 
         let url = Url::parse(&version.download_url)
             .map_err(|e| format!("Invalid download URL: {}", e))?;
@@ -715,10 +712,7 @@ async fn stage_file(
 
 /// Download a file's bytes from a URL with optional SHA1 verification.
 async fn download_bytes(url: &str, expected_sha1: Option<&str>) -> Result<Vec<u8>, String> {
-    let client = reqwest::Client::builder()
-        .user_agent("VestaLauncher/0.1.0")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = piston_lib::client::shared_client();
 
     let response = client
         .get(url)

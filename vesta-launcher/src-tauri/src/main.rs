@@ -39,6 +39,20 @@ fn main() {
                 log_level = log::LevelFilter::Debug;
             }
             telemetry_enabled = config.telemetry_enabled;
+            if let Err(e) = piston_lib::client::configure_proxy(piston_lib::client::ProxyConfig {
+                enabled: config.proxy_enabled,
+                url: config.proxy_url.clone(),
+            }) {
+                log::warn!(
+                    "Failed to configure HTTP proxy during early startup for {}: {}",
+                    config
+                        .proxy_url
+                        .as_deref()
+                        .map(piston_lib::client::redact_proxy_url)
+                        .unwrap_or_else(|| "<direct>".to_string()),
+                    piston_lib::client::redact_configured_proxy_secrets(&e)
+                );
+            }
         }
     }
 
@@ -126,6 +140,7 @@ fn main() {
             commands::app::get_network_status,
             commands::app::set_network_status,
             commands::app::refresh_network_status,
+            commands::app::test_proxy_connection,
             commands::app::get_tray_settings,
             commands::app::set_tray_icon_visibility,
             commands::app::set_minimize_to_tray,

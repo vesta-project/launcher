@@ -67,7 +67,11 @@ async fn integration_installer_launcher_natives_flow() {
     }
 
     // Run extract_natives which should detect the classifier and extract the contained file
-    let unified = piston_lib::game::launcher::unified_manifest::UnifiedLibrary::from_library(&lib, None, OsType::Windows);
+    let unified = piston_lib::game::launcher::unified_manifest::UnifiedLibrary::from_library(
+        &lib,
+        None,
+        OsType::Windows,
+    );
     extract_natives(&unified, libraries_dir, natives_dir, OsType::Windows)
         .await
         .expect("integration extract failed");

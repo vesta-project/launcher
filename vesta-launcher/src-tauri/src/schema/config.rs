@@ -53,6 +53,9 @@ diesel::table! {
         theme_background_opacity -> Nullable<Integer>,
         theme_data -> Nullable<Text>,
         ui_chrome_mode_enabled -> Bool,
+        proxy_enabled -> Bool,
+        proxy_url -> Nullable<Text>,
+        proxy_apply_to_games -> Bool,
     }
 }
 

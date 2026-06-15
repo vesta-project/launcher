@@ -1,31 +1,33 @@
+use anyhow::Result;
+use serde_json::json;
+use sha1::Sha1;
+use sha2::{Digest, Sha512};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
-use zip::{ZipWriter, write::FileOptions};
-use anyhow::Result;
-use serde_json::json;
-use sha2::{Sha512, Digest};
-use sha1::Sha1;
+use zip::{write::FileOptions, ZipWriter};
 
-use crate::game::modpack::types::ModpackFormat;
 use crate::game::installer::types::ProgressReporter;
+use crate::game::modpack::types::ModpackFormat;
 
 fn calculate_hashes(path: &Path) -> Result<(String, String)> {
     let mut file = File::open(path)?;
     let mut sha1 = Sha1::new();
     let mut sha512 = Sha512::new();
     let mut buffer = [0; 8192];
-    
+
     loop {
         let count = file.read(&mut buffer)?;
-        if count == 0 { break; }
+        if count == 0 {
+            break;
+        }
         sha1.update(&buffer[..count]);
         sha512.update(&buffer[..count]);
     }
-    
+
     Ok((
         format!("{:x}", sha1.finalize()),
-        format!("{:x}", sha512.finalize())
+        format!("{:x}", sha512.finalize()),
     ))
 }
 
@@ -44,7 +46,7 @@ pub struct ExportSpec {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub enum ExportEntry {
     Mod {
-        path: PathBuf, // Relative to instance root
+        path: PathBuf,     // Relative to instance root
         source_id: String, // Modrinth/CurseForge ID
         version_id: String,
         platform: Option<ModpackFormat>,
@@ -66,8 +68,7 @@ pub fn export_modpack<P: AsRef<Path>>(
     let instance_root = instance_root.as_ref();
     let file = File::create(output_path.as_ref())?;
     let mut zip = ZipWriter::new(file);
-    let options = FileOptions::default()
-        .compression_method(zip::CompressionMethod::Deflated);
+    let options = FileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
     match format {
         ModpackFormat::Modrinth => {
@@ -104,12 +105,24 @@ fn export_modrinth<W: Write + std::io::Seek>(
     });
 
     // Add modloader dependency
-    let deps = index.get_mut("dependencies").unwrap().as_object_mut().unwrap();
+    let deps = index
+        .get_mut("dependencies")
+        .unwrap()
+        .as_object_mut()
+        .unwrap();
     match spec.modloader_type.to_lowercase().as_str() {
-        "fabric" => { deps.insert("fabric-loader".to_string(), json!(spec.modloader_version)); }
-        "forge" => { deps.insert("forge".to_string(), json!(spec.modloader_version)); }
-        "neoforge" => { deps.insert("neoforge".to_string(), json!(spec.modloader_version)); }
-        "quilt" => { deps.insert("quilt-loader".to_string(), json!(spec.modloader_version)); }
+        "fabric" => {
+            deps.insert("fabric-loader".to_string(), json!(spec.modloader_version));
+        }
+        "forge" => {
+            deps.insert("forge".to_string(), json!(spec.modloader_version));
+        }
+        "neoforge" => {
+            deps.insert("neoforge".to_string(), json!(spec.modloader_version));
+        }
+        "quilt" => {
+            deps.insert("quilt-loader".to_string(), json!(spec.modloader_version));
+        }
         _ => {}
     }
 
@@ -125,9 +138,16 @@ fn export_modrinth<W: Write + std::io::Seek>(
         reporter.set_percent(percent);
 
         match entry {
-            ExportEntry::Mod { path, download_url, platform, source_id, version_id, .. } => {
+            ExportEntry::Mod {
+                path,
+                download_url,
+                platform,
+                source_id,
+                version_id,
+                ..
+            } => {
                 let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-                
+
                 let full_path = instance_root.join(&path);
                 if !full_path.exists() {
                     continue;
@@ -139,20 +159,25 @@ fn export_modrinth<W: Write + std::io::Seek>(
                     match calculate_hashes(&full_path) {
                         Ok((sha1_hash, sha512_hash)) => {
                             reporter.set_message(&format!("Linking mod: {}", file_name));
-                            
+
                             let file_size = full_path.metadata().map(|m| m.len()).unwrap_or(0);
                             let mut downloads = Vec::new();
-                            
+
                             if let Some(url) = download_url {
                                 downloads.push(json!(url));
                             }
-                            
+
                             // Modrinth hash-based download
-                            downloads.push(json!(format!("https://api.modrinth.com/v2/version_file/{}/download", sha1_hash)));
-                            
+                            downloads.push(json!(format!(
+                                "https://api.modrinth.com/v2/version_file/{}/download",
+                                sha1_hash
+                            )));
+
                             // If it's a CurseForge mod, add its direct download link as well
                             if source_platform == ModpackFormat::CurseForge {
-                                if let (Ok(pid), Ok(fid)) = (source_id.parse::<u32>(), version_id.parse::<u32>()) {
+                                if let (Ok(pid), Ok(fid)) =
+                                    (source_id.parse::<u32>(), version_id.parse::<u32>())
+                                {
                                     downloads.push(json!(format!("https://www.curseforge.com/api/v1/mods/{}/files/{}/download", pid, fid)));
                                 }
                             }
@@ -173,9 +198,12 @@ fn export_modrinth<W: Write + std::io::Seek>(
 
                             files.push(file_entry);
                             continue;
-                        },
+                        }
                         Err(_) => {
-                            reporter.set_message(&format!("Adding to overrides (hash failed): {}", file_name));
+                            reporter.set_message(&format!(
+                                "Adding to overrides (hash failed): {}",
+                                file_name
+                            ));
                         }
                     }
                 }
@@ -238,12 +266,18 @@ fn export_curseforge<W: Write + std::io::Seek>(
         reporter.set_percent(percent);
 
         match entry {
-            ExportEntry::Mod { path, source_id, version_id, external_ids, .. } => {
+            ExportEntry::Mod {
+                path,
+                source_id,
+                version_id,
+                external_ids,
+                ..
+            } => {
                 let file_name = path.file_name().unwrap_or_default().to_string_lossy();
-                
+
                 // If we have numeric IDs, try to link them (CurseForge requirement)
                 let mut project_id = source_id.parse::<u32>().ok();
-                
+
                 // If not numeric, check external_ids for "curseforge"
                 if project_id.is_none() {
                     if let Some(ref ext) = external_ids {
@@ -294,7 +328,9 @@ fn add_file_to_zip<W: Write + std::io::Seek>(
     }
 
     let full_path = instance_root.join(rel_path);
-    if !full_path.exists() { return Ok(()); }
+    if !full_path.exists() {
+        return Ok(());
+    }
 
     if full_path.is_dir() {
         for entry in std::fs::read_dir(full_path)? {
@@ -308,6 +344,6 @@ fn add_file_to_zip<W: Write + std::io::Seek>(
         let mut f = File::open(full_path)?;
         std::io::copy(&mut f, zip)?;
     }
-    
+
     Ok(())
 }

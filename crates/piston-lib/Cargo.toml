@@ -8,7 +8,7 @@ edition.workspace = true
 [dependencies]
 tokio = { version = "1.49.0", features = ["full"] }
 serde = { version = "1.0", features = ["derive", "rc"] }
-reqwest = { version = "0.11", features = ["json", "stream", "multipart"] }
+reqwest = { version = "0.11", features = ["json", "stream", "multipart", "socks"] }
 serde_json = "1.0.149"
 serde-xml-rs = "0.8.2"
 anyhow = "1.0"
@@ -34,7 +34,7 @@ oauth2 = "4.4"
 minecraft-msa-auth = "0.4"
 
 # reqwest 0.12 for minecraft-msa-auth compatibility
-reqwest12 = { package = "reqwest", version = "0.12.28", features = ["json"] }
+reqwest12 = { package = "reqwest", version = "0.12.28", features = ["json", "socks"] }
 regex = "1.11"
 dunce = "1.0"
 url = "2.5"
@@ -52,4 +52,3 @@ libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61.2", features = ["Win32_UI_WindowsAndMessaging", "Win32_System_Threading", "Win32_Foundation"] }
-

@@ -2,6 +2,7 @@
     position: relative;
     width: 100%;
     height: 100%;
+    isolation: isolate;
 }
 
 .settings-loading {
@@ -23,6 +24,25 @@
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+.settings-tab-error {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin: 16px var(--page-gutter-x);
+	padding: 14px 16px;
+	border: 1px solid hsl(var(--hue-error) 70% 52% / 0.45);
+	border-radius: 8px;
+	background: hsl(var(--hue-error) 70% 52% / 0.14);
+	color: var(--text-primary);
+	font-size: var(--font-small);
+	line-height: 1.45;
+}
+
+.settings-tab-error span {
+	color: var(--text-secondary);
+	overflow-wrap: anywhere;
+}
+
 @keyframes pulse {
     0%,
     100% {
@@ -39,6 +59,8 @@
 	flex: 1;
 	min-height: 0;
 	width: 100%;
+	position: relative;
+	z-index: 1;
 }
 
 .settings-tab-content {
@@ -50,6 +72,9 @@
 	width: 100%;
 	margin-inline: auto;
 	box-sizing: border-box;
+	position: relative;
+	z-index: 1;
+	transform: translateZ(0);
 }
 
 .settings-tab-content--fill {
@@ -79,6 +104,65 @@
     margin: -8px 0 4px 0;
     font-size: 0.85rem;
     color: var(--text-secondary);
+}
+
+.proxy-control-stack {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.proxy-actions-row {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex-wrap: wrap;
+	min-height: 32px;
+}
+
+.proxy-status-text {
+	color: var(--text-secondary);
+	font-size: var(--font-xxsmall);
+	font-weight: 600;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.proxy-status-text--success {
+	color: hsl(var(--hue-success) 62% 62%);
+}
+
+.proxy-status-text--error {
+	color: hsl(var(--hue-error) 70% 62%);
+}
+
+.proxy-status-detail {
+	color: var(--text-secondary);
+	font-size: var(--font-xxsmall);
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+
+.proxy-credential-note {
+	color: var(--text-tertiary);
+	font-size: var(--font-xxsmall);
+	line-height: 1.35;
+}
+
+.proxy-restart-note {
+	border: 1px solid hsl(var(--hue-warning) 70% 48% / 0.45);
+	border-radius: 8px;
+	background: hsl(var(--hue-warning) 70% 48% / 0.16);
+	color: var(--text-primary);
+	font-size: var(--font-xsmall);
+	line-height: 1.4;
+	padding: 10px 12px;
+	margin-bottom: 8px;
+}
+
+.proxy-restart-note strong {
+	color: var(--text-primary);
+	font-weight: 700;
 }
 
 .theme-preset-grid {

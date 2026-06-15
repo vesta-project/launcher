@@ -98,6 +98,9 @@ export interface AppConfig {
 	telemetry_enabled: boolean;
 	discord_presence_enabled: boolean;
 	auto_install_dependencies: boolean;
+	proxy_enabled: boolean;
+	proxy_url: string | null;
+	proxy_apply_to_games: boolean;
 
 	default_width: number;
 	default_height: number;
@@ -154,6 +157,10 @@ export const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
 export const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
 export const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
 export const [autoInstallDependencies, setAutoInstallDependencies] = createSignal(true);
+export const [proxyEnabled, setProxyEnabled] = createSignal(false);
+export const [proxyUrl, setProxyUrl] = createSignal("");
+export const [proxyApplyToGames, setProxyApplyToGames] = createSignal(false);
+export const [proxyRestartRequired, setProxyRestartRequired] = createSignal(false);
 export const [maxDownloadThreads, setMaxDownloadThreads] = createSignal(4);
 export const [autostartEnabled, setAutostartEnabled] = createSignal(false);
 export const [showTrayIcon, setShowTrayIcon] = createSignal(true);
@@ -1230,6 +1237,78 @@ export async function handleAutoInstallDepsToggle(checked: boolean) {
 	}
 }
 
+function markProxyRestartRequired() {
+	setProxyRestartRequired(true);
+}
+
+export async function handleProxyEnabledToggle(checked: boolean) {
+	const prev = proxyEnabled();
+	setProxyEnabled(checked);
+	markProxyRestartRequired();
+	if (hasTauriRuntime()) {
+		try {
+			await invoke("update_config_field", { field: "proxy_enabled", value: checked });
+		} catch (e) {
+			console.error("Failed to persist proxy_enabled:", e);
+			setProxyEnabled(prev);
+		}
+	}
+}
+
+export async function handleProxyUrlChange(value: string) {
+	const prev = proxyUrl();
+	setProxyUrl(value);
+	markProxyRestartRequired();
+	if (hasTauriRuntime()) {
+		try {
+			await invoke("update_config_field", {
+				field: "proxy_url",
+				value: value.trim() ? value.trim() : null,
+			});
+		} catch (e) {
+			console.error("Failed to persist proxy_url:", e);
+			setProxyUrl(prev);
+		}
+	}
+}
+
+export async function handleProxyApplyToGamesToggle(checked: boolean) {
+	const prev = proxyApplyToGames();
+	setProxyApplyToGames(checked);
+	if (hasTauriRuntime()) {
+		try {
+			await invoke("update_config_field", { field: "proxy_apply_to_games", value: checked });
+		} catch (e) {
+			console.error("Failed to persist proxy_apply_to_games:", e);
+			setProxyApplyToGames(prev);
+		}
+	}
+}
+
+export interface ProxyTestResult {
+	ok: boolean;
+	status: "online" | "offline";
+	message: string;
+	detail?: string | null;
+}
+
+export async function testProxyConnection(): Promise<ProxyTestResult> {
+	if (!hasTauriRuntime()) {
+		return {
+			ok: true,
+			status: "online",
+			message: "Proxy testing is available in the desktop app.",
+		};
+	}
+
+	return invoke<ProxyTestResult>("test_proxy_connection", {
+		input: {
+			enabled: proxyEnabled(),
+			url: proxyUrl().trim() ? proxyUrl().trim() : null,
+		},
+	});
+}
+
 export async function updateDefaultField(field: string, value: any) {
 	setInstanceDefaults((prev) => ({ ...prev, [field]: value }));
 	if (hasTauriRuntime()) {
@@ -1307,6 +1386,10 @@ export async function initSettings() {
 				setTelemetryEnabled(config.telemetry_enabled ?? true);
 				setDiscordPresenceEnabled(config.discord_presence_enabled ?? true);
 				setAutoInstallDependencies(config.auto_install_dependencies ?? true);
+				setProxyEnabled(config.proxy_enabled ?? false);
+				setProxyUrl(config.proxy_url ?? "");
+				setProxyApplyToGames(config.proxy_apply_to_games ?? false);
+				setProxyRestartRequired(false);
 				setMaxDownloadThreads(config.max_download_threads ?? 4);
 				setAutostartEnabled(config.autostart_enabled ?? false);
 				setShowTrayIcon(config.show_tray_icon ?? true);
@@ -1423,6 +1506,9 @@ export async function initSettings() {
 		if (field === "autostart_enabled") setAutostartEnabled(value ?? false);
 		if (field === "show_tray_icon") setShowTrayIcon(value ?? true);
 		if (field === "minimize_to_tray") setCloseToTray(value ?? false);
+		if (field === "proxy_enabled") setProxyEnabled(value ?? false);
+		if (field === "proxy_url") setProxyUrl(value ?? "");
+		if (field === "proxy_apply_to_games") setProxyApplyToGames(value ?? false);
 		if (field === "theme_id" && value) {
 			const previousThemeId = untrack(themeId);
 			if (previousThemeId !== value) {

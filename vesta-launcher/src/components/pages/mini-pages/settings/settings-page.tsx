@@ -3,7 +3,16 @@ import { router } from "@components/page-viewer/page-viewer";
 import { PageSidebar } from "@components/page-sidebar/page-sidebar";
 import { TabsContent } from "@ui/tabs/tabs";
 import { cleanupSettings, initSettings, loading } from "@stores/settings";
-import { createEffect, createMemo, createSignal, onCleanup, onMount, Show, Suspense } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	ErrorBoundary,
+	onCleanup,
+	onMount,
+	Show,
+	Suspense,
+} from "solid-js";
 import { AccountSettingsTab } from "./account/AccountTab";
 import { AppearanceSettingsTab } from "./appearance/AppearanceTab";
 import { InstanceDefaultsTab } from "./defaults/DefaultsTab";
@@ -69,7 +78,16 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 						<Suspense
 							fallback={<div class={styles["settings-tab-loading"]}>Loading General Settings...</div>}
 						>
-							<GeneralSettingsTab />
+							<ErrorBoundary
+								fallback={(error) => (
+									<div class={styles["settings-tab-error"]}>
+										<strong>General settings could not be displayed.</strong>
+										<span>{String(error)}</span>
+									</div>
+								)}
+							>
+								<GeneralSettingsTab />
+							</ErrorBoundary>
 						</Suspense>
 					</TabsContent>
 
