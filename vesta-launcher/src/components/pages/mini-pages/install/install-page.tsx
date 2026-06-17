@@ -3,7 +3,6 @@ import type { ResourceVersion } from "@stores/resources";
 import type { Instance } from "@utils/instances";
 import { createEffect, createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { FetchingOverlay } from "./components/FetchingOverlay";
-import { InstallContextBanner } from "./components/InstallContextBanner";
 import { InstallForm } from "./components/InstallForm";
 import { InstallStageHeader } from "./components/InstallStageHeader";
 import { useInstallCapabilities } from "./hooks/use-install-capabilities";
@@ -234,33 +233,33 @@ function InstallPage(props: InstallPageRouteProps) {
 
 	return (
 		<div class={styles["page-root"]}>
-			{/* Header for standard (non-modpack) installs */}
-			<Show when={!isModpackMode() && !effectiveProjectId()}>
-				<InstallStageHeader
-					title="New Instance"
-					description="Create a clean slate and customize it."
-					actionLabel="Back"
-					onAction={() => activeRouter()?.navigate("/install/source")}
-				/>
-			</Show>
+			<InstallStageHeader
+				title={
+					isModpackMode()
+						? effectiveProjectName() || source.modpackInfo()?.name || "Analyzing modpack details..."
+						: "New Instance"
+				}
+				description={isModpackMode() ? undefined : "Create a clean slate and customize it."}
+				label={isModpackMode() ? effectiveResourceType() || "Modpack" : undefined}
+				iconUrl={isModpackMode() ? effectiveProjectIcon() || source.modpackInfo()?.iconUrl : undefined}
+				minecraftVersion={
+					isModpackMode()
+						? source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()
+						: undefined
+				}
+				modloader={
+					isModpackMode()
+						? source.modpackInfo()?.modloader || effectiveInitialModloader()
+						: undefined
+				}
+				analyzing={
+					isModpackMode() && (isFetchingMetadata() || (!source.modpackInfo() && !effectiveProjectName()))
+				}
+				actionLabel={isModpackMode() ? contextBackLabel() : "Back"}
+				onAction={isModpackMode() ? handleContextBack : () => activeRouter()?.navigate("/install/source")}
+			/>
 
 			<div class={styles["page-wrapper"]}>
-				{/* Context banner (modpack info bar) */}
-				<Show when={effectiveProjectName() || source.modpackPath() || source.modpackUrl()}>
-					<InstallContextBanner
-						title={effectiveProjectName() || source.modpackInfo()?.name || "Analyzing modpack details..."}
-						label={effectiveResourceType() || (isModpackMode() ? "Modpack" : "Package")}
-						iconUrl={effectiveProjectIcon() || source.modpackInfo()?.iconUrl}
-						minecraftVersion={
-							source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()
-						}
-						modloader={source.modpackInfo()?.modloader || effectiveInitialModloader()}
-						analyzing={isFetchingMetadata() || (!source.modpackInfo() && !effectiveProjectName())}
-						backLabel={contextBackLabel()}
-						onBack={handleContextBack}
-					/>
-				</Show>
-
 				{/* Loading overlay */}
 				<FetchingOverlay
 					isVisible={isFetchingMetadata() || metadataStatus().phase === "failed"}

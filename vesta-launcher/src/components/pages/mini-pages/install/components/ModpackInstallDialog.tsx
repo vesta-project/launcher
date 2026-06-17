@@ -29,7 +29,6 @@ interface ModpackInstallDialogProps {
 
 export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 	const [isInstalling, setIsInstalling] = createSignal(false);
-	const [showAdvanced, setShowAdvanced] = createSignal(false);
 
 	const [modpackInfo] = createResource<
 		ModpackInfo | undefined,
@@ -95,10 +94,9 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 		<Dialog open={props.isOpen} onOpenChange={(open) => !open && props.onClose()}>
 			<DialogContent
 				style={{
-					width: showAdvanced() || isInstalling() ? "900px" : "440px",
+					width: "900px",
 					"max-height": "90vh",
 					"overflow-y": "auto",
-					transition: "width 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
 				}}
 			>
 				<DialogHeader>
@@ -120,7 +118,6 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 							}}
 						>
 							<InstallForm
-								compact={!showAdvanced()}
 								isModpack
 								modpackInfo={info}
 								initialName={info.name}
@@ -132,21 +129,6 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 								onCancel={props.onClose}
 								isInstalling={isInstalling()}
 							/>
-							<div style={{ "text-align": "center" }}>
-								<button
-									onClick={() => setShowAdvanced(!showAdvanced())}
-									style={{
-										background: "none",
-										border: "none",
-										color: "var(--text-secondary)",
-										cursor: "pointer",
-										"font-size": "12px",
-										"text-decoration": "underline",
-									}}
-								>
-									{showAdvanced() ? "Show Less" : "Advanced Settings..."}
-								</button>
-							</div>
 						</div>
 					)}
 				</Show>

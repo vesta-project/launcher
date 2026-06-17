@@ -1,4 +1,3 @@
-import BackArrow from "@assets/back-arrow.svg";
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { useMinecraftVersions } from "@stores/versions";
 import { instanceDefaults } from "@stores/settings";
@@ -19,6 +18,7 @@ import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider"
 import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldLabel, TextFieldRoot } from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	DEFAULT_ICONS,
 	GameVersionMetadata,
@@ -90,8 +90,6 @@ interface DirtyState {
 	loaderVer?: boolean;
 	icon?: boolean;
 	memory?: boolean;
-	jvmArgs?: boolean;
-	hooks?: boolean;
 }
 
 /**
@@ -142,7 +140,6 @@ export function InstallForm(props: InstallFormProps) {
 			minMemory: memory()[0],
 			maxMemory: memory()[1],
 			includeSnapshots: includeSnapshots(),
-			javaArgs: jvmArgs(),
 			_dirty: { ...dirty },
 		} as any);
 	});
@@ -170,16 +167,7 @@ export function InstallForm(props: InstallFormProps) {
 		}
 	});
 
-	const [jvmArgs, setJvmArgs] = createSignal(
-		props.initialData?.javaArgs || props.initialJvmArgs || "",
-	);
-
-	// --- Advanced Section ---
-	const [showAdvanced, setShowAdvanced] = createSignal(false);
-	const [useGlobalHooks, setUseGlobalHooks] = createSignal(true);
-	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialData?.preLaunchHook || "");
-	const [wrapperCommand, setWrapperCommand] = createSignal(props.initialData?.wrapperCommand || "");
-	const [postExitHook, setPostExitHook] = createSignal(props.initialData?.postExitHook || "");
+	const [isEditingMemory, setIsEditingMemory] = createSignal(false);
 
 	// --- Data Sources ---
 	const { versions: pistonMetadata } = useMinecraftVersions();
@@ -212,8 +200,6 @@ export function InstallForm(props: InstallFormProps) {
 	const isVersionDirty = () => !!dirty.version;
 	const isLoaderDirty = () => !!dirty.loader;
 	const isLoaderVerDirty = () => !!dirty.loaderVer;
-	const isJvmArgsDirty = () => !!dirty.jvmArgs;
-	const isHooksDirty = () => !!dirty.hooks;
 	const isMemoryDirty = () => !!dirty.memory;
 
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
@@ -240,15 +226,15 @@ export function InstallForm(props: InstallFormProps) {
 		if (recommendation.adjustment === "high-for-device") {
 			if (recommendation.source === "modpack") {
 				return recommendation.policyMax > recommendation.generatedLimit
-					? "Set below the modpack target to leave memory for the system. This pack may struggle."
+					? "Set below the modpack suggestion to leave memory for the system. This pack may struggle."
 					: "Using the modpack's recommendation. This is high for this device.";
 			}
 			if (recommendation.source === "mod-count") {
 				return recommendation.policyMax > recommendation.generatedLimit
-					? "Set below the pack target to leave memory for the system. This pack may struggle."
+					? "Set below the suggested memory to leave room for the system. This pack may struggle."
 					: "Raised for this modpack. This is high for this device.";
 			}
-			return "Using your preferred max. This is high for this device.";
+			return "Using your default max. This is high for this device.";
 		}
 		if (recommendation.source === "modpack") {
 			return "Using the modpack's recommended memory.";
@@ -259,8 +245,22 @@ export function InstallForm(props: InstallFormProps) {
 				? `Raised for this modpack based on ${modCount} mods.`
 				: "Raised for this modpack.";
 		}
-		return "Using your preferred max for new instances.";
+		return "Using your default max for new instances.";
 	};
+
+	const suggestedMemoryLabel = () => {
+		return formatMemoryLabel(suggestedMemoryValue());
+	};
+
+	const suggestedMemoryValue = () => {
+		const recommendation = generatedMemoryRecommendation();
+		if (normalizedIsModpack()) {
+			return Math.min(recommendation.policyMax, recommendation.generatedLimit);
+		}
+		return recommendation.preferredMax;
+	};
+
+	const shouldShowMemoryWarning = () => memory()[1] >= getMemoryWarningThresholdMb(totalRam());
 
 	const suggestedModpackIcon = createMemo(
 		() => props.originalIcon || props.modpackInfo?.iconUrl || props.initialIcon || null,
@@ -316,13 +316,6 @@ export function InstallForm(props: InstallFormProps) {
 				if (d.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(d.modloaderVersion);
 				if (d.iconPath && !isIconDirty()) setIcon(d.iconPath);
 				if (d.maxMemory && !isMemoryDirty()) setMemory([d.minMemory || 2048, d.maxMemory]);
-				if (d.javaArgs !== undefined && !isJvmArgsDirty()) setJvmArgs(d.javaArgs ?? "");
-				if (!isHooksDirty()) {
-					if (d.useGlobalHooks !== undefined) setUseGlobalHooks(d.useGlobalHooks);
-					if (d.preLaunchHook !== undefined) setPreLaunchHook(d.preLaunchHook || "");
-					if (d.wrapperCommand !== undefined) setWrapperCommand(d.wrapperCommand || "");
-					if (d.postExitHook !== undefined) setPostExitHook(d.postExitHook || "");
-				}
 			}
 
 			if (props.initialName !== undefined && !isNameDirty() && !d?.name) setName(props.initialName);
@@ -338,8 +331,6 @@ export function InstallForm(props: InstallFormProps) {
 			}
 			if (props.initialIncludeSnapshots !== undefined)
 				setIncludeSnapshots(props.initialIncludeSnapshots);
-			if (props.initialJvmArgs !== undefined && !isJvmArgsDirty() && !d?.javaArgs)
-				setJvmArgs(props.initialJvmArgs);
 		});
 	});
 
@@ -541,6 +532,148 @@ export function InstallForm(props: InstallFormProps) {
 		return list;
 	});
 
+	const updateMemoryRange = (val: number[]) => {
+		setMemory([
+			Math.min(val[0], getManualMemoryLimitMb(totalRam())),
+			Math.min(val[1], getManualMemoryLimitMb(totalRam())),
+		]);
+		setDirty("memory", true);
+	};
+
+	const applyMemoryPreset = (maxMemoryMb: number) => {
+		const nextMax = Math.min(maxMemoryMb, getManualMemoryLimitMb(totalRam()));
+		setMemory([Math.min(memory()[0], nextMax), nextMax]);
+		setDirty("memory", true);
+	};
+
+	const LoaderVersionField = () => (
+		<Show when={!normalizedIsModpack() && loader() !== "vanilla"}>
+			<div class={styles["form-row"]}>
+				<div class={styles["flex-grow"]}>
+					<div class={styles["field-label-manual"]}>Loader Version</div>
+					<Combobox<string>
+						options={availableLoaderVers().map((v) => v.version)}
+						value={loaderVer()}
+						onChange={(v) => {
+							if (v) {
+								setLoaderVer(v);
+								setDirty("loaderVer", true);
+							}
+						}}
+						placeholder="Latest"
+						itemComponent={(p) => {
+							const vi = availableLoaderVers().find((v) => v.version === p.item.rawValue);
+							return (
+								<ComboboxItem item={p.item}>
+									<div class={styles["version-item-content"]}>
+										<span class={styles["v-num"]}>{p.item.rawValue}</span>
+										<Show when={!vi?.stable}>
+											<span class={styles["v-meta"]}>Experimental</span>
+										</Show>
+									</div>
+								</ComboboxItem>
+							);
+						}}
+					>
+						<ComboboxControl aria-label="Loader Version Picker">
+							<ComboboxInput />
+							<ComboboxTrigger />
+						</ComboboxControl>
+						<ComboboxContent />
+					</Combobox>
+				</div>
+			</div>
+		</Show>
+	);
+
+	const MemoryCard = () => (
+		<div
+			class={styles["memory-card"]}
+			classList={{ [styles["memory-card--editing"]]: isEditingMemory() }}
+		>
+			<div class={styles["memory-card-header"]}>
+				<div>
+					<div class={styles["memory-card-title"]}>
+						Memory
+						<HelpTrigger topic="MODPACK_MEMORY_TARGETS" />
+					</div>
+					<div class={styles["memory-card-reason"]}>{memorySummaryReason()}</div>
+				</div>
+				<div class={styles["memory-card-actions"]}>
+					<button
+						type="button"
+						class={styles["memory-card-edit"]}
+						onClick={() => setIsEditingMemory(!isEditingMemory())}
+					>
+						{isEditingMemory() ? "Hide controls" : "Edit"}
+					</button>
+				</div>
+			</div>
+
+			<Show
+				when={isEditingMemory()}
+				fallback={
+					<div class={styles["memory-card-details"]}>
+						<div class={styles["memory-card-selected"]}>
+							<span>Selected max</span>
+							<button type="button" onClick={toggleMemoryUnit}>
+								{formatMemory(memory()[1])} {memoryUnit()}
+							</button>
+						</div>
+						<div>
+							<span>{normalizedIsModpack() ? "Suggested" : "Default"}</span>
+							<strong>{suggestedMemoryLabel()}</strong>
+						</div>
+					</div>
+				}
+			>
+				<div class={styles["memory-edit-panel"]}>
+					<div class={styles["memory-edit-readout"]}>
+						<span>{formatMemory(memory()[0])} {memoryUnit()} min</span>
+						<strong>{formatMemory(memory()[1])} {memoryUnit()} max</strong>
+					</div>
+					<Slider
+						value={memory()}
+						onChange={updateMemoryRange}
+						minValue={512}
+						maxValue={getManualMemoryLimitMb(totalRam())}
+						step={512}
+					>
+						<SliderTrack>
+							<SliderFill />
+							<SliderThumb />
+							<SliderThumb />
+						</SliderTrack>
+					</Slider>
+					<div class={styles["memory-edit-markers"]}>
+						<button
+							type="button"
+							onClick={() => applyMemoryPreset(generatedMemoryRecommendation().preferredMax)}
+						>
+							Default {formatMemoryLabel(generatedMemoryRecommendation().preferredMax)}
+						</button>
+						<Show when={normalizedIsModpack()}>
+							<button type="button" onClick={() => applyMemoryPreset(suggestedMemoryValue())}>
+								Suggested {suggestedMemoryLabel()}
+							</button>
+						</Show>
+						<Show when={shouldShowMemoryWarning()}>
+							<Tooltip>
+								<TooltipTrigger as="span" class={styles["memory-warning-pill"]}>
+									Warning
+								</TooltipTrigger>
+								<TooltipContent>
+									Allowing Minecraft to use this much memory may leave too little for the rest of
+									the computer.
+								</TooltipContent>
+							</Tooltip>
+						</Show>
+					</div>
+				</div>
+			</Show>
+		</div>
+	);
+
 	// --- Actions ---
 
 	const handleInstall = () => {
@@ -560,16 +693,16 @@ export function InstallForm(props: InstallFormProps) {
 			modloaderVersion: loaderVer() || null,
 			minMemory: memory()[0],
 			maxMemory: memory()[1],
-			javaArgs: jvmArgs() || null,
+			javaArgs: null,
 			// Linking data
 			useGlobalResolution: true,
 			useGlobalJavaArgs: true,
 			useGlobalJavaPath: true,
-			useGlobalHooks: useGlobalHooks(),
+			useGlobalHooks: true,
 			useGlobalEnvironmentVariables: true,
-			preLaunchHook: useGlobalHooks() ? null : preLaunchHook() || null,
-			wrapperCommand: useGlobalHooks() ? null : wrapperCommand() || null,
-			postExitHook: useGlobalHooks() ? null : postExitHook() || null,
+			preLaunchHook: null,
+			wrapperCommand: null,
+			postExitHook: null,
 			modpackId: props.projectId || props.modpackInfo?.modpackId || null,
 			modpackPlatform: props.platform || props.modpackInfo?.modpackPlatform || null,
 			modpackVersionId: props.selectedModpackVersionId || props.modpackInfo?.modpackVersionId || null,
@@ -707,34 +840,6 @@ export function InstallForm(props: InstallFormProps) {
 										</span>
 									</div>
 								</div>
-								<div class={styles["memory-summary-card"]}>
-									<div class={styles["memory-summary-header"]}>
-										<span class={styles["memory-summary-title"]}>
-											Memory
-											<HelpTrigger topic="MODPACK_MEMORY_TARGETS" />
-										</span>
-										<span class={styles["memory-summary-value"]}>
-											{formatMemoryLabel(memory()[1])} max
-										</span>
-									</div>
-									<div class={styles["memory-summary-reason"]}>{memorySummaryReason()}</div>
-									<Show when={!isMemoryDirty()}>
-										<div class={styles["memory-summary-details"]}>
-											<div>
-												<span>Preferred</span>
-												<strong>{formatMemoryLabel(generatedMemoryRecommendation().preferredMax)}</strong>
-											</div>
-											<div>
-												<span>Pack target</span>
-												<strong>{formatMemoryLabel(generatedMemoryRecommendation().policyMax)}</strong>
-											</div>
-											<div>
-												<span>Safety target</span>
-												<strong>{formatMemoryLabel(generatedMemoryRecommendation().generatedLimit)}</strong>
-											</div>
-										</div>
-									</Show>
-								</div>
 							</div>
 						</Show>
 
@@ -799,233 +904,10 @@ export function InstallForm(props: InstallFormProps) {
 										</Switch>
 									</div>
 								</div>
+								<LoaderVersionField />
 							</div>
+							<MemoryCard />
 						</Show>
-
-						<div>
-							{/* ADVANCED SETTINGS (collapsible) */}
-							<button
-								class={styles["advanced-toggle"]}
-								onClick={() => setShowAdvanced(!showAdvanced())}
-								type="button"
-							>
-								<BackArrow
-									class={styles["arrow"]}
-									style={{
-										transform: showAdvanced() ? "rotate(90deg)" : "rotate(-90deg)",
-									}}
-								/>
-								Advanced Settings
-							</button>
-
-							<Show when={showAdvanced()}>
-								<div class={styles["advanced-fields-box"]}>
-									{/* MEMORY ALLOCATION */}
-									<div class={styles["form-section"]}>
-										<div class={styles["form-section-title"]}>Memory Allocation</div>
-										<div class={styles["memory-setting"]}>
-											<div class={styles["memory-header"]}>
-												<div class={styles["memory-labels"]}>
-													<span class={styles["main-label"]}>
-														Allocation
-														<HelpTrigger topic="MEMORY_ALLOCATION" />
-													</span>
-													<span class={styles["sub-label"]}>Min and Max memory in {memoryUnit()}</span>
-												</div>
-												<div class={styles["memory-range-display"]} onClick={toggleMemoryUnit}>
-													{formatMemory(memory()[0])} {memoryUnit()} — {formatMemory(memory()[1])} {memoryUnit()}
-												</div>
-											</div>
-											<Slider
-												value={memory()}
-												onChange={(val) => {
-													setMemory([
-														Math.min(val[0], getManualMemoryLimitMb(totalRam())),
-														Math.min(val[1], getManualMemoryLimitMb(totalRam())),
-													]);
-													setDirty("memory", true);
-												}}
-												minValue={512}
-												maxValue={getManualMemoryLimitMb(totalRam())}
-												step={512}
-											>
-												<SliderTrack>
-													<SliderFill />
-													<SliderThumb />
-													<SliderThumb />
-												</SliderTrack>
-											</Slider>
-											<div class={styles["memory-footer"]}>
-												<Show when={props.modpackInfo?.recommendedRamMb}>
-													<span
-														class={styles["rec-hint"]}
-														classList={{
-															[styles["is-low"]]: memory()[1] < (props.modpackInfo?.recommendedRamMb ?? 0),
-														}}
-													>
-														Recommended: {formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)} {memoryUnit()}
-													</span>
-												</Show>
-												<Show when={memory()[1] >= getMemoryWarningThresholdMb(totalRam())}>
-													<span class={styles["rec-hint"]}>
-														This leaves little memory for the system and other apps.
-													</span>
-												</Show>
-											</div>
-										</div>
-									</div>
-
-									{/* LOADER VERSION (standard installs only) */}
-									<Show when={!normalizedIsModpack() && loader() !== "vanilla"}>
-										<div class={styles["form-section"]}>
-											<div class={styles["form-section-title"]}>Loader Version</div>
-											<Combobox<string>
-												options={availableLoaderVers().map((v) => v.version)}
-												value={loaderVer()}
-												onChange={(v) => {
-													if (v) {
-														setLoaderVer(v);
-														setDirty("loaderVer", true);
-													}
-												}}
-												placeholder="Latest"
-												itemComponent={(p) => {
-													const vi = availableLoaderVers().find((v) => v.version === p.item.rawValue);
-													return (
-														<ComboboxItem item={p.item}>
-															<div
-																style={{
-																	display: "flex",
-																	"justify-content": "space-between",
-																	width: "100%",
-																	"align-items": "center",
-																	gap: "12px",
-																}}
-															>
-																<span>{p.item.rawValue}</span>
-																<Show when={!vi?.stable}>
-																	<span
-																		style={{
-																			"font-size": "10px",
-																			background: "var(--surface-raised)",
-																			padding: "2px 6px",
-																			"border-radius": "4px",
-																			opacity: 0.6,
-																		}}
-																	>
-																		Experimental
-																	</span>
-																</Show>
-															</div>
-														</ComboboxItem>
-													);
-												}}
-											>
-												<ComboboxControl aria-label="Loader Version Picker">
-													<ComboboxInput />
-													<ComboboxTrigger />
-												</ComboboxControl>
-												<ComboboxContent />
-											</Combobox>
-										</div>
-									</Show>
-
-									{/* LIFE-CYCLE HOOKS */}
-									<div class={styles["form-section"]}>
-										<div class={styles["form-section-title"]}>Life-cycle Hooks</div>
-										<div
-											style={{
-												display: "flex",
-												"align-items": "center",
-												"justify-content": "space-between",
-												"margin-bottom": "8px",
-											}}
-										>
-											<span
-												style={{
-													"font-size": "12px",
-													color: "var(--text-secondary)",
-												}}
-											>
-												Use global hook settings
-											</span>
-											<Switch
-												checked={useGlobalHooks()}
-												onCheckedChange={(val: boolean) => {
-													setUseGlobalHooks(val);
-													setDirty("hooks", true);
-												}}
-											>
-												<SwitchControl>
-													<SwitchThumb />
-												</SwitchControl>
-											</Switch>
-										</div>
-										<Show
-											when={!useGlobalHooks()}
-											fallback={
-												<div
-													style={{
-														padding: "10px",
-														"border-radius": "8px",
-														border: "1px dashed var(--border-subtle)",
-														opacity: 0.6,
-														"font-size": "12px",
-													}}
-												>
-													Using hooks from global settings.
-												</div>
-											}
-										>
-											<div
-												style={{
-													display: "flex",
-													"flex-direction": "column",
-													gap: "8px",
-												}}
-											>
-												<TextFieldRoot>
-													<TextFieldLabel>Pre-launch Hook</TextFieldLabel>
-													<TextFieldInput
-														value={preLaunchHook()}
-														onInput={(e: any) => {
-															setPreLaunchHook(e.currentTarget.value);
-															setDirty("hooks", true);
-														}}
-														placeholder="e.g. C:\scripts\pre-launch.bat"
-														style="font-family: var(--font-mono); font-size: 12px;"
-													/>
-												</TextFieldRoot>
-												<TextFieldRoot>
-													<TextFieldLabel>Wrapper Command</TextFieldLabel>
-													<TextFieldInput
-														value={wrapperCommand()}
-														onInput={(e: any) => {
-															setWrapperCommand(e.currentTarget.value);
-															setDirty("hooks", true);
-														}}
-														placeholder="e.g. mangohud --dlsym"
-														style="font-family: var(--font-mono); font-size: 12px;"
-													/>
-												</TextFieldRoot>
-												<TextFieldRoot>
-													<TextFieldLabel>Post-exit Hook</TextFieldLabel>
-													<TextFieldInput
-														value={postExitHook()}
-														onInput={(e: any) => {
-															setPostExitHook(e.currentTarget.value);
-															setDirty("hooks", true);
-														}}
-														placeholder="e.g. powershell -File cleanup.ps1"
-														style="font-family: var(--font-mono); font-size: 12px;"
-													/>
-												</TextFieldRoot>
-											</div>
-										</Show>
-									</div>
-								</div>
-							</Show>
-						</div>
 					</div>
 
 					{/* Side Column (Modpack Info) */}
@@ -1054,6 +936,7 @@ export function InstallForm(props: InstallFormProps) {
 									<div class={styles["info-description"]}>{props.modpackInfo?.description}</div>
 								</Show>
 							</div>
+							<MemoryCard />
 						</div>
 					</Show>
 				</div>

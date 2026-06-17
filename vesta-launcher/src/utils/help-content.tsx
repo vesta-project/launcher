@@ -50,7 +50,7 @@ export const HELP_CONTENT: Record<string, HelpTopic> = {
 		title: "Auto Memory",
 		description: (
 			<div style={{ display: "flex", "flex-direction": "column", gap: "8px" }}>
-				<div>Vesta chooses the new instance max memory with this rule:</div>
+				<div>Vesta chooses the selected max memory with this rule:</div>
 				<div
 					style={{
 						padding: "6px 8px",
@@ -60,16 +60,16 @@ export const HELP_CONTENT: Record<string, HelpTopic> = {
 						"font-size": "12px",
 					}}
 				>
-					max(preferred, min(pack target, safety target))
+					max(default, suggested memory)
 				</div>
 				<div>
-					<strong>Preferred</strong> is your starting max from Settings.
+					<strong>Default</strong> is your starting max from Settings.
 				</div>
 				<div>
-					<strong>Pack target</strong> is what the modpack appears to need.
+					<strong>Suggested</strong> is what the modpack appears to need.
 				</div>
 				<div>
-					<strong>Safety target</strong> leaves memory for the system.
+					Vesta warns when the selected memory may leave too little for the rest of the computer.
 				</div>
 			</div>
 		),
