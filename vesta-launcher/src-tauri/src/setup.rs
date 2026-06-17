@@ -4,7 +4,9 @@ use crate::notifications::manager::NotificationManager;
 use crate::notifications::subscriptions::manager::SubscriptionManager;
 use crate::tasks::manager::TaskManager;
 use crate::tasks::manifest::GenerateManifestTask;
-use crate::utils::config::{get_app_config, init_config_db, normalize_theme_config_state};
+use crate::utils::config::{
+    get_app_config, init_config_db, normalize_memory_config_state, normalize_theme_config_state,
+};
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::version_tracking::VersionTrackingRepository;
@@ -261,6 +263,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     // Normalize theme_data and mirrored scalar theme fields on startup
     if let Err(e) = normalize_theme_config_state() {
         log::error!("Failed to normalize startup theme config state: {}", e);
+    }
+
+    if let Err(e) = normalize_memory_config_state() {
+        log::error!("Failed to normalize startup memory config state: {}", e);
     }
 
     // Initialize version tracking defaults (including launcher version)

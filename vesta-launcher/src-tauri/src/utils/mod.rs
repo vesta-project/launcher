@@ -7,6 +7,7 @@ pub mod hooks;
 pub mod image;
 pub mod java;
 pub mod manifest;
+pub mod memory_policy;
 pub mod network;
 
 pub mod db; // New Diesel connection management

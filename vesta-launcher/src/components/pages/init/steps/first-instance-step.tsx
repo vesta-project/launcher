@@ -291,7 +291,6 @@ function FirstInstanceStep(props: FirstInstanceStepProps) {
 				modpackIconUrl: null,
 				iconData: null,
 				useGlobalResolution: true,
-				useGlobalMemory: true,
 				useGlobalJavaArgs: true,
 				useGlobalJavaPath: true,
 				useGlobalHooks: true,

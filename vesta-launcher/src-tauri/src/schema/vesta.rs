@@ -91,7 +91,6 @@ diesel::table! {
         import_launcher_kind -> Nullable<Text>,
         import_instance_path -> Nullable<Text>,
         use_global_resolution -> Bool,
-        use_global_memory -> Bool,
         use_global_java_args -> Bool,
         use_global_java_path -> Bool,
         use_global_hooks -> Bool,

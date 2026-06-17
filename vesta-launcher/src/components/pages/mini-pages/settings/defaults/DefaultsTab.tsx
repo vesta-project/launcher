@@ -2,6 +2,12 @@ import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import { getTotalRam, instanceDefaults, updateDefaultField } from "@stores/settings";
 import {
+	DEFAULT_MIN_MEMORY_MB,
+	getDynamicPreferredMaxMemoryMb,
+	getGeneratedMemoryLimitMb,
+	MAX_GENERATED_MEMORY_MB,
+} from "@utils/memory-policy";
+import {
 	NumberField,
 	NumberFieldDecrementTrigger,
 	NumberFieldGroup,
@@ -17,9 +23,16 @@ import styles from "../settings-page.module.css";
 
 export function InstanceDefaultsTab() {
 	const handleMemoryChange = (val: number[]) => {
-		updateDefaultField("default_min_memory", val[0]);
-		updateDefaultField("default_max_memory", val[1]);
+		const nextMax = val[0] || preferredMaxMemory();
+		updateDefaultField("default_min_memory", DEFAULT_MIN_MEMORY_MB);
+		updateDefaultField("default_max_memory", nextMax);
 	};
+
+	const preferredMaxMemory = () =>
+		instanceDefaults().default_max_memory || getDynamicPreferredMaxMemoryMb(getTotalRam());
+	const generatedMemoryLimit = () => getGeneratedMemoryLimitMb(getTotalRam());
+	const formatMemory = (value: number) =>
+		value >= 1024 ? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)}GB` : `${value}MB`;
 
 	return (
 		<div class={styles["settings-tab-content"]}>
@@ -85,20 +98,20 @@ export function InstanceDefaultsTab() {
 				/>
 			</SettingsCard>
 
-			<SettingsCard header="Memory Allocation" subHeader="Default memory settings for new instances.">
+			<SettingsCard header="Memory Defaults" subHeader="Defaults used when creating new instances.">
 				<SettingsField
-					label="Allocation Range"
-					description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(
+					label="Preferred max memory"
+					description={`Used as the starting max memory when Vesta creates a new instance. Larger modpacks may get more automatically. (System Total: ${Math.round(
 						getTotalRam() / 1024,
 					)}GB)`}
 					body={
 						<>
-							<div style={{ "margin-bottom": "32px", "margin-top": "12px" }}>
+							<div class={styles["memory-default-control"]}>
 								<Slider
-									value={[instanceDefaults().default_min_memory || 2048, instanceDefaults().default_max_memory || 4096]}
+									value={[preferredMaxMemory()]}
 									onChange={handleMemoryChange}
-									minValue={512}
-									maxValue={getTotalRam() || 16384}
+									minValue={2048}
+									maxValue={MAX_GENERATED_MEMORY_MB}
 									step={512}
 								>
 									<div
@@ -109,38 +122,26 @@ export function InstanceDefaultsTab() {
 										}}
 									>
 										<div style={{ "font-size": "13px", "font-weight": "600" }}>
-											{(instanceDefaults().default_min_memory || 2048) >= 1024
-												? `${((instanceDefaults().default_min_memory || 2048) / 1024).toFixed(1)}GB`
-												: `${instanceDefaults().default_min_memory || 2048}MB`}
-											{" — "}
-											{(instanceDefaults().default_max_memory || 4096) >= 1024
-												? `${((instanceDefaults().default_max_memory || 4096) / 1024).toFixed(1)}GB`
-												: `${instanceDefaults().default_max_memory || 4096}MB`}
+											{preferredMaxMemory() >= 1024
+												? `${(preferredMaxMemory() / 1024).toFixed(1)}GB`
+												: `${preferredMaxMemory()}MB`}
 										</div>
 									</div>
 									<SliderTrack>
 										<SliderFill />
 										<SliderThumb />
-										<SliderThumb />
 									</SliderTrack>
 								</Slider>
 							</div>
-							<div
-								style={{
-									display: "grid",
-									"grid-template-columns": "1fr 1fr",
-									gap: "16px",
-									opacity: "0.8",
-									"font-size": "13px",
-								}}
-							>
-								<div>
-									<strong>Min (-Xms):</strong> {instanceDefaults().default_min_memory} MB
+							{preferredMaxMemory() > generatedMemoryLimit() && (
+								<div class={styles["memory-default-warning"]}>
+									<span>
+										<strong>Warning:</strong> Allowing Minecraft to use this much memory may leave
+										too little for the rest of the computer. Vesta recommends staying below{" "}
+										<strong>{formatMemory(generatedMemoryLimit())}</strong>.
+									</span>
 								</div>
-								<div>
-									<strong>Max (-Xmx):</strong> {instanceDefaults().default_max_memory} MB
-								</div>
-							</div>
+							)}
 						</>
 					}
 				/>

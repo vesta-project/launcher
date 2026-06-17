@@ -106,6 +106,31 @@
     color: var(--text-secondary);
 }
 
+.memory-default-control {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 12px;
+	margin-bottom: 8px;
+}
+
+.memory-default-warning {
+	margin-top: 8px;
+	padding: 10px 12px;
+	border: 1px solid hsl(var(--hue-warning) 70% 58% / 0.24);
+	border-radius: 8px;
+	background: hsl(var(--hue-warning) 70% 52% / 0.06);
+	color: var(--text-secondary);
+	font-size: var(--font-small);
+	line-height: 1.45;
+	max-width: 620px;
+}
+
+.memory-default-warning strong {
+	color: var(--text-primary);
+	font-weight: 700;
+}
+
 .proxy-control-stack {
 	display: flex;
 	flex-direction: column;

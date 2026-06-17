@@ -1,0 +1,1 @@
+ALTER TABLE instance ADD COLUMN use_global_memory BOOLEAN NOT NULL DEFAULT 0;

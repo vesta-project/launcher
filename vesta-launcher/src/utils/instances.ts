@@ -114,7 +114,6 @@ export interface Instance {
 
 	// Instance Defaults & Linking
 	useGlobalResolution: boolean;
-	useGlobalMemory: boolean;
 	useGlobalJavaArgs: boolean;
 	useGlobalJavaPath: boolean;
 	useGlobalHooks: boolean;
@@ -222,7 +221,6 @@ export function createDemoInstance(): Instance {
 		modpackIconUrl: null,
 		iconData: null,
 		useGlobalResolution: false,
-		useGlobalMemory: false,
 		useGlobalJavaArgs: false,
 		useGlobalJavaPath: false,
 		useGlobalHooks: false,
@@ -270,7 +268,6 @@ export async function createInstance(data: CreateInstanceData): Promise<number> 
 		modpackIconUrl: data.modpackIconUrl || null,
 		iconData: data.iconData || null,
 		useGlobalResolution: true,
-		useGlobalMemory: true,
 		useGlobalJavaArgs: true,
 		useGlobalJavaPath: true,
 		useGlobalHooks: true,

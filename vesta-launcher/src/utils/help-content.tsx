@@ -46,6 +46,34 @@ export const HELP_CONTENT: Record<string, HelpTopic> = {
 		description:
 			"This is the amount of temporary storage your computer sets aside for Minecraft to use while it's running. Using many mods requires more memory to prevent the game from freezing. Most modded games run well with 4GB to 6GB of memory.",
 	},
+	MODPACK_MEMORY_TARGETS: {
+		title: "Auto Memory",
+		description: (
+			<div style={{ display: "flex", "flex-direction": "column", gap: "8px" }}>
+				<div>Vesta chooses the new instance max memory with this rule:</div>
+				<div
+					style={{
+						padding: "6px 8px",
+						"border-radius": "6px",
+						background: "var(--surface-low)",
+						"font-family": "var(--font-mono)",
+						"font-size": "12px",
+					}}
+				>
+					max(preferred, min(pack target, safety target))
+				</div>
+				<div>
+					<strong>Preferred</strong> is your starting max from Settings.
+				</div>
+				<div>
+					<strong>Pack target</strong> is what the modpack appears to need.
+				</div>
+				<div>
+					<strong>Safety target</strong> leaves memory for the system.
+				</div>
+			</div>
+		),
+	},
 	JVM_ARGS: {
 		title: "Advanced Tuning",
 		description:

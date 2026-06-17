@@ -126,7 +126,6 @@ interface InstanceDetailsProps {
   initialGameWidth?: number;
   initialGameHeight?: number;
   initialUseGlobalResolution?: boolean;
-  initialUseGlobalMemory?: boolean;
   initialUseGlobalJavaArgs?: boolean;
   initialUseGlobalJavaPath?: boolean;
   initialUseGlobalHooks?: boolean;
@@ -494,9 +493,6 @@ export default function InstanceDetails(
   const [gameHeight, setGameHeight] = createSignal(
     props.initialGameHeight || 720,
   );
-  const [useGlobalMemory, setUseGlobalMemory] = createSignal(
-    props.initialUseGlobalMemory ?? true,
-  );
   const [useGlobalJavaArgs, setUseGlobalJavaArgs] = createSignal(
     props.initialUseGlobalJavaArgs ?? true,
   );
@@ -572,7 +568,7 @@ export default function InstanceDetails(
 
   const inst = () => instance();
   const isRunningGlobal = createMemo(
-    () => (slug() ? instancesState.runningIds[slug()] : false) || false,
+    () => Boolean(slug() ? instancesState.runningIds[slug()] : false),
   );
   const isLaunchingGlobal = createMemo(
     () =>
@@ -805,7 +801,6 @@ export default function InstanceDetails(
         initialGameWidth: gameWidth(),
         initialGameHeight: gameHeight(),
         initialUseGlobalResolution: useGlobalResolution(),
-        initialUseGlobalMemory: useGlobalMemory(),
         initialUseGlobalJavaArgs: useGlobalJavaArgs(),
         initialUseGlobalJavaPath: useGlobalJavaPath(),
         initialUseGlobalHooks: useGlobalHooks(),
@@ -1379,9 +1374,6 @@ export default function InstanceDetails(
           setUseGlobalResolution(inst.useGlobalResolution);
           setGameWidth(inst.gameWidth);
           setGameHeight(inst.gameHeight);
-        }
-        if (!isMinMemDirty() || !isMaxMemDirty()) {
-          setUseGlobalMemory(inst.useGlobalMemory);
         }
         if (!isHooksDirty()) {
           setUseGlobalHooks(inst.useGlobalHooks);
@@ -2107,7 +2099,6 @@ columnHelper.accessor("display_name", {
       fresh.useGlobalResolution = useGlobalResolution();
       fresh.gameWidth = gameWidth();
       fresh.gameHeight = gameHeight();
-      fresh.useGlobalMemory = useGlobalMemory();
       fresh.useGlobalJavaArgs = useGlobalJavaArgs();
       fresh.useGlobalJavaPath = useGlobalJavaPath();
       fresh.useGlobalHooks = useGlobalHooks();
@@ -2508,8 +2499,6 @@ columnHelper.accessor("display_name", {
                         gameHeight={gameHeight()}
                         setGameHeight={setGameHeight}
                         setIsResolutionDirty={setIsResolutionDirty}
-                        useGlobalMemory={useGlobalMemory()}
-                        setUseGlobalMemory={setUseGlobalMemory}
                         useGlobalJavaArgs={useGlobalJavaArgs()}
                         setUseGlobalJavaArgs={setUseGlobalJavaArgs}
                         useGlobalJavaPath={useGlobalJavaPath()}
@@ -2563,7 +2552,6 @@ columnHelper.accessor("display_name", {
             );
             setMinMemory([i.minMemory]);
             setMaxMemory([i.maxMemory]);
-            setUseGlobalMemory(i.useGlobalMemory);
             setJavaArgs(i.javaArgs || "");
             setUseGlobalJavaArgs(i.useGlobalJavaArgs);
             setJavaPath(i.javaPath || "");

@@ -1,6 +1,7 @@
 import BackArrow from "@assets/back-arrow.svg";
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { useMinecraftVersions } from "@stores/versions";
+import { instanceDefaults } from "@stores/settings";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import {
@@ -27,6 +28,13 @@ import {
 } from "@utils/instances";
 import { getSystemMemoryMb, ModpackInfo } from "@utils/modpacks";
 import {
+	DEFAULT_MIN_MEMORY_MB,
+	calculateRecommendedMemory,
+	getDynamicPreferredMaxMemoryMb,
+	getManualMemoryLimitMb,
+	getMemoryWarningThresholdMb,
+} from "@utils/memory-policy";
+import {
 	describeSelectionAdjustments,
 	getAllModloaders,
 	getLoaderVersionsForGameVersion,
@@ -37,7 +45,6 @@ import {
 } from "@utils/version-selection";
 import { batch, createEffect, createMemo, createSignal, onMount, Show } from "solid-js";
 import { createStore } from "solid-js/store";
-import { calculateRecommendedMemory } from "../config/memory-defaults";
 import styles from "../install-page.module.css";
 
 export interface InstallFormProps {
@@ -110,8 +117,14 @@ export function InstallForm(props: InstallFormProps) {
 		props.initialData?.modloaderVersion || props.initialModloaderVersion || "",
 	);
 	const [memory, setMemory] = createSignal<number[]>([
-		props.initialData?.minMemory || props.initialMinMemory || 2048,
-		props.initialData?.maxMemory || props.initialMaxMemory || 4096,
+		props.initialData?.minMemory ||
+			props.initialMinMemory ||
+			instanceDefaults().default_min_memory ||
+			DEFAULT_MIN_MEMORY_MB,
+		props.initialData?.maxMemory ||
+			props.initialMaxMemory ||
+			instanceDefaults().default_max_memory ||
+			getDynamicPreferredMaxMemoryMb(16384),
 	]);
 	const [memoryUnit, setMemoryUnit] = createSignal<"MB" | "GB">("MB");
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(
@@ -204,6 +217,50 @@ export function InstallForm(props: InstallFormProps) {
 	const isMemoryDirty = () => !!dirty.memory;
 
 	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+
+	const generatedMemoryRecommendation = createMemo(() =>
+		calculateRecommendedMemory(
+			totalRam(),
+			normalizedIsModpack() ? props.modpackInfo?.modCount ?? 0 : 0,
+			normalizedIsModpack() ? props.modpackInfo?.recommendedRamMb : null,
+			{
+				defaultMinMemory: instanceDefaults().default_min_memory,
+				defaultMaxMemory: instanceDefaults().default_max_memory,
+			},
+		),
+	);
+
+	const formatMemoryLabel = (value: number) =>
+		value >= 1024 ? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} GB` : `${value} MB`;
+
+	const memorySummaryReason = () => {
+		if (isMemoryDirty()) return "Manually set for this instance.";
+
+		const recommendation = generatedMemoryRecommendation();
+		if (recommendation.adjustment === "high-for-device") {
+			if (recommendation.source === "modpack") {
+				return recommendation.policyMax > recommendation.generatedLimit
+					? "Set below the modpack target to leave memory for the system. This pack may struggle."
+					: "Using the modpack's recommendation. This is high for this device.";
+			}
+			if (recommendation.source === "mod-count") {
+				return recommendation.policyMax > recommendation.generatedLimit
+					? "Set below the pack target to leave memory for the system. This pack may struggle."
+					: "Raised for this modpack. This is high for this device.";
+			}
+			return "Using your preferred max. This is high for this device.";
+		}
+		if (recommendation.source === "modpack") {
+			return "Using the modpack's recommended memory.";
+		}
+		if (recommendation.adjustment === "increased") {
+			const modCount = props.modpackInfo?.modCount;
+			return modCount
+				? `Raised for this modpack based on ${modCount} mods.`
+				: "Raised for this modpack.";
+		}
+		return "Using your preferred max for new instances.";
+	};
 
 	const suggestedModpackIcon = createMemo(
 		() => props.originalIcon || props.modpackInfo?.iconUrl || props.initialIcon || null,
@@ -299,11 +356,19 @@ export function InstallForm(props: InstallFormProps) {
 				if (info.modloader && !isLoaderDirty()) setLoader(info.modloader.toLowerCase());
 				if (info.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(info.modloaderVersion);
 				if (!isMemoryDirty()) {
-					const rec = calculateRecommendedMemory(totalRam(), info.modCount ?? 0, info.recommendedRamMb);
+					const rec = generatedMemoryRecommendation();
 					setMemory([rec.min, rec.max]);
 				}
 			});
 		}
+	});
+
+	createEffect(() => {
+		if (normalizedIsModpack() || isMemoryDirty()) return;
+		if (props.initialData?.maxMemory || props.initialMaxMemory) return;
+
+		const rec = generatedMemoryRecommendation();
+		setMemory([rec.min, rec.max]);
 	});
 
 	// --- Debug Helper ---
@@ -498,7 +563,6 @@ export function InstallForm(props: InstallFormProps) {
 			javaArgs: jvmArgs() || null,
 			// Linking data
 			useGlobalResolution: true,
-			useGlobalMemory: true,
 			useGlobalJavaArgs: true,
 			useGlobalJavaPath: true,
 			useGlobalHooks: useGlobalHooks(),
@@ -643,6 +707,34 @@ export function InstallForm(props: InstallFormProps) {
 										</span>
 									</div>
 								</div>
+								<div class={styles["memory-summary-card"]}>
+									<div class={styles["memory-summary-header"]}>
+										<span class={styles["memory-summary-title"]}>
+											Memory
+											<HelpTrigger topic="MODPACK_MEMORY_TARGETS" />
+										</span>
+										<span class={styles["memory-summary-value"]}>
+											{formatMemoryLabel(memory()[1])} max
+										</span>
+									</div>
+									<div class={styles["memory-summary-reason"]}>{memorySummaryReason()}</div>
+									<Show when={!isMemoryDirty()}>
+										<div class={styles["memory-summary-details"]}>
+											<div>
+												<span>Preferred</span>
+												<strong>{formatMemoryLabel(generatedMemoryRecommendation().preferredMax)}</strong>
+											</div>
+											<div>
+												<span>Pack target</span>
+												<strong>{formatMemoryLabel(generatedMemoryRecommendation().policyMax)}</strong>
+											</div>
+											<div>
+												<span>Safety target</span>
+												<strong>{formatMemoryLabel(generatedMemoryRecommendation().generatedLimit)}</strong>
+											</div>
+										</div>
+									</Show>
+								</div>
 							</div>
 						</Show>
 
@@ -747,11 +839,14 @@ export function InstallForm(props: InstallFormProps) {
 											<Slider
 												value={memory()}
 												onChange={(val) => {
-													setMemory(val);
+													setMemory([
+														Math.min(val[0], getManualMemoryLimitMb(totalRam())),
+														Math.min(val[1], getManualMemoryLimitMb(totalRam())),
+													]);
 													setDirty("memory", true);
 												}}
 												minValue={512}
-												maxValue={totalRam()}
+												maxValue={getManualMemoryLimitMb(totalRam())}
 												step={512}
 											>
 												<SliderTrack>
@@ -769,6 +864,11 @@ export function InstallForm(props: InstallFormProps) {
 														}}
 													>
 														Recommended: {formatMemory(props.modpackInfo?.recommendedRamMb ?? 0)} {memoryUnit()}
+													</span>
+												</Show>
+												<Show when={memory()[1] >= getMemoryWarningThresholdMb(totalRam())}>
+													<span class={styles["rec-hint"]}>
+														This leaves little memory for the system and other apps.
 													</span>
 												</Show>
 											</div>

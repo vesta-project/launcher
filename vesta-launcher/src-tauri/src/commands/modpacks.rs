@@ -1140,7 +1140,6 @@ async fn prepare_instance(
         import_launcher_kind: None,
         import_instance_path: None,
         use_global_resolution: instance_data.use_global_resolution,
-        use_global_memory: instance_data.use_global_memory,
         use_global_java_args: instance_data.use_global_java_args,
         use_global_java_path: instance_data.use_global_java_path,
         use_global_hooks: instance_data.use_global_hooks,

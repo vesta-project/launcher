@@ -375,6 +375,76 @@
 	color: var(--text-main);
 }
 
+.memory-summary-card {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 4px;
+	padding: 10px 12px;
+	background: var(--surface-low);
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+}
+
+.memory-summary-header {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+}
+
+.memory-summary-title {
+	font-size: 10px;
+	font-weight: 700;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.memory-summary-value {
+	flex-shrink: 0;
+	font-size: 13px;
+	font-weight: 700;
+	color: var(--text-main);
+}
+
+.memory-summary-reason {
+	font-size: 12px;
+	line-height: 1.4;
+	color: var(--text-secondary);
+}
+
+.memory-summary-details {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 8px;
+	padding-top: 8px;
+	border-top: 1px solid var(--border-subtle);
+}
+
+.memory-summary-details div {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.memory-summary-details span {
+	font-size: 9px;
+	font-weight: 700;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+	white-space: nowrap;
+}
+
+.memory-summary-details strong {
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--text-main);
+	white-space: nowrap;
+}
+
 .advanced-toggle {
 	font-size: 10px;
 	font-weight: 700;

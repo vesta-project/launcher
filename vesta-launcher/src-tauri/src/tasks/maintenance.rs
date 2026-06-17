@@ -171,7 +171,6 @@ impl Task for CloneInstanceTask {
                     import_launcher_kind: None,
                     import_instance_path: None,
                     use_global_resolution: source.use_global_resolution,
-                    use_global_memory: source.use_global_memory,
                     use_global_java_args: source.use_global_java_args,
                     use_global_java_path: source.use_global_java_path,
                     use_global_hooks: source.use_global_hooks,

@@ -34,7 +34,7 @@ export const HelpTrigger: Component<HelpTriggerProps> = (props) => {
 						<TooltipContent>
 							<div class={styles["help-trigger-tooltip-content"]}>
 								<h4 class={styles["help-trigger-title"]}>{content()?.title}</h4>
-								<p class={styles["help-trigger-description"]}>{content()?.description}</p>
+								<div class={styles["help-trigger-description"]}>{content()?.description}</div>
 							</div>
 						</TooltipContent>
 					</Tooltip>
@@ -47,7 +47,7 @@ export const HelpTrigger: Component<HelpTriggerProps> = (props) => {
 					<PopoverContent>
 						<div class={styles["help-trigger-popover-content"]}>
 							<h4 class={styles["help-trigger-title"]}>{content()?.title}</h4>
-							<p class={styles["help-trigger-description"]}>{content()?.description}</p>
+							<div class={styles["help-trigger-description"]}>{content()?.description}</div>
 						</div>
 					</PopoverContent>
 				</Popover>

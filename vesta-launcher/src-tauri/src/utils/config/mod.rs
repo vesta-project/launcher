@@ -858,6 +858,37 @@ pub fn normalize_theme_config_state() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
+fn normalize_memory_config(config: &mut AppConfig) -> bool {
+    let system_ram_mb = piston_lib::utils::hardware::get_total_memory_mb() as i32;
+    let next_min_memory = crate::utils::memory_policy::DEFAULT_MIN_MEMORY_MB;
+    let next_max_memory = if config.default_max_memory > 0 {
+        config.default_max_memory
+    } else {
+        crate::utils::memory_policy::dynamic_preferred_max_memory_mb(system_ram_mb)
+    };
+    let changed = config.default_min_memory != next_min_memory
+        || config.default_max_memory != next_max_memory;
+
+    if changed {
+        config.default_min_memory = next_min_memory;
+        config.default_max_memory = next_max_memory;
+    }
+
+    changed
+}
+
+/// Normalize memory defaults without capping the saved preferred max.
+pub fn normalize_memory_config_state() -> Result<(), anyhow::Error> {
+    let mut config = get_app_config()?;
+    let config_changed = normalize_memory_config(&mut config);
+    if config_changed {
+        log::info!("Normalized app memory defaults");
+        update_app_config(&config)?;
+    }
+
+    Ok(())
+}
+
 /// Initialize the config database
 ///
 /// Ensures the default config row exists.
@@ -876,7 +907,12 @@ pub fn init_config_db() -> Result<(), anyhow::Error> {
 
     if count == 0 {
         // Insert default config
-        let default_config = AppConfig::default();
+        let mut default_config = AppConfig::default();
+        let system_ram_mb = piston_lib::utils::hardware::get_total_memory_mb() as i32;
+        default_config.default_min_memory = crate::utils::memory_policy::DEFAULT_MIN_MEMORY_MB;
+        default_config.default_max_memory =
+            crate::utils::memory_policy::dynamic_preferred_max_memory_mb(system_ram_mb);
+        normalize_memory_config(&mut default_config);
         diesel::insert_into(app_config)
             .values(&default_config)
             .execute(&mut conn)?;
@@ -996,7 +1032,16 @@ pub fn set_config(config: AppConfig) -> Result<(), String> {
         config.id,
         config.theme_id
     );
-    update_app_config(&config).map_err(|e| e.to_string())
+    let mut normalized_config = config;
+    normalize_memory_config(&mut normalized_config);
+    update_app_config(&normalized_config).map_err(|e| e.to_string())
+}
+
+fn config_field_value(config: &AppConfig, field: &str) -> serde_json::Value {
+    serde_json::to_value(config)
+        .ok()
+        .and_then(|value| value.as_object().and_then(|obj| obj.get(field).cloned()))
+        .unwrap_or(serde_json::Value::Null)
 }
 
 /// Tauri command to update a specific config field
@@ -1027,21 +1072,23 @@ pub fn update_config_field(
     }
 
     // Convert back to AppConfig
-    let updated_config: AppConfig = serde_json::from_value(config_value)
+    let mut updated_config: AppConfig = serde_json::from_value(config_value)
         .map_err(|e| format!("Failed to deserialize config: {}", e))?;
+    normalize_memory_config(&mut updated_config);
 
     log::info!("Updating config field '{}' via Tauri command", field);
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
+    let emitted_value = config_field_value(&updated_config, &field);
 
     // If an account is active, sync theme changes to its profile
     if let Some(ref account_uuid) = updated_config.active_account_uuid {
-        let _ = sync_theme_to_account(&field, &value, account_uuid);
+        let _ = sync_theme_to_account(&field, &emitted_value, account_uuid);
     }
 
     // Emit event to all windows so they can update their state
     let event_payload = serde_json::json!({
         "field": field,
-        "value": value,
+        "value": emitted_value,
     });
 
     // Notify of config update
@@ -1076,24 +1123,27 @@ pub fn update_config_fields(
     }
 
     // Convert back to AppConfig
-    let updated_config: AppConfig = serde_json::from_value(config_value)
+    let mut updated_config: AppConfig = serde_json::from_value(config_value)
         .map_err(|e| format!("Failed to deserialize config: {}", e))?;
+    normalize_memory_config(&mut updated_config);
 
     log::info!("Updating {} config fields via Tauri command", updates.len());
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
 
     // If an account is active, sync theme changes to its profile
     if let Some(ref account_uuid) = updated_config.active_account_uuid {
-        for (field, value) in &updates {
-            let _ = sync_theme_to_account(field, value, account_uuid);
+        for (field, _value) in &updates {
+            let emitted_value = config_field_value(&updated_config, field);
+            let _ = sync_theme_to_account(field, &emitted_value, account_uuid);
         }
     }
 
     // Emit events for each updated field
-    for (field, value) in updates {
+    for (field, _value) in updates {
+        let emitted_value = config_field_value(&updated_config, &field);
         let event_payload = serde_json::json!({
             "field": field,
-            "value": value,
+            "value": emitted_value,
         });
         let _ = app_handle.emit("config-updated", event_payload);
     }

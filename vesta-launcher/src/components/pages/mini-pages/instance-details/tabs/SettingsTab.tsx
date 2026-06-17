@@ -35,6 +35,7 @@ import {
   TextFieldTextArea,
 } from "@ui/text-field/text-field";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { getManualMemoryLimitMb, getMemoryWarningThresholdMb } from "@utils/memory-policy";
 import { batch, createMemo, Show } from "solid-js";
 import styles from "../instance-details.module.css";
 
@@ -74,8 +75,6 @@ interface SettingsTabProps {
   gameHeight: number;
   setGameHeight: (v: number) => void;
   setIsResolutionDirty: (v: boolean) => void;
-  useGlobalMemory: boolean;
-  setUseGlobalMemory: (v: boolean) => void;
   useGlobalJavaArgs: boolean;
   setUseGlobalJavaArgs: (v: boolean) => void;
   useGlobalJavaPath: boolean;
@@ -129,7 +128,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
   );
 
   // Memory Multi-Thumb Logic
-  const sliderMaxMemory = createMemo(() => Math.max(512, p.totalRam || 512));
+  const sliderMaxMemory = createMemo(() => getManualMemoryLimitMb(p.totalRam));
   const memoryRange = createMemo(() => {
     const rawMin = p.minMemory[0] ?? 2048;
     const rawMax = p.maxMemory[0] ?? 4096;
@@ -435,63 +434,40 @@ export const SettingsTab = (p: SettingsTabProps) => {
           description={`Set the minimum and maximum RAM for the game. (System Total: ${Math.round(
             p.totalRam / 1024,
           )}GB)`}
-          headerRight={
-            <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 11px; opacity: 0.75; color: var(--text-secondary);">
-                Use Global
-              </span>
-              <Switch
-                checked={p.useGlobalMemory}
-                onCheckedChange={(val: boolean) => {
-                  batch(() => {
-                    p.setUseGlobalMemory(val);
-                    p.setIsMinMemDirty(true);
-                    p.setIsMaxMemDirty(true);
-                  });
-                }}
-              >
-                <SwitchControl>
-                  <SwitchThumb />
-                </SwitchControl>
-              </Switch>
-            </div>
-          }
           body={
-            <Show
-              when={!p.useGlobalMemory}
-              fallback={
-                <div style="padding: 10px; border-radius: 8px; border: 1px dashed var(--border-subtle); opacity: 0.6; font-size: 12px;">
-                  Currently using the memory range defined in global settings.
-                </div>
-              }
-            >
-              <>
-                <div style="margin-bottom: 32px; margin-top: 12px;">
-                  <Slider
-                    value={memoryRange()}
-                    onChange={handleMemoryChange}
-                    minValue={512}
-                    maxValue={sliderMaxMemory()}
-                    step={512}
-                  >
-                    <div class={styles["slider__header"]}>
-                      <div class={styles["slider__value-label"]}>
-                        {p.minMemory[0] >= 1024
-                          ? `${(p.minMemory[0] / 1024).toFixed(1)}GB`
-                          : `${p.minMemory[0]}MB`}
-                        {" — "}
-                        {p.maxMemory[0] >= 1024
-                          ? `${(p.maxMemory[0] / 1024).toFixed(1)}GB`
-                          : `${p.maxMemory[0]}MB`}
-                      </div>
+            <>
+              <div style="margin-bottom: 32px; margin-top: 12px;">
+                <Slider
+                  value={memoryRange()}
+                  onChange={handleMemoryChange}
+                  minValue={512}
+                  maxValue={sliderMaxMemory()}
+                  step={512}
+                >
+                  <div class={styles["slider__header"]}>
+                    <div class={styles["slider__value-label"]}>
+                      {p.minMemory[0] >= 1024
+                        ? `${(p.minMemory[0] / 1024).toFixed(1)}GB`
+                        : `${p.minMemory[0]}MB`}
+                      {" — "}
+                      {p.maxMemory[0] >= 1024
+                        ? `${(p.maxMemory[0] / 1024).toFixed(1)}GB`
+                        : `${p.maxMemory[0]}MB`}
                     </div>
-                    <SliderTrack>
-                      <SliderFill />
-                      <SliderThumb />
-                      <SliderThumb />
-                    </SliderTrack>
-                  </Slider>
+                  </div>
+                  <SliderTrack>
+                    <SliderFill />
+                    <SliderThumb />
+                    <SliderThumb />
+                  </SliderTrack>
+                </Slider>
+              </div>
+              <Show when={p.maxMemory[0] >= getMemoryWarningThresholdMb(p.totalRam)}>
+                <div style="margin-top: -18px; margin-bottom: 16px; opacity: 0.65; font-size: 12px;">
+                  This leaves little memory for the system and other apps.
                 </div>
+              </Show>
+              <>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; opacity: 0.8; font-size: 13px;">
                   <div>
                     <strong>Min (-Xms):</strong> {p.minMemory[0]} MB
@@ -501,7 +477,7 @@ export const SettingsTab = (p: SettingsTabProps) => {
                   </div>
                 </div>
               </>
-            </Show>
+            </>
           }
         />
       </SettingsCard>

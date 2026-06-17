@@ -882,7 +882,6 @@ pub async fn create_instance(
         import_launcher_kind: inst.import_launcher_kind,
         import_instance_path: inst.import_instance_path,
         use_global_resolution: inst.use_global_resolution,
-        use_global_memory: inst.use_global_memory,
         use_global_java_args: inst.use_global_java_args,
         use_global_java_path: inst.use_global_java_path,
         use_global_hooks: inst.use_global_hooks,
@@ -1224,7 +1223,6 @@ pub async fn update_instance(
             modpack_icon_url.eq(&final_instance.modpack_icon_url),
             icon_data.eq(&final_instance.icon_data),
             use_global_resolution.eq(final_instance.use_global_resolution),
-            use_global_memory.eq(final_instance.use_global_memory),
             use_global_java_args.eq(final_instance.use_global_java_args),
             use_global_java_path.eq(final_instance.use_global_java_path),
             use_global_hooks.eq(final_instance.use_global_hooks),
@@ -1428,16 +1426,14 @@ pub async fn launch_instance(
     } else {
         instance_data.game_height
     };
-    let res_min_memory = if instance_data.use_global_memory {
-        app_config.default_min_memory
-    } else {
-        instance_data.min_memory
-    };
-    let res_max_memory = if instance_data.use_global_memory {
-        app_config.default_max_memory
-    } else {
-        instance_data.max_memory
-    };
+    let system_ram_mb = piston_lib::utils::hardware::get_total_memory_mb() as i32;
+    let resolved_memory = crate::utils::memory_policy::clamp_manual_memory_range(
+        instance_data.min_memory,
+        instance_data.max_memory,
+        system_ram_mb,
+    );
+    let res_min_memory = resolved_memory.min;
+    let res_max_memory = resolved_memory.max;
     let java_args_raw = if instance_data.use_global_java_args {
         app_config.default_java_args.clone()
     } else {
