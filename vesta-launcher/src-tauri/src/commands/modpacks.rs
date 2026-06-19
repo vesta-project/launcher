@@ -1,6 +1,8 @@
 use crate::models::instance::{Instance, NewInstance};
 use crate::models::java::GlobalJavaPath;
-use crate::models::resource::SourcePlatform;
+use crate::models::resource::{
+    ResourceProject, ResourceType, ResourceVersion, SearchQuery, SourcePlatform,
+};
 use crate::schema::config::global_java_paths::dsl::{
     global_java_paths, id as gp_id, is_active, major_version,
 };
@@ -11,19 +13,48 @@ use crate::tasks::modpack_export::ModpackExportTask;
 use crate::utils::config::get_app_config;
 use crate::utils::db::{get_config_conn, get_vesta_conn};
 use crate::utils::db_manager::get_app_config_dir;
-use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_murmur2_raw, calculate_sha1};
+use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_sha1};
 use crate::utils::instance_helpers::{compute_unique_name, compute_unique_slug};
 use crate::utils::url::normalize_url;
 use anyhow::Result;
 use diesel::prelude::*;
+use lazy_static::lazy_static;
 use piston_lib::game::modpack::exporter::{ExportEntry, ExportSpec};
 use piston_lib::game::modpack::parser::get_modpack_metadata;
-use piston_lib::game::modpack::types::ModpackFormat;
+use piston_lib::game::modpack::types::{ModpackFormat, ModpackMetadata};
 use serde_json;
+use sha1::{Digest, Sha1};
+use std::collections::HashMap;
+use std::fs::File;
+use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
-use std::time::Instant;
-use tauri::{command, AppHandle, State};
+use std::sync::{Mutex, MutexGuard};
+use std::time::{Duration, Instant, SystemTime};
+use tauri::{command, AppHandle, Manager, State};
 use tempfile::NamedTempFile;
+use zip::ZipArchive;
+
+const MAX_SUMMARY_ARCHIVE_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_MANIFEST_JSON_BYTES: u64 = 5 * 1024 * 1024;
+const MAX_MANIFEST_COMPRESSION_RATIO: u64 = 100;
+const MAX_SUMMARY_CACHE_ENTRIES: usize = 24;
+const MAX_SUMMARY_CACHE_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+const MAX_SUMMARY_CACHE_BYTES: u64 = 1024 * 1024 * 1024;
+const MAX_MANIFEST_MATCH_ARCHIVE_DOWNLOADS: usize = 30;
+const MAX_MANIFEST_MATCH_RESULTS: usize = 2;
+
+#[derive(Clone, Debug)]
+struct ModpackArchiveCacheEntry {
+    path: PathBuf,
+    created_at: SystemTime,
+    accessed_at: SystemTime,
+    size: u64,
+}
+
+lazy_static! {
+    static ref MODPACK_ARCHIVE_CACHE: Mutex<HashMap<String, ModpackArchiveCacheEntry>> =
+        Mutex::new(HashMap::new());
+}
 
 #[derive(serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -43,6 +74,1160 @@ pub struct ModpackInfo {
     pub modpack_version_id: Option<String>,
     pub modpack_platform: Option<String>,
     pub full_metadata: Option<piston_lib::game::modpack::types::ModpackMetadata>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackArchiveSummary {
+    pub resource_count: usize,
+    pub recommended_ram_mb: Option<u32>,
+    pub format: String,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ModpackSourceMatch {
+    pub matched: bool,
+    pub method: Option<String>,
+    pub warning: Option<String>,
+    pub modpack_id: Option<String>,
+    pub modpack_version_id: Option<String>,
+    pub modpack_platform: Option<String>,
+    pub name: Option<String>,
+    pub version: Option<String>,
+    pub author: Option<String>,
+    pub description: Option<String>,
+    pub icon_url: Option<String>,
+    pub download_count: Option<u64>,
+    pub follower_count: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum ModpackManifestSignature {
+    Modrinth(Vec<String>),
+    CurseForge(Vec<String>),
+}
+
+#[derive(Clone, Debug)]
+struct LocalModpackMatchInput {
+    name: String,
+    version: String,
+    minecraft_version: Option<String>,
+    loader: Option<String>,
+    format: ModpackFormat,
+    signature: ModpackManifestSignature,
+    can_hash_archive: bool,
+}
+
+fn modpack_info_from_metadata(
+    metadata: ModpackMetadata,
+    target_id: Option<String>,
+    target_platform: Option<String>,
+) -> ModpackInfo {
+    // `version` is the manifest/display version. `modpack_version_id` is reserved
+    // for trusted platform version IDs so manual uploads do not get fake linkage.
+    ModpackInfo {
+        name: metadata.name.clone(),
+        version: metadata.version.clone(),
+        author: metadata.author.clone(),
+        description: metadata.description.clone(),
+        icon_url: metadata.icon_url.clone(),
+        minecraft_version: metadata.minecraft_version.clone(),
+        modloader: metadata.modloader_type.clone(),
+        modloader_version: metadata.modloader_version.clone(),
+        mod_count: metadata.mods.len(),
+        recommended_ram_mb: metadata.recommended_ram_mb,
+        format: format!("{:?}", metadata.format),
+        modpack_id: target_id,
+        modpack_version_id: None,
+        modpack_platform: target_platform,
+        full_metadata: Some(metadata),
+    }
+}
+
+fn archive_cache() -> MutexGuard<'static, HashMap<String, ModpackArchiveCacheEntry>> {
+    match MODPACK_ARCHIVE_CACHE.lock() {
+        Ok(cache) => cache,
+        Err(poisoned) => {
+            log::warn!("[modpack-summary-cache] Cache mutex was poisoned; recovering inner state");
+            poisoned.into_inner()
+        }
+    }
+}
+
+fn modpack_cache_key(url: &str) -> String {
+    let mut hasher = Sha1::new();
+    hasher.update(url.as_bytes());
+    hex::encode(hasher.finalize())
+}
+
+fn sanitized_url_for_log(url: &str) -> String {
+    match url::Url::parse(url) {
+        Ok(mut parsed) => {
+            parsed.set_query(None);
+            parsed.set_fragment(None);
+            parsed.to_string()
+        }
+        Err(_) => url.to_string(),
+    }
+}
+
+fn read_root_json_from_zip(zip_path: &Path, entry_name: &str) -> anyhow::Result<serde_json::Value> {
+    let file = File::open(zip_path)?;
+    let mut archive = ZipArchive::new(file)?;
+    let mut entry = archive
+        .by_name(entry_name)
+        .map_err(|_| anyhow::anyhow!("Missing root {}", entry_name))?;
+    if entry.size() > MAX_MANIFEST_JSON_BYTES {
+        return Err(anyhow::anyhow!(
+            "Root {} is too large ({} bytes, max {} bytes)",
+            entry_name,
+            entry.size(),
+            MAX_MANIFEST_JSON_BYTES
+        ));
+    }
+    let compressed_size = entry.compressed_size();
+    if entry.size() > 0 && compressed_size == 0 {
+        return Err(anyhow::anyhow!(
+            "Root {} has invalid compressed size metadata",
+            entry_name
+        ));
+    }
+    if compressed_size > 0 && entry.size() / compressed_size > MAX_MANIFEST_COMPRESSION_RATIO {
+        return Err(anyhow::anyhow!(
+            "Root {} compression ratio is too high ({}:{}, max {}:1)",
+            entry_name,
+            entry.size(),
+            compressed_size,
+            MAX_MANIFEST_COMPRESSION_RATIO
+        ));
+    }
+
+    let mut raw = String::new();
+    let limit = MAX_MANIFEST_JSON_BYTES + 1;
+    (&mut entry).take(limit).read_to_string(&mut raw)?;
+    if raw.len() as u64 > MAX_MANIFEST_JSON_BYTES {
+        return Err(anyhow::anyhow!(
+            "Root {} exceeded {} bytes while reading",
+            entry_name,
+            MAX_MANIFEST_JSON_BYTES
+        ));
+    }
+    Ok(serde_json::from_str(&raw)?)
+}
+
+fn parse_modpack_archive_summary(zip_path: &Path) -> anyhow::Result<ModpackArchiveSummary> {
+    if let Ok(index) = read_root_json_from_zip(zip_path, "modrinth.index.json") {
+        let resource_count = index
+            .get("files")
+            .and_then(|files| files.as_array())
+            .map(|files| files.len())
+            .unwrap_or(0);
+
+        return Ok(ModpackArchiveSummary {
+            resource_count,
+            recommended_ram_mb: None,
+            format: "Modrinth".to_string(),
+        });
+    }
+
+    if let Ok(manifest) = read_root_json_from_zip(zip_path, "manifest.json") {
+        let resource_count = manifest
+            .get("files")
+            .and_then(|files| files.as_array())
+            .map(|files| files.len())
+            .unwrap_or(0);
+        let recommended_ram_mb = manifest
+            .get("minecraft")
+            .and_then(|minecraft| minecraft.get("recommendedRam"))
+            .and_then(|value| value.as_u64())
+            .or_else(|| {
+                manifest
+                    .get("manifestMemory")
+                    .and_then(|value| value.as_u64())
+            })
+            .or_else(|| manifest.get("memory").and_then(|value| value.as_u64()))
+            .and_then(|value| u32::try_from(value).ok());
+
+        return Ok(ModpackArchiveSummary {
+            resource_count,
+            recommended_ram_mb,
+            format: "CurseForge".to_string(),
+        });
+    }
+
+    Err(anyhow::anyhow!(
+        "Invalid modpack archive: expected root modrinth.index.json or manifest.json"
+    ))
+}
+
+fn read_root_json_from_dir(dir_path: &Path, entry_name: &str) -> anyhow::Result<serde_json::Value> {
+    let path = dir_path.join(entry_name);
+    let metadata = std::fs::metadata(&path)?;
+    if metadata.len() > MAX_MANIFEST_JSON_BYTES {
+        return Err(anyhow::anyhow!(
+            "Root {} is too large ({} bytes, max {} bytes)",
+            entry_name,
+            metadata.len(),
+            MAX_MANIFEST_JSON_BYTES
+        ));
+    }
+
+    let mut file = File::open(&path)?;
+    let mut raw = String::new();
+    (&mut file)
+        .take(MAX_MANIFEST_JSON_BYTES + 1)
+        .read_to_string(&mut raw)?;
+    if raw.len() as u64 > MAX_MANIFEST_JSON_BYTES {
+        return Err(anyhow::anyhow!(
+            "Root {} exceeded {} bytes while reading",
+            entry_name,
+            MAX_MANIFEST_JSON_BYTES
+        ));
+    }
+    Ok(serde_json::from_str(&raw)?)
+}
+
+fn read_root_json_from_modpack_path(
+    path: &Path,
+    entry_name: &str,
+) -> anyhow::Result<serde_json::Value> {
+    if path.is_dir() {
+        read_root_json_from_dir(path, entry_name)
+    } else {
+        read_root_json_from_zip(path, entry_name)
+    }
+}
+
+fn sorted_modrinth_signature(index: &serde_json::Value) -> anyhow::Result<Vec<String>> {
+    let files = index
+        .get("files")
+        .and_then(|files| files.as_array())
+        .ok_or_else(|| anyhow::anyhow!("Modrinth manifest is missing files[]"))?;
+    let mut hashes = files
+        .iter()
+        .filter_map(|file| {
+            file.get("hashes")
+                .and_then(|hashes| hashes.get("sha1"))
+                .and_then(|value| value.as_str())
+                .map(|hash| hash.to_lowercase())
+        })
+        .collect::<Vec<_>>();
+    hashes.sort();
+    hashes.dedup();
+    if hashes.is_empty() && !files.is_empty() {
+        return Err(anyhow::anyhow!(
+            "Modrinth manifest files[] did not contain SHA1 hashes"
+        ));
+    }
+    Ok(hashes)
+}
+
+fn sorted_curseforge_signature(manifest: &serde_json::Value) -> anyhow::Result<Vec<String>> {
+    let files = manifest
+        .get("files")
+        .and_then(|files| files.as_array())
+        .ok_or_else(|| anyhow::anyhow!("CurseForge manifest is missing files[]"))?;
+    let mut ids = files
+        .iter()
+        .filter_map(|file| {
+            let project_id = file
+                .get("projectID")
+                .or_else(|| file.get("projectId"))
+                .and_then(|value| value.as_u64())?;
+            let file_id = file
+                .get("fileID")
+                .or_else(|| file.get("fileId"))
+                .and_then(|value| value.as_u64())?;
+            Some(format!("{}:{}", project_id, file_id))
+        })
+        .collect::<Vec<_>>();
+    ids.sort();
+    ids.dedup();
+    if ids.is_empty() && !files.is_empty() {
+        return Err(anyhow::anyhow!(
+            "CurseForge manifest files[] did not contain projectID/fileID pairs"
+        ));
+    }
+    Ok(ids)
+}
+
+fn loader_from_modrinth_dependencies(index: &serde_json::Value) -> Option<String> {
+    let deps = index.get("dependencies")?.as_object()?;
+    if deps.contains_key("fabric-loader") {
+        Some("fabric".to_string())
+    } else if deps.contains_key("forge") {
+        Some("forge".to_string())
+    } else if deps.contains_key("neoforge") {
+        Some("neoforge".to_string())
+    } else if deps.contains_key("quilt-loader") {
+        Some("quilt".to_string())
+    } else {
+        Some("vanilla".to_string())
+    }
+}
+
+fn loader_from_curseforge_manifest(manifest: &serde_json::Value) -> Option<String> {
+    let loaders = manifest
+        .get("minecraft")
+        .and_then(|minecraft| minecraft.get("modLoaders"))
+        .and_then(|loaders| loaders.as_array())?;
+    let loader = loaders
+        .iter()
+        .find(|loader| {
+            loader
+                .get("primary")
+                .and_then(|primary| primary.as_bool())
+                .unwrap_or(false)
+        })
+        .or_else(|| loaders.first())?;
+    let loader_id = loader.get("id").and_then(|value| value.as_str())?;
+    Some(
+        loader_id
+            .split('-')
+            .next()
+            .unwrap_or(loader_id)
+            .to_ascii_lowercase()
+            .replace("fabric-loader", "fabric"),
+    )
+}
+
+fn local_match_input_from_path(path: &Path) -> anyhow::Result<LocalModpackMatchInput> {
+    if let Ok(index) = read_root_json_from_modpack_path(path, "modrinth.index.json") {
+        let deps = index
+            .get("dependencies")
+            .and_then(|dependencies| dependencies.as_object());
+        let local_minecraft_version = deps
+            .and_then(|deps| deps.get("minecraft"))
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string());
+        let pack_name = index
+            .get("name")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Unknown Modpack")
+            .to_string();
+        let version = index
+            .get("versionId")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        return Ok(LocalModpackMatchInput {
+            name: pack_name,
+            version,
+            minecraft_version: local_minecraft_version,
+            loader: loader_from_modrinth_dependencies(&index),
+            format: ModpackFormat::Modrinth,
+            signature: ModpackManifestSignature::Modrinth(sorted_modrinth_signature(&index)?),
+            can_hash_archive: path.is_file(),
+        });
+    }
+
+    if let Ok(manifest) = read_root_json_from_modpack_path(path, "manifest.json") {
+        let local_minecraft_version = manifest
+            .get("minecraft")
+            .and_then(|minecraft| minecraft.get("version"))
+            .and_then(|value| value.as_str())
+            .map(|value| value.to_string());
+        let pack_name = manifest
+            .get("name")
+            .and_then(|value| value.as_str())
+            .unwrap_or("Unknown Modpack")
+            .to_string();
+        let version = manifest
+            .get("version")
+            .and_then(|value| value.as_str())
+            .unwrap_or("unknown")
+            .to_string();
+        return Ok(LocalModpackMatchInput {
+            name: pack_name,
+            version,
+            minecraft_version: local_minecraft_version,
+            loader: loader_from_curseforge_manifest(&manifest),
+            format: ModpackFormat::CurseForge,
+            signature: ModpackManifestSignature::CurseForge(sorted_curseforge_signature(
+                &manifest,
+            )?),
+            can_hash_archive: path.is_file(),
+        });
+    }
+
+    Err(anyhow::anyhow!(
+        "No root modpack metadata found. Expected modrinth.index.json or manifest.json."
+    ))
+}
+
+fn manifest_signature_from_archive(path: &Path) -> anyhow::Result<ModpackManifestSignature> {
+    if let Ok(index) = read_root_json_from_zip(path, "modrinth.index.json") {
+        return Ok(ModpackManifestSignature::Modrinth(
+            sorted_modrinth_signature(&index)?,
+        ));
+    }
+    if let Ok(manifest) = read_root_json_from_zip(path, "manifest.json") {
+        return Ok(ModpackManifestSignature::CurseForge(
+            sorted_curseforge_signature(&manifest)?,
+        ));
+    }
+    Err(anyhow::anyhow!(
+        "Candidate archive has no root modpack manifest"
+    ))
+}
+
+fn normalize_match_name(value: &str) -> String {
+    value
+        .to_lowercase()
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect()
+}
+
+fn match_result_from_project_version(
+    project: ResourceProject,
+    version: ResourceVersion,
+    method: &str,
+) -> ModpackSourceMatch {
+    let platform = match project.source {
+        SourcePlatform::Modrinth => "modrinth",
+        SourcePlatform::CurseForge => "curseforge",
+    };
+    ModpackSourceMatch {
+        matched: true,
+        method: Some(method.to_string()),
+        warning: None,
+        modpack_id: Some(project.id),
+        modpack_version_id: Some(version.id),
+        modpack_platform: Some(platform.to_string()),
+        name: Some(project.name),
+        version: Some(version.version_number),
+        author: Some(project.author),
+        description: Some(project.summary),
+        icon_url: project.icon_url,
+        download_count: Some(project.download_count),
+        follower_count: Some(project.follower_count),
+    }
+}
+
+fn no_match_result(warning: impl Into<String>) -> ModpackSourceMatch {
+    ModpackSourceMatch {
+        matched: false,
+        method: None,
+        warning: Some(warning.into()),
+        modpack_id: None,
+        modpack_version_id: None,
+        modpack_platform: None,
+        name: None,
+        version: None,
+        author: None,
+        description: None,
+        icon_url: None,
+        download_count: None,
+        follower_count: None,
+    }
+}
+
+fn calculate_sha512(path: &Path) -> anyhow::Result<String> {
+    use sha2::{Digest as Sha2Digest, Sha512};
+    let file = File::open(path)?;
+    let mut reader = BufReader::new(file);
+    let mut hasher = Sha512::new();
+    let mut buffer = [0u8; 8192];
+    loop {
+        let read = reader.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hex::encode(hasher.finalize()))
+}
+
+async fn get_modrinth_match_by_file_hash(
+    resource_manager: &crate::resources::ResourceManager,
+    hash: &str,
+    algorithm: &str,
+) -> Option<ModpackSourceMatch> {
+    if algorithm == "sha1" {
+        match resource_manager
+            .get_by_hash(SourcePlatform::Modrinth, hash)
+            .await
+        {
+            Ok((project, version)) if project.resource_type == ResourceType::Modpack => {
+                return Some(match_result_from_project_version(
+                    project,
+                    version,
+                    "exact-file-hash",
+                ));
+            }
+            Ok((project, _)) => {
+                log::info!(
+                    "[modpack-match] Modrinth exact hash matched non-modpack project {}; ignoring",
+                    project.id
+                );
+                return None;
+            }
+            Err(err) => {
+                log::info!(
+                    "[modpack-match] Modrinth exact archive SHA1 did not match: {}",
+                    err
+                );
+            }
+        }
+    }
+
+    let url = format!(
+        "https://api.modrinth.com/v2/version_file/{}?algorithm={}",
+        hash, algorithm
+    );
+    let response = match piston_lib::client::shared_client().get(&url).send().await {
+        Ok(response) => response,
+        Err(err) => {
+            log::info!(
+                "[modpack-match] Modrinth {} lookup request failed: {}",
+                algorithm,
+                err
+            );
+            return None;
+        }
+    };
+    if !response.status().is_success() {
+        log::info!(
+            "[modpack-match] Modrinth {} lookup returned {}",
+            algorithm,
+            response.status()
+        );
+        return None;
+    }
+
+    let version_json: serde_json::Value = match response.json().await {
+        Ok(value) => value,
+        Err(err) => {
+            log::warn!(
+                "[modpack-match] Modrinth {} lookup JSON decode failed: {}",
+                algorithm,
+                err
+            );
+            return None;
+        }
+    };
+    let project_id = version_json
+        .get("project_id")
+        .and_then(|value| value.as_str())?;
+    let version_id = version_json.get("id").and_then(|value| value.as_str())?;
+    let project = match resource_manager
+        .get_project(SourcePlatform::Modrinth, project_id)
+        .await
+    {
+        Ok(project) if project.resource_type == ResourceType::Modpack => project,
+        Ok(project) => {
+            log::info!(
+                "[modpack-match] Modrinth {} lookup matched non-modpack project {}; ignoring",
+                algorithm,
+                project.id
+            );
+            return None;
+        }
+        Err(err) => {
+            log::warn!(
+                "[modpack-match] Failed to hydrate Modrinth project {}: {}",
+                project_id,
+                err
+            );
+            return None;
+        }
+    };
+    let version = match resource_manager
+        .get_version(SourcePlatform::Modrinth, project_id, version_id)
+        .await
+    {
+        Ok(version) => version,
+        Err(err) => {
+            log::warn!(
+                "[modpack-match] Failed to hydrate Modrinth version {}: {}",
+                version_id,
+                err
+            );
+            return None;
+        }
+    };
+    Some(match_result_from_project_version(
+        project,
+        version,
+        "exact-file-hash",
+    ))
+}
+
+fn is_fresh_cache_entry(entry: &ModpackArchiveCacheEntry, now: SystemTime) -> bool {
+    if !entry.path.exists() || entry.size > MAX_SUMMARY_ARCHIVE_BYTES {
+        return false;
+    }
+
+    let access_is_fresh = now
+        .duration_since(entry.accessed_at)
+        .map(|age| age <= MAX_SUMMARY_CACHE_AGE)
+        .unwrap_or(true);
+    let creation_is_fresh = now
+        .duration_since(entry.created_at)
+        .map(|age| age <= MAX_SUMMARY_CACHE_AGE)
+        .unwrap_or(true);
+
+    access_is_fresh && creation_is_fresh
+}
+
+fn prune_summary_archive_cache(cache_dir: &Path) {
+    let now = SystemTime::now();
+    let mut paths_to_remove = Vec::new();
+    let mut tracked_paths = Vec::new();
+
+    {
+        let mut cache = archive_cache();
+        cache.retain(|key, entry| {
+            let keep = is_fresh_cache_entry(entry, now);
+            if !keep {
+                log::info!(
+                    "[modpack-summary-cache] Pruning stale entry cache_key={} path={:?}",
+                    key,
+                    entry.path
+                );
+                paths_to_remove.push(entry.path.clone());
+            }
+            keep
+        });
+
+        if cache.len() > MAX_SUMMARY_CACHE_ENTRIES {
+            let mut entries: Vec<(String, SystemTime, PathBuf)> = cache
+                .iter()
+                .map(|(key, entry)| (key.clone(), entry.accessed_at, entry.path.clone()))
+                .collect();
+            entries.sort_by_key(|(_, accessed_at, _)| *accessed_at);
+            let remove_count = cache.len().saturating_sub(MAX_SUMMARY_CACHE_ENTRIES);
+            for (key, _, path) in entries.into_iter().take(remove_count) {
+                cache.remove(&key);
+                log::info!(
+                    "[modpack-summary-cache] Pruning LRU entry over count budget cache_key={} path={:?}",
+                    key,
+                    path
+                );
+                paths_to_remove.push(path);
+            }
+        }
+
+        let mut total_size: u64 = cache.values().map(|entry| entry.size).sum();
+        if total_size > MAX_SUMMARY_CACHE_BYTES {
+            let mut entries: Vec<(String, SystemTime, PathBuf, u64)> = cache
+                .iter()
+                .map(|(key, entry)| {
+                    (
+                        key.clone(),
+                        entry.accessed_at,
+                        entry.path.clone(),
+                        entry.size,
+                    )
+                })
+                .collect();
+            entries.sort_by_key(|(_, accessed_at, _, _)| *accessed_at);
+
+            for (key, _, path, size) in entries {
+                if total_size <= MAX_SUMMARY_CACHE_BYTES {
+                    break;
+                }
+                cache.remove(&key);
+                total_size = total_size.saturating_sub(size);
+                log::info!(
+                    "[modpack-summary-cache] Pruning LRU entry over size budget cache_key={} size={} path={:?}",
+                    key,
+                    size,
+                    path
+                );
+                paths_to_remove.push(path);
+            }
+        }
+
+        tracked_paths.extend(cache.values().map(|entry| entry.path.clone()));
+    }
+
+    if let Ok(entries) = std::fs::read_dir(cache_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let Some(file_name) = path.file_name().and_then(|entry_name| entry_name.to_str())
+            else {
+                continue;
+            };
+            if !(file_name.starts_with("summary_")
+                && (file_name.ends_with(".zip") || file_name.ends_with(".zip.part")))
+            {
+                continue;
+            }
+            let expired = entry
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .ok()
+                .and_then(|modified| now.duration_since(modified).ok())
+                .is_some_and(|age| age > MAX_SUMMARY_CACHE_AGE);
+            let untracked = !tracked_paths.iter().any(|tracked| tracked == &path);
+            if expired || untracked || file_name.ends_with(".zip.part") {
+                log::info!(
+                    "[modpack-summary-cache] Pruning cache file expired={} untracked={} path={:?}",
+                    expired,
+                    untracked,
+                    path
+                );
+                paths_to_remove.push(path);
+            }
+        }
+    }
+
+    for path in paths_to_remove {
+        if let Err(err) = std::fs::remove_file(&path) {
+            if err.kind() != std::io::ErrorKind::NotFound {
+                log::warn!(
+                    "[modpack-summary-cache] Failed to remove stale cache file {:?}: {}",
+                    path,
+                    err
+                );
+            }
+        }
+    }
+}
+
+fn take_cached_archive(cache_key: &str) -> Option<PathBuf> {
+    let now = SystemTime::now();
+    let mut cache = archive_cache();
+    let entry = cache.get_mut(cache_key)?;
+    if !is_fresh_cache_entry(entry, now) {
+        let stale_path = entry.path.clone();
+        cache.remove(cache_key);
+        drop(cache);
+        log::info!(
+            "[modpack-summary-cache] Removing stale cache entry cache_key={} path={:?}",
+            cache_key,
+            stale_path
+        );
+        let _ = std::fs::remove_file(stale_path);
+        return None;
+    }
+
+    entry.accessed_at = now;
+    Some(entry.path.clone())
+}
+
+fn insert_cached_archive(cache_key: String, path: PathBuf, size: u64) {
+    let now = SystemTime::now();
+    let mut cache = archive_cache();
+    cache.insert(
+        cache_key,
+        ModpackArchiveCacheEntry {
+            path,
+            created_at: now,
+            accessed_at: now,
+            size,
+        },
+    );
+}
+
+async fn get_or_download_summary_archive(
+    app: &AppHandle,
+    url: &str,
+) -> Result<(String, PathBuf), String> {
+    let client = piston_lib::client::shared_client();
+    let (final_url, _) = resolve_modpack_resource(client, url).await;
+    let cache_key = modpack_cache_key(&final_url);
+    let safe_final_url = sanitized_url_for_log(&final_url);
+    let cache_dir = app
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("Could not resolve cache directory: {}", e))?
+        .join("modpacks");
+    tokio::fs::create_dir_all(&cache_dir)
+        .await
+        .map_err(|e| format!("Could not create cache directory: {}", e))?;
+    prune_summary_archive_cache(&cache_dir);
+
+    if let Some(cached_path) = take_cached_archive(&cache_key) {
+        let validation_path = cached_path.clone();
+        match run_blocking_modpack_io("validate cached modpack archive", move || {
+            let size = std::fs::metadata(&validation_path)?.len();
+            if size > MAX_SUMMARY_ARCHIVE_BYTES {
+                return Err(anyhow::anyhow!(
+                    "Cached archive is too large ({} bytes, max {} bytes)",
+                    size,
+                    MAX_SUMMARY_ARCHIVE_BYTES
+                ));
+            }
+            parse_modpack_archive_summary(&validation_path).map(|_| ())
+        })
+        .await
+        {
+            Ok(()) => {
+                log::info!(
+                    "[modpack-summary-cache] Reusing cached archive cache_key={} final_url={} path={:?}",
+                    cache_key,
+                    safe_final_url,
+                    cached_path
+                );
+                return Ok((final_url, cached_path));
+            }
+            Err(err) => {
+                log::warn!(
+                    "[modpack-summary-cache] Ignoring invalid cached archive cache_key={} final_url={} path={:?}: {}",
+                    cache_key,
+                    safe_final_url,
+                    cached_path,
+                    err
+                );
+                archive_cache().remove(&cache_key);
+                let _ = std::fs::remove_file(cached_path);
+            }
+        }
+    }
+
+    let archive_path = cache_dir.join(format!("summary_{}.zip", cache_key));
+    let partial_path = cache_dir.join(format!("summary_{}.zip.part", cache_key));
+    let response = client
+        .get(&final_url)
+        .send()
+        .await
+        .map_err(|e| format!("Could not download modpack archive: {}", e))?;
+    log::info!(
+        "[modpack-summary-cache] Downloading archive cache_key={} final_url={}",
+        cache_key,
+        safe_final_url
+    );
+
+    if !response.status().is_success() {
+        return Err(format!(
+            "Could not download modpack archive: {}",
+            response.status()
+        ));
+    }
+
+    if let Some(content_length) = response.content_length() {
+        if content_length > MAX_SUMMARY_ARCHIVE_BYTES {
+            return Err(format!(
+                "Modpack archive is too large for summary enrichment ({} bytes, max {} bytes)",
+                content_length, MAX_SUMMARY_ARCHIVE_BYTES
+            ));
+        }
+    }
+
+    let download_result: Result<u64, String> = async {
+        let mut file = tokio::fs::File::create(&partial_path)
+            .await
+            .map_err(|e| format!("Could not create modpack archive cache: {}", e))?;
+        let mut stream = response.bytes_stream();
+        let mut downloaded: u64 = 0;
+        use futures_util::StreamExt;
+        use tokio::io::AsyncWriteExt;
+
+        while let Some(chunk_result) = stream.next().await {
+            let chunk = chunk_result.map_err(|e| format!("Modpack archive stream error: {}", e))?;
+            downloaded += chunk.len() as u64;
+            if downloaded > MAX_SUMMARY_ARCHIVE_BYTES {
+                return Err(format!(
+                    "Modpack archive exceeded summary limit ({} bytes, max {} bytes)",
+                    downloaded, MAX_SUMMARY_ARCHIVE_BYTES
+                ));
+            }
+            file.write_all(&chunk)
+                .await
+                .map_err(|e| format!("Could not write modpack archive cache: {}", e))?;
+        }
+        file.flush()
+            .await
+            .map_err(|e| format!("Could not flush modpack archive cache: {}", e))?;
+        Ok(downloaded)
+    }
+    .await;
+
+    let downloaded = match download_result {
+        Ok(downloaded) => downloaded,
+        Err(err) => {
+            let _ = tokio::fs::remove_file(&partial_path).await;
+            return Err(err);
+        }
+    };
+
+    let validation_path = partial_path.clone();
+    if let Err(err) = run_blocking_modpack_io("validate downloaded modpack archive", move || {
+        parse_modpack_archive_summary(&validation_path).map(|_| ())
+    })
+    .await
+    {
+        let _ = tokio::fs::remove_file(&partial_path).await;
+        return Err(err);
+    }
+
+    let _ = tokio::fs::remove_file(&archive_path).await;
+    if let Err(err) = tokio::fs::rename(&partial_path, &archive_path).await {
+        let _ = tokio::fs::remove_file(&partial_path).await;
+        return Err(format!("Could not finalize modpack archive cache: {}", err));
+    }
+
+    insert_cached_archive(cache_key.clone(), archive_path.clone(), downloaded);
+    log::info!(
+        "[modpack-summary-cache] Cached archive cache_key={} final_url={} size={} path={:?}",
+        cache_key,
+        safe_final_url,
+        downloaded,
+        archive_path
+    );
+    prune_summary_archive_cache(&cache_dir);
+    Ok((final_url, archive_path))
+}
+
+async fn try_exact_archive_match(
+    path: &Path,
+    input: &LocalModpackMatchInput,
+    resource_manager: &crate::resources::ResourceManager,
+) -> Option<ModpackSourceMatch> {
+    if !input.can_hash_archive {
+        return None;
+    }
+
+    match input.format {
+        ModpackFormat::Modrinth => {
+            let hash_path = path.to_path_buf();
+            let sha1 = match run_blocking_modpack_io("hash local Modrinth archive", move || {
+                calculate_sha1(&hash_path)
+            })
+            .await
+            {
+                Ok(hash) => hash,
+                Err(err) => {
+                    log::warn!("[modpack-match] Modrinth archive SHA1 failed: {}", err);
+                    return None;
+                }
+            };
+
+            if let Some(match_result) =
+                get_modrinth_match_by_file_hash(resource_manager, &sha1, "sha1").await
+            {
+                return Some(match_result);
+            }
+
+            let sha512_path = path.to_path_buf();
+            let sha512 =
+                match run_blocking_modpack_io("hash local Modrinth archive sha512", move || {
+                    calculate_sha512(&sha512_path)
+                })
+                .await
+                {
+                    Ok(hash) => hash,
+                    Err(err) => {
+                        log::debug!(
+                            "[modpack-match] Optional Modrinth archive SHA512 failed: {}",
+                            err
+                        );
+                        return None;
+                    }
+                };
+            if let Some(match_result) =
+                get_modrinth_match_by_file_hash(resource_manager, &sha512, "sha512").await
+            {
+                return Some(match_result);
+            }
+        }
+        ModpackFormat::CurseForge => {
+            let fingerprint_path = path.to_path_buf();
+            let fingerprint =
+                match run_blocking_modpack_io("fingerprint local CurseForge archive", move || {
+                    calculate_curseforge_fingerprint(&fingerprint_path)
+                })
+                .await
+                {
+                    Ok(fingerprint) => fingerprint,
+                    Err(err) => {
+                        log::warn!(
+                            "[modpack-match] CurseForge archive fingerprint failed: {}",
+                            err
+                        );
+                        return None;
+                    }
+                };
+
+            match resource_manager
+                .get_by_hash(SourcePlatform::CurseForge, &fingerprint.to_string())
+                .await
+            {
+                Ok((project, version)) if project.resource_type == ResourceType::Modpack => {
+                    return Some(match_result_from_project_version(
+                        project,
+                        version,
+                        "exact-file-fingerprint",
+                    ));
+                }
+                Ok((project, _)) => {
+                    log::info!(
+                        "[modpack-match] CurseForge exact fingerprint matched non-modpack project {}; ignoring",
+                        project.id
+                    );
+                }
+                Err(err) => {
+                    log::info!(
+                        "[modpack-match] CurseForge exact archive fingerprint did not match: {}",
+                        err
+                    );
+                }
+            }
+        }
+    }
+
+    None
+}
+
+async fn match_by_manifest_signature(
+    app: &AppHandle,
+    input: &LocalModpackMatchInput,
+    resource_manager: &crate::resources::ResourceManager,
+) -> Result<ModpackSourceMatch, String> {
+    let platform = match input.format {
+        ModpackFormat::Modrinth => SourcePlatform::Modrinth,
+        ModpackFormat::CurseForge => SourcePlatform::CurseForge,
+    };
+    let loader = input
+        .loader
+        .as_deref()
+        .filter(|loader| !loader.eq_ignore_ascii_case("vanilla"));
+
+    let query = SearchQuery {
+        text: Some(input.name.clone()),
+        resource_type: ResourceType::Modpack,
+        game_version: input.minecraft_version.clone(),
+        loader: loader.map(|loader| loader.to_string()),
+        limit: 10,
+        sort_by: Some("relevance".to_string()),
+        ..Default::default()
+    };
+
+    let search = resource_manager
+        .search(platform, query)
+        .await
+        .map_err(|e| format!("Modpack source search failed: {}", e))?;
+    let target_name = normalize_match_name(&input.name);
+    let mut matches: Vec<(ResourceProject, ResourceVersion)> = Vec::new();
+    let mut checked_candidate_archives = 0usize;
+
+    for project in search
+        .hits
+        .into_iter()
+        .filter(|project| project.resource_type == ResourceType::Modpack)
+        .filter(|project| normalize_match_name(&project.name) == target_name)
+        .take(5)
+    {
+        let versions = match resource_manager
+            .get_versions(
+                platform,
+                &project.id,
+                false,
+                input.minecraft_version.as_deref(),
+                loader,
+            )
+            .await
+        {
+            Ok(versions) => versions,
+            Err(err) => {
+                log::warn!(
+                    "[modpack-match] Failed to fetch candidate versions for {}: {}",
+                    project.id,
+                    err
+                );
+                continue;
+            }
+        };
+
+        let mut versions = versions;
+        versions.sort_by_key(|version| {
+            !version
+                .version_number
+                .eq_ignore_ascii_case(input.version.as_str())
+        });
+
+        for version in versions {
+            if checked_candidate_archives >= MAX_MANIFEST_MATCH_ARCHIVE_DOWNLOADS {
+                log::info!(
+                    "[modpack-match] Reached manifest match candidate cap ({})",
+                    MAX_MANIFEST_MATCH_ARCHIVE_DOWNLOADS
+                );
+                break;
+            }
+            checked_candidate_archives += 1;
+
+            let download_url = version.download_url.clone();
+            let archive_path = match get_or_download_summary_archive(app, &download_url).await {
+                Ok((resolved_url, path)) => {
+                    log::debug!(
+                        "[modpack-match] Checking candidate archive project={} version={} version_number={} final_url={}",
+                        project.id,
+                        version.id,
+                        version.version_number,
+                        sanitized_url_for_log(&resolved_url)
+                    );
+                    path
+                }
+                Err(err) => {
+                    log::debug!(
+                        "[modpack-match] Failed to cache candidate archive {} {}: {}",
+                        project.id,
+                        version.id,
+                        err
+                    );
+                    continue;
+                }
+            };
+
+            let candidate_path = archive_path.clone();
+            let candidate_signature =
+                match run_blocking_modpack_io("parse candidate modpack signature", move || {
+                    manifest_signature_from_archive(&candidate_path)
+                })
+                .await
+                {
+                    Ok(signature) => signature,
+                    Err(err) => {
+                        log::debug!(
+                            "[modpack-match] Failed to parse candidate signature {} {}: {}",
+                            project.id,
+                            version.id,
+                            err
+                        );
+                        continue;
+                    }
+                };
+
+            if candidate_signature == input.signature {
+                matches.push((project.clone(), version));
+                if matches.len() >= MAX_MANIFEST_MATCH_RESULTS {
+                    log::info!(
+                        "[modpack-match] Found {} exact manifest matches; stopping candidate scan",
+                        matches.len()
+                    );
+                    break;
+                }
+            }
+        }
+
+        if checked_candidate_archives >= MAX_MANIFEST_MATCH_ARCHIVE_DOWNLOADS
+            || matches.len() >= MAX_MANIFEST_MATCH_RESULTS
+        {
+            break;
+        }
+    }
+
+    if matches.len() == 1 {
+        let (project, version) = matches.remove(0);
+        return Ok(match_result_from_project_version(
+            project,
+            version,
+            "exact-manifest-signature",
+        ));
+    }
+
+    if matches.len() > 1 {
+        return Ok(no_match_result(format!(
+            "Found {} exact manifest matches; leaving this upload local to avoid linking the wrong project.",
+            matches.len()
+        )));
+    }
+
+    Ok(no_match_result("No exact online source match found."))
 }
 
 async fn run_blocking_modpack_io<T, F>(label: &'static str, f: F) -> Result<T, String>
@@ -86,23 +1271,7 @@ pub async fn get_modpack_info(
     log::info!("[get_modpack_info] Parsed metadata: name={}, version={}, mc={}, loader={:?}, loader_ver={:?}",
         metadata.name, metadata.version, metadata.minecraft_version, metadata.modloader_type, metadata.modloader_version);
 
-    let mut info = ModpackInfo {
-        name: metadata.name.clone(),
-        version: metadata.version.clone(),
-        author: metadata.author.clone(),
-        description: metadata.description.clone(),
-        icon_url: metadata.icon_url.clone(),
-        minecraft_version: metadata.minecraft_version.clone(),
-        modloader: metadata.modloader_type.clone(),
-        modloader_version: metadata.modloader_version.clone(),
-        mod_count: metadata.mods.len(),
-        recommended_ram_mb: metadata.recommended_ram_mb,
-        format: format!("{:?}", metadata.format),
-        modpack_id: target_id.clone(),
-        modpack_version_id: Some(metadata.version.clone()),
-        modpack_platform: target_platform.clone(),
-        full_metadata: Some(metadata.clone()),
-    };
+    let mut info = modpack_info_from_metadata(metadata, target_id.clone(), target_platform.clone());
 
     // If we already know the platform and ID, we can skip the heavy identification logic
     if let (Some(tid), Some(tplatform)) = (&target_id, &target_platform) {
@@ -132,282 +1301,10 @@ pub async fn get_modpack_info(
         return Ok(info);
     }
 
-    // Try to link to a platform by searching for the name
-    use crate::models::resource::{ResourceType, SearchQuery, SourcePlatform};
-
-    let platforms = match metadata.format {
-        ModpackFormat::Modrinth => vec![SourcePlatform::Modrinth, SourcePlatform::CurseForge],
-        ModpackFormat::CurseForge => vec![SourcePlatform::CurseForge, SourcePlatform::Modrinth],
-    };
-
-    // 1. Try Exact Hash Lookup (Fingerprinting)
-    // This is the most accurate way to detect the project
-    log::info!("[get_modpack_info] Attempting fingerprint lookup for modpack identification...");
-    for platform in &platforms {
-        let lookup_started = Instant::now();
-        let result = match platform {
-            SourcePlatform::CurseForge => {
-                let mut found = None;
-                // Try standard CF fingerprint (skipped whitespace)
-                let cf_hash_path = path_buf.clone();
-                if let Ok(fp) = run_blocking_modpack_io("calculate CurseForge fingerprint", move || {
-                    calculate_curseforge_fingerprint(&cf_hash_path)
-                })
-                .await
-                {
-                    log::info!(
-                        "[get_modpack_info] CurseForge fingerprint calculated: {}",
-                        fp
-                    );
-                    found = resource_manager
-                        .get_by_hash(*platform, &fp.to_string())
-                        .await
-                        .ok();
-                }
-
-                // Try raw Murmur2 if first one fails
-                if found.is_none() {
-                    let raw_hash_path = path_buf.clone();
-                    if let Ok(raw_fp) = run_blocking_modpack_io("calculate raw Murmur2", move || {
-                        calculate_murmur2_raw(&raw_hash_path)
-                    })
-                    .await
-                    {
-                        log::info!(
-                            "[get_modpack_info] CurseForge RAW Murmur2 calculated: {}",
-                            raw_fp
-                        );
-                        found = resource_manager
-                            .get_by_hash(*platform, &raw_fp.to_string())
-                            .await
-                            .ok();
-                    }
-                }
-                found
-            }
-            SourcePlatform::Modrinth => {
-                let sha1_path = path_buf.clone();
-                if let Ok(hash) = run_blocking_modpack_io("calculate Modrinth SHA1", move || {
-                    calculate_sha1(&sha1_path)
-                })
-                .await
-                {
-                    log::info!("[get_modpack_info] Modrinth SHA1 calculated: {}", hash);
-                    resource_manager.get_by_hash(*platform, &hash).await.ok()
-                } else {
-                    log::warn!("[get_modpack_info] Failed to calculate Modrinth SHA1");
-                    None
-                }
-            }
-        };
-        log::info!(
-            "[get_modpack_info] {:?} hash lookup finished in {:?}",
-            platform,
-            lookup_started.elapsed()
-        );
-
-        if let Some((proj, ver)) = result {
-            log::info!(
-                "[get_modpack_info] SUCCESS: Exact match found on {:?}! Project: '{}' ({}), Version: '{}' ({})",
-                platform,
-                proj.name,
-                proj.id,
-                ver.version_number,
-                ver.id
-            );
-            info.modpack_id = Some(proj.id);
-            info.modpack_platform = Some(format!("{:?}", platform).to_lowercase());
-            info.modpack_version_id = Some(ver.id);
-            info.version = ver.version_number;
-            if info.icon_url.is_none() {
-                info.icon_url = proj.icon_url;
-            }
-            if info.description.is_none() {
-                info.description = Some(proj.summary);
-            }
-            return Ok(info);
-        }
-    }
-
-    // Only attempt fuzzy search matching if we were unable to find an exact hash match
-    // and we really need to identify the project (e.g. for a browser install that somehow failed hash check).
-    // For manual local uploads, we should be strictly hash-based to avoid false positives.
-    if target_id.is_none() {
-        log::info!("[get_modpack_info] No hash match found. Skipping fuzzy identification to avoid false positives on custom packs.");
-        return Ok(info);
-    }
-
-    log::info!("[get_modpack_info] No hash match found. Falling back to search matching...");
-
-    // 2. Fallback to Search/Fuzzy Match if hash lookup yields nothing
-    for platform in platforms {
-        log::info!(
-            "[get_modpack_info] Searching for modpack '{}' on {:?}",
-            info.name,
-            platform
-        );
-        let query = SearchQuery {
-            text: Some(info.name.clone()),
-            resource_type: ResourceType::Modpack,
-            limit: 20,
-            ..Default::default()
-        };
-
-        if let Ok(response) = resource_manager.search(platform, query).await {
-            log::info!(
-                "[get_modpack_info] Found {} potential matches on {:?}",
-                response.hits.len(),
-                platform
-            );
-
-            let mut best_hit = None;
-            let mut max_score = -1000;
-
-            for hit in response.hits {
-                let hit_name_low = hit.name.to_lowercase();
-                let info_name_low = info.name.to_lowercase();
-
-                let mut score = 0;
-
-                // 1. Exact Name Match (Huge Bonus)
-                if hit_name_low == info_name_low {
-                    score += 1000;
-                }
-
-                // 2. Author Match
-                let author_match = if let Some(ref author) = info.author {
-                    hit.author.to_lowercase() == author.to_lowercase()
-                } else {
-                    false
-                };
-
-                if author_match {
-                    score += 500;
-                }
-
-                // 3. Substring match
-                if hit_name_low.contains(&info_name_low) || info_name_low.contains(&hit_name_low) {
-                    score += 100;
-
-                    // Length similarity bonus
-                    let len_diff = (hit_name_low.len() as i32 - info_name_low.len() as i32).abs();
-                    score += (30 - len_diff).max(0);
-                }
-
-                // 4. Variant Penalties (The "To the Sky" problem)
-                // If hit has specialized keywords but manifest doesn't, penalize heavily.
-                let variant_keywords = ["sky", "block", "expert", "lite", "hardcore"];
-                for kw in variant_keywords {
-                    if hit_name_low.contains(kw) && !info_name_low.contains(kw) {
-                        score -= 400;
-                    }
-                }
-
-                log::debug!(
-                    "[get_modpack_info] [{:?}] Score {} for hit '{}' by '{}' ({})",
-                    platform,
-                    score,
-                    hit.name,
-                    hit.author,
-                    hit.id
-                );
-
-                if score > max_score {
-                    max_score = score;
-                    best_hit = Some(hit);
-                }
-            }
-
-            if let Some(hit) = best_hit {
-                // Require a minimum confidence score or exact name match
-                if max_score < 400 && !hit.name.to_lowercase().eq(&info.name.to_lowercase()) {
-                    log::warn!("[get_modpack_info] Best match '{}' has low confidence score ({}), skipping", hit.name, max_score);
-                    continue;
-                }
-
-                log::info!(
-                    "[get_modpack_info] Picked best match: '{}' ({}) with score {}",
-                    hit.name,
-                    hit.id,
-                    max_score
-                );
-
-                info.modpack_id = Some(hit.id.clone());
-                info.modpack_platform = Some(format!("{:?}", platform).to_lowercase());
-                if info.icon_url.is_none() {
-                    info.icon_url = hit.icon_url;
-                }
-                if info.description.is_none() {
-                    info.description = Some(hit.summary);
-                }
-
-                log::info!(
-                    "[get_modpack_info] Searching for version '{}' on platform {:?} (ID: {})",
-                    info.version,
-                    platform,
-                    hit.id
-                );
-
-                // Try to find matching version ID
-                if let Ok(versions) = resource_manager
-                    .get_versions(
-                        platform,
-                        &hit.id,
-                        false,
-                        Some(&info.minecraft_version),
-                        Some(&info.modloader),
-                    )
-                    .await
-                {
-                    let search_v = info.version.to_lowercase();
-
-                    if let Some(v) = versions.into_iter().find(|v| {
-                        let v_num = v.version_number.to_lowercase();
-                        // 1. Exact match
-                        if v_num == search_v {
-                            return true;
-                        }
-                        // 2. Contains (be careful with overlaps, but good for "Release x.y")
-                        if v_num.contains(&search_v) {
-                            // verify it's a "clean" submatch to avoid 5.4 matching 1.5.4
-                            let idx = v_num.find(&search_v).unwrap();
-                            let prev_char = if idx > 0 {
-                                v_num.as_bytes()[idx - 1] as char
-                            } else {
-                                ' '
-                            };
-                            let next_char = if idx + search_v.len() < v_num.len() {
-                                v_num.as_bytes()[idx + search_v.len()] as char
-                            } else {
-                                ' '
-                            };
-
-                            if !prev_char.is_alphanumeric() && !next_char.is_alphanumeric() {
-                                return true;
-                            }
-                        }
-                        false
-                    }) {
-                        info.modpack_version_id = Some(v.id);
-                        log::info!(
-                            "[get_modpack_info] Found likely version match on {:?}: {}",
-                            platform,
-                            info.modpack_version_id.as_ref().unwrap()
-                        );
-                    } else {
-                        log::info!("[get_modpack_info] No platform version match found for '{}'. Using manifest version.", info.version);
-                    }
-                }
-
-                log::info!(
-                    "[get_modpack_info] Linked modpack to {:?} project: {}",
-                    platform,
-                    hit.id
-                );
-                break;
-            }
-        }
-    }
+    log::info!(
+        "[get_modpack_info] Manual upload has no trusted source id; using local {} manifest metadata and skipping whole-pack source matching",
+        info.format
+    );
     Ok(info)
 }).await;
 
@@ -977,6 +1874,79 @@ pub async fn get_modpack_info_from_url(
 
     Ok(info)
 }).await
+}
+
+#[command]
+pub async fn match_local_modpack_source(
+    app: AppHandle,
+    path: String,
+    resource_manager: State<'_, crate::resources::ResourceManager>,
+) -> Result<ModpackSourceMatch, String> {
+    let started = Instant::now();
+    let path_buf = PathBuf::from(path);
+    if !path_buf.exists() {
+        return Err("File does not exist".to_string());
+    }
+
+    let input_path = path_buf.clone();
+    let input = run_blocking_modpack_io("parse local modpack match signature", move || {
+        local_match_input_from_path(&input_path)
+    })
+    .await?;
+
+    log::info!(
+        "[modpack-match] Matching local {} modpack '{}' version '{}' (mc={:?}, loader={:?}, archive_hash={})",
+        match input.format {
+            ModpackFormat::Modrinth => "Modrinth",
+            ModpackFormat::CurseForge => "CurseForge",
+        },
+        input.name,
+        input.version,
+        input.minecraft_version,
+        input.loader,
+        input.can_hash_archive
+    );
+
+    if let Some(match_result) =
+        try_exact_archive_match(&path_buf, &input, resource_manager.inner()).await
+    {
+        log::info!(
+            "[modpack-match] Exact archive match completed in {:?}",
+            started.elapsed()
+        );
+        return Ok(match_result);
+    }
+
+    let result = match_by_manifest_signature(&app, &input, resource_manager.inner()).await?;
+    log::info!(
+        "[modpack-match] Manifest signature match completed in {:?}: matched={}, method={:?}, warning={:?}",
+        started.elapsed(),
+        result.matched,
+        result.method,
+        result.warning
+    );
+    Ok(result)
+}
+
+#[command]
+pub async fn get_modpack_archive_summary_from_url(
+    app: AppHandle,
+    url: String,
+) -> Result<ModpackArchiveSummary, String> {
+    let started = Instant::now();
+    let (final_url, archive_path) = get_or_download_summary_archive(&app, &url).await?;
+    let summary_path = archive_path.clone();
+    let summary = run_blocking_modpack_io("parse modpack archive summary", move || {
+        parse_modpack_archive_summary(&summary_path)
+    })
+    .await?;
+    log::info!(
+        "[get_modpack_archive_summary_from_url] Parsed {} resources from {} in {:?}",
+        summary.resource_count,
+        sanitized_url_for_log(&final_url),
+        started.elapsed()
+    );
+    Ok(summary)
 }
 
 async fn prepare_instance(
@@ -1571,17 +2541,325 @@ pub async fn install_modpack_from_url(
     use tauri::Emitter;
     let _ = _app.emit("core://instance-created", &saved_instance);
 
-    // Queue Task with the URL directly - the task now handles the download
     use crate::tasks::installers::modpack::ModpackSource;
-    let task = InstallModpackTask::new(
-        saved_instance.clone(),
-        ModpackSource::Url(final_url),
-        metadata,
-    );
+    let cache_key = modpack_cache_key(&final_url);
+    let safe_final_url = sanitized_url_for_log(&final_url);
+    let source = if let Some(cached_path) = take_cached_archive(&cache_key) {
+        let validation_path = cached_path.clone();
+        match run_blocking_modpack_io(
+            "validate cached modpack archive before install",
+            move || {
+                let size = std::fs::metadata(&validation_path)?.len();
+                if size > MAX_SUMMARY_ARCHIVE_BYTES {
+                    return Err(anyhow::anyhow!(
+                        "Cached archive is too large ({} bytes, max {} bytes)",
+                        size,
+                        MAX_SUMMARY_ARCHIVE_BYTES
+                    ));
+                }
+                parse_modpack_archive_summary(&validation_path).map(|_| ())
+            },
+        )
+        .await
+        {
+            Ok(()) => {
+                log::info!(
+                    "[install_modpack_from_url] Reusing preloaded archive cache_key={} final_url={} path={:?}",
+                    cache_key,
+                    safe_final_url,
+                    cached_path
+                );
+                ModpackSource::Path(cached_path)
+            }
+            Err(err) => {
+                log::warn!(
+                    "[install_modpack_from_url] Cached archive invalid; falling back to URL install cache_key={} final_url={}: {}",
+                    cache_key,
+                    safe_final_url,
+                    err
+                );
+                archive_cache().remove(&cache_key);
+                let _ = std::fs::remove_file(cached_path);
+                ModpackSource::Url(final_url)
+            }
+        }
+    } else {
+        ModpackSource::Url(final_url)
+    };
+
+    let task = InstallModpackTask::new(saved_instance.clone(), source, metadata);
     task_manager
         .submit(Box::new(task))
         .await
         .map_err(|e| e.to_string())?;
 
     Ok(saved_instance.id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use piston_lib::game::modpack::types::{ModpackFormat, ModpackMetadata};
+    use std::io::Write;
+    use zip::{write::FileOptions, CompressionMethod, ZipWriter};
+
+    fn sample_metadata() -> ModpackMetadata {
+        ModpackMetadata {
+            name: "Local Pack".to_string(),
+            version: "1.2.3".to_string(),
+            author: None,
+            minecraft_version: "1.20.1".to_string(),
+            modloader_type: "fabric".to_string(),
+            modloader_version: Some("0.16.0".to_string()),
+            description: Some("Local manifest summary".to_string()),
+            icon_url: None,
+            recommended_ram_mb: Some(4096),
+            format: ModpackFormat::Modrinth,
+            mods: Vec::new(),
+            root_prefix: None,
+        }
+    }
+
+    fn write_zip(entries: &[(&str, &str)]) -> tempfile::NamedTempFile {
+        let file = tempfile::NamedTempFile::new().expect("create temp zip");
+        {
+            let mut zip = ZipWriter::new(file.reopen().expect("reopen temp zip"));
+            for (entry_name, content) in entries {
+                zip.start_file::<&str, ()>(*entry_name, FileOptions::default())
+                    .expect("start zip file");
+                zip.write_all(content.as_bytes()).expect("write zip entry");
+            }
+            zip.finish().expect("finish zip");
+        }
+        file
+    }
+
+    fn write_deflated_zip(entries: &[(&str, &str)]) -> tempfile::NamedTempFile {
+        let file = tempfile::NamedTempFile::new().expect("create temp zip");
+        {
+            let mut zip = ZipWriter::new(file.reopen().expect("reopen temp zip"));
+            let options = FileOptions::default().compression_method(CompressionMethod::Deflated);
+            for (entry_name, content) in entries {
+                zip.start_file::<&str, ()>(*entry_name, options)
+                    .expect("start zip file");
+                zip.write_all(content.as_bytes()).expect("write zip entry");
+            }
+            zip.finish().expect("finish zip");
+        }
+        file
+    }
+
+    #[test]
+    fn manual_metadata_does_not_create_source_link() {
+        let info = modpack_info_from_metadata(sample_metadata(), None, None);
+
+        assert_eq!(info.name, "Local Pack");
+        assert_eq!(info.version, "1.2.3");
+        assert_eq!(info.modpack_id, None);
+        assert_eq!(info.modpack_platform, None);
+        assert_eq!(info.modpack_version_id, None);
+    }
+
+    #[test]
+    fn trusted_source_metadata_does_not_fabricate_version_id() {
+        let info = modpack_info_from_metadata(
+            sample_metadata(),
+            Some("project-id".to_string()),
+            Some("modrinth".to_string()),
+        );
+
+        assert_eq!(info.modpack_id.as_deref(), Some("project-id"));
+        assert_eq!(info.modpack_platform.as_deref(), Some("modrinth"));
+        assert_eq!(info.modpack_version_id, None);
+    }
+
+    #[test]
+    fn root_modrinth_summary_counts_files() {
+        let file = write_zip(&[(
+            "modrinth.index.json",
+            r#"{"formatVersion":1,"game":"minecraft","files":[{"path":"mods/a.jar"},{"path":"mods/b.jar"}]}"#,
+        )]);
+
+        let summary = parse_modpack_archive_summary(file.path()).expect("parse mrpack summary");
+
+        assert_eq!(summary.resource_count, 2);
+        assert_eq!(summary.format, "Modrinth");
+    }
+
+    #[test]
+    fn root_curseforge_summary_counts_files() {
+        let file = write_zip(&[(
+            "manifest.json",
+            r#"{"minecraft":{"version":"1.20.1","recommendedRam":9504},"manifestType":"minecraftModpack","files":[{"projectID":1,"fileID":2},{"projectID":3,"fileID":4}]}"#,
+        )]);
+
+        let summary = parse_modpack_archive_summary(file.path()).expect("parse curseforge summary");
+
+        assert_eq!(summary.resource_count, 2);
+        assert_eq!(summary.recommended_ram_mb, Some(9504));
+        assert_eq!(summary.format, "CurseForge");
+    }
+
+    #[test]
+    fn archive_summary_serialization_does_not_expose_cache_path() {
+        let summary = ModpackArchiveSummary {
+            resource_count: 2,
+            recommended_ram_mb: Some(9504),
+            format: "CurseForge".to_string(),
+        };
+
+        let serialized = serde_json::to_value(summary).expect("serialize summary");
+
+        assert!(serialized.get("cachedPath").is_none());
+    }
+
+    #[test]
+    fn modrinth_manifest_signature_is_sorted_and_stable() {
+        let index = serde_json::json!({
+            "files": [
+                { "hashes": { "sha1": "BBBB" } },
+                { "hashes": { "sha1": "aaaa" } },
+                { "hashes": { "sha1": "BBBB" } }
+            ]
+        });
+
+        let signature = sorted_modrinth_signature(&index).expect("modrinth signature");
+
+        assert_eq!(signature, vec!["aaaa".to_string(), "bbbb".to_string()]);
+    }
+
+    #[test]
+    fn curseforge_manifest_signature_is_sorted_and_stable() {
+        let manifest = serde_json::json!({
+            "files": [
+                { "projectID": 30, "fileID": 2 },
+                { "projectID": 10, "fileID": 5 },
+                { "projectID": 30, "fileID": 2 }
+            ]
+        });
+
+        let signature = sorted_curseforge_signature(&manifest).expect("curseforge signature");
+
+        assert_eq!(signature, vec!["10:5".to_string(), "30:2".to_string()]);
+    }
+
+    #[test]
+    fn nested_only_summary_fails_fast() {
+        let file = write_zip(&[(
+            "nested/manifest.json",
+            r#"{"manifestType":"minecraftModpack","files":[{"projectID":1,"fileID":2}]}"#,
+        )]);
+
+        let error = parse_modpack_archive_summary(file.path()).expect_err("nested manifest fails");
+
+        assert!(
+            error.to_string().contains("Invalid modpack archive"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn oversized_root_manifest_is_rejected() {
+        let oversized_json = format!(
+            "{{\"files\":[],\"padding\":\"{}\"}}",
+            "x".repeat(MAX_MANIFEST_JSON_BYTES as usize + 1)
+        );
+        let file = write_zip(&[("manifest.json", oversized_json.as_str())]);
+
+        let error = parse_modpack_archive_summary(file.path()).expect_err("oversized JSON fails");
+
+        assert!(
+            error.to_string().contains("Invalid modpack archive"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn suspicious_manifest_compression_ratio_is_rejected() {
+        let compressible_json = format!(
+            "{{\"files\":[],\"padding\":\"{}\"}}",
+            "x".repeat(256 * 1024)
+        );
+        let file = write_deflated_zip(&[("manifest.json", compressible_json.as_str())]);
+
+        let error = read_root_json_from_zip(file.path(), "manifest.json")
+            .expect_err("high compression ratio fails");
+
+        assert!(
+            error.to_string().contains("compression ratio"),
+            "unexpected error: {error}"
+        );
+    }
+
+    #[test]
+    fn cache_prune_removes_missing_and_limits_entries() {
+        let temp_dir = tempfile::tempdir().expect("create cache dir");
+        let now = SystemTime::now();
+
+        {
+            let mut cache = archive_cache();
+            cache.clear();
+            cache.insert(
+                "missing".to_string(),
+                ModpackArchiveCacheEntry {
+                    path: temp_dir.path().join("summary_missing.zip"),
+                    created_at: now,
+                    accessed_at: now,
+                    size: 1,
+                },
+            );
+
+            for idx in 0..=MAX_SUMMARY_CACHE_ENTRIES {
+                let path = temp_dir.path().join(format!("summary_{idx}.zip"));
+                std::fs::write(&path, b"zip").expect("write fake cache file");
+                cache.insert(
+                    format!("key-{idx}"),
+                    ModpackArchiveCacheEntry {
+                        path,
+                        created_at: now,
+                        accessed_at: now + Duration::from_secs(idx as u64),
+                        size: 3,
+                    },
+                );
+            }
+        }
+
+        prune_summary_archive_cache(temp_dir.path());
+
+        let cache = archive_cache();
+        assert!(!cache.contains_key("missing"));
+        assert!(cache.len() <= MAX_SUMMARY_CACHE_ENTRIES);
+    }
+
+    #[test]
+    fn cache_prune_limits_total_tracked_size() {
+        let temp_dir = tempfile::tempdir().expect("create cache dir");
+        let now = SystemTime::now();
+        let entry_size = MAX_SUMMARY_ARCHIVE_BYTES;
+
+        {
+            let mut cache = archive_cache();
+            cache.clear();
+            for idx in 0..5 {
+                let path = temp_dir.path().join(format!("summary_big_{idx}.zip"));
+                std::fs::write(&path, b"zip").expect("write fake cache file");
+                cache.insert(
+                    format!("big-key-{idx}"),
+                    ModpackArchiveCacheEntry {
+                        path,
+                        created_at: now,
+                        accessed_at: now + Duration::from_secs(idx as u64),
+                        size: entry_size,
+                    },
+                );
+            }
+        }
+
+        prune_summary_archive_cache(temp_dir.path());
+
+        let cache = archive_cache();
+        let total_size: u64 = cache.values().map(|entry| entry.size).sum();
+        assert!(total_size <= MAX_SUMMARY_CACHE_BYTES);
+        assert!(!cache.contains_key("big-key-0"));
+    }
 }

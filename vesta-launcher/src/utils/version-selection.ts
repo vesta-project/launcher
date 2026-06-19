@@ -56,7 +56,6 @@ function sortLoaders(loaders: string[]): string[] {
 function getSupportedSet(values?: string[]): Set<string> | null {
 	if (!values || values.length === 0) return null;
 	const set = new Set(values.map((value) => lower(value)).filter(Boolean));
-	set.add("vanilla");
 	return set;
 }
 
@@ -159,7 +158,11 @@ export function getAllModloaders(
 	if (!metadata) return ["vanilla"];
 
 	const supportedSet = getSupportedSet(supportedModloaders);
-	const loaders = new Set<string>(["vanilla"]);
+	const loaders = new Set<string>();
+
+	if (!supportedSet || supportedSet.has("vanilla")) {
+		loaders.add("vanilla");
+	}
 
 	for (const gameVersion of metadata.game_versions) {
 		for (const loader of Object.keys(gameVersion.loaders)) {
@@ -219,12 +222,14 @@ export function resolveCompatibleVersionSelection(
 
 	const adjustments: VersionSelectionAdjustment[] = [];
 
-	if (supportedLoaders && modloader !== "vanilla" && !supportedLoaders.has(modloader)) {
+	if (supportedLoaders && !supportedLoaders.has(modloader)) {
 		adjustments.push({
 			code: "modloader",
-			message: `${getModloaderDisplayName(modloader)} is not supported in this context. Switched to Vanilla.`,
+			message: `${getModloaderDisplayName(modloader)} is not supported in this context.`,
 		});
-		modloader = "vanilla";
+		modloader = supportedLoaders.values().next().value || "vanilla";
+		adjustments[adjustments.length - 1].message +=
+			` Switched to ${getModloaderDisplayName(modloader)}.`;
 	}
 
 	if (!minecraftVersion || !findVersionMeta(input.metadata, minecraftVersion)) {

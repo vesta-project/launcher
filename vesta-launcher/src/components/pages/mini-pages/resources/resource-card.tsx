@@ -13,6 +13,7 @@ import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
+import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import { type Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
 
@@ -302,17 +303,25 @@ const ResourceCard: Component<{
 		e.stopPropagation();
 
 		if (props.project.resource_type === "modpack") {
-			activeRouter()?.navigate("/install", {
-				projectId: props.project.id,
-				platform: props.project.source,
-				isModpack: true,
-				resourceType: "modpack",
-				projectName: props.project.name,
-				projectIcon: props.project.icon_url || undefined,
-				projectAuthor: props.project.author,
-				initialMinecraftVersion: resources.state.gameVersion || undefined,
-				initialModloader: resources.state.loader || undefined,
+			const prefilledModpackInfo = buildBrowseModpackInfo(props.project, null, {
+				minecraftVersion: resources.state.gameVersion,
+				loader: resources.state.loader,
 			});
+			activeRouter()?.navigate(
+				"/install",
+				{
+					projectId: props.project.id,
+					platform: props.project.source,
+					isModpack: true,
+					resourceType: "modpack",
+					projectName: props.project.name,
+					projectIcon: props.project.icon_url || undefined,
+					projectAuthor: props.project.author,
+					initialMinecraftVersion: resources.state.gameVersion || undefined,
+					initialModloader: resources.state.loader || undefined,
+				},
+				{ prefilledModpackInfo },
+			);
 			return;
 		}
 

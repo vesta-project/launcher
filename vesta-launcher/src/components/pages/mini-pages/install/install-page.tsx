@@ -1,6 +1,8 @@
 import { router } from "@components/page-viewer/page-viewer";
 import type { ResourceVersion } from "@stores/resources";
 import type { Instance } from "@utils/instances";
+import { countVersionResources } from "@utils/modpack-prefill";
+import { getModpackArchiveSummaryFromUrl } from "@utils/modpacks";
 import { createEffect, createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { FetchingOverlay } from "./components/FetchingOverlay";
 import { InstallForm } from "./components/InstallForm";
@@ -22,6 +24,8 @@ import type { InstallPageRouteProps } from "./types";
 function InstallPage(props: InstallPageRouteProps) {
 	const [formState, setFormState] = createSignal<Partial<Instance>>({});
 	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal("");
+	let archiveSummaryRequest = 0;
+	let lastArchiveSummaryAttemptKey = "";
 	const routeParams = createMemo(() => (props.router || router())?.currentParams.get() || {});
 	const activeRouter = createMemo(() => props.router || router());
 
@@ -69,31 +73,51 @@ function InstallPage(props: InstallPageRouteProps) {
 	const effectiveResourceType = createMemo(
 		() => (routeParams().resourceType as string | undefined) || props.resourceType,
 	);
+	const effectivePrefilledModpackInfo = createMemo(() => props.prefilledModpackInfo);
+	const effectivePrefetchedModpackVersions = createMemo(() => props.prefetchedModpackVersions);
+	const effectivePendingResourceProject = createMemo(() => props.pendingResourceProject);
+	const effectivePendingResourceVersion = createMemo(() => props.pendingResourceVersion);
+	const pendingResourceIsNonModpack = createMemo(() => {
+		const resourceType = effectivePendingResourceProject()?.resource_type?.toLowerCase();
+		return !!resourceType && resourceType !== "modpack" && resourceType !== "modpacks";
+	});
 
 	// --- Hooks ---
 	const isModpackMode = createMemo(
 		() =>
-			effectiveIsModpack() ||
-			!!effectiveModpackUrl() ||
-			!!effectiveModpackPath() ||
-			effectiveResourceType()?.toLowerCase() === "modpack" ||
-			effectiveResourceType()?.toLowerCase() === "modpacks",
+			!pendingResourceIsNonModpack() &&
+			(effectiveIsModpack() ||
+				!!effectiveModpackUrl() ||
+				!!effectiveModpackPath() ||
+				effectiveResourceType()?.toLowerCase() === "modpack" ||
+				effectiveResourceType()?.toLowerCase() === "modpacks"),
 	);
+	const isResourceInstanceMode = createMemo(
+		() => !isModpackMode() && !!effectivePendingResourceProject(),
+	);
+	const resourceTypeLabel = createMemo(() => {
+		const raw = effectivePendingResourceProject()?.resource_type || effectiveResourceType();
+		if (!raw) return undefined;
+		if (raw === "resourcepack") return "Resource Pack";
+		if (raw === "datapack") return "Data Pack";
+		return raw.charAt(0).toUpperCase() + raw.slice(1);
+	});
 
 	const source = useModpackSource({
-		projectId: effectiveProjectId(),
-		platform: effectivePlatform(),
-		projectName: effectiveProjectName(),
-		projectIcon: effectiveProjectIcon(),
-		projectAuthor: effectiveProjectAuthor(),
-		initialVersion: effectiveInitialVersion(),
-		initialMinecraftVersion: effectiveInitialMinecraftVersion(),
-		initialVersionNumber: effectiveInitialVersionNumber(),
-		initialModloader: effectiveInitialModloader(),
-		initialModloaderVersion: props.initialModloaderVersion,
+		projectId: isModpackMode() ? effectiveProjectId() : undefined,
+		platform: isModpackMode() ? effectivePlatform() : undefined,
+		projectName: isModpackMode() ? effectiveProjectName() : undefined,
+		projectIcon: isModpackMode() ? effectiveProjectIcon() : undefined,
+		projectAuthor: isModpackMode() ? effectiveProjectAuthor() : undefined,
+		initialVersion: isModpackMode() ? effectiveInitialVersion() : undefined,
+		initialMinecraftVersion: isModpackMode() ? effectiveInitialMinecraftVersion() : undefined,
+		initialVersionNumber: isModpackMode() ? effectiveInitialVersionNumber() : undefined,
+		initialModloader: isModpackMode() ? effectiveInitialModloader() : undefined,
+		initialModloaderVersion: isModpackMode() ? props.initialModloaderVersion : undefined,
 		originalIcon: props.originalIcon,
-		modpackUrl: effectiveModpackUrl(),
-		modpackPath: effectiveModpackPath(),
+		prefilledModpackInfo: effectivePrefilledModpackInfo(),
+		modpackUrl: isModpackMode() ? effectiveModpackUrl() : undefined,
+		modpackPath: isModpackMode() ? effectiveModpackPath() : undefined,
 		selectedModpackVersionId,
 	});
 
@@ -104,6 +128,8 @@ function InstallPage(props: InstallPageRouteProps) {
 		modpackUrl: source.modpackUrl,
 		modpackPath: source.modpackPath,
 		modpackInfo: source.modpackInfo as any,
+		pendingResourceProject: effectivePendingResourceProject,
+		pendingResourceVersion: effectivePendingResourceVersion,
 	});
 
 	const { projectVersions, handleModpackVersionChange } = useProjectVersions({
@@ -116,6 +142,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		initialVersion: effectiveInitialVersion,
 		initialMinecraftVersion: effectiveInitialMinecraftVersion,
 		initialModloader: effectiveInitialModloader,
+		prefetchedVersions: effectivePrefetchedModpackVersions,
 		selectedModpackVersionId,
 		setSelectedModpackVersionId,
 		setModpackUrl: source.setModpackUrl,
@@ -133,6 +160,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		if (!selected) return;
 
 		const info = untrack(() => source.modpackInfo());
+		const apiResourceCount = countVersionResources(selected);
 
 		source.setModpackInfo({
 			name: info?.name || effectiveProjectName() || "Unknown Modpack",
@@ -145,12 +173,66 @@ function InstallPage(props: InstallPageRouteProps) {
 			modloader:
 				(selected.loaders[0] as any) || info?.modloader || effectiveInitialModloader() || "vanilla",
 			modloaderVersion: info?.modloaderVersion || null,
-			modCount: info?.modCount || 0,
+			modCount: apiResourceCount || info?.modCount || 0,
+			modCountSource:
+				apiResourceCount > 0
+					? "api-dependencies"
+					: info?.modCountSource || (info?.modCount ? "manifest" : "unknown"),
+			isCountingResources:
+				apiResourceCount <= 0 && !info?.modCount ? info?.isCountingResources : false,
+			downloadCount: info?.downloadCount ?? null,
+			followerCount: info?.followerCount ?? null,
 			format: info?.format || effectivePlatform() || "unknown",
 			modpackId: info?.modpackId || effectiveProjectId(),
 			modpackVersionId: selected.id,
 			modpackPlatform: info?.modpackPlatform || effectivePlatform(),
 		});
+	});
+
+	createEffect(() => {
+		if (!isModpackMode()) return;
+		const url = source.modpackUrl();
+		const info = source.modpackInfo();
+		const selectedId = selectedModpackVersionId();
+		if (!url || !info || (info.modCount || 0) > 0 || info.isCountingResources) return;
+		const attemptKey = `${selectedId || info.modpackVersionId || "unknown"}:${url}`;
+		if (attemptKey === lastArchiveSummaryAttemptKey) return;
+		lastArchiveSummaryAttemptKey = attemptKey;
+
+		const requestId = ++archiveSummaryRequest;
+		source.setModpackInfo({
+			...info,
+			isCountingResources: true,
+			modCountSource: info.modCountSource || "unknown",
+		});
+
+		void getModpackArchiveSummaryFromUrl(url)
+			.then((summary) => {
+				if (requestId !== archiveSummaryRequest) return;
+				const current = source.modpackInfo();
+				if (!current || source.modpackUrl() !== url || selectedModpackVersionId() !== selectedId)
+					return;
+
+				source.setModpackInfo({
+					...current,
+					modCount: summary.resourceCount || current.modCount || 0,
+					modCountSource: summary.resourceCount > 0 ? "manifest" : current.modCountSource || "unknown",
+					isCountingResources: false,
+					recommendedRamMb: current.recommendedRamMb ?? summary.recommendedRamMb ?? undefined,
+					format: current.format || summary.format,
+				});
+			})
+			.catch((error) => {
+				console.warn("[InstallPage] Modpack archive summary failed:", error);
+				if (requestId !== archiveSummaryRequest) return;
+				const current = source.modpackInfo();
+				if (!current || source.modpackUrl() !== url) return;
+				source.setModpackInfo({
+					...current,
+					isCountingResources: false,
+					modCountSource: current.modCountSource || "unknown",
+				});
+			});
 	});
 
 	// --- Sync modpackInfo project-level fields from effective values ---
@@ -192,18 +274,45 @@ function InstallPage(props: InstallPageRouteProps) {
 			selectedModpackVersionId: selectedModpackVersionId(),
 			initialData: formState(),
 			originalIcon: source.originalIcon(),
+			prefilledModpackInfo: source.modpackInfo(),
+			prefetchedModpackVersions: projectVersions(),
+			pendingResourceProject: effectivePendingResourceProject(),
+			pendingResourceVersion: effectivePendingResourceVersion(),
 		}));
 	});
 
 	// --- Derived UI state ---
 	const metadataStatus = createMemo(() => source.metadataStatus());
 	const isFetchingMetadata = createMemo(() => source.isFetchingMetadata());
+	const isMatchingSource = createMemo(() => metadataStatus().phase === "matching-source");
+	const isBlockingLoading = createMemo(
+		() => isFetchingMetadata() || isMatchingSource() || install.isInstalling(),
+	);
 	const hasMinimumInstallData = createMemo(
 		() => !isModpackMode() || !!source.modpackInfo() || !!effectiveProjectId(),
 	);
 
-	const showForm = createMemo(() => hasMinimumInstallData() && metadataStatus().phase !== "failed");
+	const showForm = createMemo(
+		() => hasMinimumInstallData() && metadataStatus().phase !== "failed" && !isBlockingLoading(),
+	);
 	const isLocalModpackUpload = createMemo(() => !!source.modpackPath() && !effectiveProjectId());
+	const loadingTitle = createMemo(() => {
+		if (install.isInstalling())
+			return isModpackMode() ? "Installing modpack..." : "Creating instance...";
+		if (metadataStatus().phase === "reading-local-pack") return "Reading modpack manifest...";
+		if (isMatchingSource()) return "Matching online source...";
+		if (metadataStatus().phase === "failed") return "Could not read modpack";
+		return isModpackMode() ? "Fetching modpack details..." : "Preparing instance...";
+	});
+	const loadingMessage = createMemo(() => {
+		if (install.isInstalling()) {
+			if (isResourceInstanceMode()) {
+				return `Installing ${effectivePendingResourceProject()?.name || "the selected resource"} after the instance is created.`;
+			}
+			return "Creating files and applying the selected configuration.";
+		}
+		return metadataStatus().message;
+	});
 
 	const goBackFromLocalUpload = () => {
 		const r = activeRouter();
@@ -239,38 +348,57 @@ function InstallPage(props: InstallPageRouteProps) {
 						? effectiveProjectName() || source.modpackInfo()?.name || "Analyzing modpack details..."
 						: "New Instance"
 				}
-				description={isModpackMode() ? undefined : "Create a clean slate and customize it."}
-				label={isModpackMode() ? effectiveResourceType() || "Modpack" : undefined}
-				iconUrl={isModpackMode() ? effectiveProjectIcon() || source.modpackInfo()?.iconUrl : undefined}
+				description={
+					isModpackMode()
+						? undefined
+						: isResourceInstanceMode()
+							? `Create a new instance with ${effectivePendingResourceProject()?.name || "this resource"} installed.`
+							: "Create a clean slate and customize it."
+				}
+				label={
+					isModpackMode()
+						? effectiveResourceType() || "Modpack"
+						: isResourceInstanceMode()
+							? `New instance with ${resourceTypeLabel() || "Resource"}`
+							: undefined
+				}
+				iconUrl={
+					isModpackMode()
+						? effectiveProjectIcon() || source.modpackInfo()?.iconUrl
+						: isResourceInstanceMode()
+							? effectivePendingResourceProject()?.icon_url
+							: undefined
+				}
 				minecraftVersion={
 					isModpackMode()
 						? source.modpackInfo()?.minecraftVersion || effectiveInitialMinecraftVersion()
 						: undefined
 				}
 				modloader={
-					isModpackMode()
-						? source.modpackInfo()?.modloader || effectiveInitialModloader()
-						: undefined
+					isModpackMode() ? source.modpackInfo()?.modloader || effectiveInitialModloader() : undefined
 				}
 				analyzing={
-					isModpackMode() && (isFetchingMetadata() || (!source.modpackInfo() && !effectiveProjectName()))
+					isModpackMode() &&
+					(isFetchingMetadata() ||
+						isMatchingSource() ||
+						(!source.modpackInfo() && !effectiveProjectName()))
 				}
 				actionLabel={isModpackMode() ? contextBackLabel() : "Back"}
-				onAction={isModpackMode() ? handleContextBack : () => activeRouter()?.navigate("/install/source")}
+				onAction={
+					isModpackMode()
+						? handleContextBack
+						: isResourceInstanceMode()
+							? () => activeRouter()?.backwards()
+							: () => activeRouter()?.navigate("/install/source")
+				}
 			/>
 
 			<div class={styles["page-wrapper"]}>
 				{/* Loading overlay */}
 				<FetchingOverlay
-					isVisible={isFetchingMetadata() || metadataStatus().phase === "failed"}
-					title={
-						metadataStatus().phase === "reading-local-pack"
-							? "Reading modpack manifest..."
-							: metadataStatus().phase === "failed"
-								? "Could not read modpack"
-								: "Fetching modpack details..."
-					}
-					message={metadataStatus().message}
+					isVisible={isBlockingLoading() || metadataStatus().phase === "failed"}
+					title={loadingTitle()}
+					message={loadingMessage()}
 					error={metadataStatus().error}
 					variant={metadataStatus().phase === "failed" ? "error" : "loading"}
 					onRetry={metadataStatus().canRetry ? source.retryMetadata : undefined}
@@ -290,8 +418,16 @@ function InstallPage(props: InstallPageRouteProps) {
 						modpackVersions={projectVersions() ?? []}
 						selectedModpackVersionId={selectedModpackVersionId()}
 						onModpackVersionChange={handleModpackVersionChange}
-						supportedMcVersions={capabilities.supportedMcVersions()}
-						supportedModloaders={capabilities.supportedModloaders()}
+						supportedMcVersions={
+							isResourceInstanceMode()
+								? effectivePendingResourceVersion()?.game_versions
+								: capabilities.supportedMcVersions()
+						}
+						supportedModloaders={
+							isResourceInstanceMode()
+								? effectivePendingResourceVersion()?.loaders
+								: capabilities.supportedModloaders()
+						}
 						onStateChange={setFormState}
 						projectId={effectiveProjectId()}
 						platform={effectivePlatform()}
@@ -305,9 +441,15 @@ function InstallPage(props: InstallPageRouteProps) {
 						initialVersion={
 							isModpackMode()
 								? effectiveInitialMinecraftVersion() || source.modpackInfo()?.minecraftVersion || ""
-								: props.initialVersion
+								: isResourceInstanceMode()
+									? effectiveInitialMinecraftVersion()
+									: props.initialVersion || effectiveInitialMinecraftVersion()
 						}
-						initialModloader={effectiveInitialModloader() || source.modpackInfo()?.modloader}
+						initialModloader={
+							effectiveInitialModloader() ||
+							source.modpackInfo()?.modloader ||
+							effectivePendingResourceVersion()?.loaders[0]
+						}
 						initialModloaderVersion={
 							source.modpackInfo()?.modloaderVersion || props.initialModloaderVersion || undefined
 						}

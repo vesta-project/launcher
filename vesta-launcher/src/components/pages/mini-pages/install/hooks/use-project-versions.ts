@@ -38,6 +38,7 @@ interface UseProjectVersionsParams {
 	initialVersion?: Accessor<string | undefined>;
 	initialMinecraftVersion?: Accessor<string | undefined>;
 	initialModloader?: Accessor<string | undefined>;
+	prefetchedVersions?: Accessor<ResourceVersion[] | undefined>;
 	selectedModpackVersionId: Accessor<string>;
 	setSelectedModpackVersionId: (id: string) => void;
 	setModpackUrl: (url: string) => void;
@@ -55,11 +56,15 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 		},
 		async ({ id, platform }: { id: string; platform: string }) => {
 			try {
-				const vs = await withTimeout(
-					resources.getVersions(platform as SourcePlatform, id),
-					PROJECT_VERSIONS_TIMEOUT_MS,
-					"Project versions lookup",
-				);
+				const prefetched = params.prefetchedVersions?.();
+				const vs =
+					prefetched && prefetched.length > 0
+						? prefetched
+						: await withTimeout(
+								resources.getVersions(platform as SourcePlatform, id),
+								PROJECT_VERSIONS_TIMEOUT_MS,
+								"Project versions lookup",
+							);
 				const currentUrl = params.modpackUrl();
 				const info = params.modpackInfo();
 				const initialVer =

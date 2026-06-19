@@ -33,6 +33,11 @@ export type SearchResponse = {
 	total_hits: number;
 };
 
+type CachedSearchResponse = SearchResponse & {
+	source: SourcePlatform;
+	resourceType: ResourceType;
+};
+
 export type ResourceCategory = {
 	id: string;
 	name: string;
@@ -84,6 +89,8 @@ type ResourceStoreState = {
 	results: ResourceProject[];
 	totalHits: number;
 	loading: boolean;
+	searchError: string | null;
+	searchWarning: string | null;
 	activeSource: SourcePlatform;
 	resourceType: ResourceType;
 	selectedInstanceId: number | null;
@@ -115,6 +122,8 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	results: [],
 	totalHits: 0,
 	loading: false,
+	searchError: null,
+	searchWarning: null,
 	activeSource: "modrinth",
 	resourceType: "mod",
 	selectedInstanceId: null,
@@ -140,6 +149,28 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	selection: {},
 	sorting: [{ id: "display_name", desc: false }],
 });
+
+const searchCache = new Map<string, CachedSearchResponse>();
+
+function normalizedSearchValue(value: string | null | undefined) {
+	const trimmed = value?.trim();
+	return trimmed ? trimmed : null;
+}
+
+function currentSearchCacheKey() {
+	return JSON.stringify({
+		source: resourceStore.activeSource,
+		type: resourceStore.resourceType,
+		query: normalizedSearchValue(resourceStore.query),
+		offset: resourceStore.offset,
+		limit: resourceStore.limit,
+		gameVersion: normalizedSearchValue(resourceStore.gameVersion),
+		loader: normalizedSearchValue(resourceStore.loader),
+		categories: [...resourceStore.categories].sort(),
+		sortBy: normalizedSearchValue(resourceStore.sortBy),
+		sortOrder: resourceStore.sortOrder || "desc",
+	});
+}
 
 export const resources = {
 	state: resourceStore,
@@ -321,7 +352,10 @@ export const resources = {
 	},
 
 	search: async () => {
+		const cacheKey = currentSearchCacheKey();
 		setResourceStore("loading", true);
+		setResourceStore("searchError", null);
+		setResourceStore("searchWarning", null);
 		try {
 			const response = await invoke<SearchResponse>("search_resources", {
 				platform: resourceStore.activeSource,
@@ -340,10 +374,35 @@ export const resources = {
 			setResourceStore({
 				results: response.hits,
 				totalHits: response.total_hits,
+				searchError: null,
+				searchWarning: null,
 			});
+			if (response.hits.length > 0) {
+				searchCache.set(cacheKey, {
+					...response,
+					source: resourceStore.activeSource,
+					resourceType: resourceStore.resourceType,
+				});
+			}
 		} catch (e) {
 			console.error("Failed to search resources:", e);
-			throw e;
+			const message = e instanceof Error ? e.message : String(e);
+			const cached = searchCache.get(cacheKey);
+			if (cached) {
+				setResourceStore({
+					results: cached.hits,
+					totalHits: cached.total_hits,
+					searchError: null,
+					searchWarning: "Showing cached results while the source is unavailable.",
+				});
+			} else {
+				setResourceStore({
+					results: [],
+					totalHits: 0,
+					searchError: message,
+					searchWarning: null,
+				});
+			}
 		} finally {
 			setResourceStore("loading", false);
 		}

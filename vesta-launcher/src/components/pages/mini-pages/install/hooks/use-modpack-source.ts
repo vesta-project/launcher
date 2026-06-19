@@ -1,13 +1,19 @@
 import type { ResourceVersion } from "@stores/resources";
 import { open } from "@tauri-apps/plugin-dialog";
 import { showToast } from "@ui/toast/toast";
-import { getModpackInfo, getModpackInfoFromUrl, type ModpackInfo } from "@utils/modpacks";
+import {
+	getModpackInfo,
+	getModpackInfoFromUrl,
+	matchLocalModpackSource,
+	type ModpackInfo,
+} from "@utils/modpacks";
 import { type Accessor, batch, createEffect, createMemo, createSignal, untrack } from "solid-js";
 
 export type ModpackPreflightPhase =
 	| "idle"
 	| "reading-local-pack"
 	| "fetching-pack-details"
+	| "matching-source"
 	| "ready"
 	| "ready-with-warnings"
 	| "failed";
@@ -31,6 +37,7 @@ interface UseModpackSourceParams {
 	initialModloader?: string;
 	initialModloaderVersion?: string;
 	originalIcon?: string;
+	prefilledModpackInfo?: ModpackInfo;
 	modpackUrl?: string;
 	modpackPath?: string;
 	selectedModpackVersionId: Accessor<string>;
@@ -41,14 +48,17 @@ export function useModpackSource(params: UseModpackSourceParams) {
 	const [isFetchingMetadata, setIsFetchingMetadata] = createSignal(false);
 	const [metadataRetryNonce, setMetadataRetryNonce] = createSignal(0);
 	const [metadataStatus, setMetadataStatus] = createSignal<ModpackPreflightStatus>({
-		phase: "idle",
+		phase: params.prefilledModpackInfo ? "ready" : "idle",
 		canRetry: false,
 	});
 	const [modpackUrl, setModpackUrl] = createSignal(params.modpackUrl || "");
 	const [modpackPath, setModpackPath] = createSignal(params.modpackPath || "");
-	const [modpackInfo, setModpackInfo] = createSignal<ModpackInfo | undefined>();
+	const [modpackInfo, setModpackInfo] = createSignal<ModpackInfo | undefined>(
+		params.prefilledModpackInfo,
+	);
 	const [urlInputValue, setUrlInputValue] = createSignal("");
 	let latestRequestId = 0;
+	let latestMatchRequestId = 0;
 
 	const originalIcon = createMemo(
 		() => params.originalIcon || modpackInfo()?.iconUrl || params.projectIcon || undefined,
@@ -79,6 +89,52 @@ export function useModpackSource(params: UseModpackSourceParams) {
 		};
 	};
 
+	const startSourceMatch = (path: string, baseInfo: ModpackInfo) => {
+		if (!path || params.projectId || params.platform || baseInfo.modpackId) return;
+		const requestId = latestMatchRequestId + 1;
+		latestMatchRequestId = requestId;
+		setMetadataStatus({
+			phase: "matching-source",
+			message: "Matching online source...",
+			canRetry: false,
+		});
+
+		void matchLocalModpackSource(path)
+			.then((match) => {
+				if (latestMatchRequestId !== requestId || modpackPath() !== path) return;
+				const current = modpackInfo();
+				if (!current) return;
+
+				if (match.matched && match.modpackId && match.modpackPlatform) {
+					setModpackInfo({
+						...current,
+						name: match.name || current.name,
+						version: match.version || current.version,
+						author: match.author || current.author,
+						description: match.description || current.description,
+						iconUrl: match.iconUrl || current.iconUrl,
+						modpackId: match.modpackId,
+						modpackVersionId: match.modpackVersionId || current.modpackVersionId,
+						modpackPlatform: match.modpackPlatform,
+						downloadCount: match.downloadCount ?? current.downloadCount ?? null,
+						followerCount: match.followerCount ?? current.followerCount ?? null,
+					});
+					setMetadataStatus({ phase: "ready", canRetry: false });
+					return;
+				}
+
+				if (match.warning) {
+					console.info("[InstallPage] Local modpack source match skipped:", match.warning);
+				}
+				setMetadataStatus({ phase: "ready", canRetry: false });
+			})
+			.catch((error) => {
+				if (latestMatchRequestId !== requestId || modpackPath() !== path) return;
+				console.warn("[InstallPage] Source match failed:", error);
+				setMetadataStatus({ phase: "ready", canRetry: false });
+			});
+	};
+
 	createEffect(() => {
 		metadataRetryNonce();
 		const url = modpackUrl();
@@ -87,7 +143,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 			latestRequestId += 1;
 			setIsFetchingMetadata(false);
 			if (params.projectId || params.projectName) {
-				setModpackInfo(fallbackProjectInfo());
+				setModpackInfo((current) => current || params.prefilledModpackInfo || fallbackProjectInfo());
 				setMetadataStatus({ phase: "ready", canRetry: false });
 			} else {
 				setModpackInfo(undefined);
@@ -121,6 +177,9 @@ export function useModpackSource(params: UseModpackSourceParams) {
 				if (latestRequestId !== requestId) return;
 				setModpackInfo(info);
 				setMetadataStatus({ phase: "ready", canRetry: false });
+				if (path && !params.projectId && !params.platform) {
+					startSourceMatch(path, info);
+				}
 			} catch (error) {
 				if (latestRequestId !== requestId) return;
 				console.error("[InstallPage] Metadata fetch error:", error);
@@ -171,6 +230,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 			});
 			if (res && typeof res === "string") {
 				batch(() => {
+					latestMatchRequestId += 1;
 					setModpackInfo(undefined);
 					setModpackPath(res);
 					setModpackUrl("");
@@ -185,6 +245,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 		const value = urlInputValue().trim();
 		if (!value) return false;
 		batch(() => {
+			latestMatchRequestId += 1;
 			setModpackInfo(undefined);
 			setModpackUrl(value);
 			setModpackPath("");
@@ -196,6 +257,7 @@ export function useModpackSource(params: UseModpackSourceParams) {
 	const resetSource = () => {
 		batch(() => {
 			latestRequestId += 1;
+			latestMatchRequestId += 1;
 			setIsFetchingMetadata(false);
 			setMetadataStatus({ phase: "idle", canRetry: false });
 			setModpackUrl("");

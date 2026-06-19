@@ -569,6 +569,17 @@
 	padding: 16px 20px;
 }
 
+.resource-warning {
+	margin: 8px 20px 0;
+	padding: 8px 12px;
+	border: 1px solid color-mix(in srgb, var(--semantic-warning) 38%, var(--border-subtle));
+	border-radius: 6px;
+	background: color-mix(in srgb, var(--semantic-warning) 10%, var(--surface-raised));
+	color: var(--text-primary);
+	font-size: 12px;
+	line-height: 1.4;
+}
+
 /* ===== Grid View ===== */
 .resource-grid {
 	display: grid;

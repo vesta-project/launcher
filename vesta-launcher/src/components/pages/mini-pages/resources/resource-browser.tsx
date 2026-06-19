@@ -11,6 +11,7 @@ import {
 	PaginationPrevious,
 } from "@ui/pagination/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -127,22 +128,47 @@ const ResourceBrowser: Component<{
 
 	const handleCreateNew = () => {
 		const project = resources.state.requestInstallProject;
+		const versions = resources.state.requestInstallVersions;
 		if (!project) return;
 
 		setIsInstanceDialogOpen(false);
 		resources.setRequestInstall(null);
 
-		activeRouter()?.navigate("/install", {
-			projectId: project.id,
-			platform: project.source,
-			isModpack: project.resource_type === "modpack",
-			resourceType: project.resource_type,
-			projectName: project.name,
-			projectIcon: project.icon_url || undefined,
-			projectAuthor: project.author,
-			initialMinecraftVersion: resources.state.gameVersion || undefined,
-			initialModloader: resources.state.loader || undefined,
-		});
+		const prefilledModpackInfo =
+			project.resource_type === "modpack"
+				? buildBrowseModpackInfo(project, versions[0], {
+						minecraftVersion: resources.state.gameVersion,
+						loader: resources.state.loader,
+					})
+				: undefined;
+
+		activeRouter()?.navigate(
+			"/install",
+			{
+				projectId: project.id,
+				platform: project.source,
+				isModpack: project.resource_type === "modpack",
+				resourceType: project.resource_type,
+				projectName: project.name,
+				projectIcon: project.icon_url || undefined,
+				projectAuthor: project.author,
+				initialVersion: versions[0]?.id,
+				initialVersionNumber: versions[0]?.version_number,
+				initialMinecraftVersion: resources.state.gameVersion || undefined,
+				initialModloader: resources.state.loader || undefined,
+				modpackUrl:
+					project.resource_type === "modpack" ? versions[0]?.download_url || undefined : undefined,
+			},
+			prefilledModpackInfo
+				? {
+						prefilledModpackInfo,
+						prefetchedModpackVersions: versions.length > 0 ? versions : undefined,
+					}
+				: {
+						pendingResourceProject: project,
+						pendingResourceVersion: versions[0],
+					},
+		);
 	};
 
 	const handleSearchInput = (value: string) => {
@@ -271,8 +297,6 @@ const ResourceBrowser: Component<{
 		resources.fetchCategories();
 	});
 
-	const [searchError, setSearchError] = createSignal<string | null>(null);
-
 	let hasInitializedFilters = false;
 
 	createEffect(() => {
@@ -318,11 +342,7 @@ const ResourceBrowser: Component<{
 		if (reconciling) return;
 
 		untrack(() => {
-			setSearchError(null);
-			resources.search().catch((e) => {
-				const msg = e instanceof Error ? e.message : String(e);
-				setSearchError(msg);
-			});
+			void resources.search();
 		});
 	});
 
@@ -452,13 +472,17 @@ const ResourceBrowser: Component<{
 				</div>
 			</div>
 
+			<Show when={resources.state.searchWarning}>
+				<div class={styles["resource-warning"]}>{resources.state.searchWarning}</div>
+			</Show>
+
 			<div class={styles["resource-results"]}>
 				<Show
 					when={!resources.state.loading}
 					fallback={<ResourceSkeletonGrid count={6} viewMode={resources.state.viewMode} />}
 				>
 					<Show
-						when={!searchError()}
+						when={!resources.state.searchError}
 						fallback={
 							<div class={styles["error-state"]}>
 								<svg
@@ -477,14 +501,8 @@ const ResourceBrowser: Component<{
 									<line x1="12" y1="16" x2="12.01" y2="16" />
 								</svg>
 								<h3>Search failed</h3>
-								<p>{searchError()}</p>
-								<button
-									class={styles["empty-state-action"]}
-									onClick={() => {
-										setSearchError(null);
-										resources.search();
-									}}
-								>
+								<p>{resources.state.searchError}</p>
+								<button class={styles["empty-state-action"]} onClick={() => resources.search()}>
 									Try Again
 								</button>
 							</div>
@@ -522,7 +540,6 @@ const ResourceBrowser: Component<{
 											class={styles["empty-state-action"]}
 											onClick={() => {
 												resources.resetFilters();
-												setSearchError(null);
 											}}
 										>
 											Clear all filters

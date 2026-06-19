@@ -3,6 +3,8 @@ import { Instance } from "./instances";
 
 const METADATA_TIMEOUT_MS = 30_000;
 const INSTALL_START_TIMEOUT_MS = 45_000;
+const ARCHIVE_SUMMARY_TIMEOUT_MS = 30_000;
+const SOURCE_MATCH_TIMEOUT_MS = 45_000;
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
@@ -33,12 +35,38 @@ export interface ModpackInfo {
 	modloader: string;
 	modloaderVersion: string | null;
 	modCount: number;
+	modCountSource?: "manifest" | "api-dependencies" | "unknown";
+	isCountingResources?: boolean;
+	downloadCount?: number | null;
+	followerCount?: number | null;
 	recommendedRamMb?: number;
 	format: string;
 	modpackId?: string;
 	modpackVersionId?: string;
 	modpackPlatform?: string;
 	fullMetadata?: any;
+}
+
+export interface ModpackArchiveSummary {
+	resourceCount: number;
+	recommendedRamMb?: number | null;
+	format: string;
+}
+
+export interface ModpackSourceMatch {
+	matched: boolean;
+	method: string | null;
+	warning: string | null;
+	modpackId: string | null;
+	modpackVersionId: string | null;
+	modpackPlatform: string | null;
+	name: string | null;
+	version: string | null;
+	author: string | null;
+	description: string | null;
+	iconUrl: string | null;
+	downloadCount: number | null;
+	followerCount: number | null;
 }
 
 export interface ExportCandidate {
@@ -77,6 +105,22 @@ export async function getModpackInfoFromUrl(
 		}),
 		METADATA_TIMEOUT_MS,
 		"Modpack URL metadata lookup",
+	);
+}
+
+export async function getModpackArchiveSummaryFromUrl(url: string): Promise<ModpackArchiveSummary> {
+	return await withTimeout(
+		invoke("get_modpack_archive_summary_from_url", { url }),
+		ARCHIVE_SUMMARY_TIMEOUT_MS,
+		"Modpack archive summary lookup",
+	);
+}
+
+export async function matchLocalModpackSource(path: string): Promise<ModpackSourceMatch> {
+	return await withTimeout(
+		invoke("match_local_modpack_source", { path }),
+		SOURCE_MATCH_TIMEOUT_MS,
+		"Modpack source matching",
 	);
 }
 

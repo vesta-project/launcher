@@ -1,6 +1,8 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
+import type { ResourceProject, ResourceVersion } from "@stores/resources";
 import type { Instance } from "@utils/instances";
 import type { ExternalInstanceCandidate, LauncherKind } from "@utils/launcher-imports";
+import type { ModpackInfo } from "@utils/modpacks";
 import type { JSX } from "solid-js";
 
 export interface InstallPageProps {
@@ -22,6 +24,10 @@ export interface InstallPageProps {
 	initialModloaderVersion?: string;
 	initialIcon?: string;
 	originalIcon?: string;
+	prefilledModpackInfo?: ModpackInfo;
+	prefetchedModpackVersions?: ResourceVersion[];
+	pendingResourceProject?: ResourceProject;
+	pendingResourceVersion?: ResourceVersion;
 	initialMinMemory?: number;
 	initialMaxMemory?: number;
 	initialJvmArgs?: string;

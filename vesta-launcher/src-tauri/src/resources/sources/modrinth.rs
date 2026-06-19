@@ -27,17 +27,21 @@ struct ModrinthSearchResult {
 struct ModrinthProjectHit {
     project_id: String,
     title: String,
+    #[serde(default)]
     description: String,
     icon_url: Option<String>,
+    #[serde(default)]
     author: String,
+    #[serde(default)]
     downloads: u64,
     categories: Option<Vec<String>>,
     project_type: String,
     slug: String,
     #[serde(rename = "date_created")]
-    published: String,
+    published: Option<String>,
     #[serde(rename = "date_modified")]
-    updated: String,
+    updated: Option<String>,
+    #[serde(default)]
     follows: u64,
     gallery: Option<Vec<String>>,
     featured_gallery: Option<String>,
@@ -127,6 +131,25 @@ impl ModrinthSource {
             client: piston_lib::client::shared_client().clone(),
         }
     }
+
+    async fn fetch_search_url(&self, url: &str) -> Result<ModrinthSearchResult> {
+        let response = self.client.get(url).send().await?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let body = response.text().await.unwrap_or_default();
+            return Err(anyhow!(
+                "Modrinth API error during search ({}): {}",
+                status,
+                body
+            ));
+        }
+
+        response
+            .json()
+            .await
+            .map_err(|e| anyhow!("Modrinth search JSON decode error: {}. URL: {}", e, url))
+    }
 }
 
 #[async_trait]
@@ -156,6 +179,22 @@ impl ResourceSource for ModrinthSource {
             ResourceType::World => "world",
         };
         facets.push(format!("[\"project_type:{}\"]", mr_type));
+
+        let has_optional_filters = query.game_version.is_some()
+            || query.loader.is_some()
+            || query
+                .categories
+                .as_ref()
+                .is_some_and(|categories| !categories.is_empty())
+            || query
+                .facets
+                .as_ref()
+                .is_some_and(|facets| !facets.is_empty());
+        let is_blank_query = query
+            .text
+            .as_deref()
+            .map(|text| text.trim().is_empty())
+            .unwrap_or(true);
 
         if let Some(version) = query.game_version {
             facets.push(format!("[\"versions:{}\"]", version));
@@ -191,45 +230,68 @@ impl ResourceSource for ModrinthSource {
             url.push_str(&format!("&facets={}", urlencoding::encode(&facets_json)));
         }
 
-        let response = self.client.get(&url).send().await?;
+        let mut result = self.fetch_search_url(&url).await?;
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(anyhow!(
-                "Modrinth API error during search ({}): {}",
-                status,
-                body
+        if result.hits.is_empty() && is_blank_query && has_optional_filters && query.offset == 0 {
+            let fallback_facets = format!("[[\"project_type:{}\"]]", mr_type);
+            let mut fallback_url = format!(
+                "https://api.modrinth.com/v2/search?query=&limit={}&offset=0",
+                query.limit
+            );
+            if let Some(sort) = &query.sort_by {
+                fallback_url.push_str(&format!("&index={}", sort));
+            }
+            fallback_url.push_str(&format!(
+                "&facets={}",
+                urlencoding::encode(&fallback_facets)
             ));
-        }
 
-        let result: ModrinthSearchResult = response
-            .json()
-            .await
-            .map_err(|e| anyhow!("Modrinth search JSON decode error: {}. URL: {}", e, url))?;
+            log::warn!(
+                "[Modrinth] Blank search returned no hits with optional filters. Retrying default browse without compatibility/category filters. resource_type={}, limit={}, original_url={}, fallback_url={}",
+                mr_type,
+                query.limit,
+                url,
+                fallback_url
+            );
+            let fallback_result = self.fetch_search_url(&fallback_url).await?;
+            log::info!(
+                "[Modrinth] Blank search fallback returned {} hits (total_hits={}) for resource_type={}",
+                fallback_result.hits.len(),
+                fallback_result.total_hits,
+                mr_type
+            );
+            result = fallback_result;
+        }
 
         let hits: Vec<ResourceProject> = result
             .hits
             .into_iter()
-            .map(|hit| ResourceProject {
-                id: hit.project_id,
-                source: SourcePlatform::Modrinth,
-                resource_type: query.resource_type,
-                name: hit.title,
-                summary: hit.description,
-                description: None,
-                icon_url: hit.icon_url,
-                author: hit.author.clone(),
-                authors: vec![hit.author],
-                download_count: hit.downloads,
-                follower_count: hit.follows,
-                categories: hit.categories.unwrap_or_default(),
-                web_url: format!("https://modrinth.com/{}/{}", hit.project_type, hit.slug),
-                external_ids: None,
-                gallery: hit.gallery.unwrap_or_default(),
-                featured_gallery: hit.featured_gallery,
-                published_at: Some(hit.published),
-                updated_at: Some(hit.updated),
+            .map(|hit| {
+                let author = if hit.author.is_empty() {
+                    "Unknown".to_string()
+                } else {
+                    hit.author.clone()
+                };
+                ResourceProject {
+                    id: hit.project_id,
+                    source: SourcePlatform::Modrinth,
+                    resource_type: query.resource_type,
+                    name: hit.title,
+                    summary: hit.description,
+                    description: None,
+                    icon_url: hit.icon_url,
+                    author: author.clone(),
+                    authors: vec![author],
+                    download_count: hit.downloads,
+                    follower_count: hit.follows,
+                    categories: hit.categories.unwrap_or_default(),
+                    web_url: format!("https://modrinth.com/{}/{}", hit.project_type, hit.slug),
+                    external_ids: None,
+                    gallery: hit.gallery.unwrap_or_default(),
+                    featured_gallery: hit.featured_gallery,
+                    published_at: hit.published,
+                    updated_at: hit.updated,
+                }
             })
             .collect();
 
