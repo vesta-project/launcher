@@ -7,10 +7,11 @@ use tokio::sync::RwLock;
 
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::{
-    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceProject,
-    ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion, SearchQuery,
-    SearchResponse, SourcePlatform,
+    DependencyType, ReleaseType, ResourceCategory, ResourceDependency, ResourceMetadataCacheRecord,
+    ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
+    SearchQuery, SearchResponse, SourcePlatform,
 };
+use crate::resources::update_cache::{now_datetime_str, VERSION_CACHE_TTL_MINUTES};
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
 use crate::resources::sources::ResourceSource;
@@ -106,6 +107,110 @@ impl ResourceManager {
         diesel::delete(rp_dsl::resource_project)
             .execute(&mut conn)
             .map_err(|e| anyhow!("Failed to clear resource_project table: {}", e))?;
+
+        crate::resources::update_cache::clear_all_instance_update_snapshots()?;
+
+        Ok(())
+    }
+
+    fn platform_to_source_str(platform: SourcePlatform) -> &'static str {
+        match platform {
+            SourcePlatform::Modrinth => "modrinth",
+            SourcePlatform::CurseForge => "curseforge",
+        }
+    }
+
+    fn parse_cache_datetime(value: &str) -> Option<NaiveDateTime> {
+        NaiveDateTime::parse_from_str(value, "%Y-%m-%d %H:%M:%S")
+            .ok()
+            .or_else(|| {
+                chrono::DateTime::parse_from_rfc3339(value)
+                    .ok()
+                    .map(|dt| dt.naive_utc())
+            })
+    }
+
+    fn read_versions_from_db(
+        &self,
+        platform: SourcePlatform,
+        project_id: &str,
+    ) -> Result<Option<Vec<ResourceVersion>>> {
+        let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
+        let source = Self::platform_to_source_str(platform);
+        let now = chrono::Utc::now().naive_utc();
+
+        let record = rmc_dsl::resource_metadata_cache
+            .filter(rmc_dsl::source.eq(source))
+            .filter(rmc_dsl::remote_id.eq(project_id))
+            .first::<ResourceMetadataCacheRecord>(&mut conn)
+            .optional()
+            .map_err(|e| anyhow!("Failed to read resource metadata cache: {}", e))?;
+
+        let Some(record) = record else {
+            return Ok(None);
+        };
+
+        let expires_at = Self::parse_cache_datetime(&record.expires_at);
+        if expires_at.is_none_or(|expires| expires <= now) {
+            return Ok(None);
+        }
+
+        let versions_json = record
+            .versions_data
+            .ok_or_else(|| anyhow!("Cached resource metadata is missing versions_data"))?;
+        let versions: Vec<ResourceVersion> = serde_json::from_str(&versions_json)
+            .map_err(|e| anyhow!("Failed to deserialize cached versions: {}", e))?;
+
+        Ok(Some(versions))
+    }
+
+    fn write_versions_to_db(
+        &self,
+        platform: SourcePlatform,
+        project_id: &str,
+        versions: &[ResourceVersion],
+    ) -> Result<()> {
+        let mut conn = get_vesta_conn().map_err(|e| anyhow!(e.to_string()))?;
+        let source = Self::platform_to_source_str(platform).to_string();
+        let versions_data = serde_json::to_string(versions)
+            .map_err(|e| anyhow!("Failed to serialize versions for cache: {}", e))?;
+        let last_updated = now_datetime_str();
+        let expires_at = (chrono::Utc::now().naive_utc()
+            + chrono::Duration::minutes(VERSION_CACHE_TTL_MINUTES))
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string();
+
+        let existing_project_data = rmc_dsl::resource_metadata_cache
+            .filter(rmc_dsl::source.eq(&source))
+            .filter(rmc_dsl::remote_id.eq(project_id))
+            .select(rmc_dsl::project_data)
+            .first::<String>(&mut conn)
+            .optional()
+            .unwrap_or(None)
+            // project_data is NOT NULL; preserve existing payload or use a minimal placeholder.
+            .unwrap_or_else(|| "{}".to_string());
+
+        let record = ResourceMetadataCacheRecord {
+            id: None,
+            source,
+            remote_id: project_id.to_string(),
+            project_data: existing_project_data,
+            versions_data: Some(versions_data),
+            last_updated,
+            expires_at,
+        };
+
+        diesel::insert_into(rmc_dsl::resource_metadata_cache)
+            .values(&record)
+            .on_conflict((rmc_dsl::source, rmc_dsl::remote_id))
+            .do_update()
+            .set((
+                rmc_dsl::versions_data.eq(&record.versions_data),
+                rmc_dsl::last_updated.eq(&record.last_updated),
+                rmc_dsl::expires_at.eq(&record.expires_at),
+            ))
+            .execute(&mut conn)
+            .map_err(|e| anyhow!("Failed to write resource metadata cache: {}", e))?;
 
         Ok(())
     }
@@ -459,9 +564,17 @@ impl ResourceManager {
         let can_use_memory_cache = !ignore_cache && mc_version.is_none() && loader.is_none();
 
         if can_use_memory_cache {
-            let cache = self.version_cache.read().await;
-            if let Some(versions) = cache.get(&(platform, project_id.to_string())) {
-                return Ok(versions.clone());
+            {
+                let cache = self.version_cache.read().await;
+                if let Some(versions) = cache.get(&(platform, project_id.to_string())) {
+                    return Ok(versions.clone());
+                }
+            }
+
+            if let Some(versions) = self.read_versions_from_db(platform, project_id)? {
+                let mut cache = self.version_cache.write().await;
+                cache.insert((platform, project_id.to_string()), versions.clone());
+                return Ok(versions);
             }
         }
 
@@ -472,6 +585,14 @@ impl ResourceManager {
             {
                 let mut cache = self.version_cache.write().await;
                 cache.insert((platform, project_id.to_string()), versions.clone());
+            }
+            if let Err(e) = self.write_versions_to_db(platform, project_id, &versions) {
+                log::warn!(
+                    "[ResourceManager] Failed to persist version cache for {:?}/{}: {}",
+                    platform,
+                    project_id,
+                    e
+                );
             }
         }
 

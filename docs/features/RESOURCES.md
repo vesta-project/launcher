@@ -85,11 +85,23 @@ Stores metadata for discovered projects:
 - `web_url`: Link to platform page
 
 #### `resource_metadata_cache`
-Caches version and file information:
-- `project_id`: Reference to resource_project
-- `platform`: Source platform
-- `metadata`: JSON blob of version/file data
-- `last_updated`: Cache timestamp
+Caches volatile version list data per remote project:
+- `source`, `remote_id`: Platform and project identifier (unique key)
+- `project_data`: Serialized project payload (preserved across version refreshes)
+- `versions_data`: Serialized `Vec<ResourceVersion>` for update comparison
+- `last_updated`: When the row was written
+- `expires_at`: TTL expiry (30 minutes for version lists)
+
+Read order in `ResourceManager::get_versions`: in-memory `version_cache` → `resource_metadata_cache` → platform API.
+
+#### `instance_resource_update_check`
+Caches per-instance update check results:
+- `instance_id`: Associated instance (primary key)
+- `checked_at`: When the last check completed
+- `results_json`: Serialized update candidates + modpack versions
+- `instance_fingerprint`: Hash of MC version, loader, and modpack version for invalidation
+
+Snapshot TTL is 5 minutes. Fresh snapshots are returned without network calls; stale or forced checks recompute using cached version lists when possible.
 
 #### `installed_resource`
 Tracks installed resources per instance:
@@ -201,7 +213,8 @@ The backend now treats resource project card data as durable and backend-owned.
     - `name`, `summary`, `description`
     - `icon_url`, `icon_data`
     - `last_updated`, `metadata_synced_at`, `icon_synced_at`
-- `resource_metadata_cache` remains TTL-based for volatile payloads (serialized project payload + versions).
+- `resource_metadata_cache` stores version lists with a 30-minute TTL for update comparison.
+- `instance_resource_update_check` stores per-instance update snapshots with a 5-minute TTL.
 - `get_or_hydrate_resource_projects` command accepts `[{ platform, id }]` refs and:
     - returns existing durable rows immediately
     - hydrates missing/incomplete rows from backend sources when network is allowed
@@ -210,9 +223,10 @@ The backend now treats resource project card data as durable and backend-owned.
 This allows instance resource views to request backend-hydrated project records instead of relying on frontend URL fetches.
 
 ### Cache Invalidation
-- **Time-based**: Automatic expiration after configurable periods
-- **Version-based**: Invalidation when new versions are detected
-- **Manual**: User-triggered cache refresh operations
+- **Time-based**: Version cache (30 min), instance update snapshots (5 min)
+- **Fingerprint-based**: Instance snapshot invalidated when MC version, loader, or modpack version changes
+- **Event-based**: Snapshots cleared on resource install, update, or delete
+- **Manual**: `forceRefresh` on `check_instance_updates_lightweight` bypasses snapshot and version cache
 
 ### Performance Benefits
 - Reduced API calls to external platforms
@@ -259,7 +273,9 @@ instance/
 - `get_resource_categories`: Fetch available categories
 - `search_resources`: Search projects with filters
 - `get_resource_project`: Get detailed project info
-- `get_resource_versions`: Fetch available versions
+- `get_resource_versions`: Fetch available versions (uses layered version cache)
+- `check_instance_updates_lightweight`: Check instance for resource/modpack updates (uses snapshot + version cache)
+- `get_instance_update_snapshot`: Read cached update snapshot without triggering a check
 - `install_resource`: Download and install resource
 - `delete_resource`: Remove installed resource
 - `toggle_resource`: Enable/disable resource

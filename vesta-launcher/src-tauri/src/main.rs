@@ -276,6 +276,7 @@ fn main() {
             commands::resources::backfill_modpack_resource_provenance_fast,
             commands::resources::backfill_modpack_resource_provenance,
             commands::resources::check_instance_updates_lightweight,
+            commands::resources::get_instance_update_snapshot,
             commands::resources::sync_instance_resources,
             commands::resources::get_installed_resources,
             commands::resources::check_resource_updates,

@@ -169,6 +169,15 @@ diesel::table! {
 }
 
 diesel::table! {
+    instance_resource_update_check (instance_id) {
+        instance_id -> Integer,
+        checked_at -> Text,
+        results_json -> Text,
+        instance_fingerprint -> Text,
+    }
+}
+
+diesel::table! {
     resource_metadata_cache (id) {
         id -> Nullable<Integer>,
         source -> Text,
@@ -230,6 +239,7 @@ diesel::table! {
 }
 
 diesel::joinable!(installed_resource -> instance (instance_id));
+diesel::joinable!(instance_resource_update_check -> instance (instance_id));
 diesel::joinable!(notification_seen_items -> notification_subscriptions (subscription_id));
 
 diesel::allow_tables_to_appear_in_same_query!(
@@ -241,6 +251,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     notification_seen_items,
     notification_subscriptions,
     pinned_page,
+    instance_resource_update_check,
     resource_metadata_cache,
     resource_project,
     saved_themes,

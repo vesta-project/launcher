@@ -21,7 +21,6 @@ import {
   unpinPage,
 } from "@stores/pinning";
 import {
-  findBestVersion,
   type InstalledResource,
   type ResourceVersion,
   resources,
@@ -111,6 +110,16 @@ type LightweightUpdateCheckResult = {
     version: ResourceVersion;
   }>;
   modpackVersions: ResourceVersion[];
+};
+
+type InstanceUpdateSnapshot = {
+  checkedAt: string;
+  resourceUpdates: Array<{
+    resourceId: number;
+    version: ResourceVersion;
+  }>;
+  modpackVersions: ResourceVersion[];
+  isStale: boolean;
 };
 
 type TabType =
@@ -1206,7 +1215,6 @@ export default function InstanceDetails(
       console.error("Failed to get total RAM:", e);
     }
   });
-  const [lastCheckTime, setLastCheckTime] = createSignal<number>(0);
 
   // Modpack versions for picker
   const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<
@@ -1255,6 +1263,45 @@ export default function InstanceDetails(
       }
     },
   );
+
+  const applyUpdateCheckResult = (result: LightweightUpdateCheckResult) => {
+    const newUpdates: Record<number, ResourceVersion> = {};
+    for (const update of result.resourceUpdates) {
+      newUpdates[update.resourceId] = update.version;
+    }
+    setUpdates(newUpdates);
+
+    if (result.modpackVersions.length > 0) {
+      mutateModpackVersions(result.modpackVersions);
+    }
+  };
+
+  const hydrateUpdateSnapshot = async (instanceId: number) => {
+    try {
+      const snapshot = await invoke<InstanceUpdateSnapshot | null>(
+        "get_instance_update_snapshot",
+        { instanceId },
+      );
+      if (snapshot) {
+        applyUpdateCheckResult(snapshot);
+      } else {
+        setUpdates({});
+      }
+      return snapshot;
+    } catch (e) {
+      console.error("Failed to load cached update snapshot:", e);
+      setUpdates({});
+      return null;
+    }
+  };
+
+  createEffect(() => {
+    const inst = instance();
+    setUpdates({});
+    setCheckedPerResource(new Set());
+    if (!inst) return;
+    void hydrateUpdateSnapshot(inst.id);
+  });
 
   const availableModpackUpdate = createMemo(() => {
     const inst = instance();
@@ -1722,15 +1769,12 @@ export default function InstanceDetails(
     if (tab === "resources" && inst && !busy()) {
       await triggerConditionalResync("resources-tab-enter");
 
-      // Then check for updates if needed
-      const now = Date.now();
-      if (
-        !installedResources.loading &&
-        !checkingUpdates() &&
-        now - lastCheckTime() > 5 * 60 * 1000
-      ) {
-        checkUpdates();
-      }
+      if (installedResources.loading || checkingUpdates()) return;
+
+      const snapshot = await hydrateUpdateSnapshot(inst.id);
+      if (!snapshot?.isStale) return;
+
+      void checkUpdates(false);
     }
   });
 
@@ -1757,31 +1801,22 @@ export default function InstanceDetails(
     ),
   );
 
-  const checkUpdates = async () => {
+  const checkUpdates = async (forceRefresh = false) => {
     const inst = instance();
     if (!inst || checkingUpdates()) return;
 
     setCheckingUpdates(true);
-    setLastCheckTime(Date.now());
 
     try {
       const result = await invoke<LightweightUpdateCheckResult>(
         "check_instance_updates_lightweight",
         {
           instanceId: inst.id,
-          forceRefresh: false,
+          forceRefresh,
         },
       );
 
-      if (result.modpackVersions.length > 0) {
-        mutateModpackVersions(result.modpackVersions);
-      }
-
-      const newUpdates: Record<number, ResourceVersion> = {};
-      for (const update of result.resourceUpdates) {
-        newUpdates[update.resourceId] = update.version;
-      }
-      setUpdates(newUpdates);
+      applyUpdateCheckResult(result);
     } catch (e) {
       console.error("Failed to check instance updates:", e);
       showToast({
@@ -2047,20 +2082,16 @@ columnHelper.accessor("display_name", {
               const inst = instance();
               if (!inst) return;
               try {
-                const versions = await resources.getVersions(
-                  resource.platform as any,
-                  resource.remote_id,
-                  true,
+                const result = await invoke<LightweightUpdateCheckResult>(
+                  "check_instance_updates_lightweight",
+                  {
+                    instanceId: inst.id,
+                    forceRefresh: false,
+                    resourceIds: [resource.id],
+                    forceResourceIds: [resource.id],
+                  },
                 );
-                const best = findBestVersion(
-                  versions,
-                  inst.minecraftVersion,
-                  inst.modloader,
-                  resource.release_type,
-                );
-                if (best && String(best.id) !== String(resource.remote_version_id)) {
-                  setUpdates((prev) => ({ ...prev, [resource.id]: best }));
-                }
+                applyUpdateCheckResult(result);
               } catch (e) {
                 console.error(`Failed to check updates for ${resource.display_name}:`, e);
               } finally {
@@ -2581,7 +2612,7 @@ columnHelper.accessor("display_name", {
                       selectedToUpdateCount={selectedToUpdateCount()}
                       busy={busy()}
                       checkingUpdates={checkingUpdates()}
-                      checkUpdates={checkUpdates}
+                      checkUpdates={() => void checkUpdates(true)}
                       onCompactChange={setIsCompactTable}
                     />
                   </TabsContent>
@@ -2599,7 +2630,7 @@ columnHelper.accessor("display_name", {
                         busy={busy()}
                         isInstalling={isInstalling()}
                         checkingUpdates={checkingUpdates()}
-                        checkUpdates={checkUpdates}
+                        checkUpdates={() => void checkUpdates(true)}
                         modpackVersions={modpackVersions}
                         availableModpackUpdate={availableModpackUpdate()}
                         handleModpackVersionSelect={handleModpackVersionSelect}

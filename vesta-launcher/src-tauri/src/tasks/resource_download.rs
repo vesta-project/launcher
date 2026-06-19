@@ -367,6 +367,16 @@ impl Task for ResourceDownloadTask {
                 let _ = fs::rename(&temp_file_path, &final_path).await;
             }
 
+            if let Err(e) =
+                crate::resources::update_cache::invalidate_instance_update_snapshot(instance_id)
+            {
+                log::warn!(
+                    "[update_cache] Failed to invalidate snapshot for instance {}: {}",
+                    instance_id,
+                    e
+                );
+            }
+
             // 7. Handle dependencies (Special case for Shaders)
             if resource_type == ResourceType::Shader {
                 // TODO: Auto-install Iris/Sodium or Oculus/Embeddium

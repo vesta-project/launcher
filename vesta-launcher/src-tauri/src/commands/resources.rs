@@ -1,11 +1,17 @@
 use anyhow::{anyhow, Context};
 use base64::{engine::general_purpose, Engine as _};
-use serde::Serialize;
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
     ReleaseType, ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef,
     ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+};
+use crate::models::resource_update::{
+    InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
+};
+use crate::resources::update_cache::{
+    instance_update_fingerprint, invalidate_instance_update_snapshot, is_snapshot_fresh,
+    load_instance_update_snapshot, save_instance_update_snapshot, snapshot_to_result,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
@@ -16,20 +22,6 @@ use tauri::{Emitter, Manager, State};
 /// Timeout for image downloads (in seconds)
 const IMAGE_DOWNLOAD_TIMEOUT_SECS: u64 = 8;
 const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ResourceUpdateCheckResult {
-    pub resource_id: i32,
-    pub version: ResourceVersion,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct InstanceUpdateCheckResult {
-    pub resource_updates: Vec<ResourceUpdateCheckResult>,
-    pub modpack_versions: Vec<ResourceVersion>,
-}
 
 /// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.
 /// Detects the actual image format from magic bytes.
@@ -372,10 +364,31 @@ pub async fn get_resource_versions(
 }
 
 #[tauri::command]
+pub fn get_instance_update_snapshot(
+    instance_id: i32,
+) -> Result<Option<InstanceUpdateSnapshotResponse>> {
+    use crate::models::instance::Instance;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let inst = inst_dsl::instance
+        .filter(inst_dsl::id.eq(instance_id))
+        .first::<Instance>(&mut conn)
+        .map_err(|e| anyhow::anyhow!("Failed to load instance: {}", e))?;
+
+    crate::resources::update_cache::get_instance_update_snapshot_response(instance_id, &inst)
+        .map_err(|e| anyhow::anyhow!(e.to_string()).into())
+}
+
+#[tauri::command]
 pub async fn check_instance_updates_lightweight(
     resource_manager: State<'_, ResourceManager>,
     instance_id: i32,
     force_refresh: Option<bool>,
+    resource_ids: Option<Vec<i32>>,
+    force_resource_ids: Option<Vec<i32>>,
 ) -> Result<InstanceUpdateCheckResult> {
     use crate::models::installed_resource::InstalledResource;
     use crate::models::instance::Instance;
@@ -384,6 +397,7 @@ pub async fn check_instance_updates_lightweight(
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
     use futures::stream::{self, StreamExt};
+    use std::collections::{HashMap, HashSet};
 
     let (inst, resources) = {
         let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -399,27 +413,57 @@ pub async fn check_instance_updates_lightweight(
         (inst, resources)
     };
 
-    let ignore_cache = force_refresh.unwrap_or(false);
+    let fingerprint = instance_update_fingerprint(&inst);
+    let force_refresh = force_refresh.unwrap_or(false);
+    let filter_ids: Option<HashSet<i32>> = resource_ids.map(|ids| ids.into_iter().collect());
+    let force_resource_ids: HashSet<i32> = force_resource_ids
+        .unwrap_or_default()
+        .into_iter()
+        .collect();
+    let is_partial = filter_ids.is_some() || !force_resource_ids.is_empty();
+
+    if !force_refresh && !is_partial {
+        if let Some(record) = load_instance_update_snapshot(instance_id)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        {
+            if is_snapshot_fresh(&record, &fingerprint) {
+                return Ok(
+                    snapshot_to_result(&record).map_err(|e| anyhow::anyhow!(e.to_string()))?,
+                );
+            }
+        }
+    }
+
     let loader = inst
         .modloader
         .clone()
         .unwrap_or_else(|| "vanilla".to_string());
 
-    let modpack_versions = if let (Some(modpack_id), Some(modpack_platform)) =
-        (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
-    {
-        match source_platform_from_str(modpack_platform) {
-            Some(platform) => resource_manager
-                .get_versions(platform, modpack_id, ignore_cache, None, None)
-                .await
-                .unwrap_or_default(),
-            None => Vec::new(),
-        }
-    } else {
-        Vec::new()
-    };
+    let mut merged_updates: HashMap<i32, ResourceUpdateCheckResult> = HashMap::new();
+    let mut modpack_versions = Vec::new();
+    let mut merge_base_loaded = false;
+    let mut had_snapshot = false;
 
-    let candidates: Vec<InstalledResource> = resources
+    if is_partial {
+        if let Some(record) = load_instance_update_snapshot(instance_id)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?
+        {
+            had_snapshot = true;
+            if record.instance_fingerprint == fingerprint {
+                if let Ok(data) = snapshot_to_result(&record) {
+                    for update in data.resource_updates {
+                        merged_updates.insert(update.resource_id, update);
+                    }
+                    if !force_refresh {
+                        modpack_versions = data.modpack_versions;
+                    }
+                    merge_base_loaded = true;
+                }
+            }
+        }
+    }
+
+    let all_candidates: Vec<InstalledResource> = resources
         .into_iter()
         .filter(|res| {
             res.source_kind != "modpack"
@@ -428,6 +472,41 @@ pub async fn check_instance_updates_lightweight(
         })
         .collect();
 
+    let candidates: Vec<InstalledResource> = if let Some(ref ids) = filter_ids {
+        all_candidates
+            .into_iter()
+            .filter(|res| ids.contains(&res.id))
+            .collect()
+    } else {
+        all_candidates
+    };
+
+    if !is_partial {
+        if let (Some(modpack_id), Some(modpack_platform)) =
+            (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
+        {
+            modpack_versions = match source_platform_from_str(modpack_platform) {
+                Some(platform) => resource_manager
+                    .get_versions(platform, modpack_id, force_refresh, None, None)
+                    .await
+                    .unwrap_or_default(),
+                None => Vec::new(),
+            };
+        }
+    } else if force_refresh || modpack_versions.is_empty() {
+        if let (Some(modpack_id), Some(modpack_platform)) =
+            (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
+        {
+            modpack_versions = match source_platform_from_str(modpack_platform) {
+                Some(platform) => resource_manager
+                    .get_versions(platform, modpack_id, force_refresh, None, None)
+                    .await
+                    .unwrap_or_default(),
+                None => Vec::new(),
+            };
+        }
+    }
+
     let rm = resource_manager.inner().clone();
     let mc_version = inst.minecraft_version.clone();
     let update_results = stream::iter(candidates)
@@ -435,20 +514,31 @@ pub async fn check_instance_updates_lightweight(
             let rm = rm.clone();
             let mc_version = mc_version.clone();
             let loader = loader.clone();
+            let ignore_version_cache =
+                force_refresh || force_resource_ids.contains(&res.id);
             async move {
                 let platform = source_platform_from_str(&res.platform)?;
                 let versions = rm
-                    .get_versions(platform, &res.remote_id, ignore_cache, None, None)
+                    .get_versions(
+                        platform,
+                        &res.remote_id,
+                        ignore_version_cache,
+                        None,
+                        None,
+                    )
                     .await
                     .ok()?;
                 let best = find_best_resource_update(&versions, &res, &mc_version, &loader)?;
                 if best.id == res.remote_version_id {
-                    return None;
+                    return Some((res.id, None));
                 }
-                Some(ResourceUpdateCheckResult {
-                    resource_id: res.id,
-                    version: best,
-                })
+                Some((
+                    res.id,
+                    Some(ResourceUpdateCheckResult {
+                        resource_id: res.id,
+                        version: best,
+                    }),
+                ))
             }
         })
         .buffer_unordered(MAX_CONCURRENT_UPDATE_CHECKS)
@@ -456,10 +546,34 @@ pub async fn check_instance_updates_lightweight(
         .collect::<Vec<_>>()
         .await;
 
-    Ok(InstanceUpdateCheckResult {
-        resource_updates: update_results,
+    for (resource_id, update) in update_results {
+        if let Some(entry) = update {
+            merged_updates.insert(resource_id, entry);
+        } else {
+            merged_updates.remove(&resource_id);
+        }
+    }
+
+    let result = InstanceUpdateCheckResult {
+        resource_updates: merged_updates.into_values().collect(),
         modpack_versions,
-    })
+    };
+
+    let should_save_snapshot = !is_partial || merge_base_loaded || !had_snapshot;
+    if should_save_snapshot {
+        save_instance_update_snapshot(instance_id, &fingerprint, &result)
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    } else if had_snapshot {
+        if let Err(e) = invalidate_instance_update_snapshot(instance_id) {
+            log::warn!(
+                "[update_cache] Failed to invalidate stale snapshot for instance {}: {}",
+                instance_id,
+                e
+            );
+        }
+    }
+
+    Ok(result)
 }
 
 fn source_platform_from_str(platform: &str) -> Option<SourcePlatform> {
@@ -633,6 +747,14 @@ pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
     diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
         .execute(&mut conn)
         .map_err(|e| anyhow::anyhow!("Failed to delete from database: {}", e))?;
+
+    if let Err(e) = invalidate_instance_update_snapshot(instance_id) {
+        log::warn!(
+            "[update_cache] Failed to invalidate snapshot for instance {}: {}",
+            instance_id,
+            e
+        );
+    }
 
     Ok(())
 }

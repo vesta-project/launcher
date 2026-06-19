@@ -1,0 +1,1 @@
+DROP TABLE instance_resource_update_check;
