@@ -143,14 +143,16 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 								</div>
 							</div>
 							<div class={styles["statusArea"]}>
-								<Show when={props.availableUpdate}>
-									<span class={styles["updateSignal"]}>
-										Update {props.availableUpdate?.version_number}
-									</span>
+								<Show
+									when={props.availableUpdate}
+									fallback={
+										<span class={styles["chevronWell"]}>
+											<RightArrowIcon class={styles["chevron"]} />
+										</span>
+									}
+								>
+									<span class={styles["updateAvailableLabel"]}>Update available</span>
 								</Show>
-								<span class={styles["chevronWell"]}>
-									<RightArrowIcon class={styles["chevron"]} />
-								</span>
 							</div>
 						</button>
 					</div>

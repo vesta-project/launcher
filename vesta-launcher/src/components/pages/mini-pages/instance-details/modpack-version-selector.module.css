@@ -215,25 +215,15 @@
     justify-content: flex-end;
     gap: 8px;
     flex-shrink: 0;
+    min-width: 0;
 }
 
-.updateSignal {
-    display: inline-flex;
-    align-items: center;
+.updateAvailableLabel {
     color: var(--primary-accent);
     font-size: 0.68rem;
-    font-weight: 800;
+    font-weight: 700;
     white-space: nowrap;
-}
-
-.updateSignal::before {
-    content: "";
-    width: 6px;
-    height: 6px;
-    margin-right: 6px;
-    border-radius: 999px;
-    background: currentColor;
-    box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+    flex-shrink: 0;
 }
 
 .chevronWell {

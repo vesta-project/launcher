@@ -1583,11 +1583,65 @@
 }
 
 .row-actions-cell {
+    display: grid;
+    grid-template-columns: 24px 28px;
+    column-gap: 2px;
+    justify-content: end;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    padding-right: 6px;
+    box-sizing: border-box;
+}
+
+.row-actions-update-slot {
+    width: 24px;
+    height: 24px;
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 100%;
-    min-height: 32px;
+}
+
+.row-actions-menu-slot {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.row-actions-update-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: hsl(45 90% 50%);
+    cursor: default;
+    flex-shrink: 0;
+    transition:
+        background-color 150ms ease,
+        color 150ms ease;
+    outline: none;
+}
+
+.row-actions-update-button:hover:not(:disabled) {
+    background: hsl(45 90% 50% / 0.12);
+    color: hsl(45 95% 58%);
+}
+
+.row-actions-update-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.row-actions-update-button svg {
+    width: 14px;
+    height: 14px;
 }
 
 .col-enabled {
@@ -1749,9 +1803,9 @@
 
 .vesta-table th.col-current_version,
 .vesta-table td.col-current_version {
-    width: 96px;
-    min-width: 96px;
-    padding: 10px 8px;
+    width: 84px;
+    min-width: 84px;
+    padding: 10px 6px;
 }
 
 .vesta-table th.col-is_enabled,
@@ -1765,11 +1819,11 @@
 
 .vesta-table th.col-actions,
 .vesta-table td.col-actions {
-    width: 48px;
-    min-width: 48px;
-    max-width: 48px;
+    width: 68px;
+    min-width: 68px;
+    max-width: 68px;
     padding: 0;
-    text-align: center;
+    text-align: right;
     vertical-align: middle;
     overflow: visible;
 }
@@ -1871,9 +1925,21 @@
     font-weight: 600;
 }
 
-.modpack-group-update-text {
-    color: hsl(180 85% 72%);
-    font-weight: 800;
+.update-available-link {
+    display: inline;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--primary-accent);
+    font: inherit;
+    font-weight: 700;
+    cursor: default;
+    text-decoration: none;
+}
+
+.update-available-link:hover {
+    text-decoration: underline;
 }
 
 .modpack-group-version {

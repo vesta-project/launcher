@@ -33,9 +33,9 @@ const FILTER_OPTIONS = [
 const COLUMN_WIDTHS: Record<string, string | undefined> = {
 	select: "48px",
 	display_name: undefined,
-	current_version: "96px",
+	current_version: "84px",
 	is_enabled: "56px",
-	actions: "48px",
+	actions: "68px",
 };
 
 const COLUMN_CLASS: Record<string, string> = {
@@ -150,9 +150,17 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								<Show when={props.availableModpackUpdate}>
 									<>
 										{" • "}
-										<span class={styles["modpack-group-update-text"]}>
-											Update {props.availableModpackUpdate.version_number}
-										</span>
+										<button
+											type="button"
+											class={styles["update-available-link"]}
+											title={props.availableModpackUpdate?.version_number}
+											onClick={(event: MouseEvent) => {
+												event.stopPropagation();
+												props.onManageModpackVersions();
+											}}
+										>
+											Update available
+										</button>
 									</>
 								</Show>
 							</span>
@@ -171,55 +179,60 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 				);
 			case "actions":
 				return (
-					<DropdownMenu>
-						<DropdownMenuTrigger
-							as="button"
-							class={styles["row-actions-trigger-button"]}
-							onClick={(event: MouseEvent) => event.stopPropagation()}
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="16"
-								height="16"
-								viewBox="0 0 24 24"
-								fill="currentColor"
-							>
-								<circle cx="12" cy="5" r="1.5" />
-								<circle cx="12" cy="12" r="1.5" />
-								<circle cx="12" cy="19" r="1.5" />
-							</svg>
-						</DropdownMenuTrigger>
-						<DropdownMenuContent>
-							<DropdownMenuItem
-								onSelect={props.onManageModpackVersions}
-								disabled={props.busy}
-							>
-								Manage versions
-							</DropdownMenuItem>
-							<DropdownMenuItem
-								onSelect={props.onUnlinkModpack}
-								disabled={props.busy}
-							>
-								Unlink
-							</DropdownMenuItem>
-							<DropdownMenuSeparator class={styles["row-actions-separator"]} />
-							<DropdownMenuItem
-								onSelect={props.onDeleteModpackAndUnlink}
-								disabled={props.busy || props.modpackResources.length === 0}
-								class={styles["row-actions-delete"]}
-							>
-								<TrashIcon
-									style={{
-										width: "14px",
-										height: "14px",
-										"margin-right": "8px",
-										flex: "0 0 auto",
-									}}
-								/>
-								Delete & unlink
-							</DropdownMenuItem>
-						</DropdownMenuContent>
-					</DropdownMenu>
+					<div class={styles["row-actions-cell"]}>
+						<div class={styles["row-actions-update-slot"]} />
+						<div class={styles["row-actions-menu-slot"]}>
+							<DropdownMenu>
+								<DropdownMenuTrigger
+									as="button"
+									class={styles["row-actions-trigger-button"]}
+									onClick={(event: MouseEvent) => event.stopPropagation()}
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										width="16"
+										height="16"
+										viewBox="0 0 24 24"
+										fill="currentColor"
+									>
+										<circle cx="12" cy="5" r="1.5" />
+										<circle cx="12" cy="12" r="1.5" />
+										<circle cx="12" cy="19" r="1.5" />
+									</svg>
+								</DropdownMenuTrigger>
+								<DropdownMenuContent>
+									<DropdownMenuItem
+										onSelect={props.onManageModpackVersions}
+										disabled={props.busy}
+									>
+										Manage versions
+									</DropdownMenuItem>
+									<DropdownMenuItem
+										onSelect={props.onUnlinkModpack}
+										disabled={props.busy}
+									>
+										Unlink
+									</DropdownMenuItem>
+									<DropdownMenuSeparator class={styles["row-actions-separator"]} />
+									<DropdownMenuItem
+										onSelect={props.onDeleteModpackAndUnlink}
+										disabled={props.busy || props.modpackResources.length === 0}
+										class={styles["row-actions-delete"]}
+									>
+										<TrashIcon
+											style={{
+												width: "14px",
+												height: "14px",
+												"margin-right": "8px",
+												flex: "0 0 auto",
+											}}
+										/>
+										Delete & unlink
+									</DropdownMenuItem>
+								</DropdownMenuContent>
+							</DropdownMenu>
+						</div>
+					</div>
 				);
 			default:
 				return <span class={styles["modpack-group-empty"]} />;

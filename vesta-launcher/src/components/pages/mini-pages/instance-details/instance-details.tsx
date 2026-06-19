@@ -1057,15 +1057,22 @@ export default function InstanceDetails(
   });
 
   let lastSelectedRowId: string | null = null;
+  let suppressRowNavigationUntil = 0;
+
+  const suppressRowNavigation = () => {
+    suppressRowNavigationUntil = Date.now() + 300;
+  };
 
   const handleRowClick = (row: any, event: MouseEvent) => {
     const target = event.target as HTMLElement;
+    if (Date.now() < suppressRowNavigationUntil) return;
     // Prevent navigation if clicking interactive elements inside the row
     if (
       target.closest("button") ||
       target.closest("a") ||
       target.closest("input") ||
       target.closest(".v-switch") ||
+      target.closest(`.${styles["row-actions-cell"]}`) ||
       target.getAttribute("role") === "checkbox" ||
       target.getAttribute("role") === "switch"
     ) {
@@ -1997,9 +2004,8 @@ columnHelper.accessor("display_name", {
 		columnHelper.display({
 			id: "actions",
 			header: "",
-      size: 48,
+      size: 68,
       cell: (info) => (
-        <div class={styles["row-actions-cell"]}>
           <ResourceRowActions
             resource={info.row.original}
             update={updates()[info.row.original.id]}
@@ -2008,6 +2014,7 @@ columnHelper.accessor("display_name", {
             showVersionInfo={isCompactTable()}
             currentVersion={info.row.original.current_version}
             busy={busy()}
+            onMenuItemSelect={suppressRowNavigation}
             onUpdate={handleUpdate}
             onDelete={async (resource) => {
               if (
@@ -2066,7 +2073,6 @@ columnHelper.accessor("display_name", {
               }
             }}
           />
-        </div>
       ),
     }),
   ];
