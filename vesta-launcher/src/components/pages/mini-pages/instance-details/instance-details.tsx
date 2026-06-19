@@ -71,6 +71,7 @@ import {
 } from "@utils/instances";
 import type { Instance } from "@utils/instances";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
+import { selectEligibleModpackUpdate } from "@utils/modpack-update";
 import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
@@ -103,6 +104,14 @@ import { ResourcesTab } from "./tabs/ResourcesTab";
 import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
 import { SettingsTab } from "./tabs/SettingsTab";
 import { VersioningTab } from "./tabs/VersioningTab";
+
+type LightweightUpdateCheckResult = {
+  resourceUpdates: Array<{
+    resourceId: number;
+    version: ResourceVersion;
+  }>;
+  modpackVersions: ResourceVersion[];
+};
 
 type TabType =
   | "home"
@@ -231,6 +240,30 @@ const getProjectRecordKey = (
   if (!platform || !id) return null;
   return `${platform.toLowerCase()}:${id}`;
 };
+
+const normalizeResourceSourceKind = (resource: InstalledResource | undefined) =>
+  (resource?.source_kind || "custom").toLowerCase();
+
+const isModpackOwnedResource = (resource: InstalledResource | undefined) =>
+  normalizeResourceSourceKind(resource) === "modpack";
+
+const isCustomResource = (resource: InstalledResource | undefined) =>
+  !isModpackOwnedResource(resource);
+
+const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
+  !!resource?.remote_id &&
+  (resource.platform === "modrinth" || resource.platform === "curseforge");
+
+const isSameCanonicalProject = (
+  a: InstalledResource | undefined,
+  b: InstalledResource | undefined,
+) =>
+  !!a &&
+  !!b &&
+  hasCanonicalResourceLink(a) &&
+  hasCanonicalResourceLink(b) &&
+  a.platform === b.platform &&
+  String(a.remote_id) === String(b.remote_id);
 
 const AUTO_RESYNC_COOLDOWN_MS = 5 * 60 * 1000;
 
@@ -387,6 +420,20 @@ export default function InstanceDetails(
       }
     },
   );
+
+  const modpackOwnedResources = createMemo(() =>
+    (installedResources() || []).filter(isModpackOwnedResource),
+  );
+
+  const customResources = createMemo(() =>
+    (installedResources() || []).filter(isCustomResource),
+  );
+
+  const [provenanceBackfillKeys, setProvenanceBackfillKeys] = createSignal<
+    Record<string, boolean>
+  >({});
+  const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
+    createSignal(false);
 
   const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<
     Record<number, number>
@@ -856,6 +903,48 @@ export default function InstanceDetails(
       : "home";
   });
 
+  createEffect(
+    on(
+      () =>
+        [
+          activeTab(),
+          instance()?.id,
+          instance()?.modpackId,
+          instance()?.modpackVersionId,
+          instance()?.modpackPlatform,
+        ] as const,
+      ([tab, id, modpackId, modpackVersionId, modpackPlatform]) => {
+        if (
+          !id ||
+          !modpackId ||
+          !modpackVersionId ||
+          !modpackPlatform ||
+          (tab !== "resources" && tab !== "versioning")
+        ) {
+          return;
+        }
+
+        const key = `${id}:${modpackPlatform}:${modpackId}:${modpackVersionId}`;
+        if (provenanceBackfillKeys()[key] || provenanceBackfillInFlight()) {
+          return;
+        }
+
+        setProvenanceBackfillInFlight(true);
+        void invoke("backfill_modpack_resource_provenance_fast", {
+            instanceId: id,
+          })
+          .catch((e) => {
+            console.error("Failed to start fast modpack resource provenance backfill:", e);
+          })
+          .finally(() => {
+            setProvenanceBackfillKeys((prev) => ({ ...prev, [key]: true }));
+            setProvenanceBackfillInFlight(false);
+          });
+      },
+      { defer: true },
+    ),
+  );
+
   const [showExportDialog, setShowExportDialog] = createSignal(false);
 
   const [busy, setBusy] = createSignal(false);
@@ -1090,6 +1179,10 @@ export default function InstanceDetails(
     createSignal<string>("All");
   const [resourceSearch, setResourceSearch] = createSignal("");
   const [isCompactTable, setIsCompactTable] = createSignal(false);
+  const [modpackResourcesExpanded, setModpackResourcesExpanded] =
+    createSignal(false);
+  const [overrideConflictConfirmed, setOverrideConflictConfirmed] =
+    createSignal(false);
   const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>(
     {},
   );
@@ -1132,7 +1225,7 @@ export default function InstanceDetails(
   const [compatibilityInitialized, setCompatibilityInitialized] =
     createSignal(false);
 
-  const [modpackVersions, { refetch: refetchModpackVersions }] = createResource(
+  const [modpackVersions, { mutate: mutateModpackVersions }] = createResource(
     () => {
       const inst = instance();
       return {
@@ -1155,6 +1248,20 @@ export default function InstanceDetails(
       }
     },
   );
+
+  const availableModpackUpdate = createMemo(() => {
+    const inst = instance();
+    const versions = modpackVersions();
+    if (!inst?.modpackId || !versions || versions.length === 0) return null;
+    const currentId = inst.modpackVersionId ? String(inst.modpackVersionId) : null;
+    return selectEligibleModpackUpdate(versions, currentId, inst.minecraftVersion);
+  });
+
+  const currentModpackVersion = createMemo(() => {
+    const inst = instance();
+    const currentId = inst?.modpackVersionId ? String(inst.modpackVersionId) : null;
+    return modpackVersions()?.find((version) => String(version.id) === currentId) || null;
+  });
 
   const searchableMcVersions = createMemo(() => {
     const versions = mcVersions()?.game_versions || [];
@@ -1481,6 +1588,51 @@ export default function InstanceDetails(
     }
   };
 
+  const handleDeleteModpackFilesAndUnlink = async () => {
+    const inst = instance();
+    if (!inst) return;
+
+    const bundledResources = modpackOwnedResources();
+    const confirmed = await dialogStore.confirm(
+      "Delete Modpack Files?",
+      `This will delete ${bundledResources.length} bundled modpack resources from this instance, keep custom resources and overrides, then unlink the modpack connection.`,
+      {
+        severity: "warning",
+        okLabel: "Delete & Unlink",
+        isDestructive: true,
+      },
+    );
+    if (!confirmed) return;
+
+    setBusy(true);
+    try {
+      for (const resource of bundledResources) {
+        await invoke("delete_resource", {
+          instanceId: inst.id,
+          resourceId: resource.id,
+        });
+      }
+
+      await unlinkInstance(inst);
+      await Promise.all([refetch(), refetchResources()]);
+      showToast({
+        title: "Modpack Files Deleted",
+        description: "Bundled modpack resources were removed and the instance was unlinked.",
+        severity: "success",
+      });
+    } catch (e) {
+      console.error("Failed to delete modpack files and unlink:", e);
+      await refetchResources();
+      showToast({
+        title: "Delete Failed",
+        description: "Vesta stopped before unlinking. Your custom resources were left intact.",
+        severity: "error",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const handleStandardUpdate = async () => {
     const inst = instance();
     if (!inst) return;
@@ -1603,65 +1755,36 @@ export default function InstanceDetails(
     if (!inst || checkingUpdates()) return;
 
     setCheckingUpdates(true);
-
-    // If modpack is linked, refresh versions resource
-    if (inst.modpackId) {
-      console.log(
-        `[InstanceDetails] Refreshing modpack versions for ${inst.modpackId}`,
-      );
-      // Resource handles its own refetching if we just trigger it
-      await refetchModpackVersions();
-    }
-
-    const resourcesList = installedResources();
-    if (!resourcesList) {
-      setCheckingUpdates(false);
-      return;
-    }
-
     setLastCheckTime(Date.now());
-    console.log(
-      `[InstanceDetails] Checking updates for ${resourcesList.length} resources on MC ${inst.minecraftVersion} (${inst.modloader})`,
-    );
 
-    const newUpdates: Record<number, ResourceVersion> = {};
+    try {
+      const result = await invoke<LightweightUpdateCheckResult>(
+        "check_instance_updates_lightweight",
+        {
+          instanceId: inst.id,
+          forceRefresh: false,
+        },
+      );
 
-    for (const res of resourcesList) {
-      if (res.is_manual || res.platform === "manual") continue;
-      try {
-        // We ignore cache here because the user explicitly asked to check for updates
-        const versions = await resources.getVersions(
-          res.platform as any,
-          res.remote_id,
-          true,
-        );
-        const best = findBestVersion(
-          versions,
-          inst.minecraftVersion,
-          inst.modloader,
-          res.release_type,
-        );
-
-        if (best) {
-          // Some platforms return versions in slightly different formats (string vs number)
-          // Compare as strings to be safe
-          if (String(best.id) !== String(res.remote_version_id)) {
-            console.log(
-              `[InstanceDetails] Update found for ${res.display_name}: ${res.current_version} -> ${best.version_number}`,
-            );
-            newUpdates[res.id] = best;
-          }
-        }
-      } catch (e) {
-        console.error(`Failed to check updates for ${res.display_name}:`, e);
+      if (result.modpackVersions.length > 0) {
+        mutateModpackVersions(result.modpackVersions);
       }
-    }
 
-    console.log(
-      `[InstanceDetails] Finished check. Found ${Object.keys(newUpdates).length} updates.`,
-    );
-    setUpdates(newUpdates);
-    setCheckingUpdates(false);
+      const newUpdates: Record<number, ResourceVersion> = {};
+      for (const update of result.resourceUpdates) {
+        newUpdates[update.resourceId] = update.version;
+      }
+      setUpdates(newUpdates);
+    } catch (e) {
+      console.error("Failed to check instance updates:", e);
+      showToast({
+        title: "Update Check Failed",
+        description: "Vesta could not check for updates right now.",
+        severity: "error",
+      });
+    } finally {
+      setCheckingUpdates(false);
+    }
   };
 
   const handleUpdate = async (
@@ -1693,6 +1816,68 @@ export default function InstanceDetails(
     const ups = updates();
     return Object.keys(sel).filter((id) => sel[id] && ups[Number(id)]).length;
   });
+
+  const getOppositeActiveCopies = (resource: InstalledResource) => {
+    const sourceKind = normalizeResourceSourceKind(resource);
+    return (installedResources() || []).filter(
+      (candidate) =>
+        candidate.id !== resource.id &&
+        candidate.is_enabled &&
+        normalizeResourceSourceKind(candidate) !== sourceKind &&
+        isSameCanonicalProject(candidate, resource),
+    );
+  };
+
+  const toggleResourceWithOverrides = async (
+    resource: InstalledResource,
+    enabled: boolean,
+  ) => {
+    const peers = enabled ? getOppositeActiveCopies(resource) : [];
+
+    if (peers.length > 0 && !overrideConflictConfirmed()) {
+      const confirmed = await dialogStore.confirm(
+        "Switch Active Resource?",
+        `${resource.display_name} matches ${peers
+          .map((peer) => peer.display_name)
+          .join(", ")} from the ${
+          isModpackOwnedResource(resource) ? "custom resources" : "linked modpack"
+        }. Vesta will disable the other copy so Minecraft only loads one version.`,
+        { okLabel: "Switch", cancelLabel: "Cancel", severity: "warning" },
+      );
+      if (!confirmed) return false;
+      setOverrideConflictConfirmed(true);
+    }
+
+    const previous = installedResources.latest;
+    const affectedIds = new Set([resource.id, ...peers.map((peer) => peer.id)]);
+
+    mutateResources((prev) =>
+      prev?.map((row) => {
+        if (!affectedIds.has(row.id)) return row;
+        if (row.id === resource.id) return { ...row, is_enabled: enabled };
+        return { ...row, is_enabled: false };
+      }),
+    );
+
+    try {
+      for (const peer of peers) {
+        await invoke("toggle_resource", {
+          resourceId: peer.id,
+          enabled: false,
+        });
+      }
+      await invoke("toggle_resource", {
+        resourceId: resource.id,
+        enabled,
+      });
+      await refetchResources();
+      return true;
+    } catch (e) {
+      console.error("Failed to toggle resource:", e);
+      mutateResources(previous);
+      return false;
+    }
+  };
 
   // Sync resources separately - only on actual instance change
   createEffect(
@@ -1796,29 +1981,11 @@ columnHelper.accessor("display_name", {
 					class={styles["col-enabled"]}
 					onClick={(e: MouseEvent) => e.stopPropagation()}
 				>
-					<Switch
+          <Switch
             checked={info.getValue()}
-            onCheckedChange={async (enabled: boolean) => {
-              const previous = installedResources.latest;
-              mutateResources((prev) =>
-                prev?.map((r) =>
-                  r.id === info.row.original.id
-                    ? { ...r, is_enabled: enabled }
-                    : r,
-                ),
-              );
-
-              try {
-                await invoke("toggle_resource", {
-                  resourceId: info.row.original.id,
-                  enabled,
-                });
-                refetchResources();
-              } catch (e) {
-                console.error("Failed to toggle resource:", e);
-                mutateResources(previous);
-              }
-            }}
+            onCheckedChange={(enabled: boolean) =>
+              toggleResourceWithOverrides(info.row.original, enabled)
+            }
           >
             <SwitchControl>
               <SwitchThumb />
@@ -1868,6 +2035,7 @@ columnHelper.accessor("display_name", {
               }
             }}
             onCheckUpdates={async (resource) => {
+              if (isModpackOwnedResource(resource)) return;
               setCheckingPerResource((prev) => new Set([...prev, resource.id]));
               const inst = instance();
               if (!inst) return;
@@ -1904,7 +2072,10 @@ columnHelper.accessor("display_name", {
   ];
 
   const filteredData = createMemo(() => {
-    const data = installedResources() || [];
+    const data =
+      instance()?.modpackId
+        ? [...modpackOwnedResources(), ...customResources()]
+        : installedResources() || [];
     const search = resourceSearch().toLowerCase();
     return data.filter((res) => {
       const matchesType =
@@ -1954,7 +2125,12 @@ columnHelper.accessor("display_name", {
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getRowId: (row) => row.id.toString(),
-    enableRowSelection: true,
+    enableRowSelection: (row) =>
+      !(
+        instance()?.modpackId &&
+        !modpackResourcesExpanded() &&
+        isModpackOwnedResource(row.original)
+      ),
   });
 
   // Subscribe to console logs
@@ -2383,9 +2559,18 @@ columnHelper.accessor("display_name", {
                       table={table}
                       resourcesStore={resources}
                       installedResources={installedResources}
+                      modpackResources={modpackOwnedResources()}
+                      modpackIcon={() => modpackIconBase64() || inst().modpackIconUrl || null}
+                      modpackExpanded={modpackResourcesExpanded()}
+                      setModpackExpanded={setModpackResourcesExpanded}
+                      currentModpackVersion={currentModpackVersion()}
+                      availableModpackUpdate={availableModpackUpdate()}
                       router={activeRouter()}
                       handleBatchUpdate={handleBatchUpdate}
                       handleBatchDelete={handleBatchDelete}
+                      onManageModpackVersions={() => handleTabChange("versioning")}
+                      onUnlinkModpack={handleUnlink}
+                      onDeleteModpackAndUnlink={handleDeleteModpackFilesAndUnlink}
                       onRowClick={handleRowClick}
                       selectedToUpdateCount={selectedToUpdateCount()}
                       busy={busy()}
@@ -2410,9 +2595,11 @@ columnHelper.accessor("display_name", {
                         checkingUpdates={checkingUpdates()}
                         checkUpdates={checkUpdates}
                         modpackVersions={modpackVersions}
+                        availableModpackUpdate={availableModpackUpdate()}
                         handleModpackVersionSelect={handleModpackVersionSelect}
                         rolloutModpackUpdate={rolloutModpackUpdate}
                         handleUnlink={handleUnlink}
+                        handleDeleteModpackAndUnlink={handleDeleteModpackFilesAndUnlink}
                         router={activeRouter()}
                         searchableMcVersions={searchableMcVersions}
                         includeSnapshots={includeSnapshots}

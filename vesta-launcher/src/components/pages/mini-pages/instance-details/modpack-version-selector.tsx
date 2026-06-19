@@ -1,4 +1,6 @@
-import { Badge } from "@ui/badge";
+import RightArrowIcon from "@assets/right-arrow.svg";
+import SearchIcon from "@assets/search.svg";
+import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import clsx from "clsx";
@@ -14,11 +16,18 @@ export interface ModpackVersion {
 }
 
 interface ModpackVersionSelectorProps {
+	projectName: string;
+	projectIcon?: string | null;
+	platform?: string | null;
+	minecraftVersion?: string | null;
+	loader?: string | null;
 	versions: ModpackVersion[] | undefined;
 	loading: boolean;
 	currentVersionId: string | null;
+	availableUpdate?: ModpackVersion | null;
 	onVersionSelect: (versionId: string, version?: ModpackVersion) => void;
 	onUpdate: () => void;
+	onOpenProject: () => void;
 	disabled?: boolean;
 }
 
@@ -80,117 +89,81 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 		}
 	};
 
-	const needsUpdate = createMemo(() => {
-		return selectedId() !== props.currentVersionId && selectedId() !== null;
+	const platformLabel = createMemo(() => {
+		if (props.platform === "modrinth") return "Modrinth";
+		if (props.platform === "curseforge") return "CurseForge";
+		return "Linked";
 	});
 
 	return (
-		<div>
-			<div class={styles["header"]}>
-				<div style="display: flex; flex-direction: column; gap: 2px;">
-					<span class={styles["headerTitle"]}>Modpack Version</span>
-					<span class={styles["headerSubtitle"]}>Manage installed builds and engine settings.</span>
-				</div>
-			</div>
-
+		<div class={styles["control"]}>
 			<Show when={!props.loading} fallback={<Skeleton class={styles["triggerSkeleton"]} />}>
 				<div
-					onClick={() => {
-						if (!props.disabled) setIsOpen(!isOpen());
-					}}
 					class={clsx(styles["triggerCard"], props.disabled && styles["disabled"])}
 					data-expanded={isOpen()}
 				>
 					<div class={styles["triggerMain"]}>
-						<div class={styles["triggerIcon"]}>
-							<svg
-								width="24"
-								height="24"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-							>
-								<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-								<polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-								<line x1="12" y1="22.08" x2="12" y2="12" />
-							</svg>
-						</div>
-						<div class={styles["triggerContent"]}>
-							<div class={styles["triggerTitle"]}>
-								{selectedVersion()?.version_number || "Select Version"}
-							</div>
-							<div class={styles["triggerMeta"]}>
-								<span class={styles["metaItem"]}>
-									<svg
-										width="12"
-										height="12"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.5"
-									>
-										<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-										<line x1="8" y1="21" x2="16" y2="21" />
-									</svg>
-									{selectedVersion()?.game_versions[0]}
-								</span>
-								<span class={styles["metaItem"]}>
-									<svg
-										width="12"
-										height="12"
-										viewBox="0 0 24 24"
-										fill="none"
-										stroke="currentColor"
-										stroke-width="2.5"
-									>
-										<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-									</svg>
-									{selectedVersion()?.loaders[0]}
-								</span>
-							</div>
-						</div>
-					</div>
-					<div class={styles["statusArea"]}>
-						<Show when={needsUpdate()}>
-							<Badge variant="accent" class={styles["pulse"]}>
-								Update Pending
-							</Badge>
-						</Show>
-						<svg
-							width="20"
-							height="20"
-							viewBox="0 0 24 24"
-							fill="none"
-							stroke="currentColor"
-							stroke-width="2.5"
-							class={styles["chevron"]}
+						<button
+							type="button"
+							class={styles["projectButton"]}
+							onClick={(event) => {
+								event.stopPropagation();
+								props.onOpenProject();
+							}}
+							disabled={props.disabled}
 						>
-							<path d="m6 9 6 6 6-6" />
-						</svg>
+							<ResourceAvatar
+								icon={props.projectIcon || null}
+								name={props.projectName}
+								class={styles["triggerIcon"]}
+							/>
+							<div class={styles["triggerContent"]}>
+								<div class={styles["projectLine"]}>
+									<span class={styles["projectName"]}>{props.projectName}</span>
+									<span class={styles["platformLabel"]}>{platformLabel()}</span>
+								</div>
+							</div>
+						</button>
+						<button
+							type="button"
+							class={styles["versionButton"]}
+							onClick={() => {
+								if (!props.disabled) setIsOpen(!isOpen());
+							}}
+							aria-expanded={isOpen()}
+							disabled={props.disabled}
+						>
+							<div class={styles["versionSummary"]}>
+								<span class={styles["versionSummaryPrimary"]}>
+									{selectedVersion()?.version_number || props.currentVersionId || "Current"}
+								</span>
+								<div class={styles["triggerMeta"]}>
+									<span>MC {selectedVersion()?.game_versions[0] || props.minecraftVersion || "unknown"}</span>
+									<span>{selectedVersion()?.loaders[0] || props.loader || "Vanilla"}</span>
+								</div>
+							</div>
+							<div class={styles["statusArea"]}>
+								<Show when={props.availableUpdate}>
+									<span class={styles["updateSignal"]}>
+										Update {props.availableUpdate?.version_number}
+									</span>
+								</Show>
+								<span class={styles["chevronWell"]}>
+									<RightArrowIcon class={styles["chevron"]} />
+								</span>
+							</div>
+						</button>
 					</div>
 				</div>
 
 				<Show when={isOpen()}>
 					<div
-						class={clsx(styles["selectionContainer"], "liquid-glass")}
+						class={styles["selectionContainer"]}
 						onClick={(e) => e.stopPropagation()}
 					>
 						<div class={styles["searchBarContainer"]}>
 							<div class={styles["searchBar"]}>
-								<svg
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="3"
-								>
-									<circle cx="11" cy="11" r="8" />
-									<path d="m21 21-4.3-4.3" />
-								</svg>
+								<SearchIcon class={styles["searchIcon"]} />
 								<input
 									type="text"
 									placeholder="Search versions..."
@@ -201,7 +174,7 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 							</div>
 						</div>
 
-						<div class={styles["versionListContainer"]} style={{ "max-height": "400px" }}>
+						<div class={styles["versionListContainer"]}>
 							<For each={filteredVersions()}>
 								{(version) => {
 									const isCurrent = String(version.id) === props.currentVersionId;
@@ -222,27 +195,12 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 											)}
 										>
 											<div class={styles["versionInfo"]}>
-												<div class={styles["versionIcon"]}>
-													<svg
-														width="16"
-														height="16"
-														viewBox="0 0 24 24"
-														fill="none"
-														stroke="currentColor"
-														stroke-width="2.5"
-													>
-														<path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-													</svg>
-												</div>
 												<div class={styles["metaContainer"]}>
 													<div class={styles["versionHeader"]}>
 														<span class={styles["versionNumber"]}>{version.version_number}</span>
-														<Badge
-															variant={version.release_type === "release" ? "secondary" : "outline"}
-															class={styles["releaseTypeBadge"]}
-														>
+														<span class={styles["releaseType"]}>
 															{version.release_type}
-														</Badge>
+														</span>
 													</div>
 													<div class={styles["versionSub"]}>
 														<span>MC {version.game_versions[0]}</span>

@@ -1,11 +1,20 @@
 import ReloadIcon from "@assets/reload.svg";
+import RightArrowIcon from "@assets/right-arrow.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import { flexRender } from "@tanstack/solid-table";
 import Button from "@ui/button/button";
+import {
+	DropdownMenu,
+	DropdownMenuContent,
+	DropdownMenuItem,
+	DropdownMenuSeparator,
+	DropdownMenuTrigger,
+} from "@ui/dropdown-menu/dropdown-menu";
+import { ResourceAvatar } from "@ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import { createEffect, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
 import {
 	createContainerQuery,
 	RESOURCES_FILTER_COMPACT_WIDTH,
@@ -49,9 +58,18 @@ interface ResourcesTabProps {
 	table: any;
 	resourcesStore: any;
 	installedResources: any;
+	modpackResources: any[];
+	modpackIcon: () => string | null;
+	modpackExpanded: boolean;
+	setModpackExpanded: (expanded: boolean) => void;
+	currentModpackVersion: any;
+	availableModpackUpdate: any;
 	router: any;
 	handleBatchUpdate: () => void;
 	handleBatchDelete: () => void;
+	onManageModpackVersions: () => void;
+	onUnlinkModpack: () => void;
+	onDeleteModpackAndUnlink: () => void;
 	onRowClick: (row: any, event: MouseEvent) => void;
 	resourceSearch: string;
 	setResourceSearch: (v: string) => void;
@@ -65,6 +83,148 @@ interface ResourcesTabProps {
 export const ResourcesTab = (props: ResourcesTabProps) => {
 	const selectionCount = () =>
 		Object.values(props.resourcesStore.state.selection).filter((v) => v).length;
+	const isModpackOwnedResource = (resource: any) =>
+		(resource?.source_kind || "custom").toLowerCase() === "modpack";
+	const sortedRows = createMemo(() => props.table.getRowModel().rows);
+	const modpackRows = createMemo(() =>
+		sortedRows().filter((row: any) => isModpackOwnedResource(row.original)),
+	);
+	const customRows = createMemo(() =>
+		sortedRows().filter((row: any) => !isModpackOwnedResource(row.original)),
+	);
+	const bundledCountLabel = createMemo(() => {
+		const noun =
+			props.resourceTypeFilter === "All"
+				? "resources"
+				: FILTER_OPTIONS.find((option) => option.id === props.resourceTypeFilter)
+						?.label.toLowerCase() || "resources";
+
+		return `${modpackRows().length} bundled ${noun}`;
+	});
+
+	const renderResourceRow = (row: any) => (
+		<tr
+			onClick={(e) => props.onRowClick(row, e)}
+			style={{ cursor: "default" }}
+			classList={{
+				[styles["row-selected"]]: row.getIsSelected(),
+				[styles["row-disabled"]]: !row.original.is_enabled,
+				[styles["row-modpack-child"]]: isModpackOwnedResource(row.original),
+			}}
+		>
+			<For each={row.getVisibleCells()}>
+				{(cell) => (
+					<td class={getColumnClass(cell.column.id)}>
+						{flexRender(cell.column.columnDef.cell, cell.getContext())}
+					</td>
+				)}
+			</For>
+		</tr>
+	);
+
+	const renderModpackGroupCell = (columnId: string) => {
+		switch (columnId) {
+			case "select":
+				return (
+					<div class={styles["modpack-group-disclosure"]}>
+						<RightArrowIcon
+							class={styles["modpack-group-chevron"]}
+							data-expanded={props.modpackExpanded}
+						/>
+					</div>
+				);
+			case "display_name":
+				return (
+					<div class={styles["modpack-group-name"]}>
+						<ResourceAvatar
+							icon={props.modpackIcon()}
+							name={props.instance?.name || "Linked modpack"}
+							class={styles["modpack-group-icon"]}
+						/>
+						<div class={styles["modpack-group-copy"]}>
+							<span class={styles["modpack-group-title"]}>
+								{props.instance?.name || "Linked modpack"}
+							</span>
+							<span class={styles["modpack-group-meta"]}>
+								{bundledCountLabel()}
+								<Show when={props.availableModpackUpdate}>
+									<>
+										{" • "}
+										<span class={styles["modpack-group-update-text"]}>
+											Update {props.availableModpackUpdate.version_number}
+										</span>
+									</>
+								</Show>
+							</span>
+						</div>
+					</div>
+				);
+			case "current_version":
+				return (
+					<div class={styles["modpack-group-version"]}>
+						<span>
+							{props.currentModpackVersion?.version_number ||
+								props.instance?.modpackVersionId ||
+								"Current"}
+						</span>
+					</div>
+				);
+			case "actions":
+				return (
+					<DropdownMenu>
+						<DropdownMenuTrigger
+							as="button"
+							class={styles["row-actions-trigger-button"]}
+							onClick={(event: MouseEvent) => event.stopPropagation()}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								width="16"
+								height="16"
+								viewBox="0 0 24 24"
+								fill="currentColor"
+							>
+								<circle cx="12" cy="5" r="1.5" />
+								<circle cx="12" cy="12" r="1.5" />
+								<circle cx="12" cy="19" r="1.5" />
+							</svg>
+						</DropdownMenuTrigger>
+						<DropdownMenuContent>
+							<DropdownMenuItem
+								onSelect={props.onManageModpackVersions}
+								disabled={props.busy}
+							>
+								Manage versions
+							</DropdownMenuItem>
+							<DropdownMenuItem
+								onSelect={props.onUnlinkModpack}
+								disabled={props.busy}
+							>
+								Unlink
+							</DropdownMenuItem>
+							<DropdownMenuSeparator class={styles["row-actions-separator"]} />
+							<DropdownMenuItem
+								onSelect={props.onDeleteModpackAndUnlink}
+								disabled={props.busy || props.modpackResources.length === 0}
+								class={styles["row-actions-delete"]}
+							>
+								<TrashIcon
+									style={{
+										width: "14px",
+										height: "14px",
+										"margin-right": "8px",
+										flex: "0 0 auto",
+									}}
+								/>
+								Delete & unlink
+							</DropdownMenuItem>
+						</DropdownMenuContent>
+					</DropdownMenu>
+				);
+			default:
+				return <span class={styles["modpack-group-empty"]} />;
+		}
+	};
 
 	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
 	const isCompactTable = createContainerQuery(panelRef, RESOURCES_TABLE_COMPACT_WIDTH);
@@ -336,34 +496,40 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								</For>
 							</thead>
 							<tbody>
-								<For each={props.table.getRowModel().rows}>
-									{(row) => (
-										<tr
-											onClick={(e) => props.onRowClick(row, e)}
-											style={{ cursor: "default" }}
-											classList={{
-												[styles["row-selected"]]: row.getIsSelected(),
-												[styles["row-disabled"]]:
-													!row.original.is_enabled,
-											}}
-										>
-											<For each={row.getVisibleCells()}>
-												{(cell) => (
-													<td class={getColumnClass(cell.column.id)}>
-														{flexRender(
-															cell.column.columnDef.cell,
-															cell.getContext(),
-														)}
-													</td>
-												)}
-											</For>
-										</tr>
-									)}
+								<Show when={props.instance?.modpackId}>
+									<tr
+										class={styles["modpack-group-row"]}
+										onClick={() => props.setModpackExpanded(!props.modpackExpanded)}
+										tabIndex={0}
+										onKeyDown={(event: KeyboardEvent) => {
+											if (event.key === "Enter" || event.key === " ") {
+												event.preventDefault();
+												props.setModpackExpanded(!props.modpackExpanded);
+											}
+										}}
+										aria-expanded={props.modpackExpanded}
+									>
+										<For each={props.table.getVisibleLeafColumns()}>
+											{(column) => (
+												<td class={getColumnClass(column.id)}>
+													{renderModpackGroupCell(column.id)}
+												</td>
+											)}
+										</For>
+									</tr>
+								</Show>
+								<Show when={props.instance?.modpackId && props.modpackExpanded}>
+									<For each={modpackRows()}>{renderResourceRow}</For>
+								</Show>
+								<For
+									each={props.instance?.modpackId ? customRows() : sortedRows()}
+								>
+									{renderResourceRow}
 								</For>
 							</tbody>
 						</table>
 
-						<Show when={props.table.getRowModel().rows.length === 0}>
+						<Show when={sortedRows().length === 0 && !props.instance?.modpackId}>
 							<div class={styles["resources-empty-state"]}>
 								<p>
 									No{" "}

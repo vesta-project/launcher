@@ -1,19 +1,35 @@
 use anyhow::{anyhow, Context};
 use base64::{engine::general_purpose, Engine as _};
+use serde::Serialize;
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
-    ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    ReleaseType, ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef,
+    ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::resources::{ResourceManager, ResourceWatcher};
 use crate::tasks::manager::TaskManager;
 use crate::tasks::resource_download::ResourceDownloadTask;
 use anyhow_tauri::TAResult as Result;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 /// Timeout for image downloads (in seconds)
 const IMAGE_DOWNLOAD_TIMEOUT_SECS: u64 = 8;
+const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceUpdateCheckResult {
+    pub resource_id: i32,
+    pub version: ResourceVersion,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceUpdateCheckResult {
+    pub resource_updates: Vec<ResourceUpdateCheckResult>,
+    pub modpack_versions: Vec<ResourceVersion>,
+}
 
 /// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.
 /// Detects the actual image format from magic bytes.
@@ -356,6 +372,229 @@ pub async fn get_resource_versions(
 }
 
 #[tauri::command]
+pub async fn check_instance_updates_lightweight(
+    resource_manager: State<'_, ResourceManager>,
+    instance_id: i32,
+    force_refresh: Option<bool>,
+) -> Result<InstanceUpdateCheckResult> {
+    use crate::models::installed_resource::InstalledResource;
+    use crate::models::instance::Instance;
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+    use futures::stream::{self, StreamExt};
+
+    let (inst, resources) = {
+        let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let inst = inst_dsl::instance
+            .filter(inst_dsl::id.eq(instance_id))
+            .first::<Instance>(&mut conn)
+            .map_err(|e| anyhow::anyhow!("Failed to load instance: {}", e))?;
+        let resources = ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .filter(ir_dsl::is_manual.eq(false))
+            .load::<InstalledResource>(&mut conn)
+            .map_err(|e| anyhow::anyhow!("Failed to load installed resources: {}", e))?;
+        (inst, resources)
+    };
+
+    let ignore_cache = force_refresh.unwrap_or(false);
+    let loader = inst
+        .modloader
+        .clone()
+        .unwrap_or_else(|| "vanilla".to_string());
+
+    let modpack_versions = if let (Some(modpack_id), Some(modpack_platform)) =
+        (inst.modpack_id.as_deref(), inst.modpack_platform.as_deref())
+    {
+        match source_platform_from_str(modpack_platform) {
+            Some(platform) => resource_manager
+                .get_versions(platform, modpack_id, ignore_cache, None, None)
+                .await
+                .unwrap_or_default(),
+            None => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+
+    let candidates: Vec<InstalledResource> = resources
+        .into_iter()
+        .filter(|res| {
+            res.source_kind != "modpack"
+                && res.platform != "manual"
+                && source_platform_from_str(&res.platform).is_some()
+        })
+        .collect();
+
+    let rm = resource_manager.inner().clone();
+    let mc_version = inst.minecraft_version.clone();
+    let update_results = stream::iter(candidates)
+        .map(|res| {
+            let rm = rm.clone();
+            let mc_version = mc_version.clone();
+            let loader = loader.clone();
+            async move {
+                let platform = source_platform_from_str(&res.platform)?;
+                let versions = rm
+                    .get_versions(platform, &res.remote_id, ignore_cache, None, None)
+                    .await
+                    .ok()?;
+                let best = find_best_resource_update(&versions, &res, &mc_version, &loader)?;
+                if best.id == res.remote_version_id {
+                    return None;
+                }
+                Some(ResourceUpdateCheckResult {
+                    resource_id: res.id,
+                    version: best,
+                })
+            }
+        })
+        .buffer_unordered(MAX_CONCURRENT_UPDATE_CHECKS)
+        .filter_map(|result| async move { result })
+        .collect::<Vec<_>>()
+        .await;
+
+    Ok(InstanceUpdateCheckResult {
+        resource_updates: update_results,
+        modpack_versions,
+    })
+}
+
+fn source_platform_from_str(platform: &str) -> Option<SourcePlatform> {
+    match platform {
+        "modrinth" => Some(SourcePlatform::Modrinth),
+        "curseforge" => Some(SourcePlatform::CurseForge),
+        _ => None,
+    }
+}
+
+fn resource_type_from_str(resource_type: &str) -> Option<ResourceType> {
+    match resource_type {
+        "mod" => Some(ResourceType::Mod),
+        "resourcepack" => Some(ResourceType::ResourcePack),
+        "shader" => Some(ResourceType::Shader),
+        "datapack" => Some(ResourceType::DataPack),
+        "modpack" => Some(ResourceType::Modpack),
+        "world" => Some(ResourceType::World),
+        _ => None,
+    }
+}
+
+fn release_type_from_str(release_type: &str) -> ReleaseType {
+    match release_type {
+        "alpha" => ReleaseType::Alpha,
+        "beta" => ReleaseType::Beta,
+        _ => ReleaseType::Release,
+    }
+}
+
+fn is_release_allowed(candidate: ReleaseType, current: ReleaseType) -> bool {
+    match current {
+        ReleaseType::Release => candidate == ReleaseType::Release,
+        ReleaseType::Beta => candidate == ReleaseType::Release || candidate == ReleaseType::Beta,
+        ReleaseType::Alpha => true,
+    }
+}
+
+fn release_rank(release_type: ReleaseType) -> u8 {
+    match release_type {
+        ReleaseType::Release => 0,
+        ReleaseType::Beta => 1,
+        ReleaseType::Alpha => 2,
+    }
+}
+
+fn is_game_version_compatible(supported: &[String], target: &str) -> bool {
+    let normalized_target = normalize_mc_version(target);
+    let target_major_minor = normalized_target
+        .split('.')
+        .take(2)
+        .collect::<Vec<_>>()
+        .join(".");
+
+    supported.iter().any(|version| {
+        let normalized = normalize_mc_version(version);
+        normalized == normalized_target || normalized == format!("{}.x", target_major_minor)
+    })
+}
+
+fn normalize_mc_version(version: &str) -> String {
+    version.strip_suffix(".0").unwrap_or(version).to_string()
+}
+
+fn version_matches_loader(
+    version: &ResourceVersion,
+    instance_loader: &str,
+    resource_type: Option<ResourceType>,
+) -> bool {
+    let inst_loader = instance_loader.to_lowercase();
+    let normalized_loaders = version
+        .loaders
+        .iter()
+        .map(|loader| loader.to_lowercase())
+        .collect::<Vec<_>>();
+
+    match resource_type {
+        Some(ResourceType::Shader) => inst_loader != "vanilla" && !inst_loader.is_empty(),
+        Some(ResourceType::ResourcePack) | Some(ResourceType::DataPack) => true,
+        Some(ResourceType::Mod) => {
+            if inst_loader == "vanilla" || inst_loader.is_empty() {
+                return false;
+            }
+            normalized_loaders
+                .iter()
+                .any(|loader| loader == &inst_loader)
+                || (inst_loader == "quilt"
+                    && normalized_loaders.iter().any(|loader| loader == "fabric"))
+                || (inst_loader == "neoforge"
+                    && normalized_loaders.iter().any(|loader| loader == "forge"))
+        }
+        Some(ResourceType::Modpack) => true,
+        _ => {
+            if inst_loader == "vanilla" || inst_loader.is_empty() {
+                normalized_loaders.is_empty()
+                    || normalized_loaders
+                        .iter()
+                        .any(|loader| loader == "minecraft")
+            } else {
+                normalized_loaders
+                    .iter()
+                    .any(|loader| loader == &inst_loader)
+                    || (inst_loader == "quilt"
+                        && normalized_loaders.iter().any(|loader| loader == "fabric"))
+                    || (inst_loader == "neoforge"
+                        && normalized_loaders.iter().any(|loader| loader == "forge"))
+            }
+        }
+    }
+}
+
+fn find_best_resource_update(
+    versions: &[ResourceVersion],
+    resource: &crate::models::installed_resource::InstalledResource,
+    game_version: &str,
+    loader: &str,
+) -> Option<ResourceVersion> {
+    let current_release = release_type_from_str(&resource.release_type);
+    let resource_type = resource_type_from_str(&resource.resource_type);
+
+    versions
+        .iter()
+        .filter(|version| {
+            is_game_version_compatible(&version.game_versions, game_version)
+                && version_matches_loader(version, loader, resource_type)
+                && is_release_allowed(version.release_type, current_release)
+        })
+        .min_by_key(|version| {
+            let explicit = version.game_versions.iter().any(|v| v == game_version);
+            (!explicit, release_rank(version.release_type))
+        })
+        .cloned()
+}
+
+#[tauri::command]
 pub async fn find_peer_resource(
     resource_manager: State<'_, ResourceManager>,
     project: ResourceProject,
@@ -455,6 +694,425 @@ pub async fn toggle_resource(resource_id: i32, enabled: bool) -> Result<()> {
         .map_err(|e| anyhow::anyhow!("Failed to update database: {}", e))?;
 
     Ok(())
+}
+
+#[tauri::command]
+pub async fn clear_modpack_resource_provenance(instance_id: i32) -> Result<()> {
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    diesel::update(
+        ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .filter(ir_dsl::source_kind.eq("modpack")),
+    )
+    .set((
+        ir_dsl::source_kind.eq("custom"),
+        ir_dsl::source_modpack_id.eq(Option::<String>::None),
+        ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
+        ir_dsl::source_modpack_platform.eq(Option::<String>::None),
+    ))
+    .execute(&mut conn)
+    .map_err(|e| anyhow::anyhow!("Failed to clear resource provenance: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn backfill_modpack_resource_provenance_fast(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+) -> Result<()> {
+    let app_handle = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        match backfill_modpack_resource_provenance_fast_inner(instance_id) {
+            Ok(changed) => {
+                if changed > 0 {
+                    let _ = app_handle.emit("resources-updated", instance_id);
+                }
+            }
+            Err(e) => {
+                log::warn!(
+                    "[resource-provenance] Fast backfill failed for instance {}: {}",
+                    instance_id,
+                    e
+                );
+            }
+        }
+    });
+    Ok(())
+}
+
+fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::Result<usize> {
+    use crate::models::installed_resource::InstalledResource;
+    use crate::models::instance::Instance;
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use crate::utils::db_manager::get_app_config_dir;
+    use crate::utils::instance_helpers::resolve_instance_game_directory;
+    use diesel::prelude::*;
+
+    let inst = {
+        let mut conn = get_vesta_conn()?;
+        inst_dsl::instance
+            .filter(inst_dsl::id.eq(instance_id))
+            .first::<Instance>(&mut conn)?
+    };
+
+    if inst.modpack_id.is_none()
+        || inst.modpack_version_id.is_none()
+        || inst.modpack_platform.is_none()
+    {
+        return Ok(0);
+    }
+
+    let config_dir = get_app_config_dir()?;
+    let data_dir = config_dir.join("data");
+    let instances_root = data_dir.join("instances");
+    let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
+
+    let Some(manifest) = load_modpack_manifest_for_fast_backfill(&inst, &game_dir)? else {
+        log::info!(
+            "[resource-provenance] No local manifest for fast backfill on instance {}; skipping repair/bootstrap",
+            instance_id
+        );
+        return Ok(0);
+    };
+
+    let resources = {
+        let mut conn = get_vesta_conn()?;
+        ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .load::<InstalledResource>(&mut conn)?
+    };
+
+    let matched_ids = match_manifest_owned_resources(&resources, &manifest, &game_dir);
+    let changed = apply_resource_provenance_diff(&inst, &resources, &matched_ids)?;
+    if changed > 0 {
+        log::info!(
+            "[resource-provenance] Fast backfilled {} provenance rows for instance {}",
+            changed,
+            instance_id
+        );
+    }
+
+    Ok(changed)
+}
+
+#[tauri::command]
+pub async fn backfill_modpack_resource_provenance(
+    app_handle: tauri::AppHandle,
+    instance_id: i32,
+) -> Result<usize> {
+    use crate::models::installed_resource::InstalledResource;
+    use crate::models::instance::Instance;
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use crate::utils::db_manager::get_app_config_dir;
+    use crate::utils::instance_helpers::resolve_instance_game_directory;
+    use diesel::prelude::*;
+
+    let inst = {
+        let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        inst_dsl::instance
+            .filter(inst_dsl::id.eq(instance_id))
+            .first::<Instance>(&mut conn)
+            .map_err(|e| anyhow::anyhow!("Failed to load instance: {}", e))?
+    };
+
+    if inst.modpack_id.is_none()
+        || inst.modpack_version_id.is_none()
+        || inst.modpack_platform.is_none()
+    {
+        return Ok(0);
+    }
+
+    let config_dir = get_app_config_dir().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let data_dir = config_dir.join("data");
+    let instances_root = data_dir.join("instances");
+    let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
+
+    let mut manifest = load_modpack_manifest_for_backfill(&app_handle, &inst, &game_dir).await?;
+    if let Err(e) =
+        crate::sync::manifest::backfill_manifest_hashes(&mut manifest, &game_dir, instance_id)
+    {
+        log::warn!(
+            "[resource-provenance] Failed to backfill manifest hashes for instance {}: {}",
+            instance_id,
+            e
+        );
+    }
+    if let Err(e) = manifest.persist(&game_dir) {
+        log::warn!(
+            "[resource-provenance] Failed to persist manifest after backfill for instance {}: {}",
+            instance_id,
+            e
+        );
+    }
+
+    let resources = {
+        let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .load::<InstalledResource>(&mut conn)
+            .map_err(|e| anyhow::anyhow!("Failed to load installed resources: {}", e))?
+    };
+
+    let matched_ids = match_manifest_owned_resources(&resources, &manifest, &game_dir);
+
+    let matched_vec: Vec<i32> = matched_ids.iter().copied().collect();
+    let changed = apply_resource_provenance_diff(&inst, &resources, &matched_ids)
+        .map_err(|e| anyhow::anyhow!("Failed to apply resource provenance: {}", e))?;
+
+    if changed > 0 {
+        let _ = app_handle.emit("resources-updated", instance_id);
+    }
+
+    Ok(matched_vec.len())
+}
+
+fn load_modpack_manifest_for_fast_backfill(
+    inst: &crate::models::instance::Instance,
+    game_dir: &std::path::Path,
+) -> anyhow::Result<Option<piston_lib::game::modpack::manifest::ModpackManifest>> {
+    use piston_lib::game::modpack::manifest::ModpackManifest;
+    use piston_lib::game::modpack::types::ModpackMetadata;
+
+    if let Ok(manifest) = ModpackManifest::load(game_dir) {
+        return Ok(Some(manifest));
+    }
+
+    let legacy_path = game_dir.join(".vesta").join(ModpackManifest::FILE_NAME);
+    if let Ok(content) = std::fs::read_to_string(&legacy_path) {
+        if let Ok(manifest) = serde_json::from_str::<ModpackManifest>(&content) {
+            return Ok(Some(manifest));
+        }
+        if let Ok(metadata) = serde_json::from_str::<ModpackMetadata>(&content) {
+            return Ok(Some(ModpackManifest::from_install(
+                &metadata,
+                &[],
+                &[],
+                None,
+                inst.modpack_id.clone(),
+            )));
+        }
+    }
+
+    Ok(None)
+}
+
+fn apply_resource_provenance_diff(
+    inst: &crate::models::instance::Instance,
+    resources: &[crate::models::installed_resource::InstalledResource],
+    matched_ids: &std::collections::HashSet<i32>,
+) -> anyhow::Result<usize> {
+    use crate::schema::installed_resource::dsl as ir_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let Some(modpack_id) = inst.modpack_id.clone() else {
+        return Ok(0);
+    };
+    let Some(modpack_version_id) = inst.modpack_version_id.clone() else {
+        return Ok(0);
+    };
+    let Some(modpack_platform) = inst.modpack_platform.clone() else {
+        return Ok(0);
+    };
+
+    let mut conn = get_vesta_conn()?;
+    let mut changed = 0usize;
+
+    for resource in resources {
+        let should_be_modpack = matched_ids.contains(&resource.id);
+
+        if should_be_modpack {
+            let already_correct = resource.source_kind == "modpack"
+                && resource.source_modpack_id.as_deref() == Some(modpack_id.as_str())
+                && resource.source_modpack_version_id.as_deref()
+                    == Some(modpack_version_id.as_str())
+                && resource.source_modpack_platform.as_deref() == Some(modpack_platform.as_str());
+            if already_correct {
+                continue;
+            }
+
+            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+                .set((
+                    ir_dsl::source_kind.eq("modpack"),
+                    ir_dsl::source_modpack_id.eq(Some(modpack_id.clone())),
+                    ir_dsl::source_modpack_version_id.eq(Some(modpack_version_id.clone())),
+                    ir_dsl::source_modpack_platform.eq(Some(modpack_platform.clone())),
+                ))
+                .execute(&mut conn)?;
+            changed += 1;
+            continue;
+        }
+
+        let already_custom = resource.source_kind == "custom"
+            && resource.source_modpack_id.is_none()
+            && resource.source_modpack_version_id.is_none()
+            && resource.source_modpack_platform.is_none();
+        if already_custom {
+            continue;
+        }
+
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
+            .set((
+                ir_dsl::source_kind.eq("custom"),
+                ir_dsl::source_modpack_id.eq(Option::<String>::None),
+                ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
+                ir_dsl::source_modpack_platform.eq(Option::<String>::None),
+            ))
+            .execute(&mut conn)?;
+        changed += 1;
+    }
+
+    Ok(changed)
+}
+
+async fn load_modpack_manifest_for_backfill(
+    app_handle: &tauri::AppHandle,
+    inst: &crate::models::instance::Instance,
+    game_dir: &std::path::Path,
+) -> Result<piston_lib::game::modpack::manifest::ModpackManifest> {
+    use piston_lib::game::modpack::manifest::ModpackManifest;
+    use piston_lib::game::modpack::types::ModpackMetadata;
+
+    if let Ok(manifest) = ModpackManifest::load(game_dir) {
+        return Ok(manifest);
+    }
+
+    let legacy_path = game_dir.join(".vesta").join(ModpackManifest::FILE_NAME);
+    if let Ok(content) = std::fs::read_to_string(&legacy_path) {
+        if let Ok(manifest) = serde_json::from_str::<ModpackManifest>(&content) {
+            return Ok(manifest);
+        }
+        if let Ok(metadata) = serde_json::from_str::<ModpackMetadata>(&content) {
+            return Ok(ModpackManifest::from_install(
+                &metadata,
+                &[],
+                &[],
+                None,
+                inst.modpack_id.clone(),
+            ));
+        }
+    }
+
+    Ok(
+        crate::sync::manifest_bootstrap::ensure_old_manifest(app_handle, inst, game_dir, None)
+            .await
+            .map_err(|e| anyhow::anyhow!(e))?,
+    )
+}
+
+fn match_manifest_owned_resources(
+    resources: &[crate::models::installed_resource::InstalledResource],
+    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
+    game_dir: &std::path::Path,
+) -> std::collections::HashSet<i32> {
+    use crate::utils::instance_helpers::normalize_path;
+    use piston_lib::game::modpack::manifest::{disabled_mod_path, resolve_mod_path_on_disk};
+    use std::collections::HashSet;
+
+    let mut matched_ids = HashSet::new();
+
+    for manifest_mod in &manifest.mods {
+        let mut path_candidates = HashSet::new();
+        path_candidates.insert(normalize_path(&game_dir.join(&manifest_mod.path)));
+        path_candidates.insert(normalize_path(
+            &game_dir.join(disabled_mod_path(&manifest_mod.path)),
+        ));
+        if let Some(path) = resolve_mod_path_on_disk(game_dir, &manifest_mod.path) {
+            path_candidates.insert(normalize_path(&path));
+        }
+
+        let manifest_sha1 = manifest_mod
+            .sha1
+            .as_deref()
+            .filter(|hash| !hash.is_empty())
+            .map(str::to_lowercase);
+
+        for resource in resources {
+            let path_matches = path_candidates
+                .contains(&normalize_path(std::path::Path::new(&resource.local_path)));
+            let hash_matches = manifest_sha1.as_ref().is_some_and(|sha1| {
+                resource
+                    .hash
+                    .as_deref()
+                    .is_some_and(|hash| hash.eq_ignore_ascii_case(sha1))
+            });
+            let platform_version_matches =
+                manifest_source_matches_resource(&manifest_mod.source, resource);
+
+            if path_matches || hash_matches || platform_version_matches {
+                matched_ids.insert(resource.id);
+            }
+        }
+    }
+
+    for override_path in &manifest.overrides.extracted {
+        let mut path_candidates = HashSet::new();
+        path_candidates.insert(normalize_path(&game_dir.join(override_path)));
+        path_candidates.insert(normalize_path(
+            &game_dir.join(disabled_mod_path(override_path)),
+        ));
+        let override_sha1 = manifest
+            .overrides
+            .hashes
+            .get(&override_path.to_lowercase())
+            .filter(|hash| !hash.is_empty())
+            .map(|hash| hash.to_lowercase());
+
+        for resource in resources {
+            let path_matches = path_candidates
+                .contains(&normalize_path(std::path::Path::new(&resource.local_path)));
+            let hash_matches = override_sha1.as_ref().is_some_and(|sha1| {
+                resource
+                    .hash
+                    .as_deref()
+                    .is_some_and(|hash| hash.eq_ignore_ascii_case(sha1))
+            });
+            if path_matches || hash_matches {
+                matched_ids.insert(resource.id);
+            }
+        }
+    }
+
+    matched_ids
+}
+
+fn manifest_source_matches_resource(
+    source: &piston_lib::game::modpack::manifest::ModSource,
+    resource: &crate::models::installed_resource::InstalledResource,
+) -> bool {
+    use piston_lib::game::modpack::manifest::ModSource;
+
+    match source {
+        ModSource::Modrinth {
+            project_id,
+            version_id,
+            ..
+        } => {
+            resource.platform == "modrinth"
+                && resource.remote_version_id == *version_id
+                && (project_id.is_empty() || resource.remote_id == *project_id)
+        }
+        ModSource::CurseForge {
+            project_id,
+            file_id,
+            ..
+        } => {
+            resource.platform == "curseforge"
+                && resource.remote_version_id == file_id.to_string()
+                && project_id
+                    .map(|id| resource.remote_id == id.to_string())
+                    .unwrap_or(true)
+        }
+    }
 }
 
 #[tauri::command]

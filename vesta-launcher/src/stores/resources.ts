@@ -82,6 +82,10 @@ export type InstalledResource = {
 	is_enabled: boolean;
 	last_updated: string;
 	hash?: string;
+	source_kind?: "modpack" | "custom" | string;
+	source_modpack_id?: string | null;
+	source_modpack_version_id?: string | null;
+	source_modpack_platform?: string | null;
 };
 
 type ResourceStoreState = {

@@ -414,6 +414,7 @@ impl Task for InstallModpackTask {
             let mc_ver = metadata.minecraft_version.clone();
             let loader_type = metadata.modloader_type.clone();
             let mods = metadata.mods.clone();
+            let override_mods_for_manifest = override_mods.clone();
             let instance_id = instance.id;
             let game_dir_clone = game_dir.clone();
             let app_handle_clone = app_handle.clone();
@@ -421,6 +422,8 @@ impl Task for InstallModpackTask {
 
             tauri::async_runtime::spawn(async move {
                 let rm = app_handle_clone.state::<ResourceManager>();
+                let pack_provenance =
+                    crate::resources::watcher::modpack_provenance_for_instance(instance_id).ok();
                 log::info!("[ModpackTask] Background linking {} resources and {} overrides for instance {}", mods.len(), override_mods.len(), instance_id);
 
                 // Handle Overrides first (local files from ZIP)
@@ -464,6 +467,7 @@ impl Task for InstallModpackTask {
                             hash,
                             meta,
                             "modpack",
+                            pack_provenance.clone(),
                         )
                         .await;
                     }
@@ -512,6 +516,7 @@ impl Task for InstallModpackTask {
                                             crate::models::SourcePlatform::Modrinth,
                                             Some(sha1.clone()),
                                             meta,
+                                            pack_provenance.clone(),
                                         )
                                         .await;
                                     }
@@ -602,6 +607,7 @@ impl Task for InstallModpackTask {
                                     crate::models::SourcePlatform::CurseForge,
                                     hash,
                                     meta,
+                                    pack_provenance.clone(),
                                 )
                                 .await;
                             }
@@ -613,6 +619,17 @@ impl Task for InstallModpackTask {
                 let _ = rm
                     .refresh_resources_for_instance(instance_id, &mc_ver, &loader_type)
                     .await;
+                if let Err(e) = crate::resources::watcher::resolve_modpack_override_conflicts(
+                    &app_handle_clone,
+                    instance_id,
+                )
+                .await
+                {
+                    log::warn!(
+                        "[ModpackTask] Failed to resolve modpack override conflicts: {}",
+                        e
+                    );
+                }
                 log::info!(
                     "[ModpackTask] Finished linking resources for instance {}",
                     instance_id
@@ -620,6 +637,22 @@ impl Task for InstallModpackTask {
             });
 
             // Step 6: Save manifest for future syncs
+            let mut root_manifest =
+                piston_lib::game::modpack::manifest::ModpackManifest::from_install(
+                    &metadata,
+                    &override_mods_for_manifest,
+                    &[],
+                    None,
+                    instance.modpack_id.clone(),
+                );
+            root_manifest.installed_at = chrono::Utc::now().to_rfc3339();
+            if let Err(e) = root_manifest.persist(&game_dir) {
+                log::error!(
+                    "[InstallModpackTask] Failed to save root modpack manifest: {}",
+                    e
+                );
+            }
+
             let vesta_dir = game_dir.join(".vesta");
             if let Err(e) = fs::create_dir_all(&vesta_dir).await {
                 log::error!("[InstallModpackTask] Failed to create .vesta dir: {}", e);
@@ -665,6 +698,8 @@ pub fn spawn_manifest_resource_linking(
 
     tauri::async_runtime::spawn(async move {
         let rm = app_handle.state::<ResourceManager>();
+        let pack_provenance =
+            crate::resources::watcher::modpack_provenance_for_instance(instance_id).ok();
 
         for m in mods {
             let Some(local_path) = resolve_mod_path_on_disk(&game_dir, &m.path) else {
@@ -705,6 +740,7 @@ pub fn spawn_manifest_resource_linking(
                             SourcePlatform::Modrinth,
                             Some(sha1),
                             meta,
+                            pack_provenance.clone(),
                         )
                         .await;
                     }
@@ -743,10 +779,21 @@ pub fn spawn_manifest_resource_linking(
                         SourcePlatform::CurseForge,
                         hash,
                         meta,
+                        pack_provenance.clone(),
                     )
                     .await;
                 }
             }
+        }
+
+        if let Err(e) =
+            crate::resources::watcher::resolve_modpack_override_conflicts(&app_handle, instance_id)
+                .await
+        {
+            log::warn!(
+                "[ModpackTask] Failed to resolve modpack override conflicts: {}",
+                e
+            );
         }
     });
 }

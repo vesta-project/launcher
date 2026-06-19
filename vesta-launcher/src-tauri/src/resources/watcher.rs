@@ -42,6 +42,54 @@ pub struct ResourceWatcher {
     in_flight_scans: Arc<Mutex<HashSet<String>>>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct ResourceProvenance {
+    pub source_kind: String,
+    pub source_modpack_id: Option<String>,
+    pub source_modpack_version_id: Option<String>,
+    pub source_modpack_platform: Option<String>,
+}
+
+impl ResourceProvenance {
+    pub fn custom() -> Self {
+        Self {
+            source_kind: "custom".to_string(),
+            ..Self::default()
+        }
+    }
+
+    pub fn modpack(
+        source_modpack_id: Option<String>,
+        source_modpack_version_id: Option<String>,
+        source_modpack_platform: Option<String>,
+    ) -> Self {
+        Self {
+            source_kind: "modpack".to_string(),
+            source_modpack_id,
+            source_modpack_version_id,
+            source_modpack_platform,
+        }
+    }
+}
+
+pub fn modpack_provenance_for_instance(instance_id: i32) -> Result<ResourceProvenance> {
+    use crate::models::instance::Instance;
+    use crate::schema::instance::dsl as inst_dsl;
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let mut conn = get_vesta_conn()?;
+    let inst = inst_dsl::instance
+        .filter(inst_dsl::id.eq(instance_id))
+        .first::<Instance>(&mut conn)?;
+
+    Ok(ResourceProvenance::modpack(
+        inst.modpack_id,
+        inst.modpack_version_id,
+        inst.modpack_platform,
+    ))
+}
+
 impl ResourceWatcher {
     pub fn new(app_handle: AppHandle) -> Self {
         Self {
@@ -578,6 +626,7 @@ async fn identify_and_link_resource(
             Some(hash),
             (file_size, file_mtime),
             "manual",
+            None,
         )
         .await?;
         return Ok(());
@@ -657,6 +706,7 @@ async fn identify_and_link_resource(
                         SourcePlatform::Modrinth,
                         Some(hash),
                         (file_size, file_mtime),
+                        None,
                     )
                     .await?;
                     return Ok(());
@@ -684,6 +734,7 @@ async fn identify_and_link_resource(
                             SourcePlatform::CurseForge,
                             Some(hash),
                             (file_size, file_mtime),
+                            None,
                         )
                         .await?;
                         return Ok(());
@@ -701,6 +752,7 @@ async fn identify_and_link_resource(
         Some(hash),
         (file_size, file_mtime),
         "manual",
+        None,
     )
     .await?;
 
@@ -715,6 +767,7 @@ pub async fn link_manual_resource_to_db(
     hash: Option<String>,
     metadata: (i64, i64),
     platform: &str,
+    provenance: Option<ResourceProvenance>,
 ) -> Result<()> {
     use crate::models::installed_resource::InstalledResource;
     use crate::utils::db::get_vesta_conn;
@@ -722,6 +775,14 @@ pub async fn link_manual_resource_to_db(
 
     let mut conn = get_vesta_conn()?;
     let path_str = normalize_path(path);
+    let provenance = provenance.unwrap_or_else(|| {
+        if platform == "modpack" {
+            modpack_provenance_for_instance(instance_id)
+                .unwrap_or_else(|_| ResourceProvenance::modpack(None, None, None))
+        } else {
+            ResourceProvenance::custom()
+        }
+    });
     let file_name = path
         .file_name()
         .and_then(|s| s.to_str())
@@ -776,6 +837,10 @@ pub async fn link_manual_resource_to_db(
                     ir_dsl::file_size.eq(file_size_val),
                     ir_dsl::file_mtime.eq(file_mtime_val),
                     ir_dsl::resource_type.eq(inferred_type),
+                    ir_dsl::source_kind.eq(&provenance.source_kind),
+                    ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
+                    ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
+                    ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
                 ))
                 .execute(&mut conn)?;
         } else {
@@ -788,6 +853,10 @@ pub async fn link_manual_resource_to_db(
                     ir_dsl::file_mtime.eq(file_mtime_val),
                     ir_dsl::resource_type.eq(inferred_type),
                     ir_dsl::platform.eq(platform),
+                    ir_dsl::source_kind.eq(&provenance.source_kind),
+                    ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
+                    ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
+                    ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
                 ))
                 .execute(&mut conn)?;
         }
@@ -816,6 +885,10 @@ pub async fn link_manual_resource_to_db(
             ir_dsl::hash.eq(hash),
             ir_dsl::file_size.eq(file_size_val),
             ir_dsl::file_mtime.eq(file_mtime_val),
+            ir_dsl::source_kind.eq(&provenance.source_kind),
+            ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
+            ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
+            ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
         ))
         .execute(&mut conn)?;
 
@@ -833,6 +906,7 @@ pub async fn link_resource_to_db(
     platform: SourcePlatform,
     hash: Option<String>,
     metadata: (i64, i64),
+    provenance: Option<ResourceProvenance>,
 ) -> Result<()> {
     use crate::utils::db::get_vesta_conn;
     use diesel::prelude::*;
@@ -848,6 +922,7 @@ pub async fn link_resource_to_db(
         SourcePlatform::Modrinth => "modrinth",
         SourcePlatform::CurseForge => "curseforge",
     };
+    let provenance = provenance.unwrap_or_else(ResourceProvenance::custom);
 
     let release_type_str = format!("{:?}", version.release_type).to_lowercase();
     let res_type_str = format!("{:?}", project.resource_type);
@@ -866,6 +941,8 @@ pub async fn link_resource_to_db(
         ir_dsl::installed_resource
             .filter(ir_dsl::instance_id.eq(instance_db_id))
             .filter(ir_dsl::remote_id.eq(&project.id))
+            .filter(ir_dsl::platform.eq(platform_str))
+            .filter(ir_dsl::source_kind.eq(&provenance.source_kind))
             .first::<InstalledResource>(&mut conn)
             .optional()?
     } else {
@@ -891,6 +968,10 @@ pub async fn link_resource_to_db(
                 ir_dsl::hash.eq(hash),
                 ir_dsl::file_size.eq(file_size_val),
                 ir_dsl::file_mtime.eq(file_mtime_val),
+                ir_dsl::source_kind.eq(&provenance.source_kind),
+                ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
+                ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
+                ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
             ))
             .execute(&mut conn)?;
     } else {
@@ -912,6 +993,10 @@ pub async fn link_resource_to_db(
                 ir_dsl::hash.eq(hash),
                 ir_dsl::file_size.eq(file_size_val),
                 ir_dsl::file_mtime.eq(file_mtime_val),
+                ir_dsl::source_kind.eq(&provenance.source_kind),
+                ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
+                ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
+                ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
             ))
             .execute(&mut conn)?;
     }
@@ -920,6 +1005,162 @@ pub async fn link_resource_to_db(
     app.emit("resources-updated", instance_db_id)?;
 
     Ok(())
+}
+
+pub async fn resolve_modpack_override_conflicts(app: &AppHandle, instance_id: i32) -> Result<()> {
+    use crate::models::resource::SourcePlatform;
+    use crate::notifications::manager::NotificationManager;
+    use crate::notifications::models::{CreateNotificationInput, NotificationType};
+    use crate::utils::db::get_vesta_conn;
+    use diesel::prelude::*;
+
+    let resources = {
+        let mut conn = get_vesta_conn()?;
+        ir_dsl::installed_resource
+            .filter(ir_dsl::instance_id.eq(instance_id))
+            .filter(ir_dsl::remote_id.ne(""))
+            .filter(ir_dsl::platform.eq_any(vec!["modrinth", "curseforge"]))
+            .load::<InstalledResource>(&mut conn)?
+    };
+
+    let mut disabled_custom: Vec<String> = Vec::new();
+    let mut to_disable: Vec<(InstalledResource, InstalledResource)> = Vec::new();
+    let rm = app.state::<ResourceManager>();
+
+    for pack_resource in resources
+        .iter()
+        .filter(|r| r.source_kind == "modpack" && r.is_enabled)
+    {
+        for custom_resource in resources.iter().filter(|r| {
+            r.source_kind != "modpack"
+                && r.is_enabled
+                && r.platform == pack_resource.platform
+                && r.remote_id == pack_resource.remote_id
+        }) {
+            let pack_should_win = match pack_resource.platform.as_str() {
+                "modrinth" => {
+                    version_is_at_least(
+                        &rm,
+                        SourcePlatform::Modrinth,
+                        &pack_resource.remote_id,
+                        &pack_resource.remote_version_id,
+                        &custom_resource.remote_version_id,
+                    )
+                    .await
+                }
+                "curseforge" => {
+                    version_is_at_least(
+                        &rm,
+                        SourcePlatform::CurseForge,
+                        &pack_resource.remote_id,
+                        &pack_resource.remote_version_id,
+                        &custom_resource.remote_version_id,
+                    )
+                    .await
+                }
+                _ => true,
+            };
+
+            if pack_should_win {
+                to_disable.push((custom_resource.clone(), pack_resource.clone()));
+            }
+        }
+    }
+
+    if to_disable.is_empty() {
+        return Ok(());
+    }
+
+    let mut conn = get_vesta_conn()?;
+    for (custom_resource, pack_resource) in to_disable {
+        let current_path = PathBuf::from(&custom_resource.local_path);
+        let disabled_path = if custom_resource.local_path.ends_with(".disabled") {
+            current_path.clone()
+        } else {
+            PathBuf::from(format!("{}.disabled", custom_resource.local_path))
+        };
+
+        if current_path.exists() && current_path != disabled_path {
+            std::fs::rename(&current_path, &disabled_path)?;
+        }
+
+        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(custom_resource.id)))
+            .set((
+                ir_dsl::local_path.eq(normalize_path(&disabled_path)),
+                ir_dsl::is_enabled.eq(false),
+            ))
+            .execute(&mut conn)?;
+
+        disabled_custom.push(format!(
+            "{} (custom {} -> pack {})",
+            custom_resource.display_name,
+            custom_resource.current_version,
+            pack_resource.current_version
+        ));
+    }
+
+    app.emit("resources-updated", instance_id)?;
+
+    let visible = disabled_custom
+        .iter()
+        .take(8)
+        .cloned()
+        .collect::<Vec<_>>()
+        .join("\n");
+    let remaining = disabled_custom.len().saturating_sub(8);
+    let suffix = if remaining > 0 {
+        format!("\n…and {} more.", remaining)
+    } else {
+        String::new()
+    };
+
+    let manager = app.state::<NotificationManager>();
+    let _ = manager.create(CreateNotificationInput {
+        client_key: Some(format!("modpack_override_conflicts_{}", instance_id)),
+        title: Some("Modpack versions restored".to_string()),
+        description: Some(format!(
+            "A modpack update supplied active versions for matching custom overrides, so Vesta disabled the custom copies:\n{}{}",
+            visible, suffix
+        )),
+        severity: Some("info".to_string()),
+        notification_type: Some(NotificationType::Patient),
+        dismissible: Some(true),
+        persist: Some(true),
+        ..Default::default()
+    });
+
+    Ok(())
+}
+
+async fn version_is_at_least(
+    rm: &ResourceManager,
+    platform: SourcePlatform,
+    project_id: &str,
+    pack_version_id: &str,
+    custom_version_id: &str,
+) -> bool {
+    if pack_version_id == custom_version_id {
+        return true;
+    }
+
+    let Ok(versions) = rm
+        .get_versions(platform, project_id, true, None, None)
+        .await
+    else {
+        return true;
+    };
+
+    let pack_index = versions
+        .iter()
+        .position(|version| String::from(&version.id) == pack_version_id);
+    let custom_index = versions
+        .iter()
+        .position(|version| String::from(&version.id) == custom_version_id);
+
+    match (pack_index, custom_index) {
+        (Some(pack), Some(custom)) => pack <= custom,
+        _ => true,
+    }
 }
 
 async fn unlink_resource_from_db(app: &AppHandle, instance_db_id: i32, path: &Path) -> Result<()> {

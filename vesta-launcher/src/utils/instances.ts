@@ -311,6 +311,7 @@ export async function unlinkInstance(instance: Instance): Promise<void> {
 		// which the user might want to keep or change later.
 	};
 	await updateInstance(updated);
+	await invoke("clear_modpack_resource_provenance", { instanceId: instance.id });
 }
 
 // Update instance modpack version

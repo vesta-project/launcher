@@ -239,6 +239,7 @@ impl Task for ResourceDownloadTask {
                     installed_dsl::installed_resource
                         .filter(installed_dsl::instance_id.eq(instance_id))
                         .filter(installed_dsl::remote_id.eq(project_id))
+                        .filter(installed_dsl::source_kind.eq("custom"))
                         .first::<InstalledResource>(&mut conn)
                         .optional()
                         .map_err(|e| e.to_string())
@@ -296,6 +297,10 @@ impl Task for ResourceDownloadTask {
                         installed_dsl::file_size.eq(file_size),
                         installed_dsl::file_mtime.eq(file_mtime),
                         installed_dsl::hash.eq(Some(version_hash)),
+                        installed_dsl::source_kind.eq("custom"),
+                        installed_dsl::source_modpack_id.eq(Option::<String>::None),
+                        installed_dsl::source_modpack_version_id.eq(Option::<String>::None),
+                        installed_dsl::source_modpack_platform.eq(Option::<String>::None),
                     ))
                     .execute(&mut conn)
                     .map_err(|e| e.to_string())
@@ -341,6 +346,10 @@ impl Task for ResourceDownloadTask {
                     hash: Some(version.hash.clone()),
                     file_size,
                     file_mtime,
+                    source_kind: "custom".to_string(),
+                    source_modpack_id: None,
+                    source_modpack_version_id: None,
+                    source_modpack_platform: None,
                 };
 
                 tauri::async_runtime::spawn_blocking(move || {

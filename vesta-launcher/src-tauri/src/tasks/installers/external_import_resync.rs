@@ -530,6 +530,7 @@ async fn apply_launcher_hints(
             hint.platform,
             hash,
             (file_size, file_mtime),
+            None,
         )
         .await
         .map_err(|e| format!("Failed to seed hinted linkage for {:?}: {}", local_path, e))?;

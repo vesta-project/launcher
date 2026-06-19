@@ -56,6 +56,10 @@ diesel::table! {
         hash -> Nullable<Text>,
         file_size -> BigInt,
         file_mtime -> BigInt,
+        source_kind -> Text,
+        source_modpack_id -> Nullable<Text>,
+        source_modpack_version_id -> Nullable<Text>,
+        source_modpack_platform -> Nullable<Text>,
     }
 }
 

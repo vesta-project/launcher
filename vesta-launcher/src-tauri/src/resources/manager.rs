@@ -723,6 +723,10 @@ impl ResourceManager {
         };
 
         for res in resources {
+            if res.source_kind == "modpack" {
+                continue;
+            }
+
             let platform = match res.platform.as_str() {
                 "curseforge" => SourcePlatform::CurseForge,
                 "modrinth" => SourcePlatform::Modrinth,
@@ -731,13 +735,7 @@ impl ResourceManager {
 
             let _ = self.get_project(platform, &res.remote_id).await;
             let _ = self
-                .get_versions(
-                    platform,
-                    &res.remote_id,
-                    true,
-                    Some(mc_version),
-                    Some(loader),
-                )
+                .get_versions(platform, &res.remote_id, false, None, None)
                 .await;
         }
 

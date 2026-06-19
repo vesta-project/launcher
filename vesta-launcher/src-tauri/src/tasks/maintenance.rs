@@ -297,6 +297,10 @@ where
             hash: resource.hash,
             file_size: resource.file_size,
             file_mtime: resource.file_mtime,
+            source_kind: resource.source_kind,
+            source_modpack_id: resource.source_modpack_id,
+            source_modpack_version_id: resource.source_modpack_version_id,
+            source_modpack_platform: resource.source_modpack_platform,
         };
 
         diesel::insert_into(ir_dsl::installed_resource)

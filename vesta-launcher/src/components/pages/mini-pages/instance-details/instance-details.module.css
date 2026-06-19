@@ -688,7 +688,7 @@
 /* Tab Content */
 /* Tab Content */
 .instance-tab-content h2 {
-    margin: 0 0 1.5rem;
+    /*margin: 0 0 1.5rem;*/
     font-size: var(--font-medium);
     font-weight: 600;
     color: var(--text-primary);
@@ -1572,7 +1572,12 @@
 }
 
 .col-version-text {
-    font-size: 0.9rem;
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 0.78rem;
+    font-weight: 700;
     color: var(--text-secondary);
     white-space: nowrap;
 }
@@ -1659,6 +1664,26 @@
     min-height: 0; /* Important for flex-child scrolling */
     display: flex;
     flex-direction: column;
+}
+
+.resource-update-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 18px;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid var(--border-subtle);
+    flex-shrink: 0;
+}
+
+.resource-update-badge {
+    color: hsl(180 90% 78%);
+    border-color: hsl(180 80% 50% / 0.45);
+    background: hsl(180 80% 35% / 0.16);
 }
 
 .vesta-table-container {
@@ -1777,6 +1802,172 @@
 
 .vesta-table tr:hover.row-selected td {
     background: hsl(var(--color__primary-hue) 60% 50% / 0.14) !important;
+}
+
+.vesta-table tr.modpack-group-row {
+    cursor: default;
+}
+
+.vesta-table tr.modpack-group-row td {
+    background: color-mix(in srgb, var(--surface-medium) 44%, transparent);
+    border-bottom-color: color-mix(
+        in srgb,
+        var(--border-subtle) 72%,
+        hsl(185 70% 55% / 0.24)
+    );
+}
+
+.vesta-table tr.modpack-group-row:hover td,
+.vesta-table tr.modpack-group-row:focus-visible td {
+    background: var(--surface-medium) !important;
+}
+
+.modpack-group-disclosure {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modpack-group-name {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.modpack-group-icon {
+    width: 30px !important;
+    height: 30px !important;
+    border-radius: 7px !important;
+    flex-shrink: 0;
+}
+
+.modpack-group-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.modpack-group-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-primary);
+    font-size: 0.92rem;
+    font-weight: 700;
+}
+
+.modpack-group-meta {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-secondary);
+    font-size: 0.74rem;
+    font-weight: 600;
+}
+
+.modpack-group-update-text {
+    color: hsl(180 85% 72%);
+    font-weight: 800;
+}
+
+.modpack-group-version {
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.modpack-group-version > span:first-child {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.modpack-group-empty {
+    display: block;
+    min-height: 1px;
+}
+
+.modpack-group-chevron {
+    width: 20px;
+    height: 20px;
+    color: var(--text-tertiary);
+    transition: transform 160ms ease;
+}
+
+.modpack-group-chevron[data-expanded="true"] {
+    transform: rotate(90deg);
+}
+
+.vesta-table tr.row-modpack-child td {
+    background: color-mix(
+        in srgb,
+        var(--surface-base) 72%,
+        hsl(var(--color__primary-hue) 52% var(--lightness-surface-raised) / 0.9)
+    );
+    border-bottom-color: color-mix(
+        in srgb,
+        var(--border-subtle) 72%,
+        hsl(var(--color__primary-hue) 55% var(--lightness-border) / 0.35)
+    );
+    animation: modpackChildReveal 170ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.vesta-table tr.row-modpack-child:hover td {
+    background: color-mix(
+        in srgb,
+        var(--surface-medium) 66%,
+        hsl(
+            var(--color__primary-hue) 58% var(--lightness-surface-raised) / 0.92
+        )
+    ) !important;
+}
+
+.vesta-table tr.row-modpack-child.row-selected td {
+    background: color-mix(
+        in srgb,
+        hsl(var(--color__primary-hue) 60% 50% / 0.12) 48%,
+        hsl(var(--color__primary-hue) 52% var(--lightness-surface-raised) / 0.9)
+    ) !important;
+}
+
+.vesta-table tr.row-modpack-child td.col-display_name {
+    padding-left: 22px;
+}
+
+.vesta-table tr.row-modpack-child .res-icon,
+.vesta-table tr.row-modpack-child .res-icon-placeholder {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+}
+
+@keyframes modpackChildReveal {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .vesta-table tr.row-modpack-child td {
+        animation: none;
+    }
 }
 
 .col-selection-wrapper {

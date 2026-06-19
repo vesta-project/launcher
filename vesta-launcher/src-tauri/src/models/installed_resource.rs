@@ -22,6 +22,10 @@ pub struct InstalledResource {
     pub hash: Option<String>,
     pub file_size: i64,
     pub file_mtime: i64,
+    pub source_kind: String,
+    pub source_modpack_id: Option<String>,
+    pub source_modpack_version_id: Option<String>,
+    pub source_modpack_platform: Option<String>,
 }
 
 #[derive(Insertable, Debug, Clone)]
@@ -42,4 +46,8 @@ pub struct NewInstalledResource {
     pub hash: Option<String>,
     pub file_size: i64,
     pub file_mtime: i64,
+    pub source_kind: String,
+    pub source_modpack_id: Option<String>,
+    pub source_modpack_version_id: Option<String>,
+    pub source_modpack_platform: Option<String>,
 }

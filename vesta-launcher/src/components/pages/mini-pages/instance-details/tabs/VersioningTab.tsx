@@ -1,7 +1,6 @@
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
-import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import {
 	Combobox,
@@ -26,9 +25,11 @@ interface VersioningTabProps {
 	checkingUpdates: boolean;
 	checkUpdates: () => void;
 	modpackVersions: any;
+	availableModpackUpdate: any;
 	handleModpackVersionSelect: (v: any) => void;
 	rolloutModpackUpdate: () => void;
 	handleUnlink: () => void;
+	handleDeleteModpackAndUnlink: () => void;
 	router: any;
 	searchableMcVersions: () => any[];
 	includeSnapshots: () => boolean;
@@ -90,55 +91,32 @@ export const VersioningTab = (props: VersioningTabProps) => {
 	};
 
 	const navigateToModpack = () => {
-		if (inst().modpackId) {
-			props.router?.navigate("/resource-details", {
-				projectId: inst().modpackId,
-				platform: inst().modpackPlatform,
-			});
-		}
+		if (!inst().modpackId) return;
+		props.router?.navigate("/resource-details", {
+			projectId: inst().modpackId,
+			platform: inst().modpackPlatform,
+		});
 	};
 
 	return (
 		<div class={styles["tab-versioning"]}>
 			<div class={panelStyles["settings-panel"]}>
 				<Show when={inst().modpackId}>
-					<SettingsCard header="Modpack Version" subHeader={`Project ID: ${inst().modpackId}`}>
+					<SettingsCard header="Linked Modpack" subHeader="Update the pack as one source, or unlink to manage everything manually.">
 						<div class={styles["versioning-stack"]}>
-							<div class={styles["modpack-hero"]} onClick={navigateToModpack}>
-								<div class={styles["modpack-hero-icon-container"]}>
-									<ResourceAvatar
-										icon={props.modpackIcon()}
-										name={inst().name}
-										class={styles["modpack-hero-icon"]}
-									/>
-								</div>
-								<div class={styles["modpack-hero-info"]}>
-									<div class={styles["modpack-hero-header"]}>
-										<h3 class={styles["modpack-hero-title"]}>{inst().name}</h3>
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={(e: MouseEvent) => {
-												e.stopPropagation();
-												props.handleUnlink();
-											}}
-										>
-											Unlink
-										</Button>
-									</div>
-									<p class={styles["modpack-hero-subtitle"]}>
-										{inst().modpackPlatform === "modrinth" ? "Modrinth" : "CurseForge"} •{" "}
-										{inst().minecraftVersion}
-									</p>
-								</div>
-							</div>
-
 							<ModpackVersionSelector
+								projectName={inst().name}
+								projectIcon={props.modpackIcon()}
+								platform={inst().modpackPlatform}
+								minecraftVersion={inst().minecraftVersion}
+								loader={inst().modloader || "Vanilla"}
 								versions={props.modpackVersions()}
 								loading={props.modpackVersions.loading}
 								currentVersionId={inst().modpackVersionId ? String(inst().modpackVersionId) : null}
+								availableUpdate={props.availableModpackUpdate}
 								onVersionSelect={props.handleModpackVersionSelect}
 								onUpdate={props.rolloutModpackUpdate}
+								onOpenProject={navigateToModpack}
 								disabled={props.busy || props.isInstalling || props.isGuest}
 							/>
 						</div>
@@ -311,6 +289,14 @@ export const VersioningTab = (props: VersioningTabProps) => {
 							actionLabel="Unlink"
 							destructive
 							onAction={props.handleUnlink}
+							disabled={props.busy || props.isInstalling || props.isGuest}
+						/>
+						<SettingsField
+							label="Delete Bundled Files & Unlink"
+							description="Remove only the bundled modpack files, keep custom resources and overrides, then disconnect the modpack source."
+							actionLabel="Delete & Unlink"
+							destructive
+							onAction={props.handleDeleteModpackAndUnlink}
 							disabled={props.busy || props.isInstalling || props.isGuest}
 						/>
 					</Show>
