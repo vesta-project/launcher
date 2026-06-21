@@ -4,10 +4,20 @@ Vesta Launcher supports command-line arguments and deep link protocols for exter
 
 ## Overview
 
-The system provides two main integration methods:
+The system provides three main integration methods:
 - **CLI Arguments**: Direct command-line invocation with arguments
-- **Deep Links**: URL-based protocol handling (vesta:// URLs)
+- **Deep Links**: URL-based protocol handling (`vesta://` URLs)
+- **File Associations**: OS-level `.mrpack` file handling (double-click / Open With)
 - **Single Instance**: Ensures only one launcher instance runs, forwarding arguments to existing instance
+
+## File Associations
+
+Vesta registers `.mrpack` (Modrinth modpack) files in `tauri.conf.json` via `bundle.fileAssociations`. After a production build/install, the OS can open `.mrpack` files with Vesta.
+
+**Behavior:**
+- **Windows/Linux**: File path arrives via `std::env::args()` on cold start, or via the single-instance plugin when already running
+- **macOS**: File path arrives via `RunEvent::Opened` and is queued until the frontend signals ready
+- **Frontend**: Opens the `/install` page with `modpackPath` and `isModpack: true`
 
 ## Single Instance Handling
 
@@ -15,22 +25,49 @@ Vesta uses Tauri's single instance plugin to ensure only one launcher window is 
 
 ```rust
 .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-    // Focus existing window
-    let _ = app.get_webview_window("main")
-               .expect("no main window")
-               .set_focus();
-    
-    // Forward CLI arguments to existing instance
+    let _ = crate::utils::windows::ensure_main_window_visible(&app);
+
     if args.len() > 1 {
-        let _ = app.emit("core://handle-cli", args);
+        crate::utils::launch_intents::ingest_launch_args(&args);
+        if app.state::<PendingLaunchIntents>().is_frontend_ready() {
+            crate::utils::launch_intents::flush_pending_intents(&app);
+        }
     }
 }))
 ```
 
 **Behavior:**
-- If launcher is not running: Launches normally with provided arguments
-- If launcher is running: Focuses existing window and forwards arguments
-- Arguments are processed via `core://handle-cli` event
+- If launcher is not running: Launches normally; intents are queued until the frontend calls `signal_frontend_ready`
+- If launcher is running: Focuses existing window and forwards intents immediately when ready
+- Intents are delivered as structured batches on `core://handle-launch-intents` (`argv` preserves CLI flags; `path` is a single opened file)
+
+## Cold Start Handshake
+
+On cold start, launch intents (CLI args, deep links, opened files) are queued in Rust until the frontend is ready:
+
+1. Frontend registers `core://handle-launch-intents` listener
+2. Frontend calls `getCurrent()` (deep-link plugin) and `consume_pending_intents()`
+3. Frontend calls `signal_frontend_ready` to flush any remaining queued intents
+
+```mermaid
+flowchart LR
+    subgraph rust [Rust ingestion]
+        A[argv / Opened URLs] --> B[QueuedIntent queue]
+        B --> C[consume_pending_intents]
+        B --> D[signal_frontend_ready flush]
+    end
+    subgraph frontend [Frontend bootstrap]
+        E[register listener] --> F[getCurrent]
+        F --> G[consume_pending_intents]
+        G --> H[signal_frontend_ready]
+        D --> I[core://handle-launch-intents]
+        I --> J[handleQueuedIntents]
+    end
+```
+
+**Intent shapes:**
+- `{ type: "argv", args: ["--open-resource", "modrinth", "fabric-api"] }` — full CLI tail, flags preserved
+- `{ type: "path", path: "/path/to/pack.mrpack" }` — single opened file (macOS Open With, or lone path argv)
 
 ## CLI Arguments
 
@@ -110,8 +147,18 @@ Vesta supports `vesta://` protocol URLs for cross-application integration:
 
 ```
 vesta://<action>?<parameters>
-vesta://<action>/<path>?<parameters>
+vesta://<action>/<path-segment>?<parameters>
 ```
+
+### Canonical URL Reference
+
+| Action | Example |
+|--------|---------|
+| Install modpack/resource | `vesta://install?projectId=abc&platform=modrinth` |
+| Open resource page | `vesta://open-resource/modrinth/fabric-api` |
+| Open instance page | `vesta://open-instance?slug=my-slug` |
+| Launch instance | `vesta://launch-instance?slug=my-slug` or `vesta://launch-instance/my-slug` |
+| Legacy copy links | `vesta:///instance?path=%2Finstance&slug=my-slug` (still supported) |
 
 ### Supported Actions
 
@@ -150,6 +197,23 @@ Opens resource details page with platform and project ID.
 ```
 vesta://open-resource/modrinth/fabric-api
 vesta://open-resource/curseforge/jei
+```
+
+#### `open-instance`
+Opens the instance details page for a slug.
+
+**Examples:**
+```
+vesta://open-instance?slug=vanilla-1-20-1
+```
+
+#### `launch-instance`
+Launches an instance directly without opening its page.
+
+**Examples:**
+```
+vesta://launch-instance/vanilla-1-20-1
+vesta://launch-instance?slug=vanilla-1-20-1
 ```
 
 **Processing:**

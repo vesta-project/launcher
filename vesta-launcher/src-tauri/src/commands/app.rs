@@ -652,12 +652,15 @@ pub struct TraySettings {
     pub default_launcher_action_on_launch: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum DeepLinkTarget {
     Install,
     ResourceDetails,
     Home,
+    LaunchInstance,
+    OpenInstance,
+    Navigate,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -689,6 +692,12 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
         .map(|s| s.filter(|segment| !segment.is_empty()).collect())
         .unwrap_or_default();
 
+    // Legacy copy-link format: vesta:///instance?path=%2Finstance&slug=...
+    if let Some(path) = params.get("path").cloned() {
+        params.remove("path");
+        return map_legacy_path_navigation(path, params);
+    }
+
     match action {
         "install" => Ok(DeepLinkMetadata {
             target: DeepLinkTarget::Install,
@@ -698,6 +707,26 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
             target: DeepLinkTarget::Home,
             params,
         }),
+        "launch-instance" => {
+            if let Some(slug) = segments.first() {
+                params.insert("slug".to_string(), (*slug).to_string());
+            }
+            require_param(&params, "slug", "launch-instance")?;
+            Ok(DeepLinkMetadata {
+                target: DeepLinkTarget::LaunchInstance,
+                params,
+            })
+        }
+        "open-instance" => {
+            if let Some(slug) = segments.first() {
+                params.insert("slug".to_string(), (*slug).to_string());
+            }
+            require_param(&params, "slug", "open-instance")?;
+            Ok(DeepLinkMetadata {
+                target: DeepLinkTarget::OpenInstance,
+                params,
+            })
+        }
         "standalone" => {
             let resource_type = params.get("type").map(|s| s.as_str()).unwrap_or("");
             if resource_type == "modpack" {
@@ -717,12 +746,72 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
                 params.insert("platform".to_string(), segments[0].to_string());
                 params.insert("projectId".to_string(), segments[1].to_string());
             }
+            require_param(&params, "platform", "open-resource")?;
+            require_param(&params, "projectId", "open-resource")?;
             Ok(DeepLinkMetadata {
                 target: DeepLinkTarget::ResourceDetails,
                 params,
             })
         }
         _ => Err(format!("Unknown action: {}", action)),
+    }
+}
+
+fn require_param(
+    params: &std::collections::HashMap<String, String>,
+    key: &str,
+    action: &str,
+) -> Result<(), String> {
+    if params.get(key).is_some_and(|value| !value.is_empty()) {
+        Ok(())
+    } else {
+        Err(format!("Missing {} for {}", key, action))
+    }
+}
+
+fn is_allowed_navigate_path(path: &str) -> bool {
+    matches!(
+        path,
+        "/config"
+            | "/changelog"
+            | "/install"
+            | "/install/source"
+            | "/install/import"
+            | "/modding-guide"
+            | "/resources"
+            | "/login"
+            | "/file-drop"
+    )
+}
+
+fn map_legacy_path_navigation(
+    path: String,
+    mut params: std::collections::HashMap<String, String>,
+) -> Result<DeepLinkMetadata, String> {
+    match path.as_str() {
+        "/instance" => {
+            require_param(&params, "slug", "instance navigation")?;
+            Ok(DeepLinkMetadata {
+                target: DeepLinkTarget::OpenInstance,
+                params,
+            })
+        }
+        "/resource-details" => Ok(DeepLinkMetadata {
+            target: DeepLinkTarget::ResourceDetails,
+            params,
+        }),
+        "/install" => Ok(DeepLinkMetadata {
+            target: DeepLinkTarget::Install,
+            params,
+        }),
+        allowed if is_allowed_navigate_path(allowed) => Ok(DeepLinkMetadata {
+            target: DeepLinkTarget::Navigate,
+            params: {
+                params.insert("path".to_string(), path);
+                params
+            },
+        }),
+        _ => Err(format!("Unsupported navigation path: {}", path)),
     }
 }
 
@@ -866,4 +955,74 @@ pub fn set_window_effect(window: tauri::WebviewWindow, effect: String) -> Result
 #[tauri::command]
 pub fn trigger_test_panic() -> Result<(), String> {
     panic!("Test Sentry Backend Panic - Triggered by developer test button. Check Sentry dashboard to verify capture.");
+}
+
+#[cfg(test)]
+mod parse_vesta_url_tests {
+    use super::*;
+
+    #[test]
+    fn parses_install_links() {
+        let result = parse_vesta_url("vesta://install?projectId=abc&platform=modrinth".to_string())
+            .expect("install link should parse");
+        assert_eq!(result.target, DeepLinkTarget::Install);
+        assert_eq!(result.params.get("projectId").map(String::as_str), Some("abc"));
+        assert_eq!(result.params.get("platform").map(String::as_str), Some("modrinth"));
+    }
+
+    #[test]
+    fn parses_open_resource_links() {
+        let result =
+            parse_vesta_url("vesta://open-resource/modrinth/fabric-api".to_string()).expect("open-resource");
+        assert_eq!(result.target, DeepLinkTarget::ResourceDetails);
+        assert_eq!(result.params.get("platform").map(String::as_str), Some("modrinth"));
+        assert_eq!(result.params.get("projectId").map(String::as_str), Some("fabric-api"));
+    }
+
+    #[test]
+    fn parses_launch_instance_links() {
+        let result =
+            parse_vesta_url("vesta://launch-instance/my-slug".to_string()).expect("launch-instance");
+        assert_eq!(result.target, DeepLinkTarget::LaunchInstance);
+        assert_eq!(result.params.get("slug").map(String::as_str), Some("my-slug"));
+    }
+
+    #[test]
+    fn parses_open_instance_links() {
+        let result =
+            parse_vesta_url("vesta://open-instance?slug=my-slug".to_string()).expect("open-instance");
+        assert_eq!(result.target, DeepLinkTarget::OpenInstance);
+        assert_eq!(result.params.get("slug").map(String::as_str), Some("my-slug"));
+    }
+
+    #[test]
+    fn parses_legacy_copy_link_format() {
+        let result = parse_vesta_url(
+            "vesta:///instance?path=%2Finstance&slug=my-slug".to_string(),
+        )
+        .expect("legacy copy link");
+        assert_eq!(result.target, DeepLinkTarget::OpenInstance);
+        assert_eq!(result.params.get("slug").map(String::as_str), Some("my-slug"));
+    }
+
+    #[test]
+    fn rejects_launch_instance_without_slug() {
+        let error = parse_vesta_url("vesta://launch-instance".to_string())
+            .expect_err("launch-instance without slug should fail");
+        assert!(error.contains("slug"));
+    }
+
+    #[test]
+    fn rejects_open_resource_without_segments() {
+        let error = parse_vesta_url("vesta://open-resource/modrinth".to_string())
+            .expect_err("open-resource without projectId should fail");
+        assert!(error.contains("projectId"));
+    }
+
+    #[test]
+    fn rejects_unsupported_legacy_navigation_path() {
+        let error = parse_vesta_url("vesta://open?path=%2Fdebug-test".to_string())
+            .expect_err("debug route should be rejected");
+        assert!(error.contains("Unsupported navigation path"));
+    }
 }

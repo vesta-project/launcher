@@ -15,6 +15,7 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
+import { generateVestaDeepLink } from "@utils/launch-intents";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS, getInstanceSlug, killInstance, launchInstance } from "@utils/instances";
 import { clsx } from "clsx";
@@ -209,13 +210,7 @@ export function PinnedItem(props: PinnedItemProps) {
 			};
 		}
 
-		const searchParams = new URLSearchParams();
-		searchParams.set("path", path);
-		for (const [key, value] of Object.entries(params)) {
-			searchParams.set(key, value);
-		}
-
-		const url = `vesta://${path}?${searchParams.toString()}`;
+		const url = generateVestaDeepLink(path, params);
 		try {
 			await navigator.clipboard.writeText(url);
 			showToast({

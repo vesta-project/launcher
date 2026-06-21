@@ -11,10 +11,9 @@ import "@stores/versions"; // eager-load version metadata on boot
 import { setupInstanceListeners } from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import { onOpenUrl, getCurrent } from "@tauri-apps/plugin-deep-link";
 import { ChildrenProp } from "@ui/props";
 import { showToast } from "@ui/toast/toast";
-import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import {
 	applyCommonConfigUpdates,
 	onConfigUpdate,
@@ -23,6 +22,11 @@ import {
 } from "@utils/config-sync";
 import { subscribeToCrashEvents } from "@utils/crash-handler";
 import { cleanupFileDropSystem, getDropZoneManager } from "@utils/file-drop";
+import {
+	handleDeepLink,
+	handleQueuedIntents,
+	type QueuedIntent,
+} from "@utils/launch-intents";
 import {
 	cleanupNotifications,
 	subscribeToBackendNotifications,
@@ -39,92 +43,6 @@ export interface ExitCheckResponse {
 	can_exit: boolean;
 	blocking_tasks: string[];
 	running_instances: string[];
-}
-
-/**
- * Handles deep-link URLs like vesta://install?projectId=X&platform=Y
- * Parses the URL via Rust backend and navigates if initialized and authenticated
- */
-export async function handleDeepLink(url: string, navigate: ReturnType<typeof useNavigate>) {
-	try {
-		if (hasTauriRuntime()) {
-			try {
-				await invoke("show_window_from_tray");
-			} catch (e) {
-				console.warn("Failed to show window for deep link:", e);
-			}
-		}
-		// 1. Check if app is initialized
-		const config = await invoke<any>("get_config");
-		if (!config || !config.setup_completed) {
-			showToast({
-				title: "Setup Required",
-				description: "Please complete the onboarding process before using 'Open in Vesta'.",
-				severity: "error",
-				duration: 5000,
-			});
-			return;
-		}
-
-		// 2. Check if authenticated
-		const account = await getActiveAccount();
-		if (!account || account.account_type === ACCOUNT_TYPE_GUEST || account.is_expired) {
-			showToast({
-				title: "Authentication Required",
-				description: "Please sign in to a valid account to use 'Open in Vesta'.",
-				severity: "error",
-				duration: 5000,
-			});
-			return;
-		}
-
-		// 3. Parse URL via backend
-		const metadata = await invoke<{
-			target: string;
-			params: Record<string, string>;
-		}>("parse_vesta_url", { url });
-
-		console.log("Deep link parsed via Rust:", metadata);
-
-		// Map targets to mini-router paths
-		let path = "";
-		switch (metadata.target) {
-			case "install":
-				path = "/install";
-				break;
-			case "resource-details":
-				path = "/resource-details";
-				break;
-			case "home":
-				// Just focus the app, which is done by the single-instance plugin
-				// and this handler means we're already here.
-				return;
-			default:
-				console.warn("Unknown deep link target:", metadata.target);
-				path = "/config"; // Fallback
-		}
-
-		// Always use the integrated PageViewer in the main window
-		if (router()) {
-			openMiniPage(path, metadata.params);
-		} else {
-			// If router isn't ready, show error - no standalone fallback
-			showToast({
-				title: "App Not Ready",
-				description: "Please wait for the app to fully load before using 'Open in Vesta'.",
-				severity: "error",
-				duration: 5000,
-			});
-		}
-	} catch (error) {
-		console.error("Failed to parse deep link:", url, error);
-		showToast({
-			title: "Invalid Link",
-			description: "The Vesta link you clicked is invalid or unsupported.",
-			severity: "error",
-			duration: 5000,
-		});
-	}
 }
 
 function App() {
@@ -355,10 +273,8 @@ function Root(props: ChildrenProp) {
 		onOpenUrl((urls) => {
 			console.log("Deep link received:", urls);
 
-			// Handle the first URL in the array
 			if (urls && urls.length > 0) {
-				const url = urls[0];
-				void handleDeepLink(url, navigate);
+				void handleDeepLink(urls[0]);
 			}
 		})
 			.then((u) => {
@@ -367,6 +283,49 @@ function Root(props: ChildrenProp) {
 			.catch((error) => {
 				console.error("Failed to setup deep-link handler:", error);
 			});
+
+		const bootstrapLaunchIntents = async () => {
+			if (!hasTauriRuntime()) {
+				return;
+			}
+
+			listen<QueuedIntent[]>("core://handle-launch-intents", (event) => {
+				console.log("[App] Received queued launch intents:", event.payload);
+				void handleQueuedIntents(event.payload);
+			}).catch((error) => {
+				console.error("Failed to subscribe to launch intent handler:", error);
+			});
+
+			try {
+				const currentUrls = await getCurrent();
+				if (currentUrls?.length) {
+					console.log("[App] Recovered cold-start deep links:", currentUrls);
+					for (const url of currentUrls) {
+						await handleDeepLink(url);
+					}
+				}
+			} catch (error) {
+				console.warn("Failed to read current deep links:", error);
+			}
+
+			try {
+				const pending = await invoke<QueuedIntent[]>("consume_pending_intents");
+				if (pending.length > 0) {
+					console.log("[App] Consumed pending launch intents:", pending);
+					await handleQueuedIntents(pending);
+				}
+			} catch (error) {
+				console.warn("Failed to consume pending launch intents:", error);
+			}
+
+			try {
+				await invoke("signal_frontend_ready");
+			} catch (error) {
+				console.warn("Failed to signal frontend ready:", error);
+			}
+		};
+
+		void bootstrapLaunchIntents();
 
 		// Defer non-critical initialization until the next frame.
 		// This avoids fixed startup delays while still keeping first render responsive.
@@ -414,66 +373,6 @@ function Root(props: ChildrenProp) {
 						console.error("Failed to get DB status:", err);
 					});
 			}
-
-			// Handle CLI Arguments & Deep Links
-			const handleCLI = async (args: string[]) => {
-				if (hasTauriRuntime()) {
-					try {
-						await invoke("show_window_from_tray");
-					} catch (e) {
-						console.warn("Failed to show window for CLI args:", e);
-					}
-				}
-				console.log("[App] Received CLI args:", args);
-				for (let i = 0; i < args.length; i++) {
-					const arg = args[i];
-					if (arg.startsWith("vesta://")) {
-						await handleDeepLink(arg, navigate);
-						continue;
-					}
-
-					if (arg === "--launch-instance" && args[i + 1]) {
-						const slug = args[i + 1];
-						const { instancesState, setLaunching, initializeInstances } = await import(
-							"@stores/instances"
-						);
-						const { launchInstance } = await import("@utils/instances");
-						await initializeInstances();
-						const inst = instancesState.instances.find(
-							(inst) => (inst as any).slug === slug || inst.name.toLowerCase().replace(/ /g, "-") === slug,
-						);
-						if (inst) {
-							setLaunching(slug, true);
-							try {
-								await launchInstance(inst);
-							} catch (err) {
-								setLaunching(slug, false);
-							}
-						}
-						i++;
-					} else if (arg === "--open-instance" && args[i + 1]) {
-						const slug = args[i + 1];
-						const { openMiniPage } = await import("@components/page-viewer/page-viewer");
-						openMiniPage("/instance", { slug });
-						i++;
-					} else if (arg === "--open-resource" && args[i + 2]) {
-						const platform = args[i + 1];
-						const id = args[i + 2];
-						const { openMiniPage } = await import("@components/page-viewer/page-viewer");
-						openMiniPage("/resource-details", {
-							platform,
-							projectId: id,
-						});
-						i += 2;
-					}
-				}
-			};
-
-			listen<string[]>("core://handle-cli", (event) => {
-				handleCLI(event.payload);
-			}).catch((error) => {
-				console.error("Failed to subscribe to CLI handler:", error);
-			});
 
 			// Cleanup notifications in background (don't block startup)
 			cleanupNotifications()

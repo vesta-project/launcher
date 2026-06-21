@@ -61,6 +61,18 @@
 		"resources": [
 			"../resources/exit-handler/exit-handler.jar",
 			"icons/icon.png"
+		],
+		"fileAssociations": [
+			{
+				"ext": ["mrpack"],
+				"name": "Modrinth Modpack",
+				"mimeType": "application/x-modrinth-modpack+zip",
+				"role": "Editor",
+				"exportedType": {
+					"identifier": "com.vesta.launcher.mrpack",
+					"conformsTo": ["public.zip-archive", "public.data"]
+				}
+			}
 		]
 	}
 }

@@ -1,13 +1,3 @@
-/*
-The Mini Router Component is a router solution to display different pages and navigate between them.
-
-Refactored to support:
-- Route parameters (e.g., /instance/:slug)
-- Proper history with params + state separation
-- URL generation for deep linking
-- Disabled button states
- */
-
 import {
 	type Accessor,
 	batch,
@@ -24,6 +14,7 @@ import {
 	isLibraryPath,
 	type ShellNavigationDelegate,
 } from "@utils/flat-shell-navigation";
+import { generateVestaDeepLink } from "@utils/launch-intents";
 import { Dynamic } from "solid-js/web";
 
 interface RouterComponent<T extends ValidComponent = ValidComponent> {
@@ -248,17 +239,10 @@ class MiniRouter {
 
 		this.generateUrl = () => {
 			const path = this.currentPath.get();
-			const params = this.currentParams.get();
-
-			const searchParams = new URLSearchParams();
-			searchParams.set("path", path);
-
-			if (Object.keys(params).length > 0) {
-				for (const [key, value] of Object.entries(params)) {
-					searchParams.set(key, String(value));
-				}
-			}
-			return `vesta://${path}?${searchParams.toString()}`;
+			const params = Object.fromEntries(
+				Object.entries(this.currentParams.get()).map(([key, value]) => [key, String(value)]),
+			);
+			return generateVestaDeepLink(path, params);
 		};
 
 		this.navigateFromLibrary = (

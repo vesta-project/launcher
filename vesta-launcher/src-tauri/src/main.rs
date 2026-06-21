@@ -97,6 +97,7 @@ fn main() {
             setup::init(app)
         })
         .manage(utils::dialog_manager::DialogManager::new())
+        .manage(utils::launch_intents::PendingLaunchIntents::new())
         .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
@@ -105,11 +106,14 @@ fn main() {
         .plugin(tauri_plugin_macos_permissions::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            // Ensure the main window is visible and focused for second-instance handling
             let _ = crate::utils::windows::ensure_main_window_visible(&app);
 
             if args.len() > 1 {
-                let _ = app.emit("core://handle-cli", args);
+                crate::utils::launch_intents::ingest_launch_args(&args);
+                let state = app.state::<utils::launch_intents::PendingLaunchIntents>();
+                if state.is_frontend_ready() {
+                    utils::launch_intents::flush_pending_intents(&app);
+                }
             }
         }))
         .invoke_handler(tauri::generate_handler![
@@ -147,6 +151,8 @@ fn main() {
             commands::app::show_window_from_tray,
             commands::app::clear_window_startup_background,
             commands::app::parse_vesta_url,
+            utils::launch_intents::consume_pending_intents,
+            utils::launch_intents::signal_frontend_ready,
             commands::app::get_window_effect_capabilities,
             commands::app::set_window_effect,
             utils::db::get_db_status,
@@ -331,6 +337,17 @@ fn main() {
                 _ => {}
             }
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|app, event| {
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = event {
+                crate::utils::launch_intents::ingest_opened_urls(&urls);
+                if let Some(state) = app.try_state::<utils::launch_intents::PendingLaunchIntents>() {
+                    if state.is_frontend_ready() {
+                        utils::launch_intents::flush_pending_intents(app);
+                    }
+                }
+            }
+        });
 }
