@@ -61,14 +61,23 @@
         opacity 180ms ease;
 }
 
-.toggle-group__item:hover:not(:disabled) {
+.toggle-group__item:hover:not(:disabled):not([data-pressed]) {
     background-color: var(--surface-overlay);
     color: var(--text-primary);
 }
 
 .toggle-group__item[data-pressed] {
-    background-color: color-mix(in srgb, var(--toggle-group-accent, var(--accent-primary)) 18%, var(--surface-overlay));
-    color: var(--toggle-group-shell-fg, var(--text-primary));
+    background-color: var(
+        --toggle-group-selected-bg,
+        color-mix(
+            in srgb,
+            var(--toggle-group-accent, var(--primary-accent)) 30%,
+            var(--surface-overlay)
+        )
+    );
+    color: var(--toggle-group-selected-fg, var(--text-primary));
+    font-weight: 600;
+    box-shadow: var(--elevation-soft);
 }
 
 .toggle-group__item[data-disabled] {

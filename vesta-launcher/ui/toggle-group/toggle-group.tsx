@@ -18,7 +18,9 @@ function ToggleGroup<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,
 ) {
 	const [local, rest] = splitProps(props as any, ["class", "children", "color", "variant", "style"]);
-	const buttonVars = getButtonStyleVars(local.color || "secondary");
+	const color = local.color || "secondary";
+	const buttonVars = getButtonStyleVars(color);
+	const isMutedShell = color === "none" || color === "secondary";
 
 	return (
 		<ToggleGroupPrimitive.Root
@@ -34,7 +36,17 @@ function ToggleGroup<T extends ValidComponent = "div">(
 					"--toggle-group-shell-bg": buttonVars["--button-color"],
 					"--toggle-group-shell-border": buttonVars["--button-border"],
 					"--toggle-group-shell-fg": buttonVars["--button-text"],
-					"--toggle-group-accent": buttonVars["--button-color"],
+					"--toggle-group-accent": isMutedShell
+						? "var(--primary-accent)"
+						: buttonVars["--button-color"],
+					...(isMutedShell
+						? {
+								"--toggle-group-selected-fg": "var(--text-primary)",
+							}
+						: {
+								"--toggle-group-selected-bg": `color-mix(in srgb, ${buttonVars["--button-fg"]} 22%, ${buttonVars["--button-color"]})`,
+								"--toggle-group-selected-fg": buttonVars["--button-fg"],
+							}),
 				};
 
 				return typeof local.style === "string"
