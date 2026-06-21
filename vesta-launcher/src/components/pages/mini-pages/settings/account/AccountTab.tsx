@@ -186,7 +186,6 @@ export function AccountSettingsTab() {
 	const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
 	const [compactActionMode, setCompactActionMode] = createSignal(false);
 	const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
-	const [isSingleNarrowToggle, setIsSingleNarrowToggle] = createSignal(false);
 	const [narrowView, setNarrowView] = createSignal<"browse" | "preview">("browse");
 
 	const [savedSnapshot, setSavedSnapshot] = createSignal<{
@@ -335,7 +334,6 @@ export function AccountSettingsTab() {
 			setCompactActionMode(window.innerHeight < 860);
 			const narrow = window.innerWidth <= 1000;
 			setIsNarrowLayout(narrow);
-			setIsSingleNarrowToggle(window.innerWidth < 640);
 			if (!narrow) {
 				setNarrowView("browse");
 			}
@@ -738,10 +736,6 @@ export function AccountSettingsTab() {
 		await loadData();
 	};
 
-	const toggleNarrowView = () => {
-		setNarrowView((current) => (current === "browse" ? "preview" : "browse"));
-	};
-
 	const getAccountDisplayName = (account?: Account | null) => {
 		if (!account) return "Select account";
 		return account.display_name || account.username || account.name || "Account";
@@ -959,72 +953,50 @@ export function AccountSettingsTab() {
 								</Show>
 
 								<div class={styles.narrowViewToggle}>
-									<Show
-										when={!isSingleNarrowToggle()}
-										fallback={
-											<Tooltip>
-												<TooltipTrigger
-													as="button"
-													type="button"
-													class={styles.narrowViewIcon}
-													onClick={toggleNarrowView}
-													aria-label={`Switch to ${narrowView() === "browse" ? "preview" : "browse"} view`}
-												>
-													<Show when={narrowView() === "browse"} fallback={<SkinIcon width="16" height="16" />}>
-														<ViewIcon width="16" height="16" />
-													</Show>
-												</TooltipTrigger>
-												<TooltipContent>
-													{narrowView() === "browse" ? "Switch to preview" : "Switch to browse"}
-												</TooltipContent>
-											</Tooltip>
-										}
-									>
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={styles.narrowViewIcon}
-												classList={{
-													[styles.active]: narrowView() === "browse",
-												}}
-												onClick={() => setNarrowView("browse")}
-												aria-label="Browse skins"
-											>
-												<ViewIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>Browse skins</TooltipContent>
-										</Tooltip>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={styles.narrowViewIcon}
+											classList={{
+												[styles.active]: narrowView() === "browse",
+											}}
+											onClick={() => setNarrowView("browse")}
+											aria-label="Browse skins"
+										>
+											<ViewIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>Browse skins</TooltipContent>
+									</Tooltip>
 
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={styles.narrowViewIcon}
-												classList={{
-													[styles.active]: narrowView() === "preview",
-												}}
-												onClick={() => setNarrowView("preview")}
-												aria-label="Preview"
-											>
-												<SkinIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>Preview</TooltipContent>
-										</Tooltip>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={styles.narrowViewIcon}
+											classList={{
+												[styles.active]: narrowView() === "preview",
+											}}
+											onClick={() => setNarrowView("preview")}
+											aria-label="Preview"
+										>
+											<SkinIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>Preview</TooltipContent>
+									</Tooltip>
 
-										<Tooltip>
-											<TooltipTrigger
-												as="button"
-												type="button"
-												class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
-												onClick={handleUploadSkin}
-												aria-label="Upload custom skin"
-											>
-												<PlusIcon width="16" height="16" />
-											</TooltipTrigger>
-											<TooltipContent>Upload custom skin</TooltipContent>
-										</Tooltip>
-									</Show>
+									<Tooltip>
+										<TooltipTrigger
+											as="button"
+											type="button"
+											class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
+											onClick={handleUploadSkin}
+											aria-label="Upload custom skin"
+										>
+											<PlusIcon width="16" height="16" />
+										</TooltipTrigger>
+										<TooltipContent>Upload custom skin</TooltipContent>
+									</Tooltip>
 								</div>
 							</div>
 						</Show>
