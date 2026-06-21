@@ -4,7 +4,7 @@ import type { Instance } from "@utils/instances";
 import { countVersionResources } from "@utils/modpack-prefill";
 import { getModpackArchiveSummaryFromUrl } from "@utils/modpacks";
 import { createEffect, createMemo, createSignal, onMount, Show, untrack } from "solid-js";
-import { FetchingOverlay } from "./components/FetchingOverlay";
+import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
 import { InstallForm } from "./components/InstallForm";
 import { InstallStageHeader } from "./components/InstallStageHeader";
 import { useInstallCapabilities } from "./hooks/use-install-capabilities";

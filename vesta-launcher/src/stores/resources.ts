@@ -92,7 +92,8 @@ type ResourceStoreState = {
 	query: string;
 	results: ResourceProject[];
 	totalHits: number;
-	loading: boolean;
+	loading: boolean; // browse search in flight
+	versionsLoading: boolean; // resource-details version list in flight
 	searchError: string | null;
 	searchWarning: string | null;
 	activeSource: SourcePlatform;
@@ -126,6 +127,7 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	results: [],
 	totalHits: 0,
 	loading: false,
+	versionsLoading: false,
 	searchError: null,
 	searchWarning: null,
 	activeSource: "modrinth",
@@ -338,7 +340,7 @@ export const resources = {
 	selectProject: async (project: ResourceProject | null) => {
 		setResourceStore("selectedProject", project);
 		if (project) {
-			setResourceStore("loading", true);
+			setResourceStore("versionsLoading", true);
 			try {
 				// Fetch versions - use ignoreCache: true to ensure we get the expanded (>50) list
 				// if we previously only cached 50.
@@ -348,7 +350,7 @@ export const resources = {
 				console.error("Failed to fetch versions:", e);
 				setResourceStore("versions", []);
 			} finally {
-				setResourceStore("loading", false);
+				setResourceStore("versionsLoading", false);
 			}
 		} else {
 			setResourceStore("versions", []);

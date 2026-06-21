@@ -6,6 +6,8 @@ import ModrinthIcon from "@assets/modrinth.svg";
 import RightArrowIcon from "@assets/right-arrow.svg";
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
+import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
+import { InlineLoadingRow } from "@components/fetching-overlay/inline-loading-row";
 import { instancesState } from "@stores/instances";
 import { reducedMotion } from "@stores/settings";
 import {
@@ -83,6 +85,10 @@ function getProjectFromCache(platform: SourcePlatform, id: string): ResourceProj
 function setProjectCache(platform: SourcePlatform, project: ResourceProject) {
 	const key = getProjectCacheKey(platform, project.id);
 	projectCache.set(key, { project, timestamp: Date.now() });
+}
+
+function invalidateProjectCache(platform: SourcePlatform, id: string) {
+	projectCache.delete(getProjectCacheKey(platform, id));
 }
 
 // Configure marked for GFM
@@ -370,6 +376,8 @@ const ResourceDetailsPage: Component<{
 	project?: ResourceProject;
 	projectId?: string;
 	platform?: SourcePlatform;
+	name?: string;
+	iconUrl?: string;
 	setRefetch?: (fn: () => Promise<void>) => void;
 	router?: MiniRouter;
 }> = (props) => {
@@ -377,6 +385,20 @@ const ResourceDetailsPage: Component<{
 	const [project, setProject] = createSignal<ResourceProject | undefined>(props.project);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
+
+	const showPage = createMemo(() => !!project() && !error() && !loading());
+	const showError = createMemo(() => !!error() && !loading());
+	const showNotFound = createMemo(() => !loading() && !project() && !error());
+	const showOverlay = createMemo(() => loading() || showError() || showNotFound());
+	const overlayTitle = createMemo(() => {
+		if (showError()) return "Unable to load project";
+		if (showNotFound()) return "Project not found";
+		return "Fetching project details...";
+	});
+	const overlayMessage = createMemo(() => {
+		if (showError() || showNotFound()) return undefined;
+		return props.name || project()?.name;
+	});
 
 	// Derived from router query params for persistence and history
 	const activeTab = createMemo(() => {
@@ -410,7 +432,6 @@ const ResourceDetailsPage: Component<{
 	// Register refetch so the navbar reload button works
 	onMount(() => {
 		const handleRefetch = async () => {
-			console.log("[ResourceDetails] Reloading project data...");
 			setError(null);
 
 			const p = project();
@@ -418,9 +439,8 @@ const ResourceDetailsPage: Component<{
 			const id = p?.id || props.projectId;
 
 			if (platform && id) {
-				await fetchFullProject(platform, id);
-			} else {
-				console.warn("[ResourceDetails] Cannot reload: missing platform or id");
+				invalidateProjectCache(platform, id);
+				await fetchFullProject(platform, id, { skipCache: true });
 			}
 		};
 
@@ -692,13 +712,6 @@ const ResourceDetailsPage: Component<{
 	};
 
 	onMount(() => {
-		if (props.setRefetch) {
-			props.setRefetch(async () => {
-				const p = project();
-				if (p) await fetchFullProject(p.source, p.id);
-			});
-		}
-
 		const handleGlobalKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "Escape" && selectedGalleryItem()) {
 				// Prevent PageViewer from closing when the gallery is open
@@ -1105,26 +1118,24 @@ const ResourceDetailsPage: Component<{
 		const currentProject = untrack(project);
 
 		if (initialProject) {
-			// If the project ID shifted, update state immediately
 			if (currentProject?.id !== initialProject.id) {
 				setProject(initialProject);
-				resources.selectProject(initialProject);
-
-				if (!initialProject.description && id && platform) {
-					fetchFullProject(platform, id);
+				if (initialProject.description) {
+					resources.selectProject(initialProject);
+				} else if (id && platform) {
+					void fetchFullProject(platform, id);
+				} else {
+					resources.selectProject(initialProject);
 				}
-			} else {
-				// Project ID is the same. Do we need hydration?
-				if (!currentProject?.description && id && platform) {
-					fetchFullProject(platform, id);
-				}
+			} else if (!currentProject?.description && id && platform) {
+				void fetchFullProject(platform, id);
 			}
 			return;
 		}
 
 		// Deep link case (ID only)
 		if (id && platform && currentProject?.id !== id) {
-			fetchFullProject(platform, id);
+			void fetchFullProject(platform, id);
 		}
 	};
 
@@ -1138,64 +1149,48 @@ const ResourceDetailsPage: Component<{
 		),
 	);
 
-	async function fetchFullProject(platform: SourcePlatform, id: string) {
-		console.log("[ResourceDetails] Fetching full project details for:", id);
+	async function fetchFullProject(platform: SourcePlatform, id: string, options?: { skipCache?: boolean }) {
 		setLoading(true);
 		setError(null);
 
-		// Check frontend project cache first (avoids IPC + backend cache lookup + potential network call)
-		const cachedProject = getProjectFromCache(platform, id);
-		if (cachedProject) {
-			console.log("[ResourceDetails] Using frontend-cached project:", cachedProject.name);
-			setProject(cachedProject);
-			setLoading(false);
-			return;
+		if (!options?.skipCache) {
+			const cachedProject = getProjectFromCache(platform, id);
+			if (cachedProject) {
+				setProject(cachedProject);
+				await resources.selectProject(cachedProject);
+				setLoading(false);
+				return;
+			}
 		}
 
-		// Clear stale project data so the old resource isn't briefly visible while loading
-		setProject(undefined);
-		setVersionFilter("");
-		setVersionReleaseTypes(new Set<string>());
-		setVersionLoaders(new Set<string>());
-		setGameVersionChips([]);
-		setVersionPage(1);
-		setManualVersionId(null);
-		setSelectedGalleryItem(null);
-
-		// Ensure categories for this platform are loaded in the store
-		if (
-			resources.state.activeSource !== platform ||
-			resources.state.availableCategories.length === 0
-		) {
-			resources.setSource(platform);
+		if (project()?.id !== id) {
+			setProject(undefined);
+			setVersionFilter("");
+			setVersionReleaseTypes(new Set<string>());
+			setVersionLoaders(new Set<string>());
+			setGameVersionChips([]);
+			setVersionPage(1);
+			setManualVersionId(null);
+			setSelectedGalleryItem(null);
 		}
 
 		try {
 			const p = await resources.getProject(platform, id);
-			console.log("[ResourceDetails] Fetched project:", p?.name);
-
-			// Store in frontend cache for instant re-visits
 			if (p) setProjectCache(platform, p);
 
 			setProject(p);
-			resources.selectProject(p);
+			await resources.selectProject(p);
 
-			// Unify to ID if we resolved a slug
 			if (p && p.id !== id) {
-				console.log(`[ResourceDetails] Unifying project ID from ${id} to ${p.id}`);
-				// Use replace (push=false) to avoid breaking the back button
 				activeRouter()?.updateQuery("projectId", p.id, false);
 			}
-		} catch (e: any) {
+		} catch (e: unknown) {
 			console.error("Failed to load project details:", e);
 			const errorMsg = e instanceof Error ? e.message : String(e);
 
-			// Try graceful fallback to cached metadata if the network failed
 			try {
 				const cached: any = await invoke("get_cached_resource_project", { id });
 				if (cached) {
-					console.log("[ResourceDetails] Using cached fallback for:", id);
-					// Map Record back to Project-like structure for the UI
 					const fallback: ResourceProject = {
 						id: cached.id,
 						source: platform,
@@ -1215,7 +1210,7 @@ const ResourceDetailsPage: Component<{
 						updated_at: null,
 					};
 					setProject(fallback);
-					resources.selectProject(fallback);
+					await resources.selectProject(fallback);
 					showToast({
 						title: "Offline Mode",
 						description: "Showing cached details. Some functionality may be limited.",
@@ -1872,7 +1867,7 @@ const ResourceDetailsPage: Component<{
 					</button>
 				</div>
 				<div class={styles["sidebar-version-list"]}>
-					<Show when={!resources.state.loading} fallback={<div>Loading...</div>}>
+					<Show when={!resources.state.versionsLoading} fallback={<InlineLoadingRow message="Loading versions..." />}>
 						<For each={resources.state.versions.slice(0, 5)}>
 							{(version) => (
 								<div class={styles["sidebar-version-item"]}>
@@ -1998,37 +1993,28 @@ const ResourceDetailsPage: Component<{
 	);
 
 	return (
-		<Show
-			when={!loading() || project()}
-			fallback={
-				<div class={styles["loading-state"]}>
-					<span class={styles["loading-spinner"]} />
-					<p>Fetching project details...</p>
-				</div>
-			}
+		<div
+			class={styles["resource-details-page"]}
+			classList={{ [styles["is-blocking-load"]]: showOverlay() }}
 		>
-			<Show
-				when={!error()}
-				fallback={
-					<div class={styles["error-state"]}>
-						<div class={styles["error-icon"]}>⚠️</div>
-						<h2 class={styles["error-title"]}>Unable to load project</h2>
-						<p class={styles["error-description"]}>{error()}</p>
-						<div class={styles["error-actions"]}>
-							<Button onClick={() => activeRouter()?.reload()}>Try Again</Button>
-							<Button variant="ghost" onClick={() => activeRouter()?.backwards()}>
-								Go Back
-							</Button>
-						</div>
-					</div>
+			<FetchingOverlay
+				isVisible={showOverlay()}
+				title={overlayTitle()}
+				message={overlayMessage()}
+				error={showError() ? (error() ?? undefined) : undefined}
+				variant={showError() || showNotFound() ? "error" : "loading"}
+				onRetry={showError() ? () => activeRouter()?.reload() : undefined}
+				secondaryAction={
+					showError() || showNotFound()
+						? { label: "Go Back", onClick: () => activeRouter()?.backwards() }
+						: undefined
 				}
-			>
-				<Show when={project()} fallback={<div class={styles["error-state"]}>Project not found.</div>}>
-					<div
-						class={styles["resource-details"]}
-						classList={{ [styles["is-reloading"]]: loading() }}
-						ref={(el) => headerCollapse.setPageRoot(el ?? undefined)}
-					>
+			/>
+			<Show when={showPage()}>
+				<div
+					class={styles["resource-details"]}
+					ref={(el) => headerCollapse.setPageRoot(el ?? undefined)}
+				>
 						<div class={styles["resource-details-left"]}>
 							<div
 								class={styles["header-stack"]}
@@ -2433,7 +2419,10 @@ const ResourceDetailsPage: Component<{
 													</Show>
 
 													<div class={`${styles["version-list"]} ${styles["full-width"]}`}>
-														<Show when={!resources.state.loading} fallback={<div>Loading versions...</div>}>
+														<Show
+															when={!resources.state.versionsLoading}
+															fallback={<InlineLoadingRow message="Loading versions..." />}
+														>
 															<Show
 																when={filteredVersions().length > 0}
 																fallback={
@@ -2644,9 +2633,8 @@ const ResourceDetailsPage: Component<{
 							versions={resources.state.versions}
 						/>
 					</div>
-				</Show>
 			</Show>
-		</Show>
+		</div>
 	);
 };
 

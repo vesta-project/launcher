@@ -1,7 +1,7 @@
 import { Show } from "solid-js";
-import styles from "../install-page.module.css";
+import styles from "./fetching-overlay.module.css";
 
-interface FetchingOverlayProps {
+export interface FetchingOverlayProps {
 	isVisible: boolean;
 	title: string;
 	message?: string;
@@ -9,6 +9,7 @@ interface FetchingOverlayProps {
 	variant?: "loading" | "warning" | "error";
 	onRetry?: () => void;
 	onChooseAnother?: () => void;
+	secondaryAction?: { label: string; onClick: () => void };
 }
 
 export function FetchingOverlay(props: FetchingOverlayProps) {
@@ -32,7 +33,7 @@ export function FetchingOverlay(props: FetchingOverlayProps) {
 					<Show when={props.error}>
 						<span class={styles["fetching-error-text"]}>{props.error}</span>
 					</Show>
-					<Show when={props.onRetry || props.onChooseAnother}>
+					<Show when={props.onRetry || props.onChooseAnother || props.secondaryAction}>
 						<div class={styles["fetching-actions"]}>
 							<Show when={props.onRetry}>
 								<button type="button" class={styles["fetching-action"]} onClick={props.onRetry}>
@@ -42,6 +43,15 @@ export function FetchingOverlay(props: FetchingOverlayProps) {
 							<Show when={props.onChooseAnother}>
 								<button type="button" class={styles["fetching-action"]} onClick={props.onChooseAnother}>
 									Choose another file
+								</button>
+							</Show>
+							<Show when={props.secondaryAction}>
+								<button
+									type="button"
+									class={styles["fetching-action"]}
+									onClick={props.secondaryAction!.onClick}
+								>
+									{props.secondaryAction!.label}
 								</button>
 							</Show>
 						</div>
