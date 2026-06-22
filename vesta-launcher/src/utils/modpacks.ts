@@ -37,6 +37,7 @@ export interface ModpackInfo {
 	modCount: number;
 	modCountSource?: "manifest" | "api-dependencies" | "unknown";
 	isCountingResources?: boolean;
+	modCountLookupFailed?: boolean;
 	downloadCount?: number | null;
 	followerCount?: number | null;
 	recommendedRamMb?: number;

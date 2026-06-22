@@ -1,7 +1,11 @@
 import { router } from "@components/page-viewer/page-viewer";
 import type { ResourceVersion } from "@stores/resources";
 import type { Instance } from "@utils/instances";
-import { countVersionResources } from "@utils/modpack-prefill";
+import {
+	countVersionResources,
+	deriveVersionScopedResourceState,
+	shouldFetchArchiveSummary,
+} from "@utils/modpack-prefill";
 import { getModpackArchiveSummaryFromUrl } from "@utils/modpacks";
 import { createEffect, createMemo, createSignal, onMount, Show, untrack } from "solid-js";
 import { FetchingOverlay } from "@components/fetching-overlay/fetching-overlay";
@@ -160,7 +164,10 @@ function InstallPage(props: InstallPageRouteProps) {
 		if (!selected) return;
 
 		const info = untrack(() => source.modpackInfo());
-		const apiResourceCount = countVersionResources(selected);
+		const currentUrl = source.modpackUrl();
+		const versionScopedResourceState = deriveVersionScopedResourceState(selected, {
+			fallbackPending: !countVersionResources(selected) && !!currentUrl,
+		});
 
 		source.setModpackInfo({
 			name: info?.name || effectiveProjectName() || "Unknown Modpack",
@@ -173,13 +180,7 @@ function InstallPage(props: InstallPageRouteProps) {
 			modloader:
 				(selected.loaders[0] as any) || info?.modloader || effectiveInitialModloader() || "vanilla",
 			modloaderVersion: info?.modloaderVersion || null,
-			modCount: apiResourceCount || info?.modCount || 0,
-			modCountSource:
-				apiResourceCount > 0
-					? "api-dependencies"
-					: info?.modCountSource || (info?.modCount ? "manifest" : "unknown"),
-			isCountingResources:
-				apiResourceCount <= 0 && !info?.modCount ? info?.isCountingResources : false,
+			...versionScopedResourceState,
 			downloadCount: info?.downloadCount ?? null,
 			followerCount: info?.followerCount ?? null,
 			format: info?.format || effectivePlatform() || "unknown",
@@ -194,7 +195,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		const url = source.modpackUrl();
 		const info = source.modpackInfo();
 		const selectedId = selectedModpackVersionId();
-		if (!url || !info || (info.modCount || 0) > 0 || info.isCountingResources) return;
+		if (!url || !info || !shouldFetchArchiveSummary(info)) return;
 		const attemptKey = `${selectedId || info.modpackVersionId || "unknown"}:${url}`;
 		if (attemptKey === lastArchiveSummaryAttemptKey) return;
 		lastArchiveSummaryAttemptKey = attemptKey;
@@ -204,6 +205,7 @@ function InstallPage(props: InstallPageRouteProps) {
 			...info,
 			isCountingResources: true,
 			modCountSource: info.modCountSource || "unknown",
+			modCountLookupFailed: false,
 		});
 
 		void getModpackArchiveSummaryFromUrl(url)
@@ -215,9 +217,10 @@ function InstallPage(props: InstallPageRouteProps) {
 
 				source.setModpackInfo({
 					...current,
-					modCount: summary.resourceCount || current.modCount || 0,
-					modCountSource: summary.resourceCount > 0 ? "manifest" : current.modCountSource || "unknown",
+					modCount: summary.resourceCount ?? 0,
+					modCountSource: "manifest",
 					isCountingResources: false,
+					modCountLookupFailed: false,
 					recommendedRamMb: current.recommendedRamMb ?? summary.recommendedRamMb ?? undefined,
 					format: current.format || summary.format,
 				});
@@ -231,6 +234,7 @@ function InstallPage(props: InstallPageRouteProps) {
 					...current,
 					isCountingResources: false,
 					modCountSource: current.modCountSource || "unknown",
+					modCountLookupFailed: true,
 				});
 			});
 	});

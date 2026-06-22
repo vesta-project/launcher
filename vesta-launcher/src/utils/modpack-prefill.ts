@@ -7,6 +7,37 @@ export function countVersionResources(version?: ResourceVersion | null): number 
 	);
 }
 
+export function deriveVersionScopedResourceState(
+	version?: ResourceVersion | null,
+	options?: { fallbackPending?: boolean },
+): Pick<
+	ModpackInfo,
+	"modCount" | "modCountSource" | "isCountingResources" | "modCountLookupFailed"
+> {
+	const modCount = countVersionResources(version);
+	if (modCount > 0) {
+		return {
+			modCount,
+			modCountSource: "api-dependencies",
+			isCountingResources: false,
+			modCountLookupFailed: false,
+		};
+	}
+
+	return {
+		modCount: 0,
+		modCountSource: "unknown",
+		isCountingResources: !!options?.fallbackPending,
+		modCountLookupFailed: false,
+	};
+}
+
+export function shouldFetchArchiveSummary(
+	info?: Pick<ModpackInfo, "modCountSource" | "modCountLookupFailed"> | null,
+): boolean {
+	return !!info && info.modCountSource === "unknown" && !info.modCountLookupFailed;
+}
+
 export function buildBrowseModpackInfo(
 	project: ResourceProject,
 	version?: ResourceVersion | null,
@@ -18,7 +49,8 @@ export function buildBrowseModpackInfo(
 	const minecraftVersion =
 		version?.game_versions?.[0] || options?.minecraftVersion || "";
 	const loader = version?.loaders?.[0] || options?.loader || "vanilla";
-	const modCount = countVersionResources(version);
+	const { modCount, modCountSource, isCountingResources } =
+		deriveVersionScopedResourceState(version);
 
 	return {
 		name: project.name,
@@ -30,7 +62,8 @@ export function buildBrowseModpackInfo(
 		modloader: loader as ModpackInfo["modloader"],
 		modloaderVersion: null,
 		modCount,
-		modCountSource: modCount > 0 ? "api-dependencies" : "unknown",
+		modCountSource,
+		isCountingResources,
 		downloadCount: project.download_count,
 		followerCount: project.source === "modrinth" ? project.follower_count : null,
 		recommendedRamMb: undefined,

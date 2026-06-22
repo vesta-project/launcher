@@ -215,7 +215,12 @@ export function InstallForm(props: InstallFormProps) {
 		}).format(value);
 	};
 	const resourceCountValue = createMemo(() => {
-		if (props.modpackInfo?.isCountingResources) return "Counting...";
+		if (
+			props.modpackInfo?.isCountingResources ||
+			(props.modpackInfo?.modCountSource === "unknown" && !props.modpackInfo?.modCountLookupFailed)
+		) {
+			return "Counting...";
+		}
 		const count = props.modpackInfo?.modCount || 0;
 		return count > 0 ? count.toLocaleString() : "Unknown";
 	});
@@ -241,7 +246,10 @@ export function InstallForm(props: InstallFormProps) {
 			{
 				label: "Resources",
 				value: resourceCountValue(),
-				muted: !!props.modpackInfo?.isCountingResources || (props.modpackInfo?.modCount || 0) <= 0,
+				muted:
+					!!props.modpackInfo?.isCountingResources ||
+					(props.modpackInfo?.modCountSource === "unknown" && !props.modpackInfo?.modCountLookupFailed) ||
+					(props.modpackInfo?.modCount || 0) <= 0,
 			},
 		];
 
