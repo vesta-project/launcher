@@ -93,7 +93,10 @@ pub fn normalize_opened_path(arg: &str) -> Option<String> {
 
     if let Ok(url) = url::Url::parse(trimmed) {
         if url.scheme() == "file" {
-            return url.to_file_path().ok().map(|path| path.to_string_lossy().into_owned());
+            return url
+                .to_file_path()
+                .ok()
+                .map(|path| path.to_string_lossy().into_owned());
         }
         return None;
     }
@@ -201,10 +204,7 @@ mod tests {
     #[test]
     fn ingest_launch_args_queues_file_paths_individually() {
         reset_queue();
-        ingest_launch_args(&[
-            "vesta".to_string(),
-            "/tmp/pack.mrpack".to_string(),
-        ]);
+        ingest_launch_args(&["vesta".to_string(), "/tmp/pack.mrpack".to_string()]);
 
         let drained = drain_queue();
         assert_eq!(

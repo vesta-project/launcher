@@ -31,6 +31,8 @@ pub enum NativeArchitecturePolicy {
 pub const NATIVE_ARCH_POLICY: NativeArchitecturePolicy =
     NativeArchitecturePolicy::PreferArchSpecificOnly;
 
+pub const DEFAULT_ARTIFACT_CACHE_MAX_BYTES: u64 = 1024 * 1024 * 1024;
+
 /// Progress reporter trait for installer operations
 /// Implementations forward updates to the UI/notification system
 pub trait ProgressReporter: Send + Sync {
@@ -215,6 +217,9 @@ pub struct InstallSpec {
     /// Number of concurrent downloads
     pub concurrency: usize,
 
+    /// Maximum number of bytes to retain in the shared artifact cache.
+    pub artifact_cache_max_bytes: u64,
+
     /// If true, force overwrite of user config files during modpack repair.
     /// Backend/CLI only; not exposed in the frontend.
     #[doc(hidden)]
@@ -240,6 +245,7 @@ impl InstallSpec {
             java_path: None,
             dry_run: false,
             concurrency: 8,
+            artifact_cache_max_bytes: DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
             force_overwrite_configs: false,
             repair_scope: RepairScope::default(),
             remediation_policy: RemediationPolicy::default(),
@@ -324,6 +330,7 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 8,
+            artifact_cache_max_bytes: DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
             force_overwrite_configs: false,
             repair_scope: RepairScope::Full,
             remediation_policy: RemediationPolicy::RepairIfNeeded,
@@ -343,6 +350,7 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 8,
+            artifact_cache_max_bytes: DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
             force_overwrite_configs: false,
             repair_scope: RepairScope::Full,
             remediation_policy: RemediationPolicy::RepairIfNeeded,

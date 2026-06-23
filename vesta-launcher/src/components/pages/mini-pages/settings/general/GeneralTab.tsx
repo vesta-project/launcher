@@ -1,19 +1,19 @@
+import { router } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
 	autoInstallDependencies,
 	autostartEnabled,
+	artifactCacheLimitBytes,
 	closeToTray,
 	discordPresenceEnabled,
-	getCacheSizeDisplay,
 	handleAutoInstallDepsToggle,
 	handleAutostartToggle,
-	handleClearCache,
 	handleCloseToTrayToggle,
 	handleDiscordToggle,
 	handleGpuToggle,
+	handleArtifactCacheLimitChange,
 	handleMaxDownloadThreadsChange,
-	handleOpenAppData,
 	handleProxyApplyToGamesToggle,
 	handleProxyEnabledToggle,
 	handleProxyUrlChange,
@@ -42,9 +42,7 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import LauncherButton from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
-import { invoke } from "@tauri-apps/api/core";
-import { router } from "@components/page-viewer/page-viewer";
-import { createEffect, createSignal } from "solid-js";
+import { createEffect, createMemo, createSignal } from "solid-js";
 import styles from "../settings-page.module.css";
 
 export function GeneralSettingsTab() {
@@ -56,9 +54,28 @@ export function GeneralSettingsTab() {
 	const [proxyTestMessage, setProxyTestMessage] = createSignal("");
 	const [proxyTestDetail, setProxyTestDetail] = createSignal("");
 	const [proxyTestOk, setProxyTestOk] = createSignal<boolean | null>(null);
+	const [lastHandledStorageFocusRequestId, setLastHandledStorageFocusRequestId] =
+		createSignal<number | undefined>();
+	let storageCardRef: HTMLDivElement | undefined;
 
 	createEffect(() => {
 		setOsReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+	});
+
+	createEffect(() => {
+		const path = router()?.currentPath.get();
+		const props = router()?.currentPathProps?.();
+		const requestId = props?.focusArtifactCacheLimitRequestId;
+		if (path !== "/config" || !props?.focusArtifactCacheLimit || !storageCardRef) return;
+		if (requestId === lastHandledStorageFocusRequestId()) return;
+
+		setLastHandledStorageFocusRequestId(requestId);
+
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				storageCardRef?.scrollIntoView({ behavior: "smooth", block: "start" });
+			});
+		});
 	});
 
 	const handleProxyTest = async () => {
@@ -93,6 +110,10 @@ export function GeneralSettingsTab() {
 			setIsTestingProxy(false);
 		}
 	};
+
+	const cacheLimitMb = createMemo(() =>
+		Math.max(1, Math.round((artifactCacheLimitBytes() || 1024 * 1024) / (1024 * 1024))),
+	);
 
 	return (
 		<div class={styles["settings-tab-content"]}>
@@ -175,7 +196,7 @@ export function GeneralSettingsTab() {
 				/>
 			</SettingsCard>
 
-				<SettingsCard header="Resources">
+			<SettingsCard header="Resources">
 				<SettingsField
 					label="Automatically Install Dependencies"
 					description="Automatically download and install required mods and engines when adding a new resource."
@@ -209,6 +230,33 @@ export function GeneralSettingsTab() {
 					}
 				/>
 			</SettingsCard>
+
+			<div ref={storageCardRef}>
+				<SettingsCard header="Storage">
+					<SettingsField
+						label="Artifact Cache Limit"
+						description="Controls the size of the installer artifact and modpack archive cache."
+						headerRight={
+							<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+								<NumberField
+									value={cacheLimitMb()}
+									minValue={128}
+									maxValue={524288}
+									formatOptions={{ useGrouping: false }}
+									onRawValueChange={(val) => void handleArtifactCacheLimitChange(val * 1024 * 1024)}
+								>
+									<NumberFieldGroup>
+										<NumberFieldInput />
+										<NumberFieldIncrementTrigger />
+										<NumberFieldDecrementTrigger />
+									</NumberFieldGroup>
+								</NumberField>
+								<span style={{ "font-size": "12px", color: "var(--text-secondary)" }}>MB</span>
+							</div>
+						}
+					/>
+				</SettingsCard>
+			</div>
 
 				<SettingsCard
 					header="Network / Proxy"
@@ -301,21 +349,6 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-			<SettingsCard header="Application Data">
-				<SettingsField
-					label="AppData Directory"
-					description="Open the folder where Vesta Launcher stores its data."
-					actionLabel="Open Folder"
-					onAction={handleOpenAppData}
-				/>
-				<SettingsField
-					label="Clear Cache"
-					description={`Stored data: ${getCacheSizeDisplay() || "..."}. Clear metadata and temporary files to fix sync issues.`}
-					actionLabel="Clear Now"
-					onAction={handleClearCache}
-				/>
-			</SettingsCard>
-
 			<SettingsCard header="System Tray">
 				<SettingsField
 					label="Launch On System Startup"
@@ -352,29 +385,6 @@ export function GeneralSettingsTab() {
 				/>
 			</SettingsCard>
 
-			<SettingsCard header="Troubleshooting">
-				<SettingsField
-					label="Launcher Import"
-					description="Open the launcher import flow to bring in instances from other launchers."
-					actionLabel="Open Importer"
-					onAction={() => router()?.navigate("/install/import")}
-				/>
-				<SettingsField
-					label="Reset Onboarding"
-					description="Redo the first-time setup process. This will not delete your accounts or instances."
-					actionLabel="Redo Setup"
-					destructive
-					confirmationDesc="Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen."
-					onAction={async () => {
-						try {
-							await invoke("reset_onboarding");
-							window.location.href = "/";
-						} catch (e) {
-							console.error("Failed to reset onboarding:", e);
-						}
-					}}
-				/>
-			</SettingsCard>
 			</div>
 		</div>
 	);

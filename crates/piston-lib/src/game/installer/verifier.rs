@@ -761,10 +761,11 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 4,
+            artifact_cache_max_bytes:
+                crate::game::installer::types::DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
             force_overwrite_configs: false,
-            repair_scope: piston_lib::game::installer::types::RepairScope::Full,
-            remediation_policy:
-                piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            repair_scope: crate::game::installer::types::RepairScope::Full,
+            remediation_policy: crate::game::installer::types::RemediationPolicy::RepairIfNeeded,
         }
     }
 
@@ -811,10 +812,11 @@ mod tests {
             java_path: None,
             dry_run: false,
             concurrency: 4,
+            artifact_cache_max_bytes:
+                crate::game::installer::types::DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
             force_overwrite_configs: false,
-            repair_scope: piston_lib::game::installer::types::RepairScope::Full,
-            remediation_policy:
-                piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            repair_scope: crate::game::installer::types::RepairScope::Full,
+            remediation_policy: crate::game::installer::types::RemediationPolicy::RepairIfNeeded,
         }
     }
 

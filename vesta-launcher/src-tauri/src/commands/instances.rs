@@ -1481,6 +1481,9 @@ pub async fn launch_instance(
         java_path: Some(std::path::PathBuf::from(&java_path_str)),
         dry_run: false,
         concurrency: 8,
+        artifact_cache_max_bytes: crate::utils::storage::normalize_artifact_cache_limit_bytes(
+            app_config.artifact_cache_max_bytes,
+        ) as u64,
         force_overwrite_configs: false,
         repair_scope: piston_lib::game::installer::types::RepairScope::Full,
         remediation_policy: piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
@@ -1577,6 +1580,10 @@ pub async fn launch_instance(
                 java_path: Some(std::path::PathBuf::from(&java_path_str)),
                 dry_run: false,
                 concurrency: 8,
+                artifact_cache_max_bytes:
+                    crate::utils::storage::normalize_artifact_cache_limit_bytes(
+                        app_config.artifact_cache_max_bytes,
+                    ) as u64,
                 force_overwrite_configs: false,
                 repair_scope: piston_lib::game::installer::types::RepairScope::Full,
                 remediation_policy:

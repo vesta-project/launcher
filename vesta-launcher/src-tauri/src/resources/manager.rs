@@ -11,10 +11,10 @@ use crate::models::resource::{
     ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType, ResourceVersion,
     SearchQuery, SearchResponse, SourcePlatform,
 };
-use crate::resources::update_cache::{now_datetime_str, VERSION_CACHE_TTL_MINUTES};
 use crate::resources::sources::curseforge::CurseForgeSource;
 use crate::resources::sources::modrinth::ModrinthSource;
 use crate::resources::sources::ResourceSource;
+use crate::resources::update_cache::{now_datetime_str, VERSION_CACHE_TTL_MINUTES};
 use crate::schema::vesta::installed_resource::dsl as ir_dsl;
 use crate::schema::vesta::resource_metadata_cache::dsl as rmc_dsl;
 use crate::schema::vesta::resource_project::dsl as rp_dsl;

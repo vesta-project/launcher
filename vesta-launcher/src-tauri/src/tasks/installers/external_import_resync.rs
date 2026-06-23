@@ -175,6 +175,15 @@ impl Task for ImportResourceResyncTask {
                 java_path: target_instance.java_path.as_ref().map(PathBuf::from),
                 dry_run: false,
                 concurrency: 8,
+                artifact_cache_max_bytes: crate::utils::config::get_app_config()
+                    .map(|config| {
+                        crate::utils::storage::normalize_artifact_cache_limit_bytes(
+                            config.artifact_cache_max_bytes,
+                        ) as u64
+                    })
+                    .unwrap_or(
+                        piston_lib::game::installer::types::DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
+                    ),
                 force_overwrite_configs: false,
                 repair_scope: piston_lib::game::installer::types::RepairScope::Full,
                 remediation_policy:

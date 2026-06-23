@@ -573,6 +573,13 @@ impl Task for RepairInstanceTask {
                 data_dir,
                 game_dir.clone(),
             );
+            spec.artifact_cache_max_bytes = crate::utils::config::get_app_config()
+                .map(|config| {
+                    crate::utils::storage::normalize_artifact_cache_limit_bytes(
+                        config.artifact_cache_max_bytes,
+                    ) as u64
+                })
+                .unwrap_or(piston_lib::game::installer::types::DEFAULT_ARTIFACT_CACHE_MAX_BYTES);
             spec.java_path = inst.java_path.as_ref().map(std::path::PathBuf::from);
             // Pass modloader info so the verifier uses the correct manifest
             // (e.g. fabric-loader-X-1.20.1 instead of vanilla 1.20.1)

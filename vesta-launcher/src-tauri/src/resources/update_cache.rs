@@ -63,7 +63,9 @@ pub fn load_instance_update_snapshot(
         .map_err(|e| anyhow!("Failed to load instance update snapshot: {}", e))
 }
 
-pub fn snapshot_to_result(record: &InstanceResourceUpdateCheck) -> Result<InstanceUpdateCheckResult> {
+pub fn snapshot_to_result(
+    record: &InstanceResourceUpdateCheck,
+) -> Result<InstanceUpdateCheckResult> {
     let data: InstanceUpdateSnapshotData = serde_json::from_str(&record.results_json)
         .map_err(|e| anyhow!("Failed to parse instance update snapshot: {}", e))?;
     Ok(InstanceUpdateCheckResult {

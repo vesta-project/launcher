@@ -19,6 +19,7 @@ pub mod instance_runtime;
 pub mod launch_intents;
 pub mod process_state;
 pub mod sanitize;
+pub mod storage;
 pub mod texture;
 pub mod url;
 pub mod version_tracking;

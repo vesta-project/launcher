@@ -2,6 +2,7 @@ use crate::notifications::manager::NotificationManager;
 use crate::notifications::models::{CreateNotificationInput, NotificationType};
 use crate::utils::db_manager::get_app_config_dir;
 use crate::utils::dialog_manager::{DialogAction, DialogManager, DialogRequest, DialogSeverity};
+use crate::utils::storage::{self, StorageSnapshot};
 use tauri::Emitter;
 use tauri::Manager;
 
@@ -249,6 +250,7 @@ pub fn open_logs_folder(instance_id_slug: Option<String>) -> Result<(), String> 
 
 #[tauri::command]
 pub async fn clear_cache(
+    app_handle: tauri::AppHandle,
     resource_manager: tauri::State<'_, crate::resources::ResourceManager>,
     metadata_cache: tauri::State<'_, crate::metadata_cache::MetadataCache>,
 ) -> Result<(), String> {
@@ -263,102 +265,66 @@ pub async fn clear_cache(
     // 2. Clear in-memory Piston metadata
     metadata_cache.clear();
 
-    // 3. Clear Piston manifest file
+    // 3. Clear cache targets defined by the shared storage policy.
     if let Ok(config_dir) = get_app_config_dir() {
-        let cache_path = config_dir.join("data").join("piston_manifest.json");
-        if cache_path.exists() {
-            let cp = cache_path.clone();
-            if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_file(&cp))
-                .await
-                .map_err(|e| format!("spawn_blocking panicked: {}", e))?
-            {
-                log::warn!("Failed to delete Piston manifest file: {}", e);
-            }
-        }
+        let clear_targets = storage::cache_clear_targets();
+        let paths = storage::unique_storage_paths_for_targets_with_runtime(
+            &app_handle,
+            &config_dir,
+            &clear_targets,
+        );
 
-        // 4. Clear new per-manifest cache files under data/manifests/
-        let manifests_dir = config_dir.join("data").join("manifests");
-        if manifests_dir.exists() && manifests_dir.is_dir() {
-            let md = manifests_dir.clone();
-            if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&md))
-                .await
-                .map_err(|e| format!("spawn_blocking panicked: {}", e))?
-            {
-                log::warn!("Failed to delete manifests cache: {}", e);
-            } else {
-                log::info!("Cleared manifests cache directory");
-                let _ = std::fs::create_dir_all(&manifests_dir);
-            }
-        }
-
-        // 5. Clear generic cache and temp folders if they exist
-        for folder in ["cache", "temp"] {
-            let path = config_dir.join(folder);
-            if path.exists() && path.is_dir() {
-                let p = path.clone();
-                if let Err(e) = tokio::task::spawn_blocking(move || std::fs::remove_dir_all(&p))
+        for path in paths {
+            let path_for_task = path.clone();
+            if let Err(error) =
+                tokio::task::spawn_blocking(move || storage::clear_storage_path(&path_for_task))
                     .await
                     .map_err(|e| format!("spawn_blocking panicked: {}", e))?
-                {
-                    log::warn!("Failed to clear {} folder: {}", folder, e);
-                } else {
-                    log::info!("Cleared {} folder", folder);
-                    // Re-create it so it's ready for use
-                    let _ = std::fs::create_dir_all(&path);
-                }
+            {
+                log::warn!("Failed to clear storage path {:?}: {}", path, error);
+            } else {
+                log::info!("Cleared storage path {:?}", path);
             }
         }
     }
+
+    storage::invalidate_storage_snapshot_cache();
+    let _ = app_handle.emit("storage-snapshot-invalidated", ());
 
     log::info!("[clear_cache] Cache cleanup complete!");
     Ok(())
 }
 
 #[tauri::command]
-pub async fn get_cache_size() -> Result<String, String> {
-    let config_dir = get_app_config_dir().map_err(|e| e.to_string())?;
-    let mut total_bytes = 0;
-
-    // 1. Piston manifest
-    let manifest_path = config_dir.join("data").join("piston_manifest.json");
-    if let Ok(meta) = tokio::task::spawn_blocking(move || std::fs::metadata(&manifest_path))
-        .await
-        .map_err(|e| format!("spawn_blocking panicked: {}", e))?
-    {
-        total_bytes += meta.len();
-    }
-
-    // 2. New per-manifest cache files under data/manifests/
-    let manifests_dir = config_dir.join("data").join("manifests");
-    if manifests_dir.exists() && manifests_dir.is_dir() {
-        total_bytes += get_dir_size(&manifests_dir);
-    }
-
-    // 3. Cache & Temp folders
-    for folder in ["cache", "temp"] {
-        let path = config_dir.join(folder);
-        if path.exists() && path.is_dir() {
-            total_bytes += get_dir_size(&path);
-        }
-    }
-
-    Ok(format_size(total_bytes))
+pub async fn get_storage_snapshot(
+    app_handle: tauri::AppHandle,
+    force_refresh: Option<bool>,
+) -> Result<StorageSnapshot, String> {
+    let app = app_handle.clone();
+    tokio::task::spawn_blocking(move || {
+        let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+        storage::collect_storage_snapshot_cached(&app, &config, force_refresh.unwrap_or(false))
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking panicked: {}", e))?
 }
 
-fn get_dir_size(path: &std::path::Path) -> u64 {
-    let mut size = 0;
-    if let Ok(entries) = std::fs::read_dir(path) {
-        for entry in entries.flatten() {
-            if let Ok(metadata) = entry.metadata() {
-                if metadata.is_dir() {
-                    size += get_dir_size(&entry.path());
-                } else {
-                    size += metadata.len();
-                }
-            }
-        }
-    }
-    size
+#[tauri::command]
+pub async fn prune_storage_cache(app_handle: tauri::AppHandle) -> Result<StorageSnapshot, String> {
+    let app = app_handle.clone();
+    tokio::task::spawn_blocking(move || {
+        let config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+        storage::enforce_governed_cache_limit(&app, &config)?;
+        storage::collect_storage_snapshot_cached(&app, &config, true)
+    })
+    .await
+    .map_err(|e| format!("spawn_blocking panicked: {}", e))?
+}
+
+#[tauri::command]
+pub async fn get_cache_size(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let snapshot = get_storage_snapshot(app_handle, Some(false)).await?;
+    Ok(format_size(snapshot.total_bytes))
 }
 
 fn format_size(bytes: u64) -> String {
@@ -966,43 +932,62 @@ mod parse_vesta_url_tests {
         let result = parse_vesta_url("vesta://install?projectId=abc&platform=modrinth".to_string())
             .expect("install link should parse");
         assert_eq!(result.target, DeepLinkTarget::Install);
-        assert_eq!(result.params.get("projectId").map(String::as_str), Some("abc"));
-        assert_eq!(result.params.get("platform").map(String::as_str), Some("modrinth"));
+        assert_eq!(
+            result.params.get("projectId").map(String::as_str),
+            Some("abc")
+        );
+        assert_eq!(
+            result.params.get("platform").map(String::as_str),
+            Some("modrinth")
+        );
     }
 
     #[test]
     fn parses_open_resource_links() {
-        let result =
-            parse_vesta_url("vesta://open-resource/modrinth/fabric-api".to_string()).expect("open-resource");
+        let result = parse_vesta_url("vesta://open-resource/modrinth/fabric-api".to_string())
+            .expect("open-resource");
         assert_eq!(result.target, DeepLinkTarget::ResourceDetails);
-        assert_eq!(result.params.get("platform").map(String::as_str), Some("modrinth"));
-        assert_eq!(result.params.get("projectId").map(String::as_str), Some("fabric-api"));
+        assert_eq!(
+            result.params.get("platform").map(String::as_str),
+            Some("modrinth")
+        );
+        assert_eq!(
+            result.params.get("projectId").map(String::as_str),
+            Some("fabric-api")
+        );
     }
 
     #[test]
     fn parses_launch_instance_links() {
-        let result =
-            parse_vesta_url("vesta://launch-instance/my-slug".to_string()).expect("launch-instance");
+        let result = parse_vesta_url("vesta://launch-instance/my-slug".to_string())
+            .expect("launch-instance");
         assert_eq!(result.target, DeepLinkTarget::LaunchInstance);
-        assert_eq!(result.params.get("slug").map(String::as_str), Some("my-slug"));
+        assert_eq!(
+            result.params.get("slug").map(String::as_str),
+            Some("my-slug")
+        );
     }
 
     #[test]
     fn parses_open_instance_links() {
-        let result =
-            parse_vesta_url("vesta://open-instance?slug=my-slug".to_string()).expect("open-instance");
+        let result = parse_vesta_url("vesta://open-instance?slug=my-slug".to_string())
+            .expect("open-instance");
         assert_eq!(result.target, DeepLinkTarget::OpenInstance);
-        assert_eq!(result.params.get("slug").map(String::as_str), Some("my-slug"));
+        assert_eq!(
+            result.params.get("slug").map(String::as_str),
+            Some("my-slug")
+        );
     }
 
     #[test]
     fn parses_legacy_copy_link_format() {
-        let result = parse_vesta_url(
-            "vesta:///instance?path=%2Finstance&slug=my-slug".to_string(),
-        )
-        .expect("legacy copy link");
+        let result = parse_vesta_url("vesta:///instance?path=%2Finstance&slug=my-slug".to_string())
+            .expect("legacy copy link");
         assert_eq!(result.target, DeepLinkTarget::OpenInstance);
-        assert_eq!(result.params.get("slug").map(String::as_str), Some("my-slug"));
+        assert_eq!(
+            result.params.get("slug").map(String::as_str),
+            Some("my-slug")
+        );
     }
 
     #[test]

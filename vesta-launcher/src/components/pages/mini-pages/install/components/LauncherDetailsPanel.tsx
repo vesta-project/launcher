@@ -6,6 +6,7 @@ import LauncherButton from "@ui/button/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
 import type { ExternalInstanceCandidate } from "@utils/launcher-imports";
+import { formatBytesCompact } from "@utils/format-bytes";
 import { type Component, createSignal, For, Show } from "solid-js";
 import styles from "../install-page.module.css";
 
@@ -48,18 +49,6 @@ function formatUnixTime(value: number | null | undefined): string | null {
 	return date.toLocaleString();
 }
 
-function formatBytes(value: number | null | undefined): string | null {
-	if (!hasNumber(value) || value < 0) return null;
-	const units = ["B", "KB", "MB", "GB", "TB"];
-	let size = value;
-	let idx = 0;
-	while (size >= 1024 && idx < units.length - 1) {
-		size /= 1024;
-		idx += 1;
-	}
-	const rounded = idx === 0 ? `${Math.round(size)}` : size.toFixed(1);
-	return `${rounded} ${units[idx]}`;
-}
 
 interface StatPill {
 	label: string;
@@ -114,7 +103,7 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		const rows: MetaRow[] = [];
 		const lastPlayed = formatUnixTime(inst.lastPlayedAtUnixMs);
 		if (lastPlayed) rows.push({ label: "Last Played", value: lastPlayed });
-		const dirSize = formatBytes(inst.gameDirectorySizeBytes);
+		const dirSize = formatBytesCompact(inst.gameDirectorySizeBytes);
 		if (dirSize) rows.push({ label: "Size", value: dirSize });
 		const source = formatSource(inst.modpackPlatform);
 		if (source) rows.push({ label: "Source", value: source.label });

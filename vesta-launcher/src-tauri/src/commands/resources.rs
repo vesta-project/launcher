@@ -416,10 +416,8 @@ pub async fn check_instance_updates_lightweight(
     let fingerprint = instance_update_fingerprint(&inst);
     let force_refresh = force_refresh.unwrap_or(false);
     let filter_ids: Option<HashSet<i32>> = resource_ids.map(|ids| ids.into_iter().collect());
-    let force_resource_ids: HashSet<i32> = force_resource_ids
-        .unwrap_or_default()
-        .into_iter()
-        .collect();
+    let force_resource_ids: HashSet<i32> =
+        force_resource_ids.unwrap_or_default().into_iter().collect();
     let is_partial = filter_ids.is_some() || !force_resource_ids.is_empty();
 
     if !force_refresh && !is_partial {
@@ -427,9 +425,7 @@ pub async fn check_instance_updates_lightweight(
             .map_err(|e| anyhow::anyhow!(e.to_string()))?
         {
             if is_snapshot_fresh(&record, &fingerprint) {
-                return Ok(
-                    snapshot_to_result(&record).map_err(|e| anyhow::anyhow!(e.to_string()))?,
-                );
+                return Ok(snapshot_to_result(&record).map_err(|e| anyhow::anyhow!(e.to_string()))?);
             }
         }
     }
@@ -514,18 +510,11 @@ pub async fn check_instance_updates_lightweight(
             let rm = rm.clone();
             let mc_version = mc_version.clone();
             let loader = loader.clone();
-            let ignore_version_cache =
-                force_refresh || force_resource_ids.contains(&res.id);
+            let ignore_version_cache = force_refresh || force_resource_ids.contains(&res.id);
             async move {
                 let platform = source_platform_from_str(&res.platform)?;
                 let versions = rm
-                    .get_versions(
-                        platform,
-                        &res.remote_id,
-                        ignore_version_cache,
-                        None,
-                        None,
-                    )
+                    .get_versions(platform, &res.remote_id, ignore_version_cache, None, None)
                     .await
                     .ok()?;
                 let best = find_best_resource_update(&versions, &res, &mc_version, &loader)?;

@@ -15,7 +15,9 @@ import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { openExternal } from "@utils/external-link";
 import { restartHomeIntro } from "@stores/home-intro";
 import { checkForAppUpdates } from "@utils/updater";
+import { invoke } from "@tauri-apps/api/core";
 import styles from "../settings-page.module.css";
+import { StorageUsageViewer } from "./storage-usage-viewer";
 
 export function HelpSettingsTab(props: { close?: () => void }) {
 	return (
@@ -48,6 +50,30 @@ export function HelpSettingsTab(props: { close?: () => void }) {
 				/>
 			</SettingsCard>
 
+			<SettingsCard header="Troubleshooting">
+				<SettingsField
+					label="Launcher Import"
+					description="Open the launcher import flow to bring in instances from other launchers."
+					actionLabel="Open Importer"
+					onAction={() => router()?.navigate("/install/import")}
+				/>
+				<SettingsField
+					label="Reset Onboarding"
+					description="Redo the first-time setup process. This will not delete your accounts or instances."
+					actionLabel="Redo Setup"
+					destructive
+					confirmationDesc="Are you sure you want to redo the onboarding process? You will be taken back to the welcome screen."
+					onAction={async () => {
+						try {
+							await invoke("reset_onboarding");
+							window.location.href = "/";
+						} catch (e) {
+							console.error("Failed to reset onboarding:", e);
+						}
+					}}
+				/>
+			</SettingsCard>
+
 			<SettingsCard header="Support">
 				<div class={styles["social-links"]} style={{ display: "flex", gap: "8px" }}>
 					<LauncherButton
@@ -60,6 +86,13 @@ export function HelpSettingsTab(props: { close?: () => void }) {
 						Discord
 					</LauncherButton>
 				</div>
+			</SettingsCard>
+
+			<SettingsCard
+				header="Storage & Data"
+				subHeader="Inspect storage usage, manage the artifact cache limit, and open data locations."
+			>
+				<StorageUsageViewer />
 			</SettingsCard>
 
 			<SettingsCard header="App Updates">

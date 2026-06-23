@@ -2,10 +2,13 @@ import { dialogStore } from "@stores/dialog-store";
 import {
 	cacheSize as cacheSizeResource,
 	detectedJava,
+	fetchStorageSnapshot,
 	globalJavaPaths,
 	javaRequirements,
 	managedJava,
+	storageSnapshot as storageSnapshotResource,
 	systemMemory,
+	type StorageSnapshot,
 } from "@stores/settings-cache";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
@@ -101,6 +104,7 @@ export interface AppConfig {
 	proxy_enabled: boolean;
 	proxy_url: string | null;
 	proxy_apply_to_games: boolean;
+	artifact_cache_max_bytes: number;
 
 	default_width: number;
 	default_height: number;
@@ -167,6 +171,7 @@ export const [showTrayIcon, setShowTrayIcon] = createSignal(true);
 export const [closeToTray, setCloseToTray] = createSignal(false);
 export const [reducedMotion, setReducedMotion] = createSignal(false);
 export const [instanceDefaults, setInstanceDefaults] = createSignal<Partial<AppConfig>>({});
+export const [artifactCacheLimitBytes, setArtifactCacheLimitBytes] = createSignal(1024 * 1024 * 1024);
 
 export const [backgroundHue, setBackgroundHue] = createSignal(
 	currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 180,
@@ -231,7 +236,12 @@ const [detected, { refetch: refetchDetected }] = detectedJava;
 const [managed, { refetch: refetchManaged }] = managedJava;
 const [globalPaths, { refetch: refetchGlobalPaths }] = globalJavaPaths;
 const [cacheSizeValue, { refetch: refetchSize }] = cacheSizeResource;
+const [
+	storageSnapshotValue,
+	{ refetch: refetchStorageSnapshot, mutate: mutateStorageSnapshot },
+] = storageSnapshotResource;
 export { cacheSizeValue };
+export { storageSnapshotValue };
 
 export const [isScanning, setIsScanning] = createSignal(false);
 
@@ -1339,6 +1349,8 @@ export async function handleClearCache() {
 		try {
 			await invoke("clear_cache");
 			refetchSize();
+			const snapshot = await fetchStorageSnapshot(true);
+			mutateStorageSnapshot(snapshot);
 			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Cache Cleared",
@@ -1354,6 +1366,37 @@ export async function handleClearCache() {
 				severity: "error",
 			});
 		}
+	}
+}
+
+export async function handleArtifactCacheLimitChange(nextBytes: number) {
+	const previous = artifactCacheLimitBytes();
+	const normalized = Number.isFinite(nextBytes) && nextBytes > 0 ? Math.round(nextBytes) : previous;
+	setArtifactCacheLimitBytes(normalized);
+
+	if (!hasTauriRuntime()) return;
+
+	try {
+		await invoke("update_config_field", {
+			field: "artifact_cache_max_bytes",
+			value: normalized,
+		});
+		const snapshot = await invoke<StorageSnapshot>("prune_storage_cache");
+		mutateStorageSnapshot(snapshot);
+	} catch (error) {
+		console.error("Failed to persist artifact_cache_max_bytes:", error);
+		setArtifactCacheLimitBytes(previous);
+	}
+}
+
+export function getStorageSnapshot(): StorageSnapshot | undefined {
+	return storageSnapshotValue();
+}
+
+export async function refreshStorageSnapshot() {
+	if (hasTauriRuntime()) {
+		const snapshot = await fetchStorageSnapshot(true);
+		mutateStorageSnapshot(snapshot);
 	}
 }
 
@@ -1389,6 +1432,7 @@ export async function initSettings() {
 				setProxyEnabled(config.proxy_enabled ?? false);
 				setProxyUrl(config.proxy_url ?? "");
 				setProxyApplyToGames(config.proxy_apply_to_games ?? false);
+				setArtifactCacheLimitBytes(config.artifact_cache_max_bytes ?? 1024 * 1024 * 1024);
 				setProxyRestartRequired(false);
 				setMaxDownloadThreads(config.max_download_threads ?? 4);
 				setAutostartEnabled(config.autostart_enabled ?? false);
@@ -1509,6 +1553,10 @@ export async function initSettings() {
 		if (field === "proxy_enabled") setProxyEnabled(value ?? false);
 		if (field === "proxy_url") setProxyUrl(value ?? "");
 		if (field === "proxy_apply_to_games") setProxyApplyToGames(value ?? false);
+		if (field === "artifact_cache_max_bytes") {
+			setArtifactCacheLimitBytes(value ?? 1024 * 1024 * 1024);
+			void refreshStorageSnapshot();
+		}
 		if (field === "theme_id" && value) {
 			const previousThemeId = untrack(themeId);
 			if (previousThemeId !== value) {

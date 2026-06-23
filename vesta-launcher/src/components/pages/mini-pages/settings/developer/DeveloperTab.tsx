@@ -1,13 +1,6 @@
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
-import {
-	debugLogging,
-	handleClearCache,
-	handleDebugToggle,
-	handleOpenAppData,
-	handleOpenLauncherLogs,
-	handleOpenRuntimeStorageLocation,
-} from "@stores/settings";
+import { debugLogging, handleDebugToggle } from "@stores/settings";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
@@ -19,27 +12,6 @@ export function DeveloperSettingsTab() {
 	return (
 		<div class={styles["settings-tab-content"]}>
 			<div class={panelStyles["settings-panel"]}>
-			<SettingsCard header="Data Paths">
-				<SettingsField
-					label="Open App Settings Location"
-					description="Open the directory where Vesta stores app configuration and data files."
-					actionLabel="Open Folder"
-					onAction={handleOpenAppData}
-				/>
-				<SettingsField
-					label="Open Runtime Storage Location"
-					description="Open the Local AppData-style folder where runtime cache data (player heads, account capes, etc.) is stored."
-					actionLabel="Open Folder"
-					onAction={handleOpenRuntimeStorageLocation}
-				/>
-				<SettingsField
-					label="Open Launcher Logs"
-					description="Open launcher diagnostic logs (Rust backend and UI). This is separate from in-game console output."
-					actionLabel="Open Folder"
-					onAction={handleOpenLauncherLogs}
-				/>
-			</SettingsCard>
-
 			<SettingsCard header="Debug Settings">
 				<SettingsField
 					label="Debug Logging"

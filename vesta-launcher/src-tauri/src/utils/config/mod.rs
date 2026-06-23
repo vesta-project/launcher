@@ -166,6 +166,7 @@ pub struct AppConfig {
     pub proxy_enabled: bool,
     pub proxy_url: Option<String>,
     pub proxy_apply_to_games: bool,
+    pub artifact_cache_max_bytes: i64,
 }
 
 impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlite::Sqlite>
@@ -228,6 +229,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
         bool,           // proxy_enabled
         Option<String>, // proxy_url
         bool,           // proxy_apply_to_games
+        i64,            // artifact_cache_max_bytes
     );
 
     fn build(row: Self::Row) -> diesel::deserialize::Result<Self> {
@@ -297,6 +299,7 @@ impl diesel::Queryable<crate::schema::config::app_config::SqlType, diesel::sqlit
             proxy_enabled: row.51,
             proxy_url: row.52,
             proxy_apply_to_games: row.53,
+            artifact_cache_max_bytes: row.54,
         })
     }
 }
@@ -344,6 +347,7 @@ impl Default for AppConfig {
             proxy_enabled: false,
             proxy_url: None,
             proxy_apply_to_games: false,
+            artifact_cache_max_bytes: crate::utils::storage::DEFAULT_ARTIFACT_CACHE_MAX_BYTES,
 
             setup_completed: false,
             setup_step: 0,
@@ -877,12 +881,29 @@ fn normalize_memory_config(config: &mut AppConfig) -> bool {
     changed
 }
 
+fn normalize_artifact_cache_config(config: &mut AppConfig) -> bool {
+    let next = crate::utils::storage::normalize_artifact_cache_limit_bytes(
+        config.artifact_cache_max_bytes,
+    );
+    let changed = config.artifact_cache_max_bytes != next;
+    if changed {
+        config.artifact_cache_max_bytes = next;
+    }
+    changed
+}
+
 /// Normalize memory defaults without capping the saved preferred max.
 pub fn normalize_memory_config_state() -> Result<(), anyhow::Error> {
     let mut config = get_app_config()?;
     let config_changed = normalize_memory_config(&mut config);
-    if config_changed {
-        log::info!("Normalized app memory defaults");
+    let artifact_cache_changed = normalize_artifact_cache_config(&mut config);
+    if config_changed || artifact_cache_changed {
+        if config_changed {
+            log::info!("Normalized app memory defaults");
+        }
+        if artifact_cache_changed {
+            log::info!("Normalized artifact cache config");
+        }
         update_app_config(&config)?;
     }
 
@@ -913,6 +934,7 @@ pub fn init_config_db() -> Result<(), anyhow::Error> {
         default_config.default_max_memory =
             crate::utils::memory_policy::dynamic_preferred_max_memory_mb(system_ram_mb);
         normalize_memory_config(&mut default_config);
+        normalize_artifact_cache_config(&mut default_config);
         diesel::insert_into(app_config)
             .values(&default_config)
             .execute(&mut conn)?;
@@ -1034,6 +1056,7 @@ pub fn set_config(config: AppConfig) -> Result<(), String> {
     );
     let mut normalized_config = config;
     normalize_memory_config(&mut normalized_config);
+    normalize_artifact_cache_config(&mut normalized_config);
     update_app_config(&normalized_config).map_err(|e| e.to_string())
 }
 
@@ -1075,6 +1098,7 @@ pub fn update_config_field(
     let mut updated_config: AppConfig = serde_json::from_value(config_value)
         .map_err(|e| format!("Failed to deserialize config: {}", e))?;
     normalize_memory_config(&mut updated_config);
+    normalize_artifact_cache_config(&mut updated_config);
 
     log::info!("Updating config field '{}' via Tauri command", field);
     update_app_config(&updated_config).map_err(|e| e.to_string())?;
@@ -1126,6 +1150,7 @@ pub fn update_config_fields(
     let mut updated_config: AppConfig = serde_json::from_value(config_value)
         .map_err(|e| format!("Failed to deserialize config: {}", e))?;
     normalize_memory_config(&mut updated_config);
+    normalize_artifact_cache_config(&mut updated_config);
 
     log::info!("Updating {} config fields via Tauri command", updates.len());
     update_app_config(&updated_config).map_err(|e| e.to_string())?;

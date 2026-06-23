@@ -27,15 +27,24 @@ struct InstallScope {
     cache: Arc<Mutex<ArtifactCache>>,
     artifacts: Arc<Mutex<Vec<InstallArtifactRef>>>,
     dry_run: bool,
+    max_bytes: u64,
 }
 
 pub(crate) fn install_scope_handles() -> Option<(
     Arc<Mutex<ArtifactCache>>,
     Arc<Mutex<Vec<InstallArtifactRef>>>,
     bool,
+    u64,
 )> {
     INSTALL_SCOPE
-        .try_with(|scope| (scope.cache.clone(), scope.artifacts.clone(), scope.dry_run))
+        .try_with(|scope| {
+            (
+                scope.cache.clone(),
+                scope.artifacts.clone(),
+                scope.dry_run,
+                scope.max_bytes,
+            )
+        })
         .ok()
 }
 
@@ -45,7 +54,7 @@ pub(crate) async fn track_artifact_from_path(
     signature: Option<String>,
     source_url: Option<String>,
 ) -> Result<()> {
-    if let Some((cache, artifacts, dry_run)) = install_scope_handles() {
+    if let Some((cache, artifacts, dry_run, _max_bytes)) = install_scope_handles() {
         if dry_run {
             return Ok(());
         }
@@ -63,7 +72,7 @@ pub(crate) async fn track_artifact_from_path(
 }
 
 pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Result<bool> {
-    if let Some((cache, artifacts, dry_run)) = install_scope_handles() {
+    if let Some((cache, artifacts, dry_run, _max_bytes)) = install_scope_handles() {
         let cache_guard = cache.lock().await;
         if let Some(sha) = cache_guard.find_component(label) {
             if dry_run {
@@ -83,6 +92,62 @@ pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Res
 /// Main entry point for game installation.
 /// Handles vanilla + modloader installation in a single unified pass.
 pub async fn install_instance(
+    spec: InstallSpec,
+    reporter: std::sync::Arc<dyn ProgressReporter>,
+) -> Result<()> {
+    if spec.dry_run {
+        return install_instance_inner(spec, reporter).await;
+    }
+
+    let mut cache = ArtifactCache::load_with_labels(spec.data_dir())?;
+    let startup_prune = cache.prune_to_limit(spec.artifact_cache_max_bytes);
+    if startup_prune.removed_artifacts > 0 {
+        log::info!(
+            "[installer] Pruned {} cached artifacts ({} bytes) while opening cache",
+            startup_prune.removed_artifacts,
+            startup_prune.removed_bytes
+        );
+    }
+    cache.save()?;
+
+    let cache = Arc::new(Mutex::new(cache));
+    let artifacts = Arc::new(Mutex::new(Vec::new()));
+    let scope = InstallScope {
+        cache: Arc::clone(&cache),
+        artifacts: Arc::clone(&artifacts),
+        dry_run: false,
+        max_bytes: spec.artifact_cache_max_bytes,
+    };
+
+    let result = INSTALL_SCOPE
+        .scope(scope, install_instance_inner(spec.clone(), reporter))
+        .await;
+
+    if result.is_ok() {
+        let loader = match spec.modloader {
+            Some(loader) if loader != ModloaderType::Vanilla => Some(loader.as_str().to_string()),
+            _ => None,
+        };
+        let installed_id = spec.installed_version_id();
+        let tracked_artifacts = artifacts.lock().await.clone();
+        let mut cache_guard = cache.lock().await;
+        cache_guard.remove_install(&installed_id);
+        cache_guard.record_install(&installed_id, loader, &tracked_artifacts);
+        let finalize_prune = cache_guard.prune_to_limit(spec.artifact_cache_max_bytes);
+        cache_guard.save()?;
+        if finalize_prune.removed_artifacts > 0 {
+            log::info!(
+                "[installer] Pruned {} cached artifacts ({} bytes) after installation finalization",
+                finalize_prune.removed_artifacts,
+                finalize_prune.removed_bytes
+            );
+        }
+    }
+
+    result
+}
+
+async fn install_instance_inner(
     spec: InstallSpec,
     reporter: std::sync::Arc<dyn ProgressReporter>,
 ) -> Result<()> {
