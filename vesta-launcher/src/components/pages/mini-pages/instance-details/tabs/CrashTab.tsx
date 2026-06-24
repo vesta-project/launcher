@@ -409,12 +409,15 @@ export function CrashTab(props: {
 								</div>
 
 								<section class={styles.panel}>
-									<h3>Log excerpt</h3>
-									<pre class={styles.evidence}>
-										{crash().evidence ||
-											"No excerpt was captured for this crash. Use Open file or Logs below to inspect the full log."}
-									</pre>
-									<div class={styles.pathActions}>
+									<div class={styles.logExcerptBlock}>
+										<h3>Log excerpt</h3>
+										<div class={styles.evidenceScroller}>
+											<pre class={styles.evidence}>
+												{crash().evidence ||
+													"No excerpt was captured for this crash. Use Open file or Logs below to inspect the full log."}
+											</pre>
+										</div>
+										<div class={styles.pathActions}>
 										<Button
 											size="sm"
 											variant="outline"
@@ -430,6 +433,7 @@ export function CrashTab(props: {
 										>
 											Logs
 										</Button>
+										</div>
 									</div>
 								</section>
 

@@ -97,6 +97,41 @@
     color: var(--text-primary);
 }
 
+.logExcerptBlock {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-width: 0;
+}
+
+.logExcerptBlock h3 {
+    margin-bottom: 0;
+}
+
+.evidenceScroller {
+    min-width: 0;
+    max-height: 320px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-radius: 7px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-low);
+    scrollbar-gutter: stable;
+}
+
+.evidence {
+    margin: 0;
+    padding: 12px;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+    width: 100%;
+    box-sizing: border-box;
+}
+
 .chips {
     display: flex;
     flex-wrap: wrap;
@@ -353,25 +388,15 @@
     color: var(--text-primary);
 }
 
-.evidence {
-    max-height: 320px;
-    margin: 0;
-    padding: 12px;
-    border-radius: 7px;
-    border: 1px solid var(--border-subtle);
-    background: var(--surface-low);
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    line-height: 1.45;
-    white-space: pre-wrap;
-    overflow: auto;
-}
-
 .pathActions {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
     margin-top: 12px;
+}
+
+.logExcerptBlock .pathActions {
+    margin-top: 0;
 }
 
 .shareUrlRow {

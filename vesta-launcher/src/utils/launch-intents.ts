@@ -135,6 +135,10 @@ export async function openInstanceBySlug(slug: string): Promise<void> {
 	openMiniPage("/instance", { slug });
 }
 
+export function openInstanceTab(slug: string, activeTab: string): void {
+	openMiniPage("/instance", { slug, activeTab });
+}
+
 export async function handleModpackFileOpen(path: string): Promise<void> {
 	if (!(await ensureExternalIntentReady())) {
 		return;

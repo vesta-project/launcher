@@ -811,6 +811,12 @@ export default function InstanceDetails(
 			: "home";
 	});
 
+	const [selectedTab, setSelectedTab] = createSignal<TabType>(activeTab());
+
+	createEffect(() => {
+		setSelectedTab(activeTab());
+	});
+
 	createEffect(
 		on(
 			() =>
@@ -2209,8 +2215,8 @@ export default function InstanceDetails(
 	const instanceTabs = createMemo(() => {
 		const tabs: PageSidebarTab[] = [
 			{ value: "home", label: "Home" },
-			{ value: "console", label: "Console" },
 			{ value: "resources", label: "Resources" },
+			{ value: "console", label: "Console" },
 		];
 		if (currentCrash()) {
 			tabs.push({ value: "crash", label: "Crash", variant: "error" as const });
@@ -2223,22 +2229,28 @@ export default function InstanceDetails(
 		return tabs;
 	});
 
+	const handleTabChange = (tab: TabType) => {
+		if (tab === activeTab()) return;
+		setSelectedTab(tab);
+		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
+	};
+
 	createEffect(() => {
-		if (!currentCrash() && activeTab() === "crash") {
+		if (
+			!instance.loading &&
+			instance.latest &&
+			!currentCrash() &&
+			activeTab() === "crash"
+		) {
 			handleTabChange("home");
 		}
 	});
-
-	const handleTabChange = (tab: TabType) => {
-		if (tab === activeTab()) return;
-		activeRouter()?.updateQuery("activeTab", tab, true); // Push to history
-	};
 
 	return (
 		<div class={styles["instance-details-page"]}>
 			<PageSidebar
 				tabs={instanceTabs()}
-				activeTab={activeTab()}
+				activeTab={selectedTab()}
 				onTabChange={(v) => handleTabChange(v as TabType)}
 			>
 				<div

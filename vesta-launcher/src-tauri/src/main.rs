@@ -247,6 +247,8 @@ fn main() {
             commands::instances::analyse_crash_with_mclogs,
             commands::instances::upload_crash_to_mclogs,
             commands::instances::emit_fake_crash,
+            commands::instances::emit_fake_crash_scenario,
+            commands::instances::list_crash_scenarios,
             commands::instances::duplicate_instance,
             commands::instances::repair_instance,
             commands::instances::reset_instance,

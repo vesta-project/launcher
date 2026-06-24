@@ -548,58 +548,48 @@ pub async fn upload_crash_to_mclogs(
 }
 
 #[tauri::command]
-pub fn emit_fake_crash(
+pub fn list_crash_scenarios() -> Vec<crate::utils::crash_fixtures::CrashScenarioInfo> {
+    if !cfg!(debug_assertions) {
+        return Vec::new();
+    }
+    crate::utils::crash_fixtures::crash_scenario_catalog()
+}
+
+fn emit_simulated_crash(
+    app_handle: &tauri::AppHandle,
+    instance_id_slug: &str,
+    crash: crate::utils::crash_parser::CrashDetails,
+) -> Result<(), String> {
+    store_crash_details(instance_id_slug, &crash)?;
+    app_handle
+        .emit(
+            "core://instance-crashed",
+            crash_event_payload(instance_id_slug, &crash),
+        )
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn emit_fake_crash_scenario(
     app_handle: tauri::AppHandle,
     instance_id_slug: String,
+    scenario: String,
 ) -> Result<(), String> {
     if !cfg!(debug_assertions) {
         return Err("Fake crash events are only available in development builds".to_string());
     }
 
-    let crash = crate::utils::crash_parser::CrashDetails {
-        crash_id: uuid::Uuid::new_v4().to_string(),
-        crash_type: "launch_mod".to_string(),
-        category: "missing_dependency".to_string(),
-        title: "Mod compatibility problem".to_string(),
-        message: "Mod 'Example Machines' requires mod 'fabric-api' 0.91.0 or later.".to_string(),
-        evidence: Some(
-            "[main/ERROR]: Incompatible mods found!\nMod 'Example Machines' requires mod 'fabric-api' 0.91.0 or later.".to_string(),
-        ),
-        suspected_resources: vec!["Example Machines".to_string(), "fabric-api".to_string()],
-        suspects: vec![
-            crate::utils::crash_parser::CrashSuspect {
-                display_name: "fabric-api".to_string(),
-                mod_id: Some("fabric-api".to_string()),
-                reason: Some("required but not installed".to_string()),
-                suspect_kind: "missing_dependency".to_string(),
-            },
-            crate::utils::crash_parser::CrashSuspect {
-                display_name: "Example Machines".to_string(),
-                mod_id: Some("example_machines".to_string()),
-                reason: Some("requires fabric-api 0.91.0 or later".to_string()),
-                suspect_kind: "affected_mod".to_string(),
-            },
-        ],
-        suggested_fixes: vec![
-            "Install the missing required dependency listed above.".to_string(),
-            "Use the Resources tab to update the modpack or matching mod versions.".to_string(),
-        ],
-        affected_mod_count: Some(1),
-        report_path: None,
-        log_path: None,
-        timestamp: chrono::Utc::now().to_rfc3339(),
-        confidence: 0.9,
-        mclogs_url: None,
-        analysis: None,
-    };
+    let crash = crate::utils::crash_fixtures::crash_from_scenario(&scenario)
+        .ok_or_else(|| format!("Unknown crash scenario: {scenario}"))?;
+    emit_simulated_crash(&app_handle, &instance_id_slug, crash)
+}
 
-    store_crash_details(&instance_id_slug, &crash)?;
-    app_handle
-        .emit(
-            "core://instance-crashed",
-            crash_event_payload(&instance_id_slug, &crash),
-        )
-        .map_err(|e| e.to_string())
+#[tauri::command]
+pub fn emit_fake_crash(
+    app_handle: tauri::AppHandle,
+    instance_id_slug: String,
+) -> Result<(), String> {
+    emit_fake_crash_scenario(app_handle, instance_id_slug, "fabric_missing_api".to_string())
 }
 
 fn load_redacted_crash_content(

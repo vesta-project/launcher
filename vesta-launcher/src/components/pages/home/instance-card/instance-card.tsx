@@ -10,6 +10,7 @@ import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { openStandaloneMiniPage } from "@components/page-viewer/standalone-launcher";
+import { openInstanceTab } from "@utils/launch-intents";
 import { clearRunning, instancesState, setLaunching, setRunning } from "@stores/instances";
 import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
@@ -279,7 +280,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	};
 
 	const openCrashDetails = () => {
-		openMiniPage("/instance", { slug: instanceSlug(), activeTab: "crash" });
+		openInstanceTab(instanceSlug(), "crash");
 	};
 
 	const openInstanceDetailsStandalone = () => {

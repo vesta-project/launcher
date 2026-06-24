@@ -57,6 +57,26 @@ describe("canResumeRouteFromLibrary", () => {
 	it("does not resume a different instance", () => {
 		expect(canResumeRouteFromLibrary("/instance", { id: 5 }, { id: 6 })).toBe(false);
 	});
+
+	it("does not resume same instance when target specifies a different activeTab", () => {
+		expect(
+			canResumeRouteFromLibrary(
+				"/instance",
+				{ slug: "foo", activeTab: "home" },
+				{ slug: "foo", activeTab: "crash" },
+			),
+		).toBe(false);
+	});
+
+	it("resumes same instance when target activeTab matches stored tab", () => {
+		expect(
+			canResumeRouteFromLibrary(
+				"/instance",
+				{ slug: "foo", activeTab: "crash" },
+				{ slug: "foo", activeTab: "crash" },
+			),
+		).toBe(true);
+	});
 });
 
 describe("library slot navigation", () => {

@@ -80,6 +80,18 @@ function instanceRouteIdentity(params: Record<string, unknown>): string | null {
 	return null;
 }
 
+export function isSameInstanceRoute(
+	currentParams: Record<string, unknown>,
+	targetParams: Record<string, unknown>,
+): boolean {
+	const currentIdentity = instanceRouteIdentity(currentParams);
+	const targetIdentity = instanceRouteIdentity(targetParams);
+	if (!currentIdentity || !targetIdentity) {
+		return routeParamsMatch(currentParams, targetParams, { ignoreKeys: ["activeTab"] });
+	}
+	return currentIdentity === targetIdentity;
+}
+
 function resourceDetailsRouteIdentity(params: Record<string, unknown>): string | null {
 	if (params.projectId == null || params.platform == null) return null;
 	return `${normalizeParamValue(params.platform)}:${normalizeParamValue(params.projectId)}`;
@@ -94,10 +106,16 @@ export function canResumeRouteFromLibrary(
 		case "/instance": {
 			const currentIdentity = instanceRouteIdentity(currentParams);
 			const targetIdentity = instanceRouteIdentity(targetParams);
+			const ignoreActiveTab = targetParams.activeTab == null;
+			const ignoreKeys = ignoreActiveTab ? ["activeTab"] : [];
+
 			if (!currentIdentity || !targetIdentity) {
-				return routeParamsMatch(currentParams, targetParams, { ignoreKeys: ["activeTab"] });
+				return routeParamsMatch(currentParams, targetParams, { ignoreKeys });
 			}
-			return currentIdentity === targetIdentity;
+			if (currentIdentity !== targetIdentity) {
+				return false;
+			}
+			return routeParamsMatch(currentParams, targetParams, { ignoreKeys });
 		}
 		case "/resource-details": {
 			const currentIdentity = resourceDetailsRouteIdentity(currentParams);

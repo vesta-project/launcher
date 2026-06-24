@@ -815,6 +815,44 @@ fn mod_suggestions(category: &str) -> Vec<String> {
     }
 }
 
+/// Parse launch-time crash details from raw log content (fixtures / dev simulation).
+pub fn parse_launch_log_content(log_content: &str) -> Option<CrashDetails> {
+    let log_path = PathBuf::from("/tmp/vesta-crash-fixture/latest.log");
+    check_launch_crash(log_content, &log_path)
+}
+
+/// Parse runtime crash details from raw log content (fixtures / dev simulation).
+pub fn parse_runtime_log_content(log_content: &str) -> Option<CrashDetails> {
+    let game_dir = PathBuf::from("/tmp/vesta-crash-fixture");
+    let log_path = game_dir.join("latest.log");
+    check_runtime_crash(
+        log_content,
+        &game_dir,
+        &log_path,
+        SystemTime::UNIX_EPOCH,
+    )
+}
+
+/// Representative JVM crash for dev simulation (no hs_err file required).
+pub fn build_jvm_fixture_crash() -> CrashDetails {
+    build_crash(
+        "jvm",
+        "jvm",
+        "Java virtual machine crash",
+        "Java Virtual Machine crashed (simulated)".to_string(),
+        None,
+        Vec::new(),
+        vec![
+            "Try another Java runtime for this instance.".to_string(),
+            "Lower memory settings if the crash repeats immediately.".to_string(),
+        ],
+        None,
+        None,
+        None,
+        0.98,
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
