@@ -339,6 +339,21 @@
 	box-shadow: 0 0 15px hsl(var(--hue-error) 70% 50% / 0.4);
 }
 
+.play-button.crash {
+	opacity: 1;
+	transform: scale(1);
+	pointer-events: auto;
+	color: hsl(var(--hue-error) 75% 72%);
+	border-color: hsl(var(--hue-error) 70% 50% / 0.42);
+	background: hsl(var(--hue-error) 55% 26% / 0.46);
+}
+
+.play-button.crash:hover {
+	background: hsl(var(--hue-error) 70% 50% / 0.3);
+	border-color: hsl(var(--hue-error) 70% 50% / 0.5);
+	box-shadow: 0 0 15px hsl(var(--hue-error) 70% 50% / 0.4);
+}
+
 .play-button.install:hover {
 	background: hsl(var(--hue-warning) 70% 50% / 0.3);
 	border-color: hsl(var(--hue-warning) 70% 50% / 0.5);
@@ -490,6 +505,28 @@
 	background: hsl(142 40% 14% / 0.72);
 }
 
+.status-tag--crashed {
+	color: hsl(0 85% 92%);
+	border-color: hsl(0 70% 52% / 0.62);
+	background: hsl(0 55% 18% / 0.82);
+	cursor: pointer;
+}
+
+.crash-summary {
+	margin: 4px 0 0;
+	padding: 0;
+	max-width: 100%;
+	color: hsl(0 80% 88%);
+	font-size: 10px;
+	font-weight: 600;
+	line-height: 1.35;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	text-shadow: 0 1px 2px hsl(0 0% 0% / 0.55);
+}
+
 .instance-card--warming {
 	border-color: hsl(42 85% 52% / 0.55);
 }
@@ -517,6 +554,22 @@
 			hsl(142 70% 50% / 0.12) 0%,
 			hsl(142 50% 30% / 0.16) 20%,
 			hsl(142 60% 12% / 0.34) 45.5%,
+			hsl(0 0% 0% / 0.62) 100%
+		),
+		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+}
+
+.instance-card--crashed {
+	border-color: hsl(0 75% 48% / 0.62);
+}
+
+.instance-card--crashed::after {
+	background-image:
+		radial-gradient(
+			109.12% 79.52% at 47.71% 0%,
+			hsl(0 90% 58% / 0.16) 0%,
+			hsl(0 65% 35% / 0.22) 20%,
+			hsl(0 70% 14% / 0.38) 45.5%,
 			hsl(0 0% 0% / 0.62) 100%
 		),
 		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));

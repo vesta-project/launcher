@@ -17,13 +17,38 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 use std::time::UNIX_EPOCH;
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 use walkdir::WalkDir;
 
 lazy_static! {
     static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> =
         Mutex::new(HashMap::new());
     static ref LAUNCH_IN_PROGRESS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
+}
+
+fn find_instance_by_slug(instance_id_slug: &str) -> Result<Instance, String> {
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+    instance
+        .load::<Instance>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?
+        .into_iter()
+        .find(|inst| inst.slug() == instance_id_slug)
+        .ok_or_else(|| format!("Instance {} not found in database", instance_id_slug))
+}
+
+fn crash_event_payload(
+    instance_id_slug: &str,
+    crash_info: &crate::utils::crash_parser::CrashDetails,
+) -> serde_json::Value {
+    let mut value = serde_json::to_value(crash_info).unwrap_or_else(|_| serde_json::json!({}));
+    if let Some(obj) = value.as_object_mut() {
+        obj.insert(
+            "instance_id".to_string(),
+            serde_json::Value::String(instance_id_slug.to_string()),
+        );
+    }
+    value
 }
 
 struct LaunchInProgressGuard {
@@ -437,19 +462,11 @@ fn store_crash_details(
 
     for inst in all_instances {
         if inst.slug() == instance_id_slug {
-            // Create crash details JSON
-            let crash_details_json = serde_json::json!({
-                "crash_type": crash_info.crash_type,
-                "message": crash_info.message,
-                "report_path": crash_info.report_path,
-                "timestamp": crash_info.timestamp,
-            });
+            let crash_details_json = serde_json::to_string(crash_info)
+                .map_err(|e| format!("Failed to serialize crash details: {}", e))?;
 
             diesel::update(instance.filter(id.eq(inst.id)))
-                .set((
-                    crashed.eq(true),
-                    crash_details.eq(crash_details_json.to_string()),
-                ))
+                .set((crashed.eq(true), crash_details.eq(crash_details_json)))
                 .execute(&mut conn)
                 .map_err(|e| format!("Failed to update crash details: {}", e))?;
 
@@ -466,6 +483,296 @@ fn store_crash_details(
         "Instance {} not found in database",
         instance_id_slug
     ))
+}
+
+#[tauri::command]
+pub fn clear_instance_crash(instance_id_slug: String) -> Result<(), String> {
+    clear_crash_flag(&instance_id_slug)
+}
+
+#[tauri::command]
+pub fn open_crash_report(path: String) -> Result<(), String> {
+    let path = std::path::PathBuf::from(path);
+    if !path.exists() {
+        return Err("Crash report does not exist".to_string());
+    }
+    open::that(&path).map_err(|e| format!("Failed to open crash report: {}", e))
+}
+
+#[derive(serde::Serialize)]
+pub struct MclogsUploadResult {
+    pub id: Option<String>,
+    pub url: String,
+    pub raw: Option<String>,
+    pub expires: Option<i64>,
+}
+
+#[tauri::command]
+pub async fn analyse_crash_with_mclogs(
+    instance_id_slug: String,
+    crash_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let content = load_redacted_crash_content(&instance_id_slug, crash_id)?;
+    post_mclogs_json("https://api.mclo.gs/1/analyse", content).await
+}
+
+#[tauri::command]
+pub async fn upload_crash_to_mclogs(
+    instance_id_slug: String,
+    crash_id: Option<String>,
+) -> Result<MclogsUploadResult, String> {
+    let content = load_redacted_crash_content(&instance_id_slug, crash_id)?;
+    let value = post_mclogs_json("https://api.mclo.gs/1/log", content).await?;
+    if value.get("success").and_then(|v| v.as_bool()) == Some(false) {
+        return Err(value
+            .get("error")
+            .and_then(|v| v.as_str())
+            .unwrap_or("mclo.gs rejected the log")
+            .to_string());
+    }
+    let url = value
+        .get("url")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "mclo.gs response did not include a URL".to_string())?
+        .to_string();
+
+    Ok(MclogsUploadResult {
+        id: value.get("id").and_then(|v| v.as_str()).map(str::to_string),
+        url,
+        raw: value
+            .get("raw")
+            .and_then(|v| v.as_str())
+            .map(str::to_string),
+        expires: value.get("expires").and_then(|v| v.as_i64()),
+    })
+}
+
+#[tauri::command]
+pub fn emit_fake_crash(
+    app_handle: tauri::AppHandle,
+    instance_id_slug: String,
+) -> Result<(), String> {
+    if !cfg!(debug_assertions) {
+        return Err("Fake crash events are only available in development builds".to_string());
+    }
+
+    let crash = crate::utils::crash_parser::CrashDetails {
+        crash_id: uuid::Uuid::new_v4().to_string(),
+        crash_type: "launch_mod".to_string(),
+        category: "missing_dependency".to_string(),
+        title: "Mod compatibility problem".to_string(),
+        message: "Mod 'Example Machines' requires mod 'fabric-api' 0.91.0 or later.".to_string(),
+        evidence: Some(
+            "[main/ERROR]: Incompatible mods found!\nMod 'Example Machines' requires mod 'fabric-api' 0.91.0 or later.".to_string(),
+        ),
+        suspected_resources: vec!["Example Machines".to_string(), "fabric-api".to_string()],
+        suspects: vec![
+            crate::utils::crash_parser::CrashSuspect {
+                display_name: "fabric-api".to_string(),
+                mod_id: Some("fabric-api".to_string()),
+                reason: Some("required but not installed".to_string()),
+                suspect_kind: "missing_dependency".to_string(),
+            },
+            crate::utils::crash_parser::CrashSuspect {
+                display_name: "Example Machines".to_string(),
+                mod_id: Some("example_machines".to_string()),
+                reason: Some("requires fabric-api 0.91.0 or later".to_string()),
+                suspect_kind: "affected_mod".to_string(),
+            },
+        ],
+        suggested_fixes: vec![
+            "Install the missing required dependency listed above.".to_string(),
+            "Use the Resources tab to update the modpack or matching mod versions.".to_string(),
+        ],
+        affected_mod_count: Some(1),
+        report_path: None,
+        log_path: None,
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        confidence: 0.9,
+        mclogs_url: None,
+        analysis: None,
+    };
+
+    store_crash_details(&instance_id_slug, &crash)?;
+    app_handle
+        .emit(
+            "core://instance-crashed",
+            crash_event_payload(&instance_id_slug, &crash),
+        )
+        .map_err(|e| e.to_string())
+}
+
+fn load_redacted_crash_content(
+    instance_id_slug: &str,
+    expected_crash_id: Option<String>,
+) -> Result<String, String> {
+    let inst = find_instance_by_slug(instance_id_slug)?;
+    let details = inst
+        .crash_details
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok());
+
+    if let (Some(expected), Some(details)) = (expected_crash_id.as_deref(), details.as_ref()) {
+        let actual = details.get("crash_id").and_then(|v| v.as_str());
+        if actual.is_some() && actual != Some(expected) {
+            return Err("This crash is no longer the latest crash for the instance".to_string());
+        }
+    }
+
+    let path = details
+        .as_ref()
+        .and_then(|value| {
+            value
+                .get("report_path")
+                .or_else(|| value.get("log_path"))
+                .and_then(|v| v.as_str())
+        })
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            inst.game_directory.as_ref().map(|dir| {
+                std::path::PathBuf::from(dir)
+                    .join("logs")
+                    .join("latest.log")
+            })
+        })
+        .ok_or_else(|| "No crash log path is available".to_string())?;
+
+    let content = std::fs::read_to_string(&path)
+        .map_err(|e| format!("Failed to read crash log {:?}: {}", path, e))?;
+    let redacted = redact_log_content(&content);
+    enforce_mclogs_limits(&redacted)?;
+    Ok(redacted)
+}
+
+async fn post_mclogs_json(url: &str, content: String) -> Result<serde_json::Value, String> {
+    let client = reqwest::Client::new();
+    let response = client
+        .post(url)
+        .json(&serde_json::json!({
+            "content": content,
+            "source": "Vesta Launcher",
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact mclo.gs: {}", e))?;
+
+    let status = response.status();
+    let value = response
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| format!("Failed to read mclo.gs response: {}", e))?;
+    if !status.is_success() {
+        return Err(value
+            .get("error")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("mclo.gs returned {}", status)));
+    }
+    Ok(value)
+}
+
+fn enforce_mclogs_limits(content: &str) -> Result<(), String> {
+    const MAX_BYTES: usize = 10 * 1024 * 1024;
+    const MAX_LINES: usize = 25_000;
+
+    if content.len() > MAX_BYTES {
+        return Err("Crash log is larger than mclo.gs allows (10 MiB)".to_string());
+    }
+    if content.lines().count() > MAX_LINES {
+        return Err("Crash log has more lines than mclo.gs allows (25,000)".to_string());
+    }
+    Ok(())
+}
+
+fn redact_log_content(content: &str) -> String {
+    let home = std::env::var("HOME")
+        .ok()
+        .filter(|value| !value.is_empty())
+        .or_else(|| {
+            std::env::var("USERPROFILE")
+                .ok()
+                .filter(|value| !value.is_empty())
+        });
+
+    content
+        .lines()
+        .map(|line| {
+            let mut redacted = if let Some(home) = home.as_deref() {
+                line.replace(home, "~")
+            } else {
+                line.to_string()
+            };
+            redacted = redact_windows_user_path(&redacted);
+            redacted = redact_sensitive_assignments(&redacted);
+            redact_ipv4_tokens(&redacted)
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn redact_windows_user_path(line: &str) -> String {
+    let marker = "C:\\Users\\";
+    let Some(start) = line.to_lowercase().find(&marker.to_lowercase()) else {
+        return line.to_string();
+    };
+    let name_start = start + marker.len();
+    let Some(rest) = line.get(name_start..) else {
+        return line.to_string();
+    };
+    let Some(end_offset) = rest.find('\\') else {
+        return line.to_string();
+    };
+    format!(
+        "{}{}********{}",
+        &line[..start],
+        marker,
+        &rest[end_offset..]
+    )
+}
+
+fn redact_sensitive_assignments(line: &str) -> String {
+    let sensitive = [
+        "access_token",
+        "accesstoken",
+        "session",
+        "token",
+        "client_secret",
+    ];
+    let lower = line.to_lowercase();
+    if !sensitive.iter().any(|key| lower.contains(key)) {
+        return line.to_string();
+    }
+
+    line.split_whitespace()
+        .map(|part| {
+            let lower = part.to_lowercase();
+            if sensitive.iter().any(|key| lower.contains(key)) {
+                if let Some((key, _)) = part.split_once('=') {
+                    return format!("{}=<redacted>", key);
+                }
+                if let Some((key, _)) = part.split_once(':') {
+                    return format!("{}:<redacted>", key);
+                }
+                return "<redacted>".to_string();
+            }
+            part.to_string()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_ipv4_tokens(line: &str) -> String {
+    line.split_whitespace()
+        .map(|part| {
+            let trimmed = part.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+            if trimmed.parse::<std::net::Ipv4Addr>().is_ok() {
+                part.replace(trimmed, "**.**.**.**")
+            } else {
+                part.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 /// Clear the crashed flag for an instance when it successfully launches
@@ -2027,6 +2334,10 @@ pub async fn launch_instance(
                                 {
                                     log::error!("Failed to store crash: {}", e);
                                 }
+                                let _ = app_handle_monitor.emit(
+                                    "core://instance-crashed",
+                                    crash_event_payload(&instance_id_monitor, &crash_info),
+                                );
                                 is_crashed = true;
                             }
                         }
@@ -2622,4 +2933,24 @@ pub async fn update_instance_modpack_version(
     let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
 
     Ok(())
+}
+
+#[cfg(test)]
+mod crash_upload_tests {
+    use super::{enforce_mclogs_limits, redact_log_content};
+
+    #[test]
+    fn redacts_common_private_values_before_upload() {
+        let raw = "path=C:\\Users\\eatham\\.minecraft accessToken=secret server 203.0.113.10";
+        let redacted = redact_log_content(raw);
+        assert!(!redacted.contains("eatham"));
+        assert!(!redacted.contains("secret"));
+        assert!(!redacted.contains("203.0.113.10"));
+    }
+
+    #[test]
+    fn rejects_logs_over_mclogs_line_limit() {
+        let content = (0..25_001).map(|_| "line").collect::<Vec<_>>().join("\n");
+        assert!(enforce_mclogs_limits(&content).is_err());
+    }
 }

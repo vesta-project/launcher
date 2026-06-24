@@ -282,17 +282,23 @@ impl ActionHandler for NavigateHandler {
         _client_key: Option<String>,
         payload: Option<serde_json::Value>,
     ) -> Result<()> {
+        let payload = payload.ok_or_else(|| anyhow::anyhow!("Missing navigate action payload"))?;
         let path = payload
-            .and_then(|p| {
-                p.get("path")
-                    .and_then(|u| u.as_str())
-                    .map(|s| s.to_string())
-            })
+            .get("path")
+            .and_then(|u| u.as_str())
+            .map(|s| s.to_string())
             .ok_or_else(|| anyhow::anyhow!("Missing path in navigate action payload"))?;
+        let params = payload
+            .get("params")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!({}));
 
         let handle = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            let _ = handle.emit("core://navigate", serde_json::json!({ "path": path }));
+            let _ = handle.emit(
+                "core://navigate",
+                serde_json::json!({ "path": path, "params": params }),
+            );
         });
         Ok(())
     }
@@ -302,6 +308,8 @@ impl ActionHandler for NavigateHandler {
 mod tests {
     use super::*;
     use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
+    use std::time::{Duration, Instant};
+    use tauri::Builder;
 
     // Helper to build a minimal Tauri app for manager tests
     // NOTE: Upsert tests disabled on Windows due to Tauri event loop constraints (must run on main thread).

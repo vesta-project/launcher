@@ -8,15 +8,9 @@ import PlayIcon from "@assets/play.svg";
 import QuiltLogo from "@assets/quilt-logo.svg";
 import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
-import CrashDetailsModal from "@components/modals/crash-details-modal";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { openStandaloneMiniPage } from "@components/page-viewer/standalone-launcher";
-import {
-	clearRunning,
-	instancesState,
-	setLaunching,
-	setRunning,
-} from "@stores/instances";
+import { clearRunning, instancesState, setLaunching, setRunning } from "@stores/instances";
 import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -36,7 +30,7 @@ import { ExportDialog } from "@ui/export-dialog";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
-import { clearCrashDetails, isInstanceCrashed } from "@utils/crash-handler";
+import { clearCrashDetails, getCrashDetails, isInstanceCrashed, parseCrashDetails } from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	getInstanceOperationLabel,
@@ -50,15 +44,7 @@ import {
 	resumeInstanceOperation,
 } from "@utils/instances";
 import clsx from "clsx";
-import {
-	createMemo,
-	createSignal,
-	Match,
-	onCleanup,
-	onMount,
-	Show,
-	Switch,
-} from "solid-js";
+import { createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
 import {
 	handleDuplicate,
 	handleHardReset,
@@ -73,8 +59,6 @@ interface InstanceCardProps {
 
 export default function InstanceCard(props: InstanceCardProps) {
 	const [leaveAnim, setLeaveAnim] = createSignal(false);
-	const [hasCrashed, setHasCrashed] = createSignal(false);
-	const [showCrashModal, setShowCrashModal] = createSignal(false);
 	const [showExportDialog, setShowExportDialog] = createSignal(false);
 	const [busy, setBusy] = createSignal(false);
 
@@ -86,14 +70,24 @@ export default function InstanceCard(props: InstanceCardProps) {
 	);
 
 	const isRunning = createMemo(() => !!instancesState.runningIds[instanceSlug()]);
+	const hasCrashed = createMemo(
+		() => isInstanceCrashed(instanceSlug()) || !!storeInstance().crashed,
+	);
+
+	const crashSummary = createMemo(() => {
+		const slug = instanceSlug();
+		const crash =
+			getCrashDetails(slug) || parseCrashDetails(storeInstance().crashDetails, slug);
+		if (!crash?.message) return null;
+		const text = crash.message.trim();
+		return text.length > 72 ? `${text.slice(0, 69)}…` : text;
+	});
 	const isWarmingUp = createMemo(
 		() => !!instancesState.launchingIds[instanceSlug()] && !isRunning(),
 	);
 
 	const isInstalling = createMemo(() => isInstanceOperationInProgress(storeInstance()));
-	const isInterrupted = createMemo(
-		() => storeInstance().installationStatus === "interrupted",
-	);
+	const isInterrupted = createMemo(() => storeInstance().installationStatus === "interrupted");
 	const isInstalled = createMemo(() => storeInstance().installationStatus === "installed");
 	const isFailed = createMemo(() => {
 		const status = storeInstance().installationStatus;
@@ -134,7 +128,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 						instance_id?: string;
 					};
 					if (payload.instance_id === slug) {
-						setHasCrashed(true);
 						setLaunching(slug, false);
 					}
 				}),
@@ -148,8 +141,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 				unlisten();
 			}
 		});
-
-		setHasCrashed(isInstanceCrashed(instanceSlug()));
 	});
 
 	const operationLabel = () => getInstanceOperationLabel(storeInstance());
@@ -183,6 +174,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 		if (needsInstallation()) return "Needs Installation";
 		if (isRunning()) return "Running (click to stop)";
 		if (isWarmingUp()) return "Warming up...";
+		if (hasCrashed()) return "Crash details";
 		return "Launch";
 	};
 
@@ -217,7 +209,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 			setLaunching(slug, true);
 			try {
 				clearCrashDetails(slug);
-				setHasCrashed(false);
 
 				await launchInstance(props.instance);
 				showToast({
@@ -262,16 +253,33 @@ export default function InstanceCard(props: InstanceCardProps) {
 			return;
 		}
 
+		if (hasCrashed()) {
+			openCrashDetails();
+			return;
+		}
+
 		await toggleRun();
 	};
 
 	const handleContextToggle = () => {
 		if (busy() || isWarmingUp() || isInstalling()) return;
+		if (hasCrashed() && !isRunning() && !needsInstallation() && !isInterrupted()) {
+			openCrashDetails();
+			return;
+		}
 		void toggleRun();
 	};
 
 	const openInstanceDetails = () => {
+		if (hasCrashed()) {
+			openCrashDetails();
+			return;
+		}
 		openMiniPage("/instance", { slug: instanceSlug() });
+	};
+
+	const openCrashDetails = () => {
+		openMiniPage("/instance", { slug: instanceSlug(), activeTab: "crash" });
 	};
 
 	const openInstanceDetailsStandalone = () => {
@@ -298,9 +306,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const handlePinToggle = async () => {
 		const slug = instanceSlug();
 		if (isPinned()) {
-			const pin = pinning.pins.find(
-				(p) => p.page_type === "instance" && p.target_id === slug,
-			);
+			const pin = pinning.pins.find((p) => p.page_type === "instance" && p.target_id === slug);
 			if (pin) await unpinPage(pin.id);
 			return;
 		}
@@ -315,6 +321,24 @@ export default function InstanceCard(props: InstanceCardProps) {
 		});
 	};
 
+	const handleFakeCrash = async () => {
+		try {
+			await invoke("emit_fake_crash", { instanceIdSlug: instanceSlug() });
+			showToast({
+				title: "Fake Crash",
+				description: `Emitted fake crash for instance "${props.instance.name}"`,
+				severity: "info",
+			});
+		} catch (err) {
+			console.error("Fake crash failed:", err);
+			showToast({
+				title: "Fake Crash Failed",
+				description: String(err),
+				severity: "error",
+			});
+		}
+	};
+
 	return (
 		<ContextMenu>
 			<ContextMenuTrigger
@@ -325,6 +349,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 					isInterrupted() && styles.interrupted,
 					isWarmingUp() && styles["instance-card--warming"],
 					isRunning() && !isWarmingUp() && styles["instance-card--running"],
+					hasCrashed() && !isRunning() && !isWarmingUp() && styles["instance-card--crashed"],
 					leaveAnim() && styles["instance-card-leave"],
 				)}
 				onMouseOver={() => {
@@ -343,10 +368,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				<Switch>
 					<Match when={isInstalling()}>
 						<div class={styles["instance-card-centered"]}>
-							<div
-								class={styles["instance-card-spinner"]}
-								data-essential-motion
-							></div>
+							<div class={styles["instance-card-spinner"]} data-essential-motion></div>
 							<h1
 								style={{
 									margin: 0,
@@ -404,14 +426,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div class={styles["instance-card-top"]}>
 							<div class={styles["instance-card-indicators"]}>
 								<Show when={isWarmingUp()}>
-									<div class={clsx(styles["status-tag"], styles["status-tag--warming"])}>
-										Warming up
-									</div>
+									<div class={clsx(styles["status-tag"], styles["status-tag--warming"])}>Warming up</div>
 								</Show>
 								<Show when={isRunning() && !isWarmingUp()}>
-									<div class={clsx(styles["status-tag"], styles["status-tag--running"])}>
-										Running
-									</div>
+									<div class={clsx(styles["status-tag"], styles["status-tag--running"])}>Running</div>
 								</Show>
 								<Show when={isInterrupted()}>
 									<Badge variant="warning" dot={true}>
@@ -419,22 +437,24 @@ export default function InstanceCard(props: InstanceCardProps) {
 									</Badge>
 								</Show>
 								<Show when={hasCrashed()}>
-									<Tooltip placement="top">
-										<TooltipTrigger>
-											<Badge
-												variant="error"
-												dot={true}
-												onClick={(e) => {
-													e.stopPropagation();
-													setShowCrashModal(true);
-												}}
-												style={{ cursor: "pointer" }}
-											>
-												Crashed
-											</Badge>
-										</TooltipTrigger>
-										<TooltipContent>Click to view crash details</TooltipContent>
-									</Tooltip>
+									<div
+										class={clsx(styles["status-tag"], styles["status-tag--crashed"])}
+										onClick={(e) => {
+											e.stopPropagation();
+											openCrashDetails();
+										}}
+										role="button"
+										tabIndex={0}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") {
+												e.preventDefault();
+												e.stopPropagation();
+												openCrashDetails();
+											}
+										}}
+									>
+										Crashed
+									</div>
 								</Show>
 							</div>
 							<Tooltip placement="top">
@@ -448,12 +468,14 @@ export default function InstanceCard(props: InstanceCardProps) {
 												: isWarmingUp()
 													? styles.warming
 													: isInterrupted()
-													? styles.resume
-													: needsInstallation()
-														? styles.install
-														: isRunning()
-															? styles.kill
-															: styles.launch,
+														? styles.resume
+														: needsInstallation()
+															? styles.install
+															: isRunning()
+																? styles.kill
+																: hasCrashed()
+																	? styles.crash
+																	: styles.launch,
 										)}
 										onClick={handleClick}
 										aria-label={playButtonTooltip()}
@@ -462,16 +484,15 @@ export default function InstanceCard(props: InstanceCardProps) {
 										disabled={isInstalling() || isWarmingUp()}
 									>
 										{isInstalling() || isWarmingUp() ? (
-											<div
-												class={styles["instance-card-spinner"]}
-												data-essential-motion
-											/>
+											<div class={styles["instance-card-spinner"]} data-essential-motion />
 										) : isInterrupted() ? (
 											<ReloadIcon />
 										) : needsInstallation() ? (
 											<ErrorIcon />
 										) : isRunning() ? (
 											<KillIcon />
+										) : hasCrashed() ? (
+											<ErrorIcon />
 										) : (
 											<PlayIcon />
 										)}
@@ -482,6 +503,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 						<div class={styles["instance-card-bottom"]}>
 							<h1>{props.instance.name}</h1>
+							<Show when={hasCrashed() && crashSummary()}>
+								<p class={styles["crash-summary"]}>{crashSummary()}</p>
+							</Show>
 							<div class={styles["instance-card-bottom-version"]}>
 								<p>{storeInstance().minecraftVersion}</p>
 								<div class={styles["instance-card-bottom-version-modloader"]}>
@@ -498,14 +522,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 										<Match when={storeInstance().modloader === "quilt"}>
 											<QuiltLogo />
 										</Match>
-										<Match
-											when={
-												storeInstance().modloader && storeInstance().modloader !== "vanilla"
-											}
-										>
-											<p style={{ "text-transform": "capitalize" }}>
-												{storeInstance().modloader}
-											</p>
+										<Match when={storeInstance().modloader && storeInstance().modloader !== "vanilla"}>
+											<p style={{ "text-transform": "capitalize" }}>{storeInstance().modloader}</p>
 										</Match>
 									</Switch>
 								</div>
@@ -582,6 +600,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 							>
 								<span>Hard Reset</span>
 							</ContextMenuItem>
+
+							<Show when={import.meta.env.DEV}>
+								<ContextMenuItem
+									onSelect={() => {
+										void handleFakeCrash();
+									}}
+								>
+									<span>Fake Crash</span>
+								</ContextMenuItem>
+							</Show>
 						</ContextMenuSubContent>
 					</ContextMenuSub>
 
@@ -597,11 +625,6 @@ export default function InstanceCard(props: InstanceCardProps) {
 					</ContextMenuItem>
 				</ContextMenuContent>
 			</ContextMenuPortal>
-			<CrashDetailsModal
-				instanceId={instanceSlug()}
-				isOpen={showCrashModal()}
-				onClose={() => setShowCrashModal(false)}
-			/>
 			<ExportDialog
 				isOpen={showExportDialog()}
 				onClose={() => setShowExportDialog(false)}

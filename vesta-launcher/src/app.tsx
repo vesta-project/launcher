@@ -217,10 +217,10 @@ function Root(props: ChildrenProp) {
 			unlistenUpdate = u;
 		});
 
-		listen<{ path: string }>("core://navigate", (event) => {
+		listen<{ path: string; params?: Record<string, unknown> }>("core://navigate", (event) => {
 			console.log("[App] Received navigation event:", event.payload);
 			if (router()) {
-				openMiniPage(event.payload.path);
+				openMiniPage(event.payload.path, event.payload.params);
 			} else {
 				showToast({
 					title: "App Not Ready",
