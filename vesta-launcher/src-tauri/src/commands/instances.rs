@@ -13,12 +13,16 @@ use diesel::prelude::*;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::Instant;
 use std::time::UNIX_EPOCH;
+use std::time::{Duration, Instant};
 use tauri::{Emitter, Manager, State};
 use walkdir::WalkDir;
+
+const MCLOGS_MAX_BYTES: u64 = 10 * 1024 * 1024;
+const MCLOGS_MAX_LINES: usize = 25_000;
 
 lazy_static! {
     static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> =
@@ -508,20 +512,16 @@ pub struct MclogsUploadResult {
 }
 
 #[tauri::command]
-pub async fn analyse_crash_with_mclogs(
-    instance_id_slug: String,
-    crash_id: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let content = load_redacted_crash_content(&instance_id_slug, crash_id)?;
-    post_mclogs_json("https://api.mclo.gs/1/analyse", content).await
-}
-
-#[tauri::command]
 pub async fn upload_crash_to_mclogs(
     instance_id_slug: String,
     crash_id: Option<String>,
 ) -> Result<MclogsUploadResult, String> {
-    let content = load_redacted_crash_content(&instance_id_slug, crash_id)?;
+    let content = tauri::async_runtime::spawn_blocking(move || {
+        load_redacted_crash_content(&instance_id_slug, crash_id)
+    })
+    .await
+    .map_err(|e| format!("Failed to prepare crash log upload: {}", e))??;
+
     let value = post_mclogs_json("https://api.mclo.gs/1/log", content).await?;
     if value.get("success").and_then(|v| v.as_bool()) == Some(false) {
         return Err(value
@@ -589,7 +589,11 @@ pub fn emit_fake_crash(
     app_handle: tauri::AppHandle,
     instance_id_slug: String,
 ) -> Result<(), String> {
-    emit_fake_crash_scenario(app_handle, instance_id_slug, "fabric_missing_api".to_string())
+    emit_fake_crash_scenario(
+        app_handle,
+        instance_id_slug,
+        "fabric_missing_api".to_string(),
+    )
 }
 
 fn load_redacted_crash_content(
@@ -609,6 +613,7 @@ fn load_redacted_crash_content(
         }
     }
 
+    let game_dir = resolve_instance_game_dir_for_upload(&inst)?;
     let path = details
         .as_ref()
         .and_then(|value| {
@@ -618,16 +623,54 @@ fn load_redacted_crash_content(
                 .and_then(|v| v.as_str())
         })
         .map(std::path::PathBuf::from)
-        .or_else(|| {
-            inst.game_directory.as_ref().map(|dir| {
-                std::path::PathBuf::from(dir)
-                    .join("logs")
-                    .join("latest.log")
-            })
-        })
-        .ok_or_else(|| "No crash log path is available".to_string())?;
+        .unwrap_or_else(|| game_dir.join("logs").join("latest.log"));
 
-    let content = std::fs::read_to_string(&path)
+    let path = canonical_crash_upload_path(&path, &game_dir)?;
+    let content = read_redacted_log_file(&path)?;
+    Ok(content)
+}
+
+fn resolve_instance_game_dir_for_upload(inst: &Instance) -> Result<PathBuf, String> {
+    let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
+    let app_config_dir = crate::utils::db_manager::get_app_config_dir()
+        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
+    let instances_root = crate::utils::instance_helpers::resolve_instances_root(
+        &app_config_dir,
+        app_config.default_game_dir.as_deref(),
+    );
+
+    Ok(
+        crate::utils::instance_helpers::resolve_instance_game_directory(
+            inst,
+            &instances_root,
+            &app_config_dir,
+        ),
+    )
+}
+
+fn canonical_crash_upload_path(path: &Path, game_dir: &Path) -> Result<PathBuf, String> {
+    let canonical_game_dir = game_dir
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve instance directory {:?}: {}", game_dir, e))?;
+    let canonical_path = path
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve crash log {:?}: {}", path, e))?;
+
+    if !canonical_path.starts_with(&canonical_game_dir) {
+        return Err("Crash log is outside this instance directory".to_string());
+    }
+
+    Ok(canonical_path)
+}
+
+fn read_redacted_log_file(path: &Path) -> Result<String, String> {
+    let metadata =
+        std::fs::metadata(path).map_err(|e| format!("Failed to read crash log metadata: {}", e))?;
+    if metadata.len() > MCLOGS_MAX_BYTES {
+        return Err("Crash log is larger than mclo.gs allows (10 MiB)".to_string());
+    }
+
+    let content = std::fs::read_to_string(path)
         .map_err(|e| format!("Failed to read crash log {:?}: {}", path, e))?;
     let redacted = redact_log_content(&content);
     enforce_mclogs_limits(&redacted)?;
@@ -635,7 +678,10 @@ fn load_redacted_crash_content(
 }
 
 async fn post_mclogs_json(url: &str, content: String) -> Result<serde_json::Value, String> {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| format!("Failed to prepare mclo.gs client: {}", e))?;
     let response = client
         .post(url)
         .json(&serde_json::json!({
@@ -662,37 +708,20 @@ async fn post_mclogs_json(url: &str, content: String) -> Result<serde_json::Valu
 }
 
 fn enforce_mclogs_limits(content: &str) -> Result<(), String> {
-    const MAX_BYTES: usize = 10 * 1024 * 1024;
-    const MAX_LINES: usize = 25_000;
-
-    if content.len() > MAX_BYTES {
+    if content.len() as u64 > MCLOGS_MAX_BYTES {
         return Err("Crash log is larger than mclo.gs allows (10 MiB)".to_string());
     }
-    if content.lines().count() > MAX_LINES {
+    if content.lines().count() > MCLOGS_MAX_LINES {
         return Err("Crash log has more lines than mclo.gs allows (25,000)".to_string());
     }
     Ok(())
 }
 
 fn redact_log_content(content: &str) -> String {
-    let home = std::env::var("HOME")
-        .ok()
-        .filter(|value| !value.is_empty())
-        .or_else(|| {
-            std::env::var("USERPROFILE")
-                .ok()
-                .filter(|value| !value.is_empty())
-        });
-
     content
         .lines()
         .map(|line| {
-            let mut redacted = if let Some(home) = home.as_deref() {
-                line.replace(home, "~")
-            } else {
-                line.to_string()
-            };
-            redacted = redact_windows_user_path(&redacted);
+            let mut redacted = redact_paths(line);
             redacted = redact_sensitive_assignments(&redacted);
             redact_ipv4_tokens(&redacted)
         })
@@ -700,30 +729,104 @@ fn redact_log_content(content: &str) -> String {
         .join("\n")
 }
 
-fn redact_windows_user_path(line: &str) -> String {
-    let marker = "C:\\Users\\";
-    let Some(start) = line.to_lowercase().find(&marker.to_lowercase()) else {
-        return line.to_string();
-    };
-    let name_start = start + marker.len();
-    let Some(rest) = line.get(name_start..) else {
-        return line.to_string();
-    };
-    let Some(end_offset) = rest.find('\\') else {
-        return line.to_string();
-    };
-    format!(
-        "{}{}********{}",
-        &line[..start],
-        marker,
-        &rest[end_offset..]
-    )
+fn redact_paths(line: &str) -> String {
+    let vesta_redacted = redact_vesta_path_prefixes(line);
+    vesta_redacted
+        .split_whitespace()
+        .map(redact_absolute_path_token)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_vesta_path_prefixes(line: &str) -> String {
+    let mut redacted = line.to_string();
+    for marker in [".VestaLauncher", "VestaLauncher"] {
+        let mut search_from = 0;
+        while let Some(offset) = redacted[search_from..].find(marker) {
+            let marker_start = search_from + offset;
+            let Some(path_start) = find_path_start_before(&redacted, marker_start) else {
+                search_from = marker_start + marker.len();
+                continue;
+            };
+
+            redacted.replace_range(path_start..marker_start, "<path>/");
+            search_from = path_start + "<path>/".len() + marker.len();
+        }
+    }
+    redacted
+}
+
+fn find_path_start_before(line: &str, marker_start: usize) -> Option<usize> {
+    let prefix = &line[..marker_start];
+    let mut unix_start = None;
+    for (idx, _) in prefix.match_indices('/') {
+        if idx == 0 || is_path_prefix_boundary(prefix.as_bytes()[idx - 1] as char) {
+            unix_start = Some(idx);
+        }
+    }
+    if unix_start.is_some() {
+        return unix_start;
+    }
+
+    let bytes = prefix.as_bytes();
+    for idx in (0..bytes.len().saturating_sub(2)).rev() {
+        if bytes[idx].is_ascii_alphabetic()
+            && bytes[idx + 1] == b':'
+            && (bytes[idx + 2] == b'\\' || bytes[idx + 2] == b'/')
+            && (idx == 0 || is_path_prefix_boundary(bytes[idx - 1] as char))
+        {
+            return Some(idx);
+        }
+    }
+
+    None
+}
+
+fn is_path_prefix_boundary(ch: char) -> bool {
+    ch.is_whitespace() || matches!(ch, '"' | '\'' | '(' | '[' | '{' | '<' | '=')
+}
+
+fn redact_absolute_path_token(token: &str) -> String {
+    if token.contains("<path>/VestaLauncher") || token.contains("<path>/.VestaLauncher") {
+        return token.to_string();
+    }
+
+    if let Some(start) = find_unix_path_start(token).or_else(|| find_windows_path_start(token)) {
+        let end = token[start..]
+            .find(|ch: char| matches!(ch, '"' | '\'' | ')' | ']' | '}' | '<' | '>' | '|'))
+            .map(|offset| start + offset)
+            .unwrap_or(token.len());
+        return format!("{}<path redacted>{}", &token[..start], &token[end..]);
+    }
+
+    token.to_string()
+}
+
+fn find_unix_path_start(token: &str) -> Option<usize> {
+    token.match_indices('/').find_map(|(idx, _)| {
+        if idx == 0 || is_path_prefix_boundary(token.as_bytes()[idx - 1] as char) {
+            Some(idx)
+        } else {
+            None
+        }
+    })
+}
+
+fn find_windows_path_start(token: &str) -> Option<usize> {
+    let bytes = token.as_bytes();
+    (0..bytes.len().saturating_sub(2)).find(|&idx| {
+        bytes[idx].is_ascii_alphabetic()
+            && bytes[idx + 1] == b':'
+            && (bytes[idx + 2] == b'\\' || bytes[idx + 2] == b'/')
+            && (idx == 0 || is_path_prefix_boundary(bytes[idx - 1] as char))
+    })
 }
 
 fn redact_sensitive_assignments(line: &str) -> String {
     let sensitive = [
         "access_token",
         "accesstoken",
+        "authorization",
         "session",
         "token",
         "client_secret",
@@ -733,22 +836,50 @@ fn redact_sensitive_assignments(line: &str) -> String {
         return line.to_string();
     }
 
-    line.split_whitespace()
-        .map(|part| {
-            let lower = part.to_lowercase();
-            if sensitive.iter().any(|key| lower.contains(key)) {
-                if let Some((key, _)) = part.split_once('=') {
-                    return format!("{}=<redacted>", key);
+    let parts = line.split_whitespace().collect::<Vec<_>>();
+    let mut redacted = Vec::with_capacity(parts.len());
+    let mut redact_next = 0usize;
+
+    for (idx, part) in parts.iter().enumerate() {
+        if redact_next > 0 {
+            redacted.push("<redacted>".to_string());
+            redact_next -= 1;
+            continue;
+        }
+
+        let lower = part.to_lowercase();
+        if sensitive.iter().any(|key| lower.contains(key)) {
+            if let Some((key, value)) = part.split_once('=') {
+                if !value.is_empty() {
+                    redacted.push(format!("{}=<redacted>", key));
+                    continue;
                 }
-                if let Some((key, _)) = part.split_once(':') {
-                    return format!("{}:<redacted>", key);
-                }
-                return "<redacted>".to_string();
             }
-            part.to_string()
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+            if let Some((key, value)) = part.split_once(':') {
+                redacted.push(format!("{}:<redacted>", key));
+                if value.is_empty() {
+                    let next_is_bearer = parts
+                        .get(idx + 1)
+                        .map(|next| next.eq_ignore_ascii_case("bearer"))
+                        .unwrap_or(false);
+                    redact_next = if lower.contains("authorization") && next_is_bearer {
+                        2
+                    } else {
+                        1
+                    };
+                }
+                continue;
+            }
+
+            redacted.push("<redacted>".to_string());
+            redact_next = 1;
+            continue;
+        }
+
+        redacted.push(part.to_string());
+    }
+
+    redacted.join(" ")
 }
 
 fn redact_ipv4_tokens(line: &str) -> String {
@@ -2927,20 +3058,57 @@ pub async fn update_instance_modpack_version(
 
 #[cfg(test)]
 mod crash_upload_tests {
-    use super::{enforce_mclogs_limits, redact_log_content};
+    use super::{
+        enforce_mclogs_limits, read_redacted_log_file, redact_log_content, MCLOGS_MAX_BYTES,
+    };
 
     #[test]
     fn redacts_common_private_values_before_upload() {
-        let raw = "path=C:\\Users\\eatham\\.minecraft accessToken=secret server 203.0.113.10";
+        let raw = "path=C:\\Users\\eatham\\.minecraft accessToken=secret --accessToken other Authorization: Bearer third server 203.0.113.10";
         let redacted = redact_log_content(raw);
         assert!(!redacted.contains("eatham"));
         assert!(!redacted.contains("secret"));
+        assert!(!redacted.contains("other"));
+        assert!(!redacted.contains("third"));
+        assert!(!redacted.contains("Bearer"));
         assert!(!redacted.contains("203.0.113.10"));
+    }
+
+    #[test]
+    fn preserves_vesta_relative_path_context() {
+        let raw = "/Users/eatham/Library/Application Support/VestaLauncher/instances/pack/logs/latest.log C:\\Users\\eatham\\AppData\\Roaming\\.VestaLauncher\\instances\\pack\\logs\\latest.log";
+        let redacted = redact_log_content(raw);
+        assert!(redacted.contains("<path>/VestaLauncher/instances/pack/logs/latest.log"));
+        assert!(redacted.contains("<path>/.VestaLauncher\\instances\\pack\\logs\\latest.log"));
+        assert!(!redacted.contains("eatham"));
+        assert!(!redacted.contains("Application Support"));
+        assert!(!redacted.contains("AppData"));
+    }
+
+    #[test]
+    fn fully_redacts_non_vesta_absolute_paths() {
+        let raw =
+            "path=/Users/eatham/.minecraft/mods/foo.jar C:\\Users\\eatham\\.minecraft\\options.txt";
+        let redacted = redact_log_content(raw);
+        assert_eq!(redacted.matches("<path redacted>").count(), 2, "{redacted}");
+        assert!(!redacted.contains("eatham"));
+        assert!(!redacted.contains(".minecraft"));
     }
 
     #[test]
     fn rejects_logs_over_mclogs_line_limit() {
         let content = (0..25_001).map(|_| "line").collect::<Vec<_>>().join("\n");
         assert!(enforce_mclogs_limits(&content).is_err());
+    }
+
+    #[test]
+    fn rejects_logs_over_mclogs_byte_limit_before_reading() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("huge.log");
+        let file = std::fs::File::create(&path).expect("create log");
+        file.set_len(MCLOGS_MAX_BYTES + 1).expect("set len");
+
+        let error = read_redacted_log_file(&path).expect_err("oversized log rejected");
+        assert!(error.contains("10 MiB"));
     }
 }
