@@ -127,19 +127,11 @@ fn store_crash_details_setup(
     for (inst_id, inst_name) in instances_list {
         let slug = crate::utils::sanitize::sanitize_instance_name(&inst_name);
         if slug == instance_id_slug {
-            // Create crash details JSON
-            let crash_details_json = serde_json::json!({
-                "crash_type": crash_info.crash_type,
-                "message": crash_info.message,
-                "report_path": crash_info.report_path,
-                "timestamp": crash_info.timestamp,
-            });
+            let crash_details_json = serde_json::to_string(crash_info)
+                .map_err(|e| format!("Failed to serialize crash details: {}", e))?;
 
             diesel::update(instance.filter(id.eq(inst_id)))
-                .set((
-                    crashed.eq(true),
-                    crash_details.eq(crash_details_json.to_string()),
-                ))
+                .set((crashed.eq(true), crash_details.eq(crash_details_json)))
                 .execute(&mut conn)
                 .map_err(|e| format!("Failed to update crash details: {}", e))?;
 
@@ -784,15 +776,22 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
                                                         // Emit crash event to frontend
                                                         use tauri::Emitter;
+                                                        let mut payload =
+                                                            serde_json::to_value(&crash_info)
+                                                                .unwrap_or_else(|_| {
+                                                                    serde_json::json!({})
+                                                                });
+                                                        if let Some(obj) = payload.as_object_mut() {
+                                                            obj.insert(
+                                                                "instance_id".to_string(),
+                                                                serde_json::Value::String(
+                                                                    run_state.instance_id.clone(),
+                                                                ),
+                                                            );
+                                                        }
                                                         let _ = app_handle.emit(
                                                             "core://instance-crashed",
-                                                            serde_json::json!({
-                                                                "instance_id": run_state.instance_id.clone(),
-                                                                "crash_type": crash_info.crash_type,
-                                                                "message": crash_info.message,
-                                                                "report_path": crash_info.report_path,
-                                                                "timestamp": crash_info.timestamp,
-                                                            }),
+                                                            payload,
                                                         );
                                                     }
                                                 }

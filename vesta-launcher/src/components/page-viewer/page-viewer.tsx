@@ -4,7 +4,11 @@ import { popOutMiniRouter } from "@components/page-viewer/standalone-launcher";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 
 import { uiChromeModeEnabled } from "@utils/config-sync";
-import { futureEntryMatchesTarget, isLibraryPath } from "@utils/flat-shell-navigation";
+import {
+	futureEntryMatchesTarget,
+	isLibraryPath,
+	isSameInstanceRoute,
+} from "@utils/flat-shell-navigation";
 import { createRoot, createSignal, Show } from "solid-js";
 import styles from "./page-viewer.module.css";
 
@@ -60,6 +64,17 @@ function openMiniPage(
 		if (!pageViewerOpen() && !isLibraryPath(miniRouter.currentPath.get())) {
 			setPageViewerOpen(true);
 		}
+		return;
+	}
+
+	if (
+		path === "/instance" &&
+		miniRouter.currentPath.get() === "/instance" &&
+		isSameInstanceRoute(miniRouter.currentParams.get(), targetParams) &&
+		targetParams.activeTab != null
+	) {
+		miniRouter.updateQuery("activeTab", targetParams.activeTab, true);
+		setPageViewerOpen(true);
 		return;
 	}
 

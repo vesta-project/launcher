@@ -6,6 +6,7 @@ export interface PageSidebarTab {
 	value: string;
 	label: string;
 	disabled?: boolean;
+	variant?: "error" | "default";
 }
 
 interface PageSidebarProps {
@@ -27,18 +28,23 @@ export function PageSidebar(props: PageSidebarProps) {
 	});
 
 	return (
-		<Tabs value={props.activeTab} onChange={(v) => props.onTabChange(v as string)} orientation="vertical" class={styles.root}>
+		<Tabs
+			value={props.activeTab}
+			onChange={(v) => props.onTabChange(v as string)}
+			orientation="vertical"
+			class={styles.root}
+		>
 			<div class={styles.layout}>
-				<aside
-					class={styles.sidebar}
-					classList={{ [styles.mobileOpen!]: isMobile() && mobileOpen() }}
-				>
+				<aside class={styles.sidebar} classList={{ [styles.mobileOpen!]: isMobile() && mobileOpen() }}>
 					<nav class={styles.nav}>
 						{props.tabs.map((tab) => (
 							<button
 								type="button"
 								class={styles.button}
-								classList={{ [styles.active!]: tab.value === props.activeTab }}
+								classList={{
+									[styles.active!]: tab.value === props.activeTab,
+									[styles.error!]: tab.variant === "error",
+								}}
 								disabled={tab.disabled}
 								onClick={() => {
 									props.onTabChange(tab.value);
@@ -56,30 +62,33 @@ export function PageSidebar(props: PageSidebarProps) {
 				</Show>
 
 				<Show when={isMobile()}>
-					<Show when={props.mobileToggle} fallback={
-						<button
-							type="button"
-							class={styles.mobileToggle}
-							onClick={() => setMobileOpen((o) => !o)}
-							aria-label="Toggle sidebar"
-						>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="18"
-								height="18"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
+					<Show
+						when={props.mobileToggle}
+						fallback={
+							<button
+								type="button"
+								class={styles.mobileToggle}
+								onClick={() => setMobileOpen((o) => !o)}
+								aria-label="Toggle sidebar"
 							>
-								<line x1="3" y1="6" x2="21" y2="6" />
-								<line x1="3" y1="12" x2="21" y2="12" />
-								<line x1="3" y1="18" x2="21" y2="18" />
-							</svg>
-						</button>
-					}>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+								>
+									<line x1="3" y1="6" x2="21" y2="6" />
+									<line x1="3" y1="12" x2="21" y2="12" />
+									<line x1="3" y1="18" x2="21" y2="18" />
+								</svg>
+							</button>
+						}
+					>
 						{props.mobileToggle}
 					</Show>
 				</Show>
