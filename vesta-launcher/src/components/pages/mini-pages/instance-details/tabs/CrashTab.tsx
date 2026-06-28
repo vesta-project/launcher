@@ -1,5 +1,6 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import CopyIcon from "@assets/clipboard.svg";
+import LinkIcon from "@assets/link.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { invoke } from "@tauri-apps/api/core";
 import type { InstalledResource } from "@stores/resources";
@@ -11,6 +12,7 @@ import type { CrashEvent, CrashSuspect } from "@utils/crash-handler";
 import { clearCrashDetails, formatCrashCategory } from "@utils/crash-handler";
 import { openExternal } from "@utils/external-link";
 import { createMemo, createSignal, For, Show } from "solid-js";
+import { getRequiredVersionIssue, matchSuspectToResource } from "./crash-resource-match";
 import styles from "./crash-tab.module.css";
 
 type MclogsUploadResult = {
@@ -27,28 +29,6 @@ const getProjectRecordKey = (platform: string | null | undefined, id: string | n
 
 const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
 	!!resource?.remote_id && (resource.platform === "modrinth" || resource.platform === "curseforge");
-
-const matchSuspectToResource = (
-	suspect: CrashSuspect,
-	installed: InstalledResource[],
-): InstalledResource | undefined => {
-	const modId = suspect.mod_id?.toLowerCase();
-	const displayName = suspect.display_name.toLowerCase();
-
-	return installed.find((resource) => {
-		const fileName =
-			resource.local_path
-				.split(/[\\/]/)
-				.pop()
-				?.replace(/\.jar$/i, "")
-				.toLowerCase() ?? "";
-
-		if (modId && (fileName === modId || resource.remote_id.toLowerCase() === modId)) {
-			return true;
-		}
-		return resource.display_name.toLowerCase() === displayName;
-	});
-};
 
 function SuspectIcon(props: { name: string; iconUrl?: string | null }) {
 	const displayChar = () => {
@@ -77,6 +57,14 @@ function CrashSuspectCard(props: {
 	router?: MiniRouter;
 }) {
 	const clickable = () => hasCanonicalResourceLink(props.resource);
+	const versionIssue = () => getRequiredVersionIssue(props.resource, props.suspect.reason);
+	const statusLabel = () => {
+		if (versionIssue()) return "Update";
+		if (props.resource && !props.resource.is_enabled) return "Disabled";
+		if (!props.resource) return "Missing";
+		return null;
+	};
+	const showStatusMeta = () => !!versionIssue() || (!props.resource && !!props.instanceId);
 
 	const navigateToResource = () => {
 		const resource = props.resource;
@@ -105,6 +93,7 @@ function CrashSuspectCard(props: {
 			classList={{
 				[styles.suspectCard]: true,
 				[styles.suspectCardClickable]: clickable(),
+				[styles.suspectCardDisabled]: !!props.resource && !props.resource.is_enabled,
 			}}
 			role={clickable() ? "button" : undefined}
 			tabIndex={clickable() ? 0 : undefined}
@@ -137,14 +126,31 @@ function CrashSuspectCard(props: {
 					>
 						<span class={styles.suspectModId}>{props.suspect.mod_id}</span>
 					</Show>
+					<Show when={props.suspect.suspect_kind === "missing_dependency" && statusLabel()}>
+						{(label) => (
+							<Badge
+								class={styles.suspectStatusBadge}
+								variant={label() === "Missing" ? "error" : "warning"}
+							>
+								{label()}
+							</Badge>
+						)}
+					</Show>
 				</div>
 				<Show when={props.suspect.reason}>
 					<p class={styles.suspectReason}>{props.suspect.reason}</p>
 				</Show>
-				<Show when={!props.resource && props.suspect.suspect_kind === "missing_dependency"}>
+				<Show
+					when={
+						props.suspect.suspect_kind === "missing_dependency" &&
+						showStatusMeta()
+					}
+				>
 					<div class={styles.suspectMeta}>
-						<span class={styles.suspectBadge}>Not installed</span>
-						<Show when={props.instanceId}>
+						<Show when={versionIssue()}>
+							<span class={styles.suspectStatusNote}>{versionIssue()}</span>
+						</Show>
+						<Show when={!props.resource && props.instanceId}>
 							<button
 								type="button"
 								class={styles.suspectLink}
@@ -284,6 +290,12 @@ export function CrashTab(props: {
 		await openExternal(url);
 	};
 
+	const shareLabel = () => {
+		const url = shareUrl();
+		if (!url) return "Share log";
+		return url.replace(/^https?:\/\//, "");
+	};
+
 	const renderSuspectCards = (items: CrashSuspect[]) => (
 		<For each={items}>
 			{(suspect) => {
@@ -337,7 +349,47 @@ export function CrashTab(props: {
 								<p>{crash().message}</p>
 							</div>
 							<div class={styles.heroActions}>
-								<Button color="destructive" variant="outline" size="sm" onClick={() => void clearCrash()}>
+								<Show
+									when={shareUrl()}
+									fallback={
+										<Button
+											class={styles.shareButton}
+											size="sm"
+											variant="outline"
+											onClick={() => void upload()}
+											disabled={busy()}
+										>
+											<LinkIcon />
+											{busy() ? "Uploading..." : "Share log"}
+										</Button>
+									}
+								>
+									<div class={styles.shareInline}>
+										<button
+											type="button"
+											class={styles.shareLinkButton}
+											onClick={() => void openShareUrl()}
+										>
+											<LinkIcon />
+											<span>{shareLabel()}</span>
+										</button>
+										<button
+											type="button"
+											class={styles.shareCopyButton}
+											onClick={() => void copyShareUrl()}
+											aria-label="Copy link"
+											title="Copy link"
+										>
+											<CopyIcon />
+										</button>
+									</div>
+								</Show>
+								<Button
+									color="destructive"
+									variant="outline"
+									size="sm"
+									onClick={() => void clearCrash()}
+								>
 									Clear Crash
 								</Button>
 							</div>
@@ -437,39 +489,6 @@ export function CrashTab(props: {
 									</div>
 								</section>
 
-								<section class={styles.panel}>
-									<h3>Share</h3>
-									<p class={styles.privacy}>
-										Create a redacted public link to share this crash log for support.
-									</p>
-									<Show when={!shareUrl()}>
-										<div class={styles.pathActions}>
-											<Button size="sm" onClick={() => void upload()} disabled={busy()}>
-												{busy() ? "Uploading..." : "Create link"}
-											</Button>
-										</div>
-									</Show>
-									<Show when={shareUrl()}>
-										<div class={styles.shareUrlRow}>
-											<button
-												type="button"
-												class={styles.shareUrl}
-												onClick={() => void openShareUrl()}
-											>
-												{shareUrl()}
-											</button>
-											<button
-												type="button"
-												class={styles.shareCopyButton}
-												onClick={() => void copyShareUrl()}
-												aria-label="Copy link"
-												title="Copy link"
-											>
-												<CopyIcon />
-											</button>
-										</div>
-									</Show>
-								</section>
 							</aside>
 						</div>
 

@@ -133,7 +133,7 @@
 }
 
 /* Elements inside badges */
-.badge-dot {
+.badge__dot {
 	width: 6px;
 	height: 6px;
 	border-radius: 50%;
@@ -142,19 +142,19 @@
 	opacity: 0.8;
 }
 
-.badge--variant-success .badge-dot {
+.badge--variant-success .badge__dot {
 	box-shadow: 0 0 6px hsl(var(--hue-success) 70% 50%);
 }
 
-.badge--variant-warning .badge-dot {
+.badge--variant-warning .badge__dot {
 	box-shadow: 0 0 6px hsl(var(--hue-warning) 70% 50%);
 }
 
-.badge--variant-error .badge-dot {
+.badge--variant-error .badge__dot {
 	box-shadow: 0 0 6px hsl(var(--hue-error) 70% 50%);
 }
 
-.badge--pill .badge-dot {
+.badge--pill .badge__dot {
 	width: 8px;
 	height: 8px;
 }

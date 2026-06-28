@@ -2472,8 +2472,8 @@ export default function InstanceDetails(
 											gameVersion={inst().minecraftVersion}
 											loader={inst().modloader ?? undefined}
 											crash={currentCrash()}
-											installedResources={installedResources() || []}
-											projectRecords={projectRecords()}
+											installedResources={installedResources.latest || installedResources() || []}
+											projectRecords={projectRecords.latest || projectRecords()}
 											router={activeRouter()}
 											onCleared={() => void handleRefetch()}
 										/>

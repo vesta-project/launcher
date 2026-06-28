@@ -516,6 +516,8 @@ pub async fn upload_crash_to_mclogs(
     instance_id_slug: String,
     crash_id: Option<String>,
 ) -> Result<MclogsUploadResult, String> {
+    let persist_instance_id_slug = instance_id_slug.clone();
+    let persist_crash_id = crash_id.clone();
     let content = tauri::async_runtime::spawn_blocking(move || {
         load_redacted_crash_content(&instance_id_slug, crash_id)
     })
@@ -536,6 +538,8 @@ pub async fn upload_crash_to_mclogs(
         .ok_or_else(|| "mclo.gs response did not include a URL".to_string())?
         .to_string();
 
+    persist_crash_mclogs_url(&persist_instance_id_slug, persist_crash_id.as_deref(), &url)?;
+
     Ok(MclogsUploadResult {
         id: value.get("id").and_then(|v| v.as_str()).map(str::to_string),
         url,
@@ -545,6 +549,49 @@ pub async fn upload_crash_to_mclogs(
             .map(str::to_string),
         expires: value.get("expires").and_then(|v| v.as_i64()),
     })
+}
+
+fn persist_crash_mclogs_url(
+    instance_id_slug: &str,
+    expected_crash_id: Option<&str>,
+    url: &str,
+) -> Result<(), String> {
+    let mut conn =
+        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
+    let all_instances = instance
+        .load::<Instance>(&mut conn)
+        .map_err(|e| format!("Failed to query instances: {}", e))?;
+    let inst = all_instances
+        .into_iter()
+        .find(|inst| inst.slug() == instance_id_slug)
+        .ok_or_else(|| format!("Instance {} not found in database", instance_id_slug))?;
+
+    let mut details = inst
+        .crash_details
+        .as_deref()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(raw).ok())
+        .ok_or_else(|| "No crash details are available for this instance".to_string())?;
+
+    if let Some(expected) = expected_crash_id {
+        let actual = details.get("crash_id").and_then(|value| value.as_str());
+        if actual.is_some() && actual != Some(expected) {
+            return Err("This crash is no longer the latest crash for the instance".to_string());
+        }
+    }
+
+    if let Some(obj) = details.as_object_mut() {
+        obj.insert(
+            "mclogs_url".to_string(),
+            serde_json::Value::String(url.to_string()),
+        );
+    }
+
+    diesel::update(instance.filter(id.eq(inst.id)))
+        .set(crash_details.eq(details.to_string()))
+        .execute(&mut conn)
+        .map_err(|e| format!("Failed to persist mclo.gs URL: {}", e))?;
+
+    Ok(())
 }
 
 #[tauri::command]
