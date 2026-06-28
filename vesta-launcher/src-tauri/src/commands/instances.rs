@@ -490,8 +490,11 @@ fn store_crash_details(
 }
 
 #[tauri::command]
-pub fn clear_instance_crash(instance_id_slug: String) -> Result<(), String> {
-    clear_crash_flag(&instance_id_slug)
+pub fn clear_instance_crash(
+    app_handle: tauri::AppHandle,
+    instance_id_slug: String,
+) -> Result<(), String> {
+    clear_crash_flag(&instance_id_slug, Some(&app_handle))
 }
 
 #[tauri::command]
@@ -1081,7 +1084,10 @@ fn redact_split_argument_values(line: &str, key: &str) -> String {
 }
 
 /// Clear the crashed flag for an instance when it successfully launches
-fn clear_crash_flag(instance_id_slug: &str) -> Result<(), String> {
+fn clear_crash_flag(
+    instance_id_slug: &str,
+    app_handle: Option<&tauri::AppHandle>,
+) -> Result<(), String> {
     let mut conn =
         get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
 
@@ -1095,6 +1101,14 @@ fn clear_crash_flag(instance_id_slug: &str) -> Result<(), String> {
                 .set((crashed.eq(false), crash_details.eq::<Option<String>>(None)))
                 .execute(&mut conn)
                 .map_err(|e| format!("Failed to clear crash flag: {}", e))?;
+
+            if let Some(app_handle) = app_handle {
+                let updated = instance
+                    .find(inst.id)
+                    .first::<Instance>(&mut conn)
+                    .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
+                let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
+            }
 
             log::info!(
                 "Cleared crash flag for instance {} (id {})",
@@ -2485,7 +2499,7 @@ pub async fn launch_instance(
     match join {
         Ok(result) => {
             log::info!("[launch_instance] Started PID: {}", result.instance.pid);
-            if let Err(e) = clear_crash_flag(&instance_id) {
+            if let Err(e) = clear_crash_flag(&instance_id, Some(&app_handle)) {
                 log::error!("Failed to clear crash flag: {}", e);
             }
 
