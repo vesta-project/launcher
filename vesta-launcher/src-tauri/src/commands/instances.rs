@@ -495,11 +495,10 @@ pub fn clear_instance_crash(instance_id_slug: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn open_crash_report(path: String) -> Result<(), String> {
-    let path = std::path::PathBuf::from(path);
-    if !path.exists() {
-        return Err("Crash report does not exist".to_string());
-    }
+pub fn open_crash_report(instance_id_slug: String, path: String) -> Result<(), String> {
+    let inst = find_instance_by_slug(&instance_id_slug)?;
+    let game_dir = resolve_instance_game_dir_for_upload(&inst)?;
+    let path = canonical_crash_upload_path(&PathBuf::from(path), &game_dir)?;
     open::that(&path).map_err(|e| format!("Failed to open crash report: {}", e))
 }
 
@@ -778,11 +777,7 @@ fn redact_log_content(content: &str) -> String {
 
 fn redact_paths(line: &str) -> String {
     let vesta_redacted = redact_vesta_path_prefixes(line);
-    vesta_redacted
-        .split_whitespace()
-        .map(redact_absolute_path_token)
-        .collect::<Vec<_>>()
-        .join(" ")
+    redact_non_vesta_absolute_paths(&vesta_redacted)
 }
 
 fn redact_vesta_path_prefixes(line: &str) -> String {
@@ -833,25 +828,37 @@ fn is_path_prefix_boundary(ch: char) -> bool {
     ch.is_whitespace() || matches!(ch, '"' | '\'' | '(' | '[' | '{' | '<' | '=')
 }
 
-fn redact_absolute_path_token(token: &str) -> String {
-    if token.contains("<path>/VestaLauncher") || token.contains("<path>/.VestaLauncher") {
-        return token.to_string();
+fn redact_non_vesta_absolute_paths(line: &str) -> String {
+    let mut redacted = String::with_capacity(line.len());
+    let mut cursor = 0;
+
+    while cursor < line.len() {
+        let Some(start) =
+            find_next_absolute_path_start(line, cursor).filter(|start| *start >= cursor)
+        else {
+            redacted.push_str(&line[cursor..]);
+            break;
+        };
+        let end = absolute_path_end(line, start);
+        redacted.push_str(&line[cursor..start]);
+        redacted.push_str("<path redacted>");
+        cursor = end;
     }
 
-    if let Some(start) = find_unix_path_start(token).or_else(|| find_windows_path_start(token)) {
-        let end = token[start..]
-            .find(|ch: char| matches!(ch, '"' | '\'' | ')' | ']' | '}' | '<' | '>' | '|'))
-            .map(|offset| start + offset)
-            .unwrap_or(token.len());
-        return format!("{}<path redacted>{}", &token[..start], &token[end..]);
-    }
-
-    token.to_string()
+    redacted
 }
 
-fn find_unix_path_start(token: &str) -> Option<usize> {
-    token.match_indices('/').find_map(|(idx, _)| {
-        if idx == 0 || is_path_prefix_boundary(token.as_bytes()[idx - 1] as char) {
+fn find_next_absolute_path_start(line: &str, from: usize) -> Option<usize> {
+    find_unix_path_start(line, from)
+        .into_iter()
+        .chain(find_windows_path_start(line, from))
+        .min()
+}
+
+fn find_unix_path_start(line: &str, from: usize) -> Option<usize> {
+    line[from..].match_indices('/').find_map(|(offset, _)| {
+        let idx = from + offset;
+        if idx == 0 || is_path_prefix_boundary(line.as_bytes()[idx - 1] as char) {
             Some(idx)
         } else {
             None
@@ -859,14 +866,72 @@ fn find_unix_path_start(token: &str) -> Option<usize> {
     })
 }
 
-fn find_windows_path_start(token: &str) -> Option<usize> {
-    let bytes = token.as_bytes();
-    (0..bytes.len().saturating_sub(2)).find(|&idx| {
+fn find_windows_path_start(line: &str, from: usize) -> Option<usize> {
+    let bytes = line.as_bytes();
+    (from..bytes.len().saturating_sub(2)).find(|&idx| {
         bytes[idx].is_ascii_alphabetic()
             && bytes[idx + 1] == b':'
             && (bytes[idx + 2] == b'\\' || bytes[idx + 2] == b'/')
             && (idx == 0 || is_path_prefix_boundary(bytes[idx - 1] as char))
     })
+}
+
+fn absolute_path_end(line: &str, start: usize) -> usize {
+    let quote = start
+        .checked_sub(1)
+        .and_then(|idx| line.as_bytes().get(idx))
+        .copied()
+        .filter(|byte| matches!(byte, b'"' | b'\''));
+    if let Some(quote) = quote {
+        if let Some(offset) = line[start..].find(quote as char) {
+            return start + offset;
+        }
+    }
+
+    let mut end = token_end(line, start);
+    loop {
+        let whitespace_end = skip_whitespace(line, end);
+        if whitespace_end == end || whitespace_end >= line.len() {
+            return end;
+        }
+
+        if find_unix_path_start(line, whitespace_end) == Some(whitespace_end)
+            || find_windows_path_start(line, whitespace_end) == Some(whitespace_end)
+        {
+            return end;
+        }
+
+        let next_end = token_end(line, whitespace_end);
+        let next = &line[whitespace_end..next_end];
+        if next.contains('/') || next.contains('\\') {
+            end = next_end;
+            continue;
+        }
+        return end;
+    }
+}
+
+fn token_end(line: &str, start: usize) -> usize {
+    line[start..]
+        .char_indices()
+        .find(|(_, ch)| {
+            ch.is_whitespace() || matches!(ch, '"' | '\'' | ')' | ']' | '}' | '<' | '>' | '|')
+        })
+        .map(|(offset, ch)| {
+            if offset == 0 {
+                start + ch.len_utf8()
+            } else {
+                start + offset
+            }
+        })
+        .unwrap_or(line.len())
+}
+
+fn skip_whitespace(line: &str, start: usize) -> usize {
+    line[start..]
+        .find(|ch: char| !ch.is_whitespace())
+        .map(|offset| start + offset)
+        .unwrap_or(line.len())
 }
 
 fn redact_sensitive_assignments(line: &str) -> String {
@@ -883,64 +948,136 @@ fn redact_sensitive_assignments(line: &str) -> String {
         return line.to_string();
     }
 
-    let parts = line.split_whitespace().collect::<Vec<_>>();
-    let mut redacted = Vec::with_capacity(parts.len());
-    let mut redact_next = 0usize;
-
-    for (idx, part) in parts.iter().enumerate() {
-        if redact_next > 0 {
-            redacted.push("<redacted>".to_string());
-            redact_next -= 1;
-            continue;
-        }
-
-        let lower = part.to_lowercase();
-        if sensitive.iter().any(|key| lower.contains(key)) {
-            if let Some((key, value)) = part.split_once('=') {
-                if !value.is_empty() {
-                    redacted.push(format!("{}=<redacted>", key));
-                    continue;
-                }
-            }
-            if let Some((key, value)) = part.split_once(':') {
-                redacted.push(format!("{}:<redacted>", key));
-                if value.is_empty() {
-                    let next_is_bearer = parts
-                        .get(idx + 1)
-                        .map(|next| next.eq_ignore_ascii_case("bearer"))
-                        .unwrap_or(false);
-                    redact_next = if lower.contains("authorization") && next_is_bearer {
-                        2
-                    } else {
-                        1
-                    };
-                }
-                continue;
-            }
-
-            redacted.push("<redacted>".to_string());
-            redact_next = 1;
-            continue;
-        }
-
-        redacted.push(part.to_string());
+    let mut redacted = line.to_string();
+    for key in sensitive {
+        redacted = redact_key_values(&redacted, key);
+        redacted = redact_split_argument_values(&redacted, key);
     }
-
-    redacted.join(" ")
+    redacted
 }
 
 fn redact_ipv4_tokens(line: &str) -> String {
-    line.split_whitespace()
-        .map(|part| {
-            let trimmed = part.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
-            if trimmed.parse::<std::net::Ipv4Addr>().is_ok() {
-                part.replace(trimmed, "**.**.**.**")
-            } else {
-                part.to_string()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    let mut redacted = String::with_capacity(line.len());
+    let mut cursor = 0;
+    while cursor < line.len() {
+        let end = if line.as_bytes()[cursor].is_ascii_whitespace() {
+            skip_whitespace(line, cursor)
+        } else {
+            token_end(line, cursor)
+        };
+        let part = &line[cursor..end];
+        let trimmed = part.trim_matches(|c: char| !c.is_ascii_digit() && c != '.');
+        if trimmed.parse::<std::net::Ipv4Addr>().is_ok() {
+            redacted.push_str(&part.replace(trimmed, "**.**.**.**"));
+        } else {
+            redacted.push_str(part);
+        }
+        cursor = end;
+    }
+    redacted
+}
+
+fn redact_key_values(line: &str, key: &str) -> String {
+    let lower = line.to_lowercase();
+    let mut redacted = String::with_capacity(line.len());
+    let mut cursor = 0;
+
+    while let Some(offset) = lower[cursor..].find(key) {
+        let key_start = cursor + offset;
+        let key_end = key_start + key.len();
+        let Some((value_start, quoted)) = find_sensitive_value_start(line, key_end) else {
+            redacted.push_str(&line[cursor..key_end]);
+            cursor = key_end;
+            continue;
+        };
+        let value_end = sensitive_value_end(line, value_start, quoted);
+        redacted.push_str(&line[cursor..value_start]);
+        redacted.push_str("<redacted>");
+        cursor = value_end;
+    }
+
+    redacted.push_str(&line[cursor..]);
+    redacted
+}
+
+fn find_sensitive_value_start(line: &str, key_end: usize) -> Option<(usize, Option<u8>)> {
+    let bytes = line.as_bytes();
+    let mut idx = key_end;
+    if matches!(bytes.get(idx), Some(b'"' | b'\'')) {
+        idx += 1;
+    }
+    while matches!(bytes.get(idx), Some(b' ' | b'\t')) {
+        idx += 1;
+    }
+    if !matches!(bytes.get(idx), Some(b'=' | b':')) {
+        return None;
+    }
+    idx += 1;
+    while matches!(bytes.get(idx), Some(b' ' | b'\t')) {
+        idx += 1;
+    }
+    let quote = bytes
+        .get(idx)
+        .copied()
+        .filter(|byte| matches!(byte, b'"' | b'\''));
+    if quote.is_some() {
+        idx += 1;
+    }
+    Some((idx, quote))
+}
+
+fn sensitive_value_end(line: &str, value_start: usize, quoted: Option<u8>) -> usize {
+    if let Some(quote) = quoted {
+        return line[value_start..]
+            .find(quote as char)
+            .map(|offset| value_start + offset)
+            .unwrap_or(line.len());
+    }
+
+    let mut end = line[value_start..]
+        .find(|ch: char| ch.is_whitespace() || matches!(ch, '&' | ',' | '}' | ']'))
+        .map(|offset| value_start + offset)
+        .unwrap_or(line.len());
+
+    if line[value_start..end].eq_ignore_ascii_case("bearer") {
+        let next_start = skip_whitespace(line, end);
+        if next_start > end && next_start < line.len() {
+            end = token_end(line, next_start);
+        }
+    }
+
+    end
+}
+
+fn redact_split_argument_values(line: &str, key: &str) -> String {
+    let lower = line.to_lowercase();
+    let mut redacted = String::with_capacity(line.len());
+    let mut cursor = 0;
+
+    while let Some(offset) = lower[cursor..].find(key) {
+        let key_start = cursor + offset;
+        let key_end = key_start + key.len();
+        if key_start < 2 || &line[key_start - 2..key_start] != "--" {
+            redacted.push_str(&line[cursor..key_end]);
+            cursor = key_end;
+            continue;
+        }
+
+        let value_start = skip_whitespace(line, key_end);
+        if value_start == key_end || value_start >= line.len() {
+            redacted.push_str(&line[cursor..key_end]);
+            cursor = key_end;
+            continue;
+        }
+
+        let value_end = token_end(line, value_start);
+        redacted.push_str(&line[cursor..value_start]);
+        redacted.push_str("<redacted>");
+        cursor = value_end;
+    }
+
+    redacted.push_str(&line[cursor..]);
+    redacted
 }
 
 /// Clear the crashed flag for an instance when it successfully launches
@@ -3140,6 +3277,27 @@ mod crash_upload_tests {
         assert_eq!(redacted.matches("<path redacted>").count(), 2, "{redacted}");
         assert!(!redacted.contains("eatham"));
         assert!(!redacted.contains(".minecraft"));
+    }
+
+    #[test]
+    fn redacts_non_vesta_paths_with_spaces_without_collapsing_formatting() {
+        let raw = "prefix  path=/Users/eatham/Library/Application Support/foo.log  suffix";
+        let redacted = redact_log_content(raw);
+        assert_eq!(redacted, "prefix  path=<path redacted>  suffix");
+        assert!(!redacted.contains("eatham"));
+        assert!(!redacted.contains("Application Support"));
+    }
+
+    #[test]
+    fn redacts_structured_secret_values() {
+        let raw = r#"{"access_token":"json-secret","client_secret": "quoted-secret"} url=https://example.test/?access_token=url-secret&ok=1 Authorization: Bearer bearer-secret"#;
+        let redacted = redact_log_content(raw);
+        assert!(!redacted.contains("json-secret"));
+        assert!(!redacted.contains("quoted-secret"));
+        assert!(!redacted.contains("url-secret"));
+        assert!(!redacted.contains("Bearer"));
+        assert!(!redacted.contains("bearer-secret"));
+        assert!(redacted.contains("ok=1"));
     }
 
     #[test]

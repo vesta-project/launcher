@@ -210,7 +210,7 @@ export function CrashTab(props: {
 	const openPath = async (path?: string | null) => {
 		if (!path) return;
 		try {
-			await invoke("open_crash_report", { path });
+			await invoke("open_crash_report", { instanceIdSlug: props.instanceSlug, path });
 		} catch (error) {
 			showToast({
 				title: "Could not open file",
