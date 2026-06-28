@@ -1,6 +1,6 @@
 {
 	"productName": "Vesta Launcher",
-	"version": "0.1.0-alpha.25",
+	"version": "0.1.0-alpha.26",
 	"identifier": "com.vesta.launcher",
 	"build": {
 		"beforeDevCommand": "npm run dev",
@@ -42,7 +42,7 @@
 		"createUpdaterArtifacts": true,
 		"windows": {
 			"wix": {
-				"version": "0.1.0.25"
+				"version": "0.1.0.26"
 			}
 		},
 		"macOS": {
@@ -64,13 +64,18 @@
 		],
 		"fileAssociations": [
 			{
-				"ext": ["mrpack"],
+				"ext": [
+					"mrpack"
+				],
 				"name": "Modrinth Modpack",
 				"mimeType": "application/x-modrinth-modpack+zip",
 				"role": "Editor",
 				"exportedType": {
 					"identifier": "com.vesta.launcher.mrpack",
-					"conformsTo": ["public.zip-archive", "public.data"]
+					"conformsTo": [
+						"public.zip-archive",
+						"public.data"
+					]
 				}
 			}
 		]
