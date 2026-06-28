@@ -900,11 +900,11 @@
     backdrop-filter: var(--liquid-backdrop-filter);
     border: var(--border-width-strong) solid var(--primary);
     border-radius: 12px;
-    padding: 20px;
     display: flex;
     flex-direction: column;
     gap: 12px;
     animation: slideUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    padding: 8px;
 }
 
 @keyframes slideUp {
