@@ -75,10 +75,6 @@ pub async fn list_notifications(
     let notifications = state
         .list(only_persisted, only_unread)
         .map_err(|e| e.to_string())?;
-    // println!("list_notifications returning {} notifications", notifications.len());
-    // for n in &notifications {
-    //     println!("  - {}: type={:?}, dismissible={}, progress={:?}", n.title, n.notification_type, n.dismissible, n.progress);
-    // }
     Ok(notifications)
 }
 

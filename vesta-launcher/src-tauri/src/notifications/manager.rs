@@ -601,7 +601,7 @@ impl NotificationManager {
         let mut registry = match self.action_registry.lock() {
             Ok(registry) => registry,
             Err(e) => {
-                eprintln!("Failed to lock action registry for registration: {}", e);
+                log::error!("Failed to lock action registry for registration: {}", e);
                 return;
             }
         };
@@ -795,7 +795,6 @@ impl NotificationManager {
         severity: Option<NotificationSeverity>,
         title: Option<String>,
     ) -> Result<()> {
-        // println!("NotificationManager: Updating progress for {} to {}%", id_or_key, progress);
         let notification_opt = if let Ok(id) = id_or_key.parse::<i32>() {
             NotificationStore::get_by_id(id)?
         } else {
@@ -861,8 +860,6 @@ impl NotificationManager {
 
             self.app_handle
                 .emit("core://notification-progress", &notification)?;
-        } else {
-            // println!("NotificationManager: Notification not found for {}", id_or_key);
         }
         Ok(())
     }

@@ -147,7 +147,10 @@ mod tests {
     fn fabric_missing_api_has_structured_suspects() {
         let crash = crash_from_scenario("fabric_missing_api").expect("crash");
         assert!(crash.message.contains("fabric-api") || crash.message.contains("Fabric API"));
-        assert!(crash.suspects.iter().any(|s| s.suspect_kind == "missing_dependency"));
+        assert!(crash
+            .suspects
+            .iter()
+            .any(|s| s.suspect_kind == "missing_dependency"));
     }
 
     #[test]

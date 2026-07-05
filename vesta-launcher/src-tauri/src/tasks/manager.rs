@@ -433,7 +433,7 @@ impl TaskManager {
                             );
                         }
                         Err(e) => {
-                            eprintln!("Task execution failed: {}", e);
+                            log::error!("Task execution failed: {}", e);
 
                             // 1. Update the channel if available
                             if let Some(ref channel) = ctx.progress_channel {
@@ -700,7 +700,7 @@ impl Task for TestTask {
             let manager = app.state::<NotificationManager>();
 
             // Update notification to "Running"
-            println!("Task started: {}, client_key: {}", title, client_key);
+            log::info!("Task started: {}, client_key: {}", title, client_key);
             manager
                 .create(CreateNotificationInput {
                     client_key: Some(client_key.clone()),
@@ -742,13 +742,13 @@ impl Task for TestTask {
             while i <= steps {
                 // Check cancellation
                 if *ctx.cancel_rx.borrow() {
-                    println!("Task cancelled: {}", client_key);
+                    log::info!("Task cancelled: {}", client_key);
                     return Ok(());
                 }
 
                 // Check pause
                 if *ctx.pause_rx.borrow() {
-                    println!("Task paused: {}", client_key);
+                    log::info!("Task paused: {}", client_key);
                     // Update notification to show Resume button
                     manager
                         .update_notification_actions(
@@ -785,7 +785,7 @@ impl Task for TestTask {
                         tokio::select! {
                             _ = ctx.pause_rx.changed() => {
                                 if !*ctx.pause_rx.borrow() {
-                                    println!("Task resumed: {}", client_key);
+                                    log::info!("Task resumed: {}", client_key);
                                     // Update notification back to Pause button
                                     manager.update_notification_actions(
                                         client_key.clone(),
@@ -838,9 +838,11 @@ impl Task for TestTask {
                 }
 
                 let progress = (i * 100) / steps;
-                println!(
+                log::debug!(
                     "Task updating progress: {}%, step {}/{}",
-                    progress, i, steps
+                    progress,
+                    i,
+                    steps
                 );
                 manager
                     .update_progress(
@@ -854,7 +856,7 @@ impl Task for TestTask {
                 i += 1;
             }
 
-            println!("Task finished: {}", client_key);
+            log::info!("Task finished: {}", client_key);
             // Final update to ensure 100% and maybe change description (auto-delete by default)
             manager
                 .update_progress(

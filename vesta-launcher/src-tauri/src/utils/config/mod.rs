@@ -938,7 +938,7 @@ pub fn init_config_db() -> Result<(), anyhow::Error> {
         diesel::insert_into(app_config)
             .values(&default_config)
             .execute(&mut conn)?;
-        println!("✓ Created default configuration");
+        log::info!("Created default configuration");
     }
 
     Ok(())

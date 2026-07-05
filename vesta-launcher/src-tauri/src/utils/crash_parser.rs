@@ -306,7 +306,8 @@ fn parse_fabric_formatted_exception(log_content: &str) -> Option<FabricCrashPars
                 );
             }
 
-            if let Some((dep_id, version_clause)) = parse_missing_dependency_from_detail_line(trimmed)
+            if let Some((dep_id, version_clause)) =
+                parse_missing_dependency_from_detail_line(trimmed)
             {
                 push_unique_suspect(
                     &mut missing_deps,
@@ -333,11 +334,8 @@ fn parse_fabric_formatted_exception(log_content: &str) -> Option<FabricCrashPars
         Some(affected_mods.len() as u32)
     };
 
-    let message = build_fabric_primary_message(
-        &solution_bullets,
-        &missing_deps,
-        affected_mods.len(),
-    );
+    let message =
+        build_fabric_primary_message(&solution_bullets, &missing_deps, affected_mods.len());
 
     let single_root_cause = missing_deps.len() == 1;
 
@@ -383,7 +381,10 @@ fn build_fabric_primary_message(
     {
         format!("Install {}", bullet)
     } else if !missing_deps.is_empty() {
-        let names: Vec<String> = missing_deps.iter().map(|m| m.display_name.clone()).collect();
+        let names: Vec<String> = missing_deps
+            .iter()
+            .map(|m| m.display_name.clone())
+            .collect();
         format!("Install missing dependencies: {}", names.join(", "))
     } else {
         "Some mods are incompatible or missing dependencies.".to_string()
@@ -670,10 +671,8 @@ fn build_crash(
     log_path: Option<String>,
     confidence: f32,
 ) -> CrashDetails {
-    let suspected_resources: Vec<String> = suspects
-        .iter()
-        .map(|s| s.display_name.clone())
-        .collect();
+    let suspected_resources: Vec<String> =
+        suspects.iter().map(|s| s.display_name.clone()).collect();
 
     CrashDetails {
         crash_id: new_crash_id(),
@@ -825,12 +824,7 @@ pub fn parse_launch_log_content(log_content: &str) -> Option<CrashDetails> {
 pub fn parse_runtime_log_content(log_content: &str) -> Option<CrashDetails> {
     let game_dir = PathBuf::from("/tmp/vesta-crash-fixture");
     let log_path = game_dir.join("latest.log");
-    check_runtime_crash(
-        log_content,
-        &game_dir,
-        &log_path,
-        SystemTime::UNIX_EPOCH,
-    )
+    check_runtime_crash(log_content, &game_dir, &log_path, SystemTime::UNIX_EPOCH)
 }
 
 /// Representative JVM crash for dev simulation (no hs_err file required).
@@ -923,7 +917,11 @@ More details:
     #[test]
     fn parses_fabulously_optimized_log() {
         let crash = check_launch_crash(FABULOUSLY_OPTIMIZED_LOG, &log_path()).expect("crash");
-        assert!(crash.message.contains("fabric-api"), "message: {}", crash.message);
+        assert!(
+            crash.message.contains("fabric-api"),
+            "message: {}",
+            crash.message
+        );
         assert!(
             !crash.message.to_lowercase().contains("loader"),
             "message should not mention Loader warn: {}",
@@ -933,7 +931,8 @@ More details:
             crash
                 .suspects
                 .iter()
-                .any(|s| s.display_name == "BetterGrassify" && s.mod_id.as_deref() == Some("bettergrass")),
+                .any(|s| s.display_name == "BetterGrassify"
+                    && s.mod_id.as_deref() == Some("bettergrass")),
             "suspects: {:?}",
             crash.suspects
         );
