@@ -123,6 +123,19 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	const customRows = createMemo(() =>
 		sortedRows().filter((row: any) => !isModpackOwnedResource(row.original)),
 	);
+	const installedResourceList = createMemo(() =>
+		Array.isArray(props.installedResources.latest)
+			? props.installedResources.latest
+			: [],
+	);
+	const installedModpackResources = createMemo(() =>
+		installedResourceList().filter(isModpackOwnedResource),
+	);
+	const hasManualResources = createMemo(() =>
+		installedResourceList().some(
+			(resource: any) => !isModpackOwnedResource(resource),
+		),
+	);
 	const bundledCountLabel = createMemo(() => {
 		const noun =
 			props.resourceTypeFilter === "All"
@@ -143,6 +156,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	const [shouldMountModpackRows, setShouldMountModpackRows] =
 		createSignal(false);
 	let cancelModpackRowsWarmup: (() => void) | undefined;
+	let appliedDefaultExpansionKey = "";
 
 	const renderResourceRow = (
 		row: any,
@@ -323,6 +337,28 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			cancelModpackRowsWarmup = undefined;
 			setShouldMountModpackRows(true);
 		});
+	});
+
+	createEffect(() => {
+		if (!props.instance?.modpackId || !props.installedResources.latest) {
+			appliedDefaultExpansionKey = "";
+			return;
+		}
+
+		const key = `${props.instance?.id ?? "unknown"}:${installedResourceList()
+			.map((resource: any) => resource.id)
+			.join(",")}`;
+		if (appliedDefaultExpansionKey === key) return;
+		appliedDefaultExpansionKey = key;
+
+		const shouldExpandByDefault =
+			installedModpackResources().length > 0 && !hasManualResources();
+		if (shouldExpandByDefault) {
+			cancelModpackRowsWarmup?.();
+			cancelModpackRowsWarmup = undefined;
+			setShouldMountModpackRows(true);
+		}
+		props.setModpackExpanded(shouldExpandByDefault);
 	});
 
 	onCleanup(() => {

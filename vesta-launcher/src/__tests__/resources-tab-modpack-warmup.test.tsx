@@ -216,4 +216,86 @@ describe("ResourcesTab modpack row warm-up", () => {
 			expect(bundledRow?.getAttribute("aria-hidden")).toBeNull();
 		});
 	});
+
+	it("expands bundled modpack rows by default when there are no custom resources", async () => {
+		const rows = [
+			createRow({
+				id: 1,
+				display_name: "Bundled One",
+				current_version: "1.0.0",
+				is_enabled: true,
+				local_path: "mods/bundled-one.jar",
+				resource_type: "mod",
+				source_kind: "modpack",
+			}),
+			createRow({
+				id: 2,
+				display_name: "Bundled Two",
+				current_version: "1.0.0",
+				is_enabled: true,
+				local_path: "mods/bundled-two.jar",
+				resource_type: "mod",
+				source_kind: "modpack",
+			}),
+		];
+
+		const Harness = () => {
+			const [expanded, setExpanded] = createSignal(false);
+
+			return (
+				<ResourcesTab
+					instance={{ id: 10, name: "Test Pack", modpackId: "pack-1" }}
+					resourceTypeFilter="All"
+					setResourceTypeFilter={vi.fn()}
+					table={createTable(rows)}
+					resourcesStore={{
+						state: { selection: {} },
+						clearSelection: vi.fn(),
+						setInstance: vi.fn(),
+						setGameVersion: vi.fn(),
+						setLoader: vi.fn(),
+					}}
+					installedResources={{
+						latest: rows.map((row) => row.original),
+						loading: false,
+					}}
+					modpackResources={rows.map((row) => row.original)}
+					modpackIcon={() => null}
+					modpackExpanded={expanded()}
+					setModpackExpanded={setExpanded}
+					currentModpackVersion={null}
+					availableModpackUpdate={null}
+					router={null}
+					handleBatchUpdate={vi.fn()}
+					handleBatchDelete={vi.fn()}
+					onManageModpackVersions={vi.fn()}
+					onUnlinkModpack={vi.fn()}
+					onDeleteModpackAndUnlink={vi.fn()}
+					onRowClick={vi.fn()}
+					resourceSearch=""
+					setResourceSearch={vi.fn()}
+					selectedToUpdateCount={0}
+					busy={false}
+					checkingUpdates={false}
+					checkUpdates={vi.fn()}
+				/>
+			);
+		};
+
+		render(() => <Harness />);
+
+		await waitFor(() => {
+			const bundledRow = screen.getByText("Bundled One").closest("tr");
+			expect(bundledRow?.hasAttribute("hidden")).toBe(false);
+			expect(bundledRow?.getAttribute("aria-hidden")).toBeNull();
+		});
+
+		expect(screen.getByText("Bundled Two")).toBeTruthy();
+		expect(
+			screen
+				.getByText("2 bundled resources")
+				.closest("tr")
+				?.getAttribute("aria-expanded"),
+		).toBe("true");
+	});
 });
