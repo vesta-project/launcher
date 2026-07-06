@@ -30,19 +30,21 @@ export function useModpackIcon(
 		},
 		async (modpackRef) => {
 			if (!modpackRef) return null;
-			if (modpackRef.cachedUrl) return modpackRef.cachedUrl;
 
 			try {
-				const records: Array<{ icon_data?: number[] }> = await invoke(
-					"get_or_hydrate_resource_projects",
-					{
-						refs: [{ platform: modpackRef.platform, id: modpackRef.id }],
-						allowNetwork: true,
-						refreshStale: false,
-					},
-				);
+				const records: Array<{
+					icon_data?: number[];
+					icon_url?: string | null;
+				}> = await invoke("get_or_hydrate_resource_projects", {
+					refs: [{ platform: modpackRef.platform, id: modpackRef.id }],
+					allowNetwork: true,
+					refreshStale: false,
+				});
 
 				const record = records[0];
+				if (record?.icon_url?.startsWith("data:")) {
+					return record.icon_url;
+				}
 				if (!record?.icon_data) return null;
 
 				const blob = new Blob([new Uint8Array(record.icon_data)]);
@@ -59,5 +61,19 @@ export function useModpackIcon(
 		},
 	);
 
-	return () => hydratedIcon() ?? source()?.modpackIconUrl ?? null;
+	return () => {
+		const current = source();
+		if (!current?.modpackId || !current?.modpackPlatform) {
+			return current?.modpackIconUrl ?? null;
+		}
+
+		const platform = current.modpackPlatform.toLowerCase();
+		if (platform !== "modrinth" && platform !== "curseforge") {
+			return current.modpackIconUrl ?? null;
+		}
+
+		return (
+			hydratedIcon() ?? (hydratedIcon.loading ? null : current.modpackIconUrl)
+		);
+	};
 }

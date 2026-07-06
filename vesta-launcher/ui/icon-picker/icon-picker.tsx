@@ -9,7 +9,7 @@ import type { ClassProp } from "@ui/props";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS, getStableIconId } from "@utils/instances";
 import { clsx } from "clsx";
-import { createSignal, For, Show, splitProps } from "solid-js";
+import { createMemo, createSignal, For, Show, splitProps } from "solid-js";
 import styles from "./icon-picker.module.css";
 
 /**
@@ -44,8 +44,6 @@ interface IconPickerProps extends ClassProp {
 	uploadedIcons?: string[];
 	/** Icon that should be marked as a modpack icon with a badge */
 	modpackIcon?: string | null;
-	/** Whether the modpack icon should be shown as selected even if value doesn't match exactly */
-	isSuggestedSelected?: boolean;
 	/** Props to pass to the trigger button */
 	triggerProps?: any;
 	/** Whether to allow custom image upload (default: true) */
@@ -54,6 +52,12 @@ interface IconPickerProps extends ClassProp {
 	showHint?: boolean;
 }
 
+type IconOption = {
+	icon: string;
+	kind: "uploaded" | "default";
+	isModpackOption: boolean;
+};
+
 export function IconPicker(props: IconPickerProps) {
 	const [local] = splitProps(props, [
 		"class",
@@ -61,7 +65,6 @@ export function IconPicker(props: IconPickerProps) {
 		"onSelect",
 		"uploadedIcons",
 		"modpackIcon",
-		"isSuggestedSelected",
 		"triggerProps",
 		"allowUpload",
 		"showHint",
@@ -69,21 +72,62 @@ export function IconPicker(props: IconPickerProps) {
 
 	const handleOpenChange = (open: boolean) => {
 		setIsOpen(open);
-		console.log("IconPicker popover", open ? "opened" : "closed");
-		console.log("IconPicker state:", {
-			value: local.value?.substring(0, 50),
-			modpackIcon: local.modpackIcon?.substring(0, 50),
-			isSuggestedSelected: local.isSuggestedSelected,
-			uploadedIconsCount: local.uploadedIcons?.length,
-		});
 	};
 
 	const [isOpen, setIsOpen] = createSignal(false);
 
+	const iconOptions = createMemo<IconOption[]>(() => {
+		const options: IconOption[] = [];
+
+		const addOption = (
+			icon: string | null | undefined,
+			kind: IconOption["kind"],
+		) => {
+			if (!icon) return;
+			const isModpackOption = areIconsEqual(icon, local.modpackIcon);
+			const duplicateIndex = options.findIndex((option) =>
+				areIconsEqual(option.icon, icon),
+			);
+
+			if (duplicateIndex === -1) {
+				options.push({ icon, kind, isModpackOption });
+				return;
+			}
+
+			const existing = options[duplicateIndex];
+			const shouldReplace =
+				areIconsEqual(local.value, icon) &&
+				!areIconsEqual(local.value, existing.icon);
+			if (shouldReplace || (isModpackOption && !existing.isModpackOption)) {
+				options[duplicateIndex] = {
+					icon: shouldReplace ? icon : existing.icon,
+					kind: shouldReplace ? kind : existing.kind,
+					isModpackOption: existing.isModpackOption || isModpackOption,
+				};
+			}
+		};
+
+		for (const icon of local.uploadedIcons || []) {
+			addOption(icon, "uploaded");
+		}
+
+		if (
+			local.modpackIcon &&
+			!DEFAULT_ICONS.some((icon) => areIconsEqual(icon, local.modpackIcon))
+		) {
+			addOption(local.modpackIcon, "uploaded");
+		}
+
+		for (const icon of DEFAULT_ICONS) {
+			addOption(icon, "default");
+		}
+
+		return options;
+	});
+
 	const totalIcons = () => {
-		const uploaded = (local.uploadedIcons || []).length;
 		const uploadBtn = local.allowUpload !== false ? 1 : 0;
-		return uploaded + DEFAULT_ICONS.length + uploadBtn;
+		return iconOptions().length + uploadBtn;
 	};
 
 	const gridColumns = () => Math.min(4, totalIcons());
@@ -135,7 +179,6 @@ export function IconPicker(props: IconPickerProps) {
 						ctx.drawImage(img, 0, 0, width, height);
 						const compressedBase64 = canvas.toDataURL("image/png");
 						local.onSelect?.(compressedBase64);
-						console.log("Icon uploaded:", compressedBase64);
 					}
 				};
 				img.src = event.target?.result as string;
@@ -187,9 +230,7 @@ export function IconPicker(props: IconPickerProps) {
 					</Show>
 					<Show
 						when={
-							local.modpackIcon &&
-							(areIconsEqual(local.value, local.modpackIcon) ||
-								local.isSuggestedSelected)
+							local.modpackIcon && areIconsEqual(local.value, local.modpackIcon)
 						}
 					>
 						<div class={styles["icon-picker__trigger-badge"]}>
@@ -215,7 +256,6 @@ export function IconPicker(props: IconPickerProps) {
 								)}
 								onClick={(e) => {
 									e.stopPropagation();
-									console.log("Upload button clicked");
 									handleFileUpload();
 								}}
 							>
@@ -231,30 +271,25 @@ export function IconPicker(props: IconPickerProps) {
 							</PopoverCloseButton>
 						</Show>
 
-						<For each={local.uploadedIcons || []}>
-							{(icon) => {
-								const isSelected =
-									areIconsEqual(local.value, icon) ||
-									(areIconsEqual(icon, local.modpackIcon) &&
-										local.isSuggestedSelected);
-								console.log("IconPicker uploaded icon:", {
-									icon: icon?.substring(0, 30) + "...",
-									isValueMatch: areIconsEqual(local.value, icon),
-									isModpackMatch: areIconsEqual(icon, local.modpackIcon),
-									isSuggestedSelected: local.isSuggestedSelected,
-									isSelected: isSelected,
-								});
+						<For each={iconOptions()}>
+							{(option) => {
+								const isSelected = areIconsEqual(local.value, option.icon);
 								return (
 									<PopoverCloseButton
+										aria-label={`${option.kind} icon option`}
+										data-icon-option={option.kind}
+										data-modpack-option={
+											option.isModpackOption ? "true" : "false"
+										}
+										data-selected={isSelected ? "true" : "false"}
 										class={clsx(
 											styles["icon-picker__option"],
 											isSelected && styles["icon-picker__option--selected"],
 										)}
-										style={getIconStyle(icon)}
+										style={getIconStyle(option.icon)}
 										onClick={() => {
-											const stableId = getStableIconId(icon);
-											local.onSelect?.(stableId || icon);
-											console.log("Uploaded Icon selected:", stableId);
+											const stableId = getStableIconId(option.icon);
+											local.onSelect?.(stableId || option.icon);
 										}}
 									>
 										<Show when={isSelected}>
@@ -274,53 +309,7 @@ export function IconPicker(props: IconPickerProps) {
 												/>
 											</svg>
 										</Show>
-										<Show when={areIconsEqual(icon, local.modpackIcon)}>
-											<div class={styles["icon-picker__option-badge"]}>
-												<CubeIcon fill="currentColor" width="12" height="12" />
-											</div>
-										</Show>
-									</PopoverCloseButton>
-								);
-							}}
-						</For>
-
-						<For each={DEFAULT_ICONS}>
-							{(icon) => {
-								const isSelected =
-									areIconsEqual(local.value, icon) ||
-									(areIconsEqual(icon, local.modpackIcon) &&
-										local.isSuggestedSelected);
-								return (
-									<PopoverCloseButton
-										class={clsx(
-											styles["icon-picker__option"],
-											isSelected && styles["icon-picker__option--selected"],
-										)}
-										style={getIconStyle(icon)}
-										onClick={() => {
-											const stableId = getStableIconId(icon);
-											local.onSelect?.(stableId || icon);
-											console.log("Default Icon selected:", stableId);
-										}}
-									>
-										<Show when={isSelected}>
-											<svg
-												class={styles["icon-picker__tick"]}
-												width="20"
-												height="20"
-												viewBox="0 0 24 24"
-												fill="none"
-											>
-												<path
-													d="M20 6L9 17L4 12"
-													stroke="white"
-													stroke-width="3"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-												/>
-											</svg>
-										</Show>
-										<Show when={areIconsEqual(icon, local.modpackIcon)}>
+										<Show when={option.isModpackOption}>
 											<div class={styles["icon-picker__option-badge"]}>
 												<CubeIcon fill="currentColor" width="12" height="12" />
 											</div>

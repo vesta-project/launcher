@@ -52,7 +52,6 @@ interface SettingsTabProps {
 	setIsIconDirty: (v: boolean) => void;
 	uploadedIcons: () => string[];
 	modpackIcon: () => string | null;
-	isSuggestedSelected: () => boolean;
 	isInstalling: boolean;
 	jreOptions: () => any[];
 	javaPath: string;
@@ -174,7 +173,6 @@ export const SettingsTab = (p: SettingsTabProps) => {
 							}}
 							uploadedIcons={p.uploadedIcons()}
 							modpackIcon={p.modpackIcon()}
-							isSuggestedSelected={p.isSuggestedSelected()}
 							showHint={true}
 						/>
 					</div>

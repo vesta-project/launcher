@@ -960,10 +960,6 @@ export function InstallForm(props: InstallFormProps) {
 											? suggestedModpackIcon()
 											: undefined
 									}
-									isSuggestedSelected={
-										!!suggestedModpackIcon() &&
-										areIconsEqual(icon(), suggestedModpackIcon())
-									}
 									uploadedIcons={uploadedIcons()}
 									showHint={!isIconDirty()}
 									triggerProps={{

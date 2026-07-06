@@ -672,12 +672,6 @@ export default function InstanceDetails(
 		const originalIcon = inst?.iconPath;
 		const modpackIcon = modpackIconBase64();
 
-		console.log(
-			"[InstanceDetails] uploadedIcons - session icons:",
-			result.length,
-			result.map((icon) => icon?.substring(0, 30) + "..."),
-		);
-
 		// Add current icon if it's not a default, not the original, not the modpack icon, and not already in the list
 		if (
 			current &&
@@ -687,7 +681,6 @@ export default function InstanceDetails(
 			!result.some((icon) => areIconsEqual(icon, current))
 		) {
 			result = [current, ...result];
-			console.log("[InstanceDetails] uploadedIcons - added current icon");
 		}
 
 		// Always add modpack icon first if it exists (regardless of session filtering)
@@ -696,20 +689,8 @@ export default function InstanceDetails(
 			result = result.filter((icon) => !areIconsEqual(icon, modpackIcon));
 			// Add at the beginning
 			result = [modpackIcon, ...result];
-			console.log(
-				"[InstanceDetails] uploadedIcons - ensured modpack icon is first",
-			);
 		}
 
-		console.log(
-			"[InstanceDetails] uploadedIcons - final result:",
-			result.length,
-			result.map((icon) => icon?.substring(0, 30) + "..."),
-		);
-		console.log(
-			"[InstanceDetails] uploadedIcons - modpackIcon count:",
-			result.filter((icon) => icon === modpackIcon).length,
-		);
 		return result;
 	});
 
@@ -717,27 +698,9 @@ export default function InstanceDetails(
 	createEffect(() => {
 		const current = iconPath();
 		const modpackIcon = modpackIconBase64();
-		console.log(
-			"[InstanceDetails] createEffect - current:",
-			current?.substring(0, 50),
-			"modpackIcon:",
-			modpackIcon?.substring(0, 50),
-		);
 		setCustomIconsThisSession((prev) => {
-			console.log(
-				"[InstanceDetails] createEffect - processing session icons. prev:",
-				prev.map((icon) => icon?.substring(0, 30) + "..."),
-			);
 			// Start with previous icons, filtering out any that are now known to be modpack icons
 			let filtered = prev.filter((icon) => !areIconsEqual(icon, modpackIcon));
-			const modpackRemoved = prev.length - filtered.length;
-			if (modpackRemoved > 0) {
-				console.log(
-					"[InstanceDetails] createEffect - removed",
-					modpackRemoved,
-					"modpack icons from session",
-				);
-			}
 			// Also filter out the current icon if it's now known to be the modpack icon (different format)
 			let currentIsModpackEquivalent = false;
 			if (
@@ -753,11 +716,6 @@ export default function InstanceDetails(
 				filtered = filtered.filter((icon) => !areIconsEqual(icon, current));
 				currentIsModpackEquivalent = beforeFilter > filtered.length;
 			}
-			console.log(
-				"[InstanceDetails] createEffect - after filtering:",
-				filtered.length,
-				"icons",
-			);
 			// Add current icon if it's not a default, not the modpack icon, not equivalent to modpack icon, and not already in the filtered list
 			if (
 				current &&
@@ -767,14 +725,7 @@ export default function InstanceDetails(
 				!filtered.some((icon) => areIconsEqual(icon, current))
 			) {
 				filtered = [current, ...filtered];
-				console.log(
-					"[InstanceDetails] createEffect - added current icon to session",
-				);
 			}
-			console.log(
-				"[InstanceDetails] createEffect - final session icons:",
-				filtered.length,
-			);
 			return filtered;
 		});
 	});
@@ -2822,9 +2773,6 @@ export default function InstanceDetails(
 												setIsIconDirty={setIsIconDirty}
 												uploadedIcons={uploadedIcons}
 												modpackIcon={() => modpackIconBase64() || null}
-												isSuggestedSelected={() =>
-													areIconsEqual(modpackIconBase64(), iconPath())
-												}
 												isInstalling={isInstalling()}
 												jreOptions={jreOptions}
 												javaPath={javaPath()}
