@@ -8,7 +8,8 @@ export const ONBOARDING_STEP = {
 	COMPLETE: 6,
 } as const;
 
-export type OnboardingStep = (typeof ONBOARDING_STEP)[keyof typeof ONBOARDING_STEP];
+export type OnboardingStep =
+	(typeof ONBOARDING_STEP)[keyof typeof ONBOARDING_STEP];
 
 const MIN_STEP = ONBOARDING_STEP.SPLASH;
 const MAX_STEP = ONBOARDING_STEP.COMPLETE;
@@ -39,7 +40,9 @@ export function getNextOnboardingStep(step: OnboardingStep): OnboardingStep {
 	return next;
 }
 
-export function getPreviousOnboardingStep(step: OnboardingStep): OnboardingStep {
+export function getPreviousOnboardingStep(
+	step: OnboardingStep,
+): OnboardingStep {
 	if (step <= MIN_STEP) {
 		return MIN_STEP;
 	}
@@ -79,7 +82,9 @@ interface OnboardingAccountLike {
 }
 
 export function isGuestOrDemoAccountType(accountType?: string | null): boolean {
-	const normalized = String(accountType || "").trim().toLowerCase();
+	const normalized = String(accountType || "")
+		.trim()
+		.toLowerCase();
 	return normalized === "guest" || normalized === "demo";
 }
 

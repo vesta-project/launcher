@@ -12,7 +12,6 @@ pub struct MojangNewsProvider;
 
 #[derive(Debug, Deserialize)]
 struct MojangNewsResponse {
-    version: i32,
     entries: Vec<MojangNewsEntry>,
 }
 

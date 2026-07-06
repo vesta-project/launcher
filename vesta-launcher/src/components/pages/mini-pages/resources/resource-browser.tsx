@@ -1,7 +1,7 @@
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { type Instance, instancesState } from "@stores/instances";
-import { resources } from "@stores/resources";
+import { findBestVersion, resources } from "@stores/resources";
 import {
 	Pagination,
 	PaginationEllipsis,
@@ -10,12 +10,19 @@ import {
 	PaginationNext,
 	PaginationPrevious,
 } from "@ui/pagination/pagination";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
+import { showToast } from "@ui/toast/toast";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
-	Component,
+	type Component,
 	createEffect,
 	createMemo,
 	createSignal,
@@ -72,11 +79,12 @@ const ResourceBrowser: Component<{
 	const activeRouter = createMemo(() => props.router || router());
 	let debounceTimer: number | undefined;
 	const [isInstanceDialogOpen, setIsInstanceDialogOpen] = createSignal(false);
-	let lastWidth = window.innerWidth;
 	let isInitializedFromProps = false;
 
 	const currentSortOptions = createMemo(
-		() => SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] || [],
+		() =>
+			SORT_OPTIONS[resources.state.activeSource as keyof typeof SORT_OPTIONS] ||
+			[],
 	);
 
 	createEffect(() => {
@@ -95,21 +103,20 @@ const ResourceBrowser: Component<{
 
 		try {
 			const finalVersions =
-				versions.length > 0 ? versions : await resources.getVersions(project.source, project.id);
-			const bestVersion = await import("@stores/resources").then((m) =>
-				m.findBestVersion(
-					finalVersions,
-					instance.minecraftVersion,
-					instance.modloader,
-					"release",
-					project.resource_type,
-				),
+				versions.length > 0
+					? versions
+					: await resources.getVersions(project.source, project.id);
+			const bestVersion = findBestVersion(
+				finalVersions,
+				instance.minecraftVersion,
+				instance.modloader,
+				"release",
+				project.resource_type,
 			);
 
 			if (bestVersion) {
 				await resources.install(project, bestVersion, instance.id);
 			} else {
-				const { showToast } = await import("@ui/toast/toast");
 				showToast({
 					title: "No compatible version",
 					description: `Could not find a version for ${instance.minecraftVersion} with ${instance.modloader || "no loader"}.`,
@@ -117,7 +124,6 @@ const ResourceBrowser: Component<{
 				});
 			}
 		} catch (err) {
-			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Installation failed",
 				description: err instanceof Error ? err.message : String(err),
@@ -157,12 +163,15 @@ const ResourceBrowser: Component<{
 				initialMinecraftVersion: resources.state.gameVersion || undefined,
 				initialModloader: resources.state.loader || undefined,
 				modpackUrl:
-					project.resource_type === "modpack" ? versions[0]?.download_url || undefined : undefined,
+					project.resource_type === "modpack"
+						? versions[0]?.download_url || undefined
+						: undefined,
 			},
 			prefilledModpackInfo
 				? {
 						prefilledModpackInfo,
-						prefetchedModpackVersions: versions.length > 0 ? versions : undefined,
+						prefetchedModpackVersions:
+							versions.length > 0 ? versions : undefined,
 					}
 				: {
 						pendingResourceProject: project,
@@ -209,11 +218,15 @@ const ResourceBrowser: Component<{
 				isInitializedFromProps = true;
 			}
 			if (props.gameVersion !== undefined) {
-				resources.setGameVersion(props.gameVersion === "All versions" ? null : props.gameVersion);
+				resources.setGameVersion(
+					props.gameVersion === "All versions" ? null : props.gameVersion,
+				);
 				isInitializedFromProps = true;
 			}
 			if (props.loader !== undefined) {
-				resources.setLoader(props.loader === "All Loaders" ? null : props.loader);
+				resources.setLoader(
+					props.loader === "All Loaders" ? null : props.loader,
+				);
 				isInitializedFromProps = true;
 			}
 			if (props.activeSource !== undefined) {
@@ -228,7 +241,10 @@ const ResourceBrowser: Component<{
 				resources.setSortOrder(props.sortOrder as any);
 				isInitializedFromProps = true;
 			}
-			if (props.showFilters !== undefined && props.showFilters !== resources.state.showFilters) {
+			if (
+				props.showFilters !== undefined &&
+				props.showFilters !== resources.state.showFilters
+			) {
 				resources.toggleFilters();
 				isInitializedFromProps = true;
 			}
@@ -238,7 +254,9 @@ const ResourceBrowser: Component<{
 			}
 			if (props.selectedInstanceId !== undefined) {
 				resources.setInstance(
-					props.selectedInstanceId ? parseInt(props.selectedInstanceId as any) : null,
+					props.selectedInstanceId
+						? parseInt(props.selectedInstanceId as any)
+						: null,
 				);
 				isInitializedFromProps = true;
 			}
@@ -282,14 +300,6 @@ const ResourceBrowser: Component<{
 				await resources.search();
 			});
 		}
-
-		const handleResize = () => {
-			const width = window.innerWidth;
-			lastWidth = width;
-		};
-		handleResize();
-		window.addEventListener("resize", handleResize);
-		onCleanup(() => window.removeEventListener("resize", handleResize));
 
 		if (resources.state.selectedInstanceId) {
 			resources.fetchInstalled(resources.state.selectedInstanceId);
@@ -346,8 +356,10 @@ const ResourceBrowser: Component<{
 		});
 	});
 
-	const currentPage = () => Math.floor(resources.state.offset / resources.state.limit) + 1;
-	const totalPages = () => Math.ceil(resources.state.totalHits / resources.state.limit);
+	const currentPage = () =>
+		Math.floor(resources.state.offset / resources.state.limit) + 1;
+	const totalPages = () =>
+		Math.ceil(resources.state.totalHits / resources.state.limit);
 
 	return (
 		<div class={styles["resource-browser"]}>
@@ -370,7 +382,9 @@ const ResourceBrowser: Component<{
 							options={[20, 50, 100]}
 							value={resources.state.limit}
 							onChange={(v: number | null) => resources.setLimit(v || 20)}
-							itemComponent={(p) => <SelectItem item={p.item}>{p.item.rawValue}</SelectItem>}
+							itemComponent={(p) => (
+								<SelectItem item={p.item}>{p.item.rawValue}</SelectItem>
+							)}
 						>
 							<SelectTrigger class={styles["limit-select-trigger"]}>
 								<SelectValue<number>>{(s) => s.selectedOption()}</SelectValue>
@@ -386,8 +400,9 @@ const ResourceBrowser: Component<{
 							optionValue="value"
 							optionTextValue="label"
 							value={
-								currentSortOptions().find((o) => o.value === resources.state.sortBy) ||
-								currentSortOptions()[0]
+								currentSortOptions().find(
+									(o) => o.value === resources.state.sortBy,
+								) || currentSortOptions()[0]
 							}
 							onChange={(val) => {
 								if (!val) return;
@@ -398,10 +413,14 @@ const ResourceBrowser: Component<{
 									activeRouter()?.updateQuery("sortBy", sval);
 								});
 							}}
-							itemComponent={(p) => <SelectItem item={p.item}>{p.item.rawValue.label}</SelectItem>}
+							itemComponent={(p) => (
+								<SelectItem item={p.item}>{p.item.rawValue.label}</SelectItem>
+							)}
 						>
 							<SelectTrigger class={styles["sort-select-trigger"]}>
-								<SelectValue<any>>{(s) => s.selectedOption()?.label || "Sort By..."}</SelectValue>
+								<SelectValue<any>>
+									{(s) => s.selectedOption()?.label || "Sort By..."}
+								</SelectValue>
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
@@ -413,7 +432,9 @@ const ResourceBrowser: Component<{
 								resources.toggleSortOrder();
 								resources.setOffset(0);
 							}}
-							title={resources.state.sortOrder === "asc" ? "Ascending" : "Descending"}
+							title={
+								resources.state.sortOrder === "asc" ? "Ascending" : "Descending"
+							}
 						>
 							{resources.state.sortOrder === "asc" ? "↑" : "↓"}
 						</button>
@@ -422,7 +443,9 @@ const ResourceBrowser: Component<{
 					<div class={styles["view-toggle"]}>
 						<button
 							class={styles["view-btn"]}
-							classList={{ [styles.active]: resources.state.viewMode === "list" }}
+							classList={{
+								[styles.active]: resources.state.viewMode === "list",
+							}}
 							onClick={() => resources.setViewMode("list")}
 							title="List View"
 						>
@@ -447,7 +470,9 @@ const ResourceBrowser: Component<{
 						</button>
 						<button
 							class={styles["view-btn"]}
-							classList={{ [styles.active]: resources.state.viewMode === "grid" }}
+							classList={{
+								[styles.active]: resources.state.viewMode === "grid",
+							}}
 							onClick={() => resources.setViewMode("grid")}
 							title="Grid View"
 						>
@@ -473,13 +498,20 @@ const ResourceBrowser: Component<{
 			</div>
 
 			<Show when={resources.state.searchWarning}>
-				<div class={styles["resource-warning"]}>{resources.state.searchWarning}</div>
+				<div class={styles["resource-warning"]}>
+					{resources.state.searchWarning}
+				</div>
 			</Show>
 
 			<div class={styles["resource-results"]}>
 				<Show
 					when={!resources.state.loading}
-					fallback={<ResourceSkeletonGrid count={6} viewMode={resources.state.viewMode} />}
+					fallback={
+						<ResourceSkeletonGrid
+							count={6}
+							viewMode={resources.state.viewMode}
+						/>
+					}
 				>
 					<Show
 						when={!resources.state.searchError}
@@ -502,7 +534,10 @@ const ResourceBrowser: Component<{
 								</svg>
 								<h3>Search failed</h3>
 								<p>{resources.state.searchError}</p>
-								<button class={styles["empty-state-action"]} onClick={() => resources.search()}>
+								<button
+									class={styles["empty-state-action"]}
+									onClick={() => resources.search()}
+								>
 									Try Again
 								</button>
 							</div>
@@ -550,7 +585,9 @@ const ResourceBrowser: Component<{
 						>
 							<div
 								class={
-									resources.state.viewMode === "grid" ? styles["resource-grid"] : styles["resource-list"]
+									resources.state.viewMode === "grid"
+										? styles["resource-grid"]
+										: styles["resource-list"]
 								}
 							>
 								<For each={resources.state.results}>
@@ -572,15 +609,26 @@ const ResourceBrowser: Component<{
 										onPageChange={resources.setPage}
 										class={styles.pagination}
 										itemComponent={(p) => (
-											<PaginationItem page={p.page} class={styles["pagination-item"]}>
+											<PaginationItem
+												page={p.page}
+												class={styles["pagination-item"]}
+											>
 												{p.page}
 											</PaginationItem>
 										)}
-										ellipsisComponent={() => <PaginationEllipsis class={styles["pagination-ellipsis"]} />}
+										ellipsisComponent={() => (
+											<PaginationEllipsis
+												class={styles["pagination-ellipsis"]}
+											/>
+										)}
 									>
-										<PaginationPrevious class={styles["pagination-prev"]}>Prev</PaginationPrevious>
+										<PaginationPrevious class={styles["pagination-prev"]}>
+											Prev
+										</PaginationPrevious>
 										<PaginationItems />
-										<PaginationNext class={styles["pagination-next"]}>Next</PaginationNext>
+										<PaginationNext class={styles["pagination-next"]}>
+											Next
+										</PaginationNext>
 									</Pagination>
 								</div>
 							</Show>

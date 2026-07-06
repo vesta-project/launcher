@@ -11,7 +11,13 @@ import {
 	ContextMenuTrigger,
 } from "@ui/context-menu/context-menu";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
 import { ToggleGroup, ToggleGroupItem } from "@ui/toggle-group/toggle-group";
 import { formatDate } from "@utils/date";
@@ -31,8 +37,11 @@ interface ScreenshotsTabProps {
 
 export function ScreenshotsTab(props: ScreenshotsTabProps) {
 	const [viewMode, setViewMode] = createSignal<"grid" | "list">("grid");
-	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">("newest");
-	const [selectedScreenshot, setSelectedScreenshot] = createSignal<Screenshot | null>(null);
+	const [sortBy, setSortBy] = createSignal<"newest" | "oldest" | "name">(
+		"newest",
+	);
+	const [selectedScreenshot, setSelectedScreenshot] =
+		createSignal<Screenshot | null>(null);
 
 	const [screenshots, { mutate, refetch }] = createResource(
 		() => props.instanceIdSlug,
@@ -78,7 +87,9 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 
 		try {
 			await invoke("delete_screenshot", { path: screenshot.path });
-			mutate((prev) => (prev ? prev.filter((s) => s.path !== screenshot.path) : []));
+			mutate((prev) =>
+				prev ? prev.filter((s) => s.path !== screenshot.path) : [],
+			);
 			showToast({
 				title: "Deleted",
 				description: "Screenshot removed.",
@@ -192,13 +203,21 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 						</SelectTrigger>
 						<SelectContent />
 					</Select>
-					<Button variant="slate" size="sm" icon_only={true} onClick={refetch} title="Refresh screenshots">
+					<Button
+						variant="slate"
+						size="sm"
+						icon_only={true}
+						onClick={refetch}
+						title="Refresh screenshots"
+					>
 						<RefreshIcon />
 					</Button>
 				</div>
 			</div>
 
-			<Suspense fallback={<div class={styles.loading}>Loading screenshots...</div>}>
+			<Suspense
+				fallback={<div class={styles.loading}>Loading screenshots...</div>}
+			>
 				<Show
 					when={(screenshots()?.length ?? 0) > 0}
 					fallback={
@@ -213,16 +232,26 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 								<ContextMenu>
 									<ContextMenuTrigger>
 										<div
-											class={viewMode() === "grid" ? styles.gridItem : styles.listItem}
+											class={
+												viewMode() === "grid"
+													? styles.gridItem
+													: styles.listItem
+											}
 											onClick={() => setSelectedScreenshot(screenshot)}
 										>
 											<div class={styles.preview}>
-												<img src={convertFileSrc(screenshot.path)} alt={screenshot.name} loading="lazy" />
+												<img
+													src={convertFileSrc(screenshot.path)}
+													alt={screenshot.name}
+													loading="lazy"
+												/>
 											</div>
 											<div class={styles.details}>
 												<span class={styles.name}>{screenshot.name}</span>
 												<span class={styles.date}>
-													{formatDate(new Date(screenshot.createdAt * 1000).toISOString())}
+													{formatDate(
+														new Date(screenshot.createdAt * 1000).toISOString(),
+													)}
 												</span>
 											</div>
 										</div>
@@ -238,7 +267,10 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 												<FolderIcon /> Open in Folder
 											</div>
 										</ContextMenuItem>
-										<ContextMenuItem class={styles.deleteAction} onClick={() => handleDelete(screenshot)}>
+										<ContextMenuItem
+											class={styles.deleteAction}
+											onClick={() => handleDelete(screenshot)}
+										>
 											<div class={styles.menuItem}>
 												<TrashIcon /> Delete
 											</div>
@@ -264,20 +296,28 @@ export function ScreenshotsTab(props: ScreenshotsTabProps) {
 				title={selectedScreenshot()?.name}
 				date={(() => {
 					const s = selectedScreenshot();
-					return s ? formatDate(new Date(s.createdAt * 1000).toISOString()) : undefined;
+					return s
+						? formatDate(new Date(s.createdAt * 1000).toISOString())
+						: undefined;
 				})()}
 				onClose={() => setSelectedScreenshot(null)}
 				onCopy={(src) => {
 					// Map back to original screenshot object if needed
-					const s = screenshots()?.find((ss) => convertFileSrc(ss.path) === src);
+					const s = screenshots()?.find(
+						(ss) => convertFileSrc(ss.path) === src,
+					);
 					if (s) handleCopy(s);
 				}}
 				onOpenFolder={(src) => {
-					const s = screenshots()?.find((ss) => convertFileSrc(ss.path) === src);
+					const s = screenshots()?.find(
+						(ss) => convertFileSrc(ss.path) === src,
+					);
 					if (s) openInFolder(s);
 				}}
 				onDelete={(src) => {
-					const s = screenshots()?.find((ss) => convertFileSrc(ss.path) === src);
+					const s = screenshots()?.find(
+						(ss) => convertFileSrc(ss.path) === src,
+					);
 					if (s) {
 						handleDelete(s).then(() => {
 							// If it was the only one, close

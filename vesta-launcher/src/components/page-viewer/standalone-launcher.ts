@@ -5,7 +5,9 @@ function serializeRecord(rec: Record<string, unknown> | undefined) {
 	if (!rec) return {};
 	return Object.fromEntries(
 		Object.entries(rec)
-			.filter(([key]) => key !== "router" && key !== "close" && key !== "setRefetch")
+			.filter(
+				([key]) => key !== "router" && key !== "close" && key !== "setRefetch",
+			)
 			.map(([key, value]) => [
 				key,
 				typeof value === "object" ? JSON.stringify(value) : String(value),

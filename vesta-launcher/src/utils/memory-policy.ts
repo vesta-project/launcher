@@ -38,11 +38,17 @@ export const MOD_COUNT_MEMORY_TIERS: MemoryRecommendationTier[] = [
 ];
 
 export function roundDownToMemoryStep(valueMb: number): number {
-	return Math.max(MEMORY_STEP_MB, Math.floor(valueMb / MEMORY_STEP_MB) * MEMORY_STEP_MB);
+	return Math.max(
+		MEMORY_STEP_MB,
+		Math.floor(valueMb / MEMORY_STEP_MB) * MEMORY_STEP_MB,
+	);
 }
 
 export function roundToNearestMemoryStep(valueMb: number): number {
-	return Math.max(MEMORY_STEP_MB, Math.round(valueMb / MEMORY_STEP_MB) * MEMORY_STEP_MB);
+	return Math.max(
+		MEMORY_STEP_MB,
+		Math.round(valueMb / MEMORY_STEP_MB) * MEMORY_STEP_MB,
+	);
 }
 
 export function getDynamicPreferredMaxMemoryMb(systemRamMb: number): number {
@@ -59,23 +65,32 @@ function reservedGeneratedMemoryMb(systemRamMb: number): number {
 }
 
 export function getGeneratedMemoryLimitMb(systemRamMb: number): number {
-	if (!Number.isFinite(systemRamMb) || systemRamMb <= 0) return MAX_GENERATED_MEMORY_MB;
+	if (!Number.isFinite(systemRamMb) || systemRamMb <= 0)
+		return MAX_GENERATED_MEMORY_MB;
 
-	const headroomCap = Math.max(MEMORY_STEP_MB, systemRamMb - reservedGeneratedMemoryMb(systemRamMb));
+	const headroomCap = Math.max(
+		MEMORY_STEP_MB,
+		systemRamMb - reservedGeneratedMemoryMb(systemRamMb),
+	);
 	return Math.min(MAX_GENERATED_MEMORY_MB, roundDownToMemoryStep(headroomCap));
 }
 
 export function getManualMemoryLimitMb(systemRamMb: number): number {
-	if (!Number.isFinite(systemRamMb) || systemRamMb <= 0) return MAX_GENERATED_MEMORY_MB;
+	if (!Number.isFinite(systemRamMb) || systemRamMb <= 0)
+		return MAX_GENERATED_MEMORY_MB;
 	return roundDownToMemoryStep(systemRamMb);
 }
 
 export function getMemoryWarningThresholdMb(systemRamMb: number): number {
-	if (!Number.isFinite(systemRamMb) || systemRamMb <= 0) return MAX_GENERATED_MEMORY_MB;
+	if (!Number.isFinite(systemRamMb) || systemRamMb <= 0)
+		return MAX_GENERATED_MEMORY_MB;
 	return roundDownToMemoryStep(systemRamMb * 0.9);
 }
 
-function interpolateTierMemory(tier: MemoryRecommendationTier, modCount: number): number {
+function interpolateTierMemory(
+	tier: MemoryRecommendationTier,
+	modCount: number,
+): number {
 	if (tier.maxMods === null) {
 		const span = 250;
 		const progress = Math.min(1, Math.max(0, (modCount - tier.minMods) / span));
@@ -88,7 +103,10 @@ function interpolateTierMemory(tier: MemoryRecommendationTier, modCount: number)
 }
 
 export function getRecommendedMaxMemoryForModCount(modCount: number): number {
-	const normalizedModCount = Math.max(0, Math.floor(Number.isFinite(modCount) ? modCount : 0));
+	const normalizedModCount = Math.max(
+		0,
+		Math.floor(Number.isFinite(modCount) ? modCount : 0),
+	);
 	const tier =
 		MOD_COUNT_MEMORY_TIERS.find(
 			(candidate) =>
@@ -96,7 +114,9 @@ export function getRecommendedMaxMemoryForModCount(modCount: number): number {
 				(candidate.maxMods === null || normalizedModCount <= candidate.maxMods),
 		) ?? MOD_COUNT_MEMORY_TIERS[MOD_COUNT_MEMORY_TIERS.length - 1];
 
-	return roundToNearestMemoryStep(interpolateTierMemory(tier, normalizedModCount));
+	return roundToNearestMemoryStep(
+		interpolateTierMemory(tier, normalizedModCount),
+	);
 }
 
 export function clampManualMemoryRange(
@@ -105,9 +125,15 @@ export function clampManualMemoryRange(
 ): MemoryRange {
 	const limit = getManualMemoryLimitMb(systemRamMb);
 	const rawMin = Number.isFinite(range.min) ? range.min : DEFAULT_MIN_MEMORY_MB;
-	const rawMax = Number.isFinite(range.max) ? range.max : getDynamicPreferredMaxMemoryMb(systemRamMb);
-	const nextMax = roundDownToMemoryStep(Math.min(Math.max(rawMax, MEMORY_STEP_MB), limit));
-	const nextMin = roundDownToMemoryStep(Math.min(Math.max(rawMin, MEMORY_STEP_MB), nextMax));
+	const rawMax = Number.isFinite(range.max)
+		? range.max
+		: getDynamicPreferredMaxMemoryMb(systemRamMb);
+	const nextMax = roundDownToMemoryStep(
+		Math.min(Math.max(rawMax, MEMORY_STEP_MB), limit),
+	);
+	const nextMin = roundDownToMemoryStep(
+		Math.min(Math.max(rawMin, MEMORY_STEP_MB), nextMax),
+	);
 
 	return {
 		min: nextMin,
@@ -133,10 +159,16 @@ export function calculateRecommendedMemory(
 		defaults?.defaultMaxMemory ?? getDynamicPreferredMaxMemoryMb(systemRamMb);
 	const generatedLimit = getGeneratedMemoryLimitMb(systemRamMb);
 	const deviceAwarePolicyMax = Math.min(policyMax, generatedLimit);
-	const requestedMax = Math.max(deviceAwarePolicyMax, preferredMax, MEMORY_STEP_MB);
+	const requestedMax = Math.max(
+		deviceAwarePolicyMax,
+		preferredMax,
+		MEMORY_STEP_MB,
+	);
 	const nextMax = roundDownToMemoryStep(requestedMax);
 	const preferredMin = defaults?.defaultMinMemory ?? DEFAULT_MIN_MEMORY_MB;
-	const nextMin = roundDownToMemoryStep(Math.min(DEFAULT_MIN_MEMORY_MB, preferredMin, nextMax));
+	const nextMin = roundDownToMemoryStep(
+		Math.min(DEFAULT_MIN_MEMORY_MB, preferredMin, nextMax),
+	);
 	const increased = deviceAwarePolicyMax > preferredMax;
 	const highForDevice = policyMax > generatedLimit || nextMax > generatedLimit;
 	const source =
@@ -145,7 +177,11 @@ export function calculateRecommendedMemory(
 			: policyMax > preferredMax
 				? "mod-count"
 				: "preferred";
-	const adjustment = highForDevice ? "high-for-device" : increased ? "increased" : "none";
+	const adjustment = highForDevice
+		? "high-for-device"
+		: increased
+			? "increased"
+			: "none";
 
 	return {
 		min: nextMin,

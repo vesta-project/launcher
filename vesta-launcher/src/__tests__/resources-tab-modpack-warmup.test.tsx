@@ -1,9 +1,9 @@
 /* @refresh skip */
 
+import { ResourcesTab } from "@components/pages/mini-pages/instance-details/tabs/ResourcesTab";
 import { fireEvent, render, screen, waitFor } from "@solidjs/testing-library";
 import { createSignal } from "solid-js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { ResourcesTab } from "@components/pages/mini-pages/instance-details/tabs/ResourcesTab";
 
 vi.mock("@assets/reload.svg", () => ({
 	default: (props: any) => <svg data-testid="reload-icon" {...props} />,
@@ -28,7 +28,9 @@ vi.mock("@utils/media-query", () => ({
 }));
 
 vi.mock("@ui/avatar", () => ({
-	ResourceAvatar: (props: any) => <span data-testid="resource-avatar">{props.name}</span>,
+	ResourceAvatar: (props: any) => (
+		<span data-testid="resource-avatar">{props.name}</span>
+	),
 }));
 
 vi.mock("@ui/button/button", () => ({
@@ -42,7 +44,9 @@ vi.mock("@ui/button/button", () => ({
 vi.mock("@ui/dropdown-menu/dropdown-menu", () => ({
 	DropdownMenu: (props: any) => <div>{props.children}</div>,
 	DropdownMenuContent: (props: any) => <div>{props.children}</div>,
-	DropdownMenuItem: (props: any) => <button onClick={props.onSelect}>{props.children}</button>,
+	DropdownMenuItem: (props: any) => (
+		<button onClick={props.onSelect}>{props.children}</button>
+	),
 	DropdownMenuSeparator: () => <hr />,
 	DropdownMenuTrigger: (props: any) => (
 		<button onClick={props.onClick} class={props.class}>
@@ -56,7 +60,9 @@ vi.mock("@ui/select/select", () => ({
 	SelectContent: () => null,
 	SelectItem: (props: any) => <div>{props.children}</div>,
 	SelectTrigger: (props: any) => <button>{props.children}</button>,
-	SelectValue: (props: any) => <span>{props.children?.({ selectedOption: () => "All" })}</span>,
+	SelectValue: (props: any) => (
+		<span>{props.children?.({ selectedOption: () => "All" })}</span>
+	),
 }));
 
 vi.mock("@ui/skeleton/skeleton", () => ({
@@ -80,7 +86,8 @@ const createRow = (resource: any) => ({
 			column: {
 				...column,
 				columnDef: {
-					cell: () => (column.id === "display_name" ? resource.display_name : ""),
+					cell: () =>
+						column.id === "display_name" ? resource.display_name : "",
 				},
 			},
 			getContext: () => ({}),
@@ -159,7 +166,10 @@ describe("ResourcesTab modpack row warm-up", () => {
 						setGameVersion: vi.fn(),
 						setLoader: vi.fn(),
 					}}
-					installedResources={{ latest: rows.map((row) => row.original), loading: false }}
+					installedResources={{
+						latest: rows.map((row) => row.original),
+						loading: false,
+					}}
 					modpackResources={[rows[0].original]}
 					modpackIcon={() => null}
 					modpackExpanded={expanded()}
@@ -196,7 +206,9 @@ describe("ResourcesTab modpack row warm-up", () => {
 			expect(bundledRow?.getAttribute("aria-hidden")).toBe("true");
 		});
 
-		await fireEvent.click(screen.getByText("1 bundled resources").closest("tr")!);
+		const groupRow = screen.getByText("1 bundled resources").closest("tr");
+		if (!groupRow) throw new Error("expected bundled resource group row");
+		await fireEvent.click(groupRow);
 
 		await waitFor(() => {
 			const bundledRow = screen.getByText("Bundled One").closest("tr");

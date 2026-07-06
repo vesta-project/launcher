@@ -1,7 +1,7 @@
 import { confirm } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import { Component, JSX, Show } from "solid-js";
+import { type Component, type JSX, Show } from "solid-js";
 import styles from "./settings.module.css";
 
 export interface SettingsFieldProps {
@@ -103,7 +103,9 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 						</Show>
 					</div>
 					<Show when={props.description}>
-						<div class={styles["settings-field-description"]}>{props.description}</div>
+						<div class={styles["settings-field-description"]}>
+							{props.description}
+						</div>
 					</Show>
 				</div>
 				<Show when={headerContent()}>
@@ -116,7 +118,10 @@ export const SettingsField: Component<SettingsFieldProps> = (props) => {
 				</Show>
 			</div>
 			<Show when={resolvedBody()}>
-				<div class={styles["settings-field-body"]} classList={{ [styles.disabled]: props.disabled }}>
+				<div
+					class={styles["settings-field-body"]}
+					classList={{ [styles.disabled]: props.disabled }}
+				>
 					{resolvedBody()}
 				</div>
 			</Show>

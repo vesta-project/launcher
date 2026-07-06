@@ -35,15 +35,18 @@ export function PageSidebar(props: PageSidebarProps) {
 			class={styles.root}
 		>
 			<div class={styles.layout}>
-				<aside class={styles.sidebar} classList={{ [styles.mobileOpen!]: isMobile() && mobileOpen() }}>
+				<aside
+					class={styles.sidebar}
+					classList={{ [styles.mobileOpen]: isMobile() && mobileOpen() }}
+				>
 					<nav class={styles.nav}>
 						{props.tabs.map((tab) => (
 							<button
 								type="button"
 								class={styles.button}
 								classList={{
-									[styles.active!]: tab.value === props.activeTab,
-									[styles.error!]: tab.variant === "error",
+									[styles.active]: tab.value === props.activeTab,
+									[styles.error]: tab.variant === "error",
 								}}
 								disabled={tab.disabled}
 								onClick={() => {

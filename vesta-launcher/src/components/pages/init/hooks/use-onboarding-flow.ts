@@ -1,5 +1,5 @@
-import { createSignal, onCleanup } from "solid-js";
 import { invoke } from "@tauri-apps/api/core";
+import { createSignal, onCleanup } from "solid-js";
 import {
 	getCanonicalBackStep,
 	getNextOnboardingStep,
@@ -28,12 +28,20 @@ export interface OnboardingFlowActions {
 	fadeAtmosphere: () => void;
 }
 
-export function useOnboardingFlow(initialState: Partial<OnboardingFlowState> = {}) {
+export function useOnboardingFlow(
+	initialState: Partial<OnboardingFlowState> = {},
+) {
 	const initialStep = initialState.step ?? ONBOARDING_STEP.SPLASH;
 	const [step, setStep] = createSignal<OnboardingStep>(initialStep);
-	const [stepHistory, setStepHistory] = createSignal<OnboardingStep[]>([initialStep]);
-	const [learnCompleted, setLearnCompleted] = createSignal(initialState.learnCompleted ?? false);
-	const [isLoginOnly, setIsLoginOnly] = createSignal(initialState.isLoginOnly ?? false);
+	const [stepHistory, setStepHistory] = createSignal<OnboardingStep[]>([
+		initialStep,
+	]);
+	const [learnCompleted, setLearnCompleted] = createSignal(
+		initialState.learnCompleted ?? false,
+	);
+	const [isLoginOnly, setIsLoginOnly] = createSignal(
+		initialState.isLoginOnly ?? false,
+	);
 	const [atmosphereState, setAtmosphereState] = createSignal<
 		"active" | "fading" | "off"
 	>(initialState.atmosphereState ?? "active");
@@ -62,7 +70,11 @@ export function useOnboardingFlow(initialState: Partial<OnboardingFlowState> = {
 
 	const applyStep = async (
 		s: OnboardingStep,
-		options?: { replaceHistory?: boolean; recordHistory?: boolean; persist?: boolean },
+		options?: {
+			replaceHistory?: boolean;
+			recordHistory?: boolean;
+			persist?: boolean;
+		},
 	) => {
 		setStep(s);
 
@@ -94,7 +106,10 @@ export function useOnboardingFlow(initialState: Partial<OnboardingFlowState> = {
 		}
 	};
 
-	const getDirection = (from: OnboardingStep, to: OnboardingStep): NavigationDirection => {
+	const getDirection = (
+		from: OnboardingStep,
+		to: OnboardingStep,
+	): NavigationDirection => {
 		if (to > from) return "forward";
 		if (to < from) return "backward";
 		return "direct";
@@ -148,11 +163,16 @@ export function useOnboardingFlow(initialState: Partial<OnboardingFlowState> = {
 		const history = stepHistory();
 		if (history.length > 1) {
 			const historyWithoutCurrent = history.slice(0, -1);
-			const previousStep = historyWithoutCurrent[historyWithoutCurrent.length - 1];
-			const guardedPreviousStep = await resolveStepWithGuards(previousStep, "backward");
+			const previousStep =
+				historyWithoutCurrent[historyWithoutCurrent.length - 1];
+			const guardedPreviousStep = await resolveStepWithGuards(
+				previousStep,
+				"backward",
+			);
 
 			if (guardedPreviousStep !== previousStep) {
-				const targetIndex = historyWithoutCurrent.lastIndexOf(guardedPreviousStep);
+				const targetIndex =
+					historyWithoutCurrent.lastIndexOf(guardedPreviousStep);
 				if (targetIndex >= 0) {
 					setStepHistory(historyWithoutCurrent.slice(0, targetIndex + 1));
 				} else {
@@ -182,7 +202,8 @@ export function useOnboardingFlow(initialState: Partial<OnboardingFlowState> = {
 	const fadeAtmosphere = () => {
 		if (atmosphereState() === "off") return;
 
-		const reducedMotion = document.documentElement.getAttribute("data-reduced-motion") === "true";
+		const reducedMotion =
+			document.documentElement.getAttribute("data-reduced-motion") === "true";
 		if (reducedMotion) {
 			clearAtmosphereFadeTimer();
 			setAtmosphereState("off");

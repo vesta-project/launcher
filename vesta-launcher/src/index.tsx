@@ -1,10 +1,13 @@
 /* @refresh reload */
 
-import { invoke } from "@tauri-apps/api/core";
 import { router } from "@components/page-viewer/page-viewer";
+import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { initSentryMonitoring } from "@utils/sentry";
-import { applyStartupRouteTarget, bootstrapStartup } from "@utils/startup-bootstrap";
+import {
+	applyStartupRouteTarget,
+	bootstrapStartup,
+} from "@utils/startup-bootstrap";
 import { createSignal, Show } from "solid-js";
 import { type MountableElement, render } from "solid-js/web";
 import App from "./app";

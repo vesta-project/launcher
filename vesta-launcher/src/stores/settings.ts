@@ -6,9 +6,9 @@ import {
 	globalJavaPaths,
 	javaRequirements,
 	managedJava,
+	type StorageSnapshot,
 	storageSnapshot as storageSnapshotResource,
 	systemMemory,
-	type StorageSnapshot,
 } from "@stores/settings-cache";
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
@@ -17,7 +17,11 @@ import {
 	disable as disableAutostart,
 	enable as enableAutostart,
 } from "@tauri-apps/plugin-autostart";
-import { open as openDialog, save as saveDialog } from "@tauri-apps/plugin-dialog";
+import {
+	open as openDialog,
+	save as saveDialog,
+} from "@tauri-apps/plugin-dialog";
+import { showToast } from "@ui/toast/toast";
 import { getActiveAccount } from "@utils/auth";
 import {
 	currentThemeConfig,
@@ -115,7 +119,11 @@ export interface AppConfig {
 	default_post_exit_hook: string | null;
 	default_min_memory: number;
 	default_max_memory: number;
-	default_launcher_action_on_launch: "stay-open" | "minimize" | "hide-to-tray" | "quit";
+	default_launcher_action_on_launch:
+		| "stay-open"
+		| "minimize"
+		| "hide-to-tray"
+		| "quit";
 
 	[key: string]: any;
 }
@@ -159,28 +167,39 @@ export const [autoUpdateEnabled, setAutoUpdateEnabled] = createSignal(true);
 export const [startupCheckUpdates, setStartupCheckUpdates] = createSignal(true);
 export const [useDedicatedGpu, setUseDedicatedGpu] = createSignal(false);
 export const [telemetryEnabled, setTelemetryEnabled] = createSignal(true);
-export const [discordPresenceEnabled, setDiscordPresenceEnabled] = createSignal(true);
-export const [autoInstallDependencies, setAutoInstallDependencies] = createSignal(true);
+export const [discordPresenceEnabled, setDiscordPresenceEnabled] =
+	createSignal(true);
+export const [autoInstallDependencies, setAutoInstallDependencies] =
+	createSignal(true);
 export const [proxyEnabled, setProxyEnabled] = createSignal(false);
 export const [proxyUrl, setProxyUrl] = createSignal("");
 export const [proxyApplyToGames, setProxyApplyToGames] = createSignal(false);
-export const [proxyRestartRequired, setProxyRestartRequired] = createSignal(false);
+export const [proxyRestartRequired, setProxyRestartRequired] =
+	createSignal(false);
 export const [maxDownloadThreads, setMaxDownloadThreads] = createSignal(4);
 export const [autostartEnabled, setAutostartEnabled] = createSignal(false);
 export const [showTrayIcon, setShowTrayIcon] = createSignal(true);
 export const [closeToTray, setCloseToTray] = createSignal(false);
 export const [reducedMotion, setReducedMotion] = createSignal(false);
-export const [instanceDefaults, setInstanceDefaults] = createSignal<Partial<AppConfig>>({});
-export const [artifactCacheLimitBytes, setArtifactCacheLimitBytes] = createSignal(1024 * 1024 * 1024);
+export const [instanceDefaults, setInstanceDefaults] = createSignal<
+	Partial<AppConfig>
+>({});
+export const [artifactCacheLimitBytes, setArtifactCacheLimitBytes] =
+	createSignal(1024 * 1024 * 1024);
 
 export const [backgroundHue, setBackgroundHue] = createSignal(
-	currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 180,
+	currentThemeConfig.theme_primary_hue ??
+		currentThemeConfig.background_hue ??
+		180,
 );
 export const [opacity, setOpacity] = createSignal<number>(
 	getThemeById(currentThemeConfig.theme_id || "vesta")?.opacity ?? 0,
 );
 export const [styleMode, setStyleMode] = createSignal<StyleMode>(
-	initialThemeData.style ?? currentThemeConfig.theme_style ?? initialTheme?.style ?? "glass",
+	initialThemeData.style ??
+		currentThemeConfig.theme_style ??
+		initialTheme?.style ??
+		"glass",
 );
 export const [grainStrength, setGrainStrength] = createSignal<number>(
 	initialThemeData.grainStrength ?? initialTheme?.grainStrength ?? 40,
@@ -191,17 +210,24 @@ export const [gradientEnabled, setGradientEnabled] = createSignal<boolean>(
 export const [rotation, setRotation] = createSignal<number>(
 	currentThemeConfig.theme_gradient_angle ?? 135,
 );
-export const [gradientType, setGradientType] = createSignal<"linear" | "radial">(
-	(currentThemeConfig.theme_gradient_type as "linear" | "radial") ?? "linear",
+export const [gradientType, setGradientType] = createSignal<
+	"linear" | "radial"
+>((currentThemeConfig.theme_gradient_type as "linear" | "radial") ?? "linear");
+export const [gradientHarmony, setGradientHarmony] =
+	createSignal<GradientHarmony>(
+		(currentThemeConfig.theme_gradient_harmony as GradientHarmony) ?? "none",
+	);
+export const [themeId, setThemeId] = createSignal<string>(
+	currentThemeConfig.theme_id ?? "vesta",
 );
-export const [gradientHarmony, setGradientHarmony] = createSignal<GradientHarmony>(
-	(currentThemeConfig.theme_gradient_harmony as GradientHarmony) ?? "none",
+export const [themeCatalog, setThemeCatalog] = createSignal<ThemeConfig[]>(
+	getAllThemes(),
 );
-export const [themeId, setThemeId] = createSignal<string>(currentThemeConfig.theme_id ?? "vesta");
-export const [themeCatalog, setThemeCatalog] = createSignal<ThemeConfig[]>(getAllThemes());
 export const [themeSearchQuery, setThemeSearchQuery] = createSignal("");
-export const [themeFilterMode, setThemeFilterMode] = createSignal<ThemeFilterMode>("all");
-export const [themeViewMode, setThemeViewMode] = createSignal<ThemeViewMode>("grid");
+export const [themeFilterMode, setThemeFilterMode] =
+	createSignal<ThemeFilterMode>("all");
+export const [themeViewMode, setThemeViewMode] =
+	createSignal<ThemeViewMode>("grid");
 export const [borderThickness, setBorderThickness] = createSignal(
 	currentThemeConfig.theme_border_width ?? 1,
 );
@@ -212,19 +238,27 @@ export const uiChromeMode = createMemo<UiChromeMode>(() =>
 	uiChromeModeEnabled() ? "windowed" : "flat",
 );
 export const [windowEffect, setWindowEffect] = createSignal(
-	normalizeWindowEffectForCurrentOS(currentThemeConfig.theme_window_effect || "none"),
+	normalizeWindowEffectForCurrentOS(
+		currentThemeConfig.theme_window_effect || "none",
+	),
 );
-export const [windowEffectOptions, setWindowEffectOptions] = createSignal<string[]>(
-	getSupportedWindowEffects(),
-);
+export const [windowEffectOptions, setWindowEffectOptions] = createSignal<
+	string[]
+>(getSupportedWindowEffects());
 export const [userVariables, setUserVariables] = createStore<
 	Record<string, ThemeVariableValue>
 >(untrack(() => initialThemeData.userVariables || {}));
-export const userVariablesSnapshot = createMemo<Record<string, ThemeVariableValue>>(() => {
+export const userVariablesSnapshot = createMemo<
+	Record<string, ThemeVariableValue>
+>(() => {
 	const snapshot: Record<string, ThemeVariableValue> = {};
 	for (const key of Object.keys(userVariables)) {
 		const value = userVariables[key];
-		if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
+		if (
+			typeof value === "number" ||
+			typeof value === "string" ||
+			typeof value === "boolean"
+		) {
 			snapshot[key] = value;
 		}
 	}
@@ -236,12 +270,10 @@ const [detected, { refetch: refetchDetected }] = detectedJava;
 const [managed, { refetch: refetchManaged }] = managedJava;
 const [globalPaths, { refetch: refetchGlobalPaths }] = globalJavaPaths;
 const [cacheSizeValue, { refetch: refetchSize }] = cacheSizeResource;
-const [
-	storageSnapshotValue,
-	{ refetch: refetchStorageSnapshot, mutate: mutateStorageSnapshot },
-] = storageSnapshotResource;
-export { cacheSizeValue };
-export { storageSnapshotValue };
+const [storageSnapshotValue, { mutate: mutateStorageSnapshot }] =
+	storageSnapshotResource;
+
+export { cacheSizeValue, storageSnapshotValue };
 
 export const [isScanning, setIsScanning] = createSignal(false);
 
@@ -351,17 +383,23 @@ export const activeThemeDefinition = createMemo<ThemeConfig | undefined>(() => {
 		opacity: opacity() ?? currentTheme.opacity ?? 0,
 		style: styleMode() ?? currentTheme.style,
 		grainStrength: grainStrength() ?? currentTheme.grainStrength,
-		gradientEnabled: (gradientEnabled() ?? currentTheme.gradientEnabled) as boolean,
+		gradientEnabled: (gradientEnabled() ??
+			currentTheme.gradientEnabled) as boolean,
 		rotation: (rotation() ?? currentTheme.rotation) as number,
-		gradientType: (gradientType() ?? currentTheme.gradientType) as "linear" | "radial",
-		gradientHarmony: (gradientHarmony() ?? currentTheme.gradientHarmony) as GradientHarmony,
+		gradientType: (gradientType() ?? currentTheme.gradientType) as
+			| "linear"
+			| "radial",
+		gradientHarmony: (gradientHarmony() ??
+			currentTheme.gradientHarmony) as GradientHarmony,
 		borderWidth: borderThickness(),
 		backgroundOpacity: backgroundOpacity(),
 		windowEffect: windowEffect(),
 		customCss: themeData.customCss ?? currentTheme.customCss,
 		allowHueChange: themeData.allowHueChange ?? currentTheme.allowHueChange,
-		allowStyleChange: themeData.allowStyleChange ?? currentTheme.allowStyleChange,
-		allowBorderChange: themeData.allowBorderChange ?? currentTheme.allowBorderChange,
+		allowStyleChange:
+			themeData.allowStyleChange ?? currentTheme.allowStyleChange,
+		allowBorderChange:
+			themeData.allowBorderChange ?? currentTheme.allowBorderChange,
 		variables: themeData.variables ?? currentTheme.variables,
 	});
 });
@@ -400,8 +438,11 @@ export const javaOptions = createMemo(() => {
 		const allForVersion = globalPathsData.filter(
 			(p: any) => p.major_version === req.major_version,
 		);
-		const current = allForVersion.find((p: any) => p.is_active) ?? allForVersion[0];
-		const managedRow = allForVersion.find((p: any) => p.is_managed && p.is_active);
+		const current =
+			allForVersion.find((p: any) => p.is_active) ?? allForVersion[0];
+		const managedRow = allForVersion.find(
+			(p: any) => p.is_managed && p.is_active,
+		);
 		const managedVersion = managedJavas.find(
 			(m: any) => m.major_version === req.major_version,
 		);
@@ -430,8 +471,11 @@ export const javaOptions = createMemo(() => {
 					title: "System Runtime",
 					path: det.path,
 					isActive:
-						current?.path === det.path && current?.is_active && !current?.is_managed,
-					onClick: () => handleSetGlobalPath(req.major_version, det.path, false),
+						current?.path === det.path &&
+						current?.is_active &&
+						!current?.is_managed,
+					onClick: () =>
+						handleSetGlobalPath(req.major_version, det.path, false),
 				});
 			});
 
@@ -439,7 +483,8 @@ export const javaOptions = createMemo(() => {
 			if (p.is_managed) continue;
 			if (
 				detectedJavas.some(
-					(d: any) => d.path === p.path && d.major_version === req.major_version,
+					(d: any) =>
+						d.path === p.path && d.major_version === req.major_version,
 				)
 			)
 				continue;
@@ -465,12 +510,9 @@ export const javaOptions = createMemo(() => {
 	return options;
 });
 
-const debouncedPersistence = createDebounce(
-	async (overrides: any) => {
-		await persistThemeUpdate(overrides);
-	},
-	100,
-);
+const debouncedPersistence = createDebounce(async (overrides: any) => {
+	await persistThemeUpdate(overrides);
+}, 100);
 
 export function cancelDebouncedPersistence() {
 	debouncedPersistence.cancel();
@@ -480,7 +522,11 @@ export async function refreshJavas() {
 	if (!hasTauriRuntime()) return;
 	try {
 		setIsScanning(true);
-		await Promise.all([refetchDetected(), refetchManaged(), refetchGlobalPaths()]);
+		await Promise.all([
+			refetchDetected(),
+			refetchManaged(),
+			refetchGlobalPaths(),
+		]);
 	} catch (e) {
 		console.error("Failed to refresh javas:", e);
 	} finally {
@@ -488,7 +534,11 @@ export async function refreshJavas() {
 	}
 }
 
-export async function handleSetGlobalPath(version: number, path: string, isManaged: boolean) {
+export async function handleSetGlobalPath(
+	version: number,
+	path: string,
+	isManaged: boolean,
+) {
 	try {
 		await invoke("set_global_java_path", {
 			version,
@@ -502,8 +552,6 @@ export async function handleSetGlobalPath(version: number, path: string, isManag
 }
 
 export async function handleDownloadManaged(version: number) {
-	// This triggers a toast but toast import may cause cycles. We import inline.
-	const { showToast } = await import("@ui/toast/toast");
 	try {
 		await invoke("download_managed_java", { version });
 		showToast({
@@ -550,7 +598,9 @@ export async function refreshThemeCatalog() {
 	try {
 		const saved = await invoke<SavedThemeEntry[]>("list_saved_themes");
 		const customThemes = saved.map((entry) => {
-			const runtimeId = isBuiltinThemeId(entry.id) ? `imported-${entry.id}` : entry.id;
+			const runtimeId = isBuiltinThemeId(entry.id)
+				? `imported-${entry.id}`
+				: entry.id;
 
 			return validateTheme({
 				...entry.themeData,
@@ -568,21 +618,28 @@ export async function refreshThemeCatalog() {
 	}
 }
 
-export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = false) {
+export function saveThemeUpdate(
+	overrides: Partial<ThemeConfig> = {},
+	live = false,
+) {
 	if (!hasTauriRuntime()) return;
 	const currentAppliedThemeId =
 		document.documentElement.getAttribute("data-theme-id") ||
 		currentThemeConfig.theme_id ||
 		themeId();
-	const hasThemeIdOverride = typeof overrides.id === "string" && overrides.id.length > 0;
+	const hasThemeIdOverride =
+		typeof overrides.id === "string" && overrides.id.length > 0;
 	const applyTransition =
-		hasThemeIdOverride && overrides.id !== currentAppliedThemeId ? "preset-switch" : "none";
+		hasThemeIdOverride && overrides.id !== currentAppliedThemeId
+			? "preset-switch"
+			: "none";
 
 	const activeHue = overrides.primaryHue ?? backgroundHue();
 	const activeOpacity = overrides.opacity ?? opacity();
 	const activeThemeId = overrides.id ?? themeId();
 	const currentTheme = getThemeById(activeThemeId);
-	const activeStyle = overrides.style ?? styleMode() ?? currentTheme?.style ?? "glass";
+	const activeStyle =
+		overrides.style ?? styleMode() ?? currentTheme?.style ?? "glass";
 	const activeGrainStrength = overrides.grainStrength ?? grainStrength();
 	const activeGradient = overrides.gradientEnabled ?? gradientEnabled();
 	const activeRotation = overrides.rotation ?? rotation();
@@ -594,10 +651,17 @@ export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = fal
 		overrides.windowEffect ?? windowEffect(),
 	);
 	const currentThemeData = parseThemeData(currentThemeConfig.theme_data);
-	const shouldCarryCurrentThemeData = (currentThemeData.id ?? activeThemeId) === activeThemeId;
+	const shouldCarryCurrentThemeData =
+		(currentThemeData.id ?? activeThemeId) === activeThemeId;
 	const carriedThemeData = shouldCarryCurrentThemeData ? currentThemeData : {};
-	const activeVariables = overrides.variables ?? carriedThemeData.variables ?? currentTheme?.variables;
-	const activeCustomCss = overrides.customCss ?? carriedThemeData.customCss ?? currentTheme?.customCss;
+	const activeVariables =
+		overrides.variables ??
+		carriedThemeData.variables ??
+		currentTheme?.variables;
+	const activeCustomCss =
+		overrides.customCss ??
+		carriedThemeData.customCss ??
+		currentTheme?.customCss;
 	const activeUserVars = overrides.userVariables ?? userVariablesSnapshot();
 
 	const persistenceData = {
@@ -618,8 +682,10 @@ export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = fal
 		windowEffect: activeWEffect,
 		customCss: activeCustomCss,
 		allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
-		allowStyleChange: overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
-		allowBorderChange: overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
+		allowStyleChange:
+			overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
+		allowBorderChange:
+			overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
 		variables: activeVariables,
 		userVariables: activeUserVars,
 	};
@@ -641,8 +707,10 @@ export function saveThemeUpdate(overrides: Partial<ThemeConfig> = {}, live = fal
 			windowEffect: activeWEffect,
 			customCss: activeCustomCss,
 			allowHueChange: overrides.allowHueChange ?? currentTheme?.allowHueChange,
-			allowStyleChange: overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
-			allowBorderChange: overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
+			allowStyleChange:
+				overrides.allowStyleChange ?? currentTheme?.allowStyleChange,
+			allowBorderChange:
+				overrides.allowBorderChange ?? currentTheme?.allowBorderChange,
 			variables: activeVariables,
 			userVariables: activeUserVars,
 		}),
@@ -661,7 +729,10 @@ export function handlePresetSelect(id: string) {
 			theme.windowEffect !== undefined
 				? normalizeWindowEffectForCurrentOS(theme.windowEffect)
 				: windowEffect();
-		const finalHue = theme.allowHueChange === false ? (theme.primaryHue ?? 180) : backgroundHue();
+		const finalHue =
+			theme.allowHueChange === false
+				? (theme.primaryHue ?? 180)
+				: backgroundHue();
 
 		batch(() => {
 			setThemeId(id);
@@ -715,10 +786,13 @@ export function handlePresetSelect(id: string) {
 			allowBorderChange: theme.allowBorderChange,
 			variables: theme.variables,
 			userVariables:
-				theme.variables?.reduce<Record<string, ThemeVariableValue>>((acc, variable) => {
-					acc[variable.key] = variable.default;
-					return acc;
-				}, {}) || {},
+				theme.variables?.reduce<Record<string, ThemeVariableValue>>(
+					(acc, variable) => {
+						acc[variable.key] = variable.default;
+						return acc;
+					},
+					{},
+				) || {},
 		});
 	}
 }
@@ -810,7 +884,11 @@ export function handleGradientHarmonyChange(harmony: GradientHarmony) {
 	saveThemeUpdate({ gradientHarmony: harmony });
 }
 
-export function handleVariableChange(key: string, value: ThemeVariableValue, live = false) {
+export function handleVariableChange(
+	key: string,
+	value: ThemeVariableValue,
+	live = false,
+) {
 	const nextVariables = {
 		...untrack(userVariablesSnapshot),
 		[key]: value,
@@ -853,13 +931,23 @@ async function migrateToCustomTheme(fromTheme: ThemeConfig) {
 		setBackgroundHue(fromTheme.primaryHue ?? customTheme.primaryHue);
 		setOpacity(fromTheme.opacity ?? customTheme.opacity ?? 0);
 		setStyleMode(fromTheme.style ?? customTheme.style ?? "glass");
-		setGrainStrength(fromTheme.grainStrength ?? customTheme.grainStrength ?? 40);
-		setGradientEnabled(fromTheme.gradientEnabled ?? customTheme.gradientEnabled);
+		setGrainStrength(
+			fromTheme.grainStrength ?? customTheme.grainStrength ?? 40,
+		);
+		setGradientEnabled(
+			fromTheme.gradientEnabled ?? customTheme.gradientEnabled,
+		);
 		setRotation(fromTheme.rotation ?? customTheme.rotation ?? 135);
-		setGradientType(fromTheme.gradientType ?? customTheme.gradientType ?? "linear");
-		setGradientHarmony(fromTheme.gradientHarmony ?? customTheme.gradientHarmony ?? "none");
+		setGradientType(
+			fromTheme.gradientType ?? customTheme.gradientType ?? "linear",
+		);
+		setGradientHarmony(
+			fromTheme.gradientHarmony ?? customTheme.gradientHarmony ?? "none",
+		);
 		setBorderThickness(fromTheme.borderWidth ?? customTheme.borderWidth ?? 1);
-		setBackgroundOpacity(fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity ?? 25);
+		setBackgroundOpacity(
+			fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity ?? 25,
+		);
 		setWindowEffect(migratedEffect);
 		setUserVariables(reconcile({}));
 	});
@@ -878,7 +966,8 @@ async function migrateToCustomTheme(fromTheme: ThemeConfig) {
 		gradientType: fromTheme.gradientType ?? customTheme.gradientType,
 		gradientHarmony: fromTheme.gradientHarmony ?? customTheme.gradientHarmony,
 		borderWidth: fromTheme.borderWidth ?? customTheme.borderWidth,
-		backgroundOpacity: fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity,
+		backgroundOpacity:
+			fromTheme.backgroundOpacity ?? customTheme.backgroundOpacity,
 		windowEffect: migratedEffect,
 		customCss: "",
 		variables: customTheme.variables,
@@ -887,7 +976,9 @@ async function migrateToCustomTheme(fromTheme: ThemeConfig) {
 }
 
 export async function handleDeleteImportedTheme(targetThemeId: string) {
-	const themeToDelete = themeCatalog().find((theme) => theme.id === targetThemeId);
+	const themeToDelete = themeCatalog().find(
+		(theme) => theme.id === targetThemeId,
+	);
 	if (!themeToDelete) return;
 
 	if (getThemeSource(themeToDelete) !== "imported") {
@@ -919,7 +1010,6 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 
 		if (themeId() === targetThemeId) {
 			await migrateToCustomTheme(themeToDelete);
-			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Theme Deleted",
 				description:
@@ -927,7 +1017,6 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 				severity: "info",
 			});
 		} else {
-			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Theme Deleted",
 				description: `${themeToDelete.name} was removed from your imported library.`,
@@ -938,7 +1027,11 @@ export async function handleDeleteImportedTheme(targetThemeId: string) {
 		await refreshThemeCatalog();
 	} catch (error) {
 		console.error("Failed to delete imported theme:", error);
-		dialogStore.alert("Delete Failed", "Failed to delete the selected imported theme.", "error");
+		dialogStore.alert(
+			"Delete Failed",
+			"Failed to delete the selected imported theme.",
+			"error",
+		);
 	}
 }
 
@@ -960,11 +1053,16 @@ export async function handleExportTheme() {
 
 		const themeClass = getThemeById(themeId()) || validateTheme({});
 		const activeAccount = await getActiveAccount();
-		const author = activeAccount?.display_name || activeAccount?.username || "Anonymous";
+		const author =
+			activeAccount?.display_name || activeAccount?.username || "Anonymous";
 
-		const customName = await dialogStore.prompt("Theme Name", "Enter a name for your theme before exporting.", {
-			defaultValue: "My Custom Theme",
-		});
+		const customName = await dialogStore.prompt(
+			"Theme Name",
+			"Enter a name for your theme before exporting.",
+			{
+				defaultValue: "My Custom Theme",
+			},
+		);
 
 		if (!customName) return;
 
@@ -981,7 +1079,11 @@ export async function handleExportTheme() {
 				author,
 				customCss: themeClass.customCss || "",
 			});
-			dialogStore.alert("Theme Exported", "Your theme has been exported successfully.", "success");
+			dialogStore.alert(
+				"Theme Exported",
+				"Your theme has been exported successfully.",
+				"success",
+			);
 		}
 	} catch (e) {
 		console.error("Failed to export theme", e);
@@ -1032,7 +1134,9 @@ export async function handleImportTheme() {
 			setGradientHarmony(importedTheme.gradientHarmony ?? "none");
 			setBorderThickness(importedTheme.borderWidth ?? 1);
 			setBackgroundOpacity(importedTheme.backgroundOpacity ?? 25);
-			setWindowEffect(normalizeWindowEffectForCurrentOS(importedTheme.windowEffect));
+			setWindowEffect(
+				normalizeWindowEffectForCurrentOS(importedTheme.windowEffect),
+			);
 			setUserVariables(reconcile(importedTheme.userVariables || {}));
 		});
 
@@ -1048,7 +1152,9 @@ export async function handleImportTheme() {
 			gradientHarmony: importedTheme.gradientHarmony,
 			borderWidth: importedTheme.borderWidth,
 			backgroundOpacity: importedTheme.backgroundOpacity,
-			windowEffect: normalizeWindowEffectForCurrentOS(importedTheme.windowEffect),
+			windowEffect: normalizeWindowEffectForCurrentOS(
+				importedTheme.windowEffect,
+			),
 			customCss: importedTheme.customCss,
 			allowHueChange: importedTheme.allowHueChange,
 			allowStyleChange: importedTheme.allowStyleChange,
@@ -1058,13 +1164,25 @@ export async function handleImportTheme() {
 		});
 
 		if (result.warnings && result.warnings.length > 0) {
-			dialogStore.alert("Theme Imported With Warnings", result.warnings.join("\n"), "warning");
+			dialogStore.alert(
+				"Theme Imported With Warnings",
+				result.warnings.join("\n"),
+				"warning",
+			);
 		} else {
-			dialogStore.alert("Theme Imported", "Theme imported and added to your library.", "success");
+			dialogStore.alert(
+				"Theme Imported",
+				"Theme imported and added to your library.",
+				"success",
+			);
 		}
 	} catch (e) {
 		console.error("Failed to import theme", e);
-		dialogStore.alert("Import Error", "Failed to import the selected theme file.", "error");
+		dialogStore.alert(
+			"Import Error",
+			"Failed to import the selected theme file.",
+			"error",
+		);
 	}
 }
 
@@ -1073,7 +1191,10 @@ export async function handleReducedMotionToggle(checked: boolean) {
 	setReducedMotion(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "reduced_motion", value: checked });
+			await invoke("update_config_field", {
+				field: "reduced_motion",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist reduced_motion:", e);
 			setReducedMotion(prev);
@@ -1086,7 +1207,10 @@ export async function handleDebugToggle(checked: boolean) {
 	setDebugLogging(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "debug_logging", value: checked });
+			await invoke("update_config_field", {
+				field: "debug_logging",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist debug_logging:", e);
 			setDebugLogging(prev);
@@ -1099,7 +1223,10 @@ export async function handleAutoUpdateToggle(checked: boolean) {
 	setAutoUpdateEnabled(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "auto_update_enabled", value: checked });
+			await invoke("update_config_field", {
+				field: "auto_update_enabled",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist auto_update_enabled:", e);
 			setAutoUpdateEnabled(prev);
@@ -1112,7 +1239,10 @@ export async function handleStartupCheckToggle(checked: boolean) {
 	setStartupCheckUpdates(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "startup_check_updates", value: checked });
+			await invoke("update_config_field", {
+				field: "startup_check_updates",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist startup_check_updates:", e);
 			setStartupCheckUpdates(prev);
@@ -1125,7 +1255,10 @@ export async function handleGpuToggle(checked: boolean) {
 	setUseDedicatedGpu(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "use_dedicated_gpu", value: checked });
+			await invoke("update_config_field", {
+				field: "use_dedicated_gpu",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist use_dedicated_gpu:", e);
 			setUseDedicatedGpu(prev);
@@ -1138,7 +1271,10 @@ export async function handleDiscordToggle(checked: boolean) {
 	setDiscordPresenceEnabled(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "discord_presence_enabled", value: checked });
+			await invoke("update_config_field", {
+				field: "discord_presence_enabled",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist discord_presence_enabled:", e);
 			setDiscordPresenceEnabled(prev);
@@ -1176,7 +1312,10 @@ export async function handleMaxDownloadThreadsChange(val: number) {
 	setMaxDownloadThreads(val);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "max_download_threads", value: val });
+			await invoke("update_config_field", {
+				field: "max_download_threads",
+				value: val,
+			});
 		} catch (e) {
 			console.error("Failed to persist max_download_threads:", e);
 		}
@@ -1188,7 +1327,10 @@ export async function handleAutostartToggle(checked: boolean) {
 	setAutostartEnabled(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "autostart_enabled", value: checked });
+			await invoke("update_config_field", {
+				field: "autostart_enabled",
+				value: checked,
+			});
 			if (checked) {
 				await enableAutostart();
 			} else {
@@ -1206,7 +1348,10 @@ export async function handleTelemetryToggle(checked: boolean) {
 	setTelemetryEnabled(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "telemetry_enabled", value: checked });
+			await invoke("update_config_field", {
+				field: "telemetry_enabled",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist telemetry_enabled:", e);
 			setTelemetryEnabled(prev);
@@ -1214,10 +1359,10 @@ export async function handleTelemetryToggle(checked: boolean) {
 		}
 	}
 
-	const { showToast } = await import("@ui/toast/toast");
 	showToast({
 		title: "Telemetry Preference Updated",
-		description: "Restart Vesta Launcher to apply telemetry changes to backend crash reporting.",
+		description:
+			"Restart Vesta Launcher to apply telemetry changes to backend crash reporting.",
 		severity: "info",
 		actions: [
 			{
@@ -1239,7 +1384,10 @@ export async function handleAutoInstallDepsToggle(checked: boolean) {
 	setAutoInstallDependencies(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "auto_install_dependencies", value: checked });
+			await invoke("update_config_field", {
+				field: "auto_install_dependencies",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist auto_install_dependencies:", e);
 			setAutoInstallDependencies(prev);
@@ -1257,7 +1405,10 @@ export async function handleProxyEnabledToggle(checked: boolean) {
 	markProxyRestartRequired();
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "proxy_enabled", value: checked });
+			await invoke("update_config_field", {
+				field: "proxy_enabled",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist proxy_enabled:", e);
 			setProxyEnabled(prev);
@@ -1287,7 +1438,10 @@ export async function handleProxyApplyToGamesToggle(checked: boolean) {
 	setProxyApplyToGames(checked);
 	if (hasTauriRuntime()) {
 		try {
-			await invoke("update_config_field", { field: "proxy_apply_to_games", value: checked });
+			await invoke("update_config_field", {
+				field: "proxy_apply_to_games",
+				value: checked,
+			});
 		} catch (e) {
 			console.error("Failed to persist proxy_apply_to_games:", e);
 			setProxyApplyToGames(prev);
@@ -1311,7 +1465,7 @@ export async function testProxyConnection(): Promise<ProxyTestResult> {
 		};
 	}
 
-	return invoke<ProxyTestResult>("test_proxy_connection", {
+	return await invoke<ProxyTestResult>("test_proxy_connection", {
 		input: {
 			enabled: proxyEnabled(),
 			url: proxyUrl().trim() ? proxyUrl().trim() : null,
@@ -1351,15 +1505,14 @@ export async function handleClearCache() {
 			refetchSize();
 			const snapshot = await fetchStorageSnapshot(true);
 			mutateStorageSnapshot(snapshot);
-			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Cache Cleared",
-				description: "All stored metadata and temporary files have been cleared.",
+				description:
+					"All stored metadata and temporary files have been cleared.",
 				severity: "success",
 			});
 		} catch (e) {
 			console.error("Failed to clear cache:", e);
-			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Clear Cache Failed",
 				description: "Something went wrong while clearing the cache.",
@@ -1371,7 +1524,10 @@ export async function handleClearCache() {
 
 export async function handleArtifactCacheLimitChange(nextBytes: number) {
 	const previous = artifactCacheLimitBytes();
-	const normalized = Number.isFinite(nextBytes) && nextBytes > 0 ? Math.round(nextBytes) : previous;
+	const normalized =
+		Number.isFinite(nextBytes) && nextBytes > 0
+			? Math.round(nextBytes)
+			: previous;
 	setArtifactCacheLimitBytes(normalized);
 
 	if (!hasTauriRuntime()) return;
@@ -1432,7 +1588,9 @@ export async function initSettings() {
 				setProxyEnabled(config.proxy_enabled ?? false);
 				setProxyUrl(config.proxy_url ?? "");
 				setProxyApplyToGames(config.proxy_apply_to_games ?? false);
-				setArtifactCacheLimitBytes(config.artifact_cache_max_bytes ?? 1024 * 1024 * 1024);
+				setArtifactCacheLimitBytes(
+					config.artifact_cache_max_bytes ?? 1024 * 1024 * 1024,
+				);
 				setProxyRestartRequired(false);
 				setMaxDownloadThreads(config.max_download_threads ?? 4);
 				setAutostartEnabled(config.autostart_enabled ?? false);
@@ -1454,9 +1612,15 @@ export async function initSettings() {
 				});
 
 				if (config.theme_id) setThemeId(config.theme_id);
-				if (config.theme_primary_hue !== null && config.theme_primary_hue !== undefined)
+				if (
+					config.theme_primary_hue !== null &&
+					config.theme_primary_hue !== undefined
+				)
 					setBackgroundHue(config.theme_primary_hue);
-				else if (config.background_hue !== null && config.background_hue !== undefined)
+				else if (
+					config.background_hue !== null &&
+					config.background_hue !== undefined
+				)
 					setBackgroundHue(config.background_hue);
 
 				if (config.theme_id) {
@@ -1468,46 +1632,66 @@ export async function initSettings() {
 				if (config.theme_style) {
 					setStyleMode(normalizeStyleMode(config.theme_style) ?? "glass");
 				}
-				if (config.theme_gradient_enabled !== null && config.theme_gradient_enabled !== undefined)
+				if (
+					config.theme_gradient_enabled !== null &&
+					config.theme_gradient_enabled !== undefined
+				)
 					setGradientEnabled(config.theme_gradient_enabled);
-				if (config.theme_gradient_angle !== null && config.theme_gradient_angle !== undefined)
+				if (
+					config.theme_gradient_angle !== null &&
+					config.theme_gradient_angle !== undefined
+				)
 					setRotation(config.theme_gradient_angle);
 				if (config.theme_gradient_type)
 					setGradientType(config.theme_gradient_type as "linear" | "radial");
 				if (config.theme_gradient_harmony)
 					setGradientHarmony(config.theme_gradient_harmony as GradientHarmony);
-				if (config.theme_border_width !== null && config.theme_border_width !== undefined)
+				if (
+					config.theme_border_width !== null &&
+					config.theme_border_width !== undefined
+				)
 					setBorderThickness(config.theme_border_width);
-				if (config.theme_background_opacity !== null && config.theme_background_opacity !== undefined)
+				if (
+					config.theme_background_opacity !== null &&
+					config.theme_background_opacity !== undefined
+				)
 					setBackgroundOpacity(config.theme_background_opacity);
 				if (config.theme_window_effect)
-					setWindowEffect(normalizeWindowEffectForCurrentOS(config.theme_window_effect));
+					setWindowEffect(
+						normalizeWindowEffectForCurrentOS(config.theme_window_effect),
+					);
 
 				if (config.theme_data) {
 					const themeData = parseThemeData(config.theme_data);
 
-					if (themeData.primaryHue !== undefined) setBackgroundHue(themeData.primaryHue);
+					if (themeData.primaryHue !== undefined)
+						setBackgroundHue(themeData.primaryHue);
 					if (themeData.opacity !== undefined) setOpacity(themeData.opacity);
 					if (themeData.style) setStyleMode(themeData.style);
-					if (themeData.grainStrength !== undefined) setGrainStrength(themeData.grainStrength);
-					if (themeData.gradientEnabled !== undefined) setGradientEnabled(themeData.gradientEnabled);
+					if (themeData.grainStrength !== undefined)
+						setGrainStrength(themeData.grainStrength);
+					if (themeData.gradientEnabled !== undefined)
+						setGradientEnabled(themeData.gradientEnabled);
 					if (themeData.rotation !== undefined) setRotation(themeData.rotation);
 					if (themeData.gradientType)
 						setGradientType(themeData.gradientType as "linear" | "radial");
 					if (themeData.gradientHarmony)
 						setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
-					if (themeData.borderWidth !== undefined) setBorderThickness(themeData.borderWidth);
+					if (themeData.borderWidth !== undefined)
+						setBorderThickness(themeData.borderWidth);
 					if (themeData.backgroundOpacity !== undefined)
 						setBackgroundOpacity(themeData.backgroundOpacity);
 					if (themeData.windowEffect) {
-						setWindowEffect(normalizeWindowEffectForCurrentOS(themeData.windowEffect));
+						setWindowEffect(
+							normalizeWindowEffectForCurrentOS(themeData.windowEffect),
+						);
 					}
-					if (themeData.userVariables) setUserVariables(reconcile(themeData.userVariables));
+					if (themeData.userVariables)
+						setUserVariables(reconcile(themeData.userVariables));
 				}
 			});
 		} catch (error) {
 			console.error("Failed to load settings:", error);
-			const { showToast } = await import("@ui/toast/toast");
 			showToast({
 				title: "Settings Load Failed",
 				description: "Could not load your saved preferences. Using defaults.",
@@ -1545,7 +1729,8 @@ export async function initSettings() {
 		if (field === "startup_check_updates") setStartupCheckUpdates(value);
 		if (field === "use_dedicated_gpu") setUseDedicatedGpu(value ?? true);
 		if (field === "telemetry_enabled") setTelemetryEnabled(value ?? true);
-		if (field === "discord_presence_enabled") setDiscordPresenceEnabled(value ?? true);
+		if (field === "discord_presence_enabled")
+			setDiscordPresenceEnabled(value ?? true);
 		if (field === "reduced_motion") setReducedMotion(value ?? false);
 		if (field === "autostart_enabled") setAutostartEnabled(value ?? false);
 		if (field === "show_tray_icon") setShowTrayIcon(value ?? true);
@@ -1568,26 +1753,36 @@ export async function initSettings() {
 				}
 			}
 		}
-		if (field === "theme_primary_hue" && value !== null) setBackgroundHue(value);
+		if (field === "theme_primary_hue" && value !== null)
+			setBackgroundHue(value);
 		if (field === "theme_style" && value)
 			setStyleMode(normalizeStyleMode(value) ?? untrack(styleMode));
-		if (field === "theme_gradient_enabled" && value !== null) setGradientEnabled(value);
+		if (field === "theme_gradient_enabled" && value !== null)
+			setGradientEnabled(value);
 		if (field === "theme_gradient_angle" && value !== null) setRotation(value);
 		if (field === "theme_gradient_type" && value)
 			setGradientType(value as "linear" | "radial");
 		if (field === "theme_gradient_harmony" && value)
 			setGradientHarmony(value as GradientHarmony);
-		if (field === "theme_border_width" && value !== null) setBorderThickness(value);
-		if (field === "theme_background_opacity" && value !== null) setBackgroundOpacity(value);
+		if (field === "theme_border_width" && value !== null)
+			setBorderThickness(value);
+		if (field === "theme_background_opacity" && value !== null)
+			setBackgroundOpacity(value);
 		if (field === "theme_window_effect" && value)
 			setWindowEffect(normalizeWindowEffectForCurrentOS(value));
 
 		if (field === "theme_data" && value) {
 			const themeData = parseThemeData(value);
 			batch(() => {
-				if (themeData.primaryHue !== undefined && themeData.primaryHue !== untrack(backgroundHue))
+				if (
+					themeData.primaryHue !== undefined &&
+					themeData.primaryHue !== untrack(backgroundHue)
+				)
 					setBackgroundHue(themeData.primaryHue);
-				if (themeData.opacity !== undefined && themeData.opacity !== untrack(opacity))
+				if (
+					themeData.opacity !== undefined &&
+					themeData.opacity !== untrack(opacity)
+				)
 					setOpacity(themeData.opacity);
 				if (themeData.style && themeData.style !== untrack(styleMode)) {
 					setStyleMode(themeData.style);
@@ -1603,27 +1798,45 @@ export async function initSettings() {
 					themeData.gradientEnabled !== untrack(gradientEnabled)
 				)
 					setGradientEnabled(themeData.gradientEnabled);
-				if (themeData.rotation !== undefined && themeData.rotation !== untrack(rotation))
+				if (
+					themeData.rotation !== undefined &&
+					themeData.rotation !== untrack(rotation)
+				)
 					setRotation(themeData.rotation);
-				if (themeData.gradientType && themeData.gradientType !== untrack(gradientType))
+				if (
+					themeData.gradientType &&
+					themeData.gradientType !== untrack(gradientType)
+				)
 					setGradientType(themeData.gradientType as "linear" | "radial");
-				if (themeData.gradientHarmony && themeData.gradientHarmony !== untrack(gradientHarmony))
+				if (
+					themeData.gradientHarmony &&
+					themeData.gradientHarmony !== untrack(gradientHarmony)
+				)
 					setGradientHarmony(themeData.gradientHarmony as GradientHarmony);
-				if (themeData.borderWidth !== undefined && themeData.borderWidth !== untrack(borderThickness))
+				if (
+					themeData.borderWidth !== undefined &&
+					themeData.borderWidth !== untrack(borderThickness)
+				)
 					setBorderThickness(themeData.borderWidth);
 				if (
 					themeData.backgroundOpacity !== undefined &&
 					themeData.backgroundOpacity !== untrack(backgroundOpacity)
 				)
 					setBackgroundOpacity(themeData.backgroundOpacity);
-				if (themeData.windowEffect && themeData.windowEffect !== untrack(windowEffect)) {
-					setWindowEffect(normalizeWindowEffectForCurrentOS(themeData.windowEffect));
+				if (
+					themeData.windowEffect &&
+					themeData.windowEffect !== untrack(windowEffect)
+				) {
+					setWindowEffect(
+						normalizeWindowEffectForCurrentOS(themeData.windowEffect),
+					);
 				}
 
 				if (themeData.userVariables) {
 					const currentVars = untrack(userVariablesSnapshot);
 					const hasChanged =
-						JSON.stringify(currentVars) !== JSON.stringify(themeData.userVariables);
+						JSON.stringify(currentVars) !==
+						JSON.stringify(themeData.userVariables);
 					if (hasChanged) {
 						setUserVariables(reconcile(themeData.userVariables));
 					}

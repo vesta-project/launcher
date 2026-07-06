@@ -1,4 +1,4 @@
-import { createEffect, createSignal, onCleanup, type Accessor } from "solid-js";
+import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js";
 import {
 	computeHeaderCollapseProgress,
 	deriveHeaderCompactState,
@@ -7,10 +7,14 @@ import {
 const PROGRESS_EPSILON = 0.001;
 
 export function supportsScrollDrivenHeaderCollapse(): boolean {
-	return typeof CSS !== "undefined" && CSS.supports("animation-timeline", "scroll()");
+	return (
+		typeof CSS !== "undefined" && CSS.supports("animation-timeline", "scroll()")
+	);
 }
 
-export function shouldUseCssDrivenHeaderProgress(reducedMotion: boolean): boolean {
+export function shouldUseCssDrivenHeaderProgress(
+	reducedMotion: boolean,
+): boolean {
 	return supportsScrollDrivenHeaderCollapse() && !reducedMotion;
 }
 
@@ -21,12 +25,18 @@ export function isHeaderCollapseEnabled(
 	return isDesktop && !reducedMotion;
 }
 
-export function getScrollParent(el: HTMLElement | null | undefined): HTMLElement | undefined {
+export function getScrollParent(
+	el: HTMLElement | null | undefined,
+): HTMLElement | undefined {
 	if (!el) return undefined;
 	let node: HTMLElement | null = el.parentElement;
 	while (node) {
 		const overflowY = getComputedStyle(node).overflowY;
-		if (overflowY === "auto" || overflowY === "scroll" || overflowY === "overlay") {
+		if (
+			overflowY === "auto" ||
+			overflowY === "scroll" ||
+			overflowY === "overlay"
+		) {
 			return node;
 		}
 		node = node.parentElement;
@@ -34,13 +44,17 @@ export function getScrollParent(el: HTMLElement | null | undefined): HTMLElement
 	return undefined;
 }
 
-export function findPageScrollContainer(root: HTMLElement | null | undefined): HTMLElement | undefined {
+export function findPageScrollContainer(
+	root: HTMLElement | null | undefined,
+): HTMLElement | undefined {
 	if (!root) return undefined;
 
 	const marked = root.closest<HTMLElement>("[data-page-scroll-container]");
 	if (marked) return marked;
 
-	return getScrollParent(root) ?? root.closest<HTMLElement>("main") ?? undefined;
+	return (
+		getScrollParent(root) ?? root.closest<HTMLElement>("main") ?? undefined
+	);
 }
 
 export function computeHeaderCollapseState(
@@ -103,7 +117,9 @@ export function createHeaderCollapseController(options: {
 }): HeaderCollapseController {
 	const [pageRoot, setPageRoot] = createSignal<HTMLDivElement | undefined>();
 	const [headerEl, setHeaderElement] = createSignal<HTMLElement | undefined>();
-	const [scrollContainer, setScrollContainer] = createSignal<HTMLElement | undefined>();
+	const [scrollContainer, setScrollContainer] = createSignal<
+		HTMLElement | undefined
+	>();
 	let wasCompact = false;
 	let lastProgress = -1;
 	let scrollRaf: number | null = null;
@@ -128,12 +144,19 @@ export function createHeaderCollapseController(options: {
 		lastProgress = -1;
 		const header = headerEl();
 		if (header) {
-			resetHeaderCollapseElement(header, options.classNames, useCssDrivenProgress());
+			resetHeaderCollapseElement(
+				header,
+				options.classNames,
+				useCssDrivenProgress(),
+			);
 		}
 	};
 
 	const isCollapseEnabled = () =>
-		isHeaderCollapseEnabled(options.isDesktop(), options.prefersReducedMotion());
+		isHeaderCollapseEnabled(
+			options.isDesktop(),
+			options.prefersReducedMotion(),
+		);
 
 	const runUpdate = (container: HTMLElement) => {
 		if (!isCollapseEnabled()) {
@@ -143,7 +166,11 @@ export function createHeaderCollapseController(options: {
 
 		const maxScroll = container.scrollHeight - container.clientHeight;
 		const scrollOffset = container.scrollTop;
-		const state = computeHeaderCollapseState(scrollOffset, maxScroll, wasCompact);
+		const state = computeHeaderCollapseState(
+			scrollOffset,
+			maxScroll,
+			wasCompact,
+		);
 
 		if (
 			Math.abs(state.progress - lastProgress) < PROGRESS_EPSILON &&

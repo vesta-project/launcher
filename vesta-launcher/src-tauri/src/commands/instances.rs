@@ -803,14 +803,11 @@ fn redact_vesta_path_prefixes(line: &str) -> String {
 
 fn find_path_start_before(line: &str, marker_start: usize) -> Option<usize> {
     let prefix = &line[..marker_start];
-    let mut unix_start = None;
+    let mut path_start = None;
     for (idx, _) in prefix.match_indices('/') {
         if idx == 0 || is_path_prefix_boundary(prefix.as_bytes()[idx - 1] as char) {
-            unix_start = Some(idx);
+            path_start = Some(idx);
         }
-    }
-    if unix_start.is_some() {
-        return unix_start;
     }
 
     let bytes = prefix.as_bytes();
@@ -820,11 +817,12 @@ fn find_path_start_before(line: &str, marker_start: usize) -> Option<usize> {
             && (bytes[idx + 2] == b'\\' || bytes[idx + 2] == b'/')
             && (idx == 0 || is_path_prefix_boundary(bytes[idx - 1] as char))
         {
-            return Some(idx);
+            path_start = Some(path_start.map_or(idx, |existing| existing.max(idx)));
+            break;
         }
     }
 
-    None
+    path_start
 }
 
 fn is_path_prefix_boundary(ch: char) -> bool {
@@ -3278,7 +3276,11 @@ mod crash_upload_tests {
     fn preserves_vesta_relative_path_context() {
         let raw = "/Users/eatham/Library/Application Support/VestaLauncher/instances/pack/logs/latest.log C:\\Users\\eatham\\AppData\\Roaming\\.VestaLauncher\\instances\\pack\\logs\\latest.log";
         let redacted = redact_log_content(raw);
-        assert!(redacted.contains("<path>/VestaLauncher/instances/pack/logs/latest.log"));
+        assert!(
+            redacted.contains("<path>/VestaLauncher/instances/pack/logs/latest.log"),
+            "redacted: {}",
+            redacted
+        );
         assert!(redacted.contains("<path>/.VestaLauncher\\instances\\pack\\logs\\latest.log"));
         assert!(!redacted.contains("eatham"));
         assert!(!redacted.contains("Application Support"));

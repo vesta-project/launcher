@@ -1,5 +1,8 @@
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import { miniRouterInvalidPage, miniRouterPaths } from "@components/page-viewer/mini-router-config";
+import {
+	miniRouterInvalidPage,
+	miniRouterPaths,
+} from "@components/page-viewer/mini-router-config";
 import { popOutMiniRouter } from "@components/page-viewer/standalone-launcher";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 
@@ -35,7 +38,10 @@ function openMiniPage(
 	const miniRouter = router();
 	if (!miniRouter) {
 		if (import.meta.env.DEV) {
-			console.warn("[openMiniPage] MiniRouter not ready; navigation dropped:", path);
+			console.warn(
+				"[openMiniPage] MiniRouter not ready; navigation dropped:",
+				path,
+			);
 		}
 		return;
 	}
@@ -55,7 +61,10 @@ function openMiniPage(
 		const [nextFuture] = miniRouter.history.future;
 		// After stepping back to library, future may hold the page to redo; resume via
 		// forward when the sidebar target matches. Library-tab dismiss uses past instead.
-		if (nextFuture && futureEntryMatchesTarget(nextFuture, path, targetParams)) {
+		if (
+			nextFuture &&
+			futureEntryMatchesTarget(nextFuture, path, targetParams)
+		) {
 			miniRouter.forwards();
 		} else {
 			miniRouter.navigateFromLibrary(path, targetParams, props);
@@ -117,7 +126,9 @@ function PageViewer(props: PageViewerProps) {
 		<Show when={props.open !== undefined ? props.open : pageViewerOpen()}>
 			<div
 				class={styles["page-viewer-wrapper"]}
-				classList={{ [styles["page-viewer-wrapper--embedded"]]: props.embedded }}
+				classList={{
+					[styles["page-viewer-wrapper--embedded"]]: props.embedded,
+				}}
 			>
 				<div
 					class={`${styles["page-viewer-root"]}${props.embedded ? "" : " liquid-glass"}`}
@@ -143,9 +154,9 @@ function PageViewer(props: PageViewerProps) {
 }
 
 export {
-	PageViewer,
 	dismissToLibrary,
 	openMiniPage,
+	PageViewer,
 	pageViewerOpen,
 	resetLibraryNavigationState,
 	router,

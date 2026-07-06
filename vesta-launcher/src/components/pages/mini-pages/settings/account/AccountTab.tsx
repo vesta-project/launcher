@@ -10,14 +10,37 @@ import { readFile } from "@tauri-apps/plugin-fs";
 import { ResourceAvatar } from "@ui/avatar";
 import { ImageViewer } from "@ui/image-viewer/image-viewer";
 // UI Components
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { SkinView3d } from "@ui/skin-viewer";
-import { Tabs, TabsContent, TabsIndicator, TabsList, TabsTrigger } from "@ui/tabs/tabs";
+import {
+	Tabs,
+	TabsContent,
+	TabsIndicator,
+	TabsList,
+	TabsTrigger,
+} from "@ui/tabs/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { getActiveAccount, setActiveAccount as persistActiveAccount } from "@utils/auth";
+import {
+	getActiveAccount,
+	setActiveAccount as persistActiveAccount,
+} from "@utils/auth";
 import { onConfigUpdate } from "@utils/config-sync";
 import { createNotification } from "@utils/notifications";
-import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import pageStyles from "../settings-page.module.css";
 import styles from "./AccountTab.module.css";
 
@@ -77,7 +100,9 @@ interface CompleteSkinsResponse {
 }
 
 const normalizeVariant = (value?: string | null): "classic" | "slim" => {
-	return String(value || "classic").toLowerCase() === "slim" ? "slim" : "classic";
+	return String(value || "classic").toLowerCase() === "slim"
+		? "slim"
+		: "classic";
 };
 
 const isGuestOrDemoAccountType = (accountType?: string | null): boolean => {
@@ -109,14 +134,22 @@ const toTitleCase = (value: string): string => {
 		.replace(/\s+/g, " ")
 		.trim()
 		.split(" ")
-		.map((word) => (word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word))
+		.map((word) =>
+			word ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word,
+		)
 		.join(" ");
 };
 
-const formatTooltipName = (name: string | undefined, source: string | undefined): string => {
+const formatTooltipName = (
+	name: string | undefined,
+	source: string | undefined,
+): string => {
 	if (!name) return "Skin";
 	const normalizedSource = (source || "").toLowerCase();
-	if (normalizedSource === "default" || normalizedSource.startsWith("default:")) {
+	if (
+		normalizedSource === "default" ||
+		normalizedSource.startsWith("default:")
+	) {
 		return toTitleCase(name);
 	}
 	return name;
@@ -170,7 +203,10 @@ const SkinPortrait = (props: { src: string; variant?: string }) => {
 
 	return (
 		<div class={styles.skinPortrait}>
-			<canvas ref={(el) => (canvasRef = el)} class={styles.skinPortraitCanvas} />
+			<canvas
+				ref={(el) => (canvasRef = el)}
+				class={styles.skinPortraitCanvas}
+			/>
 		</div>
 	);
 };
@@ -186,7 +222,9 @@ export function AccountSettingsTab() {
 	const [viewerSrc, setViewerSrc] = createSignal<string | null>(null);
 	const [compactActionMode, setCompactActionMode] = createSignal(false);
 	const [isNarrowLayout, setIsNarrowLayout] = createSignal(false);
-	const [narrowView, setNarrowView] = createSignal<"browse" | "preview">("browse");
+	const [narrowView, setNarrowView] = createSignal<"browse" | "preview">(
+		"browse",
+	);
 
 	const [savedSnapshot, setSavedSnapshot] = createSignal<{
 		skinUrl: string;
@@ -198,10 +236,14 @@ export function AccountSettingsTab() {
 
 	// Preview Signals
 	const [previewSkinUrl, setPreviewSkinUrl] = createSignal<string>("");
-	const [previewComputedKey, setPreviewComputedKey] = createSignal<string | null>(null);
+	const [previewComputedKey, setPreviewComputedKey] = createSignal<
+		string | null
+	>(null);
 	const [previewCapeId, setPreviewCapeId] = createSignal<string | null>(null);
 	const [previewCapeUrl, setPreviewCapeUrl] = createSignal<string | null>("");
-	const [previewVariant, setPreviewVariant] = createSignal<"classic" | "slim">("classic");
+	const [previewVariant, setPreviewVariant] = createSignal<"classic" | "slim">(
+		"classic",
+	);
 
 	const loadData = async () => {
 		try {
@@ -216,11 +258,16 @@ export function AccountSettingsTab() {
 					// Trigger a background sync on mount to ensure we have the latest from Mojang
 					invoke("force_sync_account_profile", { accountUuid: active.uuid })
 						.then(async () => {
-							console.log("[AccountSettings] Background sync on mount completed");
+							console.log(
+								"[AccountSettings] Background sync on mount completed",
+							);
 							// Fetch the updated data from DB after the sync finishes
-							const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", {
-								accountUuid: active.uuid,
-							});
+							const res = await invoke<CompleteSkinsResponse>(
+								"get_complete_skin_data",
+								{
+									accountUuid: active.uuid,
+								},
+							);
 							setSkins(res.default_skins);
 							setSkinHistory(res.recent_history);
 							setCapes(
@@ -234,8 +281,9 @@ export function AccountSettingsTab() {
 							setAccounts(refreshedAccounts);
 							const activeUuid = active.uuid.replace(/-/g, "");
 							const refreshedActive =
-								refreshedAccounts.find((account) => account.uuid.replace(/-/g, "") === activeUuid) ||
-								active;
+								refreshedAccounts.find(
+									(account) => account.uuid.replace(/-/g, "") === activeUuid,
+								) || active;
 							setActiveAccount(refreshedActive);
 
 							// Only update preview/snapshot if user hasn't touched anything yet (still matches initial snapshot)
@@ -247,26 +295,43 @@ export function AccountSettingsTab() {
 									previewCapeId() === snapshot.capeId &&
 									previewVariant() === snapshot.variant)
 							) {
-								setPreviewSkinUrl(res.current_skin_base64 || refreshedActive.skin_url || "");
-								setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
-								setPreviewCapeUrl(res.current_cape_base64 || refreshedActive.cape_url || "");
+								setPreviewSkinUrl(
+									res.current_skin_base64 || refreshedActive.skin_url || "",
+								);
+								setPreviewVariant(
+									(res.current_variant as "classic" | "slim") || "classic",
+								);
+								setPreviewCapeUrl(
+									res.current_cape_base64 || refreshedActive.cape_url || "",
+								);
 								setPreviewComputedKey(res.current_skin_id);
 								setPreviewCapeId(res.current_cape_profile_id || null);
 
 								setSavedSnapshot({
-									skinUrl: res.current_skin_base64 || refreshedActive.skin_url || "",
-									capeUrl: res.current_cape_base64 || refreshedActive.cape_url || null,
+									skinUrl:
+										res.current_skin_base64 || refreshedActive.skin_url || "",
+									capeUrl:
+										res.current_cape_base64 || refreshedActive.cape_url || null,
 									skinKey: res.current_skin_id || null,
 									capeId: res.current_cape_profile_id || null,
-									variant: (res.current_variant as "classic" | "slim") || "classic",
+									variant:
+										(res.current_variant as "classic" | "slim") || "classic",
 								});
 							}
 						})
-						.catch((err) => console.error("[AccountSettings] Background sync on mount failed:", err));
+						.catch((err) =>
+							console.error(
+								"[AccountSettings] Background sync on mount failed:",
+								err,
+							),
+						);
 
-					const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", {
-						accountUuid: active.uuid,
-					});
+					const res = await invoke<CompleteSkinsResponse>(
+						"get_complete_skin_data",
+						{
+							accountUuid: active.uuid,
+						},
+					);
 					setSkins(res.default_skins);
 					setSkinHistory(res.recent_history);
 					setCapes(
@@ -278,7 +343,9 @@ export function AccountSettingsTab() {
 					);
 
 					setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
-					setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
+					setPreviewVariant(
+						(res.current_variant as "classic" | "slim") || "classic",
+					);
 					setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 					setPreviewComputedKey(res.current_skin_id);
 					setPreviewCapeId(res.current_cape_profile_id || null);
@@ -363,7 +430,10 @@ export function AccountSettingsTab() {
 			if (snapshot.skinKey !== previewSkinKey) return true;
 		} else {
 			// Fallback to URL normalization if keys aren't available for some reason
-			if (normalizeSkinComparable(previewSkin) !== normalizeSkinComparable(snapshot.skinUrl || ""))
+			if (
+				normalizeSkinComparable(previewSkin) !==
+				normalizeSkinComparable(snapshot.skinUrl || "")
+			)
 				return true;
 		}
 
@@ -372,7 +442,10 @@ export function AccountSettingsTab() {
 		return previewVar !== snapshot.variant;
 	});
 
-	const getSkinTexture = (skin: Skin | null, variant: "classic" | "slim"): string => {
+	const getSkinTexture = (
+		skin: Skin | null,
+		variant: "classic" | "slim",
+	): string => {
 		if (!skin) return "";
 		const { source } = skin;
 		if (!source) return "";
@@ -392,10 +465,14 @@ export function AccountSettingsTab() {
 		const previewKey = previewComputedKey();
 
 		if (previewKey) {
-			const presetByKey = skins().find((skin) => skin.texture_key === previewKey);
+			const presetByKey = skins().find(
+				(skin) => skin.texture_key === previewKey,
+			);
 			if (presetByKey) return presetByKey;
 
-			const historyByKey = skinHistory().find((item) => item.texture_key === previewKey);
+			const historyByKey = skinHistory().find(
+				(item) => item.texture_key === previewKey,
+			);
 			if (historyByKey) {
 				return {
 					texture_key: historyByKey.texture_key,
@@ -414,9 +491,16 @@ export function AccountSettingsTab() {
 
 		const normalizedPreview = normalizeSkinComparable(previewUrl);
 		const presetByUrl = skins().find((skin) => {
-			const classicComparable = normalizeSkinComparable(getSkinTexture(skin, "classic"));
-			const slimComparable = normalizeSkinComparable(getSkinTexture(skin, "slim"));
-			return classicComparable === normalizedPreview || slimComparable === normalizedPreview;
+			const classicComparable = normalizeSkinComparable(
+				getSkinTexture(skin, "classic"),
+			);
+			const slimComparable = normalizeSkinComparable(
+				getSkinTexture(skin, "slim"),
+			);
+			return (
+				classicComparable === normalizedPreview ||
+				slimComparable === normalizedPreview
+			);
 		});
 		if (presetByUrl) return presetByUrl;
 
@@ -479,11 +563,15 @@ export function AccountSettingsTab() {
 	});
 
 	const defaultCategories = createMemo(() =>
-		skinHistoryCategories().filter((category) => !category.toLowerCase().includes("event")),
+		skinHistoryCategories().filter(
+			(category) => !category.toLowerCase().includes("event"),
+		),
 	);
 
 	const eventCategories = createMemo(() =>
-		skinHistoryCategories().filter((category) => category.toLowerCase().includes("event")),
+		skinHistoryCategories().filter((category) =>
+			category.toLowerCase().includes("event"),
+		),
 	);
 
 	const filteredRecentHistory = createMemo(() => {
@@ -560,7 +648,10 @@ export function AccountSettingsTab() {
 				const filePath = typeof file === "string" ? file : (file as any).path;
 				const fileData = await readFile(filePath);
 				const base64 = btoa(
-					new Uint8Array(fileData).reduce((data, byte) => data + String.fromCharCode(byte), ""),
+					new Uint8Array(fileData).reduce(
+						(data, byte) => data + String.fromCharCode(byte),
+						"",
+					),
 				);
 				const dataUrl = `data:image/png;base64,${base64}`;
 				setPreviewSkinUrl(dataUrl);
@@ -575,7 +666,10 @@ export function AccountSettingsTab() {
 					detectedVariant = normalizeVariant(detected);
 					setPreviewVariant(detectedVariant);
 				} catch (e) {
-					console.warn("Could not auto-detect uploaded skin variant, keeping current selection", e);
+					console.warn(
+						"Could not auto-detect uploaded skin variant, keeping current selection",
+						e,
+					);
 				}
 
 				// Add to history preview immediately
@@ -584,9 +678,12 @@ export function AccountSettingsTab() {
 					// Compute the authoritative texture_key for the uploaded bytes via backend
 					let computedKey: string | null = null;
 					try {
-						computedKey = await invoke<string>("compute_texture_key_from_base64", {
-							base64Data: dataUrl,
-						});
+						computedKey = await invoke<string>(
+							"compute_texture_key_from_base64",
+							{
+								base64Data: dataUrl,
+							},
+						);
 						console.log("uploadSkin: computed texture_key for uploaded file", {
 							computedKey,
 						});
@@ -616,7 +713,9 @@ export function AccountSettingsTab() {
 							source: "local",
 						};
 						// Add to start and dedup by texture_key (prefer authoritative key when available)
-						const filtered = prev.filter((h) => h.texture_key !== newEntry.texture_key);
+						const filtered = prev.filter(
+							(h) => h.texture_key !== newEntry.texture_key,
+						);
 						return [newEntry, ...filtered];
 					});
 				}
@@ -662,7 +761,10 @@ export function AccountSettingsTab() {
 						accountUuid: active.uuid,
 						textureUrl: previewSkinUrl(),
 						variant: previewVariant(),
-						category: (activeSkin()?.source as any)?.category || activeSkin()?.source.type || "Preset",
+						category:
+							(activeSkin()?.source as any)?.category ||
+							activeSkin()?.source.type ||
+							"Preset",
 					});
 				}
 			}
@@ -681,9 +783,12 @@ export function AccountSettingsTab() {
 				}
 			}
 
-			const res = await invoke<CompleteSkinsResponse>("get_complete_skin_data", {
-				accountUuid: active.uuid,
-			});
+			const res = await invoke<CompleteSkinsResponse>(
+				"get_complete_skin_data",
+				{
+					accountUuid: active.uuid,
+				},
+			);
 			setSkins(res.default_skins);
 			setSkinHistory(res.recent_history);
 			setCapes(
@@ -695,7 +800,9 @@ export function AccountSettingsTab() {
 			);
 
 			setPreviewSkinUrl(res.current_skin_base64 || active.skin_url || "");
-			setPreviewVariant((res.current_variant as "classic" | "slim") || "classic");
+			setPreviewVariant(
+				(res.current_variant as "classic" | "slim") || "classic",
+			);
 			setPreviewCapeUrl(res.current_cape_base64 || active.cape_url || "");
 			setPreviewComputedKey(res.current_skin_id);
 			setPreviewCapeId(res.current_cape_profile_id || null);
@@ -738,7 +845,9 @@ export function AccountSettingsTab() {
 
 	const getAccountDisplayName = (account?: Account | null) => {
 		if (!account) return "Select account";
-		return account.display_name || account.username || account.name || "Account";
+		return (
+			account.display_name || account.username || account.name || "Account"
+		);
 	};
 
 	const renderAccountSwitcher = (triggerClass?: string) => (
@@ -762,7 +871,9 @@ export function AccountSettingsTab() {
 							shape="square"
 						/>
 						<div class={styles.accountSelectText}>
-							<span class={styles.accountSelectName}>{getAccountDisplayName(props.item.rawValue)}</span>
+							<span class={styles.accountSelectName}>
+								{getAccountDisplayName(props.item.rawValue)}
+							</span>
 						</div>
 					</div>
 				</SelectItem>
@@ -772,7 +883,9 @@ export function AccountSettingsTab() {
 				<SelectValue<Account>>
 					{(state) => {
 						const selected = state.selectedOption();
-						const selectedName = getAccountDisplayName(selected || activeAccount());
+						const selectedName = getAccountDisplayName(
+							selected || activeAccount(),
+						);
 						return (
 							<div class={styles.accountSelectValue}>
 								<ResourceAvatar
@@ -807,7 +920,9 @@ export function AccountSettingsTab() {
 
 	const renderSkinCategorySection = (category: string) => {
 		const categorySkins = () => {
-			const defaults = skins().filter((s) => (s.source as any).category === category);
+			const defaults = skins().filter(
+				(s) => (s.source as any).category === category,
+			);
 			const historyPresets = skinHistory()
 				.filter((h) => h.source === category)
 				.map(
@@ -857,7 +972,8 @@ export function AccountSettingsTab() {
 						<For each={categorySkins()}>
 							{(skin) => {
 								const classicTexture = getSkinTexture(skin, "classic");
-								const preferredTexture = getSkinTexture(skin, previewVariant()) || classicTexture;
+								const preferredTexture =
+									getSkinTexture(skin, previewVariant()) || classicTexture;
 
 								const isSelected = createMemo(() => {
 									return isSkinSelected(preferredTexture, skin.texture_key);
@@ -875,7 +991,9 @@ export function AccountSettingsTab() {
 											>
 												<SkinPortrait
 													src={preferredTexture}
-													variant={(skin.source as any)?.variant || previewVariant()}
+													variant={
+														(skin.source as any)?.variant || previewVariant()
+													}
 												/>
 												<Tooltip>
 													<TooltipTrigger
@@ -901,7 +1019,10 @@ export function AccountSettingsTab() {
 											</div>
 										</TooltipTrigger>
 										<TooltipContent>
-											{formatTooltipName(skin.name || "Default Skin", (skin.source as any)?.type)}
+											{formatTooltipName(
+												skin.name || "Default Skin",
+												(skin.source as any)?.type,
+											)}
 										</TooltipContent>
 									</Tooltip>
 								);
@@ -914,20 +1035,294 @@ export function AccountSettingsTab() {
 	};
 
 	return (
-		<div class={`${pageStyles["settings-tab-content"]} ${pageStyles["settings-tab-content--wide"]} ${pageStyles["settings-tab-content--fill"]}`}>
-		<div class={styles.container}>
-			<Show when={activeAccount()} fallback={<div class={styles.noAccount}>No account connected</div>}>
-				{(active) => (
-					<>
-						<Show when={isNarrowLayout()}>
-							<div class={styles.viewToolbar}>
-								<Show
-									when={!isDirty()}
-									fallback={
-										<div class={styles.toolbarActions}>
+		<div
+			class={`${pageStyles["settings-tab-content"]} ${pageStyles["settings-tab-content--wide"]} ${pageStyles["settings-tab-content--fill"]}`}
+		>
+			<div class={styles.container}>
+				<Show
+					when={activeAccount()}
+					fallback={<div class={styles.noAccount}>No account connected</div>}
+				>
+					{(active) => (
+						<>
+							<Show when={isNarrowLayout()}>
+								<div class={styles.viewToolbar}>
+									<Show
+										when={!isDirty()}
+										fallback={
+											<div class={styles.toolbarActions}>
+												<button
+													type="button"
+													class={styles.toolbarRevertButton}
+													disabled={saving()}
+													onClick={revertChanges}
+												>
+													Revert
+												</button>
+												<button
+													type="button"
+													class={styles.toolbarSaveButton}
+													disabled={saving()}
+													onClick={handleSave}
+												>
+													<Show when={saving()}>
+														<RefreshIcon width="14" class="spin" />
+													</Show>
+													{saving() ? "Syncing..." : "Apply"}
+												</button>
+											</div>
+										}
+									>
+										<div class={styles.toolbarAccountSwitcher}>
+											{renderAccountSwitcher(styles.toolbarAccountSelect)}
+										</div>
+									</Show>
+
+									<div class={styles.narrowViewToggle}>
+										<Tooltip>
+											<TooltipTrigger
+												as="button"
+												type="button"
+												class={styles.narrowViewIcon}
+												classList={{
+													[styles.active]: narrowView() === "browse",
+												}}
+												onClick={() => setNarrowView("browse")}
+												aria-label="Browse skins"
+											>
+												<ViewIcon width="16" height="16" />
+											</TooltipTrigger>
+											<TooltipContent>Browse skins</TooltipContent>
+										</Tooltip>
+
+										<Tooltip>
+											<TooltipTrigger
+												as="button"
+												type="button"
+												class={styles.narrowViewIcon}
+												classList={{
+													[styles.active]: narrowView() === "preview",
+												}}
+												onClick={() => setNarrowView("preview")}
+												aria-label="Preview"
+											>
+												<SkinIcon width="16" height="16" />
+											</TooltipTrigger>
+											<TooltipContent>Preview</TooltipContent>
+										</Tooltip>
+
+										<Tooltip>
+											<TooltipTrigger
+												as="button"
+												type="button"
+												class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
+												onClick={handleUploadSkin}
+												aria-label="Upload custom skin"
+											>
+												<PlusIcon width="16" height="16" />
+											</TooltipTrigger>
+											<TooltipContent>Upload custom skin</TooltipContent>
+										</Tooltip>
+									</div>
+								</div>
+							</Show>
+
+							<div
+								class={styles.leftSection}
+								classList={{
+									[styles.hiddenOnNarrow]:
+										isNarrowLayout() && narrowView() !== "browse",
+								}}
+							>
+								<Tabs
+									value={browseTab()}
+									onChange={setBrowseTab}
+									class={styles.browseTabs}
+								>
+									<div class={styles.browseTabsHeader}>
+										<TabsList class={styles.browseTabsList}>
+											<TabsIndicator />
+											<TabsTrigger
+												class={styles.browseTabsTrigger}
+												value="recent"
+											>
+												Recent
+											</TabsTrigger>
+											<TabsTrigger
+												class={styles.browseTabsTrigger}
+												value="defaults"
+											>
+												Default
+											</TabsTrigger>
+											<TabsTrigger
+												class={styles.browseTabsTrigger}
+												value="events"
+											>
+												Events
+											</TabsTrigger>
+											<TabsTrigger
+												class={styles.browseTabsTrigger}
+												value="capes"
+											>
+												Capes
+											</TabsTrigger>
+										</TabsList>
+									</div>
+
+									<TabsContent value="recent" class={styles.browseTabsContent}>
+										<section class={styles.contentCard}>
+											<div class={styles.cardHeader}>
+												<h2 class={styles.cardTitle}>Recent Skins</h2>
+											</div>
+											<div class={styles.presetsGrid}>
+												<For each={filteredRecentHistory()}>
+													{(item) => {
+														const selected = createMemo(() =>
+															isSkinSelected(item.image_data, item.texture_key),
+														);
+														return (
+															<Tooltip>
+																<TooltipTrigger as="div">
+																	<div
+																		class={styles.skinItem}
+																		classList={{
+																			[styles.selected]: selected(),
+																		}}
+																		onClick={() => handlePreviewHistory(item)}
+																	>
+																		<SkinPortrait
+																			src={item.image_data}
+																			variant={item.variant}
+																		/>
+																		<Tooltip placement="top">
+																			<TooltipTrigger
+																				as="button"
+																				class={styles.viewRawButton}
+																				onClick={(e) => {
+																					e.stopPropagation();
+																					setViewerSrc(item.image_data);
+																				}}
+																				aria-label="View raw texture"
+																			>
+																				<ViewIcon width="16" />
+																			</TooltipTrigger>
+																			<TooltipContent>
+																				View raw texture
+																			</TooltipContent>
+																		</Tooltip>
+																		<Show when={selected()}>
+																			<span class={styles.selectedBadge}>
+																				✓
+																			</span>
+																		</Show>
+																	</div>
+																</TooltipTrigger>
+																<TooltipContent>
+																	{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
+																</TooltipContent>
+															</Tooltip>
+														);
+													}}
+												</For>
+											</div>
+										</section>
+									</TabsContent>
+
+									<TabsContent
+										value="defaults"
+										class={styles.browseTabsContent}
+									>
+										<For each={defaultCategories()}>
+											{(category) => renderSkinCategorySection(category)}
+										</For>
+									</TabsContent>
+
+									<TabsContent value="events" class={styles.browseTabsContent}>
+										<For each={eventCategories()}>
+											{(category) => renderSkinCategorySection(category)}
+										</For>
+									</TabsContent>
+
+									<TabsContent value="capes" class={styles.browseTabsContent}>
+										<section class={styles.contentCard}>
+											<div class={styles.cardHeader}>
+												<CapeIcon width="20" style="color: var(--primary)" />
+												<h2 class={styles.cardTitle}>Capes & Accessories</h2>
+											</div>
+											<div class={styles.capesGrid}>
+												<button
+													class={styles.capeItem}
+													classList={{
+														[styles.selected]: !previewCapeId(),
+													}}
+													onClick={() => handlePreviewCape(null)}
+												>
+													<span class={styles.noneLabel}>NONE</span>
+													<Show when={!previewCapeId()}>
+														<span class={styles.selectedBadge}>
+															<svg viewBox="0 0 24 24">
+																<polyline points="20 6 9 17 4 12" />
+															</svg>
+														</span>
+													</Show>
+												</button>
+												<For each={capes()}>
+													{(cape) => {
+														const isSelected = createMemo(
+															() => previewCapeId() === cape.id,
+														);
+
+														return (
+															<Tooltip>
+																<TooltipTrigger
+																	as="button"
+																	class={styles.capeItem}
+																	style={{
+																		"background-image": `url(${cape.url})`,
+																	}}
+																	classList={{
+																		[styles.selected]: isSelected(),
+																	}}
+																	onClick={() => handlePreviewCape(cape)}
+																	aria-label={cape.name}
+																>
+																	<Show when={isSelected()}>
+																		<span class={styles.selectedBadge}>
+																			<svg viewBox="0 0 24 24">
+																				<polyline points="20 6 9 17 4 12" />
+																			</svg>
+																		</span>
+																	</Show>
+																</TooltipTrigger>
+																<TooltipContent>{cape.name}</TooltipContent>
+															</Tooltip>
+														);
+													}}
+												</For>
+											</div>
+										</section>
+									</TabsContent>
+								</Tabs>
+							</div>
+
+							<aside
+								class={styles.visualizerSidebar}
+								classList={{
+									[styles.hiddenOnNarrow]:
+										isNarrowLayout() && narrowView() !== "preview",
+								}}
+							>
+								<Show when={isDirty() && !isNarrowLayout()}>
+									<section
+										class={styles.actionCard}
+										classList={{
+											[styles.compactActionCard]: compactActionMode(),
+										}}
+									>
+										<div class={styles.actionButtonsRow}>
 											<button
 												type="button"
-												class={styles.toolbarRevertButton}
+												class={styles.revertButton}
 												disabled={saving()}
 												onClick={revertChanges}
 											>
@@ -935,333 +1330,109 @@ export function AccountSettingsTab() {
 											</button>
 											<button
 												type="button"
-												class={styles.toolbarSaveButton}
+												class={styles.saveButton}
 												disabled={saving()}
 												onClick={handleSave}
 											>
 												<Show when={saving()}>
-													<RefreshIcon width="14" class="spin" />
+													<RefreshIcon width="18" class="spin" />
 												</Show>
-												{saving() ? "Syncing..." : "Apply"}
+												{saving() ? "Syncing..." : "Apply Changes"}
 											</button>
 										</div>
-									}
-								>
-									<div class={styles.toolbarAccountSwitcher}>
-										{renderAccountSwitcher(styles.toolbarAccountSelect)}
-									</div>
+									</section>
 								</Show>
 
-								<div class={styles.narrowViewToggle}>
-									<Tooltip>
-										<TooltipTrigger
-											as="button"
-											type="button"
-											class={styles.narrowViewIcon}
-											classList={{
-												[styles.active]: narrowView() === "browse",
-											}}
-											onClick={() => setNarrowView("browse")}
-											aria-label="Browse skins"
-										>
-											<ViewIcon width="16" height="16" />
-										</TooltipTrigger>
-										<TooltipContent>Browse skins</TooltipContent>
-									</Tooltip>
-
-									<Tooltip>
-										<TooltipTrigger
-											as="button"
-											type="button"
-											class={styles.narrowViewIcon}
-											classList={{
-												[styles.active]: narrowView() === "preview",
-											}}
-											onClick={() => setNarrowView("preview")}
-											aria-label="Preview"
-										>
-											<SkinIcon width="16" height="16" />
-										</TooltipTrigger>
-										<TooltipContent>Preview</TooltipContent>
-									</Tooltip>
-
-									<Tooltip>
-										<TooltipTrigger
-											as="button"
-											type="button"
-											class={`${styles.narrowViewIcon} ${styles.narrowUploadIcon}`}
-											onClick={handleUploadSkin}
-											aria-label="Upload custom skin"
-										>
-											<PlusIcon width="16" height="16" />
-										</TooltipTrigger>
-										<TooltipContent>Upload custom skin</TooltipContent>
-									</Tooltip>
-								</div>
-							</div>
-						</Show>
-
-						<div
-							class={styles.leftSection}
-							classList={{
-								[styles.hiddenOnNarrow]: isNarrowLayout() && narrowView() !== "browse",
-							}}
-						>
-							<Tabs value={browseTab()} onChange={setBrowseTab} class={styles.browseTabs}>
-								<div class={styles.browseTabsHeader}>
-									<TabsList class={styles.browseTabsList}>
-										<TabsIndicator />
-										<TabsTrigger class={styles.browseTabsTrigger} value="recent">
-											Recent
-										</TabsTrigger>
-										<TabsTrigger class={styles.browseTabsTrigger} value="defaults">
-											Default
-										</TabsTrigger>
-										<TabsTrigger class={styles.browseTabsTrigger} value="events">
-											Events
-										</TabsTrigger>
-										<TabsTrigger class={styles.browseTabsTrigger} value="capes">
-											Capes
-										</TabsTrigger>
-									</TabsList>
-								</div>
-
-								<TabsContent value="recent" class={styles.browseTabsContent}>
-									<section class={styles.contentCard}>
-										<div class={styles.cardHeader}>
-											<h2 class={styles.cardTitle}>Recent Skins</h2>
-										</div>
-										<div class={styles.presetsGrid}>
-											<For each={filteredRecentHistory()}>
-												{(item) => {
-													const selected = createMemo(() => isSkinSelected(item.image_data, item.texture_key));
-													return (
-														<Tooltip>
-															<TooltipTrigger as="div">
-																<div
-																	class={styles.skinItem}
-																	classList={{
-																		[styles.selected]: selected(),
-																	}}
-																	onClick={() => handlePreviewHistory(item)}
-																>
-																	<SkinPortrait src={item.image_data} variant={item.variant} />
-																	<Tooltip placement="top">
-																		<TooltipTrigger
-																			as="button"
-																			class={styles.viewRawButton}
-																			onClick={(e) => {
-																				e.stopPropagation();
-																				setViewerSrc(item.image_data);
-																			}}
-																			aria-label="View raw texture"
-																		>
-																			<ViewIcon width="16" />
-																		</TooltipTrigger>
-																		<TooltipContent>View raw texture</TooltipContent>
-																	</Tooltip>
-																	<Show when={selected()}>
-																		<span class={styles.selectedBadge}>✓</span>
-																	</Show>
-																</div>
-															</TooltipTrigger>
-															<TooltipContent>
-																{`${formatTooltipName(item.name, item.source)} (${item.variant})`}
-															</TooltipContent>
-														</Tooltip>
-													);
-												}}
-											</For>
-										</div>
+								<Show when={!isDirty() && !isNarrowLayout()}>
+									<section>
+										{renderAccountSwitcher(styles.accountSwitcherSelect)}
 									</section>
-								</TabsContent>
+								</Show>
 
-								<TabsContent value="defaults" class={styles.browseTabsContent}>
-									<For each={defaultCategories()}>{(category) => renderSkinCategorySection(category)}</For>
-								</TabsContent>
-
-								<TabsContent value="events" class={styles.browseTabsContent}>
-									<For each={eventCategories()}>{(category) => renderSkinCategorySection(category)}</For>
-								</TabsContent>
-
-								<TabsContent value="capes" class={styles.browseTabsContent}>
-									<section class={styles.contentCard}>
-										<div class={styles.cardHeader}>
-											<CapeIcon width="20" style="color: var(--primary)" />
-											<h2 class={styles.cardTitle}>Capes & Accessories</h2>
-										</div>
-										<div class={styles.capesGrid}>
-											<button
-												class={styles.capeItem}
-												classList={{
-													[styles.selected]: !previewCapeId(),
-												}}
-												onClick={() => handlePreviewCape(null)}
+								<section class={styles.visualizerCard}>
+									<Show when={!isNarrowLayout()}>
+										<Tooltip>
+											<TooltipTrigger
+												as="button"
+												type="button"
+												class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
+												onClick={handleUploadSkin}
+												aria-label="Upload custom skin"
 											>
-												<span class={styles.noneLabel}>NONE</span>
-												<Show when={!previewCapeId()}>
-													<span class={styles.selectedBadge}>
-														<svg viewBox="0 0 24 24">
-															<polyline points="20 6 9 17 4 12" />
-														</svg>
-													</span>
-												</Show>
-											</button>
-											<For each={capes()}>
-												{(cape) => {
-													const isSelected = createMemo(() => previewCapeId() === cape.id);
+												<PlusIcon width="18" />
+											</TooltipTrigger>
+											<TooltipContent>Upload custom skin</TooltipContent>
+										</Tooltip>
+									</Show>
 
-													return (
-														<Tooltip>
-															<TooltipTrigger
-																as="button"
-																class={styles.capeItem}
-																style={{
-																	"background-image": `url(${cape.url})`,
-																}}
-																classList={{
-																	[styles.selected]: isSelected(),
-																}}
-																onClick={() => handlePreviewCape(cape)}
-																aria-label={cape.name}
-															>
-																<Show when={isSelected()}>
-																	<span class={styles.selectedBadge}>
-																		<svg viewBox="0 0 24 24">
-																			<polyline points="20 6 9 17 4 12" />
-																		</svg>
-																	</span>
-																</Show>
-															</TooltipTrigger>
-															<TooltipContent>{cape.name}</TooltipContent>
-														</Tooltip>
-													);
-												}}
-											</For>
-										</div>
-									</section>
-								</TabsContent>
-							</Tabs>
-						</div>
+									<div class={styles.visualizerWrapper}>
+										<SkinView3d
+											skinUrl={previewSkinUrl() || undefined}
+											capeUrl={previewCapeUrl() || ""}
+											model={previewVariant()}
+											animation="walking"
+											animationSpeed={0.5}
+											enableZoom={false}
+										/>
+									</div>
 
-						<aside
-							class={styles.visualizerSidebar}
-							classList={{
-								[styles.hiddenOnNarrow]: isNarrowLayout() && narrowView() !== "preview",
-							}}
-						>
-							<Show when={isDirty() && !isNarrowLayout()}>
-								<section
-									class={styles.actionCard}
-									classList={{
-										[styles.compactActionCard]: compactActionMode(),
-									}}
-								>
-									<div class={styles.actionButtonsRow}>
+									<div class={styles.modelToggle}>
 										<button
 											type="button"
-											class={styles.revertButton}
-											disabled={saving()}
-											onClick={revertChanges}
+											class={styles.toggleBtn}
+											classList={{
+												[styles.active]: previewVariant() === "classic",
+											}}
+											onClick={() => {
+												setPreviewVariant("classic");
+												const skin = activeSkin();
+												if (
+													skin &&
+													skin.source?.type === "default" &&
+													skin.source.classic_texture &&
+													skin.source.slim_texture
+												) {
+													setPreviewSkinUrl(getSkinTexture(skin, "classic"));
+												}
+											}}
 										>
-											Revert
+											Classic
 										</button>
-										<button type="button" class={styles.saveButton} disabled={saving()} onClick={handleSave}>
-											<Show when={saving()}>
-												<RefreshIcon width="18" class="spin" />
-											</Show>
-											{saving() ? "Syncing..." : "Apply Changes"}
+										<button
+											type="button"
+											class={styles.toggleBtn}
+											classList={{
+												[styles.active]: previewVariant() === "slim",
+											}}
+											onClick={() => {
+												setPreviewVariant("slim");
+												const skin = activeSkin();
+												if (
+													skin &&
+													skin.source?.type === "default" &&
+													skin.source.classic_texture &&
+													skin.source.slim_texture
+												) {
+													setPreviewSkinUrl(getSkinTexture(skin, "slim"));
+												}
+											}}
+										>
+											Slim
 										</button>
 									</div>
 								</section>
-							</Show>
-
-							<Show when={!isDirty() && !isNarrowLayout()}>
-								<section>{renderAccountSwitcher(styles.accountSwitcherSelect)}</section>
-							</Show>
-
-							<section class={styles.visualizerCard}>
-								<Show when={!isNarrowLayout()}>
-									<Tooltip>
-										<TooltipTrigger
-											as="button"
-											type="button"
-											class={`${styles.uploadSkinButton} ${styles.floatingUploadButton}`}
-											onClick={handleUploadSkin}
-											aria-label="Upload custom skin"
-										>
-											<PlusIcon width="18" />
-										</TooltipTrigger>
-										<TooltipContent>Upload custom skin</TooltipContent>
-									</Tooltip>
-								</Show>
-
-								<div class={styles.visualizerWrapper}>
-									<SkinView3d
-										skinUrl={previewSkinUrl() || undefined}
-										capeUrl={previewCapeUrl() || ""}
-										model={previewVariant()}
-										animation="walking"
-										animationSpeed={0.5}
-										enableZoom={false}
-									/>
-								</div>
-
-								<div class={styles.modelToggle}>
-									<button
-										type="button"
-										class={styles.toggleBtn}
-										classList={{
-											[styles.active]: previewVariant() === "classic",
-										}}
-										onClick={() => {
-											setPreviewVariant("classic");
-											const skin = activeSkin();
-											if (
-												skin &&
-												skin.source?.type === "default" &&
-												skin.source.classic_texture &&
-												skin.source.slim_texture
-											) {
-												setPreviewSkinUrl(getSkinTexture(skin, "classic"));
-											}
-										}}
-									>
-										Classic
-									</button>
-									<button
-										type="button"
-										class={styles.toggleBtn}
-										classList={{ [styles.active]: previewVariant() === "slim" }}
-										onClick={() => {
-											setPreviewVariant("slim");
-											const skin = activeSkin();
-											if (
-												skin &&
-												skin.source?.type === "default" &&
-												skin.source.classic_texture &&
-												skin.source.slim_texture
-											) {
-												setPreviewSkinUrl(getSkinTexture(skin, "slim"));
-											}
-										}}
-									>
-										Slim
-									</button>
-								</div>
-							</section>
-						</aside>
-					</>
-				)}
-			</Show>
-			<ImageViewer
-				src={viewerSrc()}
-				onClose={() => setViewerSrc(null)}
-				title="Skin Texture Preview"
-				scale={4}
-				pixelated={true}
-			/>
-		</div>
+							</aside>
+						</>
+					)}
+				</Show>
+				<ImageViewer
+					src={viewerSrc()}
+					onClose={() => setViewerSrc(null)}
+					title="Skin Texture Preview"
+					scale={4}
+					pixelated={true}
+				/>
+			</div>
 		</div>
 	);
 }

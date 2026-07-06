@@ -91,6 +91,10 @@ pub fn normalize_opened_path(arg: &str) -> Option<String> {
         return None;
     }
 
+    if trimmed.contains('\\') || (trimmed.len() >= 2 && trimmed.as_bytes()[1] == b':') {
+        return Some(trimmed.to_string());
+    }
+
     if let Ok(url) = url::Url::parse(trimmed) {
         if url.scheme() == "file" {
             return url

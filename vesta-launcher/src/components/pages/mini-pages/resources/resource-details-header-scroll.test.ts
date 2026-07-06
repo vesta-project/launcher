@@ -53,7 +53,9 @@ describe("applyHeaderCollapseToElement", () => {
 			floating: "floating",
 		});
 
-		expect(header.style.getPropertyValue("--header-collapse-progress")).toBe("0.5");
+		expect(header.style.getPropertyValue("--header-collapse-progress")).toBe(
+			"0.5",
+		);
 		expect(header.classList.contains("floating")).toBe(true);
 		expect(header.classList.contains("compact")).toBe(false);
 	});
@@ -70,7 +72,9 @@ describe("applyHeaderCollapseToElement", () => {
 			true,
 		);
 
-		expect(header.style.getPropertyValue("--header-collapse-progress")).toBe("");
+		expect(header.style.getPropertyValue("--header-collapse-progress")).toBe(
+			"",
+		);
 		expect(header.classList.contains("compact")).toBe(true);
 	});
 
@@ -81,7 +85,10 @@ describe("applyHeaderCollapseToElement", () => {
 			floating: "floating",
 		});
 
-		resetHeaderCollapseElement(header, { compact: "compact", floating: "floating" });
+		resetHeaderCollapseElement(header, {
+			compact: "compact",
+			floating: "floating",
+		});
 
 		expect(header.classList.contains("compact")).toBe(false);
 		expect(header.classList.contains("floating")).toBe(false);

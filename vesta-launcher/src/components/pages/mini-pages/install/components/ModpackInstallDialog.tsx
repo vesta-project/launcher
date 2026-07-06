@@ -6,13 +6,13 @@ import {
 	DialogTitle,
 } from "@ui/dialog/dialog";
 import { showToast } from "@ui/toast/toast";
-import { Instance } from "@utils/instances";
+import type { Instance } from "@utils/instances";
 import {
 	getModpackInfo,
 	getModpackInfoFromUrl,
 	installModpackFromUrl,
 	installModpackFromZip,
-	ModpackInfo,
+	type ModpackInfo,
 } from "@utils/modpacks";
 import { createResource, createSignal, Show } from "solid-js";
 import { InstallForm } from "./InstallForm";
@@ -50,9 +50,17 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 		async (source) => {
 			let info: ModpackInfo | undefined;
 			if (source.zipPath)
-				info = await getModpackInfo(source.zipPath, source.modpackId, source.modpackPlatform);
+				info = await getModpackInfo(
+					source.zipPath,
+					source.modpackId,
+					source.modpackPlatform,
+				);
 			else if (source.url)
-				info = await getModpackInfoFromUrl(source.url, source.modpackId, source.modpackPlatform);
+				info = await getModpackInfoFromUrl(
+					source.url,
+					source.modpackId,
+					source.modpackPlatform,
+				);
 
 			if (info) {
 				if (source.manualIcon) info.iconUrl = source.manualIcon;
@@ -91,7 +99,10 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 	};
 
 	return (
-		<Dialog open={props.isOpen} onOpenChange={(open) => !open && props.onClose()}>
+		<Dialog
+			open={props.isOpen}
+			onOpenChange={(open) => !open && props.onClose()}
+		>
 			<DialogContent
 				style={{
 					width: "900px",
@@ -101,11 +112,15 @@ export function ModpackInstallDialog(props: ModpackInstallDialogProps) {
 			>
 				<DialogHeader>
 					<DialogTitle>Install Modpack</DialogTitle>
-					<DialogDescription>Configure your new instance for this modpack.</DialogDescription>
+					<DialogDescription>
+						Configure your new instance for this modpack.
+					</DialogDescription>
 				</DialogHeader>
 
 				<Show when={modpackInfo.loading}>
-					<div style={{ padding: "20px", "text-align": "center" }}>Analyzing modpack...</div>
+					<div style={{ padding: "20px", "text-align": "center" }}>
+						Analyzing modpack...
+					</div>
 				</Show>
 
 				<Show when={modpackInfo()} keyed>

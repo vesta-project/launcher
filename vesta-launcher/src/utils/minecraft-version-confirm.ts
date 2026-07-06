@@ -35,9 +35,13 @@ export async function confirmMinecraftVersionChange(
 		return true;
 	}
 
-	return dialogStore.confirm("Change Minecraft Version?", buildDescription(params), {
-		severity: "warning",
-		okLabel: "Change Version",
-		isDestructive: true,
-	});
+	return await dialogStore.confirm(
+		"Change Minecraft Version?",
+		buildDescription(params),
+		{
+			severity: "warning",
+			okLabel: "Change Version",
+			isDestructive: true,
+		},
+	);
 }

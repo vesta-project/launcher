@@ -3,7 +3,7 @@ import EllipsisVIcon from "@assets/ellipsis-v.svg";
 import LinkIcon from "@assets/link.svg";
 import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
-import { type MiniRouter } from "@components/page-viewer/mini-router";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import { isPinned, pinning, pinPage, unpinPage } from "@stores/pinning";
@@ -27,7 +27,9 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 
 		if (path === "/instance" && params?.slug) {
 			const slug = String(params.slug);
-			const instance = instancesState.instances.find((i) => getInstanceSlug(i) === slug);
+			const instance = instancesState.instances.find(
+				(i) => getInstanceSlug(i) === slug,
+			);
 			return {
 				type: "instance" as const,
 				id: slug,
@@ -87,7 +89,9 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 		setIsOpen(false);
 
 		if (pinned()) {
-			const pin = pinning.pins.find((p) => p.page_type === info.type && p.target_id === info.id);
+			const pin = pinning.pins.find(
+				(p) => p.page_type === info.type && p.target_id === info.id,
+			);
 			if (pin) await unpinPage(pin.id);
 		} else {
 			await pinPage({
@@ -113,7 +117,9 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 			let args = "";
 
 			if (info.type === "instance") {
-				args = quickLaunch ? `--launch-instance ${info.id}` : `--open-instance ${info.id}`;
+				args = quickLaunch
+					? `--launch-instance ${info.id}`
+					: `--open-instance ${info.id}`;
 			} else {
 				args = `--open-resource ${info.platform} ${info.id}`;
 			}
@@ -178,13 +184,19 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 						</button>
 
 						<Show when={pageInfo()?.type === "instance"}>
-							<button class={styles["menu-item"]} onClick={() => handleCreateShortcut(true)}>
+							<button
+								class={styles["menu-item"]}
+								onClick={() => handleCreateShortcut(true)}
+							>
 								<DesktopAddIcon />
 								<span>Add Quick Launch to Desktop</span>
 							</button>
 						</Show>
 
-						<button class={styles["menu-item"]} onClick={() => handleCreateShortcut(false)}>
+						<button
+							class={styles["menu-item"]}
+							onClick={() => handleCreateShortcut(false)}
+						>
 							<DesktopAddIcon />
 							<span>Add Page to Desktop</span>
 						</button>

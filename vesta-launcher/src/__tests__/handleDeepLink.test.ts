@@ -74,7 +74,9 @@ describe("handleDeepLink", () => {
 		expect(invoke).toHaveBeenCalledWith("parse_vesta_url", {
 			url: "vesta://install?projectId=1",
 		});
-		expect(mockOpenMiniPage).toHaveBeenCalledWith("/install", { projectId: "1" });
+		expect(mockOpenMiniPage).toHaveBeenCalledWith("/install", {
+			projectId: "1",
+		});
 	});
 
 	it("deduplicates repeated deep links in the same session", async () => {
@@ -114,7 +116,9 @@ describe("launch intent helpers", () => {
 			target: "open-instance",
 			params: { slug: "my-pack" },
 		});
-		expect(mockOpenMiniPage).toHaveBeenCalledWith("/instance", { slug: "my-pack" });
+		expect(mockOpenMiniPage).toHaveBeenCalledWith("/instance", {
+			slug: "my-pack",
+		});
 	});
 
 	it("routes launch-instance deep links to launch flow", async () => {

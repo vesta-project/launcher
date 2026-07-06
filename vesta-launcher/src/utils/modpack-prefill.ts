@@ -1,9 +1,13 @@
 import type { ResourceProject, ResourceVersion } from "@stores/resources";
 import type { ModpackInfo } from "./modpacks";
 
-export function countVersionResources(version?: ResourceVersion | null): number {
+export function countVersionResources(
+	version?: ResourceVersion | null,
+): number {
 	return (
-		version?.dependencies?.filter((dep) => dep.dependency_type !== "incompatible").length || 0
+		version?.dependencies?.filter(
+			(dep) => dep.dependency_type !== "incompatible",
+		).length || 0
 	);
 }
 
@@ -35,7 +39,9 @@ export function deriveVersionScopedResourceState(
 export function shouldFetchArchiveSummary(
 	info?: Pick<ModpackInfo, "modCountSource" | "modCountLookupFailed"> | null,
 ): boolean {
-	return !!info && info.modCountSource === "unknown" && !info.modCountLookupFailed;
+	return (
+		!!info && info.modCountSource === "unknown" && !info.modCountLookupFailed
+	);
 }
 
 export function buildBrowseModpackInfo(
@@ -65,7 +71,8 @@ export function buildBrowseModpackInfo(
 		modCountSource,
 		isCountingResources,
 		downloadCount: project.download_count,
-		followerCount: project.source === "modrinth" ? project.follower_count : null,
+		followerCount:
+			project.source === "modrinth" ? project.follower_count : null,
 		recommendedRamMb: undefined,
 		format: project.source,
 		modpackId: project.id,

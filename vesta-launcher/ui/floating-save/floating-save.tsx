@@ -22,11 +22,21 @@ export function FloatingSave(props: FloatingSaveProps) {
 				<p>{props.message || "You have unsaved changes"}</p>
 				<div class={styles["save-footer-actions"]}>
 					<Show when={props.onCancel}>
-						<Button variant="ghost" onClick={props.onCancel!} disabled={props.isSaving}>
-							{props.cancelText || "Cancel"}
-						</Button>
+						{(onCancel) => (
+							<Button
+								variant="ghost"
+								onClick={onCancel()}
+								disabled={props.isSaving}
+							>
+								{props.cancelText || "Cancel"}
+							</Button>
+						)}
 					</Show>
-					<Button variant="solid" onClick={props.onSave} disabled={props.isSaving}>
+					<Button
+						variant="solid"
+						onClick={props.onSave}
+						disabled={props.isSaving}
+					>
 						{props.saveText || "Save"}
 					</Button>
 				</div>

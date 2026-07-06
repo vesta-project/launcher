@@ -1,10 +1,14 @@
+import ErrorIcon from "@assets/error.svg";
 import PinIcon from "@assets/pin.svg";
 import PinOffIcon from "@assets/pin-off.svg";
 import PlayIcon from "@assets/play.svg";
-import ErrorIcon from "@assets/error.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import FloatingSaveFooter from "@components/floating-save-footer/floating-save-footer";
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import {
+	PageSidebar,
+	type PageSidebarTab,
+} from "@components/page-sidebar/page-sidebar";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { consoleStore } from "@stores/console";
 import { dialogStore } from "@stores/dialog-store";
@@ -15,8 +19,17 @@ import {
 	setLaunching,
 	setRunning,
 } from "@stores/instances";
-import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
-import { type InstalledResource, type ResourceVersion, resources } from "@stores/resources";
+import {
+	isPinned as isPinnedInStore,
+	pinning,
+	pinPage,
+	unpinPage,
+} from "@stores/pinning";
+import {
+	type InstalledResource,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
 import {
 	createColumnHelper,
 	createSolidTable,
@@ -26,18 +39,19 @@ import {
 } from "@tanstack/solid-table";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { PageSidebar, type PageSidebarTab } from "@components/page-sidebar/page-sidebar";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
-import { TabsContent } from "@ui/tabs/tabs";
 import { Checkbox } from "@ui/checkbox/checkbox";
 import { ExportDialog } from "@ui/export-dialog";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
+import { TabsContent } from "@ui/tabs/tabs";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
-import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
+import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
+import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
+import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
 	duplicateInstance,
@@ -48,8 +62,8 @@ import {
 	getMinecraftVersions,
 	getStableIconId,
 	installInstance,
-	isInstanceOperationInProgress,
 	isDefaultIcon,
+	isInstanceOperationInProgress,
 	isInstanceRunning,
 	killInstance,
 	launchInstance,
@@ -60,12 +74,8 @@ import {
 	updateInstance,
 	updateInstanceModpackVersion,
 } from "@utils/instances";
-import type { Instance } from "@utils/instances";
 import { confirmMinecraftVersionChange } from "@utils/minecraft-version-confirm";
 import { selectEligibleModpackUpdate } from "@utils/modpack-update";
-import { useModpackIcon } from "~/hooks/use-modpack-icon";
-import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
-import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -87,12 +97,14 @@ import {
 	Show,
 } from "solid-js";
 import { handleHardReset, handleUninstall } from "~/handlers/instance-handler";
+import { useModpackIcon } from "~/hooks/use-modpack-icon";
 import styles from "./instance-details.module.css";
 import type { ModpackVersion } from "./modpack-version-selector";
-import { CrashTab } from "./tabs/CrashTab";
 import { ConsoleTab } from "./tabs/ConsoleTab";
+import { CrashTab } from "./tabs/CrashTab";
 // Tabs
 import { HomeTab } from "./tabs/HomeTab";
+import { ResourceRowActions } from "./tabs/ResourceRowActions";
 import { ResourcesTab } from "./tabs/ResourcesTab";
 import { ScreenshotsTab } from "./tabs/ScreenshotsTab";
 import { SettingsTab } from "./tabs/SettingsTab";
@@ -201,9 +213,17 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 		<div ref={wrapperRef} style="display: inline-flex; align-items: center;">
 			<Show
 				when={resolvedUrl() && isNearViewport() ? resolvedUrl() : false}
-				fallback={<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>}
+				fallback={
+					<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>
+				}
 			>
-				{(url) => <img src={url()} alt={props.name || "Resource Icon"} class={styles["res-icon"]} />}
+				{(url) => (
+					<img
+						src={url()}
+						alt={props.name || "Resource Icon"}
+						class={styles["res-icon"]}
+					/>
+				)}
 			</Show>
 		</div>
 	);
@@ -247,7 +267,8 @@ const isCustomResource = (resource: InstalledResource | undefined) =>
 	!isModpackOwnedResource(resource);
 
 const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
-	!!resource?.remote_id && (resource.platform === "modrinth" || resource.platform === "curseforge");
+	!!resource?.remote_id &&
+	(resource.platform === "modrinth" || resource.platform === "curseforge");
 
 const isSameCanonicalProject = (
 	a: InstalledResource | undefined,
@@ -271,9 +292,13 @@ interface RecordCacheEntry {
 const projectRecordCache = new Map<string, RecordCacheEntry>();
 const RECORD_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
-function getProjectRecordCacheKey(refs: { platform: string; id: string }[]): string {
+function getProjectRecordCacheKey(
+	refs: { platform: string; id: string }[],
+): string {
 	const sorted = [...refs]
-		.sort((a, b) => `${a.platform}:${a.id}`.localeCompare(`${b.platform}:${b.id}`))
+		.sort((a, b) =>
+			`${a.platform}:${a.id}`.localeCompare(`${b.platform}:${b.id}`),
+		)
 		.map((r) => `${r.platform}:${r.id}`)
 		.join(",");
 	return sorted;
@@ -329,12 +354,16 @@ export default function InstanceDetails(
 		return inst ? getInstanceSlug(inst) : "";
 	});
 
-	const isPinned = createMemo(() => (slug() ? isPinnedInStore("instance", slug()) : false));
+	const isPinned = createMemo(() =>
+		slug() ? isPinnedInStore("instance", slug()) : false,
+	);
 
 	const handlePin = async () => {
 		if (!slug()) return;
 		if (isPinned()) {
-			const pin = pinning.pins.find((p) => p.page_type === "instance" && p.target_id === slug());
+			const pin = pinning.pins.find(
+				(p) => p.page_type === "instance" && p.target_id === slug(),
+			);
 			if (pin) unpinPage(pin.id);
 		} else {
 			const inst = instance();
@@ -350,70 +379,93 @@ export default function InstanceDetails(
 		}
 	};
 
-	const [installedResources, { refetch: refetchResources, mutate: mutateResources }] =
-		createResource(instance, async (inst) => {
-			if (!inst) return [];
-			return await resources.getInstalled(inst.id);
-		});
-
-	const [projectRecords] = createResource(installedResources, async (resourcesList) => {
-		if (!resourcesList || resourcesList.length === 0) return {};
-		const refs = resourcesList
-			.filter((r) => r.remote_id && (r.platform === "modrinth" || r.platform === "curseforge"))
-			.map((r) => ({
-				platform: r.platform,
-				id: r.remote_id,
-			}));
-
-		if (refs.length === 0) return {};
-
-		// Check frontend cache first (avoids IPC + backend cache lookup)
-		const cacheKey = getProjectRecordCacheKey(refs);
-		const cached = projectRecordCache.get(cacheKey);
-		if (cached && Date.now() - cached.timestamp < RECORD_CACHE_TTL_MS) {
-			return cached.data;
-		}
-
-		try {
-			const records: any[] = await invoke("get_or_hydrate_resource_projects", {
-				refs,
-				allowNetwork: true,
-				refreshStale: false,
-			});
-			const map: Record<string, any> = {};
-			for (const r of records) {
-				const key = getProjectRecordKey(r.source, r.id);
-				if (key) {
-					map[key] = r;
-				}
-			}
-			// Store in frontend cache for instant re-visits
-			projectRecordCache.set(cacheKey, { data: map, timestamp: Date.now() });
-			return map;
-		} catch (e) {
-			console.error("Failed to fetch project records:", e);
-			return {};
-		}
+	const [
+		installedResources,
+		{ refetch: refetchResources, mutate: mutateResources },
+	] = createResource(instance, async (inst) => {
+		if (!inst) return [];
+		return await resources.getInstalled(inst.id);
 	});
+
+	const [projectRecords] = createResource(
+		installedResources,
+		async (resourcesList) => {
+			if (!resourcesList || resourcesList.length === 0) return {};
+			const refs = resourcesList
+				.filter(
+					(r) =>
+						r.remote_id &&
+						(r.platform === "modrinth" || r.platform === "curseforge"),
+				)
+				.map((r) => ({
+					platform: r.platform,
+					id: r.remote_id,
+				}));
+
+			if (refs.length === 0) return {};
+
+			// Check frontend cache first (avoids IPC + backend cache lookup)
+			const cacheKey = getProjectRecordCacheKey(refs);
+			const cached = projectRecordCache.get(cacheKey);
+			if (cached && Date.now() - cached.timestamp < RECORD_CACHE_TTL_MS) {
+				return cached.data;
+			}
+
+			try {
+				const records: any[] = await invoke(
+					"get_or_hydrate_resource_projects",
+					{
+						refs,
+						allowNetwork: true,
+						refreshStale: false,
+					},
+				);
+				const map: Record<string, any> = {};
+				for (const r of records) {
+					const key = getProjectRecordKey(r.source, r.id);
+					if (key) {
+						map[key] = r;
+					}
+				}
+				// Store in frontend cache for instant re-visits
+				projectRecordCache.set(cacheKey, { data: map, timestamp: Date.now() });
+				return map;
+			} catch (e) {
+				console.error("Failed to fetch project records:", e);
+				return {};
+			}
+		},
+	);
 
 	const modpackOwnedResources = createMemo(() =>
 		(installedResources() || []).filter(isModpackOwnedResource),
 	);
 
-	const customResources = createMemo(() => (installedResources() || []).filter(isCustomResource));
-
-	const [provenanceBackfillKeys, setProvenanceBackfillKeys] = createSignal<Record<string, boolean>>(
-		{},
+	const customResources = createMemo(() =>
+		(installedResources() || []).filter(isCustomResource),
 	);
-	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] = createSignal(false);
 
-	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<Record<number, number>>({});
+	const [provenanceBackfillKeys, setProvenanceBackfillKeys] = createSignal<
+		Record<string, boolean>
+	>({});
+	const [provenanceBackfillInFlight, setProvenanceBackfillInFlight] =
+		createSignal(false);
+
+	const [autoResyncByInstance, setAutoResyncByInstance] = createSignal<
+		Record<number, number>
+	>({});
 	const [autoResyncInFlight, setAutoResyncInFlight] = createSignal(false);
 
-	const getLinkedResourceRefs = (resourcesList: InstalledResource[] | undefined) => {
+	const getLinkedResourceRefs = (
+		resourcesList: InstalledResource[] | undefined,
+	) => {
 		if (!resourcesList || resourcesList.length === 0) return [];
 		return resourcesList
-			.filter((r) => !!r.remote_id && (r.platform === "modrinth" || r.platform === "curseforge"))
+			.filter(
+				(r) =>
+					!!r.remote_id &&
+					(r.platform === "modrinth" || r.platform === "curseforge"),
+			)
 			.map((r) => ({ platform: r.platform, id: r.remote_id }));
 	};
 
@@ -442,7 +494,8 @@ export default function InstanceDetails(
 			const expectsIcon = !!record.icon_url;
 			const iconMissing =
 				expectsIcon &&
-				(!record.icon_data || (Array.isArray(record.icon_data) && record.icon_data.length === 0));
+				(!record.icon_data ||
+					(Array.isArray(record.icon_data) && record.icon_data.length === 0));
 
 			if (summaryMissing || iconMissing) {
 				holes += 1;
@@ -483,8 +536,12 @@ export default function InstanceDetails(
 	// --- Settings State (Unsaved Changes) ---
 	const [name, setName] = createSignal(props.initialName || "");
 	const [iconPath, setIconPath] = createSignal(props.initialIconPath || "");
-	const [minMemory, setMinMemory] = createSignal<number[]>([props.initialMinMemory || 2048]);
-	const [maxMemory, setMaxMemory] = createSignal<number[]>([props.initialMaxMemory || 4096]);
+	const [minMemory, setMinMemory] = createSignal<number[]>([
+		props.initialMinMemory || 2048,
+	]);
+	const [maxMemory, setMaxMemory] = createSignal<number[]>([
+		props.initialMaxMemory || 4096,
+	]);
 	const [javaArgs, setJavaArgs] = createSignal(props.initialJavaArgs || "");
 	const [javaPath, setJavaPath] = createSignal(props.initialJavaPath || "");
 	const [isCustomMode, setIsCustomMode] = createSignal(false);
@@ -493,18 +550,23 @@ export default function InstanceDetails(
 	const [useGlobalResolution, setUseGlobalResolution] = createSignal(
 		props.initialUseGlobalResolution ?? true,
 	);
-	const [gameWidth, setGameWidth] = createSignal(props.initialGameWidth || 1280);
-	const [gameHeight, setGameHeight] = createSignal(props.initialGameHeight || 720);
+	const [gameWidth, setGameWidth] = createSignal(
+		props.initialGameWidth || 1280,
+	);
+	const [gameHeight, setGameHeight] = createSignal(
+		props.initialGameHeight || 720,
+	);
 	const [useGlobalJavaArgs, setUseGlobalJavaArgs] = createSignal(
 		props.initialUseGlobalJavaArgs ?? true,
 	);
 	const [useGlobalJavaPath, setUseGlobalJavaPath] = createSignal(
 		props.initialUseGlobalJavaPath ?? true,
 	);
-	const [useGlobalHooks, setUseGlobalHooks] = createSignal(props.initialUseGlobalHooks ?? true);
-	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] = createSignal(
-		props.initialUseGlobalEnvironmentVariables ?? true,
+	const [useGlobalHooks, setUseGlobalHooks] = createSignal(
+		props.initialUseGlobalHooks ?? true,
 	);
+	const [useGlobalEnvironmentVariables, setUseGlobalEnvironmentVariables] =
+		createSignal(props.initialUseGlobalEnvironmentVariables ?? true);
 	const [useGlobalLauncherAction, setUseGlobalLauncherAction] = createSignal(
 		props.initialUseGlobalLauncherAction ?? true,
 	);
@@ -514,39 +576,67 @@ export default function InstanceDetails(
 		["stay-open", "minimize", "hide-to-tray", "quit"].includes(
 			props.initialLauncherActionOnLaunch || "",
 		)
-			? (props.initialLauncherActionOnLaunch as "stay-open" | "minimize" | "hide-to-tray" | "quit")
+			? (props.initialLauncherActionOnLaunch as
+					| "stay-open"
+					| "minimize"
+					| "hide-to-tray"
+					| "quit")
 			: "stay-open",
 	);
-	const [preLaunchHook, setPreLaunchHook] = createSignal(props.initialPreLaunchHook || "");
-	const [postExitHook, setPostExitHook] = createSignal(props.initialPostExitHook || "");
-	const [wrapperCommand, setWrapperCommand] = createSignal(props.initialWrapperCommand || "");
+	const [preLaunchHook, setPreLaunchHook] = createSignal(
+		props.initialPreLaunchHook || "",
+	);
+	const [postExitHook, setPostExitHook] = createSignal(
+		props.initialPostExitHook || "",
+	);
+	const [wrapperCommand, setWrapperCommand] = createSignal(
+		props.initialWrapperCommand || "",
+	);
 	const [environmentVariables, setEnvironmentVariables] = createSignal(
 		props.initialEnvironmentVariables || "",
 	);
 
 	// Dirty flags for settings
-	const [isNameDirty, setIsNameDirty] = createSignal(props._dirty?.name || false);
-	const [isIconDirty, setIsIconDirty] = createSignal(props._dirty?.icon || false);
-	const [isMinMemDirty, setIsMinMemDirty] = createSignal(props._dirty?.minMem || false);
-	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(props._dirty?.maxMem || false);
+	const [isNameDirty, setIsNameDirty] = createSignal(
+		props._dirty?.name || false,
+	);
+	const [isIconDirty, setIsIconDirty] = createSignal(
+		props._dirty?.icon || false,
+	);
+	const [isMinMemDirty, setIsMinMemDirty] = createSignal(
+		props._dirty?.minMem || false,
+	);
+	const [isMaxMemDirty, setIsMaxMemDirty] = createSignal(
+		props._dirty?.maxMem || false,
+	);
 	const [isJvmDirty, setIsJvmDirty] = createSignal(props._dirty?.jvm || false);
-	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(props._dirty?.javaPath || false);
-	const [isResolutionDirty, setIsResolutionDirty] = createSignal(props._dirty?.resolution || false);
-	const [isHooksDirty, setIsHooksDirty] = createSignal(props._dirty?.hooks || false);
+	const [isJavaPathDirty, setIsJavaPathDirty] = createSignal(
+		props._dirty?.javaPath || false,
+	);
+	const [isResolutionDirty, setIsResolutionDirty] = createSignal(
+		props._dirty?.resolution || false,
+	);
+	const [isHooksDirty, setIsHooksDirty] = createSignal(
+		props._dirty?.hooks || false,
+	);
 	const [isEnvDirty, setIsEnvDirty] = createSignal(props._dirty?.env || false);
 	const [isLaunchActionDirty, setIsLaunchActionDirty] = createSignal(
 		props._dirty?.launchAction || false,
 	);
 
 	const [saving, setSaving] = createSignal(false);
-	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<
+		string[]
+	>([]);
 
 	const inst = () => instance();
 	const isRunningGlobal = createMemo(() =>
 		Boolean(slug() ? instancesState.runningIds[slug()] : false),
 	);
 	const isLaunchingGlobal = createMemo(
-		() => (slug() ? instancesState.launchingIds[slug()] : false) && !isRunningGlobal(),
+		() =>
+			(slug() ? instancesState.launchingIds[slug()] : false) &&
+			!isRunningGlobal(),
 	);
 
 	const isDirty = createMemo(() => {
@@ -606,7 +696,9 @@ export default function InstanceDetails(
 			result = result.filter((icon) => !areIconsEqual(icon, modpackIcon));
 			// Add at the beginning
 			result = [modpackIcon, ...result];
-			console.log("[InstanceDetails] uploadedIcons - ensured modpack icon is first");
+			console.log(
+				"[InstanceDetails] uploadedIcons - ensured modpack icon is first",
+			);
 		}
 
 		console.log(
@@ -661,7 +753,11 @@ export default function InstanceDetails(
 				filtered = filtered.filter((icon) => !areIconsEqual(icon, current));
 				currentIsModpackEquivalent = beforeFilter > filtered.length;
 			}
-			console.log("[InstanceDetails] createEffect - after filtering:", filtered.length, "icons");
+			console.log(
+				"[InstanceDetails] createEffect - after filtering:",
+				filtered.length,
+				"icons",
+			);
 			// Add current icon if it's not a default, not the modpack icon, not equivalent to modpack icon, and not already in the filtered list
 			if (
 				current &&
@@ -671,9 +767,14 @@ export default function InstanceDetails(
 				!filtered.some((icon) => areIconsEqual(icon, current))
 			) {
 				filtered = [current, ...filtered];
-				console.log("[InstanceDetails] createEffect - added current icon to session");
+				console.log(
+					"[InstanceDetails] createEffect - added current icon to session",
+				);
 			}
-			console.log("[InstanceDetails] createEffect - final session icons:", filtered.length);
+			console.log(
+				"[InstanceDetails] createEffect - final session icons:",
+				filtered.length,
+			);
 			return filtered;
 		});
 	});
@@ -806,7 +907,15 @@ export default function InstanceDetails(
 		const params = activeRouter()?.currentParams.get();
 		const tab = params?.activeTab as TabType | undefined;
 		return tab &&
-			["home", "console", "resources", "crash", "screenshots", "settings", "versioning"].includes(tab)
+			[
+				"home",
+				"console",
+				"resources",
+				"crash",
+				"screenshots",
+				"settings",
+				"versioning",
+			].includes(tab)
 			? tab
 			: "home";
 	});
@@ -848,7 +957,10 @@ export default function InstanceDetails(
 					instanceId: id,
 				})
 					.catch((e) => {
-						console.error("Failed to start fast modpack resource provenance backfill:", e);
+						console.error(
+							"Failed to start fast modpack resource provenance backfill:",
+							e,
+						);
 					})
 					.finally(() => {
 						setProvenanceBackfillKeys((prev) => ({ ...prev, [key]: true }));
@@ -865,7 +977,6 @@ export default function InstanceDetails(
 
 	const [activeAccount] = createResource<any>(async () => {
 		try {
-			const { getActiveAccount } = await import("@utils/auth");
 			return await getActiveAccount();
 		} catch {
 			return null;
@@ -883,14 +994,14 @@ export default function InstanceDetails(
 			});
 		},
 	);
-	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(() =>
-		invoke("detect_java"),
+	const [detectedJavas, { refetch: refetchDetected }] = createResource<any[]>(
+		() => invoke("detect_java"),
 	);
-	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(() =>
-		invoke("get_managed_javas"),
+	const [managedJavas, { refetch: refetchManaged }] = createResource<any[]>(
+		() => invoke("get_managed_javas"),
 	);
-	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(() =>
-		invoke("get_global_java_paths"),
+	const [globalJavaPaths, { refetch: refetchGlobal }] = createResource<any[]>(
+		() => invoke("get_global_java_paths"),
 	);
 
 	const jreOptions = createMemo(() => {
@@ -1096,15 +1207,24 @@ export default function InstanceDetails(
 	};
 
 	// Resources Tab State
-	const [resourceTypeFilter, setResourceTypeFilter] = createSignal<string>("All");
+	const [resourceTypeFilter, setResourceTypeFilter] =
+		createSignal<string>("All");
 	const [resourceSearch, setResourceSearch] = createSignal("");
 	const [isCompactTable, setIsCompactTable] = createSignal(false);
-	const [modpackResourcesExpanded, setModpackResourcesExpanded] = createSignal(false);
-	const [overrideConflictConfirmed, setOverrideConflictConfirmed] = createSignal(false);
-	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>({});
+	const [modpackResourcesExpanded, setModpackResourcesExpanded] =
+		createSignal(false);
+	const [overrideConflictConfirmed, setOverrideConflictConfirmed] =
+		createSignal(false);
+	const [updates, setUpdates] = createSignal<Record<number, ResourceVersion>>(
+		{},
+	);
 	const [checkingUpdates, setCheckingUpdates] = createSignal(false);
-	const [checkingPerResource, setCheckingPerResource] = createSignal<Set<number>>(new Set());
-	const [checkedPerResource, setCheckedPerResource] = createSignal<Set<number>>(new Set());
+	const [checkingPerResource, setCheckingPerResource] = createSignal<
+		Set<number>
+	>(new Set());
+	const [checkedPerResource, setCheckedPerResource] = createSignal<Set<number>>(
+		new Set(),
+	);
 	const [totalRam, setTotalRam] = createSignal(16384);
 
 	onMount(async () => {
@@ -1117,7 +1237,9 @@ export default function InstanceDetails(
 	});
 
 	// Modpack versions for picker
-	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<string | null>(null);
+	const [selectedModpackVersionId, setSelectedModpackVersionId] = createSignal<
+		string | null
+	>(null);
 
 	const [mcVersions] = createResource(getMinecraftVersions);
 	const loadersList = createMemo(() => {
@@ -1135,7 +1257,8 @@ export default function InstanceDetails(
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(false);
 	const [selectedLoader, setSelectedLoader] = createSignal("vanilla");
 	const [selectedLoaderVersion, setSelectedLoaderVersion] = createSignal("");
-	const [compatibilityInitialized, setCompatibilityInitialized] = createSignal(false);
+	const [compatibilityInitialized, setCompatibilityInitialized] =
+		createSignal(false);
 
 	const [modpackVersions, { mutate: mutateModpackVersions }] = createResource(
 		() => {
@@ -1149,7 +1272,10 @@ export default function InstanceDetails(
 		async (params) => {
 			if (!params.active || !params.id || !params.platform) return [];
 			try {
-				const vs = await resources.getVersions(params.platform as any, params.id);
+				const vs = await resources.getVersions(
+					params.platform as any,
+					params.id,
+				);
 				return vs;
 			} catch (e) {
 				console.error("Failed to fetch modpack versions:", e);
@@ -1172,9 +1298,12 @@ export default function InstanceDetails(
 
 	const hydrateUpdateSnapshot = async (instanceId: number) => {
 		try {
-			const snapshot = await invoke<InstanceUpdateSnapshot | null>("get_instance_update_snapshot", {
-				instanceId,
-			});
+			const snapshot = await invoke<InstanceUpdateSnapshot | null>(
+				"get_instance_update_snapshot",
+				{
+					instanceId,
+				},
+			);
 			if (snapshot) {
 				applyUpdateCheckResult(snapshot);
 			} else {
@@ -1200,14 +1329,25 @@ export default function InstanceDetails(
 		const inst = instance();
 		const versions = modpackVersions();
 		if (!inst?.modpackId || !versions || versions.length === 0) return null;
-		const currentId = inst.modpackVersionId ? String(inst.modpackVersionId) : null;
-		return selectEligibleModpackUpdate(versions, currentId, inst.minecraftVersion);
+		const currentId = inst.modpackVersionId
+			? String(inst.modpackVersionId)
+			: null;
+		return selectEligibleModpackUpdate(
+			versions,
+			currentId,
+			inst.minecraftVersion,
+		);
 	});
 
 	const currentModpackVersion = createMemo(() => {
 		const inst = instance();
-		const currentId = inst?.modpackVersionId ? String(inst.modpackVersionId) : null;
-		return modpackVersions()?.find((version) => String(version.id) === currentId) || null;
+		const currentId = inst?.modpackVersionId
+			? String(inst.modpackVersionId)
+			: null;
+		return (
+			modpackVersions()?.find((version) => String(version.id) === currentId) ||
+			null
+		);
 	});
 
 	const searchableMcVersions = createMemo(() => {
@@ -1218,7 +1358,10 @@ export default function InstanceDetails(
 			? versions
 			: versions.filter((version) => version.stable);
 
-		if (selected && !visibleVersions.some((version) => version.id === selected)) {
+		if (
+			selected &&
+			!visibleVersions.some((version) => version.id === selected)
+		) {
 			const selectedMeta = versions.find((version) => version.id === selected);
 			if (selectedMeta) {
 				visibleVersions = [selectedMeta, ...visibleVersions];
@@ -1234,7 +1377,8 @@ export default function InstanceDetails(
 	const currentVersionSupportedLoaders = createMemo(() => {
 		const metadata = mcVersions();
 		const version = selectedMcVersion();
-		if (!metadata || !version) return [selectedLoader().toLowerCase() || "vanilla"];
+		if (!metadata || !version)
+			return [selectedLoader().toLowerCase() || "vanilla"];
 
 		const supported = getModloadersForGameVersion(metadata, version);
 		const current = selectedLoader().toLowerCase();
@@ -1255,7 +1399,9 @@ export default function InstanceDetails(
 		const selectedVersion = selectedLoaderVersion();
 		if (
 			selectedVersion &&
-			!loaderInfo.some((loaderVersion) => loaderVersion.version === selectedVersion)
+			!loaderInfo.some(
+				(loaderVersion) => loaderVersion.version === selectedVersion,
+			)
 		) {
 			loaderInfo = [{ version: selectedVersion, stable: true }, ...loaderInfo];
 		}
@@ -1286,7 +1432,9 @@ export default function InstanceDetails(
 					setIncludeSnapshots(currentMeta ? !currentMeta.stable : false);
 
 					if (inst.modpackId && !selectedModpackVersionId()) {
-						setSelectedModpackVersionId(inst.modpackVersionId ? String(inst.modpackVersionId) : null);
+						setSelectedModpackVersionId(
+							inst.modpackVersionId ? String(inst.modpackVersionId) : null,
+						);
 					}
 				});
 			}
@@ -1299,11 +1447,19 @@ export default function InstanceDetails(
 		const metadata = mcVersions();
 		const currentVersion = selectedMcVersion();
 
-		if (!inst || tab !== "versioning" || inst.modpackId || !metadata || !currentVersion) {
+		if (
+			!inst ||
+			tab !== "versioning" ||
+			inst.modpackId ||
+			!metadata ||
+			!currentVersion
+		) {
 			return;
 		}
 
-		const selectedMeta = metadata.game_versions.find((version) => version.id === currentVersion);
+		const selectedMeta = metadata.game_versions.find(
+			(version) => version.id === currentVersion,
+		);
 		if (!compatibilityInitialized() && selectedMeta && !selectedMeta.stable) {
 			if (!includeSnapshots()) {
 				setIncludeSnapshots(true);
@@ -1343,7 +1499,9 @@ export default function InstanceDetails(
 			}
 		});
 
-		const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(
+			resolved.adjustments,
+		);
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
@@ -1366,7 +1524,9 @@ export default function InstanceDetails(
 
 		// Try to find a better match if we just have a loose ID
 		const match = vs.find(
-			(v) => String(v.id) === String(current) || String(v.version_number) === String(current),
+			(v) =>
+				String(v.id) === String(current) ||
+				String(v.version_number) === String(current),
 		);
 		if (match && String(match.id) !== current) {
 			setSelectedModpackVersionId(String(match.id));
@@ -1427,7 +1587,10 @@ export default function InstanceDetails(
 		}
 	});
 
-	const handleModpackVersionSelect = (versionId: string, version?: ModpackVersion) => {
+	const handleModpackVersionSelect = (
+		versionId: string,
+		version?: ModpackVersion,
+	) => {
 		setSelectedModpackVersionId(versionId);
 	};
 
@@ -1469,7 +1632,9 @@ export default function InstanceDetails(
 		const vid = selectedModpackVersionId();
 		if (!inst || !vid) return;
 
-		const targetVersion = modpackVersions()?.find((version) => String(version.id) === vid);
+		const targetVersion = modpackVersions()?.find(
+			(version) => String(version.id) === vid,
+		);
 		const nextMcVersion = targetVersion?.game_versions?.[0];
 
 		if (
@@ -1539,7 +1704,8 @@ export default function InstanceDetails(
 			await Promise.all([refetch(), refetchResources()]);
 			showToast({
 				title: "Modpack Files Deleted",
-				description: "Bundled modpack resources were removed and the instance was unlinked.",
+				description:
+					"Bundled modpack resources were removed and the instance was unlinked.",
 				severity: "success",
 			});
 		} catch (e) {
@@ -1547,7 +1713,8 @@ export default function InstanceDetails(
 			await refetchResources();
 			showToast({
 				title: "Delete Failed",
-				description: "Vesta stopped before unlinking. Your custom resources were left intact.",
+				description:
+					"Vesta stopped before unlinking. Your custom resources were left intact.",
 				severity: "error",
 			});
 		} finally {
@@ -1585,7 +1752,9 @@ export default function InstanceDetails(
 					setSelectedLoaderVersion(nextLoaderVersion);
 				});
 
-				const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
+				const notifiableAdjustments = getNotifiableSelectionAdjustments(
+					resolved.adjustments,
+				);
 
 				if (notifiableAdjustments.length > 0) {
 					showToast({
@@ -1616,7 +1785,8 @@ export default function InstanceDetails(
 				...inst,
 				minecraftVersion: nextMcVersion,
 				modloader: nextLoader === "vanilla" ? null : nextLoader,
-				modloaderVersion: nextLoader === "vanilla" ? null : nextLoaderVersion || null,
+				modloaderVersion:
+					nextLoader === "vanilla" ? null : nextLoaderVersion || null,
 			});
 			await repairInstance(inst.id);
 			await refetch();
@@ -1673,10 +1843,13 @@ export default function InstanceDetails(
 		setCheckingUpdates(true);
 
 		try {
-			const result = await invoke<LightweightUpdateCheckResult>("check_instance_updates_lightweight", {
-				instanceId: inst.id,
-				forceRefresh,
-			});
+			const result = await invoke<LightweightUpdateCheckResult>(
+				"check_instance_updates_lightweight",
+				{
+					instanceId: inst.id,
+					forceRefresh,
+				},
+			);
 
 			applyUpdateCheckResult(result);
 		} catch (e) {
@@ -1691,12 +1864,18 @@ export default function InstanceDetails(
 		}
 	};
 
-	const handleUpdate = async (resource: InstalledResource, version: ResourceVersion) => {
+	const handleUpdate = async (
+		resource: InstalledResource,
+		version: ResourceVersion,
+	) => {
 		const inst = instance();
 		if (!inst) return;
 
 		try {
-			const project = await resources.getProject(resource.platform as any, resource.remote_id);
+			const project = await resources.getProject(
+				resource.platform as any,
+				resource.remote_id,
+			);
 			await resources.install(project, version, inst.id);
 
 			setUpdates((prev) => {
@@ -1726,7 +1905,10 @@ export default function InstanceDetails(
 		);
 	};
 
-	const toggleResourceWithOverrides = async (resource: InstalledResource, enabled: boolean) => {
+	const toggleResourceWithOverrides = async (
+		resource: InstalledResource,
+		enabled: boolean,
+	) => {
 		const peers = enabled ? getOppositeActiveCopies(resource) : [];
 
 		if (peers.length > 0 && !overrideConflictConfirmed()) {
@@ -1735,7 +1917,9 @@ export default function InstanceDetails(
 				`${resource.display_name} matches ${peers
 					.map((peer) => peer.display_name)
 					.join(", ")} from the ${
-					isModpackOwnedResource(resource) ? "custom resources" : "linked modpack"
+					isModpackOwnedResource(resource)
+						? "custom resources"
+						: "linked modpack"
 				}. Vesta will disable the other copy so Minecraft only loads one version.`,
 				{ okLabel: "Switch", cancelLabel: "Cancel", severity: "warning" },
 			);
@@ -1800,7 +1984,9 @@ export default function InstanceDetails(
 			id: "select",
 			size: 48, // Sync with CSS
 			header: ({ table }) => (
-				<div class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}>
+				<div
+					class={`${styles["col-selection-wrapper"]} ${styles.header} v-col-selection`}
+				>
 					<Checkbox
 						class={styles["header-checkbox"]}
 						checked={table.getIsAllPageRowsSelected()}
@@ -1811,11 +1997,17 @@ export default function InstanceDetails(
 			),
 			cell: (info) => (
 				<div class={`${styles["col-selection-wrapper"]} v-col-selection`}>
-					<div class={styles["select-icon-container"]} onClick={(e: MouseEvent) => e.stopPropagation()}>
+					<div
+						class={styles["select-icon-container"]}
+						onClick={(e: MouseEvent) => e.stopPropagation()}
+					>
 						<ResourceIcon
 							record={
 								projectRecords()?.[
-									getProjectRecordKey(info.row.original.platform, info.row.original.remote_id) || ""
+									getProjectRecordKey(
+										info.row.original.platform,
+										info.row.original.remote_id,
+									) || ""
 								]
 							}
 							name={info.row.original.display_name}
@@ -1834,7 +2026,8 @@ export default function InstanceDetails(
 			header: "Name",
 			cell: (info) => {
 				const displayName = info.getValue();
-				const fileName = info.row.original.local_path.split(/[\\/]/).pop() ?? "";
+				const fileName =
+					info.row.original.local_path.split(/[\\/]/).pop() ?? "";
 				return (
 					<div class={styles["res-info-cell"]}>
 						<div class={styles["res-title-group"]}>
@@ -1857,12 +2050,17 @@ export default function InstanceDetails(
 		}),
 		columnHelper.accessor("current_version", {
 			header: "Version",
-			cell: (info) => <span class={styles["col-version-text"]}>{info.getValue()}</span>,
+			cell: (info) => (
+				<span class={styles["col-version-text"]}>{info.getValue()}</span>
+			),
 		}),
 		columnHelper.accessor("is_enabled", {
 			header: () => <div style="text-align: center; width: 100%;">Enabled</div>,
 			cell: (info) => (
-				<div class={styles["col-enabled"]} onClick={(e: MouseEvent) => e.stopPropagation()}>
+				<div
+					class={styles["col-enabled"]}
+					onClick={(e: MouseEvent) => e.stopPropagation()}
+				>
 					<Switch
 						checked={info.getValue()}
 						onCheckedChange={(enabled: boolean) =>
@@ -1900,7 +2098,9 @@ export default function InstanceDetails(
 							)
 						) {
 							const previous = installedResources.latest;
-							mutateResources((prev) => prev?.filter((r) => r.id !== resource.id));
+							mutateResources((prev) =>
+								prev?.filter((r) => r.id !== resource.id),
+							);
 
 							try {
 								await invoke("delete_resource", {
@@ -1931,7 +2131,10 @@ export default function InstanceDetails(
 							);
 							applyUpdateCheckResult(result);
 						} catch (e) {
-							console.error(`Failed to check updates for ${resource.display_name}:`, e);
+							console.error(
+								`Failed to check updates for ${resource.display_name}:`,
+								e,
+							);
 						} finally {
 							setCheckingPerResource((prev) => {
 								const next = new Set(prev);
@@ -2000,7 +2203,11 @@ export default function InstanceDetails(
 		getFilteredRowModel: getFilteredRowModel(),
 		getRowId: (row) => row.id.toString(),
 		enableRowSelection: (row) =>
-			!(instance()?.modpackId && !modpackResourcesExpanded() && isModpackOwnedResource(row.original)),
+			!(
+				instance()?.modpackId &&
+				!modpackResourcesExpanded() &&
+				isModpackOwnedResource(row.original)
+			),
 	});
 
 	// Subscribe to console logs
@@ -2056,7 +2263,10 @@ export default function InstanceDetails(
 		const currentSlug = slug();
 		const inst = instance();
 		if (!currentSlug || !inst) return undefined;
-		return getCrashDetails(currentSlug) || parseCrashDetails(inst.crashDetails, currentSlug);
+		return (
+			getCrashDetails(currentSlug) ||
+			parseCrashDetails(inst.crashDetails, currentSlug)
+		);
 	});
 
 	const playButtonText = createMemo(() => {
@@ -2092,7 +2302,13 @@ export default function InstanceDetails(
 	const handlePlay = async () => {
 		const inst = instance();
 		const currentSlug = slug();
-		if (!inst || !currentSlug || busy() || isLaunchingGlobal() || isRunningGlobal()) {
+		if (
+			!inst ||
+			!currentSlug ||
+			busy() ||
+			isLaunchingGlobal() ||
+			isRunningGlobal()
+		) {
 			return;
 		}
 
@@ -2164,7 +2380,9 @@ export default function InstanceDetails(
 			fresh.useGlobalHooks = useGlobalHooks();
 			fresh.useGlobalEnvironmentVariables = useGlobalEnvironmentVariables();
 			fresh.useGlobalLauncherAction = useGlobalLauncherAction();
-			fresh.launcherActionOnLaunch = useGlobalLauncherAction() ? null : launcherActionOnLaunch();
+			fresh.launcherActionOnLaunch = useGlobalLauncherAction()
+				? null
+				: launcherActionOnLaunch();
 			fresh.preLaunchHook = preLaunchHook() || null;
 			fresh.postExitHook = postExitHook() || null;
 			fresh.wrapperCommand = wrapperCommand() || null;
@@ -2276,8 +2494,13 @@ export default function InstanceDetails(
 						fallback={
 							<Show when={!instance.loading}>
 								<div class={styles["instance-error"]}>
-									<p>No instance data available. {slug() ? `(Slug: ${slug()})` : "No slug provided."}</p>
-									<Button onClick={() => activeRouter()?.navigate("/")}>Back to Home</Button>
+									<p>
+										No instance data available.{" "}
+										{slug() ? `(Slug: ${slug()})` : "No slug provided."}
+									</p>
+									<Button onClick={() => activeRouter()?.navigate("/")}>
+										Back to Home
+									</Button>
 								</div>
 							</Show>
 						}
@@ -2291,7 +2514,9 @@ export default function InstanceDetails(
 									<div
 										class={styles["header-background"]}
 										style={{
-											"background-image": (inst().iconPath || "").startsWith("linear-gradient")
+											"background-image": (inst().iconPath || "").startsWith(
+												"linear-gradient",
+											)
 												? inst().iconPath || ""
 												: `url('${resolveResourceUrl(inst().iconPath || DEFAULT_ICONS[0])}')`,
 										}}
@@ -2307,7 +2532,8 @@ export default function InstanceDetails(
 											<div class={styles["header-text"]}>
 												<h1>{inst().name}</h1>
 												<p class={styles["header-meta"]}>
-													{inst().minecraftVersion} • {inst().modloader || "Vanilla"}
+													{inst().minecraftVersion} •{" "}
+													{inst().modloader || "Vanilla"}
 													<Show when={inst().modpackId}>
 														<Tooltip placement="top">
 															<TooltipTrigger>
@@ -2327,7 +2553,8 @@ export default function InstanceDetails(
 																</svg>
 															</TooltipTrigger>
 															<TooltipContent>
-																Linked to a {inst().modpackPlatform?.toLowerCase()} modpack
+																Linked to a{" "}
+																{inst().modpackPlatform?.toLowerCase()} modpack
 															</TooltipContent>
 														</Tooltip>
 													</Show>
@@ -2362,20 +2589,37 @@ export default function InstanceDetails(
 												variant="ghost"
 												size="md"
 												onClick={handlePin}
-												title={isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}
-												aria-label={isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"}
+												title={
+													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
+												}
+												aria-label={
+													isPinned() ? "Unpin from Sidebar" : "Pin to Sidebar"
+												}
 												class={styles["header-square-button"]}
 											>
-												<Show when={isPinned()} fallback={<PinIcon width="18" height="18" />}>
+												<Show
+													when={isPinned()}
+													fallback={<PinIcon width="18" height="18" />}
+												>
 													<PinOffIcon width="18" height="18" />
 												</Show>
 											</Button>
 
 											<Button
 												onClick={isRunningGlobal() ? handleKill : handlePlay}
-												disabled={busy() || isInstalling() || isLaunchingGlobal()}
-												color={isRunningGlobal() || currentCrash() ? "destructive" : "primary"}
-												data-color={isRunningGlobal() || currentCrash() ? "destructive" : "primary"}
+												disabled={
+													busy() || isInstalling() || isLaunchingGlobal()
+												}
+												color={
+													isRunningGlobal() || currentCrash()
+														? "destructive"
+														: "primary"
+												}
+												data-color={
+													isRunningGlobal() || currentCrash()
+														? "destructive"
+														: "primary"
+												}
 												variant="solid"
 												size="lg"
 												title={playButtonText()}
@@ -2389,7 +2633,12 @@ export default function InstanceDetails(
 															<Show
 																when={isRunningGlobal()}
 																fallback={
-																	<Show when={currentCrash()} fallback={<PlayIcon width="16" height="16" />}>
+																	<Show
+																		when={currentCrash()}
+																		fallback={
+																			<PlayIcon width="16" height="16" />
+																		}
+																	>
 																		<ErrorIcon width="16" height="16" />
 																	</Show>
 																}
@@ -2401,7 +2650,9 @@ export default function InstanceDetails(
 												>
 													<span class={styles["btn-spinner"]} />
 												</Show>
-												<span class={styles["details-play-button-label"]}>{playButtonText()}</span>
+												<span class={styles["details-play-button-label"]}>
+													{playButtonText()}
+												</span>
 											</Button>
 										</div>
 									</div>
@@ -2430,7 +2681,10 @@ export default function InstanceDetails(
 											<Skeleton class={styles["skeleton-console"]} />
 										</Show>
 										<Show when={instance.latest}>
-											<ConsoleTab instanceSlug={slug()} openLogsFolder={openLogsFolder} />
+											<ConsoleTab
+												instanceSlug={slug()}
+												openLogsFolder={openLogsFolder}
+											/>
 										</Show>
 									</TabsContent>
 
@@ -2445,7 +2699,9 @@ export default function InstanceDetails(
 											resourcesStore={resources}
 											installedResources={installedResources}
 											modpackResources={modpackOwnedResources()}
-											modpackIcon={() => modpackIconBase64() || inst().modpackIconUrl || null}
+											modpackIcon={() =>
+												modpackIconBase64() || inst().modpackIconUrl || null
+											}
 											modpackExpanded={modpackResourcesExpanded()}
 											setModpackExpanded={setModpackResourcesExpanded}
 											currentModpackVersion={currentModpackVersion()}
@@ -2453,9 +2709,13 @@ export default function InstanceDetails(
 											router={activeRouter()}
 											handleBatchUpdate={handleBatchUpdate}
 											handleBatchDelete={handleBatchDelete}
-											onManageModpackVersions={() => handleTabChange("versioning")}
+											onManageModpackVersions={() =>
+												handleTabChange("versioning")
+											}
 											onUnlinkModpack={handleUnlink}
-											onDeleteModpackAndUnlink={handleDeleteModpackFilesAndUnlink}
+											onDeleteModpackAndUnlink={
+												handleDeleteModpackFilesAndUnlink
+											}
 											onRowClick={handleRowClick}
 											selectedToUpdateCount={selectedToUpdateCount()}
 											busy={busy()}
@@ -2472,7 +2732,9 @@ export default function InstanceDetails(
 											gameVersion={inst().minecraftVersion}
 											loader={inst().modloader ?? undefined}
 											crash={currentCrash()}
-											installedResources={installedResources.latest || installedResources() || []}
+											installedResources={
+												installedResources.latest || installedResources() || []
+											}
 											projectRecords={projectRecords.latest || projectRecords()}
 											router={activeRouter()}
 											onCleared={() => void handleRefetch()}
@@ -2487,7 +2749,9 @@ export default function InstanceDetails(
 										<Show when={instance.latest}>
 											<VersioningTab
 												instance={inst()}
-												modpackIcon={() => modpackIconBase64() || inst().modpackIconUrl || null}
+												modpackIcon={() =>
+													modpackIconBase64() || inst().modpackIconUrl || null
+												}
 												isGuest={isGuest()}
 												busy={busy()}
 												isInstalling={isInstalling()}
@@ -2498,7 +2762,9 @@ export default function InstanceDetails(
 												handleModpackVersionSelect={handleModpackVersionSelect}
 												rolloutModpackUpdate={rolloutModpackUpdate}
 												handleUnlink={handleUnlink}
-												handleDeleteModpackAndUnlink={handleDeleteModpackFilesAndUnlink}
+												handleDeleteModpackAndUnlink={
+													handleDeleteModpackFilesAndUnlink
+												}
 												router={activeRouter()}
 												searchableMcVersions={searchableMcVersions}
 												includeSnapshots={includeSnapshots}
@@ -2510,18 +2776,28 @@ export default function InstanceDetails(
 												selectedLoaderVersion={selectedLoaderVersion}
 												setSelectedLoaderVersion={setSelectedLoaderVersion}
 												loadersList={loadersList()}
-												currentVersionSupportedLoaders={currentVersionSupportedLoaders}
+												currentVersionSupportedLoaders={
+													currentVersionSupportedLoaders
+												}
 												searchableLoaderVersions={searchableLoaderVersions}
 												handleStandardUpdate={handleStandardUpdate}
 												setShowExportDialog={setShowExportDialog}
 												handleDuplicate={async () => {
-													const n = await dialogStore.prompt("Duplicate Instance", "Enter name for the copy:", {
-														defaultValue: `${inst().name} (Copy)`,
-													});
+													const n = await dialogStore.prompt(
+														"Duplicate Instance",
+														"Enter name for the copy:",
+														{
+															defaultValue: `${inst().name} (Copy)`,
+														},
+													);
 													if (n) duplicateInstance(inst().id, n);
 												}}
 												handleHardReset={() => handleHardReset(inst())}
-												handleUninstall={() => handleUninstall(inst(), () => activeRouter()?.navigate("/"))}
+												handleUninstall={() =>
+													handleUninstall(inst(), () =>
+														activeRouter()?.navigate("/"),
+													)
+												}
 												repairInstance={repairInstance}
 												mcVersions={mcVersions}
 											/>
@@ -2546,7 +2822,9 @@ export default function InstanceDetails(
 												setIsIconDirty={setIsIconDirty}
 												uploadedIcons={uploadedIcons}
 												modpackIcon={() => modpackIconBase64() || null}
-												isSuggestedSelected={() => areIconsEqual(modpackIconBase64(), iconPath())}
+												isSuggestedSelected={() =>
+													areIconsEqual(modpackIconBase64(), iconPath())
+												}
 												isInstalling={isInstalling()}
 												jreOptions={jreOptions}
 												javaPath={javaPath()}
@@ -2589,7 +2867,9 @@ export default function InstanceDetails(
 												environmentVariables={environmentVariables()}
 												setEnvironmentVariables={setEnvironmentVariables}
 												useGlobalEnvironmentVariables={useGlobalEnvironmentVariables()}
-												setUseGlobalEnvironmentVariables={setUseGlobalEnvironmentVariables}
+												setUseGlobalEnvironmentVariables={
+													setUseGlobalEnvironmentVariables
+												}
 												setIsEnvDirty={setIsEnvDirty}
 												useGlobalLauncherAction={useGlobalLauncherAction()}
 												setUseGlobalLauncherAction={setUseGlobalLauncherAction}
@@ -2617,7 +2897,11 @@ export default function InstanceDetails(
 					if (!i) return;
 					batch(() => {
 						setName(i.name);
-						setIconPath(i.iconPath || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0]);
+						setIconPath(
+							i.iconPath ||
+								getStableIconId(DEFAULT_ICONS[0]) ||
+								DEFAULT_ICONS[0],
+						);
 						setMinMemory([i.minMemory]);
 						setMaxMemory([i.maxMemory]);
 						setJavaArgs(i.javaArgs || "");

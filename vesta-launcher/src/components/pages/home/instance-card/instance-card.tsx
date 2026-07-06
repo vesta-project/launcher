@@ -10,9 +10,18 @@ import ReloadIcon from "@assets/reload.svg";
 import KillIcon from "@assets/rounded-square.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { openStandaloneMiniPage } from "@components/page-viewer/standalone-launcher";
-import { openInstanceTab } from "@utils/launch-intents";
-import { clearRunning, instancesState, setLaunching, setRunning } from "@stores/instances";
-import { isPinned as isPinnedInStore, pinning, pinPage, unpinPage } from "@stores/pinning";
+import {
+	clearRunning,
+	instancesState,
+	setLaunching,
+	setRunning,
+} from "@stores/instances";
+import {
+	isPinned as isPinnedInStore,
+	pinning,
+	pinPage,
+	unpinPage,
+} from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Badge } from "@ui/badge";
@@ -31,7 +40,12 @@ import { ExportDialog } from "@ui/export-dialog";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
-import { clearCrashDetails, getCrashDetails, isInstanceCrashed, parseCrashDetails } from "@utils/crash-handler";
+import {
+	clearCrashDetails,
+	getCrashDetails,
+	isInstanceCrashed,
+	parseCrashDetails,
+} from "@utils/crash-handler";
 import type { Instance } from "@utils/instances";
 import {
 	getInstanceOperationLabel,
@@ -44,8 +58,17 @@ import {
 	resolveInstanceDisplayIcon,
 	resumeInstanceOperation,
 } from "@utils/instances";
+import { openInstanceTab } from "@utils/launch-intents";
 import clsx from "clsx";
-import { createMemo, createSignal, Match, onCleanup, onMount, Show, Switch } from "solid-js";
+import {
+	createMemo,
+	createSignal,
+	Match,
+	onCleanup,
+	onMount,
+	Show,
+	Switch,
+} from "solid-js";
 import {
 	handleDuplicate,
 	handleHardReset,
@@ -64,13 +87,19 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const [busy, setBusy] = createSignal(false);
 
 	const instanceSlug = () => getInstanceSlug(props.instance);
-	const isPinned = createMemo(() => isPinnedInStore("instance", instanceSlug()));
-
-	const storeInstance = createMemo(
-		() => instancesState.instances.find((inst) => inst.id === props.instance.id) ?? props.instance,
+	const isPinned = createMemo(() =>
+		isPinnedInStore("instance", instanceSlug()),
 	);
 
-	const isRunning = createMemo(() => !!instancesState.runningIds[instanceSlug()]);
+	const storeInstance = createMemo(
+		() =>
+			instancesState.instances.find((inst) => inst.id === props.instance.id) ??
+			props.instance,
+	);
+
+	const isRunning = createMemo(
+		() => !!instancesState.runningIds[instanceSlug()],
+	);
 	const hasCrashed = createMemo(
 		() => isInstanceCrashed(instanceSlug()) || !!storeInstance().crashed,
 	);
@@ -78,7 +107,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const crashSummary = createMemo(() => {
 		const slug = instanceSlug();
 		const crash =
-			getCrashDetails(slug) || parseCrashDetails(storeInstance().crashDetails, slug);
+			getCrashDetails(slug) ||
+			parseCrashDetails(storeInstance().crashDetails, slug);
 		if (!crash?.message) return null;
 		const text = crash.message.trim();
 		return text.length > 72 ? `${text.slice(0, 69)}…` : text;
@@ -87,9 +117,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 		() => !!instancesState.launchingIds[instanceSlug()] && !isRunning(),
 	);
 
-	const isInstalling = createMemo(() => isInstanceOperationInProgress(storeInstance()));
-	const isInterrupted = createMemo(() => storeInstance().installationStatus === "interrupted");
-	const isInstalled = createMemo(() => storeInstance().installationStatus === "installed");
+	const isInstalling = createMemo(() =>
+		isInstanceOperationInProgress(storeInstance()),
+	);
+	const isInterrupted = createMemo(
+		() => storeInstance().installationStatus === "interrupted",
+	);
 	const isFailed = createMemo(() => {
 		const status = storeInstance().installationStatus;
 		return status === "failed" || status?.startsWith("failed:");
@@ -155,7 +188,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 		return "Installation failed";
 	};
 
-	const needsInstallation = () => !storeInstance().installationStatus || isFailed();
+	const needsInstallation = () =>
+		!storeInstance().installationStatus || isFailed();
 
 	const playButtonTooltip = () => {
 		if (isInstalling()) {
@@ -191,7 +225,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				await killInstance(props.instance);
 				showToast({
 					title: "Killed",
-					description: `Killed instance \"${props.instance.name}\"`,
+					description: `Killed instance "${props.instance.name}"`,
 					severity: "info",
 					duration: 3000,
 				});
@@ -214,7 +248,7 @@ export default function InstanceCard(props: InstanceCardProps) {
 				await launchInstance(props.instance);
 				showToast({
 					title: "Launching",
-					description: `Launching instance \"${props.instance.name}\"`,
+					description: `Launching instance "${props.instance.name}"`,
 					severity: "info",
 					duration: 3000,
 				});
@@ -264,7 +298,12 @@ export default function InstanceCard(props: InstanceCardProps) {
 
 	const handleContextToggle = () => {
 		if (busy() || isWarmingUp() || isInstalling()) return;
-		if (hasCrashed() && !isRunning() && !needsInstallation() && !isInterrupted()) {
+		if (
+			hasCrashed() &&
+			!isRunning() &&
+			!needsInstallation() &&
+			!isInterrupted()
+		) {
 			openCrashDetails();
 			return;
 		}
@@ -307,7 +346,9 @@ export default function InstanceCard(props: InstanceCardProps) {
 	const handlePinToggle = async () => {
 		const slug = instanceSlug();
 		if (isPinned()) {
-			const pin = pinning.pins.find((p) => p.page_type === "instance" && p.target_id === slug);
+			const pin = pinning.pins.find(
+				(p) => p.page_type === "instance" && p.target_id === slug,
+			);
 			if (pin) await unpinPage(pin.id);
 			return;
 		}
@@ -316,7 +357,8 @@ export default function InstanceCard(props: InstanceCardProps) {
 			page_type: "instance",
 			target_id: slug,
 			label: storeInstance().name,
-			icon_url: storeInstance().iconPath || storeInstance().modpackIconUrl || null,
+			icon_url:
+				storeInstance().iconPath || storeInstance().modpackIconUrl || null,
 			platform: null,
 			order_index: pinning.pins.length,
 		});
@@ -350,7 +392,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 					isInterrupted() && styles.interrupted,
 					isWarmingUp() && styles["instance-card--warming"],
 					isRunning() && !isWarmingUp() && styles["instance-card--running"],
-					hasCrashed() && !isRunning() && !isWarmingUp() && styles["instance-card--crashed"],
+					hasCrashed() &&
+						!isRunning() &&
+						!isWarmingUp() &&
+						styles["instance-card--crashed"],
 					leaveAnim() && styles["instance-card-leave"],
 				)}
 				onMouseOver={() => {
@@ -369,7 +414,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 				<Switch>
 					<Match when={isInstalling()}>
 						<div class={styles["instance-card-centered"]}>
-							<div class={styles["instance-card-spinner"]} data-essential-motion></div>
+							<div
+								class={styles["instance-card-spinner"]}
+								data-essential-motion
+							></div>
 							<h1
 								style={{
 									margin: 0,
@@ -395,8 +443,16 @@ export default function InstanceCard(props: InstanceCardProps) {
 						</div>
 					</Match>
 					<Match when={isFailed()}>
-						<div class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}>
-							<ErrorIcon style={{ width: "24px", height: "24px", color: "var(--semantic-error)" }} />
+						<div
+							class={`${styles["instance-card-centered"]} ${styles["failure-overlay"]}`}
+						>
+							<ErrorIcon
+								style={{
+									width: "24px",
+									height: "24px",
+									color: "var(--semantic-error)",
+								}}
+							/>
 							<h1
 								style={{
 									margin: "4px 0 0",
@@ -427,10 +483,24 @@ export default function InstanceCard(props: InstanceCardProps) {
 						<div class={styles["instance-card-top"]}>
 							<div class={styles["instance-card-indicators"]}>
 								<Show when={isWarmingUp()}>
-									<div class={clsx(styles["status-tag"], styles["status-tag--warming"])}>Warming up</div>
+									<div
+										class={clsx(
+											styles["status-tag"],
+											styles["status-tag--warming"],
+										)}
+									>
+										Warming up
+									</div>
 								</Show>
 								<Show when={isRunning() && !isWarmingUp()}>
-									<div class={clsx(styles["status-tag"], styles["status-tag--running"])}>Running</div>
+									<div
+										class={clsx(
+											styles["status-tag"],
+											styles["status-tag--running"],
+										)}
+									>
+										Running
+									</div>
 								</Show>
 								<Show when={isInterrupted()}>
 									<Badge variant="warning" dot={true}>
@@ -439,7 +509,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 								</Show>
 								<Show when={hasCrashed()}>
 									<div
-										class={clsx(styles["status-tag"], styles["status-tag--crashed"])}
+										class={clsx(
+											styles["status-tag"],
+											styles["status-tag--crashed"],
+										)}
 										onClick={(e) => {
 											e.stopPropagation();
 											openCrashDetails();
@@ -485,7 +558,10 @@ export default function InstanceCard(props: InstanceCardProps) {
 										disabled={isInstalling() || isWarmingUp()}
 									>
 										{isInstalling() || isWarmingUp() ? (
-											<div class={styles["instance-card-spinner"]} data-essential-motion />
+											<div
+												class={styles["instance-card-spinner"]}
+												data-essential-motion
+											/>
 										) : isInterrupted() ? (
 											<ReloadIcon />
 										) : needsInstallation() ? (
@@ -523,8 +599,15 @@ export default function InstanceCard(props: InstanceCardProps) {
 										<Match when={storeInstance().modloader === "quilt"}>
 											<QuiltLogo />
 										</Match>
-										<Match when={storeInstance().modloader && storeInstance().modloader !== "vanilla"}>
-											<p style={{ "text-transform": "capitalize" }}>{storeInstance().modloader}</p>
+										<Match
+											when={
+												storeInstance().modloader &&
+												storeInstance().modloader !== "vanilla"
+											}
+										>
+											<p style={{ "text-transform": "capitalize" }}>
+												{storeInstance().modloader}
+											</p>
 										</Match>
 									</Switch>
 								</div>
@@ -535,8 +618,13 @@ export default function InstanceCard(props: InstanceCardProps) {
 			</ContextMenuTrigger>
 			<ContextMenuPortal>
 				<ContextMenuContent>
-					<ContextMenuItem onSelect={handleContextToggle} disabled={isWarmingUp()}>
-						<span>{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}</span>
+					<ContextMenuItem
+						onSelect={handleContextToggle}
+						disabled={isWarmingUp()}
+					>
+						<span>
+							{isRunning() ? "Stop" : isWarmingUp() ? "Warming up..." : "Play"}
+						</span>
 					</ContextMenuItem>
 
 					<ContextMenuItem onSelect={openInstanceDetails}>

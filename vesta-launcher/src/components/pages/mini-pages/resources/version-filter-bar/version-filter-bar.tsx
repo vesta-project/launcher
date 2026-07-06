@@ -212,7 +212,8 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 										<button
 											class={clsx(
 												styles["dropdown-pill"],
-												props.releaseTypes.has(type) && styles["dropdown-pill--active"],
+												props.releaseTypes.has(type) &&
+													styles["dropdown-pill--active"],
 											)}
 											onMouseDown={(e) => {
 												e.preventDefault();
@@ -240,7 +241,8 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 											<button
 												class={clsx(
 													styles["dropdown-pill"],
-													props.loaders.has(loader.toLowerCase()) && styles["dropdown-pill--active"],
+													props.loaders.has(loader.toLowerCase()) &&
+														styles["dropdown-pill--active"],
 												)}
 												onMouseDown={(e) => {
 													e.preventDefault();
@@ -266,33 +268,42 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 							<div class={styles["dropdown-section"]}>
 								<div class={styles["dropdown-section-label"]}>MC Versions</div>
 								<div class={styles["dropdown-versions"]}>
-									<Show when={rangeMatch()?.isFull}>
-										<button
-											class={clsx(
-												styles["dropdown-version-item"],
-												styles["dropdown-version-item--range"],
-												props.selectedVersions.includes(
-													`${RANGE_CHIP_PREFIX}${rangeMatch()!.start}...${rangeMatch()!.endPartial}`,
-												) && styles["dropdown-version-item--active"],
-											)}
-											onMouseDown={(e) => {
-												e.preventDefault();
-												const range = rangeMatch();
-												if (!range?.isFull) return;
-												const chip = `${RANGE_CHIP_PREFIX}${range.start}...${range.endPartial}`;
-												if (props.selectedVersions.includes(chip)) {
-													props.onSelectedVersionsChange(props.selectedVersions.filter((v) => v !== chip));
-												} else {
-													props.onSelectedVersionsChange([...props.selectedVersions, chip]);
-												}
-												closeDropdown();
-											}}
-										>
-											<span class={styles["dropdown-version-label"]}>
-												{rangeMatch()?.start}...{rangeMatch()?.endPartial}
-											</span>
-											<span class={styles["dropdown-version-hint"]}>Range</span>
-										</button>
+									<Show when={rangeMatch()?.isFull ? rangeMatch() : undefined}>
+										{(range) => (
+											<button
+												class={clsx(
+													styles["dropdown-version-item"],
+													styles["dropdown-version-item--range"],
+													props.selectedVersions.includes(
+														`${RANGE_CHIP_PREFIX}${range().start}...${range().endPartial}`,
+													) && styles["dropdown-version-item--active"],
+												)}
+												onMouseDown={(e) => {
+													e.preventDefault();
+													const range = rangeMatch();
+													if (!range?.isFull) return;
+													const chip = `${RANGE_CHIP_PREFIX}${range.start}...${range.endPartial}`;
+													if (props.selectedVersions.includes(chip)) {
+														props.onSelectedVersionsChange(
+															props.selectedVersions.filter((v) => v !== chip),
+														);
+													} else {
+														props.onSelectedVersionsChange([
+															...props.selectedVersions,
+															chip,
+														]);
+													}
+													closeDropdown();
+												}}
+											>
+												<span class={styles["dropdown-version-label"]}>
+													{range().start}...{range().endPartial}
+												</span>
+												<span class={styles["dropdown-version-hint"]}>
+													Range
+												</span>
+											</button>
+										)}
 									</Show>
 									<Show
 										when={autocompleteVersions().length > 0}
@@ -305,30 +316,39 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 										}
 									>
 										{autocompleteVersions().map((version) => {
-											const isRangeActive = !!rangeMatch();
-											const selectedChip = isRangeActive
-												? `${RANGE_CHIP_PREFIX}${rangeMatch()!.start}...${version}`
+											const range = rangeMatch();
+											const selectedChip = range
+												? `${RANGE_CHIP_PREFIX}${range.start}...${version}`
 												: `${VERSION_CHIP_PREFIX}${version}`;
-											const isSelected = props.selectedVersions.includes(selectedChip);
+											const isSelected =
+												props.selectedVersions.includes(selectedChip);
 											return (
 												<button
 													class={styles["dropdown-version-item"]}
 													classList={{
-														[styles["dropdown-version-item--active"]]: isSelected,
+														[styles["dropdown-version-item--active"]]:
+															isSelected,
 													}}
 													onMouseDown={(e) => {
 														e.preventDefault();
 														if (isSelected) {
 															props.onSelectedVersionsChange(
-																props.selectedVersions.filter((v) => v !== selectedChip),
+																props.selectedVersions.filter(
+																	(v) => v !== selectedChip,
+																),
 															);
 														} else {
-															props.onSelectedVersionsChange([...props.selectedVersions, selectedChip]);
+															props.onSelectedVersionsChange([
+																...props.selectedVersions,
+																selectedChip,
+															]);
 														}
 														closeDropdown();
 													}}
 												>
-													<span class={styles["dropdown-version-label"]}>{version}</span>
+													<span class={styles["dropdown-version-label"]}>
+														{version}
+													</span>
 													<Show when={isSelected}>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
@@ -366,7 +386,9 @@ export function VersionFilterBar(props: VersionFilterBarProps) {
 							<button
 								class={styles["chip"]}
 								onClick={() => {
-									props.onSelectedVersionsChange(props.selectedVersions.filter((v) => v !== chip));
+									props.onSelectedVersionsChange(
+										props.selectedVersions.filter((v) => v !== chip),
+									);
 									closeDropdown();
 								}}
 								type="button"

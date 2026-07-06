@@ -22,6 +22,7 @@ export {
 	setUiChromeModeInThemeData,
 	type UiChromeMode,
 } from "./ui-chrome";
+
 // TODO: Remove these exports once all consumers read ui_chrome_mode_enabled from app config
 
 /**
@@ -77,23 +78,47 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
 			180,
 		opacity: getNum(themeData.opacity) ?? baseTheme.opacity ?? 0,
 		grainStrength: getNum(themeData.grainStrength) ?? baseTheme.grainStrength,
-		borderWidth: themeData.borderWidth ?? config.theme_border_width ?? baseTheme.borderWidth,
+		borderWidth:
+			themeData.borderWidth ??
+			config.theme_border_width ??
+			baseTheme.borderWidth,
 		style:
-			themeData.style ?? normalizeStyleMode(config.theme_style) ?? normalizeStyleMode(baseTheme.style),
+			themeData.style ??
+			normalizeStyleMode(config.theme_style) ??
+			normalizeStyleMode(baseTheme.style),
 		gradientEnabled:
-			themeData.gradientEnabled ?? config.theme_gradient_enabled ?? baseTheme.gradientEnabled,
-		rotation: getNum(themeData.rotation) ?? getNum(config.theme_gradient_angle) ?? baseTheme.rotation,
-		gradientType: themeData.gradientType ?? config.theme_gradient_type ?? baseTheme.gradientType,
+			themeData.gradientEnabled ??
+			config.theme_gradient_enabled ??
+			baseTheme.gradientEnabled,
+		rotation:
+			getNum(themeData.rotation) ??
+			getNum(config.theme_gradient_angle) ??
+			baseTheme.rotation,
+		gradientType:
+			themeData.gradientType ??
+			config.theme_gradient_type ??
+			baseTheme.gradientType,
 		gradientHarmony:
-			themeData.gradientHarmony ?? config.theme_gradient_harmony ?? baseTheme.gradientHarmony,
-		customCss: themeData.customCss !== undefined ? themeData.customCss : baseTheme.customCss,
-		windowEffect: themeData.windowEffect ?? config.theme_window_effect ?? baseTheme.windowEffect,
+			themeData.gradientHarmony ??
+			config.theme_gradient_harmony ??
+			baseTheme.gradientHarmony,
+		customCss:
+			themeData.customCss !== undefined
+				? themeData.customCss
+				: baseTheme.customCss,
+		windowEffect:
+			themeData.windowEffect ??
+			config.theme_window_effect ??
+			baseTheme.windowEffect,
 		backgroundOpacity:
-			themeData.backgroundOpacity ?? config.theme_background_opacity ?? baseTheme.backgroundOpacity,
+			themeData.backgroundOpacity ??
+			config.theme_background_opacity ??
+			baseTheme.backgroundOpacity,
 		author: themeData.author ?? baseTheme.author,
 		allowHueChange: themeData.allowHueChange ?? baseTheme.allowHueChange,
 		allowStyleChange: themeData.allowStyleChange ?? baseTheme.allowStyleChange,
-		allowBorderChange: themeData.allowBorderChange ?? baseTheme.allowBorderChange,
+		allowBorderChange:
+			themeData.allowBorderChange ?? baseTheme.allowBorderChange,
 		variables: themeData.variables ?? baseTheme.variables,
 		userVariables: themeData.userVariables,
 	});
@@ -102,7 +127,10 @@ export function configToTheme(config: Partial<AppThemeConfig>): ThemeConfig {
  * Get a theme by ID
  */
 export function getThemeById(id: string): ThemeConfig | undefined {
-	return customThemeRegistry.get(id) || PRESET_THEMES.find((theme) => theme.id === id);
+	return (
+		customThemeRegistry.get(id) ||
+		PRESET_THEMES.find((theme) => theme.id === id)
+	);
 }
 
 export {
@@ -116,7 +144,11 @@ export {
 	normalizeWindowEffectForCurrentOS,
 } from "./engine/effects";
 // Re-export common engine functions for convenience
-export { normalizeStyleMode, parseThemeData, serializeThemeData } from "./engine/parser";
+export {
+	normalizeStyleMode,
+	parseThemeData,
+	serializeThemeData,
+} from "./engine/parser";
 export { themeToCSSVars } from "./engine/themeToCSSVars";
 export {
 	getDefaultTheme,

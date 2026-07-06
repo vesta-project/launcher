@@ -3,9 +3,6 @@ module.exports = (ctx) => ({
 	map: ctx.env === "development" ? ctx.map : false,
 	plugins: {
 		autoprefixer: true,
-		cssnano: {
-			preset: "default",
-		},
 		"@csstools/postcss-contrast-color-function": {},
 	},
 });

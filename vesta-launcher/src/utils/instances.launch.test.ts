@@ -1,7 +1,7 @@
 import { clearRunning, instancesState, setLaunching } from "@stores/instances";
+import { invoke } from "@tauri-apps/api/core";
 import { getActiveAccount } from "@utils/auth";
 import { launchInstance } from "@utils/instances";
-import { invoke } from "@tauri-apps/api/core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@tauri-apps/api/core", () => ({

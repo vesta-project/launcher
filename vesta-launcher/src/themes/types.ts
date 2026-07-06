@@ -2,7 +2,11 @@ export type StyleMode = "glass" | "frosted" | "flat";
 
 export type LegacyStyleMode = "satin" | "bordered" | "solid";
 
-export type GradientHarmony = "none" | "analogous" | "complementary" | "triadic";
+export type GradientHarmony =
+	| "none"
+	| "analogous"
+	| "complementary"
+	| "triadic";
 
 export type ThemeVariableType = "number" | "color" | "boolean" | "select";
 

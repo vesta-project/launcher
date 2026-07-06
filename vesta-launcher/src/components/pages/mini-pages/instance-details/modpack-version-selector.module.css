@@ -1,527 +1,527 @@
 .control {
-    width: 100%;
+	width: 100%;
 }
 
 .disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
-    pointer-events: none;
+	opacity: 0.55;
+	cursor: not-allowed;
+	pointer-events: none;
 }
 
 .triggerSkeleton {
-    height: 74px;
-    width: 100%;
-    border-radius: 10px;
+	height: 74px;
+	width: 100%;
+	border-radius: 10px;
 }
 
 .triggerCard {
-    display: block;
-    min-height: 74px;
-    width: 100%;
-    padding: 10px;
-    background: var(--surface-base);
-    border: 1px solid var(--border-subtle);
-    border-radius: 10px;
-    box-sizing: border-box;
-    color: var(--text-primary);
-    transition:
-        background 160ms ease,
-        border-color 160ms ease;
+	display: block;
+	min-height: 74px;
+	width: 100%;
+	padding: 10px;
+	background: var(--surface-base);
+	border: 1px solid var(--border-subtle);
+	border-radius: 10px;
+	box-sizing: border-box;
+	color: var(--text-primary);
+	transition:
+		background 160ms ease,
+		border-color 160ms ease;
 }
 
 .triggerCard:hover {
-    background: var(--surface-raised);
-    border-color: var(--border-strong);
+	background: var(--surface-raised);
+	border-color: var(--border-strong);
 }
 
 .triggerCard[data-expanded="true"] {
-    border-bottom-color: var(--border-subtle);
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
-    background: var(--surface-raised);
+	border-bottom-color: var(--border-subtle);
+	border-bottom-left-radius: 0;
+	border-bottom-right-radius: 0;
+	background: var(--surface-raised);
 }
 
 .triggerMain {
-    display: grid;
-    grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 0.85fr);
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+	display: grid;
+	grid-template-columns: minmax(180px, 1.15fr) minmax(220px, 0.85fr);
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
 }
 
 .projectButton {
-    min-width: 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    min-height: 52px;
-    padding: 4px 10px 4px 4px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition:
-        background 160ms ease,
-        transform 160ms ease;
+	min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	min-height: 52px;
+	padding: 4px 10px 4px 4px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		transform 160ms ease;
 }
 
 .projectButton:hover {
-    background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
+	background: color-mix(in srgb, var(--surface-raised) 72%, transparent);
 }
 
 .projectButton:hover .projectName,
 .projectButton:focus-visible .projectName {
-    color: var(--text-primary);
-    text-decoration: underline;
-    text-underline-offset: 3px;
+	color: var(--text-primary);
+	text-decoration: underline;
+	text-underline-offset: 3px;
 }
 
 .projectButton:focus-visible {
-    outline: 2px solid var(--primary-low);
-    outline-offset: 2px;
-    border-radius: 8px;
+	outline: 2px solid var(--primary-low);
+	outline-offset: 2px;
+	border-radius: 8px;
 }
 
 .projectButton:disabled {
-    pointer-events: none;
+	pointer-events: none;
 }
 
 .triggerIcon {
-    width: 42px !important;
-    height: 42px !important;
-    border-radius: 8px !important;
-    flex-shrink: 0;
+	width: 42px !important;
+	height: 42px !important;
+	border-radius: 8px !important;
+	flex-shrink: 0;
 }
 
 .triggerContent {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
 }
 
 .projectLine {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
 }
 
 .projectName {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-primary);
-    font-size: 0.98rem;
-    font-weight: 700;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-primary);
+	font-size: 0.98rem;
+	font-weight: 700;
 }
 
 .platformLabel {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-    font-size: 0.72rem;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+	flex-shrink: 0;
+	color: var(--text-tertiary);
+	font-size: 0.72rem;
+	font-weight: 700;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 .triggerMeta {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-    color: var(--text-secondary);
-    font-size: 0.78rem;
-    font-weight: 600;
-    text-transform: capitalize;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	color: var(--text-secondary);
+	font-size: 0.78rem;
+	font-weight: 600;
+	text-transform: capitalize;
 }
 
 .versionButton {
-    min-width: 0;
-    min-height: 52px;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 8px 6px 12px;
-    border: 0;
-    border-radius: 8px;
-    background: transparent;
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    transition:
-        background 160ms ease,
-        border-color 160ms ease,
-        transform 160ms ease;
+	min-width: 0;
+	min-height: 52px;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 8px 6px 12px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background 160ms ease,
+		border-color 160ms ease,
+		transform 160ms ease;
 }
 
 .versionButton:hover,
 .versionButton:focus-visible {
-    background: color-mix(in srgb, var(--surface-raised) 82%, var(--primary-low));
+	background: color-mix(in srgb, var(--surface-raised) 82%, var(--primary-low));
 }
 
 .versionButton:focus-visible {
-    outline: 2px solid var(--primary-low);
-    outline-offset: 2px;
+	outline: 2px solid var(--primary-low);
+	outline-offset: 2px;
 }
 
 .versionButton:disabled {
-    cursor: not-allowed;
+	cursor: not-allowed;
 }
 
 .triggerCard[data-expanded="true"] .versionButton {
-    background: color-mix(in srgb, var(--surface-raised) 88%, var(--primary-low));
+	background: color-mix(in srgb, var(--surface-raised) 88%, var(--primary-low));
 }
 
 .versionSummary {
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 5px;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 5px;
 }
 
 .versionSummaryPrimary {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-primary);
-    font-size: 0.94rem;
-    font-weight: 800;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-primary);
+	font-size: 0.94rem;
+	font-weight: 800;
 }
 
 .triggerMeta span {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .triggerMeta span + span::before {
-    content: "•";
-    margin-right: 8px;
-    color: var(--text-tertiary);
+	content: "•";
+	margin-right: 8px;
+	color: var(--text-tertiary);
 }
 
 .statusArea {
-    display: inline-flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
-    flex-shrink: 0;
-    min-width: 0;
+	display: inline-flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 8px;
+	flex-shrink: 0;
+	min-width: 0;
 }
 
 .updateAvailableLabel {
-    color: var(--primary-accent);
-    font-size: 0.68rem;
-    font-weight: 700;
-    white-space: nowrap;
-    flex-shrink: 0;
+	color: var(--primary-accent);
+	font-size: 0.68rem;
+	font-weight: 700;
+	white-space: nowrap;
+	flex-shrink: 0;
 }
 
 .chevronWell {
-    display: inline-grid;
-    place-items: center;
-    width: 30px;
-    height: 30px;
-    border-radius: 7px;
-    background: color-mix(in srgb, var(--surface-sunken) 70%, transparent);
-    transition:
-        background 160ms ease,
-        transform 160ms ease;
+	display: inline-grid;
+	place-items: center;
+	width: 30px;
+	height: 30px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--surface-sunken) 70%, transparent);
+	transition:
+		background 160ms ease,
+		transform 160ms ease;
 }
 
 .versionButton:hover .chevronWell,
 .versionButton:focus-visible .chevronWell,
 .triggerCard[data-expanded="true"] .chevronWell {
-    background: color-mix(in srgb, var(--primary-low) 62%, var(--surface-raised));
-    transform: translateX(2px);
+	background: color-mix(in srgb, var(--primary-low) 62%, var(--surface-raised));
+	transform: translateX(2px);
 }
 
 .chevron {
-    width: 18px;
-    height: 18px;
-    color: var(--text-tertiary);
-    transition: transform 160ms ease;
+	width: 18px;
+	height: 18px;
+	color: var(--text-tertiary);
+	transition: transform 160ms ease;
 }
 
 .triggerCard[data-expanded="true"] .chevron {
-    transform: rotate(90deg);
+	transform: rotate(90deg);
 }
 
 .selectionContainer {
-    overflow: hidden;
-    border: 1px solid var(--border-subtle);
-    border-top: none;
-    border-bottom-left-radius: 10px;
-    border-bottom-right-radius: 10px;
-    background: var(--surface-base);
-    transform-origin: top center;
-    animation: versionPickerReveal 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+	overflow: hidden;
+	border: 1px solid var(--border-subtle);
+	border-top: none;
+	border-bottom-left-radius: 10px;
+	border-bottom-right-radius: 10px;
+	background: var(--surface-base);
+	transform-origin: top center;
+	animation: versionPickerReveal 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .searchBarContainer {
-    padding: 10px;
-    border-bottom: 1px solid var(--border-subtle);
-    background: var(--surface-sunken);
+	padding: 10px;
+	border-bottom: 1px solid var(--border-subtle);
+	background: var(--surface-sunken);
 }
 
 .searchBar {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    height: 38px;
-    padding: 0 12px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 8px;
-    background: var(--surface-base);
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	height: 38px;
+	padding: 0 12px;
+	border: 1px solid var(--border-subtle);
+	border-radius: 8px;
+	background: var(--surface-base);
 }
 
 .searchBar:focus-within {
-    border-color: var(--primary-accent);
-    background: var(--surface-raised);
+	border-color: var(--primary-accent);
+	background: var(--surface-raised);
 }
 
 .searchIcon {
-    width: 15px;
-    height: 15px;
-    color: var(--text-tertiary);
-    flex-shrink: 0;
+	width: 15px;
+	height: 15px;
+	color: var(--text-tertiary);
+	flex-shrink: 0;
 }
 
 .searchBar input {
-    width: 100%;
-    min-width: 0;
-    border: none;
-    outline: none;
-    background: transparent;
-    color: var(--text-primary);
-    font-size: 0.86rem;
-    font-weight: 600;
+	width: 100%;
+	min-width: 0;
+	border: none;
+	outline: none;
+	background: transparent;
+	color: var(--text-primary);
+	font-size: 0.86rem;
+	font-weight: 600;
 }
 
 .searchBar input::placeholder {
-    color: var(--text-tertiary);
+	color: var(--text-tertiary);
 }
 
 .versionListContainer {
-    max-height: 390px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: var(--text-tertiary) transparent;
+	max-height: 390px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: var(--text-tertiary) transparent;
 }
 
 .versionListContainer::-webkit-scrollbar {
-    width: 4px;
+	width: 4px;
 }
 
 .versionListContainer::-webkit-scrollbar-thumb {
-    background: var(--text-tertiary);
-    border-radius: 10px;
+	background: var(--text-tertiary);
+	border-radius: 10px;
 }
 
 .versionRow {
-    position: relative;
-    min-height: 58px;
-    padding: 10px 14px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    border-bottom: 1px solid var(--border-subtle);
-    user-select: none;
+	position: relative;
+	min-height: 58px;
+	padding: 10px 14px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	border-bottom: 1px solid var(--border-subtle);
+	user-select: none;
 }
 
 .versionRow:last-child {
-    border-bottom: none;
+	border-bottom: none;
 }
 
 .versionRow:hover {
-    background: var(--surface-raised);
+	background: var(--surface-raised);
 }
 
 .activeRow {
-    background: var(--primary-low) !important;
+	background: var(--primary-low) !important;
 }
 
 .activeRow::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 10px;
-    bottom: 10px;
-    width: 3px;
-    border-radius: 0 2px 2px 0;
-    background: var(--primary-accent);
+	content: "";
+	position: absolute;
+	left: 0;
+	top: 10px;
+	bottom: 10px;
+	width: 3px;
+	border-radius: 0 2px 2px 0;
+	background: var(--primary-accent);
 }
 
 .versionInfo {
-    display: flex;
-    align-items: center;
-    min-width: 0;
-    flex: 1;
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	flex: 1;
 }
 
 .metaContainer {
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
-    min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	min-width: 0;
 }
 
 .versionHeader {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
 }
 
 .versionNumber {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-primary);
-    font-size: 0.88rem;
-    font-weight: 700;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	color: var(--text-primary);
+	font-size: 0.88rem;
+	font-weight: 700;
 }
 
 .releaseType {
-    flex-shrink: 0;
-    color: var(--text-tertiary);
-    font-size: 0.66rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+	flex-shrink: 0;
+	color: var(--text-tertiary);
+	font-size: 0.66rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
 }
 
 .versionSub {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    min-width: 0;
-    color: var(--text-secondary);
-    font-size: 0.72rem;
-    font-weight: 600;
-    text-transform: capitalize;
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	min-width: 0;
+	color: var(--text-secondary);
+	font-size: 0.72rem;
+	font-weight: 600;
+	text-transform: capitalize;
 }
 
 .actionArea {
-    width: 96px;
-    display: flex;
-    justify-content: flex-end;
-    flex-shrink: 0;
+	width: 96px;
+	display: flex;
+	justify-content: flex-end;
+	flex-shrink: 0;
 }
 
 .switchButton {
-    opacity: 0;
-    transform: translateX(6px);
-    pointer-events: none;
-    transition:
-        opacity 160ms ease,
-        transform 160ms ease;
+	opacity: 0;
+	transform: translateX(6px);
+	pointer-events: none;
+	transition:
+		opacity 160ms ease,
+		transform 160ms ease;
 }
 
 .versionRow:hover .switchButton,
 .isConfirming .switchButton {
-    opacity: 1;
-    transform: translateX(0);
-    pointer-events: auto;
+	opacity: 1;
+	transform: translateX(0);
+	pointer-events: auto;
 }
 
 .installedLabel {
-    padding: 4px 8px;
-    border: 1px solid var(--primary-accent);
-    border-radius: 7px;
-    color: var(--primary-accent);
-    background: var(--primary-low);
-    font-size: 0.62rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+	padding: 4px 8px;
+	border: 1px solid var(--primary-accent);
+	border-radius: 7px;
+	color: var(--primary-accent);
+	background: var(--primary-low);
+	font-size: 0.62rem;
+	font-weight: 800;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
 }
 
 .confirmSlide {
-    position: relative;
-    overflow: hidden;
-    height: 20px;
-    width: 100%;
+	position: relative;
+	overflow: hidden;
+	height: 20px;
+	width: 100%;
 }
 
 .slideInner {
-    display: flex;
-    flex-direction: column;
-    transition: transform 220ms ease;
+	display: flex;
+	flex-direction: column;
+	transition: transform 220ms ease;
 }
 
 .isConfirming .slideInner {
-    transform: translateY(-20px);
+	transform: translateY(-20px);
 }
 
 .slideText {
-    height: 20px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    white-space: nowrap;
+	height: 20px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	white-space: nowrap;
 }
 
 @media (max-width: 620px) {
-    .triggerCard {
-        padding: 10px;
-    }
+	.triggerCard {
+		padding: 10px;
+	}
 
-    .triggerMain {
-        width: 100%;
-        grid-template-columns: 1fr;
-        gap: 8px;
-    }
+	.triggerMain {
+		width: 100%;
+		grid-template-columns: 1fr;
+		gap: 8px;
+	}
 
-    .versionButton {
-        border-top: 1px solid var(--border-subtle);
-        padding: 10px 8px;
-    }
+	.versionButton {
+		border-top: 1px solid var(--border-subtle);
+		padding: 10px 8px;
+	}
 
-    .statusArea {
-        justify-content: flex-end;
-    }
+	.statusArea {
+		justify-content: flex-end;
+	}
 
-    .triggerMeta {
-        flex-wrap: wrap;
-    }
+	.triggerMeta {
+		flex-wrap: wrap;
+	}
 
-    .actionArea {
-        width: auto;
-    }
+	.actionArea {
+		width: auto;
+	}
 
-    .switchButton {
-        opacity: 1;
-        transform: none;
-        pointer-events: auto;
-    }
+	.switchButton {
+		opacity: 1;
+		transform: none;
+		pointer-events: auto;
+	}
 }
 
 @keyframes versionPickerReveal {
-    from {
-        opacity: 0;
-        transform: translateY(-6px) scaleY(0.985);
-    }
+	from {
+		opacity: 0;
+		transform: translateY(-6px) scaleY(0.985);
+	}
 
-    to {
-        opacity: 1;
-        transform: translateY(0) scaleY(1);
-    }
+	to {
+		opacity: 1;
+		transform: translateY(0) scaleY(1);
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .selectionContainer {
-        animation: none;
-    }
+	.selectionContainer {
+		animation: none;
+	}
 }

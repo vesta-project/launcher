@@ -19,7 +19,9 @@ interface ImportPageRouteProps {
  */
 function ImportPage(props: ImportPageRouteProps) {
 	const activeRouter = () => props.router || router();
-	const routeParams = createMemo(() => activeRouter()?.currentParams.get() || {});
+	const routeParams = createMemo(
+		() => activeRouter()?.currentParams.get() || {},
+	);
 
 	const selectedLauncherFromQuery = createMemo(() => {
 		const launcher = routeParams().launcher;
@@ -28,11 +30,14 @@ function ImportPage(props: ImportPageRouteProps) {
 
 	const launcherImport = useLauncherImport({
 		selectedLauncherFromQuery,
-		onImportSuccess: () => (props.close ? props.close() : activeRouter()?.navigate("/home")),
+		onImportSuccess: () =>
+			props.close ? props.close() : activeRouter()?.navigate("/home"),
 	});
 
 	const activeLauncherVisual = createMemo(() =>
-		launcherVisualMap.get(selectedLauncherFromQuery() ?? launcherImport.activeLauncherKind()),
+		launcherVisualMap.get(
+			selectedLauncherFromQuery() ?? launcherImport.activeLauncherKind(),
+		),
 	);
 
 	const isDetailsMode = createMemo(() => !!selectedLauncherFromQuery());

@@ -6,7 +6,9 @@ import {
 	matchSuspectToResource,
 } from "./crash-resource-match";
 
-const resource = (overrides: Partial<InstalledResource>): InstalledResource => ({
+const resource = (
+	overrides: Partial<InstalledResource>,
+): InstalledResource => ({
 	id: 1,
 	instance_id: 1,
 	platform: "modrinth",
@@ -25,8 +27,12 @@ const resource = (overrides: Partial<InstalledResource>): InstalledResource => (
 
 describe("crash resource matching", () => {
 	it("does not match sodium-extra as sodium", () => {
-		expect(fileNameMatchesModId("sodium-extra-0-8-7-mc26-1-1", "sodium")).toBe(false);
-		expect(fileNameMatchesModId("sodium-fabric-0-8-7-mc26-1-1", "sodium")).toBe(true);
+		expect(fileNameMatchesModId("sodium-extra-0-8-7-mc26-1-1", "sodium")).toBe(
+			false,
+		);
+		expect(fileNameMatchesModId("sodium-fabric-0-8-7-mc26-1-1", "sodium")).toBe(
+			true,
+		);
 	});
 
 	it("matches disabled dependency jars by mod id", () => {

@@ -9,7 +9,7 @@ import {
 	deleteInstance,
 	duplicateInstance,
 	getInstanceSlug,
-	Instance,
+	type Instance,
 	launchInstance,
 	repairInstance,
 	resetInstance,
@@ -19,9 +19,13 @@ import {
  * Handles duplicating an instance with user prompt for name.
  */
 export const handleDuplicate = async (instance: Instance) => {
-	const newName = await dialogStore.prompt("Duplicate Instance", "Enter name for the copy:", {
-		defaultValue: `${instance.name} (Copy)`,
-	});
+	const newName = await dialogStore.prompt(
+		"Duplicate Instance",
+		"Enter name for the copy:",
+		{
+			defaultValue: `${instance.name} (Copy)`,
+		},
+	);
 	if (newName) {
 		try {
 			await duplicateInstance(instance.id, newName);
@@ -99,7 +103,10 @@ export const handleHardReset = async (instance: Instance) => {
 /**
  * Handles uninstalling/deleting an instance.
  */
-export const handleUninstall = async (instance: Instance, onSuccess?: () => void) => {
+export const handleUninstall = async (
+	instance: Instance,
+	onSuccess?: () => void,
+) => {
 	const confirmed = await dialogStore.confirm(
 		"Uninstall Instance",
 		`Are you sure you want to uninstall "${instance.name}"?\n\nThis will permanently delete the instance and its files.`,

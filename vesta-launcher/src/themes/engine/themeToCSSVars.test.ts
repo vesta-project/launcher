@@ -28,7 +28,9 @@ function readNoiseSizePx(vars: Record<string, string>): number {
 
 describe("themeToCSSVars grain mapping", () => {
 	it("does not emit retired grain variables", () => {
-		const vars = themeToCSSVars(createTheme({ style: "glass", grainStrength: 65 }));
+		const vars = themeToCSSVars(
+			createTheme({ style: "glass", grainStrength: 65 }),
+		);
 
 		expect(vars["--grain-strength"]).toBeUndefined();
 		expect(vars["--liquid-noise-strength"]).toBeUndefined();
@@ -38,14 +40,18 @@ describe("themeToCSSVars grain mapping", () => {
 	});
 
 	it("disables grain for flat style", () => {
-		const vars = themeToCSSVars(createTheme({ style: "flat", grainStrength: 100 }));
+		const vars = themeToCSSVars(
+			createTheme({ style: "flat", grainStrength: 100 }),
+		);
 
 		expect(Number.parseFloat(vars["--liquid-noise-opacity"]) || 0).toBe(0);
 		expect(vars["--liquid-noise-size"]).toBe("196px 196px");
 	});
 
 	it("allows glass grain opacity to reach full strength at max strength", () => {
-		const vars = themeToCSSVars(createTheme({ style: "glass", grainStrength: 100 }));
+		const vars = themeToCSSVars(
+			createTheme({ style: "glass", grainStrength: 100 }),
+		);
 		const opacity = Number.parseFloat(vars["--liquid-noise-opacity"] || "0");
 		const tileSize = readNoiseSizePx(vars);
 
@@ -54,7 +60,9 @@ describe("themeToCSSVars grain mapping", () => {
 	});
 
 	it("allows frosted grain opacity to reach full strength at max strength", () => {
-		const vars = themeToCSSVars(createTheme({ style: "frosted", grainStrength: 100 }));
+		const vars = themeToCSSVars(
+			createTheme({ style: "frosted", grainStrength: 100 }),
+		);
 		const opacity = Number.parseFloat(vars["--liquid-noise-opacity"] || "0");
 		const tileSize = readNoiseSizePx(vars);
 
@@ -63,11 +71,17 @@ describe("themeToCSSVars grain mapping", () => {
 	});
 
 	it("scales opacity and tile size smoothly with grain strength", () => {
-		const low = themeToCSSVars(createTheme({ style: "frosted", grainStrength: 10 }));
-		const high = themeToCSSVars(createTheme({ style: "frosted", grainStrength: 90 }));
+		const low = themeToCSSVars(
+			createTheme({ style: "frosted", grainStrength: 10 }),
+		);
+		const high = themeToCSSVars(
+			createTheme({ style: "frosted", grainStrength: 90 }),
+		);
 
 		const lowOpacity = Number.parseFloat(low["--liquid-noise-opacity"] || "0");
-		const highOpacity = Number.parseFloat(high["--liquid-noise-opacity"] || "0");
+		const highOpacity = Number.parseFloat(
+			high["--liquid-noise-opacity"] || "0",
+		);
 		const lowSize = readNoiseSizePx(low);
 		const highSize = readNoiseSizePx(high);
 

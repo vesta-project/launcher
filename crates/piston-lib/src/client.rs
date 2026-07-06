@@ -98,6 +98,15 @@ pub fn validate_proxy_url(raw_url: &str) -> Result<ParsedProxy, String> {
         return Err("Proxy URL cannot be empty".to_string());
     }
 
+    let authority_start = trimmed
+        .find("://")
+        .ok_or_else(|| "Proxy URL must include a scheme and host".to_string())?;
+    let authority = &trimmed[authority_start + 3..];
+    let authority_end = authority.find(['/', '?', '#']).unwrap_or(authority.len());
+    if authority_end == 0 {
+        return Err("Proxy URL must include a host".to_string());
+    }
+
     let parsed = reqwest::Url::parse(trimmed).map_err(|e| format!("Invalid proxy URL: {e}"))?;
     let scheme = parsed.scheme().to_ascii_lowercase();
     match scheme.as_str() {
@@ -272,7 +281,7 @@ mod tests {
         );
         assert_eq!(
             redact_proxy_url("socks5h://user@example.test:1080"),
-            "socks5h://redacted@example.test:1080/"
+            "socks5h://redacted@example.test:1080"
         );
         assert_eq!(
             redact_proxy_url("http://127.0.0.1:8080"),

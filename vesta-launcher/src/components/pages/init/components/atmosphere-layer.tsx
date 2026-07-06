@@ -52,7 +52,7 @@ function AtmosphereLayer(props: AtmosphereLayerProps) {
 				{Array.from({ length: 40 }).map((_, i) => {
 					// Deterministic pseudo-random spread so particles are already
 					// scattered at different points in their drift when the page loads.
-					const startY = (i * 47 - 80);
+					const startY = i * 47 - 80;
 					const size = 1 + ((i * 13) % 3);
 					return (
 						<div

@@ -2,7 +2,7 @@ import HelpIcon from "@assets/help.svg";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { HELP_CONTENT } from "@utils/help-content";
-import { Component, Show } from "solid-js";
+import { type Component, Show } from "solid-js";
 import styles from "./help-trigger.module.css";
 
 interface HelpTriggerProps {
@@ -34,7 +34,9 @@ export const HelpTrigger: Component<HelpTriggerProps> = (props) => {
 						<TooltipContent>
 							<div class={styles["help-trigger-tooltip-content"]}>
 								<h4 class={styles["help-trigger-title"]}>{content()?.title}</h4>
-								<div class={styles["help-trigger-description"]}>{content()?.description}</div>
+								<div class={styles["help-trigger-description"]}>
+									{content()?.description}
+								</div>
 							</div>
 						</TooltipContent>
 					</Tooltip>
@@ -47,7 +49,9 @@ export const HelpTrigger: Component<HelpTriggerProps> = (props) => {
 					<PopoverContent>
 						<div class={styles["help-trigger-popover-content"]}>
 							<h4 class={styles["help-trigger-title"]}>{content()?.title}</h4>
-							<div class={styles["help-trigger-description"]}>{content()?.description}</div>
+							<div class={styles["help-trigger-description"]}>
+								{content()?.description}
+							</div>
 						</div>
 					</PopoverContent>
 				</Popover>

@@ -2,12 +2,18 @@ import CurseForgeIcon from "@assets/curseforge.svg";
 import FilterIcon from "@assets/filter.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import SearchIcon from "@assets/search.svg";
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import { resources } from "@stores/resources";
 import { Popover, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { TextField } from "@ui/text-field/text-field";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS } from "@utils/instances";
@@ -35,7 +41,11 @@ export function ResourceToolbar(props: {
 
 	const selectedInstance = () => {
 		if (!resources.state.selectedInstanceId) return null;
-		return instancesState.instances.find((i) => i.id === resources.state.selectedInstanceId) || null;
+		return (
+			instancesState.instances.find(
+				(i) => i.id === resources.state.selectedInstanceId,
+			) || null
+		);
 	};
 
 	const instanceIconUrl = () => {
@@ -75,10 +85,13 @@ export function ResourceToolbar(props: {
 						});
 					}}
 					optionValue={(v) => v}
-					optionTextValue={(v) => RESOURCE_TYPES.find((t) => t.value === v)?.label || v}
+					optionTextValue={(v) =>
+						RESOURCE_TYPES.find((t) => t.value === v)?.label || v
+					}
 					itemComponent={(p) => (
 						<SelectItem item={p.item}>
-							{RESOURCE_TYPES.find((t) => t.value === p.item.rawValue)?.label || p.item.rawValue}
+							{RESOURCE_TYPES.find((t) => t.value === p.item.rawValue)?.label ||
+								p.item.rawValue}
 						</SelectItem>
 					)}
 				>
@@ -86,7 +99,11 @@ export function ResourceToolbar(props: {
 						<SelectValue<string>>
 							{(s) => {
 								const val = s.selectedOption();
-								return RESOURCE_TYPES.find((t) => t.value === val)?.label || val || "Mods";
+								return (
+									RESOURCE_TYPES.find((t) => t.value === val)?.label ||
+									val ||
+									"Mods"
+								);
 							}}
 						</SelectValue>
 					</SelectTrigger>
@@ -149,20 +166,29 @@ export function ResourceToolbar(props: {
 				<div
 					class={styles["instance-selector-wrapper"]}
 					classList={{ [styles.disabled]: isModpack() }}
-					title={isModpack() ? "Instance selection is disabled for modpacks" : undefined}
+					title={
+						isModpack()
+							? "Instance selection is disabled for modpacks"
+							: undefined
+					}
 				>
 					<Select<any>
 						disabled={isModpack()}
-						options={[{ id: "none", name: "No Instance" } as any, ...instancesState.instances]}
+						options={[
+							{ id: "none", name: "No Instance" } as any,
+							...instancesState.instances,
+						]}
 						value={
 							resources.state.selectedInstanceId
-								? instancesState.instances.find((i) => i.id === resources.state.selectedInstanceId) ||
-									({ id: "none", name: "No Instance" } as any)
+								? instancesState.instances.find(
+										(i) => i.id === resources.state.selectedInstanceId,
+									) || ({ id: "none", name: "No Instance" } as any)
 								: ({ id: "none", name: "No Instance" } as any)
 						}
 						onChange={(instance: any) => {
 							batch(() => {
-								const id = instance?.id === "none" ? null : (instance?.id ?? null);
+								const id =
+									instance?.id === "none" ? null : (instance?.id ?? null);
 								resources.setInstance(id);
 								if (id && instance) {
 									resources.setGameVersion(instance.minecraftVersion);
@@ -181,7 +207,10 @@ export function ResourceToolbar(props: {
 									resources.setLoader(null);
 								}
 								activeRouter()?.updateQuery("selectedInstanceId", id);
-								activeRouter()?.updateQuery("gameVersion", resources.state.gameVersion);
+								activeRouter()?.updateQuery(
+									"gameVersion",
+									resources.state.gameVersion,
+								);
 								activeRouter()?.updateQuery("loader", resources.state.loader);
 							});
 						}}
@@ -192,13 +221,17 @@ export function ResourceToolbar(props: {
 								<div class={styles["instance-item-content"]}>
 									<Show when={p.item.rawValue && p.item.rawValue.id !== null}>
 										<Show
-											when={resolveResourceUrl(p.item.rawValue?.iconPath || DEFAULT_ICONS[0])}
+											when={resolveResourceUrl(
+												p.item.rawValue?.iconPath || DEFAULT_ICONS[0],
+											)}
 											fallback={
 												<div class={styles["instance-item-icon-placeholder"]}>
 													{(() => {
 														const name = p.item.rawValue?.name || "?";
 														const match = name.match(/[a-zA-Z]/);
-														return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+														return match
+															? match[0].toUpperCase()
+															: name.charAt(0).toUpperCase();
 													})()}
 												</div>
 											}
@@ -213,10 +246,14 @@ export function ResourceToolbar(props: {
 											/>
 										</Show>
 									</Show>
-									<span class={styles["instance-item-name"]}>{p.item.rawValue?.name || "No Instance"}</span>
+									<span class={styles["instance-item-name"]}>
+										{p.item.rawValue?.name || "No Instance"}
+									</span>
 									<span class={styles["instance-item-meta"]}>
 										{p.item.rawValue?.minecraftVersion || ""}
-										{p.item.rawValue?.modloader ? ` · ${p.item.rawValue.modloader}` : ""}
+										{p.item.rawValue?.modloader
+											? ` · ${p.item.rawValue.modloader}`
+											: ""}
 									</span>
 								</div>
 							</SelectItem>
@@ -239,19 +276,32 @@ export function ResourceToolbar(props: {
 												stroke-linecap="round"
 												stroke-linejoin="round"
 											>
-												<rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+												<rect
+													x="2"
+													y="3"
+													width="20"
+													height="14"
+													rx="2"
+													ry="2"
+												/>
 												<line x1="8" y1="21" x2="16" y2="21" />
 												<line x1="12" y1="17" x2="12" y2="21" />
 											</svg>
 										</div>
-										<span class={styles["instance-trigger-name"]}>Select an instance</span>
+										<span class={styles["instance-trigger-name"]}>
+											Select an instance
+										</span>
 									</div>
 								}
 							>
 								<div class={styles["instance-trigger-content"]}>
 									<Show
 										when={instanceIconUrl()}
-										fallback={<div class={styles["instance-icon-placeholder"]}>{instanceDisplayChar()}</div>}
+										fallback={
+											<div class={styles["instance-icon-placeholder"]}>
+												{instanceDisplayChar()}
+											</div>
+										}
 									>
 										<div
 											class={styles["instance-item-icon"]}
@@ -262,7 +312,9 @@ export function ResourceToolbar(props: {
 											}}
 										/>
 									</Show>
-									<span class={styles["instance-trigger-name"]}>{selectedInstance()?.name}</span>
+									<span class={styles["instance-trigger-name"]}>
+										{selectedInstance()?.name}
+									</span>
 								</div>
 							</Show>
 						</SelectTrigger>
@@ -278,7 +330,9 @@ export function ResourceToolbar(props: {
 						<FilterIcon width="16" height="16" />
 						<span>Filters</span>
 						<Show when={activeFilterCount() > 0}>
-							<span class={styles["filter-count-badge"]}>{activeFilterCount()}</span>
+							<span class={styles["filter-count-badge"]}>
+								{activeFilterCount()}
+							</span>
 						</Show>
 					</PopoverTrigger>
 					<PopoverContent class={styles["filter-popover"]}>

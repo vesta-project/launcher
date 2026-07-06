@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
-	DEFAULT_MIN_MEMORY_MB,
-	MAX_GENERATED_MEMORY_MB,
 	calculateRecommendedMemory,
 	clampManualMemoryRange,
+	DEFAULT_MIN_MEMORY_MB,
 	getDynamicPreferredMaxMemoryMb,
 	getGeneratedMemoryLimitMb,
 	getManualMemoryLimitMb,
 	getMemoryWarningThresholdMb,
 	getRecommendedMaxMemoryForModCount,
+	MAX_GENERATED_MEMORY_MB,
 } from "./memory-policy";
 
 describe("memory-policy", () => {
@@ -76,7 +76,9 @@ describe("memory-policy", () => {
 
 	it("keeps mod-count generated recommendations within the policy maximum", () => {
 		expect(getGeneratedMemoryLimitMb(131072)).toBe(MAX_GENERATED_MEMORY_MB);
-		expect(calculateRecommendedMemory(131072, 1000).max).toBe(MAX_GENERATED_MEMORY_MB);
+		expect(calculateRecommendedMemory(131072, 1000).max).toBe(
+			MAX_GENERATED_MEMORY_MB,
+		);
 	});
 
 	it("allows manual memory up to physical RAM but not above it", () => {
@@ -94,7 +96,9 @@ describe("memory-policy", () => {
 	});
 
 	it("keeps Xms conservative", () => {
-		expect(calculateRecommendedMemory(32768, 1000).min).toBe(DEFAULT_MIN_MEMORY_MB);
+		expect(calculateRecommendedMemory(32768, 1000).min).toBe(
+			DEFAULT_MIN_MEMORY_MB,
+		);
 		expect(
 			calculateRecommendedMemory(1024, 1000, null, {
 				defaultMaxMemory: 512,

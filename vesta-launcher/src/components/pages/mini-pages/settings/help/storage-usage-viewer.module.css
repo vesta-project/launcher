@@ -67,7 +67,8 @@
 .storage-tab--active {
 	color: var(--text-primary);
 	background: var(--surface-overlay);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 70%, transparent);
+	box-shadow: inset 0 0 0 1px
+		color-mix(in srgb, var(--border-subtle) 70%, transparent);
 }
 
 .storage-panels {
@@ -94,7 +95,8 @@
 	border-radius: 6px;
 	overflow: hidden;
 	background: color-mix(in srgb, var(--border-subtle) 62%, transparent);
-	box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border-subtle) 50%, transparent);
+	box-shadow: inset 0 0 0 1px
+		color-mix(in srgb, var(--border-subtle) 50%, transparent);
 }
 
 .storage-segment {
@@ -153,13 +155,13 @@
 	padding: 9px 8px 9px 10px;
 	margin: 0;
 	border: none;
-	border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
+	border-bottom: 1px solid
+		color-mix(in srgb, var(--border-subtle) 50%, transparent);
 	background: transparent;
 	color: inherit;
 	text-align: left;
 	cursor: pointer;
-	transition:
-		background-color 120ms ease;
+	transition: background-color 120ms ease;
 }
 
 .storage-row:last-child {
@@ -188,8 +190,7 @@
 	height: 10px;
 	border-radius: 3px;
 	flex-shrink: 0;
-	transition:
-		box-shadow 120ms ease;
+	transition: box-shadow 120ms ease;
 }
 
 .storage-row--active .storage-row-swatch {
@@ -263,8 +264,7 @@
 	justify-content: flex-end;
 	min-height: 28px;
 	white-space: nowrap;
-	transition:
-		opacity 120ms ease;
+	transition: opacity 120ms ease;
 }
 
 .storage-cache-edit-button {
@@ -295,8 +295,7 @@
 	font-weight: 600;
 	line-height: 1;
 	opacity: 0;
-	transition:
-		opacity 120ms ease;
+	transition: opacity 120ms ease;
 }
 
 .storage-cache-edit-button:hover .storage-cache-stats-value,
@@ -323,11 +322,7 @@
 .storage-cache-progress-fill {
 	height: 100%;
 	border-radius: inherit;
-	background: linear-gradient(
-		90deg,
-		hsl(164 67% 42%),
-		hsl(38 88% 54%)
-	);
+	background: linear-gradient(90deg, hsl(164 67% 42%), hsl(38 88% 54%));
 }
 
 .storage-cache-meta {
@@ -369,7 +364,8 @@
 	gap: 0;
 	margin-top: 4px;
 	padding-top: 8px;
-	border-top: 1px solid color-mix(in srgb, var(--border-subtle) 50%, transparent);
+	border-top: 1px solid
+		color-mix(in srgb, var(--border-subtle) 50%, transparent);
 }
 
 .storage-empty {

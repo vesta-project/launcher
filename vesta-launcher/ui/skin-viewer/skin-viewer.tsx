@@ -1,5 +1,12 @@
 import { FunctionAnimation, SkinViewer, WalkingAnimation } from "skinview3d";
-import { createEffect, JSX, on, onCleanup, onMount, splitProps } from "solid-js";
+import {
+	createEffect,
+	type JSX,
+	on,
+	onCleanup,
+	onMount,
+	splitProps,
+} from "solid-js";
 
 export interface SkinViewerProps extends JSX.HTMLAttributes<HTMLDivElement> {
 	skinUrl?: string;

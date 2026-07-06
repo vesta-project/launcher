@@ -19,13 +19,12 @@ import { type PinnedPage, pinning } from "@stores/pinning";
 import { Popover, PopoverAnchor } from "@ui/popover/popover";
 import { Separator } from "@ui/separator/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
+import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import {
 	listNotifications,
 	PROGRESS_INDETERMINATE,
 	persistentNotificationTrigger,
 } from "@utils/notifications";
-import type { UiChromeMode } from "~/themes/presets";
 import {
 	createEffect,
 	createMemo,
@@ -36,6 +35,7 @@ import {
 	onMount,
 	Show,
 } from "solid-js";
+import type { UiChromeMode } from "~/themes/presets";
 import { PinnedItem } from "./pinned-items";
 import styles from "./sidebar.module.css";
 
@@ -75,8 +75,10 @@ function Sidebar(props: SidebarProps) {
 
 		const path = router()?.currentPath.get() ?? "";
 		if (path.startsWith("/install")) return "create";
-		if (path.startsWith("/resources") || path.startsWith("/resource-details")) return "explore";
-		if (path.startsWith("/config") || path.startsWith("/login")) return "settings";
+		if (path.startsWith("/resources") || path.startsWith("/resource-details"))
+			return "explore";
+		if (path.startsWith("/config") || path.startsWith("/login"))
+			return "settings";
 		if (path.startsWith("/instance")) return "library";
 		return "";
 	});
@@ -109,7 +111,8 @@ function Sidebar(props: SidebarProps) {
 					(n) =>
 						n.notification_type === "progress" &&
 						n.progress !== null &&
-						(n.progress === PROGRESS_INDETERMINATE || (n.progress >= 0 && n.progress < 100)),
+						(n.progress === PROGRESS_INDETERMINATE ||
+							(n.progress >= 0 && n.progress < 100)),
 				);
 				return { totalCount, hasActiveTask };
 			} catch (_error) {
@@ -159,8 +162,14 @@ function Sidebar(props: SidebarProps) {
 			}}
 		>
 			<div class={styles["sidebar__root"]}>
-				<div class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}>
-					<Popover open={accountMenuOpen()} onOpenChange={setAccountMenuOpen} placement="right-start">
+				<div
+					class={`${styles["sidebar__section"]} ${styles["sidebar__section--top"]}`}
+				>
+					<Popover
+						open={accountMenuOpen()}
+						onOpenChange={setAccountMenuOpen}
+						placement="right-start"
+					>
 						<PopoverAnchor>
 							<SidebarProfileButton
 								id={"profile-selector"}
@@ -175,14 +184,16 @@ function Sidebar(props: SidebarProps) {
 								setAccountMenuOpen(false);
 
 								try {
-									const { getActiveAccount } = await import("@utils/auth");
 									const account = await getActiveAccount();
 									if (account?.account_type === ACCOUNT_TYPE_GUEST) {
 										window.location.href = "/?login=true";
 										return;
 									}
 								} catch (error) {
-									console.error("Failed to check guest status for Add Account:", error);
+									console.error(
+										"Failed to check guest status for Add Account:",
+										error,
+									);
 								}
 
 								openPage("/login");
@@ -194,7 +205,11 @@ function Sidebar(props: SidebarProps) {
 							<SidebarActionButton
 								id={"sidebar-library"}
 								tooltip_text={"Library"}
-								class={activeSection() === "library" ? styles["sidebar-tab-active"] : undefined}
+								class={
+									activeSection() === "library"
+										? styles["sidebar-tab-active"]
+										: undefined
+								}
 								onClick={openLibrary}
 							>
 								<LibraryIcon />
@@ -204,7 +219,11 @@ function Sidebar(props: SidebarProps) {
 						<SidebarActionButton
 							id={"sidebar-new"}
 							tooltip_text={"New Instance"}
-							class={activeSection() === "create" ? styles["sidebar-tab-active"] : undefined}
+							class={
+								activeSection() === "create"
+									? styles["sidebar-tab-active"]
+									: undefined
+							}
 							onClick={() => openPage("/install/source")}
 						>
 							<PlusIcon />
@@ -213,7 +232,11 @@ function Sidebar(props: SidebarProps) {
 						<SidebarActionButton
 							id={"sidebar-explore"}
 							tooltip_text={"Explore"}
-							class={activeSection() === "explore" ? styles["sidebar-tab-active"] : undefined}
+							class={
+								activeSection() === "explore"
+									? styles["sidebar-tab-active"]
+									: undefined
+							}
 							onClick={onExploreClicked}
 						>
 							<SearchIcon />
@@ -223,18 +246,20 @@ function Sidebar(props: SidebarProps) {
 							<div class={styles["sidebar__pins-container"]}>
 								<Separator class={styles["pins-separator"]} />
 								<div class={styles["sidebar__pins"]}>
-									<For each={pinning.pins}>{(pin: PinnedPage) => <PinnedItem pin={pin} />}</For>
+									<For each={pinning.pins}>
+										{(pin: PinnedPage) => <PinnedItem pin={pin} />}
+									</For>
 								</div>
 							</div>
 						</Show>
 					</div>
 				</div>
 				<div class={styles["sidebar__section"]}>
-				<SidebarActionButton
-					id={"sidebar-notifications"}
-					onClick={() => props.openChanged(!props.open)}
-					tooltip_text={"Notifications"}
-				>
+					<SidebarActionButton
+						id={"sidebar-notifications"}
+						onClick={() => props.openChanged(!props.open)}
+						tooltip_text={"Notifications"}
+					>
 						<div
 							style={{
 								position: "relative",
@@ -255,7 +280,9 @@ function Sidebar(props: SidebarProps) {
 							<Show when={notifData().totalCount > 0}>
 								<Tooltip placement="top">
 									<TooltipTrigger>
-										<div class={styles["notification-badge"]}>{notifData().totalCount}</div>
+										<div class={styles["notification-badge"]}>
+											{notifData().totalCount}
+										</div>
 									</TooltipTrigger>
 									<TooltipContent>{`${notifData().totalCount} notification${notifData().totalCount === 1 ? "" : "s"}`}</TooltipContent>
 								</Tooltip>
@@ -265,7 +292,11 @@ function Sidebar(props: SidebarProps) {
 					<SidebarActionButton
 						id={"sidebar-settings"}
 						tooltip_text={"Settings"}
-						class={activeSection() === "settings" ? styles["sidebar-tab-active"] : undefined}
+						class={
+							activeSection() === "settings"
+								? styles["sidebar-tab-active"]
+								: undefined
+						}
 						onClick={() => openPage("/config")}
 					>
 						<GearIcon />

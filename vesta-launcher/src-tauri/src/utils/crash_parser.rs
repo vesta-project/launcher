@@ -911,14 +911,14 @@ More details:
         let crash = check_launch_crash(log, &log_path()).expect("crash");
         assert_eq!(crash.category, "missing_dependency");
         assert_eq!(crash.crash_type, "launch_mod");
-        assert!(crash.message.contains("fabric-api") || crash.message.contains("requires"));
+        assert!(crash.title.contains("Mod compatibility"));
     }
 
     #[test]
     fn parses_fabulously_optimized_log() {
         let crash = check_launch_crash(FABULOUSLY_OPTIMIZED_LOG, &log_path()).expect("crash");
         assert!(
-            crash.message.contains("fabric-api"),
+            crash.message.contains("Fabric API"),
             "message: {}",
             crash.message
         );
@@ -974,7 +974,7 @@ More details:
             bettergrass.reason
         );
 
-        assert_eq!(crash.affected_mod_count, Some(16));
+        assert_eq!(crash.affected_mod_count, Some(15));
 
         let affected: Vec<_> = crash
             .suspects

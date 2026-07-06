@@ -1,6 +1,6 @@
 import { ModloaderSwitcher } from "@components/modloader-switcher/modloader-switcher";
-import { useMinecraftVersions } from "@stores/versions";
 import { instanceDefaults } from "@stores/settings";
+import { useMinecraftVersions } from "@stores/versions";
 import { invoke } from "@tauri-apps/api/core";
 import LauncherButton from "@ui/button/button";
 import {
@@ -14,26 +14,40 @@ import {
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
 import { areIconsEqual, IconPicker } from "@ui/icon-picker/icon-picker";
 import { Separator } from "@ui/separator/separator";
-import { Slider, SliderFill, SliderThumb, SliderTrack } from "@ui/slider/slider";
-import { Switch, SwitchControl, SwitchLabel, SwitchThumb } from "@ui/switch/switch";
-import { TextFieldInput, TextFieldLabel, TextFieldRoot } from "@ui/text-field/text-field";
+import {
+	Slider,
+	SliderFill,
+	SliderThumb,
+	SliderTrack,
+} from "@ui/slider/slider";
+import {
+	Switch,
+	SwitchControl,
+	SwitchLabel,
+	SwitchThumb,
+} from "@ui/switch/switch";
+import {
+	TextFieldInput,
+	TextFieldLabel,
+	TextFieldRoot,
+} from "@ui/text-field/text-field";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	DEFAULT_ICONS,
-	GameVersionMetadata,
+	type GameVersionMetadata,
 	getStableIconId,
-	Instance,
+	type Instance,
 	isDefaultIcon,
 } from "@utils/instances";
-import { getSystemMemoryMb, ModpackInfo } from "@utils/modpacks";
 import {
-	DEFAULT_MIN_MEMORY_MB,
 	calculateRecommendedMemory,
+	DEFAULT_MIN_MEMORY_MB,
 	getDynamicPreferredMaxMemoryMb,
 	getManualMemoryLimitMb,
 	getMemoryWarningThresholdMb,
 } from "@utils/memory-policy";
+import { getSystemMemoryMb, type ModpackInfo } from "@utils/modpacks";
 import {
 	describeSelectionAdjustments,
 	getAllModloaders,
@@ -43,7 +57,15 @@ import {
 	MODLOADER_DISPLAY_NAMES,
 	resolveCompatibleVersionSelection,
 } from "@utils/version-selection";
-import { batch, createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
+import {
+	batch,
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onMount,
+	Show,
+} from "solid-js";
 import { createStore } from "solid-js/store";
 import styles from "../install-page.module.css";
 
@@ -109,7 +131,9 @@ interface ModpackMetaRow {
  */
 export function InstallForm(props: InstallFormProps) {
 	// --- Core Instance State ---
-	const [name, setName] = createSignal(props.initialData?.name || props.initialName || "");
+	const [name, setName] = createSignal(
+		props.initialData?.name || props.initialName || "",
+	);
 	const [icon, setIcon] = createSignal<string | null>(
 		props.initialData?.iconPath ||
 			props.initialIcon ||
@@ -137,7 +161,9 @@ export function InstallForm(props: InstallFormProps) {
 	]);
 	const [memoryUnit, setMemoryUnit] = createSignal<"MB" | "GB">("MB");
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(
-		(props.initialData as any)?.includeSnapshots ?? props.initialIncludeSnapshots ?? false,
+		(props.initialData as any)?.includeSnapshots ??
+			props.initialIncludeSnapshots ??
+			false,
 	);
 
 	// --- State Propagation ---
@@ -194,7 +220,11 @@ export function InstallForm(props: InstallFormProps) {
 	const selectedModpackVersionOption = createMemo(() => {
 		const selectedId = props.selectedModpackVersionId;
 		if (!selectedId) return null;
-		return searchableModpackVersions().find((version) => version.id === selectedId) || null;
+		return (
+			searchableModpackVersions().find(
+				(version) => version.id === selectedId,
+			) || null
+		);
 	});
 
 	// --- State Normalization ---
@@ -205,7 +235,8 @@ export function InstallForm(props: InstallFormProps) {
 		() =>
 			normalizedIsModpack() &&
 			!props.isLocalImport &&
-			(props.projectId || (props.modpackVersions && props.modpackVersions.length > 0)),
+			(props.projectId ||
+				(props.modpackVersions && props.modpackVersions.length > 0)),
 	);
 	const formatCompactNumber = (value?: number | null) => {
 		if (value === null || value === undefined) return null;
@@ -217,7 +248,8 @@ export function InstallForm(props: InstallFormProps) {
 	const resourceCountValue = createMemo(() => {
 		if (
 			props.modpackInfo?.isCountingResources ||
-			(props.modpackInfo?.modCountSource === "unknown" && !props.modpackInfo?.modCountLookupFailed)
+			(props.modpackInfo?.modCountSource === "unknown" &&
+				!props.modpackInfo?.modCountLookupFailed)
 		) {
 			return "Counting...";
 		}
@@ -239,8 +271,12 @@ export function InstallForm(props: InstallFormProps) {
 		if (!loaderName) return "Unknown";
 		return loaderVersion ? `${loaderName} ${loaderVersion}` : loaderName;
 	});
-	const modpackTitle = createMemo(() => props.modpackInfo?.name || name() || "Modpack");
-	const modpackAuthor = createMemo(() => props.modpackInfo?.author || props.initialAuthor || null);
+	const modpackTitle = createMemo(
+		() => props.modpackInfo?.name || name() || "Modpack",
+	);
+	const modpackAuthor = createMemo(
+		() => props.modpackInfo?.author || props.initialAuthor || null,
+	);
 	const modpackStatPills = createMemo<ModpackStatPill[]>(() => {
 		const stats: ModpackStatPill[] = [
 			{
@@ -248,24 +284,30 @@ export function InstallForm(props: InstallFormProps) {
 				value: resourceCountValue(),
 				muted:
 					!!props.modpackInfo?.isCountingResources ||
-					(props.modpackInfo?.modCountSource === "unknown" && !props.modpackInfo?.modCountLookupFailed) ||
+					(props.modpackInfo?.modCountSource === "unknown" &&
+						!props.modpackInfo?.modCountLookupFailed) ||
 					(props.modpackInfo?.modCount || 0) <= 0,
 			},
 		];
 
 		const downloads = formatCompactNumber(props.modpackInfo?.downloadCount);
-		if (downloads !== null) stats.push({ label: "Downloads", value: downloads });
+		if (downloads !== null)
+			stats.push({ label: "Downloads", value: downloads });
 
 		return stats;
 	});
 	const modpackMetaRows = createMemo<ModpackMetaRow[]>(() => {
 		const rows: ModpackMetaRow[] = [];
-		rows.push({ label: "Pack Version", value: props.modpackInfo?.version || "1.0.0" });
+		rows.push({
+			label: "Pack Version",
+			value: props.modpackInfo?.version || "1.0.0",
+		});
 
 		const projectId = props.modpackInfo?.modpackId || props.projectId;
 		if (projectId) rows.push({ label: "Project ID", value: projectId });
 
-		const versionId = props.modpackInfo?.modpackVersionId || props.selectedModpackVersionId;
+		const versionId =
+			props.modpackInfo?.modpackVersionId || props.selectedModpackVersionId;
 		if (versionId) rows.push({ label: "Version ID", value: versionId });
 
 		return rows;
@@ -273,7 +315,9 @@ export function InstallForm(props: InstallFormProps) {
 
 	// Flag to track if the user has manually changed fields
 	// These are persisted across window handoffs via props.initialData._dirty
-	const [dirty, setDirty] = createStore<DirtyState>((props.initialData as any)?._dirty || {});
+	const [dirty, setDirty] = createStore<DirtyState>(
+		(props.initialData as any)?._dirty || {},
+	);
 
 	const isNameDirty = () => !!dirty.name;
 	const isIconDirty = () => !!dirty.icon;
@@ -282,7 +326,9 @@ export function InstallForm(props: InstallFormProps) {
 	const isLoaderVerDirty = () => !!dirty.loaderVer;
 	const isMemoryDirty = () => !!dirty.memory;
 
-	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<string[]>([]);
+	const [customIconsThisSession, setCustomIconsThisSession] = createSignal<
+		string[]
+	>([]);
 
 	const generatedMemoryRecommendation = createMemo(() =>
 		calculateRecommendedMemory(
@@ -297,7 +343,9 @@ export function InstallForm(props: InstallFormProps) {
 	);
 
 	const formatMemoryLabel = (value: number) =>
-		value >= 1024 ? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} GB` : `${value} MB`;
+		value >= 1024
+			? `${(value / 1024).toFixed(value % 1024 === 0 ? 0 : 1)} GB`
+			: `${value} MB`;
 
 	const memorySummaryReason = () => {
 		if (isMemoryDirty()) return "Manually set for this instance.";
@@ -340,21 +388,34 @@ export function InstallForm(props: InstallFormProps) {
 		return recommendation.preferredMax;
 	};
 
-	const shouldShowMemoryWarning = () => memory()[1] >= getMemoryWarningThresholdMb(totalRam());
+	const shouldShowMemoryWarning = () =>
+		memory()[1] >= getMemoryWarningThresholdMb(totalRam());
 
 	const suggestedModpackIcon = createMemo(
-		() => props.originalIcon || props.modpackInfo?.iconUrl || props.initialIcon || null,
+		() =>
+			props.originalIcon ||
+			props.modpackInfo?.iconUrl ||
+			props.initialIcon ||
+			null,
 	);
 
 	// Create uploadedIcons array that includes all custom icons seen this session
 	const uploadedIcons = createMemo(() => {
 		const result = [...customIconsThisSession()];
 		const suggested = suggestedModpackIcon();
-		if (suggested && !isDefaultIcon(suggested) && !result.some((i) => areIconsEqual(i, suggested))) {
+		if (
+			suggested &&
+			!isDefaultIcon(suggested) &&
+			!result.some((i) => areIconsEqual(i, suggested))
+		) {
 			result.unshift(suggested);
 		}
 		const current = icon();
-		if (current && !isDefaultIcon(current) && !result.some((i) => areIconsEqual(i, current))) {
+		if (
+			current &&
+			!isDefaultIcon(current) &&
+			!result.some((i) => areIconsEqual(i, current))
+		) {
 			return [current, ...result];
 		}
 		return result;
@@ -363,7 +424,11 @@ export function InstallForm(props: InstallFormProps) {
 	// Track custom icons in session list
 	createEffect(() => {
 		const current = icon();
-		if (current && !isDefaultIcon(current) && !areIconsEqual(current, suggestedModpackIcon())) {
+		if (
+			current &&
+			!isDefaultIcon(current) &&
+			!areIconsEqual(current, suggestedModpackIcon())
+		) {
 			setCustomIconsThisSession((prev) => {
 				if (prev.some((i) => areIconsEqual(i, current))) return prev;
 				return [current, ...prev];
@@ -391,21 +456,31 @@ export function InstallForm(props: InstallFormProps) {
 
 			if (d) {
 				if (d.name !== undefined && !isNameDirty()) setName(d.name);
-				if (d.minecraftVersion && !isVersionDirty()) setMcVersion(d.minecraftVersion);
-				if (d.modloader && !isLoaderDirty()) setLoader(d.modloader.toLowerCase());
-				if (d.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(d.modloaderVersion);
+				if (d.minecraftVersion && !isVersionDirty())
+					setMcVersion(d.minecraftVersion);
+				if (d.modloader && !isLoaderDirty())
+					setLoader(d.modloader.toLowerCase());
+				if (d.modloaderVersion && !isLoaderVerDirty())
+					setLoaderVer(d.modloaderVersion);
 				if (d.iconPath && !isIconDirty()) setIcon(d.iconPath);
-				if (d.maxMemory && !isMemoryDirty()) setMemory([d.minMemory || 2048, d.maxMemory]);
+				if (d.maxMemory && !isMemoryDirty())
+					setMemory([d.minMemory || 2048, d.maxMemory]);
 			}
 
-			if (props.initialName !== undefined && !isNameDirty() && !d?.name) setName(props.initialName);
+			if (props.initialName !== undefined && !isNameDirty() && !d?.name)
+				setName(props.initialName);
 			if (props.initialVersion && !isVersionDirty() && !d?.minecraftVersion)
 				setMcVersion(props.initialVersion);
 			if (props.initialModloader && !isLoaderDirty() && !d?.modloader)
 				setLoader(props.initialModloader.toLowerCase());
-			if (props.initialModloaderVersion && !isLoaderVerDirty() && !d?.modloaderVersion)
+			if (
+				props.initialModloaderVersion &&
+				!isLoaderVerDirty() &&
+				!d?.modloaderVersion
+			)
 				setLoaderVer(props.initialModloaderVersion);
-			if (props.initialIcon && !isIconDirty() && !d?.iconPath) setIcon(props.initialIcon);
+			if (props.initialIcon && !isIconDirty() && !d?.iconPath)
+				setIcon(props.initialIcon);
 			if (props.initialMaxMemory && !isMemoryDirty() && !d?.maxMemory) {
 				setMemory([props.initialMinMemory || 2048, props.initialMaxMemory]);
 			}
@@ -423,9 +498,12 @@ export function InstallForm(props: InstallFormProps) {
 				// We prioritize modpack-defined metadata unless user has already touched it
 				if (info.name && !isNameDirty()) setName(info.name);
 				if (info.iconUrl && !isIconDirty()) setIcon(info.iconUrl);
-				if (info.minecraftVersion && !isVersionDirty()) setMcVersion(info.minecraftVersion);
-				if (info.modloader && !isLoaderDirty()) setLoader(info.modloader.toLowerCase());
-				if (info.modloaderVersion && !isLoaderVerDirty()) setLoaderVer(info.modloaderVersion);
+				if (info.minecraftVersion && !isVersionDirty())
+					setMcVersion(info.minecraftVersion);
+				if (info.modloader && !isLoaderDirty())
+					setLoader(info.modloader.toLowerCase());
+				if (info.modloaderVersion && !isLoaderVerDirty())
+					setLoaderVer(info.modloaderVersion);
 				if (!isMemoryDirty()) {
 					const rec = generatedMemoryRecommendation();
 					setMemory([rec.min, rec.max]);
@@ -456,12 +534,21 @@ export function InstallForm(props: InstallFormProps) {
 	createEffect(() => {
 		// Pick latest stable supported MC version if none selected.
 		const meta = pistonMetadata();
-		if (meta && !mcVersion() && !props.initialVersion && !normalizedIsModpack()) {
+		if (
+			meta &&
+			!mcVersion() &&
+			!props.initialVersion &&
+			!normalizedIsModpack()
+		) {
 			const supported = props.supportedMcVersions?.length
-				? meta.game_versions.filter((v) => props.supportedMcVersions?.includes(v.id))
+				? meta.game_versions.filter((v) =>
+						props.supportedMcVersions?.includes(v.id),
+					)
 				: meta.game_versions;
 			const preferred =
-				supported.find((v) => v.stable) || supported[0] || meta.game_versions.find((v) => v.stable);
+				supported.find((v) => v.stable) ||
+				supported[0] ||
+				meta.game_versions.find((v) => v.stable);
 			if (preferred) {
 				setMcVersion(preferred.id);
 				if (!preferred.stable) setIncludeSnapshots(true);
@@ -472,12 +559,14 @@ export function InstallForm(props: InstallFormProps) {
 	createEffect(() => {
 		const meta = pistonMetadata();
 		const current = mcVersion();
-		if (!meta || !current || normalizedIsModpack() || includeSnapshots()) return;
+		if (!meta || !current || normalizedIsModpack() || includeSnapshots())
+			return;
 		const currentMeta = meta.game_versions.find((v) => v.id === current);
 		if (currentMeta && !currentMeta.stable) setIncludeSnapshots(true);
 	});
 
-	const [compatibilityInitialized, setCompatibilityInitialized] = createSignal(false);
+	const [compatibilityInitialized, setCompatibilityInitialized] =
+		createSignal(false);
 
 	createEffect(() => {
 		const meta = pistonMetadata();
@@ -520,7 +609,9 @@ export function InstallForm(props: InstallFormProps) {
 			}
 		});
 
-		const notifiableAdjustments = getNotifiableSelectionAdjustments(resolved.adjustments);
+		const notifiableAdjustments = getNotifiableSelectionAdjustments(
+			resolved.adjustments,
+		);
 
 		if (compatibilityInitialized() && notifiableAdjustments.length > 0) {
 			showToast({
@@ -584,7 +675,11 @@ export function InstallForm(props: InstallFormProps) {
 
 		const loaders = getAllModloaders(meta, props.supportedModloaders);
 		const currentLoader = loader().toLowerCase();
-		if (currentLoader && !props.supportedModloaders?.length && !loaders.includes(currentLoader)) {
+		if (
+			currentLoader &&
+			!props.supportedModloaders?.length &&
+			!loaders.includes(currentLoader)
+		) {
 			return [currentLoader, ...loaders];
 		}
 
@@ -657,7 +752,9 @@ export function InstallForm(props: InstallFormProps) {
 						}}
 						placeholder="Latest"
 						itemComponent={(p) => {
-							const vi = availableLoaderVers().find((v) => v.version === p.item.rawValue);
+							const vi = availableLoaderVers().find(
+								(v) => v.version === p.item.rawValue,
+							);
 							return (
 								<ComboboxItem item={p.item}>
 									<div class={styles["version-item-content"]}>
@@ -692,7 +789,9 @@ export function InstallForm(props: InstallFormProps) {
 						Memory
 						<HelpTrigger topic="MODPACK_MEMORY_TARGETS" />
 					</div>
-					<div class={styles["memory-card-reason"]}>{memorySummaryReason()}</div>
+					<div class={styles["memory-card-reason"]}>
+						{memorySummaryReason()}
+					</div>
 				</div>
 				<div class={styles["memory-card-actions"]}>
 					<button
@@ -747,12 +846,18 @@ export function InstallForm(props: InstallFormProps) {
 					<div class={styles["memory-edit-markers"]}>
 						<button
 							type="button"
-							onClick={() => applyMemoryPreset(generatedMemoryRecommendation().preferredMax)}
+							onClick={() =>
+								applyMemoryPreset(generatedMemoryRecommendation().preferredMax)
+							}
 						>
-							Default {formatMemoryLabel(generatedMemoryRecommendation().preferredMax)}
+							Default{" "}
+							{formatMemoryLabel(generatedMemoryRecommendation().preferredMax)}
 						</button>
 						<Show when={normalizedIsModpack()}>
-							<button type="button" onClick={() => applyMemoryPreset(suggestedMemoryValue())}>
+							<button
+								type="button"
+								onClick={() => applyMemoryPreset(suggestedMemoryValue())}
+							>
 								Suggested {suggestedMemoryLabel()}
 							</button>
 						</Show>
@@ -762,8 +867,8 @@ export function InstallForm(props: InstallFormProps) {
 									Warning
 								</TooltipTrigger>
 								<TooltipContent>
-									Allowing Minecraft to use this much memory may leave too little for the rest of the
-									computer.
+									Allowing Minecraft to use this much memory may leave too
+									little for the rest of the computer.
 								</TooltipContent>
 							</Tooltip>
 						</Show>
@@ -782,11 +887,13 @@ export function InstallForm(props: InstallFormProps) {
 			loader: loader(),
 			loaderVer: loaderVer(),
 		});
-		const effectiveIcon = icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0];
+		const effectiveIcon =
+			icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0];
 		const data: Partial<Instance> = {
 			name: name(),
 			iconPath: effectiveIcon,
-			modpackIconUrl: (effectiveIcon.startsWith("http") ? effectiveIcon : null) || null,
+			modpackIconUrl:
+				(effectiveIcon.startsWith("http") ? effectiveIcon : null) || null,
 			minecraftVersion: mcVersion(),
 			modloader: loader(),
 			modloaderVersion: loaderVer() || null,
@@ -809,7 +916,9 @@ export function InstallForm(props: InstallFormProps) {
 				? props.platform || props.modpackInfo?.modpackPlatform || null
 				: null,
 			modpackVersionId: normalizedIsModpack()
-				? props.selectedModpackVersionId || props.modpackInfo?.modpackVersionId || null
+				? props.selectedModpackVersionId ||
+					props.modpackInfo?.modpackVersionId ||
+					null
 				: null,
 		};
 		props.onInstall(data);
@@ -827,8 +936,11 @@ export function InstallForm(props: InstallFormProps) {
 				<div
 					class={styles["install-grid"]}
 					classList={{
-						[styles["install-grid--with-side"]]: normalizedIsModpack() && !!props.modpackInfo,
-						[styles["install-grid--single"]]: !(normalizedIsModpack() && !!props.modpackInfo),
+						[styles["install-grid--with-side"]]:
+							normalizedIsModpack() && !!props.modpackInfo,
+						[styles["install-grid--single"]]: !(
+							normalizedIsModpack() && !!props.modpackInfo
+						),
 					}}
 				>
 					{/* Main Column */}
@@ -843,9 +955,14 @@ export function InstallForm(props: InstallFormProps) {
 										setIcon(newIcon);
 										setDirty("icon", true);
 									}}
-									modpackIcon={normalizedIsModpack() || props.projectId ? suggestedModpackIcon() : undefined}
+									modpackIcon={
+										normalizedIsModpack() || props.projectId
+											? suggestedModpackIcon()
+											: undefined
+									}
 									isSuggestedSelected={
-										!!suggestedModpackIcon() && areIconsEqual(icon(), suggestedModpackIcon())
+										!!suggestedModpackIcon() &&
+										areIconsEqual(icon(), suggestedModpackIcon())
 									}
 									uploadedIcons={uploadedIcons()}
 									showHint={!isIconDirty()}
@@ -880,9 +997,13 @@ export function InstallForm(props: InstallFormProps) {
 									[styles["is-fetching"]]: props.isFetchingMetadata,
 								}}
 							>
-								<div class={styles["form-section-title"]}>Modpack Configuration</div>
+								<div class={styles["form-section-title"]}>
+									Modpack Configuration
+								</div>
 								<Show
-									when={props.modpackVersions && props.modpackVersions.length > 0}
+									when={
+										props.modpackVersions && props.modpackVersions.length > 0
+									}
 									fallback={
 										<div class={styles["modpack-version-placeholder"]}>
 											{props.isFetchingMetadata
@@ -892,26 +1013,40 @@ export function InstallForm(props: InstallFormProps) {
 									}
 								>
 									<div class={styles["modpack-version-picker"]}>
-										<div class={styles["field-label-manual"]}>Release Version</div>
+										<div class={styles["field-label-manual"]}>
+											Release Version
+										</div>
 										<Combobox<any>
 											options={searchableModpackVersions()}
 											value={selectedModpackVersionOption()}
 											onChange={(version: any) => {
-												if (version?.id) props.onModpackVersionChange?.(version.id);
+												if (version?.id)
+													props.onModpackVersionChange?.(version.id);
 											}}
 											optionValue={(v) => v.id}
 											optionLabel={(v) => {
 												const mc = v.game_versions?.[0];
-												return mc ? `${v.version_number} (MC ${mc})` : v.version_number;
+												return mc
+													? `${v.version_number} (MC ${mc})`
+													: v.version_number;
 											}}
 											optionTextValue={(v) => v.searchString}
-											placeholder={props.selectedModpackVersionId ? "Loading version..." : "Select version..."}
+											placeholder={
+												props.selectedModpackVersionId
+													? "Loading version..."
+													: "Select version..."
+											}
 											itemComponent={(p) => (
 												<ComboboxItem item={p.item}>
 													<div class={styles["version-item-content"]}>
-														<span class={styles["v-num"]}>{p.item.rawValue.version_number}</span>
+														<span class={styles["v-num"]}>
+															{p.item.rawValue.version_number}
+														</span>
 														<span class={styles["v-meta"]}>
-															{(p.item.rawValue.game_versions as string[]).join(", ")} -{" "}
+															{(p.item.rawValue.game_versions as string[]).join(
+																", ",
+															)}{" "}
+															-{" "}
 															{(p.item.rawValue.loaders as string[]).join(", ")}
 														</span>
 													</div>
@@ -929,7 +1064,9 @@ export function InstallForm(props: InstallFormProps) {
 								<div class={styles["modpack-meta-grid"]}>
 									<div class={styles["meta-item"]}>
 										<span class={styles["label"]}>Minecraft</span>
-										<span class={styles["value"]}>{mcVersion() || "Loading..."}</span>
+										<span class={styles["value"]}>
+											{mcVersion() || "Loading..."}
+										</span>
 									</div>
 									<div class={styles["meta-item"]}>
 										<span class={styles["label"]}>
@@ -937,7 +1074,8 @@ export function InstallForm(props: InstallFormProps) {
 											<HelpTrigger topic="MODLOADER_EXPLAINED" />
 										</span>
 										<span class={styles["value"]}>
-											{MODLOADER_DISPLAY_NAMES[loader()] || loader()} {loaderVer()}
+											{MODLOADER_DISPLAY_NAMES[loader()] || loader()}{" "}
+											{loaderVer()}
 										</span>
 									</div>
 								</div>
@@ -984,7 +1122,11 @@ export function InstallForm(props: InstallFormProps) {
 												}
 											}}
 											placeholder="Pick a version..."
-											itemComponent={(p) => <ComboboxItem item={p.item}>{p.item.rawValue}</ComboboxItem>}
+											itemComponent={(p) => (
+												<ComboboxItem item={p.item}>
+													{p.item.rawValue}
+												</ComboboxItem>
+											)}
 										>
 											<ComboboxControl aria-label="Version Picker">
 												<ComboboxInput />
@@ -1002,7 +1144,9 @@ export function InstallForm(props: InstallFormProps) {
 											<SwitchControl class={styles["form-switch__control"]}>
 												<SwitchThumb class={styles["form-switch__thumb"]} />
 											</SwitchControl>
-											<SwitchLabel class={styles["form-switch__label"]}>Include Snapshots</SwitchLabel>
+											<SwitchLabel class={styles["form-switch__label"]}>
+												Include Snapshots
+											</SwitchLabel>
 										</Switch>
 									</div>
 								</div>
@@ -1015,34 +1159,57 @@ export function InstallForm(props: InstallFormProps) {
 					{/* Side Column (Modpack Info) */}
 					<Show when={normalizedIsModpack() && props.modpackInfo}>
 						<div class={styles["install-side-column"]}>
-							<div class={`${styles["form-section"]} ${styles["info-section"]}`}>
-								<div class={styles["import-details-name"]}>{modpackTitle()}</div>
+							<div
+								class={`${styles["form-section"]} ${styles["info-section"]}`}
+							>
+								<div class={styles["import-details-name"]}>
+									{modpackTitle()}
+								</div>
 								<Show when={modpackAuthor()}>
-									{(author) => <div class={styles["modpack-author-subtitle"]}>by {author()}</div>}
+									{(author) => (
+										<div class={styles["modpack-author-subtitle"]}>
+											by {author()}
+										</div>
+									)}
 								</Show>
 								<div class={styles["import-details-badges"]}>
 									<span class={styles["import-badge"]}>
-										MC {props.modpackInfo?.minecraftVersion || mcVersion() || "Unknown"}
+										MC{" "}
+										{props.modpackInfo?.minecraftVersion ||
+											mcVersion() ||
+											"Unknown"}
 									</span>
-									<span class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}>
+									<span
+										class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}
+									>
 										{loaderLabel()}
 									</span>
-									<span class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}>
+									<span
+										class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}
+									>
 										{sourceLabel()}
 									</span>
 								</div>
 								<Show when={modpackStatPills().length > 0}>
-									<div class={`${styles["import-stat-row"]} ${styles["modpack-stat-row"]}`}>
+									<div
+										class={`${styles["import-stat-row"]} ${styles["modpack-stat-row"]}`}
+									>
 										<For each={modpackStatPills()}>
 											{(pill) => (
-												<div class={`${styles["import-stat-pill"]} ${styles["modpack-stat-pill"]}`}>
+												<div
+													class={`${styles["import-stat-pill"]} ${styles["modpack-stat-pill"]}`}
+												>
 													<span
 														class={`${styles["import-stat-value"]} ${styles["modpack-stat-value"]}`}
-														classList={{ [styles["info-value-muted"]]: pill.muted }}
+														classList={{
+															[styles["info-value-muted"]]: pill.muted,
+														}}
 													>
 														{pill.value}
 													</span>
-													<span class={styles["import-stat-label"]}>{pill.label}</span>
+													<span class={styles["import-stat-label"]}>
+														{pill.label}
+													</span>
 												</div>
 											)}
 										</For>
@@ -1053,15 +1220,21 @@ export function InstallForm(props: InstallFormProps) {
 										<For each={modpackMetaRows()}>
 											{(row) => (
 												<div class={styles["import-meta-row"]}>
-													<span class={styles["import-meta-label"]}>{row.label}</span>
-													<span class={styles["import-meta-value"]}>{row.value}</span>
+													<span class={styles["import-meta-label"]}>
+														{row.label}
+													</span>
+													<span class={styles["import-meta-value"]}>
+														{row.value}
+													</span>
 												</div>
 											)}
 										</For>
 									</div>
 								</Show>
 								<Show when={props.modpackInfo?.description}>
-									<div class={styles["info-description"]}>{props.modpackInfo?.description}</div>
+									<div class={styles["info-description"]}>
+										{props.modpackInfo?.description}
+									</div>
 								</Show>
 							</div>
 						</div>
@@ -1074,7 +1247,11 @@ export function InstallForm(props: InstallFormProps) {
 			<div class={styles["install-form__actions-container"]}>
 				<div class={styles["install-form__actions"]}>
 					<Show when={props.onCancel}>
-						<LauncherButton variant="ghost" onClick={props.onCancel} disabled={props.isInstalling}>
+						<LauncherButton
+							variant="ghost"
+							onClick={props.onCancel}
+							disabled={props.isInstalling}
+						>
 							Cancel
 						</LauncherButton>
 					</Show>

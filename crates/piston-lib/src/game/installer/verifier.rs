@@ -693,7 +693,7 @@ mod tests {
 
     fn setup_spec_with_manifest(include_extracted_native: bool) -> InstallSpec {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let root = tmp.into_path();
+        let root = tmp.keep();
 
         let version_id = "1.20.1-test".to_string();
         let versions_dir = root.join("versions").join(&version_id);
@@ -713,7 +713,13 @@ mod tests {
 
         let manifest = json!({
             "id": version_id,
-            "assetIndex": { "id": "30" },
+            "assetIndex": {
+                "id": "30",
+                "sha1": "asset-index-sha1",
+                "size": 2,
+                "totalSize": 2,
+                "url": "https://example.invalid/assets/30.json"
+            },
             "libraries": [
                 {
                     "name": "org.lwjgl:lwjgl:3.4.1",
@@ -772,7 +778,7 @@ mod tests {
 
     fn setup_spec_with_asset_hash(hash: &str) -> InstallSpec {
         let tmp = tempfile::tempdir().expect("tempdir");
-        let root = tmp.into_path();
+        let root = tmp.keep();
 
         let version_id = "1.20.1-test-short-hash".to_string();
         let versions_dir = root.join("versions").join(&version_id);
@@ -784,7 +790,13 @@ mod tests {
 
         let manifest = json!({
             "id": version_id,
-            "assetIndex": { "id": "30" },
+            "assetIndex": {
+                "id": "30",
+                "sha1": "asset-index-sha1",
+                "size": 2,
+                "totalSize": 2,
+                "url": "https://example.invalid/assets/30.json"
+            },
             "libraries": []
         });
         std::fs::write(

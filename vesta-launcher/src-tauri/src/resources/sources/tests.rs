@@ -6,6 +6,7 @@ mod tests {
     use crate::resources::sources::ResourceSource;
 
     #[tokio::test]
+    #[ignore = "live Modrinth API test; run explicitly when checking provider integration"]
     async fn test_modrinth_search() {
         let source = ModrinthSource::new();
         let query = SearchQuery {
@@ -33,6 +34,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "live CurseForge API test; run explicitly when checking provider integration"]
     async fn test_curseforge_search() {
         let source = CurseForgeSource::new();
         let query = SearchQuery {
@@ -63,6 +65,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "live Modrinth API test; run explicitly when checking provider integration"]
     async fn test_modrinth_versions() {
         let source = ModrinthSource::new();
         // Use the ID for Abandoned Prismarine Tower if known, or search first
@@ -90,6 +93,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "live CurseForge API test; run explicitly when checking provider integration"]
     async fn test_curseforge_versions() {
         let source = CurseForgeSource::new();
 

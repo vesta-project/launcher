@@ -8,7 +8,9 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	const vars: Record<string, string> = {
 		"--color__primary-hue": theme.primaryHue.toString(),
 		"--background-opacity":
-			theme.backgroundOpacity !== undefined ? (theme.backgroundOpacity / 100).toFixed(2) : "0.25",
+			theme.backgroundOpacity !== undefined
+				? (theme.backgroundOpacity / 100).toFixed(2)
+				: "0.25",
 		"--rotation": `${theme.rotation ?? 135}deg`,
 	};
 
@@ -105,14 +107,17 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	}
 
 	const defaultGrain = style === "frosted" ? 62 : style === "glass" ? 34 : 0;
-	const grainStrength = Math.max(0, Math.min(100, theme.grainStrength ?? defaultGrain));
+	const grainStrength = Math.max(
+		0,
+		Math.min(100, theme.grainStrength ?? defaultGrain),
+	);
 	const normalizedGrain = grainStrength / 100;
 	const grainOpacity =
 		style === "flat"
 			? 0
 			: style === "frosted"
-				? Math.min(1, 0.03 + Math.pow(normalizedGrain, 4.5) * 0.97)
-				: Math.min(1, 0.02 + Math.pow(normalizedGrain, 5) * 0.98);
+				? Math.min(1, 0.03 + normalizedGrain ** 4.5 * 0.97)
+				: Math.min(1, 0.02 + normalizedGrain ** 5 * 0.98);
 	const grainTileSize =
 		style === "flat"
 			? 196
@@ -121,7 +126,8 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 				: 188 - normalizedGrain * 56;
 
 	vars["--liquid-noise-opacity"] = `${grainOpacity.toFixed(3)}`;
-	vars["--liquid-noise-size"] = `${grainTileSize.toFixed(0)}px ${grainTileSize.toFixed(0)}px`;
+	vars["--liquid-noise-size"] =
+		`${grainTileSize.toFixed(0)}px ${grainTileSize.toFixed(0)}px`;
 
 	// Border width scaling
 	const bdWidth = theme.borderWidth ?? 1;
@@ -149,7 +155,12 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 			declaredVariableKeys.add(v.key);
 			const key = `--theme-var-${v.key}`;
 			if (!vars[key]) {
-				vars[key] = typeof v.default === "boolean" ? (v.default ? "1" : "0") : String(v.default);
+				vars[key] =
+					typeof v.default === "boolean"
+						? v.default
+							? "1"
+							: "0"
+						: String(v.default);
 			}
 		}
 	}
@@ -157,7 +168,8 @@ export function themeToCSSVars(theme: ThemeConfig): Record<string, string> {
 	if (theme.userVariables && declaredVariableKeys.size > 0) {
 		for (const [key, val] of Object.entries(theme.userVariables)) {
 			if (!declaredVariableKeys.has(key)) continue;
-			vars[`--theme-var-${key}`] = typeof val === "boolean" ? (val ? "1" : "0") : String(val);
+			vars[`--theme-var-${key}`] =
+				typeof val === "boolean" ? (val ? "1" : "0") : String(val);
 		}
 	}
 

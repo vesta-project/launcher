@@ -69,20 +69,6 @@ impl StagingDir {
         Ok(())
     }
 
-    /// Copy a file from an external path into the staging directory.
-    pub fn copy_into_staging(&self, source: &Path, relative_path: &str) -> Result<()> {
-        let target = self.staged_path(relative_path)?;
-        self.prepare_parent(relative_path)?;
-        std::fs::copy(source, &target)
-            .with_context(|| format!("Failed to copy {:?} into staging as {:?}", source, target))?;
-        log::debug!(
-            "[staging] Copied into staging: {:?} → {}",
-            source,
-            relative_path
-        );
-        Ok(())
-    }
-
     /// Move a file from an external path into the staging directory.
     #[allow(dead_code)]
     pub fn move_into_staging(&self, source: &Path, relative_path: &str) -> Result<()> {

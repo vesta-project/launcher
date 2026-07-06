@@ -1,5 +1,5 @@
 import { type Component, Show } from "solid-js";
-import { type ThemeConfig } from "../../themes/presets";
+import type { ThemeConfig } from "../../themes/presets";
 import styles from "./theme-preset-card.module.css";
 
 interface ThemePresetCardProps {
@@ -81,12 +81,16 @@ export const ThemePresetCard: Component<ThemePresetCardProps> = (props) => {
 							<span class={styles["theme-preset-card__source"]}>Imported</span>
 						</div>
 					</Show>
-					<span class={styles["theme-preset-card__name"]}>{props.theme.name}</span>
-				<Show when={!props.compact}>
-					<span class={styles["theme-preset-card__description"]}>
-						{props.theme.author ? `by ${props.theme.author}` : props.theme.description || previewStyle()}
+					<span class={styles["theme-preset-card__name"]}>
+						{props.theme.name}
 					</span>
-				</Show>
+					<Show when={!props.compact}>
+						<span class={styles["theme-preset-card__description"]}>
+							{props.theme.author
+								? `by ${props.theme.author}`
+								: props.theme.description || previewStyle()}
+						</span>
+					</Show>
 				</div>
 			</button>
 			<Show when={props.isDeletable && props.onDelete}>

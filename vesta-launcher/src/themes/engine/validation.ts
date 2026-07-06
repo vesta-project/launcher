@@ -49,7 +49,11 @@ export function normalizeUserVariables(
 		if (!userVariables) return undefined;
 		const filtered: Record<string, ThemeVariableValue> = {};
 		for (const [key, value] of Object.entries(userVariables)) {
-			if (typeof value === "number" || typeof value === "string" || typeof value === "boolean") {
+			if (
+				typeof value === "number" ||
+				typeof value === "string" ||
+				typeof value === "boolean"
+			) {
 				filtered[key] = value;
 			}
 		}
@@ -65,23 +69,27 @@ export function normalizeUserVariables(
 		const candidate = userVariables?.[variable.key];
 
 		if (variable.type === "number") {
-			const value = typeof candidate === "number" ? candidate : variable.default;
+			const value =
+				typeof candidate === "number" ? candidate : variable.default;
 			normalized[variable.key] = clamp(value, variable.min, variable.max);
 			continue;
 		}
 
 		if (variable.type === "color") {
-			normalized[variable.key] = typeof candidate === "string" ? candidate : variable.default;
+			normalized[variable.key] =
+				typeof candidate === "string" ? candidate : variable.default;
 			continue;
 		}
 
 		if (variable.type === "boolean") {
-			normalized[variable.key] = typeof candidate === "boolean" ? candidate : variable.default;
+			normalized[variable.key] =
+				typeof candidate === "boolean" ? candidate : variable.default;
 			continue;
 		}
 
 		if (variable.type === "select") {
-			const selected = typeof candidate === "string" ? candidate : variable.default;
+			const selected =
+				typeof candidate === "string" ? candidate : variable.default;
 			const isAllowed = variable.options.some((opt) => opt.value === selected);
 			normalized[variable.key] = isAllowed ? selected : variable.default;
 		}
@@ -90,17 +98,23 @@ export function normalizeUserVariables(
 	return normalized;
 }
 
-function normalizeThemeVariables(variables?: ThemeVariable[]): ThemeVariable[] | undefined {
+function normalizeThemeVariables(
+	variables?: ThemeVariable[],
+): ThemeVariable[] | undefined {
 	if (!variables || variables.length === 0) return undefined;
 
-	const normalized = variables.filter((variable) => THEME_VARIABLE_KEY_PATTERN.test(variable.key));
+	const normalized = variables.filter((variable) =>
+		THEME_VARIABLE_KEY_PATTERN.test(variable.key),
+	);
 	return normalized.length > 0 ? normalized : undefined;
 }
 
 export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 	const defaultTheme = getDefaultTheme();
 	const resolvedId = theme.id || "custom";
-	const presetFallback = PRESET_THEMES.find((candidate) => candidate.id === resolvedId);
+	const presetFallback = PRESET_THEMES.find(
+		(candidate) => candidate.id === resolvedId,
+	);
 	const fallbackTheme = presetFallback ?? defaultTheme;
 	const source: ThemeConfig["source"] =
 		theme.source || (isBuiltinThemeId(resolvedId) ? "builtin" : "imported");
@@ -125,7 +139,11 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 		author: theme.author || fallbackTheme.author,
 		source,
 		description: theme.description,
-		primaryHue: clamp(getVal(theme.primaryHue, fallbackTheme.primaryHue), 0, 360),
+		primaryHue: clamp(
+			getVal(theme.primaryHue, fallbackTheme.primaryHue),
+			0,
+			360,
+		),
 		primarySat:
 			theme.primarySat !== undefined && theme.primarySat !== null
 				? clamp(theme.primarySat, 0, 100)
@@ -135,8 +153,16 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 				? clamp(theme.primaryLight, 0, 100)
 				: undefined,
 		opacity: clamp(getVal(theme.opacity, fallbackTheme.opacity ?? 0), 0, 100),
-		grainStrength: clamp(getVal(theme.grainStrength, fallbackTheme.grainStrength ?? 40), 0, 100),
-		borderWidth: clamp(getVal(theme.borderWidth, fallbackTheme.borderWidth ?? 1), 0, 6),
+		grainStrength: clamp(
+			getVal(theme.grainStrength, fallbackTheme.grainStrength ?? 40),
+			0,
+			100,
+		),
+		borderWidth: clamp(
+			getVal(theme.borderWidth, fallbackTheme.borderWidth ?? 1),
+			0,
+			6,
+		),
 		style: normalizeStyleMode(theme.style) || fallbackTheme.style,
 		colorScheme: theme.colorScheme || fallbackTheme.colorScheme,
 		gradientEnabled: theme.gradientEnabled ?? fallbackTheme.gradientEnabled,
@@ -145,12 +171,22 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 				? clamp(theme.rotation, 0, 360)
 				: undefined,
 		gradientType: theme.gradientType || fallbackTheme.gradientType || "linear",
-		gradientHarmony: theme.gradientHarmony || fallbackTheme.gradientHarmony || "none",
+		gradientHarmony:
+			theme.gradientHarmony || fallbackTheme.gradientHarmony || "none",
 		thumbnail: theme.thumbnail,
 		customCss: theme.customCss ? sanitizeCustomCss(theme.customCss) : undefined,
-		allowHueChange: resolveEditability(theme.allowHueChange, fallbackTheme.allowHueChange),
-		allowStyleChange: resolveEditability(theme.allowStyleChange, fallbackTheme.allowStyleChange),
-		allowBorderChange: resolveEditability(theme.allowBorderChange, fallbackTheme.allowBorderChange),
+		allowHueChange: resolveEditability(
+			theme.allowHueChange,
+			fallbackTheme.allowHueChange,
+		),
+		allowStyleChange: resolveEditability(
+			theme.allowStyleChange,
+			fallbackTheme.allowStyleChange,
+		),
+		allowBorderChange: resolveEditability(
+			theme.allowBorderChange,
+			fallbackTheme.allowBorderChange,
+		),
 		windowEffect: normalizeWindowEffectForCurrentOS(
 			theme.windowEffect ||
 				(getCurrentOsHint() === "windows"
@@ -159,8 +195,12 @@ export function validateTheme(theme: Partial<ThemeConfig>): ThemeConfig {
 						? "vibrancy"
 						: "none"),
 		),
-		backgroundOpacity: theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
+		backgroundOpacity:
+			theme.backgroundOpacity !== undefined ? theme.backgroundOpacity : 25,
 		variables: normalizeThemeVariables(theme.variables),
-		userVariables: normalizeUserVariables(theme.userVariables, normalizeThemeVariables(theme.variables)),
+		userVariables: normalizeUserVariables(
+			theme.userVariables,
+			normalizeThemeVariables(theme.variables),
+		),
 	};
 }

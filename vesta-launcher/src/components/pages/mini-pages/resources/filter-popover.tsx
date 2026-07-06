@@ -1,4 +1,4 @@
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { resources } from "@stores/resources";
 import { useMinecraftVersions } from "@stores/versions";
@@ -11,7 +11,13 @@ import {
 	ComboboxItem,
 	ComboboxTrigger,
 } from "@ui/combobox/combobox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { sanitizeSvg } from "@utils/security";
 import { For, Show } from "solid-js";
 import styles from "./resource-browser.module.css";
@@ -34,7 +40,6 @@ const VERSION_OPTIONS = [
 
 export function FilterPopover(props: { router?: MiniRouter }) {
 	const activeRouter = () => props.router || router();
-	let scrollRef: HTMLDivElement | undefined;
 	const { versions: mcVersions } = useMinecraftVersions();
 
 	const gameVersions = () => {
@@ -114,7 +119,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 								icon: c.icon_url,
 								displayIndex: c.display_index ?? 0,
 							}))
-							.sort((a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name)),
+							.sort(
+								(a, b) =>
+									a.displayIndex - b.displayIndex ||
+									a.name.localeCompare(b.name),
+							),
 					});
 				} else {
 					generalGroup.items.push({
@@ -126,10 +135,14 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 				}
 			}
 
-			result.sort((a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name));
+			result.sort(
+				(a, b) =>
+					a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
+			);
 			if (generalGroup.items.length > 0) {
 				generalGroup.items.sort(
-					(a, b) => a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
+					(a, b) =>
+						a.displayIndex - b.displayIndex || a.name.localeCompare(b.name),
 				);
 				result.unshift(generalGroup);
 			}
@@ -160,7 +173,8 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 	};
 
 	const shouldShowLoader = () =>
-		resources.state.resourceType === "mod" || resources.state.resourceType === "modpack";
+		resources.state.resourceType === "mod" ||
+		resources.state.resourceType === "modpack";
 
 	const toggleGroupExpand = (groupId: string, e: MouseEvent) => {
 		e.stopPropagation();
@@ -168,12 +182,7 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 	};
 
 	return (
-		<div
-			ref={(el) => {
-				scrollRef = el;
-			}}
-			class={styles["filter-popover-scrollable"]}
-		>
+		<div class={styles["filter-popover-scrollable"]}>
 			<div class={styles["filter-popover-content"]}>
 				<div class={styles["filter-popover-section"]}>
 					<label class={styles["filter-label"]}>Minecraft Version</label>
@@ -186,7 +195,11 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 							resources.setOffset(0);
 							activeRouter()?.updateQuery("gameVersion", val);
 						}}
-						itemComponent={(p) => <ComboboxItem item={p.item}>{String(p.item.rawValue)}</ComboboxItem>}
+						itemComponent={(p) => (
+							<ComboboxItem item={p.item}>
+								{String(p.item.rawValue)}
+							</ComboboxItem>
+						)}
 					>
 						<ComboboxControl class={styles["filter-combobox"]}>
 							<ComboboxInput />
@@ -201,17 +214,25 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 						<label class={styles["filter-label"]}>Mod Loader</label>
 						<Select
 							options={["All Loaders", ...LOADERS]}
-							value={LOADERS.find((l) => l.toLowerCase() === resources.state.loader) || "All Loaders"}
+							value={
+								LOADERS.find(
+									(l) => l.toLowerCase() === resources.state.loader,
+								) || "All Loaders"
+							}
 							onChange={(v: string | null) => {
 								const val = v === "All Loaders" || !v ? null : v.toLowerCase();
 								resources.setLoader(val);
 								resources.setOffset(0);
 								activeRouter()?.updateQuery("loader", val);
 							}}
-							itemComponent={(p) => <SelectItem item={p.item}>{String(p.item.rawValue)}</SelectItem>}
+							itemComponent={(p) => (
+								<SelectItem item={p.item}>{String(p.item.rawValue)}</SelectItem>
+							)}
 						>
 							<SelectTrigger class={styles["filter-select"]}>
-								<SelectValue<string>>{(s) => String(s.selectedOption() || "All Loaders")}</SelectValue>
+								<SelectValue<string>>
+									{(s) => String(s.selectedOption() || "All Loaders")}
+								</SelectValue>
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
@@ -236,13 +257,17 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 													classList={{
 														[styles.clickable]: group.id !== undefined,
 														[styles.active]:
-															group.id !== undefined && resources.state.categories.includes(group.id),
+															group.id !== undefined &&
+															resources.state.categories.includes(group.id),
 													}}
 													onClick={() => {
 														if (group.id) {
 															resources.toggleCategory(group.id);
 															resources.setOffset(0);
-															activeRouter()?.updateQuery("categories", resources.state.categories);
+															activeRouter()?.updateQuery(
+																"categories",
+																resources.state.categories,
+															);
 														}
 													}}
 												>
@@ -267,15 +292,23 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 													</Show>
 													<span>{group.name}</span>
 												</div>
-												<Show when={group.items.length > 0 && resources.state.activeSource === "curseforge"}>
+												<Show
+													when={
+														group.items.length > 0 &&
+														resources.state.activeSource === "curseforge"
+													}
+												>
 													<button
 														class={styles["expand-toggle"]}
 														classList={{
-															[styles.expanded]: resources.state.expandedCategoryGroups.includes(
-																group.id || group.name,
-															),
+															[styles.expanded]:
+																resources.state.expandedCategoryGroups.includes(
+																	group.id || group.name,
+																),
 														}}
-														onClick={(e) => toggleGroupExpand(group.id || group.name, e)}
+														onClick={(e) =>
+															toggleGroupExpand(group.id || group.name, e)
+														}
 													>
 														<svg
 															xmlns="http://www.w3.org/2000/svg"
@@ -296,8 +329,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 										</Show>
 										<Show
 											when={
-												resources.state.expandedCategoryGroups.includes(group.id || group.name) ||
-												resources.state.activeSource !== "curseforge"
+												resources.state.expandedCategoryGroups.includes(
+													group.id || group.name,
+												) || resources.state.activeSource !== "curseforge"
 											}
 										>
 											<div class={styles["category-grid"]}>
@@ -305,8 +339,14 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 													{(cat) => (
 														<Badge
 															variant="theme"
-															class={styles["resource-tag"] + " " + styles["category-tag"]}
-															active={resources.state.categories.includes(cat.id)}
+															class={
+																styles["resource-tag"] +
+																" " +
+																styles["category-tag"]
+															}
+															active={resources.state.categories.includes(
+																cat.id,
+															)}
 															title={cat.id}
 															onClick={() => {
 																resources.toggleCategory(cat.id);
@@ -332,7 +372,9 @@ export function FilterPopover(props: { router?: MiniRouter }) {
 																	</Show>
 																</div>
 															</Show>
-															<span class={styles["category-tag-text"]}>{cat.name}</span>
+															<span class={styles["category-tag-text"]}>
+																{cat.name}
+															</span>
 														</Badge>
 													)}
 												</For>

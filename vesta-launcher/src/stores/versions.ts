@@ -8,9 +8,12 @@ import { createSignal } from "solid-js";
  * install page opens, data is already loaded or nearly there.
  * All components share the same signal; no duplicate requests.
  */
-const [versions, setVersions] = createSignal<PistonMetadata | undefined>(undefined, {
-	equals: false,
-});
+const [versions, setVersions] = createSignal<PistonMetadata | undefined>(
+	undefined,
+	{
+		equals: false,
+	},
+);
 
 const [versionsLoading, setVersionsLoading] = createSignal(false);
 const [versionsError, setVersionsError] = createSignal<string | null>(null);

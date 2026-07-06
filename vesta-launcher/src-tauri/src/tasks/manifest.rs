@@ -3,7 +3,6 @@ use tauri::Manager;
 use tokio::fs;
 
 use crate::metadata_cache::MetadataCache;
-use crate::notifications::manager::NotificationManager;
 use crate::tasks::manager::{BoxFuture, Task, TaskContext};
 
 pub struct GenerateManifestTask {
@@ -67,12 +66,9 @@ impl Task for GenerateManifestTask {
 
     fn run(&self, ctx: TaskContext) -> BoxFuture<'static, Result<(), String>> {
         let app = ctx.app_handle.clone();
-        let notif_key = ctx.notification_id.clone();
         let force_refresh = self.force_refresh;
 
         Box::pin(async move {
-            let manager = app.state::<NotificationManager>();
-
             log::info!(
                 "Starting PistonManifest generation (force_refresh: {})",
                 force_refresh

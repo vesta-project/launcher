@@ -101,6 +101,7 @@ mod tests {
         );
     }
 
+    #[test]
     fn test_is_world_save() {
         assert!(is_world_save("saves/MyWorld/level.dat"));
         assert!(!is_world_save("mods/level.dat"));

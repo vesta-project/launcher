@@ -18,7 +18,11 @@ export function UrlSourcePanel(props: UrlSourcePanelProps) {
 					onKeyDown={(e) => e.key === "Enter" && props.onSubmit()}
 					autofocus
 				/>
-				<button class={styles["import-button"]} onClick={props.onSubmit} disabled={!props.value.trim()}>
+				<button
+					class={styles["import-button"]}
+					onClick={props.onSubmit}
+					disabled={!props.value.trim()}
+				>
 					Continue
 				</button>
 			</div>

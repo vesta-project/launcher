@@ -1,4 +1,4 @@
-import { JSX } from "solid-js";
+import type { JSX } from "solid-js";
 
 export interface HelpTopic {
 	title: string;
@@ -69,7 +69,8 @@ export const HELP_CONTENT: Record<string, HelpTopic> = {
 					<strong>Suggested</strong> is what the modpack appears to need.
 				</div>
 				<div>
-					Vesta warns when the selected memory may leave too little for the rest of the computer.
+					Vesta warns when the selected memory may leave too little for the rest
+					of the computer.
 				</div>
 			</div>
 		),

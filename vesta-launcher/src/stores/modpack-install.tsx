@@ -9,7 +9,11 @@ const [source, setSource] = createSignal<{
 	modpackPlatform?: string;
 } | null>(null);
 
-export function openModpackInstall(path: string, modpackId?: string, modpackPlatform?: string) {
+export function openModpackInstall(
+	path: string,
+	modpackId?: string,
+	modpackPlatform?: string,
+) {
 	setSource({ type: "zip", value: path, modpackId, modpackPlatform });
 }
 

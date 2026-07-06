@@ -1,11 +1,4 @@
-import {
-	type Accessor,
-	batch,
-	createMemo,
-	createSignal,
-	type JSXElement,
-	type ValidComponent,
-} from "solid-js";
+import { generateVestaDeepLink } from "@utils/deep-links";
 
 import {
 	createLibraryEntry,
@@ -14,7 +7,14 @@ import {
 	isLibraryPath,
 	type ShellNavigationDelegate,
 } from "@utils/flat-shell-navigation";
-import { generateVestaDeepLink } from "@utils/launch-intents";
+import {
+	type Accessor,
+	batch,
+	createMemo,
+	createSignal,
+	type JSXElement,
+	type ValidComponent,
+} from "solid-js";
 import { Dynamic } from "solid-js/web";
 
 interface RouterComponent<T extends ValidComponent = ValidComponent> {
@@ -45,9 +45,12 @@ class MiniRouter {
 		get: Accessor<string | null>;
 	};
 	isReloading: Accessor<boolean>;
-	private setCurrentPathProps: (props: Record<string, unknown> | undefined) => void;
+	private setCurrentPathProps: (
+		props: Record<string, unknown> | undefined,
+	) => void;
 	private setIsReloading: (value: boolean) => void;
-	private stateProviders: Map<string, () => Record<string, unknown>> = new Map();
+	private stateProviders: Map<string, () => Record<string, unknown>> =
+		new Map();
 	history: {
 		past: HistoryEntry[];
 		future: HistoryEntry[];
@@ -72,7 +75,10 @@ class MiniRouter {
 	removeQuery: (key: string, push?: boolean) => void;
 	reload: () => Promise<void>;
 	setState: (state: Record<string, unknown>) => void;
-	registerStateProvider: (path: string, provider: () => Record<string, unknown>) => void;
+	registerStateProvider: (
+		path: string,
+		provider: () => Record<string, unknown>,
+	) => void;
 	getSnapshot: () => Record<string, unknown>;
 	forwards: () => void;
 	backwards: () => void;
@@ -104,16 +110,20 @@ class MiniRouter {
 
 		this.paths["404"] = { element: props.invalid ?? (() => <div />) };
 
-		const [getCanExit, setCanExitSignal] = createSignal<(() => Promise<boolean>) | null>(null);
+		const [getCanExit, setCanExitSignal] = createSignal<
+			(() => Promise<boolean>) | null
+		>(null);
 
 		this.getCanExit = getCanExit;
 		this.setCanExit = (fn) => setCanExitSignal(() => fn);
 
-		const [getCurrentPath, setCurrentPath] = createSignal<string>(props.currentPath ?? "");
-
-		const [getCurrentParams, setCurrentParams] = createSignal<Record<string, unknown>>(
-			props.initialParams || {},
+		const [getCurrentPath, setCurrentPath] = createSignal<string>(
+			props.currentPath ?? "",
 		);
+
+		const [getCurrentParams, setCurrentParams] = createSignal<
+			Record<string, unknown>
+		>(props.initialParams || {});
 
 		const [getCurrentPathProps, setCurrentPathProps] = createSignal<
 			Record<string, unknown> | undefined
@@ -131,7 +141,8 @@ class MiniRouter {
 		this.currentParams = { set: setCurrentParams, get: getCurrentParams };
 
 		this.currentElement = createMemo(() => {
-			const pathConfig = this.paths[this.currentPath.get()] ?? this.paths["404"];
+			const pathConfig =
+				this.paths[this.currentPath.get()] ?? this.paths["404"];
 			const params = this.currentParams.get();
 			const props = this.currentPathProps();
 
@@ -142,7 +153,9 @@ class MiniRouter {
 		});
 
 		const [getHistoryPast, setHistoryPast] = createSignal<HistoryEntry[]>([]);
-		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>([]);
+		const [getHistoryFuture, setHistoryFuture] = createSignal<HistoryEntry[]>(
+			[],
+		);
 
 		const applyEntry = (entry: HistoryEntry) => {
 			batch(() => {
@@ -191,7 +204,10 @@ class MiniRouter {
 			},
 		};
 
-		this.setRefetch = (fn: (() => Promise<void>) | undefined, path = this.currentPath.get()) => {
+		this.setRefetch = (
+			fn: (() => Promise<void>) | undefined,
+			path = this.currentPath.get(),
+		) => {
 			this.refetchFn = fn;
 			this.refetchPath = fn ? path : undefined;
 		};
@@ -204,7 +220,8 @@ class MiniRouter {
 
 		this.getRefetch = () => {
 			if (!this.refetchFn) return undefined;
-			if (this.refetchPath && this.refetchPath !== this.currentPath.get()) return undefined;
+			if (this.refetchPath && this.refetchPath !== this.currentPath.get())
+				return undefined;
 			return this.refetchFn;
 		};
 
@@ -220,8 +237,12 @@ class MiniRouter {
 
 		this.resetLibrarySlot = () => {
 			batch(() => {
-				setHistoryPast(getHistoryPast().filter((entry) => !isLibraryEntry(entry)));
-				setHistoryFuture(getHistoryFuture().filter((entry) => !isLibraryEntry(entry)));
+				setHistoryPast(
+					getHistoryPast().filter((entry) => !isLibraryEntry(entry)),
+				);
+				setHistoryFuture(
+					getHistoryFuture().filter((entry) => !isLibraryEntry(entry)),
+				);
 				if (this.isOnLibrarySlot()) {
 					setCurrentPath("");
 					setCurrentParams({});
@@ -240,7 +261,10 @@ class MiniRouter {
 		this.generateUrl = () => {
 			const path = this.currentPath.get();
 			const params = Object.fromEntries(
-				Object.entries(this.currentParams.get()).map(([key, value]) => [key, String(value)]),
+				Object.entries(this.currentParams.get()).map(([key, value]) => [
+					key,
+					String(value),
+				]),
 			);
 			return generateVestaDeepLink(path, params);
 		};
@@ -349,7 +373,10 @@ class MiniRouter {
 			this.setCurrentPathProps(newProps);
 		};
 
-		this.registerStateProvider = (path: string, provider: () => Record<string, unknown>) => {
+		this.registerStateProvider = (
+			path: string,
+			provider: () => Record<string, unknown>,
+		) => {
 			this.stateProviders.set(path, provider);
 		};
 
@@ -446,6 +473,6 @@ function CreateMiniRouterPath(
 	return { [path]: { name, element, props } };
 }
 
-export { CreateMiniRouterPath, MiniRouter };
 // Canonical HistoryEntry lives in flat-shell-navigation to avoid mini-router ↔ utilities cycles.
 export type { HistoryEntry } from "@utils/flat-shell-navigation";
+export { CreateMiniRouterPath, MiniRouter };

@@ -1,8 +1,8 @@
-import { PolymorphicProps } from "@kobalte/core/polymorphic";
+import type { PolymorphicProps } from "@kobalte/core/polymorphic";
 import * as TextFieldPrimitive from "@kobalte/core/text-field";
-import { ClassProp } from "@ui/props";
+import type { ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { splitProps, ValidComponent } from "solid-js";
+import { splitProps, type ValidComponent } from "solid-js";
 import styles from "./text-field.module.css";
 
 const TextFieldRoot = TextFieldPrimitive.Root;
@@ -15,7 +15,10 @@ function TextFieldInput<T extends ValidComponent = "input">(
 	const [_, rest] = splitProps(props as TextFieldInputProps, ["class"]);
 
 	return (
-		<TextFieldPrimitive.Input class={clsx(styles["text-field__input"], props.class)} {...rest} />
+		<TextFieldPrimitive.Input
+			class={clsx(styles["text-field__input"], props.class)}
+			{...rest}
+		/>
 	);
 }
 
@@ -36,15 +39,21 @@ function TextFieldTextArea<T extends ValidComponent = "input">(
 
 type TextFieldLabelProps = TextFieldPrimitive.TextFieldLabelProps & ClassProp;
 
-function TextFieldLabel<T extends "label">(props: PolymorphicProps<T, TextFieldLabelProps>) {
+function TextFieldLabel<T extends "label">(
+	props: PolymorphicProps<T, TextFieldLabelProps>,
+) {
 	const [_, rest] = splitProps(props as TextFieldLabelProps, ["class"]);
 
 	return (
-		<TextFieldPrimitive.Label class={clsx(styles["text-field__label"], props.class)} {...rest} />
+		<TextFieldPrimitive.Label
+			class={clsx(styles["text-field__label"], props.class)}
+			{...rest}
+		/>
 	);
 }
 
-type TextFieldDescriptionProps = TextFieldPrimitive.TextFieldDescriptionProps & ClassProp;
+type TextFieldDescriptionProps = TextFieldPrimitive.TextFieldDescriptionProps &
+	ClassProp;
 
 function TextFieldDescription<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, TextFieldDescriptionProps>,
@@ -66,7 +75,12 @@ function TextFieldErrorMessage<T extends ValidComponent = "div">(
 ) {
 	const [_, rest] = splitProps(props as TextFieldErrorMessageProps, []);
 
-	return <TextFieldPrimitive.ErrorMessage class={styles["text-field__error-message"]} {...rest} />;
+	return (
+		<TextFieldPrimitive.ErrorMessage
+			class={styles["text-field__error-message"]}
+			{...rest}
+		/>
+	);
 }
 
 export type TextFieldProps = TextFieldPrimitive.TextFieldRootProps & {
@@ -78,7 +92,13 @@ export type TextFieldProps = TextFieldPrimitive.TextFieldRootProps & {
 };
 
 export function TextField(props: TextFieldProps) {
-	const [local, rest] = splitProps(props, ["placeholder", "onInput", "class", "onFocus", "onBlur"]);
+	const [local, rest] = splitProps(props, [
+		"placeholder",
+		"onInput",
+		"class",
+		"onFocus",
+		"onBlur",
+	]);
 	return (
 		<TextFieldRoot class={clsx(styles["text-field"], local.class)} {...rest}>
 			<TextFieldInput

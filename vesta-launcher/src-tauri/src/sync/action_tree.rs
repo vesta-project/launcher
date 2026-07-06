@@ -83,30 +83,22 @@ pub enum FileSource {
         /// Game-relative path (passed to `read_zip_override_entry`)
         relative_path: String,
     },
-    /// Content generated in-memory (merged configs)
-    Generated,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoveReason {
     /// Author removed this file from the modpack
     AuthorRemoved,
-    /// File is no longer needed (dead dependency)
-    DeadDependency,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SkipReason {
     /// User modified this file — protect their changes
     UserModified,
-    /// File is untracked (not in either manifest) — leave alone
-    Untracked,
     /// File matches the new manifest already — no update needed
     AlreadyCurrent,
     /// Binary file the user has modified
     UserModifiedBinary,
-    /// Config key was resolved via merge — no file-level action needed
-    ResolvedViaMerge,
     /// Config/override dropped from the new modpack manifest — keep the local file
     NotInNewVersion,
     /// Config/override expected from the new ZIP but missing — keep the local file

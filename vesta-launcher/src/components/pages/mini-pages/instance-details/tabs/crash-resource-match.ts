@@ -59,8 +59,9 @@ const describeRangeIssue = (
 
 const normalizeBound = (value: string | undefined) => {
 	const bound = cleanVersionLabel((value ?? "").trim());
-	if (!bound || bound.includes("∞") || /^-?inf(inity)?$/i.test(bound)) return null;
-	return bound.match(/[0-9][^\s,\]\)]*/)?.[0] ?? null;
+	if (!bound || bound.includes("∞") || /^-?inf(inity)?$/i.test(bound))
+		return null;
+	return bound.match(/[0-9][^\s,\])]*/)?.[0] ?? null;
 };
 
 export const getRequiredVersionIssue = (
@@ -80,7 +81,9 @@ export const getRequiredVersionIssue = (
 		}
 	}
 
-	const upperBound = reason.match(/version\s+([0-9][^\s,]*)\s+or\s+(?:earlier|older|lower|below)/i);
+	const upperBound = reason.match(
+		/version\s+([0-9][^\s,]*)\s+or\s+(?:earlier|older|lower|below)/i,
+	);
 	if (upperBound) {
 		const required = versionParts(upperBound[1]);
 		if (required.length && compareVersions(current, required) > 0) {
@@ -88,7 +91,9 @@ export const getRequiredVersionIssue = (
 		}
 	}
 
-	const betweenRange = reason.match(/between\s+([0-9][^\s,]*)\s+and\s+([0-9][^\s,]*)/i);
+	const betweenRange = reason.match(
+		/between\s+([0-9][^\s,]*)\s+and\s+([0-9][^\s,]*)/i,
+	);
 	if (betweenRange) {
 		const issue = describeRangeIssue(
 			current,
@@ -99,7 +104,9 @@ export const getRequiredVersionIssue = (
 		if (issue) return issue;
 	}
 
-	const intervalRange = reason.match(/[\[(]+\s*([^,\]\)]+)\s*,\s*([^\]\)]+)\s*[\]\)]+/);
+	const intervalRange = reason.match(
+		/[[(]+\s*([^,\])]+)\s*,\s*([^\])]+)\s*[\])]+/,
+	);
 	if (intervalRange) {
 		const issue = describeRangeIssue(
 			current,
@@ -113,7 +120,8 @@ export const getRequiredVersionIssue = (
 	const minorRange = reason.match(/any\s+([0-9]+)\.([0-9]+)\.x\s+version/i);
 	if (
 		minorRange &&
-		(current[0] !== Number(minorRange[1]) || current[1] !== Number(minorRange[2]))
+		(current[0] !== Number(minorRange[1]) ||
+			current[1] !== Number(minorRange[2]))
 	) {
 		return `Installed ${resource.current_version}, needs ${minorRange[1]}.${minorRange[2]}.x`;
 	}
@@ -129,11 +137,16 @@ export const matchSuspectToResource = (
 	const displayName = normalizeResourceToken(suspect.display_name);
 
 	return installed.find((resource) => {
-		const fileName = normalizeResourceToken(resource.local_path.split(/[\\/]/).pop());
+		const fileName = normalizeResourceToken(
+			resource.local_path.split(/[\\/]/).pop(),
+		);
 		const remoteId = normalizeResourceToken(resource.remote_id);
 		const resourceName = normalizeResourceToken(resource.display_name);
 
-		if (modId && (fileNameMatchesModId(fileName, modId) || remoteId === modId)) {
+		if (
+			modId &&
+			(fileNameMatchesModId(fileName, modId) || remoteId === modId)
+		) {
 			return true;
 		}
 		return resourceName === displayName;

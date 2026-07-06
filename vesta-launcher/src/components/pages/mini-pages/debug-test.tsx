@@ -32,7 +32,10 @@ export default function DebugTestPage() {
 						setCheckboxChecked(val);
 					}}
 				>
-					<label>Project Checkbox (Status: {checkboxChecked() ? "Checked" : "Unchecked"})</label>
+					<label>
+						Project Checkbox (Status:{" "}
+						{checkboxChecked() ? "Checked" : "Unchecked"})
+					</label>
 				</Checkbox>
 			</section>
 
@@ -68,12 +71,8 @@ export default function DebugTestPage() {
 						if (typeof val === "string") setToggleValue(val);
 					}}
 				>
-					<ToggleGroupItem value="one">
-						Option One
-					</ToggleGroupItem>
-					<ToggleGroupItem value="two">
-						Option Two
-					</ToggleGroupItem>
+					<ToggleGroupItem value="one">Option One</ToggleGroupItem>
+					<ToggleGroupItem value="two">Option Two</ToggleGroupItem>
 				</ToggleGroup>
 				<p>Selected: {toggleValue()}</p>
 			</section>

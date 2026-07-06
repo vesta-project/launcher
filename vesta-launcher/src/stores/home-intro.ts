@@ -3,19 +3,19 @@ import { createSignal } from "solid-js";
 const [homeIntroVisible, setHomeIntroVisible] = createSignal(false);
 const [homeIntroShowDemoCards, setHomeIntroShowDemoCards] = createSignal(false);
 const [homeIntroSidebarVisible, setHomeIntroSidebarVisible] =
-  createSignal(false);
+	createSignal(false);
 
 export {
-  homeIntroVisible,
-  setHomeIntroVisible,
-  homeIntroShowDemoCards,
-  setHomeIntroShowDemoCards,
-  homeIntroSidebarVisible,
-  setHomeIntroSidebarVisible,
+	homeIntroShowDemoCards,
+	homeIntroSidebarVisible,
+	homeIntroVisible,
+	setHomeIntroShowDemoCards,
+	setHomeIntroSidebarVisible,
+	setHomeIntroVisible,
 };
 
 export function restartHomeIntro() {
-  setHomeIntroVisible(true);
-  setHomeIntroShowDemoCards(false);
-  setHomeIntroSidebarVisible(false);
+	setHomeIntroVisible(true);
+	setHomeIntroShowDemoCards(false);
+	setHomeIntroSidebarVisible(false);
 }

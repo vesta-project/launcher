@@ -1,6 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Slider, SliderThumb, SliderTrack } from "@ui/slider/slider";
-import { invoke } from "@tauri-apps/api/core";
 import { createEffect, createSignal, For, onMount, Show } from "solid-js";
 import {
 	applyTheme,
@@ -8,7 +8,10 @@ import {
 	PRESET_THEMES,
 	type ThemeConfig,
 } from "../../../../themes/presets";
-import { currentThemeConfig, saveThemeUpdate as persistThemeUpdate } from "../../../../utils/config-sync";
+import {
+	currentThemeConfig,
+	saveThemeUpdate as persistThemeUpdate,
+} from "../../../../utils/config-sync";
 import styles from "../init.module.css";
 
 interface ThemeStepProps {
@@ -28,7 +31,9 @@ function OnboardingThemeCard(props: {
 		<button
 			type="button"
 			class={styles["onboarding-theme-card"]}
-			classList={{ [styles["onboarding-theme-card--selected"]]: props.isSelected }}
+			classList={{
+				[styles["onboarding-theme-card--selected"]]: props.isSelected,
+			}}
 			onClick={props.onClick}
 			data-preview-style={previewStyle()}
 			data-preview-gradient={props.theme.gradientEnabled ? "1" : "0"}
@@ -43,7 +48,9 @@ function OnboardingThemeCard(props: {
 					<div class={styles["onboarding-theme-preview__dot"]} />
 					<div
 						class={styles["onboarding-theme-preview__dot"]}
-						classList={{ [styles["onboarding-theme-preview__dot--active"]]: true }}
+						classList={{
+							[styles["onboarding-theme-preview__dot--active"]]: true,
+						}}
 					/>
 					<div class={styles["onboarding-theme-preview__dot"]} />
 				</div>
@@ -54,15 +61,21 @@ function OnboardingThemeCard(props: {
 					</div>
 				</div>
 			</div>
-			<span class={styles["onboarding-theme-card__name"]}>{props.theme.name}</span>
+			<span class={styles["onboarding-theme-card__name"]}>
+				{props.theme.name}
+			</span>
 		</button>
 	);
 }
 
 function ThemeStep(props: ThemeStepProps) {
-	const [themeId, setThemeId] = createSignal<string>(currentThemeConfig.theme_id ?? "vesta");
+	const [themeId, setThemeId] = createSignal<string>(
+		currentThemeConfig.theme_id ?? "vesta",
+	);
 	const [backgroundHue, setBackgroundHue] = createSignal(
-		currentThemeConfig.theme_primary_hue ?? currentThemeConfig.background_hue ?? 180,
+		currentThemeConfig.theme_primary_hue ??
+			currentThemeConfig.background_hue ??
+			180,
 	);
 	const [explicitThemeSelected, setExplicitThemeSelected] = createSignal(false);
 	const [isPersisting, setIsPersisting] = createSignal(false);
@@ -71,7 +84,10 @@ function ThemeStep(props: ThemeStepProps) {
 		try {
 			const config = await invoke<any>("get_config");
 			if (config.theme_id) setThemeId(config.theme_id);
-			if (config.theme_primary_hue !== null && config.theme_primary_hue !== undefined) {
+			if (
+				config.theme_primary_hue !== null &&
+				config.theme_primary_hue !== undefined
+			) {
 				setBackgroundHue(config.theme_primary_hue);
 			}
 			setExplicitThemeSelected(false);
@@ -148,7 +164,8 @@ function ThemeStep(props: ThemeStepProps) {
 		await persistThemeUpdate({ primaryHue: newHue });
 	};
 
-	const isSelected = (id: string) => explicitThemeSelected() && themeId() === id;
+	const isSelected = (id: string) =>
+		explicitThemeSelected() && themeId() === id;
 
 	const canChangeHue = () => {
 		const theme = getThemeById(themeId());

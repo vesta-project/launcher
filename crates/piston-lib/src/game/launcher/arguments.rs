@@ -646,6 +646,58 @@ fn build_game_variables(spec: &LaunchSpec, manifest: &UnifiedManifest) -> HashMa
 mod tests {
     use super::*;
     use crate::game::launcher::version_parser::VersionManifest;
+    use std::path::PathBuf;
+
+    fn test_launch_spec(
+        instance_id: &str,
+        version_id: &str,
+        data_dir: PathBuf,
+        game_dir: PathBuf,
+    ) -> LaunchSpec {
+        LaunchSpec {
+            instance_id: instance_id.to_string(),
+            version_id: version_id.to_string(),
+            modloader: None,
+            modloader_version: None,
+            data_dir,
+            game_dir,
+            java_path: PathBuf::from("java"),
+            username: "Player".to_string(),
+            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
+            access_token: "0".to_string(),
+            user_type: "msa".to_string(),
+            xuid: None,
+            jvm_args: vec![],
+            game_args: vec![],
+            window_width: None,
+            window_height: None,
+            min_memory: None,
+            max_memory: None,
+            client_id: "cid".to_string(),
+            exit_handler_jar: None,
+            log_file: None,
+            env_vars: HashMap::new(),
+            wrapper_command: None,
+            pre_launch_hook: None,
+            post_exit_hook: None,
+        }
+    }
+
+    fn temp_launch_spec(instance_id: &str, version_id: &str) -> LaunchSpec {
+        test_launch_spec(
+            instance_id,
+            version_id,
+            tempfile::tempdir().unwrap().path().to_path_buf(),
+            tempfile::tempdir().unwrap().path().to_path_buf(),
+        )
+    }
+
+    fn test_version_manifest(id: &str) -> VersionManifest {
+        VersionManifest {
+            id: id.to_string(),
+            ..Default::default()
+        }
+    }
 
     #[test]
     fn test_substitute_variables() {
@@ -666,50 +718,13 @@ mod tests {
 
     #[test]
     fn test_default_jvm_args() {
-        use crate::game::launcher::version_parser::VersionManifest;
-
-        let spec = LaunchSpec {
-            instance_id: "test".to_string(),
-            version_id: "1.20.1".to_string(),
-            modloader: None,
-            modloader_version: None,
-            data_dir: std::path::PathBuf::from("."),
-            game_dir: std::path::PathBuf::from("."),
-            java_path: std::path::PathBuf::from("java"),
-            username: "Player".to_string(),
-            uuid: "uuid".to_string(),
-            access_token: "token".to_string(),
-            user_type: "msa".to_string(),
-            xuid: None,
-            jvm_args: vec![],
-            game_args: vec![],
-            window_width: None,
-            window_height: None,
-            min_memory: None,
-            max_memory: None,
-            client_id: "cid".to_string(),
-            exit_handler_jar: None,
-            log_file: None,
-            env_vars: HashMap::new(),
-        };
-
-        let manifest = UnifiedManifest::from(VersionManifest {
-            id: "1.20.1".to_string(),
-            main_class: None,
-            inherits_from: None,
-            arguments: None,
-            jvm_arguments: None,
-            game_arguments: None,
-            minecraft_arguments: None,
-            libraries: vec![],
-            asset_index: None,
-            assets: None,
-            java_version: None,
-            version_type: None,
-            release_time: None,
-            time: None,
-            downloads: None,
-        });
+        let spec = test_launch_spec(
+            "test",
+            "1.20.1",
+            std::path::PathBuf::from("."),
+            std::path::PathBuf::from("."),
+        );
+        let manifest = UnifiedManifest::from(test_version_manifest("1.20.1"));
 
         let natives_dir = std::path::PathBuf::from("natives");
         let classpath = "cp";
@@ -740,48 +755,13 @@ mod tests {
         fs::create_dir_all(&assets).unwrap();
         fs::create_dir_all(data_dir.join("game_dir")).unwrap();
 
-        let spec = LaunchSpec {
-            instance_id: "test-inst".to_string(),
-            version_id: "vtest".to_string(),
-            modloader: None,
-            modloader_version: None,
-            data_dir: data_dir.clone(),
-            game_dir: data_dir.join("game_dir"),
-            java_path: std::path::PathBuf::from("java"),
-            username: "Player".to_string(),
-            uuid: "uuid".to_string(),
-            access_token: "token".to_string(),
-            user_type: "msa".to_string(),
-            xuid: None,
-            jvm_args: vec![],
-            game_args: vec![],
-            window_width: None,
-            window_height: None,
-            client_id: "cid".to_string(),
-            min_memory: None,
-            max_memory: None,
-            exit_handler_jar: None,
-            log_file: None,
-            env_vars: HashMap::new(),
-        };
-
-        let manifest = VersionManifest {
-            id: "vtest".to_string(),
-            main_class: None,
-            inherits_from: None,
-            arguments: None,
-            jvm_arguments: None,
-            game_arguments: None,
-            minecraft_arguments: None,
-            libraries: vec![],
-            asset_index: None,
-            assets: None,
-            java_version: None,
-            version_type: None,
-            release_time: None,
-            time: None,
-            downloads: None,
-        };
+        let spec = test_launch_spec(
+            "test-inst",
+            "vtest",
+            data_dir.clone(),
+            data_dir.join("game_dir"),
+        );
+        let manifest = test_version_manifest("vtest");
 
         let unified = UnifiedManifest::from(manifest);
         let jvm_vars = build_jvm_variables(&spec, &unified, &natives, "cp", OsType::current());
@@ -819,31 +799,7 @@ mod tests {
     fn process_simple_split_and_drop() {
         use crate::game::launcher::version_parser::{Argument, Rule, RuleAction};
 
-        // Build a simple LaunchSpec
-        let spec = LaunchSpec {
-            instance_id: "i".to_string(),
-            version_id: "v".to_string(),
-            modloader: None,
-            modloader_version: None,
-            data_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            game_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            java_path: std::path::PathBuf::from("java"),
-            username: "Player".to_string(),
-            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
-            access_token: "0".to_string(),
-            user_type: "msa".to_string(),
-            xuid: None,
-            jvm_args: vec![],
-            game_args: vec![],
-            window_width: None,
-            window_height: None,
-            min_memory: None,
-            max_memory: None,
-            client_id: "cid".to_string(),
-            exit_handler_jar: None,
-            log_file: None,
-            env_vars: HashMap::new(),
-        };
+        let spec = temp_launch_spec("i", "v");
 
         let mut vars = HashMap::new();
         vars.insert("value".to_string(), "42".to_string());
@@ -886,30 +842,7 @@ mod tests {
 
     #[test]
     fn process_argument_keeps_single_placeholder_with_spaces() {
-        let spec = LaunchSpec {
-            instance_id: "i".to_string(),
-            version_id: "v".to_string(),
-            modloader: None,
-            modloader_version: None,
-            data_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            game_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            java_path: std::path::PathBuf::from("java"),
-            username: "Player".to_string(),
-            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
-            access_token: "0".to_string(),
-            user_type: "msa".to_string(),
-            xuid: None,
-            jvm_args: vec![],
-            game_args: vec![],
-            window_width: None,
-            window_height: None,
-            min_memory: None,
-            max_memory: None,
-            client_id: "cid".to_string(),
-            exit_handler_jar: None,
-            log_file: None,
-            env_vars: HashMap::new(),
-        };
+        let spec = temp_launch_spec("i", "v");
 
         let mut vars = HashMap::new();
         vars.insert(
@@ -951,34 +884,11 @@ mod tests {
         use crate::game::launcher::version_parser::{Rule, RuleAction};
 
         // Demo user spec: username Player and zero-uuid/access token 0
-        let demo_spec = LaunchSpec {
-            instance_id: "i".to_string(),
-            version_id: "v".to_string(),
-            modloader: None,
-            modloader_version: None,
-            data_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            game_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            java_path: std::path::PathBuf::from("java"),
-            username: "Player".to_string(),
-            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
-            access_token: "0".to_string(),
-            user_type: "msa".to_string(),
-            xuid: None,
-            jvm_args: vec![],
-            game_args: vec![],
-            window_width: None,
-            window_height: None,
-            min_memory: None,
-            max_memory: None,
-            client_id: "cid".to_string(),
-            exit_handler_jar: None,
-            log_file: None,
-            env_vars: HashMap::new(),
-        };
+        let demo_spec = temp_launch_spec("i", "v");
 
         // Rule requiring demo user should match
         let mut features = HashMap::new();
-        features.insert("is_demo_user".to_string(), true);
+        features.insert("is_demo_user".to_string(), Some(true));
         let rule = Rule {
             action: RuleAction::Allow,
             os: None,
@@ -988,7 +898,7 @@ mod tests {
 
         // Rule requiring custom resolution should NOT match demo_spec
         let mut features2 = HashMap::new();
-        features2.insert("has_custom_resolution".to_string(), true);
+        features2.insert("has_custom_resolution".to_string(), Some(true));
         let rule2 = Rule {
             action: RuleAction::Allow,
             os: None,
@@ -1013,30 +923,7 @@ mod tests {
     fn evaluate_rules_matches_base_os_name_for_arm_variants() {
         use crate::game::launcher::version_parser::{OsRule, Rule, RuleAction};
 
-        let spec = LaunchSpec {
-            instance_id: "i".to_string(),
-            version_id: "v".to_string(),
-            modloader: None,
-            modloader_version: None,
-            data_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            game_dir: tempfile::tempdir().unwrap().path().to_path_buf(),
-            java_path: std::path::PathBuf::from("java"),
-            username: "Player".to_string(),
-            uuid: "00000000-0000-0000-0000-000000000000".to_string(),
-            access_token: "0".to_string(),
-            user_type: "msa".to_string(),
-            xuid: None,
-            jvm_args: vec![],
-            game_args: vec![],
-            window_width: None,
-            window_height: None,
-            min_memory: None,
-            max_memory: None,
-            client_id: "cid".to_string(),
-            exit_handler_jar: None,
-            log_file: None,
-            env_vars: HashMap::new(),
-        };
+        let spec = temp_launch_spec("i", "v");
 
         let osx_rule = Rule {
             action: RuleAction::Allow,

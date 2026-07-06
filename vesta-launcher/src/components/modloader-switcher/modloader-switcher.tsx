@@ -35,7 +35,8 @@ export function ModloaderSwitcher(props: ModloaderSwitcherProps) {
 						value={option.value}
 						disabled={props.disabled || option.disabled}
 						classList={{
-							[styles["modloader-switcher__item--unsupported"]]: option.supported === false,
+							[styles["modloader-switcher__item--unsupported"]]:
+								option.supported === false,
 						}}
 					>
 						{option.label}

@@ -10,7 +10,10 @@ async function isTelemetryEnabled(): Promise<boolean> {
 		const config = await invoke<{ telemetry_enabled?: boolean }>("get_config");
 		return config.telemetry_enabled ?? true;
 	} catch (error) {
-		console.warn("Failed to read telemetry setting, defaulting to enabled:", error);
+		console.warn(
+			"Failed to read telemetry setting, defaulting to enabled:",
+			error,
+		);
 		return true;
 	}
 }
@@ -35,7 +38,8 @@ export async function initSentryMonitoring() {
 		...defaultOptions,
 		release: import.meta.env.VITE_APP_RELEASE || undefined,
 		environment:
-			import.meta.env.VITE_SENTRY_ENVIRONMENT || (import.meta.env.DEV ? "development" : "production"),
+			import.meta.env.VITE_SENTRY_ENVIRONMENT ||
+			(import.meta.env.DEV ? "development" : "production"),
 	});
 
 	Sentry.setTag("app_layer", "frontend");

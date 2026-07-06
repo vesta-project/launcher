@@ -702,10 +702,6 @@ async fn stage_file(
                 }
             }
         }
-        FileSource::Generated => {
-            // Content is generated in-memory (e.g., merged configs)
-            // Already handled by the Merge action
-        }
     }
     Ok(())
 }

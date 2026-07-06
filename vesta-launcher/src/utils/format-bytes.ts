@@ -19,7 +19,9 @@ export function formatBytes(bytes: number | null | undefined): string {
 }
 
 /** Compact formatter for inline stats; returns null when the value is not displayable. */
-export function formatBytesCompact(value: number | null | undefined): string | null {
+export function formatBytesCompact(
+	value: number | null | undefined,
+): string | null {
 	if (value == null || !Number.isFinite(value) || value < 0) {
 		return null;
 	}

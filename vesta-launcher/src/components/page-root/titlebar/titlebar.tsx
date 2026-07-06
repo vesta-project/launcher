@@ -2,7 +2,11 @@ import HelpIcon from "@assets/help.svg";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
 import { getVersion } from "@tauri-apps/api/app";
 import { WindowControls } from "@tauri-controls-v2/solid";
-import { ACCOUNT_TYPE_GUEST, type Account, getActiveAccount } from "@utils/auth";
+import {
+	ACCOUNT_TYPE_GUEST,
+	type Account,
+	getActiveAccount,
+} from "@utils/auth";
 import { createResource, Show } from "solid-js";
 import NetworkPill from "./network-pill";
 import styles from "./titlebar.module.css";
@@ -34,7 +38,8 @@ function TitleBar(props: TitleBarProps) {
 		<div
 			classList={{
 				[styles.titlebar]: true,
-				[styles["titlebar--right"]]: props.os !== "macos" || props.macosFullscreen === true,
+				[styles["titlebar--right"]]:
+					props.os !== "macos" || props.macosFullscreen === true,
 				[styles["titlebar--white"]]: props.os === "windows",
 				[props.class ?? ""]: !!props.class,
 			}}
@@ -43,7 +48,13 @@ function TitleBar(props: TitleBarProps) {
 				<WindowControls
 					class={styles["titlebar__window-controls"]}
 					hide={props.pageViewerOpen}
-					platform={props.os === "linux" ? "gnome" : props.os === "macos" ? "macos" : "windows"}
+					platform={
+						props.os === "linux"
+							? "gnome"
+							: props.os === "macos"
+								? "macos"
+								: "windows"
+					}
 				/>
 			</Show>
 			<div class={styles["titlebar__grab"]} data-tauri-drag-region={true}>
@@ -52,7 +63,10 @@ function TitleBar(props: TitleBarProps) {
 						Vesta Launcher {version() ? `v${version()}` : "..."}
 					</span>
 					<Show when={props.sectionTitle}>
-						<span data-tauri-drag-region={true} class={styles["titlebar__section"]}>
+						<span
+							data-tauri-drag-region={true}
+							class={styles["titlebar__section"]}
+						>
 							{props.sectionTitle}
 						</span>
 					</Show>

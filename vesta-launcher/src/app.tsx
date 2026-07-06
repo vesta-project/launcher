@@ -5,14 +5,19 @@ import { FatalPage } from "@components/pages/fatal/fatal-page";
 import HomePage from "@components/pages/home/home";
 import InitPage from "@components/pages/init/init";
 import InvalidPage from "@components/pages/invalid";
-import { Route, Router, useNavigate } from "@solidjs/router";
-import { cleanupDialogSystem, dialogStore, initializeDialogSystem } from "@stores/dialog-store";
+import { Route, Router } from "@solidjs/router";
+import {
+	cleanupDialogSystem,
+	dialogStore,
+	initializeDialogSystem,
+} from "@stores/dialog-store";
 import "@stores/versions"; // eager-load version metadata on boot
 import { setupInstanceListeners } from "@stores/instances";
+import { GlobalModpackInstallDialog } from "@stores/modpack-install";
 import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
-import { onOpenUrl, getCurrent } from "@tauri-apps/plugin-deep-link";
-import { ChildrenProp } from "@ui/props";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrent, onOpenUrl } from "@tauri-apps/plugin-deep-link";
+import type { ChildrenProp } from "@ui/props";
 import { showToast } from "@ui/toast/toast";
 import {
 	applyCommonConfigUpdates,
@@ -34,10 +39,11 @@ import {
 } from "@utils/notifications";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { checkForAppUpdates, initUpdateListener } from "@utils/updater";
-import { GlobalModpackInstallDialog } from "@stores/modpack-install";
 import { lazy, onCleanup, onMount } from "solid-js";
 
-const StandalonePageViewer = lazy(() => import("@components/page-viewer/standalone-page-viewer"));
+const StandalonePageViewer = lazy(
+	() => import("@components/page-viewer/standalone-page-viewer"),
+);
 
 export interface ExitCheckResponse {
 	can_exit: boolean;
@@ -66,8 +72,6 @@ function App() {
 }
 
 function Root(props: ChildrenProp) {
-	const navigate = useNavigate();
-
 	let unlistenDeepLink: (() => void) | null = null;
 	let unlistenCrash: (() => void) | null = null;
 	let unlistenExit: UnlistenFn | null = null;
@@ -190,7 +194,9 @@ function Root(props: ChildrenProp) {
 						checkForAppUpdates(true);
 					}
 				})
-				.catch((error) => console.error("Failed to read startup config:", error));
+				.catch((error) =>
+					console.error("Failed to read startup config:", error),
+				);
 		}
 
 		// Initialize update listener and set OS attribute on root for global CSS
@@ -217,19 +223,23 @@ function Root(props: ChildrenProp) {
 			unlistenUpdate = u;
 		});
 
-		listen<{ path: string; params?: Record<string, unknown> }>("core://navigate", (event) => {
-			console.log("[App] Received navigation event:", event.payload);
-			if (router()) {
-				openMiniPage(event.payload.path, event.payload.params);
-			} else {
-				showToast({
-					title: "App Not Ready",
-					description: "Please wait for the app to fully load before navigating.",
-					severity: "error",
-					duration: 5000,
-				});
-			}
-		}).then((unlisten) => {
+		listen<{ path: string; params?: Record<string, unknown> }>(
+			"core://navigate",
+			(event) => {
+				console.log("[App] Received navigation event:", event.payload);
+				if (router()) {
+					openMiniPage(event.payload.path, event.payload.params);
+				} else {
+					showToast({
+						title: "App Not Ready",
+						description:
+							"Please wait for the app to fully load before navigating.",
+						severity: "error",
+						duration: 5000,
+					});
+				}
+			},
+		).then((unlisten) => {
 			unlistenNavigate = unlisten;
 		});
 
@@ -365,8 +375,14 @@ function Root(props: ChildrenProp) {
 				invoke("get_db_status")
 					.then((status: any) => {
 						console.group("Database Diagnostic Report");
-						console.log("Vesta DB Tables:", status.vesta?.tables || "NOT FOUND");
-						console.log("Config DB Tables:", status.config?.tables || "NOT FOUND");
+						console.log(
+							"Vesta DB Tables:",
+							status.vesta?.tables || "NOT FOUND",
+						);
+						console.log(
+							"Config DB Tables:",
+							status.config?.tables || "NOT FOUND",
+						);
 						console.groupEnd();
 					})
 					.catch((err) => {

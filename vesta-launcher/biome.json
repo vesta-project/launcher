@@ -1,0 +1,38 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.4.12/schema.json",
+	"files": {
+		"includes": [
+			"src/**",
+			"ui/**",
+			"package.json",
+			"tsconfig.json",
+			"vite.config.ts",
+			"vitest.config.ts",
+			"index.html",
+			"other.html",
+			"biome.json",
+			"!dist",
+			"!node_modules",
+			"!target",
+			"!src-tauri/target",
+			"!build",
+			"!.next",
+			"!.nuxt",
+			"!.output",
+			"!.vercel",
+			"!.netlify",
+			"!coverage",
+			"!**/*.tsbuildinfo",
+			"!**/*.d.ts",
+			"!**/*.d.tsx"
+		]
+	},
+	"linter": {
+		"enabled": false
+	},
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	}
+}

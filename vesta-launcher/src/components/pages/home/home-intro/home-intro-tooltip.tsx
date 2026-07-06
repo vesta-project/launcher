@@ -1,6 +1,6 @@
 import { createEffect, createSignal, Show } from "solid-js";
-import type { IntroStep } from "./home-intro-steps";
 import styles from "./home-intro.module.css";
+import type { IntroStep } from "./home-intro-steps";
 
 interface HomeIntroTooltipProps {
 	step: IntroStep;
@@ -30,7 +30,10 @@ function HomeIntroTooltip(props: HomeIntroTooltipProps) {
 			if (step.kind === "cards") {
 				setPos({
 					x: Math.max(16, window.innerWidth / 2 - tooltipWidth / 2),
-					y: Math.max(80, Math.min(160, window.innerHeight / 2 - tooltipHeight / 2)),
+					y: Math.max(
+						80,
+						Math.min(160, window.innerHeight / 2 - tooltipHeight / 2),
+					),
 				});
 				return;
 			}
@@ -121,7 +124,9 @@ function HomeIntroTooltip(props: HomeIntroTooltipProps) {
 				}}
 			>
 				<h4 class={styles["home-intro-tooltip-title"]}>{props.step.title}</h4>
-				<p class={styles["home-intro-tooltip-desc"]}>{props.step.description}</p>
+				<p class={styles["home-intro-tooltip-desc"]}>
+					{props.step.description}
+				</p>
 				<button
 					class={styles["home-intro-tooltip-btn"]}
 					onClick={props.onContinue}

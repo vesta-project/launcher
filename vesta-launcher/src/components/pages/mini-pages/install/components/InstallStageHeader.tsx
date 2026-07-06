@@ -31,7 +31,9 @@ export function InstallStageHeader(props: InstallStageHeaderProps) {
 							<span class={styles["stage-header-label"]}>{props.label}</span>
 						</Show>
 						<div class={styles["stage-header-title-row"]}>
-							<h2 classList={{ [styles["is-analyzing"]]: !!props.analyzing }}>{props.title}</h2>
+							<h2 classList={{ [styles["is-analyzing"]]: !!props.analyzing }}>
+								{props.title}
+							</h2>
 							<Show when={props.minecraftVersion || props.modloader}>
 								<div class={styles["stage-header-tags"]}>
 									<Show when={props.minecraftVersion}>
@@ -50,7 +52,11 @@ export function InstallStageHeader(props: InstallStageHeaderProps) {
 				</div>
 				<Show when={props.actionLabel && props.onAction}>
 					<div class={styles["stage-header-actions"]}>
-						<button type="button" class={styles["header-link-action"]} onClick={props.onAction}>
+						<button
+							type="button"
+							class={styles["header-link-action"]}
+							onClick={props.onAction}
+						>
 							{props.actionLabel}
 						</button>
 					</div>

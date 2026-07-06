@@ -410,10 +410,9 @@ impl ArtifactCache {
     pub fn restore_candidate(&self, label: &str) -> Option<ArtifactRestoreCandidate> {
         let sha256 = self.find_component(label)?;
         let blob_path = self.get_artifact_path(&sha256);
-        blob_path.exists().then_some(ArtifactRestoreCandidate {
-            sha256,
-            blob_path,
-        })
+        blob_path
+            .exists()
+            .then_some(ArtifactRestoreCandidate { sha256, blob_path })
     }
 
     pub fn restore_artifact(&self, sha256: &str, destination: &Path) -> Result<bool> {
@@ -688,8 +687,8 @@ mod tests {
         let candidate = cache.restore_candidate("test-label").unwrap();
         assert_eq!(candidate.sha256, sha);
 
-        let success = ArtifactCache::restore_blob_to_path(&candidate.blob_path, &restored_path)
-            .unwrap();
+        let success =
+            ArtifactCache::restore_blob_to_path(&candidate.blob_path, &restored_path).unwrap();
         assert!(success);
         assert!(restored_path.exists());
 

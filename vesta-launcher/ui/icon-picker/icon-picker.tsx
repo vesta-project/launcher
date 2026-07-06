@@ -1,6 +1,11 @@
 import CubeIcon from "@assets/cube.svg";
-import { Popover, PopoverCloseButton, PopoverContent, PopoverTrigger } from "@ui/popover/popover";
-import { ClassProp } from "@ui/props";
+import {
+	Popover,
+	PopoverCloseButton,
+	PopoverContent,
+	PopoverTrigger,
+} from "@ui/popover/popover";
+import type { ClassProp } from "@ui/props";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS, getStableIconId } from "@utils/instances";
 import { clsx } from "clsx";
@@ -84,7 +89,7 @@ export function IconPicker(props: IconPickerProps) {
 	const gridColumns = () => Math.min(4, totalIcons());
 
 	const getIconStyle = (icon?: string | null) => {
-		let target = icon || DEFAULT_ICONS[0];
+		const target = icon || DEFAULT_ICONS[0];
 		if (target.startsWith("linear-gradient")) return { background: target };
 
 		const resolved = resolveResourceUrl(target);
@@ -183,7 +188,8 @@ export function IconPicker(props: IconPickerProps) {
 					<Show
 						when={
 							local.modpackIcon &&
-							(areIconsEqual(local.value, local.modpackIcon) || local.isSuggestedSelected)
+							(areIconsEqual(local.value, local.modpackIcon) ||
+								local.isSuggestedSelected)
 						}
 					>
 						<div class={styles["icon-picker__trigger-badge"]}>
@@ -203,7 +209,10 @@ export function IconPicker(props: IconPickerProps) {
 					>
 						<Show when={local.allowUpload !== false}>
 							<PopoverCloseButton
-								class={clsx(styles["icon-picker__option"], styles["icon-picker__upload-btn"])}
+								class={clsx(
+									styles["icon-picker__option"],
+									styles["icon-picker__upload-btn"],
+								)}
 								onClick={(e) => {
 									e.stopPropagation();
 									console.log("Upload button clicked");
@@ -226,7 +235,8 @@ export function IconPicker(props: IconPickerProps) {
 							{(icon) => {
 								const isSelected =
 									areIconsEqual(local.value, icon) ||
-									(areIconsEqual(icon, local.modpackIcon) && local.isSuggestedSelected);
+									(areIconsEqual(icon, local.modpackIcon) &&
+										local.isSuggestedSelected);
 								console.log("IconPicker uploaded icon:", {
 									icon: icon?.substring(0, 30) + "...",
 									isValueMatch: areIconsEqual(local.value, icon),
@@ -278,7 +288,8 @@ export function IconPicker(props: IconPickerProps) {
 							{(icon) => {
 								const isSelected =
 									areIconsEqual(local.value, icon) ||
-									(areIconsEqual(icon, local.modpackIcon) && local.isSuggestedSelected);
+									(areIconsEqual(icon, local.modpackIcon) &&
+										local.isSuggestedSelected);
 								return (
 									<PopoverCloseButton
 										class={clsx(
@@ -325,4 +336,4 @@ export function IconPicker(props: IconPickerProps) {
 	);
 }
 
-export { type IconPickerProps };
+export type { IconPickerProps };

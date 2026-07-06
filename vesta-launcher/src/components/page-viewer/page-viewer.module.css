@@ -30,15 +30,21 @@
 	overflow: visible;
 }
 
-[data-ui-chrome-enabled="false"] .page-viewer-wrapper--embedded .page-viewer-root {
+[data-ui-chrome-enabled="false"]
+	.page-viewer-wrapper--embedded
+	.page-viewer-root {
 	border-radius: 10px;
 	background: var(--surface-base);
-	box-shadow: inset 0 0 0 1px hsl(0deg 0% 100% / 6%), inset 0 2px 6px hsl(0deg 0% 0% / 12%);
+	box-shadow:
+		inset 0 0 0 1px hsl(0deg 0% 100% / 6%),
+		inset 0 2px 6px hsl(0deg 0% 0% / 12%);
 }
 
 [data-ui-chrome-enabled="false"] .page-viewer-root {
 	border-radius: 10px;
-	box-shadow: inset 0 0 0 1px hsl(0deg 0% 100% / 6%), inset 0 2px 6px hsl(0deg 0% 0% / 12%);
+	box-shadow:
+		inset 0 0 0 1px hsl(0deg 0% 100% / 6%),
+		inset 0 2px 6px hsl(0deg 0% 0% / 12%);
 }
 
 .page-viewer-wrapper--embedded {

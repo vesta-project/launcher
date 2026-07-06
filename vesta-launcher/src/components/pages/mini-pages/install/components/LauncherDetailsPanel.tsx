@@ -3,10 +3,16 @@ import FolderIcon from "@assets/folder.svg";
 import ModrinthIcon from "@assets/modrinth.svg";
 import { open } from "@tauri-apps/plugin-shell";
 import LauncherButton from "@ui/button/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import type { ExternalInstanceCandidate } from "@utils/launcher-imports";
 import { formatBytesCompact } from "@utils/format-bytes";
+import type { ExternalInstanceCandidate } from "@utils/launcher-imports";
 import { type Component, createSignal, For, Show } from "solid-js";
 import styles from "../install-page.module.css";
 
@@ -37,8 +43,10 @@ function formatSource(
 ): { label: string; icon?: Component<{ class?: string }> } | null {
 	const normalized = (platform ?? "").trim().toLowerCase();
 	if (!normalized) return null;
-	if (normalized.includes("modrinth")) return { label: "Modrinth", icon: ModrinthIcon };
-	if (normalized.includes("curse")) return { label: "CurseForge", icon: CurseForgeIcon };
+	if (normalized.includes("modrinth"))
+		return { label: "Modrinth", icon: ModrinthIcon };
+	if (normalized.includes("curse"))
+		return { label: "CurseForge", icon: CurseForgeIcon };
 	return { label: platform?.trim() ?? normalized };
 }
 
@@ -48,7 +56,6 @@ function formatUnixTime(value: number | null | undefined): string | null {
 	if (Number.isNaN(date.getTime())) return null;
 	return date.toLocaleString();
 }
-
 
 interface StatPill {
 	label: string;
@@ -73,10 +80,14 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		props.onRescan();
 	};
 	const getInstance = () =>
-		props.instances.find((item) => item.instancePath === props.selectedInstancePath) ?? null;
+		props.instances.find(
+			(item) => item.instancePath === props.selectedInstancePath,
+		) ?? null;
 
 	const instanceLabel = (instancePath: string) => {
-		const inst = props.instances.find((item) => item.instancePath === instancePath);
+		const inst = props.instances.find(
+			(item) => item.instancePath === instancePath,
+		);
 		if (!inst) return "Select an instance";
 		const suffix = inst.minecraftVersion ? ` (${inst.minecraftVersion})` : "";
 		return `${inst.name}${suffix}`;
@@ -86,12 +97,14 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		const inst = getInstance();
 		if (!inst) return [];
 		const result: StatPill[] = [];
-		if (hasNumber(inst.modsCount)) result.push({ label: "Mods", value: inst.modsCount });
+		if (hasNumber(inst.modsCount))
+			result.push({ label: "Mods", value: inst.modsCount });
 		if (hasNumber(inst.resourcepacksCount))
 			result.push({ label: "Packs", value: inst.resourcepacksCount });
 		if (hasNumber(inst.shaderpacksCount))
 			result.push({ label: "Shaders", value: inst.shaderpacksCount });
-		if (hasNumber(inst.worldsCount)) result.push({ label: "Worlds", value: inst.worldsCount });
+		if (hasNumber(inst.worldsCount))
+			result.push({ label: "Worlds", value: inst.worldsCount });
 		if (hasNumber(inst.screenshotsCount))
 			result.push({ label: "Shots", value: inst.screenshotsCount });
 		return result;
@@ -107,7 +120,8 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 		if (dirSize) rows.push({ label: "Size", value: dirSize });
 		const source = formatSource(inst.modpackPlatform);
 		if (source) rows.push({ label: "Source", value: source.label });
-		if (hasValue(inst.modpackId)) rows.push({ label: "Project ID", value: inst.modpackId as string });
+		if (hasValue(inst.modpackId))
+			rows.push({ label: "Project ID", value: inst.modpackId as string });
 		if (hasValue(inst.modloaderVersion))
 			rows.push({ label: "Loader", value: inst.modloaderVersion as string });
 		return rows;
@@ -130,7 +144,8 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 	};
 
 	const hasDetails = () =>
-		getInstance() !== null && (pills().length > 0 || metaRows().length > 0 || gameDirPath() !== null);
+		getInstance() !== null &&
+		(pills().length > 0 || metaRows().length > 0 || gameDirPath() !== null);
 
 	return (
 		<div
@@ -145,7 +160,9 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 						<TextFieldInput
 							value={props.basePath}
 							placeholder="Detected launcher instances path"
-							onInput={(e) => handlePathChange((e.target as HTMLInputElement).value)}
+							onInput={(e) =>
+								handlePathChange((e.target as HTMLInputElement).value)
+							}
 						/>
 					</TextFieldRoot>
 					<LauncherButton
@@ -175,11 +192,15 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 							onChange={(value) => props.onSelectInstance(String(value))}
 							options={props.instances.map((item) => item.instancePath)}
 							itemComponent={(selectProps) => (
-								<SelectItem item={selectProps.item}>{instanceLabel(selectProps.item.rawValue)}</SelectItem>
+								<SelectItem item={selectProps.item}>
+									{instanceLabel(selectProps.item.rawValue)}
+								</SelectItem>
 							)}
 						>
 							<SelectTrigger>
-								<SelectValue<string>>{(state) => instanceLabel(state.selectedOption() || "")}</SelectValue>
+								<SelectValue<string>>
+									{(state) => instanceLabel(state.selectedOption() || "")}
+								</SelectValue>
 							</SelectTrigger>
 							<SelectContent />
 						</Select>
@@ -212,15 +233,21 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 					{/* Badge row: MC version, modloader, source with brand icon */}
 					<div class={styles["import-details-badges"]}>
 						<Show when={minecraftVersion()}>
-							<span class={styles["import-badge"]}>MC {minecraftVersion()}</span>
+							<span class={styles["import-badge"]}>
+								MC {minecraftVersion()}
+							</span>
 						</Show>
 						<Show when={modloader()}>
-							<span class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}>
+							<span
+								class={`${styles["import-badge"]} ${styles["import-badge--loader"]}`}
+							>
 								{modloader()}
 							</span>
 						</Show>
 						<Show when={sourceInfo()}>
-							<span class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}>
+							<span
+								class={`${styles["import-badge"]} ${styles["import-badge--source"]}`}
+							>
 								{(() => {
 									const si = sourceInfo();
 									if (si?.icon) {
@@ -244,8 +271,12 @@ export function LauncherDetailsPanel(props: LauncherDetailsPanelProps) {
 							<For each={pills()}>
 								{(pill) => (
 									<div class={styles["import-stat-pill"]}>
-										<span class={styles["import-stat-value"]}>{pill.value}</span>
-										<span class={styles["import-stat-label"]}>{pill.label}</span>
+										<span class={styles["import-stat-value"]}>
+											{pill.value}
+										</span>
+										<span class={styles["import-stat-label"]}>
+											{pill.label}
+										</span>
 									</div>
 								)}
 							</For>

@@ -1,14 +1,14 @@
-import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
-import { invoke } from "@tauri-apps/api/core";
 import {
 	setHomeIntroShowDemoCards,
 	setHomeIntroSidebarVisible,
 } from "@stores/home-intro";
-import { INTRO_STEPS } from "./home-intro-steps";
+import { invoke } from "@tauri-apps/api/core";
+import { createEffect, createSignal, onCleanup, onMount, Show } from "solid-js";
+import styles from "./home-intro.module.css";
 import HomeIntroModal from "./home-intro-modal";
 import HomeIntroRing from "./home-intro-ring";
+import { INTRO_STEPS } from "./home-intro-steps";
 import HomeIntroTooltip from "./home-intro-tooltip";
-import styles from "./home-intro.module.css";
 
 interface HomeIntroProps {
 	onComplete?: () => void;
@@ -37,7 +37,8 @@ function HomeIntro(props: HomeIntroProps) {
 	createEffect(() => {
 		const idx = stepIndex();
 		const instancesStepIndex = INTRO_STEPS.findIndex((s) => s.kind === "cards");
-		const shouldShow = idx >= instancesStepIndex && idx < INTRO_STEPS.length - 1;
+		const shouldShow =
+			idx >= instancesStepIndex && idx < INTRO_STEPS.length - 1;
 		setHomeIntroShowDemoCards(shouldShow);
 	});
 
@@ -60,7 +61,9 @@ function HomeIntro(props: HomeIntroProps) {
 			if (stepKind() === "modal") return;
 
 			// Allow clicks on the intro overlay itself (tooltip buttons, skip)
-			const overlay = document.querySelector(`.${styles["home-intro-overlay"]}`);
+			const overlay = document.querySelector(
+				`.${styles["home-intro-overlay"]}`,
+			);
 			if (overlay && overlay.contains(target)) return;
 
 			e.preventDefault();
@@ -118,7 +121,8 @@ function HomeIntro(props: HomeIntroProps) {
 	};
 
 	const showRing = () => stepKind() === "ring" && ringReady();
-	const showTooltip = () => (stepKind() === "ring" || stepKind() === "cards") && tooltipReady();
+	const showTooltip = () =>
+		(stepKind() === "ring" || stepKind() === "cards") && tooltipReady();
 	const showModal = () => stepKind() === "modal";
 
 	const ringTarget = () => currentStep().targetSelector ?? "";

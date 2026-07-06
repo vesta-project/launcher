@@ -701,15 +701,12 @@ fn is_neoforge_artifact(name: &str) -> bool {
 /// Modrinth loader JSONs usually include `url: https://launcher-meta.modrinth.com/maven/`;
 /// this fallback only runs for the sparse entries that omit both fields (common on legacy Forge).
 fn resolve_maven_base(name: &str, ml_type: Option<&str>) -> Option<&'static str> {
-    if uses_mojang_libraries_mirror(name) {
-        return Some("https://libraries.minecraft.net/");
-    }
-
     match ml_type {
         Some("neoforge") if is_neoforge_artifact(name) => {
             Some("https://maven.neoforged.net/releases/")
         }
         Some("forge") if is_forge_artifact(name) => Some("https://maven.minecraftforge.net/"),
+        _ if uses_mojang_libraries_mirror(name) => Some("https://libraries.minecraft.net/"),
         // Match Modrinth loader profiles that point other deps at their Maven mirror.
         Some("forge") | Some("neoforge") => Some("https://launcher-meta.modrinth.com/maven/"),
         Some("fabric") => Some("https://maven.fabricmc.net/"),

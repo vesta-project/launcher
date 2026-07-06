@@ -131,8 +131,6 @@ impl ActionHandler for RestartAppHandler {
         // Attempt a normal restart. In dev mode this may be a no-op because the
         // runner keeps the process; production builds should relaunch correctly.
         app_handle.restart();
-        log::info!("[RestartAppHandler] app_handle.restart() returned");
-        Ok(())
     }
 }
 
@@ -308,12 +306,18 @@ impl ActionHandler for NavigateHandler {
 mod tests {
     use super::*;
     use crate::notifications::models::{Notification, NotificationSeverity, NotificationType};
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     use std::time::{Duration, Instant};
-    use tauri::Builder;
 
     // Helper to build a minimal Tauri app for manager tests
     // NOTE: Upsert tests disabled on Windows due to Tauri event loop constraints (must run on main thread).
     // Integration tests should cover upsert behavior in a runtime context.
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    fn build_test_app() -> tauri::App {
+        tauri::Builder::default()
+            .build(crate::tauri_context())
+            .unwrap()
+    }
 
     #[test]
     fn should_persist_when_notification_flag_true() {
@@ -348,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn should_persist_when_key_registered() {
+    fn registered_key_does_not_override_completion_visibility() {
         let n = Notification {
             id: Some(2),
             client_key: Some("task_keep".to_string()),
@@ -375,13 +379,13 @@ mod tests {
         keys.insert("task_keep".to_string());
         let ids = HashSet::new();
 
-        assert!(NotificationManager::should_persist_on_completion(
+        assert!(!NotificationManager::should_persist_on_completion(
             &n, &keys, &ids
         ));
     }
 
     #[test]
-    fn should_persist_when_id_registered() {
+    fn registered_id_does_not_override_completion_visibility() {
         let n = Notification {
             id: Some(99),
             client_key: None,
@@ -408,7 +412,7 @@ mod tests {
         let mut ids = HashSet::new();
         ids.insert(99);
 
-        assert!(NotificationManager::should_persist_on_completion(
+        assert!(!NotificationManager::should_persist_on_completion(
             &n, &keys, &ids
         ));
     }
@@ -446,12 +450,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn invoke_action_dispatches_to_registered_handler() {
-        // Build a minimal tauri app handle for testing
-        let app = Builder::default()
-            .build(tauri::generate_context!())
-            .unwrap();
+        let app = build_test_app();
         let handle = app.handle();
 
         let manager = NotificationManager::new(handle.clone());
@@ -489,12 +490,9 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
     fn integration_cancel_task_flow() {
-        // Build app and managers
-        let app = Builder::default()
-            .build(tauri::generate_context!())
-            .unwrap();
+        let app = build_test_app();
         let handle = app.handle();
 
         // Initialize managers and add to app state

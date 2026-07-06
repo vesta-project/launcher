@@ -339,8 +339,15 @@ mod tests {
         fs::create_dir_all(legacy_dir.join("instances").join("my-pack").join("mods"))
             .expect("create legacy instance dir");
         fs::create_dir_all(legacy_dir.join("data")).expect("create legacy data dir");
-        fs::write(legacy_dir.join("app_config.db"), b"cfg").expect("write config db placeholder");
-        fs::write(legacy_dir.join("vesta.db"), b"vesta").expect("write vesta db placeholder");
+        let legacy_config_db = legacy_dir.join("app_config.db");
+        let _legacy_config_conn = diesel::sqlite::SqliteConnection::establish(
+            legacy_config_db.to_string_lossy().as_ref(),
+        )
+        .expect("create legacy config sqlite db");
+        let legacy_vesta_db = legacy_dir.join("vesta.db");
+        let _legacy_conn =
+            diesel::sqlite::SqliteConnection::establish(legacy_vesta_db.to_string_lossy().as_ref())
+                .expect("create legacy sqlite db");
 
         migrate_config_artifacts_only(&legacy_dir, &target_dir).expect("migrate config artifacts");
 

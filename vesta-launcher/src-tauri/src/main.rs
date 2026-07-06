@@ -17,8 +17,6 @@ mod sync;
 mod tasks;
 pub mod utils;
 
-use tauri::Emitter;
-#[allow(unused_imports)]
 use tauri::Manager;
 #[allow(unused_imports)]
 use utils::config::{
@@ -26,6 +24,10 @@ use utils::config::{
 };
 #[allow(unused_imports)]
 use utils::windows::launch_window;
+
+pub(crate) fn tauri_context() -> tauri::Context {
+    tauri::generate_context!()
+}
 
 fn main() {
     // Early checks for debug logging and telemetry settings.
@@ -345,7 +347,7 @@ fn main() {
                 _ => {}
             }
         })
-        .build(tauri::generate_context!())
+        .build(tauri_context())
         .expect("error while running tauri application")
         .run(|app, event| {
             #[cfg(any(target_os = "macos", target_os = "ios"))]

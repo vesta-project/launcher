@@ -18,7 +18,9 @@ let isDownloaded = false;
 async function getUpdaterCheckOptions() {
 	const config = await invoke<any>("get_config");
 	const proxyUrl =
-		config.proxy_enabled && typeof config.proxy_url === "string" && config.proxy_url.trim()
+		config.proxy_enabled &&
+		typeof config.proxy_url === "string" &&
+		config.proxy_url.trim()
 			? config.proxy_url.trim()
 			: undefined;
 
@@ -41,7 +43,9 @@ export function initUpdateListener() {
 			// Check if already downloaded - Tauri plugin might lose state on hot-reload,
 			// but if the UI is showing the "Install" button, we likely have the 'Finished' event cached.
 			if (!isDownloaded) {
-				console.warn("[Updater] Update.install called but isDownloaded is false. Starting download...");
+				console.warn(
+					"[Updater] Update.install called but isDownloaded is false. Starting download...",
+				);
 				if (!isDownloading) {
 					await downloadUpdate();
 				}
@@ -64,7 +68,9 @@ export function initUpdateListener() {
 
 				// We call it without parameters as the artifacts are already downloaded.
 				await pendingUpdate.install();
-				console.log("[Updater] pendingUpdate.install() call returned. Triggering backend restart...");
+				console.log(
+					"[Updater] pendingUpdate.install() call returned. Triggering backend restart...",
+				);
 
 				// TRIGGER BACKEND RESTART explicitly as fallback for some platforms/dev modes
 				await invoke("invoke_notification_action", {
@@ -86,7 +92,9 @@ export function initUpdateListener() {
 				);
 			}
 		} else {
-			console.error("[Updater] Received install event but pendingUpdate is null");
+			console.error(
+				"[Updater] Received install event but pendingUpdate is null",
+			);
 			// If we don't have a pending update, check again
 			checkForAppUpdates(false);
 		}
@@ -134,7 +142,9 @@ export async function downloadUpdate() {
 				case "Progress": {
 					downloaded += event.data.chunkLength;
 					const progress =
-						contentLength > 0 ? Math.round((downloaded / contentLength) * 100) : PROGRESS_INDETERMINATE;
+						contentLength > 0
+							? Math.round((downloaded / contentLength) * 100)
+							: PROGRESS_INDETERMINATE;
 
 					// Only update if progress has changed significantly to avoid IPC spam
 					if (
@@ -192,7 +202,8 @@ export async function downloadUpdate() {
 		if (
 			error &&
 			typeof error === "string" &&
-			(error.includes("Invalid encoding in minisign data") || error.includes("signature"))
+			(error.includes("Invalid encoding in minisign data") ||
+				error.includes("signature"))
 		) {
 			errorTitle = "Update Verification Failed";
 			errorMessage =

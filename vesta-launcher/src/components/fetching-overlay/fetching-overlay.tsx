@@ -23,7 +23,10 @@ export function FetchingOverlay(props: FetchingOverlayProps) {
 						[styles["is-error"]]: props.variant === "error",
 					}}
 				>
-					<Show when={props.variant !== "error"} fallback={<div class={styles["error-mark"]}>!</div>}>
+					<Show
+						when={props.variant !== "error"}
+						fallback={<div class={styles["error-mark"]}>!</div>}
+					>
 						<div class={styles.spinner} />
 					</Show>
 					<p>{props.title}</p>
@@ -33,26 +36,40 @@ export function FetchingOverlay(props: FetchingOverlayProps) {
 					<Show when={props.error}>
 						<span class={styles["fetching-error-text"]}>{props.error}</span>
 					</Show>
-					<Show when={props.onRetry || props.onChooseAnother || props.secondaryAction}>
+					<Show
+						when={
+							props.onRetry || props.onChooseAnother || props.secondaryAction
+						}
+					>
 						<div class={styles["fetching-actions"]}>
 							<Show when={props.onRetry}>
-								<button type="button" class={styles["fetching-action"]} onClick={props.onRetry}>
+								<button
+									type="button"
+									class={styles["fetching-action"]}
+									onClick={props.onRetry}
+								>
 									Retry
 								</button>
 							</Show>
 							<Show when={props.onChooseAnother}>
-								<button type="button" class={styles["fetching-action"]} onClick={props.onChooseAnother}>
+								<button
+									type="button"
+									class={styles["fetching-action"]}
+									onClick={props.onChooseAnother}
+								>
 									Choose another file
 								</button>
 							</Show>
 							<Show when={props.secondaryAction}>
-								<button
-									type="button"
-									class={styles["fetching-action"]}
-									onClick={props.secondaryAction!.onClick}
-								>
-									{props.secondaryAction!.label}
-								</button>
+								{(secondaryAction) => (
+									<button
+										type="button"
+										class={styles["fetching-action"]}
+										onClick={secondaryAction().onClick}
+									>
+										{secondaryAction().label}
+									</button>
+								)}
 							</Show>
 						</div>
 					</Show>

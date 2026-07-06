@@ -6,8 +6,14 @@ import {
 	router,
 	setPageViewerOpen,
 } from "@components/page-viewer/page-viewer";
-import InstanceCard from "@components/pages/home/instance-card/instance-card";
 import FlatNavigationControls from "@components/pages/home/flat-navigation-controls/flat-navigation-controls";
+import InstanceCard from "@components/pages/home/instance-card/instance-card";
+import {
+	homeIntroShowDemoCards,
+	homeIntroSidebarVisible,
+	homeIntroVisible,
+	setHomeIntroVisible,
+} from "@stores/home-intro";
 import {
 	initializeInstances,
 	instancesError,
@@ -15,21 +21,26 @@ import {
 	instancesLoading,
 	instances as instancesStore,
 } from "@stores/instances";
-import {
-	homeIntroShowDemoCards,
-	homeIntroSidebarVisible,
-	homeIntroVisible,
-	setHomeIntroVisible,
-} from "@stores/home-intro";
 import { initializePinning } from "@stores/pinning";
 import { invoke } from "@tauri-apps/api/core";
 import { Skeleton } from "@ui/skeleton/skeleton";
 import { clearToasts, Toaster } from "@ui/toast/toast";
 import { uiChromeModeEnabled } from "@utils/config-sync";
-import { createFlatShellNavigation, isLibraryPath } from "@utils/flat-shell-navigation";
+import {
+	createFlatShellNavigation,
+	isLibraryPath,
+} from "@utils/flat-shell-navigation";
 import { useOs } from "@utils/os";
 import { useWindowFullscreen } from "@utils/window-fullscreen";
-import { createEffect, createMemo, createSignal, For, onMount, Show, untrack } from "solid-js";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onMount,
+	Show,
+	untrack,
+} from "solid-js";
 import styles from "./home.module.css";
 import { DemoInstanceCards } from "./home-intro/demo-instance-cards";
 import HomeIntro from "./home-intro/home-intro";
@@ -42,7 +53,9 @@ function HomePage() {
 	const os = useOs();
 	const isWindowFullscreen = useWindowFullscreen();
 	const isFlatChrome = createMemo(() => !uiChromeModeEnabled());
-	const isMacosFullscreen = createMemo(() => os() === "macos" && isWindowFullscreen());
+	const isMacosFullscreen = createMemo(
+		() => os() === "macos" && isWindowFullscreen(),
+	);
 	const flatShellNavigation = createMemo(() =>
 		createFlatShellNavigation(pageViewerOpen, setPageViewerOpen),
 	);
@@ -152,7 +165,11 @@ function HomePage() {
 			}}
 			draggable={false}
 		>
-			<TitleBar os={os()} sectionTitle={sectionTitle()} macosFullscreen={isMacosFullscreen()} />
+			<TitleBar
+				os={os()}
+				sectionTitle={sectionTitle()}
+				macosFullscreen={isMacosFullscreen()}
+			/>
 			<Show when={isFlatChrome()}>
 				<FlatNavigationControls />
 			</Show>
@@ -170,15 +187,16 @@ function HomePage() {
 				fallback={
 					<>
 						<MainMenu />
-						<PageViewer open={pageViewerOpen()} viewChanged={() => setPageViewerOpen(false)} />
+						<PageViewer
+							open={pageViewerOpen()}
+							viewChanged={() => setPageViewerOpen(false)}
+						/>
 					</>
 				}
 			>
 				<Show
 					when={!pageViewerOpen()}
-					fallback={
-						<PageViewer open={pageViewerOpen()} embedded />
-					}
+					fallback={<PageViewer open={pageViewerOpen()} embedded />}
 				>
 					<MainMenu />
 				</Show>
@@ -206,7 +224,9 @@ function MainMenu() {
 			}}
 		>
 			<div style={{ display: "flex", "justify-content": "flex-end" }}>
-				<Skeleton style={{ width: "32px", height: "32px", "border-radius": "5px" }} />
+				<Skeleton
+					style={{ width: "32px", height: "32px", "border-radius": "5px" }}
+				/>
 			</div>
 			<div style={{ display: "flex", "flex-direction": "column", gap: "6px" }}>
 				<Skeleton style={{ width: "70%", height: "16px" }} />
@@ -243,12 +263,20 @@ function MainMenu() {
 							Failed to load instances: {String(instancesError())}
 						</p>
 					</Show>
-					<Show when={!instancesLoading() && instancesStore().length === 0 && !homeIntroShowDemoCards()}>
+					<Show
+						when={
+							!instancesLoading() &&
+							instancesStore().length === 0 &&
+							!homeIntroShowDemoCards()
+						}
+					>
 						<p style={{ color: "#888", padding: "20px" }}>
 							No instances found. Create one to get started!
 						</p>
 					</Show>
-					<For each={instancesStore()}>{(instance) => <InstanceCard instance={instance} />}</For>
+					<For each={instancesStore()}>
+						{(instance) => <InstanceCard instance={instance} />}
+					</For>
 					<Show when={homeIntroShowDemoCards()}>
 						<DemoInstanceCards />
 					</Show>

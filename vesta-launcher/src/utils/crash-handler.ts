@@ -1,4 +1,4 @@
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { showToast } from "@ui/toast/toast";
 import { createNotification } from "@utils/notifications";
 import { createSignal } from "solid-js";
@@ -37,7 +37,9 @@ export interface CrashEvent {
  * Store for tracking recent crashes by instance
  * Maps instance_id to crash event details
  */
-const [crashedInstances, setCrashedInstances] = createSignal<Map<string, CrashEvent>>(new Map());
+const [crashedInstances, setCrashedInstances] = createSignal<
+	Map<string, CrashEvent>
+>(new Map());
 
 /**
  * Get crash details for a specific instance
@@ -46,11 +48,17 @@ export function getCrashDetails(instanceId: string): CrashEvent | undefined {
 	return crashedInstances().get(instanceId);
 }
 
-export function parseCrashDetails(raw: string | null | undefined, instanceId: string): CrashEvent | undefined {
+export function parseCrashDetails(
+	raw: string | null | undefined,
+	instanceId: string,
+): CrashEvent | undefined {
 	if (!raw) return undefined;
 	try {
 		const parsed = JSON.parse(raw);
-		return normalizeCrashEvent({ ...parsed, instance_id: parsed.instance_id || instanceId });
+		return normalizeCrashEvent({
+			...parsed,
+			instance_id: parsed.instance_id || instanceId,
+		});
 	} catch {
 		return undefined;
 	}
@@ -65,15 +73,22 @@ export function normalizeCrashEvent(event: any): CrashEvent {
 		title: event.title,
 		message: event.message || "The instance crashed.",
 		evidence: event.evidence ?? null,
-		suspected_resources: Array.isArray(event.suspected_resources) ? event.suspected_resources : [],
+		suspected_resources: Array.isArray(event.suspected_resources)
+			? event.suspected_resources
+			: [],
 		suspects: Array.isArray(event.suspects) ? event.suspects : [],
-		suggested_fixes: Array.isArray(event.suggested_fixes) ? event.suggested_fixes : [],
+		suggested_fixes: Array.isArray(event.suggested_fixes)
+			? event.suggested_fixes
+			: [],
 		affected_mod_count:
-			typeof event.affected_mod_count === "number" ? event.affected_mod_count : null,
+			typeof event.affected_mod_count === "number"
+				? event.affected_mod_count
+				: null,
 		report_path: event.report_path ?? undefined,
 		log_path: event.log_path ?? null,
 		timestamp: event.timestamp || new Date().toISOString(),
-		confidence: typeof event.confidence === "number" ? event.confidence : undefined,
+		confidence:
+			typeof event.confidence === "number" ? event.confidence : undefined,
 		mclogs_url: event.mclogs_url ?? null,
 		analysis: event.analysis,
 	};
@@ -128,7 +143,8 @@ function getCrashTypeLabel(crashType: string): string {
  * Get a crash description based on type and message
  */
 function getCrashDescription(crashEvent: CrashEvent): string {
-	const typeLabel = crashEvent.title || getCrashTypeLabel(crashEvent.crash_type);
+	const typeLabel =
+		crashEvent.title || getCrashTypeLabel(crashEvent.crash_type);
 
 	if (crashEvent.message) {
 		return `${typeLabel}: ${crashEvent.message}`;
@@ -171,7 +187,10 @@ async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
 			show_on_completion: true,
 		});
 	} catch (error) {
-		console.error("Failed to create patient crash notification, falling back to toast", error);
+		console.error(
+			"Failed to create patient crash notification, falling back to toast",
+			error,
+		);
 		showToast({
 			title,
 			description,
@@ -185,18 +204,21 @@ async function showCrashNotification(crashEvent: CrashEvent): Promise<void> {
  * Subscribe to crash events from the backend
  */
 export async function subscribeToCrashEvents(): Promise<UnlistenFn> {
-	const unlisten = await listen<CrashEvent>("core://instance-crashed", (event) => {
-		const crashEvent = normalizeCrashEvent(event.payload);
-		console.log("[CrashHandler] Crash detected:", crashEvent);
+	const unlisten = await listen<CrashEvent>(
+		"core://instance-crashed",
+		(event) => {
+			const crashEvent = normalizeCrashEvent(event.payload);
+			console.log("[CrashHandler] Crash detected:", crashEvent);
 
-		// Store crash details in memory
-		const updated = new Map(crashedInstances());
-		updated.set(crashEvent.instance_id, crashEvent);
-		setCrashedInstances(updated);
+			// Store crash details in memory
+			const updated = new Map(crashedInstances());
+			updated.set(crashEvent.instance_id, crashEvent);
+			setCrashedInstances(updated);
 
-		// Show notification
-		void showCrashNotification(crashEvent);
-	});
+			// Show notification
+			void showCrashNotification(crashEvent);
+		},
+	);
 
 	return unlisten;
 }

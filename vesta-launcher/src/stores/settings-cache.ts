@@ -52,17 +52,23 @@ const emptyStorageSnapshot = (): StorageSnapshot => ({
 	artifactCacheOverLimitBytes: 0,
 });
 
-export function fetchStorageSnapshot(forceRefresh = false): Promise<StorageSnapshot> {
+export function fetchStorageSnapshot(
+	forceRefresh = false,
+): Promise<StorageSnapshot> {
 	return hasTauriRuntime()
 		? invoke("get_storage_snapshot", { forceRefresh })
 		: Promise.resolve(emptyStorageSnapshot());
 }
 
 // Resource for Java requirements
-export const javaRequirements: [Resource<any[]>, ResourceActions<any[] | undefined>] =
-	createResource<any[]>(() =>
-		hasTauriRuntime() ? invoke("get_required_java_versions") : Promise.resolve([]),
-	);
+export const javaRequirements: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
+	hasTauriRuntime()
+		? invoke("get_required_java_versions")
+		: Promise.resolve([]),
+);
 
 // Auto-retry Manifest not ready
 createEffect(() => {
@@ -78,26 +84,36 @@ createEffect(() => {
 });
 
 // Resource for detected Java versions
-export const detectedJava: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<
-	any[]
->(() => (hasTauriRuntime() ? invoke("detect_java") : Promise.resolve([])));
+export const detectedJava: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
+	hasTauriRuntime() ? invoke("detect_java") : Promise.resolve([]),
+);
 
 // Resource for managed Java versions
-export const managedJava: [Resource<any[]>, ResourceActions<any[] | undefined>] = createResource<
-	any[]
->(() => (hasTauriRuntime() ? invoke("get_managed_javas") : Promise.resolve([])));
+export const managedJava: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
+	hasTauriRuntime() ? invoke("get_managed_javas") : Promise.resolve([]),
+);
 
 // Resource for global Java paths
-export const globalJavaPaths: [Resource<any[]>, ResourceActions<any[] | undefined>] =
-	createResource<any[]>(() =>
-		hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
-	);
+export const globalJavaPaths: [
+	Resource<any[]>,
+	ResourceActions<any[] | undefined>,
+] = createResource<any[]>(() =>
+	hasTauriRuntime() ? invoke("get_global_java_paths") : Promise.resolve([]),
+);
 
 // Resource for cache size
-export const cacheSize: [Resource<string>, ResourceActions<string | undefined>] =
-	createResource<string>(() =>
-		hasTauriRuntime() ? invoke("get_cache_size") : Promise.resolve("0 bytes"),
-	);
+export const cacheSize: [
+	Resource<string>,
+	ResourceActions<string | undefined>,
+] = createResource<string>(() =>
+	hasTauriRuntime() ? invoke("get_cache_size") : Promise.resolve("0 bytes"),
+);
 
 export const storageSnapshot: [
 	Resource<StorageSnapshot>,

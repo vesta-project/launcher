@@ -1,10 +1,10 @@
-import type { MiniRouter } from "@components/page-viewer/mini-router";
 import CopyIcon from "@assets/clipboard.svg";
 import LinkIcon from "@assets/link.svg";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { openMiniPage } from "@components/page-viewer/page-viewer";
-import { invoke } from "@tauri-apps/api/core";
 import type { InstalledResource } from "@stores/resources";
 import { resources } from "@stores/resources";
+import { invoke } from "@tauri-apps/api/core";
 import { Badge } from "@ui/badge";
 import Button from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
@@ -12,7 +12,10 @@ import type { CrashEvent, CrashSuspect } from "@utils/crash-handler";
 import { clearCrashDetails, formatCrashCategory } from "@utils/crash-handler";
 import { openExternal } from "@utils/external-link";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import { getRequiredVersionIssue, matchSuspectToResource } from "./crash-resource-match";
+import {
+	getRequiredVersionIssue,
+	matchSuspectToResource,
+} from "./crash-resource-match";
 import styles from "./crash-tab.module.css";
 
 type MclogsUploadResult = {
@@ -22,13 +25,17 @@ type MclogsUploadResult = {
 	expires?: number | null;
 };
 
-const getProjectRecordKey = (platform: string | null | undefined, id: string | null | undefined) => {
+const getProjectRecordKey = (
+	platform: string | null | undefined,
+	id: string | null | undefined,
+) => {
 	if (!platform || !id) return null;
 	return `${platform.toLowerCase()}:${id}`;
 };
 
 const hasCanonicalResourceLink = (resource: InstalledResource | undefined) =>
-	!!resource?.remote_id && (resource.platform === "modrinth" || resource.platform === "curseforge");
+	!!resource?.remote_id &&
+	(resource.platform === "modrinth" || resource.platform === "curseforge");
 
 function SuspectIcon(props: { name: string; iconUrl?: string | null }) {
 	const displayChar = () => {
@@ -40,7 +47,9 @@ function SuspectIcon(props: { name: string; iconUrl?: string | null }) {
 	return (
 		<Show
 			when={props.iconUrl?.startsWith("data:") ? props.iconUrl : null}
-			fallback={<div class={styles.suspectIconPlaceholder}>{displayChar()}</div>}
+			fallback={
+				<div class={styles.suspectIconPlaceholder}>{displayChar()}</div>
+			}
 		>
 			{(url) => <img src={url()} alt="" class={styles.suspectIcon} />}
 		</Show>
@@ -57,14 +66,16 @@ function CrashSuspectCard(props: {
 	router?: MiniRouter;
 }) {
 	const clickable = () => hasCanonicalResourceLink(props.resource);
-	const versionIssue = () => getRequiredVersionIssue(props.resource, props.suspect.reason);
+	const versionIssue = () =>
+		getRequiredVersionIssue(props.resource, props.suspect.reason);
 	const statusLabel = () => {
 		if (versionIssue()) return "Update";
 		if (props.resource && !props.resource.is_enabled) return "Disabled";
 		if (!props.resource) return "Missing";
 		return null;
 	};
-	const showStatusMeta = () => !!versionIssue() || (!props.resource && !!props.instanceId);
+	const showStatusMeta = () =>
+		!!versionIssue() || (!props.resource && !!props.instanceId);
 
 	const navigateToResource = () => {
 		const resource = props.resource;
@@ -93,7 +104,8 @@ function CrashSuspectCard(props: {
 			classList={{
 				[styles.suspectCard]: true,
 				[styles.suspectCardClickable]: clickable(),
-				[styles.suspectCardDisabled]: !!props.resource && !props.resource.is_enabled,
+				[styles.suspectCardDisabled]:
+					!!props.resource && !props.resource.is_enabled,
 			}}
 			role={clickable() ? "button" : undefined}
 			tabIndex={clickable() ? 0 : undefined}
@@ -126,7 +138,12 @@ function CrashSuspectCard(props: {
 					>
 						<span class={styles.suspectModId}>{props.suspect.mod_id}</span>
 					</Show>
-					<Show when={props.suspect.suspect_kind === "missing_dependency" && statusLabel()}>
+					<Show
+						when={
+							props.suspect.suspect_kind === "missing_dependency" &&
+							statusLabel()
+						}
+					>
 						{(label) => (
 							<Badge
 								class={styles.suspectStatusBadge}
@@ -180,7 +197,9 @@ export function CrashTab(props: {
 	router?: MiniRouter;
 	onCleared?: () => void;
 }) {
-	const [shareUrl, setShareUrl] = createSignal<string | null>(props.crash?.mclogs_url ?? null);
+	const [shareUrl, setShareUrl] = createSignal<string | null>(
+		props.crash?.mclogs_url ?? null,
+	);
 	const [busy, setBusy] = createSignal(false);
 
 	const AFFECTED_MODS_SCROLL_THRESHOLD = 4;
@@ -188,7 +207,9 @@ export function CrashTab(props: {
 	const fixes = () =>
 		props.crash?.suggested_fixes?.length
 			? props.crash.suggested_fixes
-			: ["Open the latest log and check the first error above the stack trace."];
+			: [
+					"Open the latest log and check the first error above the stack trace.",
+				];
 
 	const suspects = createMemo((): CrashSuspect[] => {
 		if (props.crash?.suspects?.length) return props.crash.suspects;
@@ -210,7 +231,10 @@ export function CrashTab(props: {
 	const openPath = async (path?: string | null) => {
 		if (!path) return;
 		try {
-			await invoke("open_crash_report", { instanceIdSlug: props.instanceSlug, path });
+			await invoke("open_crash_report", {
+				instanceIdSlug: props.instanceSlug,
+				path,
+			});
 		} catch (error) {
 			showToast({
 				title: "Could not open file",
@@ -222,7 +246,9 @@ export function CrashTab(props: {
 
 	const clearCrash = async () => {
 		try {
-			await invoke("clear_instance_crash", { instanceIdSlug: props.instanceSlug });
+			await invoke("clear_instance_crash", {
+				instanceIdSlug: props.instanceSlug,
+			});
 			clearCrashDetails(props.instanceSlug);
 			props.onCleared?.();
 		} catch (error) {
@@ -237,10 +263,13 @@ export function CrashTab(props: {
 	const upload = async () => {
 		setBusy(true);
 		try {
-			const result = await invoke<MclogsUploadResult>("upload_crash_to_mclogs", {
-				instanceIdSlug: props.instanceSlug,
-				crashId: props.crash?.crash_id ?? null,
-			});
+			const result = await invoke<MclogsUploadResult>(
+				"upload_crash_to_mclogs",
+				{
+					instanceIdSlug: props.instanceSlug,
+					crashId: props.crash?.crash_id ?? null,
+				},
+			);
 			setShareUrl(result.url);
 		} catch (error) {
 			showToast({
@@ -341,7 +370,9 @@ export function CrashTab(props: {
 							<div class={styles.heroContent}>
 								<div class={styles.kicker}>
 									<Badge variant="error">
-										{formatCrashCategory(crash().category || crash().crash_type)}
+										{formatCrashCategory(
+											crash().category || crash().crash_type,
+										)}
 									</Badge>
 									<span>{new Date(crash().timestamp).toLocaleString()}</span>
 								</div>
@@ -400,7 +431,10 @@ export function CrashTab(props: {
 								<Show when={suspects().length}>
 									<section class={styles.panel}>
 										<h3>Suspects</h3>
-										{renderSuspectGroup("Missing dependencies", missingDependencies())}
+										{renderSuspectGroup(
+											"Missing dependencies",
+											missingDependencies(),
+										)}
 										<Show when={affectedMods().length}>
 											<div class={styles.suspectGroup}>
 												<h4>Affected mods</h4>
@@ -408,7 +442,8 @@ export function CrashTab(props: {
 													classList={{
 														[styles.suspectList]: true,
 														[styles.suspectListScrollable]:
-															affectedMods().length > AFFECTED_MODS_SCROLL_THRESHOLD,
+															affectedMods().length >
+															AFFECTED_MODS_SCROLL_THRESHOLD,
 													}}
 												>
 													{renderSuspectCards(affectedMods())}
@@ -436,7 +471,9 @@ export function CrashTab(props: {
 												<button
 													type="button"
 													class={styles.helpLink}
-													onClick={() => void openExternal("https://discord.gg/zuDNHNHk8E")}
+													onClick={() =>
+														void openExternal("https://discord.gg/zuDNHNHk8E")
+													}
 												>
 													Ask for help on Discord
 												</button>
@@ -449,11 +486,14 @@ export function CrashTab(props: {
 							<aside class={styles.side}>
 								<div class={styles.devNoticePanel}>
 									<p>
-										Crash detection is still in development and may be incomplete or wrong.{" "}
+										Crash detection is still in development and may be
+										incomplete or wrong.{" "}
 										<button
 											type="button"
 											class={styles.helpLink}
-											onClick={() => void openExternal("https://discord.gg/zuDNHNHk8E")}
+											onClick={() =>
+												void openExternal("https://discord.gg/zuDNHNHk8E")
+											}
 										>
 											Report problems on Discord
 										</button>
@@ -470,25 +510,30 @@ export function CrashTab(props: {
 											</pre>
 										</div>
 										<div class={styles.pathActions}>
-										<Button
-											size="sm"
-											variant="outline"
-											onClick={() => void openPath(crash().report_path || crash().log_path)}
-											disabled={!crash().report_path && !crash().log_path}
-										>
-											Open file
-										</Button>
-										<Button
-											size="sm"
-											variant="ghost"
-											onClick={() => void invoke("open_logs_folder", { instanceIdSlug: props.instanceSlug })}
-										>
-											Logs
-										</Button>
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={() =>
+													void openPath(crash().report_path || crash().log_path)
+												}
+												disabled={!crash().report_path && !crash().log_path}
+											>
+												Open file
+											</Button>
+											<Button
+												size="sm"
+												variant="ghost"
+												onClick={() =>
+													void invoke("open_logs_folder", {
+														instanceIdSlug: props.instanceSlug,
+													})
+												}
+											>
+												Logs
+											</Button>
 										</div>
 									</div>
 								</section>
-
 							</aside>
 						</div>
 
@@ -496,11 +541,17 @@ export function CrashTab(props: {
 							<Button
 								size="sm"
 								variant="outline"
-								onClick={() => void openPath(crash().report_path || crash().log_path)}
+								onClick={() =>
+									void openPath(crash().report_path || crash().log_path)
+								}
 							>
 								Open file
 							</Button>
-							<Button size="sm" variant="ghost" onClick={() => void clearCrash()}>
+							<Button
+								size="sm"
+								variant="ghost"
+								onClick={() => void clearCrash()}
+							>
 								Clear Crash
 							</Button>
 						</div>

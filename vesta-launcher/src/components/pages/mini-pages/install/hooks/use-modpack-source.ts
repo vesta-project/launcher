@@ -4,10 +4,17 @@ import { showToast } from "@ui/toast/toast";
 import {
 	getModpackInfo,
 	getModpackInfoFromUrl,
-	matchLocalModpackSource,
 	type ModpackInfo,
+	matchLocalModpackSource,
 } from "@utils/modpacks";
-import { type Accessor, batch, createEffect, createMemo, createSignal, untrack } from "solid-js";
+import {
+	type Accessor,
+	batch,
+	createEffect,
+	createMemo,
+	createSignal,
+	untrack,
+} from "solid-js";
 
 export type ModpackPreflightPhase =
 	| "idle"
@@ -47,10 +54,11 @@ interface UseModpackSourceParams {
 export function useModpackSource(params: UseModpackSourceParams) {
 	const [isFetchingMetadata, setIsFetchingMetadata] = createSignal(false);
 	const [metadataRetryNonce, setMetadataRetryNonce] = createSignal(0);
-	const [metadataStatus, setMetadataStatus] = createSignal<ModpackPreflightStatus>({
-		phase: params.prefilledModpackInfo ? "ready" : "idle",
-		canRetry: false,
-	});
+	const [metadataStatus, setMetadataStatus] =
+		createSignal<ModpackPreflightStatus>({
+			phase: params.prefilledModpackInfo ? "ready" : "idle",
+			canRetry: false,
+		});
 	const [modpackUrl, setModpackUrl] = createSignal(params.modpackUrl || "");
 	const [modpackPath, setModpackPath] = createSignal(params.modpackPath || "");
 	const [modpackInfo, setModpackInfo] = createSignal<ModpackInfo | undefined>(
@@ -61,25 +69,38 @@ export function useModpackSource(params: UseModpackSourceParams) {
 	let latestMatchRequestId = 0;
 
 	const originalIcon = createMemo(
-		() => params.originalIcon || modpackInfo()?.iconUrl || params.projectIcon || undefined,
+		() =>
+			params.originalIcon ||
+			modpackInfo()?.iconUrl ||
+			params.projectIcon ||
+			undefined,
 	);
 
 	const fallbackProjectInfo = (): ModpackInfo => {
 		const versions = params.projectVersions?.();
-		const initialVerId = params.initialVersion || params.selectedModpackVersionId();
+		const initialVerId =
+			params.initialVersion || params.selectedModpackVersionId();
 		const selectedVer =
-			versions?.find((v) => v.id === initialVerId || v.version_number === initialVerId) ||
-			versions?.[0];
+			versions?.find(
+				(v) => v.id === initialVerId || v.version_number === initialVerId,
+			) || versions?.[0];
 
 		return {
 			name: params.projectName || "Unknown Modpack",
 			version:
-				selectedVer?.version_number || params.initialVersionNumber || params.initialVersion || "1.0.0",
+				selectedVer?.version_number ||
+				params.initialVersionNumber ||
+				params.initialVersion ||
+				"1.0.0",
 			author: params.projectAuthor || null,
 			description: null,
 			iconUrl: params.projectIcon || null,
-			minecraftVersion: selectedVer?.game_versions[0] || params.initialMinecraftVersion || "",
-			modloader: (selectedVer?.loaders[0] as any) || params.initialModloader || "vanilla",
+			minecraftVersion:
+				selectedVer?.game_versions[0] || params.initialMinecraftVersion || "",
+			modloader:
+				(selectedVer?.loaders[0] as any) ||
+				params.initialModloader ||
+				"vanilla",
 			modloaderVersion: params.initialModloaderVersion || null,
 			modCount: 0,
 			format: params.platform || "unknown",
@@ -90,7 +111,8 @@ export function useModpackSource(params: UseModpackSourceParams) {
 	};
 
 	const startSourceMatch = (path: string, baseInfo: ModpackInfo) => {
-		if (!path || params.projectId || params.platform || baseInfo.modpackId) return;
+		if (!path || params.projectId || params.platform || baseInfo.modpackId)
+			return;
 		const requestId = latestMatchRequestId + 1;
 		latestMatchRequestId = requestId;
 		setMetadataStatus({
@@ -101,7 +123,8 @@ export function useModpackSource(params: UseModpackSourceParams) {
 
 		void matchLocalModpackSource(path)
 			.then((match) => {
-				if (latestMatchRequestId !== requestId || modpackPath() !== path) return;
+				if (latestMatchRequestId !== requestId || modpackPath() !== path)
+					return;
 				const current = modpackInfo();
 				if (!current) return;
 
@@ -114,7 +137,8 @@ export function useModpackSource(params: UseModpackSourceParams) {
 						description: match.description || current.description,
 						iconUrl: match.iconUrl || current.iconUrl,
 						modpackId: match.modpackId,
-						modpackVersionId: match.modpackVersionId || current.modpackVersionId,
+						modpackVersionId:
+							match.modpackVersionId || current.modpackVersionId,
 						modpackPlatform: match.modpackPlatform,
 						downloadCount: match.downloadCount ?? current.downloadCount ?? null,
 						followerCount: match.followerCount ?? current.followerCount ?? null,
@@ -124,12 +148,16 @@ export function useModpackSource(params: UseModpackSourceParams) {
 				}
 
 				if (match.warning) {
-					console.info("[InstallPage] Local modpack source match skipped:", match.warning);
+					console.info(
+						"[InstallPage] Local modpack source match skipped:",
+						match.warning,
+					);
 				}
 				setMetadataStatus({ phase: "ready", canRetry: false });
 			})
 			.catch((error) => {
-				if (latestMatchRequestId !== requestId || modpackPath() !== path) return;
+				if (latestMatchRequestId !== requestId || modpackPath() !== path)
+					return;
 				console.warn("[InstallPage] Source match failed:", error);
 				setMetadataStatus({ phase: "ready", canRetry: false });
 			});
@@ -143,7 +171,10 @@ export function useModpackSource(params: UseModpackSourceParams) {
 			latestRequestId += 1;
 			setIsFetchingMetadata(false);
 			if (params.projectId || params.projectName) {
-				setModpackInfo((current) => current || params.prefilledModpackInfo || fallbackProjectInfo());
+				setModpackInfo(
+					(current) =>
+						current || params.prefilledModpackInfo || fallbackProjectInfo(),
+				);
 				setMetadataStatus({ phase: "ready", canRetry: false });
 			} else {
 				setModpackInfo(undefined);
@@ -188,13 +219,15 @@ export function useModpackSource(params: UseModpackSourceParams) {
 					setModpackInfo(fallbackProjectInfo());
 					setMetadataStatus({
 						phase: "ready-with-warnings",
-						message: "Using cached project details while online metadata is unavailable.",
+						message:
+							"Using cached project details while online metadata is unavailable.",
 						error: errorText,
 						canRetry: true,
 					});
 					showToast({
 						title: "Modpack Details Limited",
-						description: "Using the project details already loaded from Browse.",
+						description:
+							"Using the project details already loaded from Browse.",
 						severity: "warning",
 					});
 				} else {

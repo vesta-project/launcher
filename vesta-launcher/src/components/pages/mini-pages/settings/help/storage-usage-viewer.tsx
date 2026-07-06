@@ -6,16 +6,26 @@ import {
 	handleOpenLauncherLogs,
 	handleOpenRuntimeStorageLocation,
 } from "@stores/settings";
-import { fetchStorageSnapshot, storageSnapshot, type StorageSnapshot } from "@stores/settings-cache";
 import type { StorageInstanceSnapshot } from "@stores/settings-cache";
+import {
+	fetchStorageSnapshot,
+	type StorageSnapshot,
+	storageSnapshot,
+} from "@stores/settings-cache";
 import LauncherButton from "@ui/button/button";
 import buttonStyles from "@ui/button/button.module.css";
-import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { formatBytes, formatPercent } from "@utils/format-bytes";
-import { Component, createEffect, createMemo, createSignal, For, onMount, Show } from "solid-js";
+import { hasTauriRuntime } from "@utils/tauri-runtime";
+import {
+	type Component,
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onMount,
+	Show,
+} from "solid-js";
 import styles from "./storage-usage-viewer.module.css";
-
-const MB = 1024 * 1024;
 
 type StorageTab = "overview" | "instances" | "cache";
 
@@ -80,7 +90,10 @@ const StorageSegmentBar: Component<{
 }> = (props) => (
 	<div
 		class={styles["storage-bar"]}
-		classList={{ [styles["storage-bar--dimmed"]]: props.dimInactive && props.activeId != null }}
+		classList={{
+			[styles["storage-bar--dimmed"]]:
+				props.dimInactive && props.activeId != null,
+		}}
 		role="group"
 		aria-label="Storage usage breakdown"
 	>
@@ -133,7 +146,9 @@ const StorageBreakdownRow: Component<{
 		type="button"
 		class={styles["storage-row"]}
 		classList={{ [styles["storage-row--active"]]: props.active }}
-		style={{ "--storage-row-color": props.item.color || "var(--accent-primary)" }}
+		style={{
+			"--storage-row-color": props.item.color || "var(--accent-primary)",
+		}}
 		title={props.item.description || undefined}
 		onClick={(event) => {
 			event.preventDefault();
@@ -186,7 +201,8 @@ function instanceBreakdownItems(
 	return instances.map((instance, index) => ({
 		id: String(instance.id),
 		label: instance.name,
-		description: selectedInstanceId === instance.id ? instance.path : instance.slug,
+		description:
+			selectedInstanceId === instance.id ? instance.path : instance.slug,
 		bytes: instance.bytes,
 		color: categoryColor(String(instance.id), index),
 	}));
@@ -197,13 +213,27 @@ export function StorageUsageViewer() {
 	let editNavigationInFlight = false;
 
 	const [snapshot, { mutate, refetch }] = storageSnapshot;
-	const [cachedSnapshot, setCachedSnapshot] = createSignal<StorageSnapshot | undefined>();
-	const [selectedCategoryId, setSelectedCategoryId] = createSignal<string | null>(null);
-	const [selectedInstanceId, setSelectedInstanceId] = createSignal<number | null>(null);
-	const [selectedCacheCategoryId, setSelectedCacheCategoryId] = createSignal<string | null>(null);
-	const [hoveredCategoryId, setHoveredCategoryId] = createSignal<string | null>(null);
-	const [hoveredInstanceId, setHoveredInstanceId] = createSignal<number | null>(null);
-	const [hoveredCacheCategoryId, setHoveredCacheCategoryId] = createSignal<string | null>(null);
+	const [cachedSnapshot, setCachedSnapshot] = createSignal<
+		StorageSnapshot | undefined
+	>();
+	const [selectedCategoryId, setSelectedCategoryId] = createSignal<
+		string | null
+	>(null);
+	const [selectedInstanceId, setSelectedInstanceId] = createSignal<
+		number | null
+	>(null);
+	const [selectedCacheCategoryId, setSelectedCacheCategoryId] = createSignal<
+		string | null
+	>(null);
+	const [hoveredCategoryId, setHoveredCategoryId] = createSignal<string | null>(
+		null,
+	);
+	const [hoveredInstanceId, setHoveredInstanceId] = createSignal<number | null>(
+		null,
+	);
+	const [hoveredCacheCategoryId, setHoveredCacheCategoryId] = createSignal<
+		string | null
+	>(null);
 	const [activeTab, setActiveTab] = createSignal<StorageTab>("overview");
 	const [isRefreshing, setIsRefreshing] = createSignal(false);
 
@@ -269,7 +299,9 @@ export function StorageUsageViewer() {
 
 	const categoryColorMap = createMemo(() => {
 		const map = new Map<string, string>();
-		categories().forEach((category, index) => map.set(category.id, categoryColor(category.id, index)));
+		categories().forEach((category, index) =>
+			map.set(category.id, categoryColor(category.id, index)),
+		);
 		return map;
 	});
 
@@ -278,7 +310,8 @@ export function StorageUsageViewer() {
 			id: category.id,
 			label: category.label,
 			bytes: category.bytes,
-			color: categoryColorMap().get(category.id) || categoryColor(category.id, 0),
+			color:
+				categoryColorMap().get(category.id) || categoryColor(category.id, 0),
 		})),
 	);
 
@@ -288,12 +321,16 @@ export function StorageUsageViewer() {
 			label: category.label,
 			description: category.description,
 			bytes: category.bytes,
-			color: categoryColorMap().get(category.id) || categoryColor(category.id, 0),
+			color:
+				categoryColorMap().get(category.id) || categoryColor(category.id, 0),
 		})),
 	);
 
 	const cacheCategories = createMemo(() =>
-		categories().filter((category) => category.kind === "cache" || category.governedByArtifactLimit),
+		categories().filter(
+			(category) =>
+				category.kind === "cache" || category.governedByArtifactLimit,
+		),
 	);
 
 	const cacheBarItems = createMemo<BarItem[]>(() =>
@@ -301,7 +338,8 @@ export function StorageUsageViewer() {
 			id: category.id,
 			label: category.label,
 			bytes: category.bytes,
-			color: categoryColorMap().get(category.id) || categoryColor(category.id, 0),
+			color:
+				categoryColorMap().get(category.id) || categoryColor(category.id, 0),
 		})),
 	);
 
@@ -313,18 +351,23 @@ export function StorageUsageViewer() {
 				? "Counted toward the artifact cache limit"
 				: category.description,
 			bytes: category.bytes,
-			color: categoryColorMap().get(category.id) || categoryColor(category.id, 0),
+			color:
+				categoryColorMap().get(category.id) || categoryColor(category.id, 0),
 		})),
 	);
 
 	const totalBytes = createMemo(() => displaySnapshot()?.totalBytes || 0);
 	const instances = createMemo(() => displaySnapshot()?.instances || []);
-	const instancesTotalBytes = createMemo(() => displaySnapshot()?.instancesTotalBytes || 0);
+	const instancesTotalBytes = createMemo(
+		() => displaySnapshot()?.instancesTotalBytes || 0,
+	);
 	const cacheTotalBytes = createMemo(() =>
 		cacheCategories().reduce((sum, category) => sum + category.bytes, 0),
 	);
 
-	const artifactCacheBytes = createMemo(() => displaySnapshot()?.artifactCacheUsageBytes || 0);
+	const artifactCacheBytes = createMemo(
+		() => displaySnapshot()?.artifactCacheUsageBytes || 0,
+	);
 	const artifactCacheOverLimitBytes = createMemo(
 		() => displaySnapshot()?.artifactCacheOverLimitBytes || 0,
 	);
@@ -336,9 +379,15 @@ export function StorageUsageViewer() {
 		return Math.min(100, Math.round((usage / limit) * 100));
 	});
 
-	const activeCategoryId = createMemo(() => hoveredCategoryId() ?? selectedCategoryId());
-	const activeInstanceId = createMemo(() => hoveredInstanceId() ?? selectedInstanceId());
-	const activeCacheCategoryId = createMemo(() => hoveredCacheCategoryId() ?? selectedCacheCategoryId());
+	const activeCategoryId = createMemo(
+		() => hoveredCategoryId() ?? selectedCategoryId(),
+	);
+	const activeInstanceId = createMemo(
+		() => hoveredInstanceId() ?? selectedInstanceId(),
+	);
+	const activeCacheCategoryId = createMemo(
+		() => hoveredCacheCategoryId() ?? selectedCacheCategoryId(),
+	);
 
 	const instanceItems = createMemo(() =>
 		instanceBreakdownItems(instances(), activeInstanceId()),
@@ -396,15 +445,23 @@ export function StorageUsageViewer() {
 
 			<Show
 				when={displaySnapshot()}
-				fallback={<div class={styles["storage-empty"]}>Loading storage usage…</div>}
+				fallback={
+					<div class={styles["storage-empty"]}>Loading storage usage…</div>
+				}
 			>
 				<div class={styles["storage-tabs"]}>
-					<div class={styles["storage-tab-list"]} role="tablist" aria-label="Storage breakdown views">
+					<div
+						class={styles["storage-tab-list"]}
+						role="tablist"
+						aria-label="Storage breakdown views"
+					>
 						<button
 							type="button"
 							role="tab"
 							class={styles["storage-tab"]}
-							classList={{ [styles["storage-tab--active"]]: isTabActive("overview") }}
+							classList={{
+								[styles["storage-tab--active"]]: isTabActive("overview"),
+							}}
 							aria-selected={isTabActive("overview")}
 							onClick={(event) => setTab("overview", event)}
 						>
@@ -414,7 +471,9 @@ export function StorageUsageViewer() {
 							type="button"
 							role="tab"
 							class={styles["storage-tab"]}
-							classList={{ [styles["storage-tab--active"]]: isTabActive("instances") }}
+							classList={{
+								[styles["storage-tab--active"]]: isTabActive("instances"),
+							}}
 							aria-selected={isTabActive("instances")}
 							onClick={(event) => setTab("instances", event)}
 						>
@@ -424,7 +483,9 @@ export function StorageUsageViewer() {
 							type="button"
 							role="tab"
 							class={styles["storage-tab"]}
-							classList={{ [styles["storage-tab--active"]]: isTabActive("cache") }}
+							classList={{
+								[styles["storage-tab--active"]]: isTabActive("cache"),
+							}}
 							aria-selected={isTabActive("cache")}
 							onClick={(event) => setTab("cache", event)}
 						>
@@ -436,18 +497,20 @@ export function StorageUsageViewer() {
 						<div
 							role="tabpanel"
 							class={styles["storage-panel"]}
-							classList={{ [styles["storage-panel--hidden"]]: !isTabActive("overview") }}
+							classList={{
+								[styles["storage-panel--hidden"]]: !isTabActive("overview"),
+							}}
 							aria-hidden={!isTabActive("overview")}
 						>
-								<StorageSegmentBar
-									items={barItems()}
-									totalBytes={totalBytes()}
-									activeId={activeCategoryId()}
-									selectedId={selectedCategoryId()}
-									dimInactive={activeCategoryId() != null}
-									onSelect={selectCategory}
-									onHover={setHoveredCategoryId}
-								/>
+							<StorageSegmentBar
+								items={barItems()}
+								totalBytes={totalBytes()}
+								activeId={activeCategoryId()}
+								selectedId={selectedCategoryId()}
+								dimInactive={activeCategoryId() != null}
+								onSelect={selectCategory}
+								onHover={setHoveredCategoryId}
+							/>
 							<div class={styles["storage-breakdown"]}>
 								<For each={breakdownItems()}>
 									{(item) => (
@@ -456,7 +519,9 @@ export function StorageUsageViewer() {
 											totalBytes={totalBytes()}
 											active={activeCategoryId() === item.id}
 											onSelect={() => selectCategory(item.id)}
-											onHover={(active) => setHoveredCategoryId(active ? item.id : null)}
+											onHover={(active) =>
+												setHoveredCategoryId(active ? item.id : null)
+											}
 										/>
 									)}
 								</For>
@@ -466,7 +531,9 @@ export function StorageUsageViewer() {
 						<div
 							role="tabpanel"
 							class={styles["storage-panel"]}
-							classList={{ [styles["storage-panel--hidden"]]: !isTabActive("instances") }}
+							classList={{
+								[styles["storage-panel--hidden"]]: !isTabActive("instances"),
+							}}
 							aria-hidden={!isTabActive("instances")}
 						>
 							<Show
@@ -481,14 +548,20 @@ export function StorageUsageViewer() {
 									items={instanceBarItems(instances())}
 									totalBytes={instancesTotalBytes()}
 									activeId={
-										activeInstanceId() != null ? String(activeInstanceId()) : null
+										activeInstanceId() != null
+											? String(activeInstanceId())
+											: null
 									}
 									selectedId={
-										selectedInstanceId() != null ? String(selectedInstanceId()) : null
+										selectedInstanceId() != null
+											? String(selectedInstanceId())
+											: null
 									}
 									dimInactive={activeInstanceId() != null}
 									onSelect={(id) => selectInstance(Number(id))}
-									onHover={(id) => setHoveredInstanceId(id == null ? null : Number(id))}
+									onHover={(id) =>
+										setHoveredInstanceId(id == null ? null : Number(id))
+									}
 								/>
 								<div class={styles["storage-breakdown"]}>
 									<For each={instanceItems()}>
@@ -511,7 +584,9 @@ export function StorageUsageViewer() {
 						<div
 							role="tabpanel"
 							class={styles["storage-panel"]}
-							classList={{ [styles["storage-panel--hidden"]]: !isTabActive("cache") }}
+							classList={{
+								[styles["storage-panel--hidden"]]: !isTabActive("cache"),
+							}}
 							aria-hidden={!isTabActive("cache")}
 						>
 							<Show when={cacheCategories().length > 0}>
@@ -543,7 +618,9 @@ export function StorageUsageViewer() {
 
 							<div class={styles["storage-cache-stats"]}>
 								<div class={styles["storage-cache-stats-header"]}>
-									<span class={styles["storage-cache-stats-label"]}>Artifact cache limit</span>
+									<span class={styles["storage-cache-stats-label"]}>
+										Artifact cache limit
+									</span>
 									<button
 										type="button"
 										class={`${buttonStyles["launcher-button"]} ${buttonStyles["launcher-button--ghost"]} ${buttonStyles["launcher-button--sm"]} ${styles["storage-cache-edit-button"]}`}
@@ -557,10 +634,13 @@ export function StorageUsageViewer() {
 									>
 										<span class={styles["storage-cache-stats-value"]}>
 											{formatBytes(artifactCacheBytes())} /{" "}
-											{formatBytes(displaySnapshot()?.artifactCacheLimitBytes)} ·{" "}
-											{cacheUsagePercent()}%
+											{formatBytes(displaySnapshot()?.artifactCacheLimitBytes)}{" "}
+											· {cacheUsagePercent()}%
 										</span>
-										<span class={styles["storage-cache-edit-label"]} aria-hidden="true">
+										<span
+											class={styles["storage-cache-edit-label"]}
+											aria-hidden="true"
+										>
 											Edit
 										</span>
 									</button>
@@ -577,9 +657,11 @@ export function StorageUsageViewer() {
 								<div class={styles["cache-note"]}>
 									<span>
 										Artifact cache is over limit by{" "}
-										<strong>{formatBytes(artifactCacheOverLimitBytes())}</strong>.
-										Vesta evicts least-recently-used artifacts that are not referenced by active
-										installs.
+										<strong>
+											{formatBytes(artifactCacheOverLimitBytes())}
+										</strong>
+										. Vesta evicts least-recently-used artifacts that are not
+										referenced by active installs.
 									</span>
 								</div>
 							</Show>

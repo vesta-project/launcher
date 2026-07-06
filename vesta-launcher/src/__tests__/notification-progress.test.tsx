@@ -33,10 +33,14 @@ describe("Notification progress rendering", () => {
 			/>
 		));
 
-		const progress = container.querySelector('[role="progressbar"]') as HTMLElement | null;
+		const progress = container.querySelector(
+			'[role="progressbar"]',
+		) as HTMLElement | null;
 
 		expect(progress).toBeTruthy();
-		expect(progress?.style.getPropertyValue("--progress-fill-width")).toBe("0%");
+		expect(progress?.style.getPropertyValue("--progress-fill-width")).toBe(
+			"0%",
+		);
 		expect(screen.getByText("0/3")).toBeTruthy();
 	});
 
@@ -50,9 +54,13 @@ describe("Notification progress rendering", () => {
 			/>
 		));
 
-		const progress = container.querySelector('[role="progressbar"]') as HTMLElement | null;
+		const progress = container.querySelector(
+			'[role="progressbar"]',
+		) as HTMLElement | null;
 
 		expect(progress).toBeTruthy();
-		expect(progress?.style.getPropertyValue("--progress-fill-width")).toBe("100%");
+		expect(progress?.style.getPropertyValue("--progress-fill-width")).toBe(
+			"100%",
+		);
 	});
 });

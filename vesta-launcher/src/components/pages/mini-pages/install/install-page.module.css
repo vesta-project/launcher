@@ -342,7 +342,10 @@
 
 .memory-card-details {
 	display: grid;
-	grid-template-columns: minmax(130px, 1.35fr) repeat(auto-fit, minmax(92px, 1fr));
+	grid-template-columns: minmax(130px, 1.35fr) repeat(
+			auto-fit,
+			minmax(92px, 1fr)
+		);
 	gap: 8px;
 	padding-top: 8px;
 	border-top: 1px solid var(--border-subtle);
@@ -447,15 +450,31 @@
 }
 
 .memory-edit-markers .memory-warning-pill {
-	background: color-mix(in srgb, var(--semantic-warning) 16%, var(--surface-raised));
-	border-color: color-mix(in srgb, var(--semantic-warning) 34%, var(--border-subtle));
+	background: color-mix(
+		in srgb,
+		var(--semantic-warning) 16%,
+		var(--surface-raised)
+	);
+	border-color: color-mix(
+		in srgb,
+		var(--semantic-warning) 34%,
+		var(--border-subtle)
+	);
 	color: var(--text-primary);
 	cursor: help;
 }
 
 .memory-edit-markers .memory-warning-pill:hover {
-	background: color-mix(in srgb, var(--semantic-warning) 24%, var(--surface-raised));
-	border-color: color-mix(in srgb, var(--semantic-warning) 46%, var(--border-subtle));
+	background: color-mix(
+		in srgb,
+		var(--semantic-warning) 24%,
+		var(--surface-raised)
+	);
+	border-color: color-mix(
+		in srgb,
+		var(--semantic-warning) 46%,
+		var(--border-subtle)
+	);
 }
 
 .info-block-grid {
@@ -725,7 +744,11 @@
 .modpack-import-card:hover {
 	background: var(--launcher-hover-bg);
 	transform: translateY(-4px);
-	border-color: color-mix(in srgb, var(--launcher-accent) 70%, var(--border-main));
+	border-color: color-mix(
+		in srgb,
+		var(--launcher-accent) 70%,
+		var(--border-main)
+	);
 	box-shadow: var(--elevation-soft);
 }
 
@@ -753,7 +776,8 @@
 	border-radius: 10px;
 	padding: 12px;
 	fill: currentColor;
-	border: 1px solid color-mix(in srgb, var(--launcher-accent) 30%, var(--border-subtle));
+	border: 1px solid
+		color-mix(in srgb, var(--launcher-accent) 30%, var(--border-subtle));
 }
 
 .modpack-import-card .card-icon svg {
@@ -850,7 +874,11 @@
 .launcher-card--curseforge {
 	--launcher-accent: rgb(183, 91, 58);
 	--launcher-accent-soft: rgb(183, 91, 58);
-	--launcher-hover-bg: color-mix(in srgb, rgb(183, 91, 58) 8%, var(--bg-surface-hover));
+	--launcher-hover-bg: color-mix(
+		in srgb,
+		rgb(183, 91, 58) 8%,
+		var(--bg-surface-hover)
+	);
 }
 
 .launcher-card--gdlauncher {
@@ -1328,7 +1356,6 @@
 	.url-input-row {
 		flex-direction: column;
 	}
-
 }
 
 @media (max-height: 720px) {

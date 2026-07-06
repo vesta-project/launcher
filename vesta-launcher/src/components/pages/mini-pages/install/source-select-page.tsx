@@ -1,5 +1,6 @@
 import { router } from "@components/page-viewer/page-viewer";
 import { resources } from "@stores/resources";
+import { open } from "@tauri-apps/plugin-dialog";
 import LauncherButton from "@ui/button/button";
 import { createSignal, Show } from "solid-js";
 import { InstallStageHeader } from "./components/InstallStageHeader";
@@ -17,7 +18,10 @@ function SourceSelectPage(props: { router?: any }) {
 
 	const handleUrlSubmit = () => {
 		if (urlValue().trim()) {
-			activeRouter()?.navigate("/install", { modpackUrl: urlValue().trim(), isModpack: true });
+			activeRouter()?.navigate("/install", {
+				modpackUrl: urlValue().trim(),
+				isModpack: true,
+			});
 		}
 	};
 
@@ -33,7 +37,6 @@ function SourceSelectPage(props: { router?: any }) {
 					<SourceOptionsGrid
 						onStandard={() => activeRouter()?.navigate("/install")}
 						onLocalImport={async () => {
-							const { open } = await import("@tauri-apps/plugin-dialog");
 							const selected = await open({
 								multiple: false,
 								filters: [{ name: "Modpack", extensions: ["zip", "mrpack"] }],
@@ -65,16 +68,26 @@ function SourceSelectPage(props: { router?: any }) {
 										onKeyDown={(e) => e.key === "Enter" && handleUrlSubmit()}
 										autofocus
 									/>
-									<LauncherButton color="primary" onClick={handleUrlSubmit} disabled={!urlValue().trim()}>
+									<LauncherButton
+										color="primary"
+										onClick={handleUrlSubmit}
+										disabled={!urlValue().trim()}
+									>
 										Import URL
 									</LauncherButton>
-									<LauncherButton variant="ghost" onClick={() => setShowUrlInput(false)}>
+									<LauncherButton
+										variant="ghost"
+										onClick={() => setShowUrlInput(false)}
+									>
 										Cancel
 									</LauncherButton>
 								</div>
 							}
 						>
-							<button class={styles["url-toggle"]} onClick={() => setShowUrlInput(true)}>
+							<button
+								class={styles["url-toggle"]}
+								onClick={() => setShowUrlInput(true)}
+							>
 								Or import from a Direct URL
 							</button>
 						</Show>

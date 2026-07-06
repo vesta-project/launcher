@@ -7,7 +7,10 @@
 	display: flex;
 	flex-direction: row;
 
-	--titlebar__opacity: max(0.1, min(0.7, calc(var(--background-opacity) * 1.5)));
+	--titlebar__opacity: max(
+		0.1,
+		min(0.7, calc(var(--background-opacity) * 1.5))
+	);
 
 	background: linear-gradient(
 		90deg,
@@ -39,7 +42,13 @@
 	}
 }
 
-:root[data-os="windows"] div .titlebar .titlebar__window-controls button svg path {
+:root[data-os="windows"]
+	div
+	.titlebar
+	.titlebar__window-controls
+	button
+	svg
+	path {
 	fill: var(--titlebar__svg--color);
 }
 

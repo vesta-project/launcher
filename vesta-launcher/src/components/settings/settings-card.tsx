@@ -1,5 +1,5 @@
 import { HelpTrigger } from "@ui/help-trigger/help-trigger";
-import { Component, JSX, Show } from "solid-js";
+import { type Component, type JSX, Show } from "solid-js";
 import styles from "./settings.module.css";
 
 export interface SettingsCardProps {
@@ -32,7 +32,7 @@ export const SettingsCard: Component<SettingsCardProps> = (props) => {
 					<div class={styles["settings-card-header--top"]}>
 						<h2 class={styles["settings-card-title"]}>{props.header}</h2>
 						<Show when={props.helpTopic}>
-							<HelpTrigger topic={props.helpTopic!} />
+							{(helpTopic) => <HelpTrigger topic={helpTopic()} />}
 						</Show>
 					</div>
 					<Show when={props.subHeader}>

@@ -1,6 +1,3 @@
-import { createSignal } from "solid-js";
-import { describe, expect, it } from "vitest";
-
 import { MiniRouter } from "@components/page-viewer/mini-router";
 import {
 	canResumeRouteFromLibrary,
@@ -13,6 +10,8 @@ import {
 	LIBRARY_PATH,
 	routeParamsMatch,
 } from "@utils/flat-shell-navigation";
+import { createSignal } from "solid-js";
+import { describe, expect, it } from "vitest";
 
 function createTestRouter() {
 	const router = new MiniRouter({
@@ -24,7 +23,9 @@ function createTestRouter() {
 	});
 
 	const [pageViewerOpen, setPageViewerOpen] = createSignal(false);
-	router.setShellNavigation(createFlatShellNavigation(pageViewerOpen, setPageViewerOpen));
+	router.setShellNavigation(
+		createFlatShellNavigation(pageViewerOpen, setPageViewerOpen),
+	);
 
 	return { router, pageViewerOpen, setPageViewerOpen };
 }
@@ -43,19 +44,27 @@ describe("routeParamsMatch", () => {
 	});
 
 	it("rejects different params", () => {
-		expect(routeParamsMatch({ activeTab: "help" }, { activeTab: "account" })).toBe(false);
+		expect(
+			routeParamsMatch({ activeTab: "help" }, { activeTab: "account" }),
+		).toBe(false);
 	});
 });
 
 describe("canResumeRouteFromLibrary", () => {
 	it("resumes the same instance even when the stored route has extra query params", () => {
 		expect(
-			canResumeRouteFromLibrary("/instance", { id: 5, activeTab: "console" }, { id: 5 }),
+			canResumeRouteFromLibrary(
+				"/instance",
+				{ id: 5, activeTab: "console" },
+				{ id: 5 },
+			),
 		).toBe(true);
 	});
 
 	it("does not resume a different instance", () => {
-		expect(canResumeRouteFromLibrary("/instance", { id: 5 }, { id: 6 })).toBe(false);
+		expect(canResumeRouteFromLibrary("/instance", { id: 5 }, { id: 6 })).toBe(
+			false,
+		);
 	});
 
 	it("does not resume same instance when target specifies a different activeTab", () => {
@@ -114,7 +123,9 @@ describe("library slot navigation", () => {
 
 		expect(pageViewerOpen()).toBe(false);
 		expect(router.canGoBack()).toBe(true);
-		expect(router.history.past[router.history.past.length - 1]?.params).toEqual({ id: 1 });
+		expect(router.history.past[router.history.past.length - 1]?.params).toEqual(
+			{ id: 1 },
+		);
 
 		router.navigateFromLibrary("/instance", { id: 2 });
 
@@ -166,7 +177,9 @@ describe("library slot navigation", () => {
 		expect(router.isOnLibrarySlot()).toBe(true);
 		expect(router.canGoBack()).toBe(true);
 		expect(router.history.future).toEqual([]);
-		expect(router.history.past[router.history.past.length - 1]?.params.activeTab).toBe("console");
+		expect(
+			router.history.past[router.history.past.length - 1]?.params.activeTab,
+		).toBe("console");
 	});
 
 	it("library tab back resumes the current page not the first in-app page", async () => {
@@ -183,7 +196,10 @@ describe("library slot navigation", () => {
 
 		await handleNavigationBack(router);
 		expect(router.currentPath.get()).toBe("/install");
-		expect(router.history.past.map((e) => e.path)).toEqual([LIBRARY_PATH, "/config"]);
+		expect(router.history.past.map((e) => e.path)).toEqual([
+			LIBRARY_PATH,
+			"/config",
+		]);
 	});
 
 	it("restores in-page back history after library dismiss and back", async () => {
@@ -241,7 +257,10 @@ describe("library slot navigation", () => {
 
 		const pastEntry = router.history.past[router.history.past.length - 1];
 		expect(pastEntry).toBeDefined();
-		expect(futureEntryMatchesTarget(pastEntry!, "/instance", { id: 5 })).toBe(true);
+		if (!pastEntry) throw new Error("expected a past history entry");
+		expect(futureEntryMatchesTarget(pastEntry, "/instance", { id: 5 })).toBe(
+			true,
+		);
 
 		await handleNavigationBack(router);
 
@@ -265,7 +284,9 @@ describe("library slot navigation", () => {
 		expect(router.isOnLibrarySlot()).toBe(true);
 		expect(router.canGoBack()).toBe(true);
 		expect(router.history.past).toHaveLength(pastBefore);
-		expect(router.history.past[router.history.past.length - 1]?.params).toEqual({ id: 1 });
+		expect(router.history.past[router.history.past.length - 1]?.params).toEqual(
+			{ id: 1 },
+		);
 	});
 
 	it("walks in-page history before returning to library", async () => {
@@ -293,7 +314,9 @@ describe("library slot navigation", () => {
 		expect(pageViewerOpen()).toBe(false);
 		expect(router.isOnLibrarySlot()).toBe(true);
 		expect(router.canGoBack()).toBe(true);
-		expect(router.history.past[router.history.past.length - 1]?.path).toBe("/install");
+		expect(router.history.past[router.history.past.length - 1]?.path).toBe(
+			"/install",
+		);
 
 		await handleNavigationBack(router);
 		expect(router.currentPath.get()).toBe("/install");
@@ -317,13 +340,18 @@ describe("resetLibrarySlot", () => {
 		router.navigate("/install");
 		router.navigateToLibrary();
 
-		expect(router.history.past.some((entry) => entry.path === LIBRARY_PATH)).toBe(false);
+		expect(
+			router.history.past.some((entry) => entry.path === LIBRARY_PATH),
+		).toBe(false);
 		expect(router.history.past.length).toBeGreaterThan(0);
 
 		router.resetLibrarySlot();
 
 		expect(router.isOnLibrarySlot()).toBe(false);
-		expect(router.history.past.map((entry) => entry.path)).toEqual(["/config", "/install"]);
+		expect(router.history.past.map((entry) => entry.path)).toEqual([
+			"/config",
+			"/install",
+		]);
 		expect(router.history.future).toEqual([]);
 	});
 
@@ -345,7 +373,7 @@ describe("route-scoped reload", () => {
 		let reloads = 0;
 
 		router.navigate("/instance", { id: 1 });
-		router.setRefetch(async () => {
+		router.setRefetch(() => {
 			reloads += 1;
 		}, "/instance");
 

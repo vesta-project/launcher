@@ -32,7 +32,9 @@ interface ModpackVersionSelectorProps {
 }
 
 export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
-	const [selectedId, setSelectedId] = createSignal<string | null>(props.currentVersionId);
+	const [selectedId, setSelectedId] = createSignal<string | null>(
+		props.currentVersionId,
+	);
 	const [searchQuery, setSearchQuery] = createSignal("");
 	const [isOpen, setIsOpen] = createSignal(false);
 	const [confirmingId, setConfirmingId] = createSignal<string | null>(null);
@@ -97,9 +99,15 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 
 	return (
 		<div class={styles["control"]}>
-			<Show when={!props.loading} fallback={<Skeleton class={styles["triggerSkeleton"]} />}>
+			<Show
+				when={!props.loading}
+				fallback={<Skeleton class={styles["triggerSkeleton"]} />}
+			>
 				<div
-					class={clsx(styles["triggerCard"], props.disabled && styles["disabled"])}
+					class={clsx(
+						styles["triggerCard"],
+						props.disabled && styles["disabled"],
+					)}
 					data-expanded={isOpen()}
 				>
 					<div class={styles["triggerMain"]}>
@@ -135,11 +143,20 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 						>
 							<div class={styles["versionSummary"]}>
 								<span class={styles["versionSummaryPrimary"]}>
-									{selectedVersion()?.version_number || props.currentVersionId || "Current"}
+									{selectedVersion()?.version_number ||
+										props.currentVersionId ||
+										"Current"}
 								</span>
 								<div class={styles["triggerMeta"]}>
-									<span>MC {selectedVersion()?.game_versions[0] || props.minecraftVersion || "unknown"}</span>
-									<span>{selectedVersion()?.loaders[0] || props.loader || "Vanilla"}</span>
+									<span>
+										MC{" "}
+										{selectedVersion()?.game_versions[0] ||
+											props.minecraftVersion ||
+											"unknown"}
+									</span>
+									<span>
+										{selectedVersion()?.loaders[0] || props.loader || "Vanilla"}
+									</span>
 								</div>
 							</div>
 							<div class={styles["statusArea"]}>
@@ -151,7 +168,9 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 										</span>
 									}
 								>
-									<span class={styles["updateAvailableLabel"]}>Update available</span>
+									<span class={styles["updateAvailableLabel"]}>
+										Update available
+									</span>
 								</Show>
 							</div>
 						</button>
@@ -179,7 +198,8 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 						<div class={styles["versionListContainer"]}>
 							<For each={filteredVersions()}>
 								{(version) => {
-									const isCurrent = String(version.id) === props.currentVersionId;
+									const isCurrent =
+										String(version.id) === props.currentVersionId;
 									const isConfirming = () => confirmingId() === version.id;
 
 									return (
@@ -188,7 +208,8 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 												if (isCurrent) activeRowRef = el;
 											}}
 											onMouseLeave={() => {
-												if (confirmingId() === version.id) setConfirmingId(null);
+												if (confirmingId() === version.id)
+													setConfirmingId(null);
 											}}
 											class={clsx(
 												styles["versionRow"],
@@ -199,7 +220,9 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 											<div class={styles["versionInfo"]}>
 												<div class={styles["metaContainer"]}>
 													<div class={styles["versionHeader"]}>
-														<span class={styles["versionNumber"]}>{version.version_number}</span>
+														<span class={styles["versionNumber"]}>
+															{version.version_number}
+														</span>
 														<span class={styles["releaseType"]}>
 															{version.release_type}
 														</span>
@@ -229,8 +252,12 @@ export function ModpackVersionSelector(props: ModpackVersionSelectorProps) {
 														>
 															<div class={styles["confirmSlide"]}>
 																<div class={styles["slideInner"]}>
-																	<span class={styles["slideText"]}>Switch</span>
-																	<span class={styles["slideText"]}>Confirm?</span>
+																	<span class={styles["slideText"]}>
+																		Switch
+																	</span>
+																	<span class={styles["slideText"]}>
+																		Confirm?
+																	</span>
 																</div>
 															</div>
 														</Button>

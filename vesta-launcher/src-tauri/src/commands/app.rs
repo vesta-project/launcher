@@ -708,9 +708,11 @@ pub fn parse_vesta_url(url: String) -> Result<DeepLinkMetadata, String> {
             }
         }
         "open-resource" => {
-            if segments.len() >= 2 {
-                params.insert("platform".to_string(), segments[0].to_string());
-                params.insert("projectId".to_string(), segments[1].to_string());
+            if let Some(platform) = segments.first() {
+                params.insert("platform".to_string(), (*platform).to_string());
+            }
+            if let Some(project_id) = segments.get(1) {
+                params.insert("projectId".to_string(), (*project_id).to_string());
             }
             require_param(&params, "platform", "open-resource")?;
             require_param(&params, "projectId", "open-resource")?;

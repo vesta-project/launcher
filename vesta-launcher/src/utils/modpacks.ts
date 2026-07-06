@@ -1,15 +1,23 @@
 import { invoke } from "@tauri-apps/api/core";
-import { Instance } from "./instances";
+import type { Instance } from "./instances";
 
 const METADATA_TIMEOUT_MS = 30_000;
 const INSTALL_START_TIMEOUT_MS = 45_000;
 const ARCHIVE_SUMMARY_TIMEOUT_MS = 30_000;
 const SOURCE_MATCH_TIMEOUT_MS = 45_000;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+function withTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+	operation: string,
+): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		const timer = setTimeout(() => {
-			reject(new Error(`${operation} timed out after ${Math.round(timeoutMs / 1000)}s`));
+			reject(
+				new Error(
+					`${operation} timed out after ${Math.round(timeoutMs / 1000)}s`,
+				),
+			);
 		}, timeoutMs);
 
 		void promise.then(
@@ -109,7 +117,9 @@ export async function getModpackInfoFromUrl(
 	);
 }
 
-export async function getModpackArchiveSummaryFromUrl(url: string): Promise<ModpackArchiveSummary> {
+export async function getModpackArchiveSummaryFromUrl(
+	url: string,
+): Promise<ModpackArchiveSummary> {
 	return await withTimeout(
 		invoke("get_modpack_archive_summary_from_url", { url }),
 		ARCHIVE_SUMMARY_TIMEOUT_MS,
@@ -117,7 +127,9 @@ export async function getModpackArchiveSummaryFromUrl(url: string): Promise<Modp
 	);
 }
 
-export async function matchLocalModpackSource(path: string): Promise<ModpackSourceMatch> {
+export async function matchLocalModpackSource(
+	path: string,
+): Promise<ModpackSourceMatch> {
 	return await withTimeout(
 		invoke("match_local_modpack_source", { path }),
 		SOURCE_MATCH_TIMEOUT_MS,
@@ -239,7 +251,9 @@ export async function installModpackFromUrl(
 	);
 }
 
-export async function listExportCandidates(instanceId: number): Promise<ExportCandidate[]> {
+export async function listExportCandidates(
+	instanceId: number,
+): Promise<ExportCandidate[]> {
 	return await invoke("list_export_candidates", { instanceId });
 }
 

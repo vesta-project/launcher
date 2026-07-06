@@ -3,6 +3,7 @@ import RightArrowIcon from "@assets/right-arrow.svg";
 import SearchIcon from "@assets/search.svg";
 import TrashIcon from "@assets/trash.svg";
 import { flexRender } from "@tanstack/solid-table";
+import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import {
 	DropdownMenu,
@@ -11,15 +12,27 @@ import {
 	DropdownMenuSeparator,
 	DropdownMenuTrigger,
 } from "@ui/dropdown-menu/dropdown-menu";
-import { ResourceAvatar } from "@ui/avatar";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import {
 	createContainerQuery,
 	RESOURCES_FILTER_COMPACT_WIDTH,
 	RESOURCES_TABLE_COMPACT_WIDTH,
 } from "@utils/media-query";
+import {
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	onCleanup,
+	Show,
+} from "solid-js";
 import styles from "../instance-details.module.css";
 
 const FILTER_OPTIONS = [
@@ -114,8 +127,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 		const noun =
 			props.resourceTypeFilter === "All"
 				? "resources"
-				: FILTER_OPTIONS.find((option) => option.id === props.resourceTypeFilter)
-						?.label.toLowerCase() || "resources";
+				: FILTER_OPTIONS.find(
+						(option) => option.id === props.resourceTypeFilter,
+					)?.label.toLowerCase() || "resources";
 
 		return `${modpackRows().length} bundled ${noun}`;
 	});
@@ -126,10 +140,14 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 					.join(",")}`
 			: "",
 	);
-	const [shouldMountModpackRows, setShouldMountModpackRows] = createSignal(false);
+	const [shouldMountModpackRows, setShouldMountModpackRows] =
+		createSignal(false);
 	let cancelModpackRowsWarmup: (() => void) | undefined;
 
-	const renderResourceRow = (row: any, options?: { hidden?: () => boolean }) => (
+	const renderResourceRow = (
+		row: any,
+		options?: { hidden?: () => boolean },
+	) => (
 		<tr
 			onClick={(e) => props.onRowClick(row, e)}
 			style={{ cursor: "default" }}
@@ -246,7 +264,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									>
 										Unlink
 									</DropdownMenuItem>
-									<DropdownMenuSeparator class={styles["row-actions-separator"]} />
+									<DropdownMenuSeparator
+										class={styles["row-actions-separator"]}
+									/>
 									<DropdownMenuItem
 										onSelect={props.onDeleteModpackAndUnlink}
 										disabled={props.busy || props.modpackResources.length === 0}
@@ -273,8 +293,14 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 	};
 
 	const [panelRef, setPanelRef] = createSignal<HTMLElement | undefined>();
-	const isCompactTable = createContainerQuery(panelRef, RESOURCES_TABLE_COMPACT_WIDTH);
-	const isFilterCompact = createContainerQuery(panelRef, RESOURCES_FILTER_COMPACT_WIDTH);
+	const isCompactTable = createContainerQuery(
+		panelRef,
+		RESOURCES_TABLE_COMPACT_WIDTH,
+	);
+	const isFilterCompact = createContainerQuery(
+		panelRef,
+		RESOURCES_FILTER_COMPACT_WIDTH,
+	);
 
 	createEffect(() => {
 		props.onCompactChange?.(isCompactTable());
@@ -286,7 +312,8 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 		cancelModpackRowsWarmup = undefined;
 		setShouldMountModpackRows(false);
 
-		if (!key || !props.installedResources.latest || modpackRows().length === 0) return;
+		if (!key || !props.installedResources.latest || modpackRows().length === 0)
+			return;
 		if (props.modpackExpanded) {
 			setShouldMountModpackRows(true);
 			return;
@@ -348,14 +375,19 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								options={FILTER_OPTIONS.map((o) => o.id)}
 								itemComponent={(p) => (
 									<SelectItem item={p.item}>
-										{FILTER_OPTIONS.find((o) => o.id === p.item.rawValue)?.label}
+										{
+											FILTER_OPTIONS.find((o) => o.id === p.item.rawValue)
+												?.label
+										}
 									</SelectItem>
 								)}
 							>
 								<SelectTrigger>
 									<SelectValue<string>>
 										{(state) =>
-											FILTER_OPTIONS.find((o) => o.id === state.selectedOption())?.label || "All"
+											FILTER_OPTIONS.find(
+												(o) => o.id === state.selectedOption(),
+											)?.label || "All"
 										}
 									</SelectValue>
 								</SelectTrigger>
@@ -504,7 +536,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 									class={styles["delete-selected"]}
 									onClick={props.handleBatchDelete}
 									disabled={props.busy}
-									tooltip_text={isCompactTable() ? "Delete selected" : undefined}
+									tooltip_text={
+										isCompactTable() ? "Delete selected" : undefined
+									}
 									icon_only={isCompactTable()}
 								>
 									<TrashIcon />
@@ -517,7 +551,11 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 			</div>
 
 			<div class={styles["installed-resources-list"]}>
-				<Show when={props.installedResources.loading && !props.installedResources.latest}>
+				<Show
+					when={
+						props.installedResources.loading && !props.installedResources.latest
+					}
+				>
 					<Skeleton class={styles["skeleton-resources"]} />
 				</Show>
 				<Show when={props.installedResources.latest}>
@@ -555,9 +593,7 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 													>
 														<Show when={!header.isPlaceholder}>
 															<div
-																onClick={
-																	header.column.getToggleSortingHandler()
-																}
+																onClick={header.column.getToggleSortingHandler()}
 															>
 																{flexRender(
 																	header.column.columnDef.header,
@@ -595,9 +631,15 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										</For>
 									</tr>
 								</Show>
-								<Show when={props.instance?.modpackId && shouldMountModpackRows()}>
+								<Show
+									when={props.instance?.modpackId && shouldMountModpackRows()}
+								>
 									<For each={modpackRows()}>
-										{(row) => renderResourceRow(row, { hidden: () => !props.modpackExpanded })}
+										{(row) =>
+											renderResourceRow(row, {
+												hidden: () => !props.modpackExpanded,
+											})
+										}
 									</For>
 								</Show>
 								<For
@@ -608,7 +650,9 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 							</tbody>
 						</table>
 
-						<Show when={sortedRows().length === 0 && !props.instance?.modpackId}>
+						<Show
+							when={sortedRows().length === 0 && !props.instance?.modpackId}
+						>
 							<div class={styles["resources-empty-state"]}>
 								<p>
 									No{" "}

@@ -81,7 +81,6 @@ struct CFAuthor {
 #[derive(Deserialize)]
 struct CFCategory {
     id: i64,
-    name: String,
 }
 
 #[derive(Deserialize)]

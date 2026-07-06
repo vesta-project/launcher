@@ -38,7 +38,7 @@ describe("confirmMinecraftVersionChange", () => {
 		expect(result).toBe(true);
 		expect(dialogStore.confirm).toHaveBeenCalledWith(
 			"Change Minecraft Version?",
-			expect.stringContaining('from 1.20.1 to 1.21.1'),
+			expect.stringContaining("from 1.20.1 to 1.21.1"),
 			{
 				severity: "warning",
 				okLabel: "Change Version",
@@ -64,7 +64,9 @@ describe("confirmMinecraftVersionChange", () => {
 
 		expect(dialogStore.confirm).toHaveBeenCalledWith(
 			"Change Minecraft Version?",
-			expect.stringContaining("Updating this modpack will change the Minecraft version"),
+			expect.stringContaining(
+				"Updating this modpack will change the Minecraft version",
+			),
 			expect.any(Object),
 		);
 	});

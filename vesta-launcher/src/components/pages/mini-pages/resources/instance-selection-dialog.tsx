@@ -1,12 +1,24 @@
 import { type Instance, instancesState } from "@stores/instances";
-import { findBestVersion, ResourceProject, ResourceVersion, resources } from "@stores/resources";
+import {
+	findBestVersion,
+	type ResourceProject,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent, DialogHeader } from "@ui/dialog/dialog";
 import { resolveResourceUrl } from "@utils/assets";
 import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import { getCompatibilityForInstance } from "@utils/resources";
-import { Component, createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import {
+	type Component,
+	createEffect,
+	createMemo,
+	createSignal,
+	For,
+	Show,
+} from "solid-js";
 import styles from "./instance-selection-dialog.module.css";
 
 interface InstanceSelectionDialogProps {
@@ -19,7 +31,9 @@ interface InstanceSelectionDialogProps {
 	versions?: ResourceVersion[];
 }
 
-const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props) => {
+const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
+	props,
+) => {
 	const [installedMap, setInstalledMap] = createSignal<
 		Record<
 			number,
@@ -32,7 +46,9 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 			}[]
 		>
 	>({});
-	const [fetchedVersions, setFetchedVersions] = createSignal<ResourceVersion[]>([]);
+	const [fetchedVersions, setFetchedVersions] = createSignal<ResourceVersion[]>(
+		[],
+	);
 	const [isLoadingVersions, setIsLoadingVersions] = createSignal(false);
 
 	const sortedInstances = () =>
@@ -81,7 +97,10 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 							}));
 						}
 					} catch (e) {
-						console.error(`Failed to fetch installed for instance ${inst.id}`, e);
+						console.error(
+							`Failed to fetch installed for instance ${inst.id}`,
+							e,
+						);
 						newMap[inst.id] = [];
 					}
 				}),
@@ -92,11 +111,21 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 	});
 
 	createEffect(async () => {
-		if (props.isOpen && props.project && (!props.versions || props.versions.length === 0)) {
+		if (
+			props.isOpen &&
+			props.project &&
+			(!props.versions || props.versions.length === 0)
+		) {
 			setIsLoadingVersions(true);
-			console.log("[InstanceSelection] Fetching versions for compatibility...", props.project.id);
+			console.log(
+				"[InstanceSelection] Fetching versions for compatibility...",
+				props.project.id,
+			);
 			try {
-				const vs = await resources.getVersions(props.project.source, props.project.id);
+				const vs = await resources.getVersions(
+					props.project.source,
+					props.project.id,
+				);
 				setFetchedVersions(vs);
 			} catch (e) {
 				console.error("Failed to fetch versions for compatibility check:", e);
@@ -121,7 +150,11 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 		return (
 			<Show
 				when={resolvedUrl()}
-				fallback={<div class={styles["instance-select-icon-placeholder"]}>{displayChar()}</div>}
+				fallback={
+					<div class={styles["instance-select-icon-placeholder"]}>
+						{displayChar()}
+					</div>
+				}
 			>
 				<div
 					class={styles["instance-select-icon"]}
@@ -143,7 +176,11 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 		if (!props.project) return { type: "compatible" as const };
 
 		if (props.version) {
-			return getCompatibilityForInstance(props.project, props.version, instance);
+			return getCompatibilityForInstance(
+				props.project,
+				props.version,
+				instance,
+			);
 		}
 
 		const instLoader = instance.modloader?.toLowerCase() || "";
@@ -194,7 +231,9 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 
 		// 3. Version-based check (the "truth")
 		const versionsToUse =
-			props.versions && props.versions.length > 0 ? props.versions : fetchedVersions();
+			props.versions && props.versions.length > 0
+				? props.versions
+				: fetchedVersions();
 		if (versionsToUse.length > 0) {
 			const best = findBestVersion(
 				versionsToUse,
@@ -234,7 +273,10 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 	};
 
 	return (
-		<Dialog open={props.isOpen} onOpenChange={(open) => !open && props.onClose()}>
+		<Dialog
+			open={props.isOpen}
+			onOpenChange={(open) => !open && props.onClose()}
+		>
 			<DialogContent class={styles["instance-selection-dialog"]}>
 				<DialogHeader>
 					<h2 class={styles["dialog-title"]}>Select Instance</h2>
@@ -247,7 +289,9 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 					<For each={sortedInstances()}>
 						{(instance) => {
 							const comp = createMemo(() => getCompatibility(instance));
-							const isDisabled = createMemo(() => comp().type === "incompatible");
+							const isDisabled = createMemo(
+								() => comp().type === "incompatible",
+							);
 
 							const installedResource = createMemo(() => {
 								if (!props.project) return null;
@@ -267,7 +311,9 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 								});
 							});
 
-							const isAlreadyInstalled = createMemo(() => !!installedResource());
+							const isAlreadyInstalled = createMemo(
+								() => !!installedResource(),
+							);
 
 							const isUpdateAvailable = createMemo(() => {
 								const ir = installedResource();
@@ -276,13 +322,20 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 								// If we have a specific version we're trying to install
 								if (props.version) {
 									if (ir.versionId === props.version.id) return false;
-									if (ir.hash && props.version.hash && ir.hash === props.version.hash) return false;
+									if (
+										ir.hash &&
+										props.version.hash &&
+										ir.hash === props.version.hash
+									)
+										return false;
 									return true;
 								}
 
 								// If no specific version, check if the best version for this instance is different
 								const versionsToUse =
-									props.versions && props.versions.length > 0 ? props.versions : fetchedVersions();
+									props.versions && props.versions.length > 0
+										? props.versions
+										: fetchedVersions();
 								if (versionsToUse.length > 0) {
 									const best = findBestVersion(
 										versionsToUse,
@@ -293,7 +346,8 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 									);
 									if (best) {
 										if (ir.versionId === best.id) return false;
-										if (ir.hash && best.hash && ir.hash === best.hash) return false;
+										if (ir.hash && best.hash && ir.hash === best.hash)
+											return false;
 										return true;
 									}
 								}
@@ -312,7 +366,8 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 									class={styles["instance-select-item"]}
 									classList={{
 										[styles.disabled]: !canSelect(),
-										[styles.installed]: isAlreadyInstalled() && !isUpdateAvailable(),
+										[styles.installed]:
+											isAlreadyInstalled() && !isUpdateAvailable(),
 										[styles.update]: isUpdateAvailable(),
 									}}
 									onClick={() => canSelect() && props.onSelect(instance)}
@@ -329,23 +384,34 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 									<div class={styles["instance-item-left"]}>
 										<InstanceIcon instance={instance} />
 										<div class={styles["instance-item-info"]}>
-											<span class={styles["instance-item-name"]}>{instance.name}</span>
+											<span class={styles["instance-item-name"]}>
+												{instance.name}
+											</span>
 											<span class={styles["instance-item-meta"]}>
-												{instance.minecraftVersion} • {instance.modloader || "Vanilla"}
+												{instance.minecraftVersion} •{" "}
+												{instance.modloader || "Vanilla"}
 											</span>
 											<Show when={isDisabled()}>
-												<span class={styles["incompatible-reason"]}>{comp().reason}</span>
+												<span class={styles["incompatible-reason"]}>
+													{comp().reason}
+												</span>
 											</Show>
 											<Show when={isAlreadyInstalled() && !isUpdateAvailable()}>
-												<span class={styles["installed-status"]}>Already installed</span>
+												<span class={styles["installed-status"]}>
+													Already installed
+												</span>
 											</Show>
 											<Show when={isUpdateAvailable()}>
-												<span class={styles["update-status"]}>Update Available</span>
+												<span class={styles["update-status"]}>
+													Update Available
+												</span>
 											</Show>
 										</div>
 									</div>
 									<Show when={isDisabled()}>
-										<span class={styles["incompatible-badge"]}>Incompatible</span>
+										<span class={styles["incompatible-badge"]}>
+											Incompatible
+										</span>
 									</Show>
 									<Show when={isAlreadyInstalled() && !isUpdateAvailable()}>
 										<span class={styles["installed-badge"]}>Installed</span>
@@ -360,7 +426,11 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (props)
 				</div>
 
 				<div class={styles["dialog-footer"]}>
-					<Button variant="outline" onClick={props.onCreateNew} style={{ width: "100%" }}>
+					<Button
+						variant="outline"
+						onClick={props.onCreateNew}
+						style={{ width: "100%" }}
+					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"
 							width="16"

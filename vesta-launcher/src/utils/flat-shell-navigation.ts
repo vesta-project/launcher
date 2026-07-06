@@ -64,7 +64,8 @@ export function routeParamsMatch(
 	);
 
 	for (const key of keys) {
-		if (normalizeParamValue(a[key]) !== normalizeParamValue(b[key])) return false;
+		if (normalizeParamValue(a[key]) !== normalizeParamValue(b[key]))
+			return false;
 	}
 
 	return true;
@@ -87,12 +88,16 @@ export function isSameInstanceRoute(
 	const currentIdentity = instanceRouteIdentity(currentParams);
 	const targetIdentity = instanceRouteIdentity(targetParams);
 	if (!currentIdentity || !targetIdentity) {
-		return routeParamsMatch(currentParams, targetParams, { ignoreKeys: ["activeTab"] });
+		return routeParamsMatch(currentParams, targetParams, {
+			ignoreKeys: ["activeTab"],
+		});
 	}
 	return currentIdentity === targetIdentity;
 }
 
-function resourceDetailsRouteIdentity(params: Record<string, unknown>): string | null {
+function resourceDetailsRouteIdentity(
+	params: Record<string, unknown>,
+): string | null {
 	if (params.projectId == null || params.platform == null) return null;
 	return `${normalizeParamValue(params.platform)}:${normalizeParamValue(params.projectId)}`;
 }
@@ -129,9 +134,13 @@ export function canResumeRouteFromLibrary(
 			if (targetParams.activeTab != null) {
 				return routeParamsMatch(currentParams, targetParams);
 			}
-			return routeParamsMatch(currentParams, targetParams, { ignoreKeys: ["activeTab"] });
+			return routeParamsMatch(currentParams, targetParams, {
+				ignoreKeys: ["activeTab"],
+			});
 		case "/resources":
-			return routeParamsMatch(currentParams, targetParams, { ignoreKeys: ["activeTab"] });
+			return routeParamsMatch(currentParams, targetParams, {
+				ignoreKeys: ["activeTab"],
+			});
 		default:
 			return routeParamsMatch(currentParams, targetParams);
 	}
@@ -146,7 +155,9 @@ export function futureEntryMatchesTarget(
 	return canResumeRouteFromLibrary(path, entry.params, targetParams);
 }
 
-export async function handleNavigationBack(router: FlatNavigationRouter): Promise<void> {
+export async function handleNavigationBack(
+	router: FlatNavigationRouter,
+): Promise<void> {
 	if (!router.canGoBack()) return;
 
 	const canExit = router.getCanExit();

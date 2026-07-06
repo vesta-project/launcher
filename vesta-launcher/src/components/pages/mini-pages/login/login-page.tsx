@@ -1,5 +1,6 @@
 import { router } from "@components/page-viewer/page-viewer";
 import LauncherButton from "@ui/button/button";
+import { cancelLogin, listenToAuthEvents, startLogin } from "@utils/auth";
 import { openExternal } from "@utils/external-link";
 import { createSignal, onCleanup, onMount, Show } from "solid-js";
 import styles from "./login-page.module.css";
@@ -18,7 +19,6 @@ function LoginPage(_props: LoginPageProps) {
 	let unlistenAuth: (() => void) | null = null;
 
 	onMount(async () => {
-		const { listenToAuthEvents } = await import("@utils/auth");
 		unlistenAuth = await listenToAuthEvents((event) => {
 			if (event.stage === "AuthCode") {
 				setAuthCode(event.code);
@@ -45,7 +45,6 @@ function LoginPage(_props: LoginPageProps) {
 	const handleLogin = async () => {
 		try {
 			setErrorMessage("");
-			const { startLogin } = await import("@utils/auth");
 			await startLogin();
 		} catch (error) {
 			setErrorMessage(`Failed to start login: ${error}`);
@@ -54,7 +53,6 @@ function LoginPage(_props: LoginPageProps) {
 
 	const handleCancel = async () => {
 		try {
-			const { cancelLogin } = await import("@utils/auth");
 			await cancelLogin();
 			setIsAuthenticating(false);
 		} catch (error) {
@@ -92,7 +90,10 @@ function LoginPage(_props: LoginPageProps) {
 					<Show when={errorMessage()}>
 						<p class={styles["login-page__error"]}>{errorMessage()}</p>
 					</Show>
-					<LauncherButton onClick={handleLogin} class={styles["login-page__button"]}>
+					<LauncherButton
+						onClick={handleLogin}
+						class={styles["login-page__button"]}
+					>
 						Sign in with Microsoft
 					</LauncherButton>
 				</Show>
@@ -104,12 +105,18 @@ function LoginPage(_props: LoginPageProps) {
 						</p>
 						<div class={styles["login-page__code-container"]}>
 							<code class={styles["login-page__code"]}>{authCode()}</code>
-							<LauncherButton onClick={copyCode} class={styles["login-page__copy-button"]}>
+							<LauncherButton
+								onClick={copyCode}
+								class={styles["login-page__copy-button"]}
+							>
 								{copied() ? "Copied!" : "Copy"}
 							</LauncherButton>
 						</div>
 						<div class={styles["login-page__button-group"]}>
-							<LauncherButton onClick={openUrl} class={styles["login-page__button"]}>
+							<LauncherButton
+								onClick={openUrl}
+								class={styles["login-page__button"]}
+							>
 								Open Sign-in Page
 							</LauncherButton>
 							<LauncherButton

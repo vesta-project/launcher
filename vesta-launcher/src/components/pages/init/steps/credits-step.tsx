@@ -56,12 +56,16 @@ function CreditsStep(props: CreditsStepProps) {
 				Minecraft modding exists because of an incredible community.
 			</p>
 
-			<p class={`${styles["credits-subtext"]} ${styles["fade-up--enter-delay-1"]}`}>
-				Vesta stands on the work of these teams and the thousands of mod developers
-				who make it all possible.
+			<p
+				class={`${styles["credits-subtext"]} ${styles["fade-up--enter-delay-1"]}`}
+			>
+				Vesta stands on the work of these teams and the thousands of mod
+				developers who make it all possible.
 			</p>
 
-			<div class={`${styles["credits-logos"]} ${styles["fade-up--enter-delay-2"]}`}>
+			<div
+				class={`${styles["credits-logos"]} ${styles["fade-up--enter-delay-2"]}`}
+			>
 				{PLATFORMS.map((platform) => (
 					<div
 						class={styles["credits-logo-item"]}

@@ -89,10 +89,7 @@ pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Res
 
         if ArtifactCache::restore_blob_to_path(&candidate.blob_path, destination)? {
             let mut artifacts_guard = artifacts.lock().await;
-            artifacts_guard.push(InstallArtifactRef::new(
-                label.to_string(),
-                candidate.sha256,
-            ));
+            artifacts_guard.push(InstallArtifactRef::new(label.to_string(), candidate.sha256));
             return Ok(true);
         }
     }
@@ -105,7 +102,7 @@ pub async fn install_instance(
     spec: InstallSpec,
     reporter: std::sync::Arc<dyn ProgressReporter>,
 ) -> Result<()> {
-    if spec.dry_run {
+    if spec.dry_run || spec.remediation_policy == types::RemediationPolicy::VerifyOnly {
         return install_instance_inner(spec, reporter).await;
     }
 
@@ -228,11 +225,7 @@ fn collect_missing_asset_downloads(
     Ok(assets_to_download)
 }
 
-fn complete_install_progress(
-    spec: &InstallSpec,
-    reporter: &dyn ProgressReporter,
-    message: &str,
-) {
+fn complete_install_progress(spec: &InstallSpec, reporter: &dyn ProgressReporter, message: &str) {
     if spec.finalize_reporter {
         reporter.set_percent(100);
         reporter.done(true, Some(message));
@@ -253,7 +246,9 @@ async fn install_instance_inner(
         spec.dry_run
     );
 
-    if !spec.dry_run {
+    let mutates_disk =
+        !spec.dry_run && spec.remediation_policy != types::RemediationPolicy::VerifyOnly;
+    if mutates_disk {
         std::fs::create_dir_all(spec.data_dir())?;
         std::fs::create_dir_all(spec.libraries_dir())?;
         std::fs::create_dir_all(spec.assets_dir())?;
@@ -661,10 +656,7 @@ mod tests {
         let assets_dir = tmp.path().join("assets");
         let existing_hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
         let missing_hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-        let existing_path = assets_dir
-            .join("objects")
-            .join("aa")
-            .join(existing_hash);
+        let existing_path = assets_dir.join("objects").join("aa").join(existing_hash);
         std::fs::create_dir_all(existing_path.parent().unwrap()).unwrap();
         std::fs::write(&existing_path, b"already here").unwrap();
 
@@ -673,13 +665,15 @@ mod tests {
         objects.insert("missing".to_string(), asset_object(missing_hash));
 
         let reporter = RecordingReporter::default();
-        let downloads =
-            collect_missing_asset_downloads(&objects, &assets_dir, &reporter).unwrap();
+        let downloads = collect_missing_asset_downloads(&objects, &assets_dir, &reporter).unwrap();
 
         assert_eq!(downloads.len(), 1);
         assert_eq!(downloads[0].name, "missing");
         assert_eq!(downloads[0].sha1.as_deref(), Some(missing_hash));
-        assert_eq!(downloads[0].label, format!("assets/objects/bb/{missing_hash}"));
+        assert_eq!(
+            downloads[0].label,
+            format!("assets/objects/bb/{missing_hash}")
+        );
         assert_eq!(
             downloads[0].urls,
             vec![format!(

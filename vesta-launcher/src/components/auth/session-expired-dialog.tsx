@@ -5,8 +5,19 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { ResourceAvatar } from "@ui/avatar";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent } from "@ui/dialog/dialog";
-import { type Account, getAccounts, removeAccount, setActiveAccount } from "@utils/auth";
-import { Component, createResource, createSignal, For, Show } from "solid-js";
+import {
+	type Account,
+	getAccounts,
+	removeAccount,
+	setActiveAccount,
+} from "@utils/auth";
+import {
+	type Component,
+	createResource,
+	createSignal,
+	For,
+	Show,
+} from "solid-js";
 import styles from "./session-expired-dialog.module.css";
 
 const SessionExpiredDialog: Component = () => {
@@ -14,7 +25,8 @@ const SessionExpiredDialog: Component = () => {
 	const navigate = useNavigate();
 	const [view, setView] = createSignal<"expired" | "switch">("expired");
 
-	const [accounts, { refetch: refetchAccounts }] = createResource<Account[]>(getAccounts);
+	const [accounts, { refetch: refetchAccounts }] =
+		createResource<Account[]>(getAccounts);
 
 	const isNonClosable = () => {
 		const acc = expiredAccount();
@@ -131,8 +143,9 @@ const SessionExpiredDialog: Component = () => {
 					<div class={styles.content}>
 						<h2>Session Expired</h2>
 						<p>
-							Your security token for <span class={styles.username}>{expiredAccount()?.username}</span> has
-							expired or been revoked by Microsoft.
+							Your security token for{" "}
+							<span class={styles.username}>{expiredAccount()?.username}</span>{" "}
+							has expired or been revoked by Microsoft.
 						</p>
 					</div>
 
@@ -181,11 +194,19 @@ const SessionExpiredDialog: Component = () => {
 									onClick={() => handleSwitchAccount(account)}
 									disabled={account.uuid === expiredAccount()?.uuid}
 								>
-									<ResourceAvatar playerUuid={account.uuid} name={account.username} size={32} />
+									<ResourceAvatar
+										playerUuid={account.uuid}
+										name={account.username}
+										size={32}
+									/>
 									<div class={styles["account-info"]}>
-										<span class={styles["account-name"]}>{account.username}</span>
+										<span class={styles["account-name"]}>
+											{account.username}
+										</span>
 										<Show when={account.is_expired}>
-											<span class={styles["account-status-expired"]}>Expired</span>
+											<span class={styles["account-status-expired"]}>
+												Expired
+											</span>
 										</Show>
 									</div>
 									<Show when={account.uuid === expiredAccount()?.uuid}>

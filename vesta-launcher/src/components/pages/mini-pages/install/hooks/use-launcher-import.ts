@@ -18,16 +18,24 @@ interface UseLauncherImportParams {
 }
 
 export function useLauncherImport(params: UseLauncherImportParams) {
-	const [selectedLauncher, setSelectedLauncher] = createSignal<LauncherKind>("curseforgeFlame");
+	const [selectedLauncher, setSelectedLauncher] =
+		createSignal<LauncherKind>("curseforgeFlame");
 	const [launcherBasePath, setLauncherBasePath] = createSignal("");
-	const [launcherInstances, setLauncherInstances] = createSignal<ExternalInstanceCandidate[]>([]);
+	const [launcherInstances, setLauncherInstances] = createSignal<
+		ExternalInstanceCandidate[]
+	>([]);
 	const [selectedInstancePath, setSelectedInstancePath] = createSignal("");
-	const [isLoadingLauncherInstances, setIsLoadingLauncherInstances] = createSignal(false);
+	const [isLoadingLauncherInstances, setIsLoadingLauncherInstances] =
+		createSignal(false);
 	const [isImportingLauncher, setIsImportingLauncher] = createSignal(false);
-	const [hasScannedLauncherInstances, setHasScannedLauncherInstances] = createSignal(false);
-	const [autoLoadedLauncher, setAutoLoadedLauncher] = createSignal<string | null>(null);
+	const [hasScannedLauncherInstances, setHasScannedLauncherInstances] =
+		createSignal(false);
+	const [autoLoadedLauncher, setAutoLoadedLauncher] = createSignal<
+		string | null
+	>(null);
 
-	const activeLauncherKind = () => params.selectedLauncherFromQuery() ?? selectedLauncher();
+	const activeLauncherKind = () =>
+		params.selectedLauncherFromQuery() ?? selectedLauncher();
 
 	const loadLauncherInstances = async (
 		launcher: LauncherKind = activeLauncherKind(),
@@ -37,7 +45,10 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 		setIsLoadingLauncherInstances(true);
 		try {
 			const basePath = (basePathOverride ?? launcherBasePath()).trim();
-			const instances = await listExternalInstances(launcher, basePath || undefined);
+			const instances = await listExternalInstances(
+				launcher,
+				basePath || undefined,
+			);
 			setLauncherInstances(instances);
 			setSelectedInstancePath(instances[0]?.instancePath ?? "");
 		} catch (error) {
@@ -63,11 +74,16 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 		let detectedPaths: string[] = [];
 		try {
 			const detected = await detectExternalLaunchers();
-			const matched = detected.find((entry: DetectedLauncher) => entry.kind === launcher);
+			const matched = detected.find(
+				(entry: DetectedLauncher) => entry.kind === launcher,
+			);
 			detectedPaths = matched?.detectedPaths?.filter(Boolean) ?? [];
 			preferredPath = detectedPaths[0] ?? "";
 		} catch (error) {
-			console.warn("[InstallPage] Failed to load launcher detection paths", error);
+			console.warn(
+				"[InstallPage] Failed to load launcher detection paths",
+				error,
+			);
 		}
 
 		const validRoots: string[] = [];
@@ -79,7 +95,9 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 				console.debug("[InstallPage] Launcher root probe failed", path, error);
 			}
 		}
-		const uniqueRoots = Array.from(new Set(validRoots.length > 0 ? validRoots : detectedPaths));
+		const uniqueRoots = Array.from(
+			new Set(validRoots.length > 0 ? validRoots : detectedPaths),
+		);
 		if (uniqueRoots.length > 0) preferredPath = uniqueRoots[0];
 
 		if (uniqueRoots.length > 1) {
@@ -114,12 +132,15 @@ export function useLauncherImport(params: UseLauncherImportParams) {
 				launcher: activeLauncherKind(),
 				instancePath: selectedInstancePath(),
 				selectedInstance:
-					launcherInstances().find((item) => item.instancePath === selectedInstancePath()) ?? null,
+					launcherInstances().find(
+						(item) => item.instancePath === selectedInstancePath(),
+					) ?? null,
 				basePathOverride: launcherBasePath().trim() || null,
 			});
 			showToast({
 				title: "Import Queued",
-				description: "The import task is queued and will start when a worker is available.",
+				description:
+					"The import task is queued and will start when a worker is available.",
 				severity: "success",
 			});
 			// Give the user a moment to see confirmation before the view closes.

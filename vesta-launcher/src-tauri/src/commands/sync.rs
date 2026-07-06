@@ -75,7 +75,7 @@ pub async fn check_modpack_update(
     // Fetch the latest versions from the platform
     let resource_manager = app_handle.state::<ResourceManager>();
 
-    let mut versions = resource_manager
+    let versions = resource_manager
         .get_versions(platform, &project_id, false, None, None)
         .await
         .map_err(|e| format!("Failed to fetch versions: {}", e))?;

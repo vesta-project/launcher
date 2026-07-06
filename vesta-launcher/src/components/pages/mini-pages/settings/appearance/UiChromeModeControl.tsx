@@ -9,7 +9,10 @@ interface UiChromeModeControlProps {
 
 export function UiChromeModeControl(props: UiChromeModeControlProps) {
 	return (
-		<SettingsCard header="Launcher Layout" subHeader="Choose how launcher pages are displayed.">
+		<SettingsCard
+			header="Launcher Layout"
+			subHeader="Choose how launcher pages are displayed."
+		>
 			<SettingsField
 				label="Page style"
 				description="Windowed keeps the framed page viewer. Flat uses sidebar tabs."

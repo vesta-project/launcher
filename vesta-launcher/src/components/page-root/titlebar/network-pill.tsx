@@ -30,7 +30,11 @@ function NetworkPill() {
 					[styles["network-pill"]]: true,
 					[styles["network-pill--refreshing"]]: isRefreshing(),
 				}}
-				title={isRefreshing() ? "Checking connection..." : `${label()} - Click to retry`}
+				title={
+					isRefreshing()
+						? "Checking connection..."
+						: `${label()} - Click to retry`
+				}
 				onClick={handleRetry}
 			>
 				<div class={styles["network-pill__icon"]}>

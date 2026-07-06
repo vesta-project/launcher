@@ -3,7 +3,7 @@
  */
 
 import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
 export const ACCOUNT_TYPE_GUEST = "Guest";
 export const GUEST_UUID = "00000000000000000000000000000000";

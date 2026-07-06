@@ -1,9 +1,9 @@
 import {
-	ONBOARDING_STEP,
-	type OnboardingStep,
 	isGuestOrDemoAccountType,
 	isSkippableAuthenticatedAccount,
 	normalizeOnboardingStep,
+	ONBOARDING_STEP,
+	type OnboardingStep,
 	shouldRecoverLegacyGuestCompletion,
 } from "@components/pages/init/init-flow";
 import { initTheme } from "@components/theming";
@@ -81,7 +81,8 @@ async function resolveInitStateFromConfigAndAccount(
 	forceLoginRequested: boolean,
 ): Promise<{ target: StartupTarget; initState: InitBootstrapState }> {
 	const hasValidAccount = isSkippableAuthenticatedAccount(account);
-	const forceGuestLoginOnly = forceLoginRequested && isGuestOrDemoAccountType(account?.account_type);
+	const forceGuestLoginOnly =
+		forceLoginRequested && isGuestOrDemoAccountType(account?.account_type);
 	let setupCompleted = Boolean(config.setup_completed);
 	let setupStep = normalizeOnboardingStep(config.setup_step);
 
@@ -150,7 +151,7 @@ async function resolveInitStateFromConfigAndAccount(
 
 export async function bootstrapStartup(): Promise<StartupBootstrapResult> {
 	if (bootstrapPromise) {
-		return bootstrapPromise;
+		return await bootstrapPromise;
 	}
 
 	bootstrapPromise = (async () => {
@@ -170,12 +171,19 @@ export async function bootstrapStartup(): Promise<StartupBootstrapResult> {
 
 		let account: Record<string, any> | null = null;
 		try {
-			account = (await invoke("get_active_account")) as Record<string, any> | null;
+			account = (await invoke("get_active_account")) as Record<
+				string,
+				any
+			> | null;
 		} catch (error) {
 			console.error("Failed to load active account during startup:", error);
 		}
 
-		const resolved = await resolveInitStateFromConfigAndAccount(config, account, forceLoginRequested);
+		const resolved = await resolveInitStateFromConfigAndAccount(
+			config,
+			account,
+			forceLoginRequested,
+		);
 		const rootStartupPath = isRootPath(window.location.pathname);
 
 		if (resolved.target === "home") {
@@ -196,5 +204,5 @@ export async function bootstrapStartup(): Promise<StartupBootstrapResult> {
 		};
 	})();
 
-	return bootstrapPromise;
+	return await bootstrapPromise;
 }

@@ -1,5 +1,8 @@
 import { MiniRouter } from "@components/page-viewer/mini-router";
-import { miniRouterInvalidPage, miniRouterPaths } from "@components/page-viewer/mini-router-config";
+import {
+	miniRouterInvalidPage,
+	miniRouterPaths,
+} from "@components/page-viewer/mini-router-config";
 import { router, setRouter } from "@components/page-viewer/page-viewer";
 import { UnifiedPageViewer } from "@components/page-viewer/unified-page-viewer";
 import { useSearchParams } from "@solidjs/router";
@@ -14,7 +17,9 @@ function StandalonePageViewer() {
 	const [searchParams] = useSearchParams();
 	const osType = useOs();
 	const isWindowFullscreen = useWindowFullscreen();
-	const isMacosFullscreen = createMemo(() => osType() === "macos" && isWindowFullscreen());
+	const isMacosFullscreen = createMemo(
+		() => osType() === "macos" && isWindowFullscreen(),
+	);
 
 	const tryParse = (val: string) => {
 		if (typeof val !== "string") return val;
@@ -42,8 +47,8 @@ function StandalonePageViewer() {
 		console.log("[Standalone] Initial currentPath from URL:", initialPath);
 
 		// Separate route params (like slug) from component props
-		let initialParams: Record<string, unknown> = {};
-		let initialProps: Record<string, unknown> = {};
+		const initialParams: Record<string, unknown> = {};
+		const initialProps: Record<string, unknown> = {};
 		let historyPast: any[] = [];
 		let historyFuture: any[] = [];
 
@@ -108,9 +113,12 @@ function StandalonePageViewer() {
 			}
 
 			for (const [key, value] of Object.entries(searchParams)) {
-				if (key === "path" || key === "history" || key === "handoffId") continue;
+				if (key === "path" || key === "history" || key === "handoffId")
+					continue;
 				const parsed = tryParse(String(value));
-				if (["slug", "id", "projectId", "platform", "activeTab"].includes(key)) {
+				if (
+					["slug", "id", "projectId", "platform", "activeTab"].includes(key)
+				) {
 					initialParams[key] = parsed;
 				} else {
 					initialProps[key] = parsed;
@@ -122,7 +130,8 @@ function StandalonePageViewer() {
 			paths: miniRouterPaths,
 			invalid: miniRouterInvalidPage,
 			currentPath: initialPath,
-			initialProps: Object.keys(initialProps).length > 0 ? initialProps : undefined,
+			initialProps:
+				Object.keys(initialProps).length > 0 ? initialProps : undefined,
 		});
 
 		if (Object.keys(initialParams).length > 0) {
@@ -134,10 +143,20 @@ function StandalonePageViewer() {
 				entries.map((entry) => ({
 					path: entry.path,
 					params: entry.params
-						? Object.fromEntries(Object.entries(entry.params).map(([k, v]) => [k, tryParse(v as string)]))
+						? Object.fromEntries(
+								Object.entries(entry.params).map(([k, v]) => [
+									k,
+									tryParse(v as string),
+								]),
+							)
 						: {},
 					props: entry.props
-						? Object.fromEntries(Object.entries(entry.props).map(([k, v]) => [k, tryParse(v as string)]))
+						? Object.fromEntries(
+								Object.entries(entry.props).map(([k, v]) => [
+									k,
+									tryParse(v as string),
+								]),
+							)
 						: undefined,
 				}));
 
@@ -148,19 +167,21 @@ function StandalonePageViewer() {
 		setRouter(mini_router);
 
 		// Handle native window close button
-		const unlistenCloseRequested = getCurrentWindow().onCloseRequested(async (event) => {
-			if (mini_router.skipNextExitCheck) return;
+		const unlistenCloseRequested = getCurrentWindow().onCloseRequested(
+			async (event) => {
+				if (mini_router.skipNextExitCheck) return;
 
-			const canExit = mini_router.getCanExit();
-			if (canExit) {
-				event.preventDefault();
-				const ok = await canExit();
-				if (ok) {
-					mini_router.skipNextExitCheck = true;
-					getCurrentWindow().close();
+				const canExit = mini_router.getCanExit();
+				if (canExit) {
+					event.preventDefault();
+					const ok = await canExit();
+					if (ok) {
+						mini_router.skipNextExitCheck = true;
+						getCurrentWindow().close();
+					}
 				}
-			}
-		});
+			},
+		);
 
 		onCleanup(() => {
 			unlistenCloseRequested.then((unlisten) => unlisten());
@@ -182,9 +203,17 @@ function StandalonePageViewer() {
 							<WindowControls
 								class={
 									styles["standalone-page-viewer__controls"] +
-									styles[`standalone-page-viewer__controls--${osType() ?? "windows"}`]
+									styles[
+										`standalone-page-viewer__controls--${osType() ?? "windows"}`
+									]
 								}
-								platform={osType() === "linux" ? "gnome" : osType() === "macos" ? "macos" : "windows"}
+								platform={
+									osType() === "linux"
+										? "gnome"
+										: osType() === "macos"
+											? "macos"
+											: "windows"
+								}
 							/>
 						</Show>
 					}

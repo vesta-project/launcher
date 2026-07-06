@@ -2,7 +2,7 @@ use crate::models::resource::SourcePlatform;
 use crate::resources::ResourceManager;
 use crate::tasks::installers::TauriProgressReporter;
 use crate::tasks::manager::{BoxFuture, Task, TaskContext};
-use piston_lib::game::installer::types::{CancelToken, ProgressReporter};
+use piston_lib::game::installer::types::ProgressReporter;
 use piston_lib::game::modpack::exporter::{export_modpack, ExportEntry, ExportSpec};
 use piston_lib::game::modpack::types::ModpackFormat;
 use std::path::PathBuf;

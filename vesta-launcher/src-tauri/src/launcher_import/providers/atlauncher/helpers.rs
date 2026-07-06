@@ -38,7 +38,11 @@ pub fn resolve_instances_root(launcher_root: &Path) -> PathBuf {
 }
 
 pub fn extract_atlauncher_resource_hints(instance_root: &Path) -> Vec<ATResourceHint> {
-    let cfg_path = instance_root.join("instance.json");
+    let cfg_path = if instance_root.is_file() {
+        instance_root.to_path_buf()
+    } else {
+        instance_root.join("instance.json")
+    };
     let Ok(raw) = std::fs::read_to_string(cfg_path) else {
         log::debug!(
             "[ATLauncher] extract_atlauncher_resource_hints: instance.json not found at {}",

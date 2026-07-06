@@ -9,7 +9,7 @@ import {
 } from "@ui/context-menu/context-menu";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
-import { JSX, Show } from "solid-js";
+import { type JSX, Show } from "solid-js";
 import styles from "../settings-page.module.css";
 
 export interface JavaOption {
@@ -74,7 +74,10 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 								</LauncherButton>
 							}
 						>
-							<div class={styles["option-path"]} style={{ "margin-top": "auto" }}>
+							<div
+								class={styles["option-path"]}
+								style={{ "margin-top": "auto" }}
+							>
 								{props.option.path}
 							</div>
 						</Show>
@@ -103,9 +106,14 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 
 			case "browse":
 				return (
-					<div class={`${styles["java-option-card"]} ${styles.browse}`} onClick={props.option.onClick}>
+					<div
+						class={`${styles["java-option-card"]} ${styles.browse}`}
+						onClick={props.option.onClick}
+					>
 						<div class={styles["option-title"]}>
-							<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
+							<div
+								style={{ display: "flex", "align-items": "center", gap: "8px" }}
+							>
 								<PlusIcon
 									style={{
 										width: "16px",
@@ -116,7 +124,10 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 								<span>Browse...</span>
 							</div>
 						</div>
-						<div class={styles["option-subtitle"]} style={{ "margin-top": "auto" }}>
+						<div
+							class={styles["option-subtitle"]}
+							style={{ "margin-top": "auto" }}
+						>
 							Select manually
 						</div>
 					</div>
@@ -143,7 +154,9 @@ export function JavaOptionCard(props: JavaOptionCardProps) {
 			</ContextMenuTrigger>
 			<Show when={props.option.path}>
 				<ContextMenuContent>
-					<ContextMenuItem onClick={handleCopyPath}>Copy Full Path</ContextMenuItem>
+					<ContextMenuItem onClick={handleCopyPath}>
+						Copy Full Path
+					</ContextMenuItem>
 				</ContextMenuContent>
 			</Show>
 		</ContextMenu>

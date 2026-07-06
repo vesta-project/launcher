@@ -1,8 +1,8 @@
-import { MiniRouter } from "@components/page-viewer/mini-router";
-import { router } from "@components/page-viewer/page-viewer";
 import { PageSidebar } from "@components/page-sidebar/page-sidebar";
-import { TabsContent } from "@ui/tabs/tabs";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
+import { router } from "@components/page-viewer/page-viewer";
 import { cleanupSettings, initSettings, loading } from "@stores/settings";
+import { TabsContent } from "@ui/tabs/tabs";
 import {
 	createEffect,
 	createMemo,
@@ -64,7 +64,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 		<div class={styles["settings-page"]}>
 			<Show
 				when={!loading()}
-				fallback={<div class={styles["settings-loading"]}>Loading settings...</div>}
+				fallback={
+					<div class={styles["settings-loading"]}>Loading settings...</div>
+				}
 			>
 				<PageSidebar
 					tabs={settingsTabs}
@@ -76,7 +78,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 				>
 					<TabsContent class={styles["tabs-content"]} value="general">
 						<Suspense
-							fallback={<div class={styles["settings-tab-loading"]}>Loading General Settings...</div>}
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading General Settings...
+								</div>
+							}
 						>
 							<ErrorBoundary
 								fallback={(error) => (
@@ -97,7 +103,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 					<TabsContent class={styles["tabs-content"]} value="appearance">
 						<Suspense
-							fallback={<div class={styles["settings-tab-loading"]}>Loading Appearance...</div>}
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading Appearance...
+								</div>
+							}
 						>
 							<AppearanceSettingsTab />
 						</Suspense>
@@ -105,7 +115,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 					<TabsContent class={styles["tabs-content"]} value="java">
 						<Suspense
-							fallback={<div class={styles["settings-tab-loading"]}>Loading Java Settings...</div>}
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading Java Settings...
+								</div>
+							}
 						>
 							<JavaSettingsTab />
 						</Suspense>
@@ -121,7 +135,11 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 					<TabsContent class={styles["tabs-content"]} value="developer">
 						<Suspense
-							fallback={<div class={styles["settings-tab-loading"]}>Loading Developer Settings...</div>}
+							fallback={
+								<div class={styles["settings-tab-loading"]}>
+									Loading Developer Settings...
+								</div>
+							}
 						>
 							<DeveloperSettingsTab />
 						</Suspense>
@@ -129,7 +147,9 @@ function SettingsPage(props: { close?: () => void; router?: MiniRouter }) {
 
 					<TabsContent class={styles["tabs-content"]} value="help">
 						<Suspense
-							fallback={<div class={styles["settings-tab-loading"]}>Loading...</div>}
+							fallback={
+								<div class={styles["settings-tab-loading"]}>Loading...</div>
+							}
 						>
 							<HelpSettingsTab close={props.close} />
 						</Suspense>

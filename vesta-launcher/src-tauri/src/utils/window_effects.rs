@@ -10,6 +10,7 @@ pub struct WindowEffectCapabilities {
 }
 
 #[derive(Debug, Clone, Copy)]
+#[cfg(target_os = "windows")]
 struct WindowsVersionInfo {
     major: u32,
     build: u32,

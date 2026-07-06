@@ -2,7 +2,9 @@ export type UiChromeMode = "windowed" | "flat";
 
 export const DEFAULT_UI_CHROME_MODE: UiChromeMode = "windowed";
 
-export function normalizeUiChromeMode(value: unknown): UiChromeMode | undefined {
+export function normalizeUiChromeMode(
+	value: unknown,
+): UiChromeMode | undefined {
 	if (typeof value !== "string") return undefined;
 
 	switch (value.trim().toLowerCase()) {
@@ -24,7 +26,10 @@ export function resolveUiChromeMode(...values: unknown[]): UiChromeMode {
 	return DEFAULT_UI_CHROME_MODE;
 }
 
-export function setUiChromeModeInThemeData(raw: unknown, mode: UiChromeMode): string {
+export function setUiChromeModeInThemeData(
+	raw: unknown,
+	mode: UiChromeMode,
+): string {
 	let themeData: Record<string, unknown> = {};
 
 	if (typeof raw === "string" && raw.trim().length > 0) {
@@ -34,7 +39,10 @@ export function setUiChromeModeInThemeData(raw: unknown, mode: UiChromeMode): st
 				themeData = parsed as Record<string, unknown>;
 			}
 		} catch (error) {
-			console.error("Failed to preserve theme_data while updating UI chrome mode:", error);
+			console.error(
+				"Failed to preserve theme_data while updating UI chrome mode:",
+				error,
+			);
 		}
 	} else if (raw && typeof raw === "object" && !Array.isArray(raw)) {
 		themeData = raw as Record<string, unknown>;

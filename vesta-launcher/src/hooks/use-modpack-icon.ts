@@ -1,14 +1,19 @@
 import { invoke } from "@tauri-apps/api/core";
-import { createResource } from "solid-js";
 import type { Instance } from "@utils/instances";
+import { createResource } from "solid-js";
 
-type ModpackIconSource = Pick<Instance, "modpackId" | "modpackPlatform" | "modpackIconUrl">;
+type ModpackIconSource = Pick<
+	Instance,
+	"modpackId" | "modpackPlatform" | "modpackIconUrl"
+>;
 
 /**
  * Hydrates the linked modpack project icon from the platform API when DB metadata is missing.
  * Falls back to `modpackIconUrl` from the instance row.
  */
-export function useModpackIcon(source: () => ModpackIconSource | null | undefined) {
+export function useModpackIcon(
+	source: () => ModpackIconSource | null | undefined,
+) {
 	const [hydratedIcon] = createResource(
 		() => {
 			const current = source();

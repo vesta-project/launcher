@@ -1,7 +1,11 @@
+import { invoke } from "@tauri-apps/api/core";
 import type { ThemeConfig } from "../types";
 import { normalizeWindowEffectForCurrentOS } from "./effects";
 import { themeToCSSVars } from "./themeToCSSVars";
-import { startThemeTransition, type ThemeApplyOptions } from "./transitionManager";
+import {
+	startThemeTransition,
+	type ThemeApplyOptions,
+} from "./transitionManager";
 
 export type {
 	ThemeApplyOptions,
@@ -12,7 +16,10 @@ const STARTUP_FALLBACK_ATTR = "data-startup-fallback-active";
 const CUSTOM_CSS_TAG_ID = "theme-custom-css";
 const CUSTOM_CSS_OWNER_ATTR = "data-theme-custom-css-owner";
 
-function clearStartupFallbackIfActive(root: HTMLElement, style: CSSStyleDeclaration): void {
+function clearStartupFallbackIfActive(
+	root: HTMLElement,
+	style: CSSStyleDeclaration,
+): void {
 	if (root.getAttribute(STARTUP_FALLBACK_ATTR) !== "1") {
 		return;
 	}
@@ -36,7 +43,9 @@ function getThemeVarKeysFromStyle(style: CSSStyleDeclaration): string[] {
 
 function applyCustomCss(theme: ThemeConfig): void {
 	const normalizedCss = (theme.customCss || "").trim();
-	const existing = document.getElementById(CUSTOM_CSS_TAG_ID) as HTMLStyleElement | null;
+	const existing = document.getElementById(
+		CUSTOM_CSS_TAG_ID,
+	) as HTMLStyleElement | null;
 
 	if (normalizedCss.length === 0) {
 		existing?.remove();
@@ -96,7 +105,10 @@ function applyBackgroundState(
 	}
 }
 
-export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}): void {
+export function applyTheme(
+	theme: ThemeConfig,
+	options: ThemeApplyOptions = {},
+): void {
 	const root = document.documentElement;
 	const style = root.style;
 
@@ -111,23 +123,40 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	const currentHue = style.getPropertyValue("--color__primary-hue").trim();
 	const currentRotation = style.getPropertyValue("--rotation").trim();
 	const currentSecondaryHue = style.getPropertyValue("--hue-secondary").trim();
-	const currentBackgroundOpacity = style.getPropertyValue("--background-opacity").trim();
+	const currentBackgroundOpacity = style
+		.getPropertyValue("--background-opacity")
+		.trim();
 	const currentOpacity = style.getPropertyValue("--effect-opacity").trim();
 	const currentWindowEffect = root.getAttribute("data-window-effect") || "none";
-	const currentBorderWidth = style.getPropertyValue("--border-width-subtle").trim();
-	const effectToSet = normalizeWindowEffectForCurrentOS(theme.windowEffect || "none");
+	const currentBorderWidth = style
+		.getPropertyValue("--border-width-subtle")
+		.trim();
+	const effectToSet = normalizeWindowEffectForCurrentOS(
+		theme.windowEffect || "none",
+	);
 	const styleMode = theme.style ?? "glass";
-	const nextThemeVarKeys = Object.keys(vars).filter((key) => key.startsWith("--theme-var-"));
-	const previousTrackedThemeVarKeys = (root.getAttribute("data-theme-var-keys") || "")
+	const nextThemeVarKeys = Object.keys(vars).filter((key) =>
+		key.startsWith("--theme-var-"),
+	);
+	const previousTrackedThemeVarKeys = (
+		root.getAttribute("data-theme-var-keys") || ""
+	)
 		.split(",")
 		.map((key) => key.trim())
 		.filter((key) => key.length > 0);
 	const previousThemeVarKeys = Array.from(
-		new Set([...previousTrackedThemeVarKeys, ...getThemeVarKeysFromStyle(style)]),
+		new Set([
+			...previousTrackedThemeVarKeys,
+			...getThemeVarKeysFromStyle(style),
+		]),
 	);
-	const hasRemovedThemeVars = previousThemeVarKeys.some((key) => !nextThemeVarKeys.includes(key));
+	const hasRemovedThemeVars = previousThemeVarKeys.some(
+		(key) => !nextThemeVarKeys.includes(key),
+	);
 
-	const styleTag = document.getElementById("theme-custom-css") as HTMLStyleElement | null;
+	const styleTag = document.getElementById(
+		"theme-custom-css",
+	) as HTMLStyleElement | null;
 	const currentCustomCss = (styleTag?.textContent || "").trim();
 	const nextCustomCss = (theme.customCss || "").trim();
 	const customCssOwner = styleTag?.getAttribute(CUSTOM_CSS_OWNER_ATTR) || "";
@@ -153,8 +182,10 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 		currentThemeId === themeId &&
 		currentHue === theme.primaryHue.toString() &&
 		root.getAttribute("data-style") === styleMode &&
-		root.getAttribute("data-gradient") === (theme.gradientEnabled ? "1" : "0") &&
-		root.getAttribute("data-gradient-type") === (theme.gradientType || "linear") &&
+		root.getAttribute("data-gradient") ===
+			(theme.gradientEnabled ? "1" : "0") &&
+		root.getAttribute("data-gradient-type") ===
+			(theme.gradientType || "linear") &&
 		currentRotation === vars["--rotation"] &&
 		currentSecondaryHue === vars["--hue-secondary"] &&
 		numMatch(currentBackgroundOpacity, vars["--background-opacity"]) &&
@@ -199,9 +230,7 @@ export function applyTheme(theme: ThemeConfig, options: ThemeApplyOptions = {}):
 	if (currentWindowEffect !== effectToSet || isFirstApply) {
 		root.setAttribute("data-window-effect", effectToSet);
 		if ((window as any).__TAURI_INTERNALS__) {
-			import("@tauri-apps/api/core").then(({ invoke }) => {
-				invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
-			});
+			invoke("set_window_effect", { effect: effectToSet }).catch(console.error);
 		}
 	}
 

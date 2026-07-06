@@ -2,17 +2,17 @@ import { router } from "@components/page-viewer/page-viewer";
 import { SettingsCard, SettingsField } from "@components/settings";
 import panelStyles from "@components/settings/settings.module.css";
 import {
+	artifactCacheLimitBytes,
 	autoInstallDependencies,
 	autostartEnabled,
-	artifactCacheLimitBytes,
 	closeToTray,
 	discordPresenceEnabled,
+	handleArtifactCacheLimitChange,
 	handleAutoInstallDepsToggle,
 	handleAutostartToggle,
 	handleCloseToTrayToggle,
 	handleDiscordToggle,
 	handleGpuToggle,
-	handleArtifactCacheLimitChange,
 	handleMaxDownloadThreadsChange,
 	handleProxyApplyToGamesToggle,
 	handleProxyEnabledToggle,
@@ -27,10 +27,11 @@ import {
 	proxyUrl,
 	reducedMotion,
 	showTrayIcon,
-	testProxyConnection,
 	telemetryEnabled,
+	testProxyConnection,
 	useDedicatedGpu,
 } from "@stores/settings";
+import LauncherButton from "@ui/button/button";
 import {
 	NumberField,
 	NumberFieldDecrementTrigger,
@@ -40,7 +41,6 @@ import {
 } from "@ui/number-field/number-field";
 import { Switch, SwitchControl, SwitchThumb } from "@ui/switch/switch";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import LauncherButton from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
 import { createEffect, createMemo, createSignal } from "solid-js";
 import styles from "../settings-page.module.css";
@@ -54,19 +54,28 @@ export function GeneralSettingsTab() {
 	const [proxyTestMessage, setProxyTestMessage] = createSignal("");
 	const [proxyTestDetail, setProxyTestDetail] = createSignal("");
 	const [proxyTestOk, setProxyTestOk] = createSignal<boolean | null>(null);
-	const [lastHandledStorageFocusRequestId, setLastHandledStorageFocusRequestId] =
-		createSignal<number | undefined>();
+	const [
+		lastHandledStorageFocusRequestId,
+		setLastHandledStorageFocusRequestId,
+	] = createSignal<number | undefined>();
 	let storageCardRef: HTMLDivElement | undefined;
 
 	createEffect(() => {
-		setOsReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+		setOsReducedMotion(
+			window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+		);
 	});
 
 	createEffect(() => {
 		const path = router()?.currentPath.get();
 		const props = router()?.currentPathProps?.();
 		const requestId = props?.focusArtifactCacheLimitRequestId;
-		if (path !== "/config" || !props?.focusArtifactCacheLimit || !storageCardRef) return;
+		if (
+			path !== "/config" ||
+			!props?.focusArtifactCacheLimit ||
+			!storageCardRef
+		)
+			return;
 		if (requestId === lastHandledStorageFocusRequestId()) return;
 
 		setLastHandledStorageFocusRequestId(requestId);
@@ -112,7 +121,10 @@ export function GeneralSettingsTab() {
 	};
 
 	const cacheLimitMb = createMemo(() =>
-		Math.max(1, Math.round((artifactCacheLimitBytes() || 1024 * 1024) / (1024 * 1024))),
+		Math.max(
+			1,
+			Math.round((artifactCacheLimitBytes() || 1024 * 1024) / (1024 * 1024)),
+		),
 	);
 
 	return (
@@ -132,16 +144,19 @@ export function GeneralSettingsTab() {
 								"line-height": "1.5",
 							}}
 						>
-							<strong>OS Animation Disabled:</strong> Your operating system has animations disabled
-							in accessibility settings. UI animations won't appear until you enable them in your
-							system preferences.
+							<strong>OS Animation Disabled:</strong> Your operating system has
+							animations disabled in accessibility settings. UI animations won't
+							appear until you enable them in your system preferences.
 						</div>
 					)}
 					<SettingsField
 						label="Reduced Motion"
 						description="Disable UI animations for a faster and cleaner experience."
 						headerRight={
-							<Switch checked={reducedMotion()} onCheckedChange={handleReducedMotionToggle}>
+							<Switch
+								checked={reducedMotion()}
+								onCheckedChange={handleReducedMotionToggle}
+							>
 								<SwitchControl>
 									<SwitchThumb />
 								</SwitchControl>
@@ -150,113 +165,140 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-			<SettingsCard header="Privacy & Integration">
-				<SettingsField
-					label="Error Telemetry"
-					description={
-						<>
-							Send crash and error diagnostics to help improve reliability.{" "}
-							<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
-								Privacy Policy
-							</a>
-						</>
-					}
-					headerRight={
-						<Switch checked={telemetryEnabled()} onCheckedChange={handleTelemetryToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-				<SettingsField
-					label="Discord Rich Presence"
-					description="Show your current game and status on Discord."
-					headerRight={
-						<Switch checked={discordPresenceEnabled()} onCheckedChange={handleDiscordToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-			</SettingsCard>
-
-				<SettingsCard header="Performance" subHeader="Optimization settings for game performance.">
-				<SettingsField
-					label="Use Dedicated GPU"
-					description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
-					headerRight={
-						<Switch checked={useDedicatedGpu()} onCheckedChange={handleGpuToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-			</SettingsCard>
-
-			<SettingsCard header="Resources">
-				<SettingsField
-					label="Automatically Install Dependencies"
-					description="Automatically download and install required mods and engines when adding a new resource."
-					headerRight={
-						<Switch
-							checked={autoInstallDependencies()}
-							onCheckedChange={handleAutoInstallDepsToggle}
-						>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-				<SettingsField
-					label="Parallel Download Threads"
-					description="Number of simultaneous downloads when installing resources."
-					headerRight={
-						<NumberField
-							value={maxDownloadThreads()}
-							onRawValueChange={(val) => handleMaxDownloadThreadsChange(val)}
-							minValue={1}
-							maxValue={16}
-						>
-							<NumberFieldGroup>
-								<NumberFieldInput />
-								<NumberFieldIncrementTrigger />
-								<NumberFieldDecrementTrigger />
-							</NumberFieldGroup>
-						</NumberField>
-					}
-				/>
-			</SettingsCard>
-
-			<div ref={storageCardRef}>
-				<SettingsCard header="Storage">
+				<SettingsCard header="Privacy & Integration">
 					<SettingsField
-						label="Artifact Cache Limit"
-						description="Controls the size of the installer artifact and modpack archive cache."
+						label="Error Telemetry"
+						description={
+							<>
+								Send crash and error diagnostics to help improve reliability.{" "}
+								<a href={privacyPolicyUrl} target="_blank" rel="noreferrer">
+									Privacy Policy
+								</a>
+							</>
+						}
 						headerRight={
-							<div style={{ display: "flex", "align-items": "center", gap: "8px" }}>
-								<NumberField
-									value={cacheLimitMb()}
-									minValue={128}
-									maxValue={524288}
-									formatOptions={{ useGrouping: false }}
-									onRawValueChange={(val) => void handleArtifactCacheLimitChange(val * 1024 * 1024)}
-								>
-									<NumberFieldGroup>
-										<NumberFieldInput />
-										<NumberFieldIncrementTrigger />
-										<NumberFieldDecrementTrigger />
-									</NumberFieldGroup>
-								</NumberField>
-								<span style={{ "font-size": "12px", color: "var(--text-secondary)" }}>MB</span>
-							</div>
+							<Switch
+								checked={telemetryEnabled()}
+								onCheckedChange={handleTelemetryToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+					<SettingsField
+						label="Discord Rich Presence"
+						description="Show your current game and status on Discord."
+						headerRight={
+							<Switch
+								checked={discordPresenceEnabled()}
+								onCheckedChange={handleDiscordToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
 						}
 					/>
 				</SettingsCard>
-			</div>
+
+				<SettingsCard
+					header="Performance"
+					subHeader="Optimization settings for game performance."
+				>
+					<SettingsField
+						label="Use Dedicated GPU"
+						description="Attempt to force Minecraft to use your high-performance graphics card (NVIDIA/AMD)."
+						headerRight={
+							<Switch
+								checked={useDedicatedGpu()}
+								onCheckedChange={handleGpuToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+				</SettingsCard>
+
+				<SettingsCard header="Resources">
+					<SettingsField
+						label="Automatically Install Dependencies"
+						description="Automatically download and install required mods and engines when adding a new resource."
+						headerRight={
+							<Switch
+								checked={autoInstallDependencies()}
+								onCheckedChange={handleAutoInstallDepsToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+					<SettingsField
+						label="Parallel Download Threads"
+						description="Number of simultaneous downloads when installing resources."
+						headerRight={
+							<NumberField
+								value={maxDownloadThreads()}
+								onRawValueChange={(val) => handleMaxDownloadThreadsChange(val)}
+								minValue={1}
+								maxValue={16}
+							>
+								<NumberFieldGroup>
+									<NumberFieldInput />
+									<NumberFieldIncrementTrigger />
+									<NumberFieldDecrementTrigger />
+								</NumberFieldGroup>
+							</NumberField>
+						}
+					/>
+				</SettingsCard>
+
+				<div ref={storageCardRef}>
+					<SettingsCard header="Storage">
+						<SettingsField
+							label="Artifact Cache Limit"
+							description="Controls the size of the installer artifact and modpack archive cache."
+							headerRight={
+								<div
+									style={{
+										display: "flex",
+										"align-items": "center",
+										gap: "8px",
+									}}
+								>
+									<NumberField
+										value={cacheLimitMb()}
+										minValue={128}
+										maxValue={524288}
+										formatOptions={{ useGrouping: false }}
+										onRawValueChange={(val) =>
+											void handleArtifactCacheLimitChange(val * 1024 * 1024)
+										}
+									>
+										<NumberFieldGroup>
+											<NumberFieldInput />
+											<NumberFieldIncrementTrigger />
+											<NumberFieldDecrementTrigger />
+										</NumberFieldGroup>
+									</NumberField>
+									<span
+										style={{
+											"font-size": "12px",
+											color: "var(--text-secondary)",
+										}}
+									>
+										MB
+									</span>
+								</div>
+							}
+						/>
+					</SettingsCard>
+				</div>
 
 				<SettingsCard
 					header="Network / Proxy"
@@ -266,7 +308,10 @@ export function GeneralSettingsTab() {
 						label="Use Proxy"
 						description="Apply a proxy to launcher HTTP traffic after restart."
 						headerRight={
-							<Switch checked={proxyEnabled()} onCheckedChange={handleProxyEnabledToggle}>
+							<Switch
+								checked={proxyEnabled()}
+								onCheckedChange={handleProxyEnabledToggle}
+							>
 								<SwitchControl>
 									<SwitchThumb />
 								</SwitchControl>
@@ -278,8 +323,9 @@ export function GeneralSettingsTab() {
 								hidden={!proxyRestartRequired()}
 								aria-live="polite"
 							>
-								<strong>Restart required.</strong> Saved changes apply to regular launcher traffic
-								after restart. You can keep editing and test the proxy first.
+								<strong>Restart required.</strong> Saved changes apply to
+								regular launcher traffic after restart. You can keep editing and
+								test the proxy first.
 							</div>
 						}
 					/>
@@ -294,7 +340,9 @@ export function GeneralSettingsTab() {
 										type="url"
 										value={proxyUrl()}
 										onInput={(e) =>
-											handleProxyUrlChange((e.currentTarget as HTMLInputElement).value)
+											handleProxyUrlChange(
+												(e.currentTarget as HTMLInputElement).value,
+											)
 										}
 										placeholder="http://127.0.0.1:8080"
 										autocomplete="off"
@@ -302,8 +350,8 @@ export function GeneralSettingsTab() {
 									/>
 								</TextFieldRoot>
 								<div class={styles["proxy-credential-note"]}>
-									Proxy credentials in URLs are saved in launcher config. Use them only on trusted
-									devices.
+									Proxy credentials in URLs are saved in launcher config. Use
+									them only on trusted devices.
 								</div>
 								<div class={styles["proxy-actions-row"]}>
 									<LauncherButton
@@ -318,8 +366,10 @@ export function GeneralSettingsTab() {
 										<span
 											class={styles["proxy-status-text"]}
 											classList={{
-												[styles["proxy-status-text--success"]]: proxyTestOk() === true,
-												[styles["proxy-status-text--error"]]: proxyTestOk() === false,
+												[styles["proxy-status-text--success"]]:
+													proxyTestOk() === true,
+												[styles["proxy-status-text--error"]]:
+													proxyTestOk() === false,
 											}}
 										>
 											{proxyTestMessage()}
@@ -327,7 +377,9 @@ export function GeneralSettingsTab() {
 									)}
 								</div>
 								{proxyTestDetail() && (
-									<div class={styles["proxy-status-detail"]}>{proxyTestDetail()}</div>
+									<div class={styles["proxy-status-detail"]}>
+										{proxyTestDetail()}
+									</div>
 								)}
 							</div>
 						}
@@ -349,42 +401,50 @@ export function GeneralSettingsTab() {
 					/>
 				</SettingsCard>
 
-			<SettingsCard header="System Tray">
-				<SettingsField
-					label="Launch On System Startup"
-					description="Start Vesta Launcher automatically when you sign in."
-					headerRight={
-						<Switch checked={autostartEnabled()} onCheckedChange={handleAutostartToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-				<SettingsField
-					label="Show Tray Icon"
-					description="Display the launcher icon in the system tray."
-					headerRight={
-						<Switch checked={showTrayIcon()} onCheckedChange={handleShowTrayIconToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-				<SettingsField
-					label="Close Button Hides To Tray"
-					description="When enabled, clicking the window close button hides the launcher to tray instead of requesting app exit."
-					headerRight={
-						<Switch checked={closeToTray()} onCheckedChange={handleCloseToTrayToggle}>
-							<SwitchControl>
-								<SwitchThumb />
-							</SwitchControl>
-						</Switch>
-					}
-				/>
-			</SettingsCard>
-
+				<SettingsCard header="System Tray">
+					<SettingsField
+						label="Launch On System Startup"
+						description="Start Vesta Launcher automatically when you sign in."
+						headerRight={
+							<Switch
+								checked={autostartEnabled()}
+								onCheckedChange={handleAutostartToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+					<SettingsField
+						label="Show Tray Icon"
+						description="Display the launcher icon in the system tray."
+						headerRight={
+							<Switch
+								checked={showTrayIcon()}
+								onCheckedChange={handleShowTrayIconToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+					<SettingsField
+						label="Close Button Hides To Tray"
+						description="When enabled, clicking the window close button hides the launcher to tray instead of requesting app exit."
+						headerRight={
+							<Switch
+								checked={closeToTray()}
+								onCheckedChange={handleCloseToTrayToggle}
+							>
+								<SwitchControl>
+									<SwitchThumb />
+								</SwitchControl>
+							</Switch>
+						}
+					/>
+				</SettingsCard>
 			</div>
 		</div>
 	);

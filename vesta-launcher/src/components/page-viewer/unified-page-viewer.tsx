@@ -4,14 +4,21 @@ import OpenIcon from "@assets/open.svg";
 import RefreshIcon from "@assets/refresh.svg";
 import ForwardsArrowIcon from "@assets/right-arrow.svg";
 import { PageOptionsMenu } from "@components/page-root/titlebar/page-options-menu";
-import { MiniRouter } from "@components/page-viewer/mini-router";
+import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
 	handleNavigationBack,
 	handleNavigationForward,
 	handleNavigationKeyDown,
 } from "@utils/flat-shell-navigation";
-import { children, createMemo, type JSX, onCleanup, onMount, Show } from "solid-js";
+import {
+	children,
+	createMemo,
+	type JSX,
+	onCleanup,
+	onMount,
+	Show,
+} from "solid-js";
 import styles from "./unified-page-viewer.module.css";
 
 interface NavbarButtonProps {
@@ -130,7 +137,11 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						</div>
 					</Show>
 					<div class={styles["page-viewer-navbar-left"]}>
-						<NavbarButton onClick={handleBack} text="Back" disabled={!canGoBack()}>
+						<NavbarButton
+							onClick={handleBack}
+							text="Back"
+							disabled={!canGoBack()}
+						>
 							<BackArrowIcon />
 						</NavbarButton>
 						<NavbarButton
@@ -141,7 +152,11 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 							<ForwardsArrowIcon />
 						</NavbarButton>
 						<Show when={props.router.getRefetch()}>
-							<NavbarButton onClick={() => props.router.reload()} text="Reload" loading={isReloading()}>
+							<NavbarButton
+								onClick={() => props.router.reload()}
+								text="Reload"
+								loading={isReloading()}
+							>
 								<RefreshIcon />
 							</NavbarButton>
 						</Show>
@@ -151,8 +166,12 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 						class={styles["page-viewer-navbar-center"]}
 						data-tauri-drag-region={props.showWindowControls}
 					>
-						<span class={styles["page-viewer-title"]} data-tauri-drag-region={props.showWindowControls}>
-							{props.router.customName.get() || props.router.currentElement().name}
+						<span
+							class={styles["page-viewer-title"]}
+							data-tauri-drag-region={props.showWindowControls}
+						>
+							{props.router.customName.get() ||
+								props.router.currentElement().name}
 							{props.titleSuffix && ` - ${props.titleSuffix}`}
 						</span>
 					</div>
@@ -168,14 +187,20 @@ export function UnifiedPageViewer(props: UnifiedPageViewerProps) {
 							</NavbarButton>
 						</Show>
 
-						<Show when={props.onClose && !props.windowControls && !props.hideCloseButton}>
+						<Show
+							when={
+								props.onClose && !props.windowControls && !props.hideCloseButton
+							}
+						>
 							<NavbarButton onClick={handleClose} text="Close">
 								<CloseIcon />
 							</NavbarButton>
 						</Show>
 
 						<Show when={!isMac()}>
-							<div class={styles["page-viewer-window-controls-wrapper"]}>{props.windowControls}</div>
+							<div class={styles["page-viewer-window-controls-wrapper"]}>
+								{props.windowControls}
+							</div>
 						</Show>
 
 						{props.children}

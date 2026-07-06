@@ -1,7 +1,11 @@
 import { dialogStore } from "@stores/dialog-store";
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
-import { createNotification, PROGRESS_INDETERMINATE, showAlert } from "@utils/notifications";
+import {
+	createNotification,
+	PROGRESS_INDETERMINATE,
+	showAlert,
+} from "@utils/notifications";
 import { createSignal } from "solid-js";
 import styles from "./notification-test.module.css";
 
@@ -22,7 +26,11 @@ function NotificationTestPage() {
 	const testEphemeralSuccess = async () => {
 		setLoading(true);
 		try {
-			await showAlert("success", "Test Success", "This is an ephemeral success toast");
+			await showAlert(
+				"success",
+				"Test Success",
+				"This is an ephemeral success toast",
+			);
 		} catch (error) {
 			console.error("Failed to create notification:", error);
 		} finally {
@@ -109,7 +117,11 @@ function NotificationTestPage() {
 	const testMultipleNotifications = async () => {
 		setLoading(true);
 		try {
-			await Promise.all([testPersistentWarning(), testPersistentError(), testProgressBar()]);
+			await Promise.all([
+				testPersistentWarning(),
+				testPersistentError(),
+				testProgressBar(),
+			]);
 		} catch (error) {
 			console.error("Failed to create notifications:", error);
 		} finally {
@@ -121,7 +133,10 @@ function NotificationTestPage() {
 		setLoading(true);
 		try {
 			console.log("checkTables command is currently disabled in backend");
-			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
+			await dialogStore.alert(
+				"Debug",
+				"This debug command is currently disabled in the backend.",
+			);
 		} catch (error) {
 			console.error("Failed to check tables:", error);
 		} finally {
@@ -133,7 +148,10 @@ function NotificationTestPage() {
 		setLoading(true);
 		try {
 			console.log("rerunMigrations command is currently disabled in backend");
-			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
+			await dialogStore.alert(
+				"Debug",
+				"This debug command is currently disabled in the backend.",
+			);
 		} catch (error) {
 			console.error("Failed to rerun migrations:", error);
 		} finally {
@@ -145,7 +163,10 @@ function NotificationTestPage() {
 		setLoading(true);
 		try {
 			console.log("submit_test_task command is currently disabled in backend");
-			await dialogStore.alert("Debug", "This debug command is currently disabled in the backend.");
+			await dialogStore.alert(
+				"Debug",
+				"This debug command is currently disabled in the backend.",
+			);
 		} catch (error) {
 			console.error("Failed to submit task:", error);
 		} finally {
@@ -244,19 +265,23 @@ function NotificationTestPage() {
 				<h3>How to Test:</h3>
 				<ul>
 					<li>
-						<strong>Ephemeral:</strong> Appear as toasts only, disappear after 5s
+						<strong>Ephemeral:</strong> Appear as toasts only, disappear after
+						5s
 					</li>
 					<li>
-						<strong>Persistent:</strong> Appear in sidebar + toast, stay until dismissed
+						<strong>Persistent:</strong> Appear in sidebar + toast, stay until
+						dismissed
 					</li>
 					<li>
-						<strong>Pulsing:</strong> Shows animated progress indicator (indeterminate)
+						<strong>Pulsing:</strong> Shows animated progress indicator
+						(indeterminate)
 					</li>
 					<li>
 						<strong>Progress Bar:</strong> Shows 0-100% with step counter
 					</li>
 					<li>
-						<strong>Bell Icon:</strong> Shows spinner when tasks are active, badge when unread exist
+						<strong>Bell Icon:</strong> Shows spinner when tasks are active,
+						badge when unread exist
 					</li>
 				</ul>
 			</div>

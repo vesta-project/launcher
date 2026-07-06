@@ -5,14 +5,28 @@ import {
 	type SourcePlatform,
 } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
-import { type Accessor, batch, createEffect, createResource, untrack } from "solid-js";
+import {
+	type Accessor,
+	batch,
+	createEffect,
+	createResource,
+	untrack,
+} from "solid-js";
 
 const PROJECT_VERSIONS_TIMEOUT_MS = 20_000;
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, operation: string): Promise<T> {
+function withTimeout<T>(
+	promise: Promise<T>,
+	timeoutMs: number,
+	operation: string,
+): Promise<T> {
 	return new Promise<T>((resolve, reject) => {
 		const timer = setTimeout(() => {
-			reject(new Error(`${operation} timed out after ${Math.round(timeoutMs / 1000)}s`));
+			reject(
+				new Error(
+					`${operation} timed out after ${Math.round(timeoutMs / 1000)}s`,
+				),
+			);
 		}, timeoutMs);
 
 		void promise.then(
@@ -32,7 +46,9 @@ interface UseProjectVersionsParams {
 	isModpackMode: Accessor<boolean>;
 	modpackPath: Accessor<string>;
 	modpackUrl: Accessor<string>;
-	modpackInfo: Accessor<{ modpackId?: string; modpackPlatform?: string } | undefined>;
+	modpackInfo: Accessor<
+		{ modpackId?: string; modpackPlatform?: string } | undefined
+	>;
 	projectId?: Accessor<string | undefined>;
 	platform?: Accessor<string | undefined>;
 	initialVersion?: Accessor<string | undefined>;
@@ -49,8 +65,11 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 		() => {
 			if (params.modpackPath()) return null;
 
-			const pId = params.projectId?.() || untrack(() => params.modpackInfo())?.modpackId;
-			const pPlatform = params.platform?.() || untrack(() => params.modpackInfo())?.modpackPlatform;
+			const pId =
+				params.projectId?.() || untrack(() => params.modpackInfo())?.modpackId;
+			const pPlatform =
+				params.platform?.() ||
+				untrack(() => params.modpackInfo())?.modpackPlatform;
 			if (pId && pPlatform) return { id: pId, platform: pPlatform };
 			return null;
 		},
@@ -73,7 +92,8 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 
 				if (initialVer) {
 					const match = vs.find(
-						(v: ResourceVersion) => v.id === initialVer || v.version_number === initialVer,
+						(v: ResourceVersion) =>
+							v.id === initialVer || v.version_number === initialVer,
 					);
 					if (match) {
 						batch(() => {
@@ -85,7 +105,9 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 				}
 
 				if (currentUrl) {
-					const match = vs.find((v: ResourceVersion) => v.download_url === currentUrl);
+					const match = vs.find(
+						(v: ResourceVersion) => v.download_url === currentUrl,
+					);
 					if (match) {
 						batch(() => {
 							params.setSelectedModpackVersionId(match.id);
@@ -100,7 +122,13 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 					const loader = params.initialModloader?.();
 					const best =
 						mcVersion || loader
-							? findBestVersion(vs, mcVersion || "", loader || null, "release", "modpack")
+							? findBestVersion(
+									vs,
+									mcVersion || "",
+									loader || null,
+									"release",
+									"modpack",
+								)
 							: undefined;
 					const target = best || vs[0];
 					batch(() => {
@@ -128,7 +156,8 @@ export function useProjectVersions(params: UseProjectVersionsParams) {
 		if (!versions || versions.length === 0 || !selectedId) return;
 
 		const match = versions.find(
-			(version: ResourceVersion) => version.id === selectedId || version.version_number === selectedId,
+			(version: ResourceVersion) =>
+				version.id === selectedId || version.version_number === selectedId,
 		);
 		if (match) {
 			if (match.id !== selectedId) params.setSelectedModpackVersionId(match.id);

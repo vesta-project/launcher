@@ -32,7 +32,9 @@ describe("computeHeaderCollapseProgress", () => {
 		expect(computeHeaderCollapseProgress(-50, 300)).toBe(0);
 		expect(computeHeaderCollapseProgress(999, 300)).toBe(1);
 		expect(computeHeaderCollapseProgress(Number.NaN, 300)).toBe(0);
-		expect(computeHeaderCollapseProgress(12, Number.POSITIVE_INFINITY)).toBeCloseTo(12 / 72, 5);
+		expect(
+			computeHeaderCollapseProgress(12, Number.POSITIVE_INFINITY),
+		).toBeCloseTo(12 / 72, 5);
 	});
 
 	it("keeps the default target range stable", () => {

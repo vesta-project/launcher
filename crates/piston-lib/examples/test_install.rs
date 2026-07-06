@@ -83,19 +83,13 @@ async fn main() -> Result<()> {
     std::fs::create_dir_all(&data_dir)?;
     std::fs::create_dir_all(&game_dir)?;
 
-    let spec = InstallSpec {
-        version_id: "1.21.10".to_string(),
-        modloader: Some(piston_lib::game::metadata::ModloaderType::NeoForge),
-        modloader_version: Some("21.10.54-beta".to_string()),
-        data_dir: data_dir.clone(),
-        game_dir: game_dir.clone(),
-        java_path: None,
-        dry_run: false,
-        concurrency: 8,
-        force_overwrite_configs: false,
-        repair_scope: Default::default(),
-        remediation_policy: Default::default(),
-    };
+    let mut spec = InstallSpec::new("1.21.10".to_string(), data_dir.clone(), game_dir.clone());
+    spec.modloader = Some(piston_lib::game::metadata::ModloaderType::NeoForge);
+    spec.modloader_version = Some("21.10.54-beta".to_string());
+    spec.concurrency = 8;
+    spec.force_overwrite_configs = false;
+    spec.repair_scope = Default::default();
+    spec.remediation_policy = Default::default();
 
     let (reporter_impl, _tx) = ConsoleReporter::new();
     let reporter = Arc::new(reporter_impl);

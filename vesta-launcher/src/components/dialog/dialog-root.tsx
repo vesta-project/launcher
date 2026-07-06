@@ -8,31 +8,48 @@ import {
 	DialogHeader,
 	DialogTitle,
 } from "@ui/dialog/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
+import {
+	Select,
+	SelectContent,
+	SelectItem,
+	SelectTrigger,
+	SelectValue,
+} from "@ui/select/select";
 import { TextFieldInput, TextFieldRoot } from "@ui/text-field/text-field";
-import { Component, createSignal, For, Show } from "solid-js";
+import { type Component, createSignal, For, Show } from "solid-js";
 
 export const DialogRoot: Component = () => {
 	return (
-		<For each={dialogStore.dialogs}>{(dialog) => <DialogInstanceComponent dialog={dialog} />}</For>
+		<For each={dialogStore.dialogs}>
+			{(dialog) => <DialogInstanceComponent dialog={dialog} />}
+		</For>
 	);
 };
 
-const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) => {
-	const [inputValue, setInputValue] = createSignal(props.dialog.input?.defaultValue ?? "");
+const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (
+	props,
+) => {
+	const [inputValue, setInputValue] = createSignal(
+		props.dialog.input?.defaultValue ?? "",
+	);
 	const [selectValue, setSelectValue] = createSignal(
 		props.dialog.defaultSelectOption ?? props.dialog.selectOptions?.[0] ?? "",
 	);
 
 	const handleAction = (actionId: string) => {
-		const submitValue = props.dialog.selectOptions ? selectValue() : inputValue();
+		const submitValue = props.dialog.selectOptions
+			? selectValue()
+			: inputValue();
 		dialogStore.submit(props.dialog.id, actionId, submitValue);
 	};
 
 	const isNonDismissible = () => props.dialog.isBackendGenerated;
-	const cancelAction = () => props.dialog.actions.find((a) => a.id === "cancel");
+	const cancelAction = () =>
+		props.dialog.actions.find((a) => a.id === "cancel");
 	const primaryAction = () =>
-		props.dialog.actions.length > 0 ? props.dialog.actions[props.dialog.actions.length - 1] : null;
+		props.dialog.actions.length > 0
+			? props.dialog.actions[props.dialog.actions.length - 1]
+			: null;
 
 	return (
 		<Dialog
@@ -70,22 +87,34 @@ const DialogInstanceComponent: Component<{ dialog: DialogInstance }> = (props) =
 					</div>
 				</Show>
 
-				<Show when={props.dialog.selectOptions && props.dialog.selectOptions.length > 0}>
-					<div style={{ margin: "1rem 0" }}>
-						<Select
-							value={selectValue()}
-							onChange={(value) => setSelectValue(String(value))}
-							options={props.dialog.selectOptions!}
-							itemComponent={(selectProps) => (
-								<SelectItem item={selectProps.item}>{selectProps.item.rawValue}</SelectItem>
-							)}
-						>
-							<SelectTrigger autofocus>
-								<SelectValue<string>>{(state) => state.selectedOption() || ""}</SelectValue>
-							</SelectTrigger>
-							<SelectContent />
-						</Select>
-					</div>
+				<Show
+					when={
+						props.dialog.selectOptions?.length
+							? props.dialog.selectOptions
+							: undefined
+					}
+				>
+					{(selectOptions) => (
+						<div style={{ margin: "1rem 0" }}>
+							<Select
+								value={selectValue()}
+								onChange={(value) => setSelectValue(String(value))}
+								options={selectOptions()}
+								itemComponent={(selectProps) => (
+									<SelectItem item={selectProps.item}>
+										{selectProps.item.rawValue}
+									</SelectItem>
+								)}
+							>
+								<SelectTrigger autofocus>
+									<SelectValue<string>>
+										{(state) => state.selectedOption() || ""}
+									</SelectValue>
+								</SelectTrigger>
+								<SelectContent />
+							</Select>
+						</div>
+					)}
 				</Show>
 
 				<DialogFooter>

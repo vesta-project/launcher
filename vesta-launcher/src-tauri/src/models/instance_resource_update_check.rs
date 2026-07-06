@@ -1,5 +1,4 @@
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Queryable, Insertable, AsChangeset, Clone)]
 #[diesel(table_name = crate::schema::vesta::instance_resource_update_check)]

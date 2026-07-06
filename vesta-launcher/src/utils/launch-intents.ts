@@ -1,58 +1,29 @@
 import { openMiniPage } from "@components/page-viewer/page-viewer";
+import {
+	initializeInstances,
+	instancesState,
+	setLaunching,
+} from "@stores/instances";
 import { invoke } from "@tauri-apps/api/core";
 import { showToast } from "@ui/toast/toast";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
+import {
+	generateVestaDeepLink,
+	isAllowedNavigatePath,
+} from "@utils/deep-links";
 import { launchInstance } from "@utils/instances";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
+
+export { generateVestaDeepLink } from "@utils/deep-links";
 
 export type QueuedIntent =
 	| { type: "argv"; args: string[] }
 	| { type: "path"; path: string };
 
-const ALLOWED_NAVIGATE_PATHS = new Set([
-	"/config",
-	"/changelog",
-	"/install",
-	"/install/source",
-	"/install/import",
-	"/modding-guide",
-	"/resources",
-	"/login",
-	"/file-drop",
-]);
-
 const processedIntentKeys = new Set<string>();
 
 export function isModpackFilePath(arg: string): boolean {
 	return /\.mrpack$/i.test(arg) && !arg.startsWith("vesta://");
-}
-
-export function generateVestaDeepLink(path: string, params: Record<string, string> = {}): string {
-	if (path === "/instance" && params.slug) {
-		const searchParams = new URLSearchParams({ slug: params.slug });
-		return `vesta://open-instance?${searchParams.toString()}`;
-	}
-
-	if (path === "/resource-details" && params.platform && params.projectId) {
-		return `vesta://open-resource/${params.platform}/${params.projectId}`;
-	}
-
-	if (path === "/install") {
-		const searchParams = new URLSearchParams(params);
-		return `vesta://install?${searchParams.toString()}`;
-	}
-
-	if (path === "/config") {
-		const searchParams = new URLSearchParams({ path: "/config" });
-		return `vesta://open?${searchParams.toString()}`;
-	}
-
-	if (ALLOWED_NAVIGATE_PATHS.has(path)) {
-		const searchParams = new URLSearchParams({ path, ...params });
-		return `vesta://open?${searchParams.toString()}`;
-	}
-
-	throw new Error(`Cannot generate deep link for unsupported path: ${path}`);
 }
 
 function intentDedupeKey(intent: QueuedIntent): string {
@@ -83,7 +54,8 @@ async function ensureExternalIntentReady(): Promise<boolean> {
 	if (!config || !config.setup_completed) {
 		showToast({
 			title: "Setup Required",
-			description: "Please complete the onboarding process before using 'Open in Vesta'.",
+			description:
+				"Please complete the onboarding process before using 'Open in Vesta'.",
 			severity: "error",
 			duration: 5000,
 		});
@@ -91,7 +63,11 @@ async function ensureExternalIntentReady(): Promise<boolean> {
 	}
 
 	const account = await getActiveAccount();
-	if (!account || account.account_type === ACCOUNT_TYPE_GUEST || account.is_expired) {
+	if (
+		!account ||
+		account.account_type === ACCOUNT_TYPE_GUEST ||
+		account.is_expired
+	) {
 		showToast({
 			title: "Authentication Required",
 			description: "Please sign in to a valid account to use 'Open in Vesta'.",
@@ -105,7 +81,6 @@ async function ensureExternalIntentReady(): Promise<boolean> {
 }
 
 export async function launchInstanceBySlug(slug: string): Promise<void> {
-	const { instancesState, setLaunching, initializeInstances } = await import("@stores/instances");
 	await initializeInstances();
 	const inst = instancesState.instances.find(
 		(instance) =>
@@ -132,6 +107,7 @@ export async function launchInstanceBySlug(slug: string): Promise<void> {
 }
 
 export async function openInstanceBySlug(slug: string): Promise<void> {
+	await Promise.resolve();
 	openMiniPage("/instance", { slug });
 }
 
@@ -145,10 +121,6 @@ export async function handleModpackFileOpen(path: string): Promise<void> {
 	}
 
 	openMiniPage("/install", { modpackPath: path, isModpack: true });
-}
-
-function isAllowedNavigatePath(path: string): boolean {
-	return ALLOWED_NAVIGATE_PATHS.has(path);
 }
 
 export async function handleDeepLinkMetadata(metadata: {
@@ -255,7 +227,9 @@ export async function handleLaunchArgs(args: string[]): Promise<void> {
 	}
 }
 
-export async function handleQueuedIntents(intents: QueuedIntent[]): Promise<void> {
+export async function handleQueuedIntents(
+	intents: QueuedIntent[],
+): Promise<void> {
 	for (const intent of intents) {
 		const key = intentDedupeKey(intent);
 		if (!shouldProcessIntent(key)) {

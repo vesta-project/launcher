@@ -51,6 +51,7 @@ pub fn check_instance_not_running(game_dir: &Path) -> Result<()> {
 /// Normalize a file path to lowercase for case-insensitive comparison.
 /// This prevents duplicate mod files on Linux/macOS when a modpack author
 /// changes casing (e.g., JEI.jar → jei.jar).
+#[cfg(test)]
 pub fn normalize_path(path: &str) -> String {
     path.to_lowercase()
 }

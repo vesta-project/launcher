@@ -1,4 +1,9 @@
-import { Component, ComponentProps, Show, splitProps } from "solid-js";
+import {
+	type Component,
+	type ComponentProps,
+	Show,
+	splitProps,
+} from "solid-js";
 import styles from "./badge.module.css";
 
 export interface BadgeProps extends ComponentProps<"div"> {

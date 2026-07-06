@@ -52,7 +52,11 @@
 	position: absolute;
 	inset: 0;
 	border-radius: inherit;
-	background: linear-gradient(160deg, hsl(0 0% 100% / 0.06) 0%, transparent 40%);
+	background: linear-gradient(
+		160deg,
+		hsl(0 0% 100% / 0.06) 0%,
+		transparent 40%
+	);
 	pointer-events: none;
 	z-index: 1;
 }
@@ -72,7 +76,10 @@
 			rgb(36 35 35 / 30%) 45.5%,
 			rgb(0 0 0 / 65%) 100%
 		),
-		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 	background-repeat: no-repeat;
 	background-position: center center;
 	background-size: cover;
@@ -182,7 +189,11 @@
 	display: flex;
 	justify-content: flex-end;
 	align-items: center;
-	background: linear-gradient(to bottom, var(--instance-card-overlay-top) 0%, transparent 100%);
+	background: linear-gradient(
+		to bottom,
+		var(--instance-card-overlay-top) 0%,
+		transparent 100%
+	);
 	padding: 16px;
 	margin: -16px -16px 0 -16px;
 	border-radius: 7px 7px 0 0;
@@ -424,14 +435,29 @@
 
 :root[data-theme="light"] .instance-card {
 	--instance-card-overlay-top: hsl(var(--color__primary-hue) 20% 26% / 0.18);
-	--instance-card-overlay-bottom-strong: hsl(var(--color__primary-hue) 24% 20% / 0.34);
-	--instance-card-overlay-bottom-soft: hsl(var(--color__primary-hue) 20% 30% / 0.12);
-	--instance-card-centered-overlay: hsl(var(--color__primary-hue) 16% 22% / 0.3);
+	--instance-card-overlay-bottom-strong: hsl(
+		var(--color__primary-hue) 24% 20% /
+		0.34
+	);
+	--instance-card-overlay-bottom-soft: hsl(
+		var(--color__primary-hue) 20% 30% /
+		0.12
+	);
+	--instance-card-centered-overlay: hsl(
+		var(--color__primary-hue) 16% 22% /
+		0.3
+	);
 	--instance-card-text-main: hsl(var(--color__primary-hue) 5% 95%);
 	--instance-card-text-muted: hsl(var(--color__primary-hue) 6% 92% / 0.8);
 	--instance-card-play-surface: hsl(var(--color__primary-hue) 14% 22% / 0.42);
-	--instance-card-play-surface-hover: hsl(var(--color__primary-hue) 16% 24% / 0.52);
-	--instance-card-play-surface-active: hsl(var(--color__primary-hue) 16% 20% / 0.46);
+	--instance-card-play-surface-hover: hsl(
+		var(--color__primary-hue) 16% 24% /
+		0.52
+	);
+	--instance-card-play-surface-active: hsl(
+		var(--color__primary-hue) 16% 20% /
+		0.46
+	);
 	--instance-card-glass-border: hsl(0 0% 100% / 0.12);
 	--instance-card-glass-highlight: hsl(0 0% 100% / 0.06);
 }
@@ -439,14 +465,29 @@
 @media (prefers-color-scheme: light) {
 	:root:not([data-theme="dark"]) .instance-card {
 		--instance-card-overlay-top: hsl(var(--color__primary-hue) 20% 26% / 0.18);
-		--instance-card-overlay-bottom-strong: hsl(var(--color__primary-hue) 24% 20% / 0.34);
-		--instance-card-overlay-bottom-soft: hsl(var(--color__primary-hue) 20% 30% / 0.12);
-		--instance-card-centered-overlay: hsl(var(--color__primary-hue) 16% 22% / 0.3);
+		--instance-card-overlay-bottom-strong: hsl(
+			var(--color__primary-hue) 24% 20% /
+			0.34
+		);
+		--instance-card-overlay-bottom-soft: hsl(
+			var(--color__primary-hue) 20% 30% /
+			0.12
+		);
+		--instance-card-centered-overlay: hsl(
+			var(--color__primary-hue) 16% 22% /
+			0.3
+		);
 		--instance-card-text-main: hsl(var(--color__primary-hue) 5% 95%);
 		--instance-card-text-muted: hsl(var(--color__primary-hue) 6% 92% / 0.8);
 		--instance-card-play-surface: hsl(var(--color__primary-hue) 14% 22% / 0.42);
-		--instance-card-play-surface-hover: hsl(var(--color__primary-hue) 16% 24% / 0.52);
-		--instance-card-play-surface-active: hsl(var(--color__primary-hue) 16% 20% / 0.46);
+		--instance-card-play-surface-hover: hsl(
+			var(--color__primary-hue) 16% 24% /
+			0.52
+		);
+		--instance-card-play-surface-active: hsl(
+			var(--color__primary-hue) 16% 20% /
+			0.46
+		);
 		--instance-card-glass-border: hsl(0 0% 100% / 0.12);
 		--instance-card-glass-highlight: hsl(0 0% 100% / 0.06);
 	}
@@ -540,7 +581,10 @@
 			hsl(42 100% 20% / 0.34) 45.5%,
 			hsl(0 0% 0% / 0.62) 100%
 		),
-		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 }
 
 .instance-card--running {
@@ -556,7 +600,10 @@
 			hsl(142 60% 12% / 0.34) 45.5%,
 			hsl(0 0% 0% / 0.62) 100%
 		),
-		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 }
 
 .instance-card--crashed {
@@ -572,7 +619,10 @@
 			hsl(0 70% 14% / 0.38) 45.5%,
 			hsl(0 0% 0% / 0.62) 100%
 		),
-		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 }
 
 .instance-card.failed {
@@ -584,7 +634,10 @@
 			hsl(0 100% 20% / 0.5) 45.5%,
 			hsl(0 100% 6% / 0.95) 100%
 		),
-		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 	border-color: hsl(0 100% 50% / 0.3);
 }
 
@@ -597,7 +650,10 @@
 			hsl(45 100% 20% / 0.4) 45.5%,
 			hsl(45 100% 6% / 0.9) 100%
 		),
-		var(--instance-bg-image, url("@assets/placeholder-images/placeholder-image1.jpg"));
+		var(
+			--instance-bg-image,
+			url("@assets/placeholder-images/placeholder-image1.jpg")
+		);
 	border-color: hsl(45 100% 50% / 0.3);
 }
 

@@ -1,9 +1,11 @@
 import { listen } from "@tauri-apps/api/event";
-import { Account, getActiveAccount } from "@utils/auth";
+import { type Account, getActiveAccount } from "@utils/auth";
 import { createRoot, createSignal } from "solid-js";
 
 function createAuthStore() {
-	const [expiredAccount, setExpiredAccount] = createSignal<Account | null>(null);
+	const [expiredAccount, setExpiredAccount] = createSignal<Account | null>(
+		null,
+	);
 	const [activeAccount, setActiveAccount] = createSignal<Account | null>(null);
 
 	const refreshState = async () => {

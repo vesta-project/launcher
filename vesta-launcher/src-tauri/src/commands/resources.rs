@@ -19,8 +19,6 @@ use crate::tasks::resource_download::ResourceDownloadTask;
 use anyhow_tauri::TAResult as Result;
 use tauri::{Emitter, Manager, State};
 
-/// Timeout for image downloads (in seconds)
-const IMAGE_DOWNLOAD_TIMEOUT_SECS: u64 = 8;
 const MAX_CONCURRENT_UPDATE_CHECKS: usize = 6;
 
 /// Converts `icon_data` bytes to a base64 data URL, mirroring `process_instance_icon`.

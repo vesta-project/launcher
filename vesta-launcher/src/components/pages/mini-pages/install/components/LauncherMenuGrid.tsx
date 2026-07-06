@@ -10,7 +10,9 @@ interface LauncherMenuGridProps {
 export function LauncherMenuGrid(props: LauncherMenuGridProps) {
 	return (
 		<div class={styles["import-stage-surface"]}>
-			<div class={`${styles["modpack-import-container"]} ${styles["launcher-menu-grid"]}`}>
+			<div
+				class={`${styles["modpack-import-container"]} ${styles["launcher-menu-grid"]}`}
+			>
 				<For each={props.launchers}>
 					{(launcher) => (
 						<button
@@ -21,7 +23,9 @@ export function LauncherMenuGrid(props: LauncherMenuGridProps) {
 							{launcher.icon && (
 								<div
 									class={styles["card-icon"]}
-									classList={{ [styles["icon-mono"]]: !!launcher.iconMonochrome }}
+									classList={{
+										[styles["icon-mono"]]: !!launcher.iconMonochrome,
+									}}
 								>
 									<launcher.icon />
 								</div>

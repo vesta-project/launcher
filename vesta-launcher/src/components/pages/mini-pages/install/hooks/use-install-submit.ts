@@ -1,6 +1,15 @@
+import {
+	type ResourceProject,
+	type ResourceVersion,
+	resources,
+} from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
-import { resources, type ResourceProject, type ResourceVersion } from "@stores/resources";
-import { createInstance, getInstance, type Instance, installInstance } from "@utils/instances";
+import {
+	createInstance,
+	getInstance,
+	type Instance,
+	installInstance,
+} from "@utils/instances";
 import { installModpackFromUrl, installModpackFromZip } from "@utils/modpacks";
 import { type Accessor, createSignal } from "solid-js";
 
@@ -21,7 +30,10 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 	const handleInstall = async (data: Partial<Instance>) => {
 		setIsInstalling(true);
 		try {
-			if (params.isModpackMode() && (params.modpackUrl() || params.modpackPath())) {
+			if (
+				params.isModpackMode() &&
+				(params.modpackUrl() || params.modpackPath())
+			) {
 				const sourceUrl = params.modpackUrl();
 				const sourcePath = params.modpackPath();
 				const fullMetadata = params.modpackInfo()?.fullMetadata;
@@ -33,7 +45,8 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 			} else if (params.isModpackMode()) {
 				showToast({
 					title: "Modpack Version Still Loading",
-					description: "Wait for a version to finish loading, then try installing again.",
+					description:
+						"Wait for a version to finish loading, then try installing again.",
 					severity: "warning",
 				});
 				return;
@@ -61,7 +74,11 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 			}, 500);
 		} catch (error) {
 			console.error("[Install] ERROR:", error);
-			showToast({ title: "Failed", description: String(error), severity: "error" });
+			showToast({
+				title: "Failed",
+				description: String(error),
+				severity: "error",
+			});
 		} finally {
 			setIsInstalling(false);
 		}

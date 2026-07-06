@@ -11,11 +11,16 @@ const RELEASE_STABILITY_RANK: Record<string, number> = {
 	release: 2,
 };
 
-function getReleaseStabilityRank(releaseType: string | null | undefined, fallback: number) {
+function getReleaseStabilityRank(
+	releaseType: string | null | undefined,
+	fallback: number,
+) {
 	return RELEASE_STABILITY_RANK[(releaseType || "").toLowerCase()] ?? fallback;
 }
 
-function parseVersionParts(version: string | null | undefined): number[] | null {
+function parseVersionParts(
+	version: string | null | undefined,
+): number[] | null {
 	if (!version) return null;
 	const match = version.match(/\d+(?:\.\d+)*/);
 	if (!match) return null;
@@ -46,7 +51,9 @@ export function selectEligibleModpackUpdate(
 ): ModpackUpdateVersion | null {
 	if (!versions || !currentVersionId) return null;
 
-	const currentVersion = versions.find((version) => String(version.id) === currentVersionId);
+	const currentVersion = versions.find(
+		(version) => String(version.id) === currentVersionId,
+	);
 	if (!currentVersion) return null;
 
 	const currentRank = getReleaseStabilityRank(
@@ -71,7 +78,10 @@ export function selectEligibleModpackUpdate(
 	if (eligible.length === 0) return null;
 
 	return [...eligible].sort((a, b) => {
-		const comparison = compareSemverishVersions(b.version_number, a.version_number);
+		const comparison = compareSemverishVersions(
+			b.version_number,
+			a.version_number,
+		);
 		if (comparison !== null && comparison !== 0) return comparison;
 
 		const bRank = getReleaseStabilityRank(b.release_type, -1);

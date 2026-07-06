@@ -4,8 +4,8 @@ import { ACCOUNT_TYPE_GUEST } from "@utils/auth";
 import {
 	createDemoInstance,
 	DEFAULT_ICONS,
-	resolveInstanceDisplayIcon,
 	type Instance,
+	resolveInstanceDisplayIcon,
 } from "@utils/instances";
 import { createStore, reconcile } from "solid-js/store";
 
@@ -51,7 +51,7 @@ export function setLaunching(slug: string, launching: boolean) {
 	}
 
 	// Solid store: delete nested record keys by setting undefined, not via delete/spread.
-	setInstancesState("launchingIds", slug, undefined!);
+	setInstancesState("launchingIds", slug, undefined as unknown as boolean);
 }
 
 export function setRunning(slug: string, meta: RunningMetadata) {
@@ -62,11 +62,17 @@ export function setRunning(slug: string, meta: RunningMetadata) {
 
 /** Launch in progress and not yet registered as running. */
 export function isInstanceWarming(slug: string): boolean {
-	return !!instancesState.launchingIds[slug] && !instancesState.runningIds[slug];
+	return (
+		!!instancesState.launchingIds[slug] && !instancesState.runningIds[slug]
+	);
 }
 
 export function clearRunning(slug: string) {
-	setInstancesState("runningIds", slug, undefined!);
+	setInstancesState(
+		"runningIds",
+		slug,
+		undefined as unknown as RunningMetadata,
+	);
 }
 
 export function isInstanceLaunching(slug: string): boolean {
@@ -132,7 +138,9 @@ export function initializeInstances(force = false): Promise<void> {
 
 // Update single instance in store
 function updateInstance(updatedInstance: Instance) {
-	const existing = instancesState.instances.find((inst) => inst.id === updatedInstance.id);
+	const existing = instancesState.instances.find(
+		(inst) => inst.id === updatedInstance.id,
+	);
 	let normalized = updatedInstance;
 
 	// Event payloads from tasks may omit processed icon_path; keep a usable display icon.
@@ -163,24 +171,34 @@ function addInstance(newInstance: Instance) {
 
 // Remove instance from store
 function removeInstance(instanceId: number) {
-	setInstancesState("instances", (instances) => instances.filter((inst) => inst.id !== instanceId));
+	setInstancesState("instances", (instances) =>
+		instances.filter((inst) => inst.id !== instanceId),
+	);
 }
 
-function isFullInstancePayload(payload: InstalledEventPayload): payload is Instance {
+function isFullInstancePayload(
+	payload: InstalledEventPayload,
+): payload is Instance {
 	return typeof (payload as Instance).id === "number";
 }
 
 export function removeInstanceOptimistic(instanceId: number): Instance | null {
-	const snapshot = instancesState.instances.find((inst) => inst.id === instanceId) ?? null;
+	const snapshot =
+		instancesState.instances.find((inst) => inst.id === instanceId) ?? null;
 	removeInstance(instanceId);
 	return snapshot;
 }
 
 export function restoreInstanceOptimistic(instanceSnapshot: Instance | null) {
 	if (!instanceSnapshot) return;
-	const exists = instancesState.instances.some((inst) => inst.id === instanceSnapshot.id);
+	const exists = instancesState.instances.some(
+		(inst) => inst.id === instanceSnapshot.id,
+	);
 	if (!exists) {
-		setInstancesState("instances", (instances) => [instanceSnapshot, ...instances]);
+		setInstancesState("instances", (instances) => [
+			instanceSnapshot,
+			...instances,
+		]);
 	}
 }
 
@@ -212,22 +230,31 @@ export function setupInstanceListeners() {
 		});
 
 		// Listen for installation status updates
-		await listen<InstalledEventPayload>("core://instance-installed", (event) => {
-			if (isFullInstancePayload(event.payload)) {
-				updateInstance(event.payload);
-				return;
-			}
+		await listen<InstalledEventPayload>(
+			"core://instance-installed",
+			(event) => {
+				if (isFullInstancePayload(event.payload)) {
+					updateInstance(event.payload);
+					return;
+				}
 
-			// Legacy payload support: refresh from backend when only slug/name is provided.
-			void initializeInstances(true).catch((error) => {
-				console.error("Failed to refresh instances after installed event:", error);
-			});
-		});
+				// Legacy payload support: refresh from backend when only slug/name is provided.
+				void initializeInstances(true).catch((error) => {
+					console.error(
+						"Failed to refresh instances after installed event:",
+						error,
+					);
+				});
+			},
+		);
 
 		// Listen for launch initiated (this is for UI responsiveness)
-		await listen<{ instance_id: string }>("core://instance-launch-request", (event) => {
-			setLaunching(event.payload.instance_id, true);
-		});
+		await listen<{ instance_id: string }>(
+			"core://instance-launch-request",
+			(event) => {
+				setLaunching(event.payload.instance_id, true);
+			},
+		);
 
 		// Listen for launch events (updates when process successfully started)
 		await listen<{ instance_id: string; pid: number; start_time?: number }>(
@@ -249,23 +276,31 @@ export function setupInstanceListeners() {
 		});
 
 		// Listen for instance exit/crash
-		await listen<{ instance_id: string; crashed: boolean }>("core://instance-exited", (event) => {
-			const slug = event.payload.instance_id;
-			setLaunching(slug, false);
-			clearRunning(slug);
+		await listen<{ instance_id: string; crashed: boolean }>(
+			"core://instance-exited",
+			(event) => {
+				const slug = event.payload.instance_id;
+				setLaunching(slug, false);
+				clearRunning(slug);
 
-			// Refresh instance metadata if crashed/playtime updated
-			void initializeInstances(true).catch((error) => {
-				console.error("Failed to refresh instances after exit:", error);
-			});
-		});
+				// Refresh instance metadata if crashed/playtime updated
+				void initializeInstances(true).catch((error) => {
+					console.error("Failed to refresh instances after exit:", error);
+				});
+			},
+		);
 
 		// Listen for account changes to re-initialize instances (important for Guest -> Real transition)
 		await listen<any>("config-updated", (event) => {
 			if (event.payload.field === "active_account_uuid") {
-				console.log("[InstancesStore] Active account changed, re-initializing...");
+				console.log(
+					"[InstancesStore] Active account changed, re-initializing...",
+				);
 				void initializeInstances(true).catch((error) => {
-					console.error("Failed to refresh instances after account change:", error);
+					console.error(
+						"Failed to refresh instances after account change:",
+						error,
+					);
 				});
 			}
 		});

@@ -90,7 +90,9 @@ describe("applyTheme background and effect behavior", () => {
 		);
 
 		expect(root.getAttribute("data-startup-fallback-active")).toBeNull();
-		expect(root.style.getPropertyValue("--app-background-tint").trim()).toBe("");
+		expect(root.style.getPropertyValue("--app-background-tint").trim()).toBe(
+			"",
+		);
 		expect(root.style.getPropertyValue("--background-color").trim()).toBe("");
 		expect(root.style.getPropertyValue("--background-image").trim()).toBe("");
 	});
@@ -103,12 +105,16 @@ describe("applyTheme background and effect behavior", () => {
 			}),
 		);
 
-		expect(document.getElementById("theme-custom-css")?.textContent).toContain("--midnight-only");
+		expect(document.getElementById("theme-custom-css")?.textContent).toContain(
+			"--midnight-only",
+		);
 
 		applyTheme(createTheme({ id: "classic", customCss: undefined }));
 
 		expect(document.getElementById("theme-custom-css")).toBeNull();
-		expect(document.documentElement.getAttribute("data-theme-id")).toBe("classic");
+		expect(document.documentElement.getAttribute("data-theme-id")).toBe(
+			"classic",
+		);
 	});
 
 	it("updates custom css when the same theme id changes css text", () => {
@@ -117,7 +123,9 @@ describe("applyTheme background and effect behavior", () => {
 
 		const styleTag = document.getElementById("theme-custom-css");
 		expect(styleTag?.textContent).toContain("--test-custom-css: 2");
-		expect(styleTag?.getAttribute("data-theme-custom-css-owner")).toBe("test-theme");
+		expect(styleTag?.getAttribute("data-theme-custom-css-owner")).toBe(
+			"test-theme",
+		);
 	});
 
 	it("removes stale theme variable properties even when tracking metadata is missing", () => {

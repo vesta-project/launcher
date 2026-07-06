@@ -1,4 +1,4 @@
-import { Show, createEffect, createSignal } from "solid-js";
+import { createEffect, createSignal, Show } from "solid-js";
 import styles from "./home-intro.module.css";
 
 interface HomeIntroRingProps {

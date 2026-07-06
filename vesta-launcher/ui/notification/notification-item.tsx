@@ -3,7 +3,11 @@ import CloseIcon from "@assets/close.svg";
 import ErrorIcon from "@assets/error.svg";
 import Button from "@ui/button/button";
 import { Progress } from "@ui/progress/progress";
-import type { NotificationAction, NotificationSeverity, NotificationType } from "@utils/notifications";
+import type {
+	NotificationAction,
+	NotificationSeverity,
+	NotificationType,
+} from "@utils/notifications";
 import clsx from "clsx";
 import { For, JSX, Show, splitProps } from "solid-js";
 import styles from "./notification-item.module.css";
@@ -96,7 +100,10 @@ export function NotificationItem(props: NotificationItemProps) {
 				<div class={styles.content}>
 					<div class={styles.header}>
 						<span class={clsx(styles.title, "selectable")}>
-							{local.title || (local.notification_type === "progress" ? "Working..." : "Notification")}
+							{local.title ||
+								(local.notification_type === "progress"
+									? "Working..."
+									: "Notification")}
 						</span>
 						<div class={styles.headerActions}>
 							<Show when={local.created_at}>
@@ -121,7 +128,9 @@ export function NotificationItem(props: NotificationItemProps) {
 					</div>
 
 					<Show when={local.description}>
-						<p class={clsx(styles.description, "selectable")}>{local.description}</p>
+						<p class={clsx(styles.description, "selectable")}>
+							{local.description}
+						</p>
 					</Show>
 
 					<Show when={local.progress !== undefined && local.progress !== null}>

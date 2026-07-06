@@ -13,16 +13,6 @@ pub struct FileHash {
     pub hash: String,
 }
 
-/// Load the old base manifest ($O$) from an instance's game directory.
-/// This is the snapshot recorded during the last successful update.
-pub fn load_old_manifest(
-    game_dir: &Path,
-) -> Result<piston_lib::game::modpack::manifest::ModpackManifest> {
-    piston_lib::game::modpack::manifest::ModpackManifest::load(game_dir).context(
-        "Failed to load modpack_manifest.json — has this instance been installed from a modpack?",
-    )
-}
-
 /// Build a new base manifest ($N$) from a modpack ZIP file.
 /// Parses the platform index (modrinth.index.json / manifest.json) and
 /// constructs a ModpackManifest that represents what the new version wants.

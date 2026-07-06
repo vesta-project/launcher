@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import { listen, UnlistenFn } from "@tauri-apps/api/event";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { hasTauriRuntime } from "@utils/tauri-runtime";
 import { createSignal } from "solid-js";
 
@@ -26,10 +27,13 @@ export interface SniffedPath {
 const [sniffedPaths, setSniffedPaths] = createSignal<SniffedPath[]>([]);
 const [isDragging, setIsDragging] = createSignal(false);
 
-function normalizeOptions(options: DropZoneOptions = {}): NormalizedDropZoneOptions {
+function normalizeOptions(
+	options: DropZoneOptions = {},
+): NormalizedDropZoneOptions {
 	return {
 		accept: options.accept ?? "all",
-		allowedExtensions: options.allowedExtensions?.map((ext) => ext.toLowerCase()) ?? [],
+		allowedExtensions:
+			options.allowedExtensions?.map((ext) => ext.toLowerCase()) ?? [],
 	};
 }
 
@@ -48,18 +52,21 @@ class DropZoneManager {
 
 		console.log("[FileDrop] Initializing file drop manager");
 
-		this.unlisten = await listen<SniffedPath[]>("vesta://sniffed-file-drop", (event) => {
-			console.log("[FileDrop] Sniffed paths received:", event.payload);
-			setSniffedPaths(event.payload);
+		this.unlisten = await listen<SniffedPath[]>(
+			"vesta://sniffed-file-drop",
+			(event) => {
+				console.log("[FileDrop] Sniffed paths received:", event.payload);
+				setSniffedPaths(event.payload);
 
-			if (event.payload.length > 0) {
-				setIsDragging(true);
-				this.hasSniffedThisSession = true;
-				this.cooldownUntil = Date.now() + 1000; // Don't re-summon for 1s
-				// Immediately hide the sniffer once we have the paths
-				this.hideSniffer();
-			}
-		});
+				if (event.payload.length > 0) {
+					setIsDragging(true);
+					this.hasSniffedThisSession = true;
+					this.cooldownUntil = Date.now() + 1000; // Don't re-summon for 1s
+					// Immediately hide the sniffer once we have the paths
+					this.hideSniffer();
+				}
+			},
+		);
 
 		this.unlistenHide = await listen("vesta://hide-sniffer-request", () => {
 			console.log("[FileDrop] Hide request received from native sniffer");
@@ -70,14 +77,14 @@ class DropZoneManager {
 	}
 
 	async showSniffer(): Promise<void> {
-		if (!hasTauriRuntime() || this.isSummoning || this.hasSniffedThisSession) return;
+		if (!hasTauriRuntime() || this.isSummoning || this.hasSniffedThisSession)
+			return;
 
 		// Cooldown check to prevent flickering after a successful sniff
 		if (Date.now() < this.cooldownUntil) return;
 
 		try {
 			this.isSummoning = true;
-			const { getCurrentWindow } = await import("@tauri-apps/api/window");
 			const win = getCurrentWindow();
 			const _factor = await win.scaleFactor();
 			const size = await win.innerSize();
@@ -147,7 +154,10 @@ class DropZoneManager {
 		this.cooldownUntil = 0; // Immediate reset for new drag session
 	}
 
-	filterPaths(paths: SniffedPath[], options: DropZoneOptions = {}): SniffedPath[] {
+	filterPaths(
+		paths: SniffedPath[],
+		options: DropZoneOptions = {},
+	): SniffedPath[] {
 		const normalized = normalizeOptions(options);
 		return paths.filter((item) => {
 			const isDir = item.is_directory;

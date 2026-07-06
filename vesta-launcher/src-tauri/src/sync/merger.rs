@@ -87,6 +87,11 @@ fn parse_properties(content: &str) -> BTreeMap<String, String> {
 
 /// Parse a single "key = value" line.
 fn parse_key_value(line: &str) -> Option<(String, String)> {
+    let trimmed = line.trim_start();
+    if trimmed.is_empty() || trimmed.starts_with('#') || trimmed.starts_with('!') {
+        return None;
+    }
+
     // Try = separator first
     if let Some(pos) = line.find('=') {
         let key = line[..pos].trim().to_string();

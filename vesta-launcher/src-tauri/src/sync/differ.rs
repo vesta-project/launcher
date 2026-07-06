@@ -119,7 +119,7 @@ impl ThreeWayDiffer {
 
         match (old_mod, new_mod) {
             // File in both old and new
-            (Some(old_m), Some(new_m)) => {
+            (Some(_old_m), Some(new_m)) => {
                 if let Some(ch) = cur_hash {
                     if let Some(oh) = old_hash {
                         if ch.to_lowercase() != oh.to_lowercase() {

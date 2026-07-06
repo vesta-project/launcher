@@ -1,13 +1,21 @@
-import { PolymorphicProps } from "@kobalte/core";
+import type { PolymorphicProps } from "@kobalte/core";
 import * as ButtonPrimitive from "@kobalte/core/button";
-import { ChildrenProp } from "@ui/props";
-import { Tooltip, TooltipContent, TooltipPlacement, TooltipTrigger } from "@ui/tooltip/tooltip";
+import type { ChildrenProp } from "@ui/props";
+import {
+	Tooltip,
+	TooltipContent,
+	type TooltipPlacement,
+	TooltipTrigger,
+} from "@ui/tooltip/tooltip";
 import { children, mergeProps, Show, splitProps } from "solid-js";
 import styles from "./button.module.css";
 import { getButtonStyleVars } from "./button-style";
 
 export interface ButtonProps
-	extends PolymorphicProps<"button", ButtonPrimitive.ButtonRootProps & ChildrenProp> {
+	extends PolymorphicProps<
+		"button",
+		ButtonPrimitive.ButtonRootProps & ChildrenProp
+	> {
 	color?: "none" | "primary" | "secondary" | "destructive" | "warning";
 	variant?: "solid" | "outline" | "ghost" | "shadow" | "slate";
 	size?: "sm" | "md" | "lg" | "xl" | "icon";

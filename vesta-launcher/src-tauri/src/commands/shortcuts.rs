@@ -1,9 +1,14 @@
+#[cfg(target_os = "windows")]
 use piston_lib::utils::process::PistonCommandExt;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::fs;
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 use std::path::PathBuf;
+#[cfg(target_os = "windows")]
 use std::process::Command;
 use tauri::{command, AppHandle, Manager};
 
+#[cfg(any(target_os = "windows", target_os = "linux"))]
 async fn process_icon(app_handle: &AppHandle, input: Option<String>) -> Option<PathBuf> {
     let input = input?;
     let cache_dir = app_handle.path().app_cache_dir().ok()?.join("shortcuts");
@@ -68,7 +73,7 @@ pub async fn create_desktop_shortcut(
     app_handle: AppHandle,
     mut name: String,
     target_args: String, // e.g. "--launch-instance slug"
-    icon_path: Option<String>,
+    _icon_path: Option<String>,
 ) -> Result<(), String> {
     // Sanitize name for filesystem
     name = name
@@ -83,9 +88,11 @@ pub async fn create_desktop_shortcut(
     }
 
     let desktop_dir = app_handle.path().desktop_dir().map_err(|e| e.to_string())?;
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
     let exe_path = std::env::current_exe().map_err(|e| e.to_string())?;
 
-    let processed_icon = process_icon(&app_handle, icon_path).await;
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    let processed_icon = process_icon(&app_handle, _icon_path).await;
 
     #[cfg(target_os = "windows")]
     {

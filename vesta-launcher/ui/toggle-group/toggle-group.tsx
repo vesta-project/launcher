@@ -1,23 +1,29 @@
-import { PolymorphicProps } from "@kobalte/core";
+import type { PolymorphicProps } from "@kobalte/core";
 import * as ToggleGroupPrimitive from "@kobalte/core/toggle-group";
-import { getButtonStyleVars, type ButtonColor } from "@ui/button/button-style";
-import { ChildrenProp, ClassProp } from "@ui/props";
+import { type ButtonColor, getButtonStyleVars } from "@ui/button/button-style";
+import type { ChildrenProp, ClassProp } from "@ui/props";
 import clsx from "clsx";
-import { splitProps, ValidComponent } from "solid-js";
+import { splitProps, type ValidComponent } from "solid-js";
 import styles from "./toggle-group.module.css";
 
 type ToggleGroupRootProps<T extends ValidComponent = "div"> =
 	ToggleGroupPrimitive.ToggleGroupRootProps<T> &
-	ClassProp &
-	ChildrenProp & {
-		color?: ButtonColor;
-		variant?: "solid" | "outline" | "ghost" | "shadow" | "slate";
-	};
+		ClassProp &
+		ChildrenProp & {
+			color?: ButtonColor;
+			variant?: "solid" | "outline" | "ghost" | "shadow" | "slate";
+		};
 
 function ToggleGroup<T extends ValidComponent = "div">(
 	props: PolymorphicProps<T, ToggleGroupRootProps<T>>,
 ) {
-	const [local, rest] = splitProps(props as any, ["class", "children", "color", "variant", "style"]);
+	const [local, rest] = splitProps(props as any, [
+		"class",
+		"children",
+		"color",
+		"variant",
+		"style",
+	]);
 	const color = local.color || "secondary";
 	const buttonVars = getButtonStyleVars(color);
 	const isMutedShell = color === "none" || color === "secondary";
