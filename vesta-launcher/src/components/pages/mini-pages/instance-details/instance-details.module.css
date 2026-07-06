@@ -1986,6 +1986,13 @@
         var(--border-subtle) 72%,
         hsl(var(--color__primary-hue) 55% var(--lightness-border) / 0.35)
     );
+}
+
+.vesta-table tr.row-modpack-child-hidden {
+    display: none;
+}
+
+.vesta-table tr.row-modpack-child-expanded td {
     animation: modpackChildReveal 170ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
@@ -2031,7 +2038,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .vesta-table tr.row-modpack-child td {
+    .vesta-table tr.row-modpack-child-expanded td {
         animation: none;
     }
 }

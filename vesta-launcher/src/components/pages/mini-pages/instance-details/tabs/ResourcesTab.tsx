@@ -14,7 +14,7 @@ import {
 import { ResourceAvatar } from "@ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@ui/select/select";
 import { Skeleton } from "@ui/skeleton/skeleton";
-import { createEffect, createMemo, createSignal, For, Show } from "solid-js";
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import {
 	createContainerQuery,
 	RESOURCES_FILTER_COMPACT_WIDTH,
@@ -50,6 +50,24 @@ function getColumnClass(columnId: string): string | undefined {
 	const key = COLUMN_CLASS[columnId];
 	return key ? styles[key] : undefined;
 }
+
+type IdleCallbackHandle = number;
+type WindowWithIdleCallback = Window &
+	typeof globalThis & {
+		requestIdleCallback?: (callback: () => void) => IdleCallbackHandle;
+		cancelIdleCallback?: (handle: IdleCallbackHandle) => void;
+	};
+
+const scheduleIdleWarmup = (callback: () => void) => {
+	const win = window as WindowWithIdleCallback;
+	if (typeof win.requestIdleCallback === "function") {
+		const handle = win.requestIdleCallback(callback);
+		return () => win.cancelIdleCallback?.(handle);
+	}
+
+	const handle = window.setTimeout(callback, 0);
+	return () => window.clearTimeout(handle);
+};
 
 interface ResourcesTabProps {
 	instance: any;
@@ -101,15 +119,30 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 
 		return `${modpackRows().length} bundled ${noun}`;
 	});
+	const modpackRowsWarmupKey = createMemo(() =>
+		props.instance?.modpackId
+			? `${props.instance?.id ?? "unknown"}:${modpackRows()
+					.map((row: any) => row.id)
+					.join(",")}`
+			: "",
+	);
+	const [shouldMountModpackRows, setShouldMountModpackRows] = createSignal(false);
+	let cancelModpackRowsWarmup: (() => void) | undefined;
 
-	const renderResourceRow = (row: any) => (
+	const renderResourceRow = (row: any, options?: { hidden?: () => boolean }) => (
 		<tr
 			onClick={(e) => props.onRowClick(row, e)}
 			style={{ cursor: "default" }}
+			hidden={options?.hidden?.()}
+			aria-hidden={options?.hidden?.() ? "true" : undefined}
 			classList={{
 				[styles["row-selected"]]: row.getIsSelected(),
 				[styles["row-disabled"]]: !row.original.is_enabled,
 				[styles["row-modpack-child"]]: isModpackOwnedResource(row.original),
+				[styles["row-modpack-child-hidden"]]:
+					isModpackOwnedResource(row.original) && !!options?.hidden?.(),
+				[styles["row-modpack-child-expanded"]]:
+					isModpackOwnedResource(row.original) && !options?.hidden?.(),
 			}}
 		>
 			<For each={row.getVisibleCells()}>
@@ -247,9 +280,40 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 		props.onCompactChange?.(isCompactTable());
 	});
 
+	createEffect(() => {
+		const key = modpackRowsWarmupKey();
+		cancelModpackRowsWarmup?.();
+		cancelModpackRowsWarmup = undefined;
+		setShouldMountModpackRows(false);
+
+		if (!key || !props.installedResources.latest || modpackRows().length === 0) return;
+		if (props.modpackExpanded) {
+			setShouldMountModpackRows(true);
+			return;
+		}
+
+		cancelModpackRowsWarmup = scheduleIdleWarmup(() => {
+			cancelModpackRowsWarmup = undefined;
+			setShouldMountModpackRows(true);
+		});
+	});
+
+	onCleanup(() => {
+		cancelModpackRowsWarmup?.();
+	});
+
 	const handleSearchInput = (e: InputEvent) => {
 		const target = e.currentTarget as HTMLInputElement;
 		props.setResourceSearch(target.value);
+	};
+
+	const setModpackExpanded = (expanded: boolean) => {
+		if (expanded) {
+			cancelModpackRowsWarmup?.();
+			cancelModpackRowsWarmup = undefined;
+			setShouldMountModpackRows(true);
+		}
+		props.setModpackExpanded(expanded);
 	};
 
 	return (
@@ -512,12 +576,12 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 								<Show when={props.instance?.modpackId}>
 									<tr
 										class={styles["modpack-group-row"]}
-										onClick={() => props.setModpackExpanded(!props.modpackExpanded)}
+										onClick={() => setModpackExpanded(!props.modpackExpanded)}
 										tabIndex={0}
 										onKeyDown={(event: KeyboardEvent) => {
 											if (event.key === "Enter" || event.key === " ") {
 												event.preventDefault();
-												props.setModpackExpanded(!props.modpackExpanded);
+												setModpackExpanded(!props.modpackExpanded);
 											}
 										}}
 										aria-expanded={props.modpackExpanded}
@@ -531,8 +595,10 @@ export const ResourcesTab = (props: ResourcesTabProps) => {
 										</For>
 									</tr>
 								</Show>
-								<Show when={props.instance?.modpackId && props.modpackExpanded}>
-									<For each={modpackRows()}>{renderResourceRow}</For>
+								<Show when={props.instance?.modpackId && shouldMountModpackRows()}>
+									<For each={modpackRows()}>
+										{(row) => renderResourceRow(row, { hidden: () => !props.modpackExpanded })}
+									</For>
 								</Show>
 								<For
 									each={props.instance?.modpackId ? customRows() : sortedRows()}
