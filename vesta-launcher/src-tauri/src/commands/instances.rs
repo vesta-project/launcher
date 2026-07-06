@@ -2113,6 +2113,7 @@ pub async fn launch_instance(
         force_overwrite_configs: false,
         repair_scope: piston_lib::game::installer::types::RepairScope::Full,
         remediation_policy: piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+        finalize_reporter: true,
     };
     let preflight_report = piston_lib::game::installer::verify_instance(&verify_spec)
         .map_err(|e| format!("Launch preflight verification failed: {}", e))?;
@@ -2214,6 +2215,7 @@ pub async fn launch_instance(
                 repair_scope: piston_lib::game::installer::types::RepairScope::Full,
                 remediation_policy:
                     piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+                finalize_reporter: true,
             },
         )
         .map_err(|e| {

@@ -188,6 +188,7 @@ impl Task for ImportResourceResyncTask {
                 repair_scope: piston_lib::game::installer::types::RepairScope::Full,
                 remediation_policy:
                     piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+                finalize_reporter: true,
             };
 
             // Spawn blocking to avoid async Send issues with &InstallSpec

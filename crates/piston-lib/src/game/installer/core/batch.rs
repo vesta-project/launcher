@@ -139,8 +139,6 @@ impl BatchDownloader {
                                 current,
                                 total
                             );
-                            reporter.set_message("Downloading resources...");
-
                             let file_reporter = BatchFileProgressReporter {
                                 parent: reporter.clone(),
                             };

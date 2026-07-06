@@ -232,6 +232,11 @@ pub struct InstallSpec {
     /// Remediation policy: VerifyOnly produces a report without mutating disk,
     /// RepairIfNeeded proceeds with downloads and fixes.
     pub remediation_policy: RemediationPolicy,
+
+    /// If false, leave reporter completion to the caller.
+    /// Use this when installation is one phase inside a larger task.
+    #[doc(hidden)]
+    pub finalize_reporter: bool,
 }
 
 impl InstallSpec {
@@ -249,6 +254,7 @@ impl InstallSpec {
             force_overwrite_configs: false,
             repair_scope: RepairScope::default(),
             remediation_policy: RemediationPolicy::default(),
+            finalize_reporter: true,
         }
     }
 
@@ -334,6 +340,7 @@ mod tests {
             force_overwrite_configs: false,
             repair_scope: RepairScope::Full,
             remediation_policy: RemediationPolicy::RepairIfNeeded,
+            finalize_reporter: true,
         };
 
         assert_eq!(spec.installed_version_id(), "1.20.1");
@@ -354,6 +361,7 @@ mod tests {
             force_overwrite_configs: false,
             repair_scope: RepairScope::Full,
             remediation_policy: RemediationPolicy::RepairIfNeeded,
+            finalize_reporter: true,
         };
 
         assert_eq!(spec.installed_version_id(), "fabric-loader-0.38.2-1.20.1");

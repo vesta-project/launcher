@@ -120,6 +120,7 @@ impl ModpackInstaller {
         spec.modloader_version = metadata.modloader_version.clone();
         spec.dry_run = reporter.is_dry_run();
         spec.java_path = java_path;
+        spec.finalize_reporter = false;
         let force_overwrite_configs = spec.force_overwrite_configs;
 
         // Step 3: Install base Minecraft + Modloader
@@ -286,7 +287,7 @@ impl ModpackInstaller {
 
             if !artifacts.is_empty() {
                 downloader
-                    .download_all(artifacts, reporter.clone(), 0, 1.0)
+                    .download_all(artifacts, reporter.clone(), 0, 100.0)
                     .await?;
             }
 
@@ -608,7 +609,7 @@ impl ModpackInstaller {
 
             if !artifacts.is_empty() {
                 downloader
-                    .download_all(artifacts, reporter.clone(), 0, 1.0)
+                    .download_all(artifacts, reporter.clone(), 0, 100.0)
                     .await?;
             }
 

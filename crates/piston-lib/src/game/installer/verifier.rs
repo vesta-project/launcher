@@ -766,6 +766,7 @@ mod tests {
             force_overwrite_configs: false,
             repair_scope: crate::game::installer::types::RepairScope::Full,
             remediation_policy: crate::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            finalize_reporter: true,
         }
     }
 
@@ -817,6 +818,7 @@ mod tests {
             force_overwrite_configs: false,
             repair_scope: crate::game::installer::types::RepairScope::Full,
             remediation_policy: crate::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            finalize_reporter: true,
         }
     }
 

@@ -125,9 +125,9 @@ function SidebarNotifications(props: SidebarNotificationProps) {
 									id={notification.id}
 									title={notification.title}
 									description={notification.description || undefined}
-									progress={notification.progress || undefined}
-									current_step={notification.current_step || undefined}
-									total_steps={notification.total_steps || undefined}
+									progress={notification.progress ?? undefined}
+									current_step={notification.current_step ?? undefined}
+									total_steps={notification.total_steps ?? undefined}
 									severity={notification.severity}
 									notification_type={notification.notification_type}
 									dismissible={notification.dismissible}

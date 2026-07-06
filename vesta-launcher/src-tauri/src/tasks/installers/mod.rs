@@ -190,6 +190,7 @@ impl Task for InstallInstanceTask {
                 repair_scope: piston_lib::game::installer::types::RepairScope::Full,
                 remediation_policy:
                     piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
+                finalize_reporter: true,
             };
 
             tauri::async_runtime::spawn(async move {

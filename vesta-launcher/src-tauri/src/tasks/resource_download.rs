@@ -1,6 +1,6 @@
 use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
 use crate::models::resource::{ResourceType, ResourceVersion, SourcePlatform};
-use crate::notifications::manager::NotificationManager;
+use crate::notifications::models::PROGRESS_INDETERMINATE;
 use crate::schema::installed_resource::dsl as installed_dsl;
 use crate::schema::instance::dsl as instances_dsl;
 use crate::tasks::manager::{Task, TaskContext};
@@ -11,7 +11,6 @@ use diesel::prelude::*;
 use reqwest::Url;
 use sha1::{Digest, Sha1};
 use std::path::PathBuf;
-use tauri::Manager;
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -23,6 +22,43 @@ pub struct ResourceDownloadTask {
     pub version: ResourceVersion,
     pub resource_type: ResourceType,
     pub dependency_for: Option<String>,
+}
+
+fn format_download_size(bytes: u64) -> String {
+    format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+}
+
+fn format_download_speed(bytes_per_second: f64) -> String {
+    if bytes_per_second > 1024.0 * 1024.0 {
+        format!("{:.2} MB/s", bytes_per_second / (1024.0 * 1024.0))
+    } else {
+        format!("{:.2} KB/s", bytes_per_second / 1024.0)
+    }
+}
+
+fn download_progress_percent(downloaded: u64, total_size: u64) -> i32 {
+    if total_size == 0 {
+        return PROGRESS_INDETERMINATE;
+    }
+
+    ((downloaded as f64 / total_size as f64 * 100.0) as i32).clamp(0, 99)
+}
+
+fn known_size_download_description(downloaded: u64, total_size: u64, speed: &str) -> String {
+    format!(
+        "{} / {} ({})",
+        format_download_size(downloaded),
+        format_download_size(total_size),
+        speed
+    )
+}
+
+fn unknown_size_download_description(downloaded: u64, speed: &str) -> String {
+    format!(
+        "{} downloaded ({})",
+        format_download_size(downloaded),
+        speed
+    )
 }
 
 impl Task for ResourceDownloadTask {
@@ -76,10 +112,6 @@ impl Task for ResourceDownloadTask {
         let resource_type = self.resource_type;
 
         Box::pin(async move {
-            let app_handle = ctx.app_handle.clone();
-            let notification_id = ctx.notification_id.clone();
-            let manager = app_handle.state::<NotificationManager>();
-
             ctx.set_title(format!("Installing {}", project_name));
 
             // 1. Get instance path
@@ -130,6 +162,8 @@ impl Task for ResourceDownloadTask {
             let url = Url::parse(&version.download_url)
                 .map_err(|e| format!("Invalid download URL '{}': {}", version.download_url, e))?;
 
+            ctx.update_full(0, "Starting download...".to_string(), Some(0), Some(1));
+
             let client = piston_lib::client::shared_client();
 
             let mut response = client
@@ -147,6 +181,15 @@ impl Task for ResourceDownloadTask {
             }
 
             let total_size = response.content_length().unwrap_or(0);
+            if total_size == 0 {
+                ctx.update_full(
+                    PROGRESS_INDETERMINATE,
+                    "Downloading...".to_string(),
+                    Some(0),
+                    Some(1),
+                );
+            }
+
             let mut downloaded: u64 = 0;
             let mut last_update = std::time::Instant::now();
             let mut last_downloaded: u64 = 0;
@@ -174,26 +217,44 @@ impl Task for ResourceDownloadTask {
                     let elapsed = now.duration_since(last_update).as_secs_f64();
                     let speed = (downloaded - last_downloaded) as f64 / elapsed; // bytes/sec
 
-                    let speed_fmt = if speed > 1024.0 * 1024.0 {
-                        format!("{:.2} MB/s", speed / (1024.0 * 1024.0))
-                    } else {
-                        format!("{:.2} KB/s", speed / 1024.0)
-                    };
-
-                    let downloaded_fmt = format!("{:.1} MB", downloaded as f64 / (1024.0 * 1024.0));
-                    let total_fmt = format!("{:.1} MB", total_size as f64 / (1024.0 * 1024.0));
+                    let speed_fmt = format_download_speed(speed);
 
                     if total_size > 0 {
-                        let percent = (downloaded as f64 / total_size as f64 * 100.0) as i32;
-                        let desc = format!("{} / {} ({})", downloaded_fmt, total_fmt, speed_fmt);
-                        let _ = ctx.update_full(percent, desc, None, None);
+                        ctx.update_full(
+                            download_progress_percent(downloaded, total_size),
+                            known_size_download_description(downloaded, total_size, &speed_fmt),
+                            Some(0),
+                            Some(1),
+                        );
                     } else {
-                        let desc = format!("{} units downloaded ({})", downloaded, speed_fmt);
-                        let _ = ctx.update_description(desc);
+                        ctx.update_full(
+                            PROGRESS_INDETERMINATE,
+                            unknown_size_download_description(downloaded, &speed_fmt),
+                            Some(0),
+                            Some(1),
+                        );
                     }
 
                     last_update = now;
                     last_downloaded = downloaded;
+                }
+            }
+
+            if downloaded > 0 {
+                if total_size > 0 {
+                    ctx.update_full(
+                        download_progress_percent(downloaded, total_size),
+                        known_size_download_description(downloaded, total_size, "finalizing"),
+                        Some(0),
+                        Some(1),
+                    );
+                } else {
+                    ctx.update_full(
+                        PROGRESS_INDETERMINATE,
+                        unknown_size_download_description(downloaded, "finalizing"),
+                        Some(0),
+                        Some(1),
+                    );
                 }
             }
 
@@ -384,5 +445,35 @@ impl Task for ResourceDownloadTask {
 
             Ok(())
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn known_size_progress_is_visible_but_reserved_for_task_completion() {
+        assert_eq!(download_progress_percent(0, 100), 0);
+        assert_eq!(download_progress_percent(50, 100), 50);
+        assert_eq!(download_progress_percent(100, 100), 99);
+        assert_eq!(download_progress_percent(120, 100), 99);
+    }
+
+    #[test]
+    fn unknown_size_progress_is_indeterminate() {
+        assert_eq!(download_progress_percent(10, 0), PROGRESS_INDETERMINATE);
+    }
+
+    #[test]
+    fn download_descriptions_use_byte_progress_text() {
+        assert_eq!(
+            known_size_download_description(1024 * 1024, 2 * 1024 * 1024, "12.00 MB/s"),
+            "1.0 MB / 2.0 MB (12.00 MB/s)"
+        );
+        assert_eq!(
+            unknown_size_download_description(1024 * 1024, "finalizing"),
+            "1.0 MB downloaded (finalizing)"
+        );
     }
 }

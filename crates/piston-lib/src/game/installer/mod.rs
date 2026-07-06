@@ -228,6 +228,20 @@ fn collect_missing_asset_downloads(
     Ok(assets_to_download)
 }
 
+fn complete_install_progress(
+    spec: &InstallSpec,
+    reporter: &dyn ProgressReporter,
+    message: &str,
+) {
+    if spec.finalize_reporter {
+        reporter.set_percent(100);
+        reporter.done(true, Some(message));
+    } else {
+        reporter.set_percent(99);
+        reporter.set_message(message);
+    }
+}
+
 async fn install_instance_inner(
     spec: InstallSpec,
     reporter: std::sync::Arc<dyn ProgressReporter>,
@@ -282,14 +296,16 @@ async fn install_instance_inner(
                 "Verification complete: {} issues found",
                 preflight.issues.len()
             ));
-            reporter.set_percent(100);
-            reporter.done(true, Some("Verification complete"));
+            complete_install_progress(&spec, reporter.as_ref(), "Verification complete");
             return Ok(());
         }
     } else if !spec.dry_run {
         reporter.set_message("Runtime already valid. Skipping repair downloads.");
-        reporter.set_percent(100);
-        reporter.done(true, Some("Installation verification complete"));
+        complete_install_progress(
+            &spec,
+            reporter.as_ref(),
+            "Installation verification complete",
+        );
         return Ok(());
     }
 
@@ -320,8 +336,11 @@ async fn install_instance_inner(
                 "[Dry-Run] Would download version metadata for {}",
                 spec.version_id
             );
-            reporter.set_percent(100);
-            reporter.done(true, Some("[Dry-Run] Installation plan validated"));
+            complete_install_progress(
+                &spec,
+                reporter.as_ref(),
+                "[Dry-Run] Installation plan validated",
+            );
             return Ok(());
         }
 
@@ -582,8 +601,7 @@ async fn install_instance_inner(
         }
     }
 
-    reporter.set_percent(100);
-    reporter.done(true, Some("Installation complete"));
+    complete_install_progress(&spec, reporter.as_ref(), "Installation complete");
     log::info!("Installation completed successfully: {}", spec.version_id);
 
     Ok(())

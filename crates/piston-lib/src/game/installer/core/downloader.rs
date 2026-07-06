@@ -531,6 +531,7 @@ mod tests {
             force_overwrite_configs: false,
             repair_scope: crate::game::installer::types::RepairScope::Full,
             remediation_policy: crate::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            finalize_reporter: true,
         };
 
         let installed_id = "forge-loader-47.2.0-1.20.1";
@@ -579,6 +580,7 @@ mod tests {
             force_overwrite_configs: false,
             repair_scope: crate::game::installer::types::RepairScope::Full,
             remediation_policy: crate::game::installer::types::RemediationPolicy::RepairIfNeeded,
+            finalize_reporter: true,
         };
 
         let installed_id = "forge-loader-47.2.0-1.20.1";
