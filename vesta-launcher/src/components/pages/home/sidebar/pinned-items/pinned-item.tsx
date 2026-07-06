@@ -173,32 +173,45 @@ export function PinnedItem(props: PinnedItemProps) {
 	};
 
 	const handleCreateShortcut = async (quickLaunch = false) => {
+		if (props.pin.page_type === "settings") return;
+
 		try {
-			let args = "";
 			const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
-			if (props.pin.page_type === "instance") {
-				args = quickLaunch
-					? `--launch-instance ${props.pin.target_id}`
-					: `--open-instance ${props.pin.target_id}`;
-			} else {
-				args = `--open-resource ${props.pin.platform} ${props.pin.target_id}`;
-			}
+			const name = `${displayName()}${suffix}`;
+			const target =
+				props.pin.page_type === "instance"
+					? {
+							kind: quickLaunch ? "launch-instance" : "open-instance",
+							slug: props.pin.target_id,
+						}
+					: {
+							kind: "open-resource",
+							platform: props.pin.platform,
+							projectId: props.pin.target_id,
+						};
 
-			const name = props.pin.label + suffix;
-
-			await invoke("create_desktop_shortcut", {
-				name: name,
-				targetArgs: args,
-				iconPath: props.pin.icon_url,
+			const result = await invoke<{
+				warnings?: string[];
+				iconApplied?: boolean;
+			}>("create_desktop_shortcut", {
+				name,
+				target,
+				iconSource: displayIcon(),
 			});
+			const warning = result.warnings?.[0];
 
 			showToast({
 				title: "Shortcut Created",
-				description: `Added ${name} to your desktop`,
-				severity: "success",
+				description: warning || `Added ${name} to your desktop`,
+				severity: warning ? "warning" : "success",
 			});
 		} catch (e) {
 			console.error("Failed to create shortcut:", e);
+			showToast({
+				title: "Shortcut Failed",
+				description: String(e),
+				severity: "error",
+			});
 		}
 	};
 
@@ -365,15 +378,17 @@ export function PinnedItem(props: PinnedItemProps) {
 						</ContextMenuItem>
 					</Show>
 					<ContextMenuSeparator />
-					<Show when={props.pin.page_type === "instance"}>
-						<ContextMenuItem onClick={() => handleCreateShortcut(true)}>
-							<span>Add Quick Launch to Desktop</span>
+					<Show when={props.pin.page_type !== "settings"}>
+						<Show when={props.pin.page_type === "instance"}>
+							<ContextMenuItem onClick={() => handleCreateShortcut(true)}>
+								<span>Create Launch Shortcut</span>
+							</ContextMenuItem>
+						</Show>
+						<ContextMenuItem onClick={() => handleCreateShortcut(false)}>
+							<span>Create Page Shortcut</span>
 						</ContextMenuItem>
+						<ContextMenuSeparator />
 					</Show>
-					<ContextMenuItem onClick={() => handleCreateShortcut(false)}>
-						<span>Add to Desktop</span>
-					</ContextMenuItem>
-					<ContextMenuSeparator />
 					<ContextMenuItem
 						onClick={() => unpinPage(props.pin.id)}
 						class={styles["menu-item--danger"]}

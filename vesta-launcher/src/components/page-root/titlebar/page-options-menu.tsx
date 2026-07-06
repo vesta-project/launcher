@@ -107,33 +107,39 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 
 	const handleCreateShortcut = async (quickLaunch = false) => {
 		const info = pageInfo();
-		if (!info) return;
+		if (!info || info.type === "settings") return;
 
 		setIsOpen(false);
 
 		try {
 			const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
 			const name = info.label + suffix;
-			let args = "";
+			const target =
+				info.type === "instance"
+					? {
+							kind: quickLaunch ? "launch-instance" : "open-instance",
+							slug: info.id,
+						}
+					: {
+							kind: "open-resource",
+							platform: info.platform,
+							projectId: info.id,
+						};
 
-			if (info.type === "instance") {
-				args = quickLaunch
-					? `--launch-instance ${info.id}`
-					: `--open-instance ${info.id}`;
-			} else {
-				args = `--open-resource ${info.platform} ${info.id}`;
-			}
-
-			await invoke("create_desktop_shortcut", {
+			const result = await invoke<{
+				warnings?: string[];
+				iconApplied?: boolean;
+			}>("create_desktop_shortcut", {
 				name,
-				targetArgs: args,
-				iconPath: info.icon, // Pass the icon URL/path
+				target,
+				iconSource: info.icon,
 			});
+			const warning = result.warnings?.[0];
 
 			showToast({
 				title: "Shortcut Created",
-				description: `Added ${name} to your desktop`,
-				severity: "success",
+				description: warning || `Added ${name} to your desktop`,
+				severity: warning ? "warning" : "success",
 			});
 		} catch (e) {
 			console.error("Failed to create shortcut:", e);
@@ -183,23 +189,25 @@ export function PageOptionsMenu(props: { router?: MiniRouter }) {
 							<span>{pinned() ? "Unpin Page" : "Pin Page"}</span>
 						</button>
 
-						<Show when={pageInfo()?.type === "instance"}>
+						<Show when={pageInfo()?.type !== "settings"}>
+							<Show when={pageInfo()?.type === "instance"}>
+								<button
+									class={styles["menu-item"]}
+									onClick={() => handleCreateShortcut(true)}
+								>
+									<DesktopAddIcon />
+									<span>Create Launch Shortcut</span>
+								</button>
+							</Show>
+
 							<button
 								class={styles["menu-item"]}
-								onClick={() => handleCreateShortcut(true)}
+								onClick={() => handleCreateShortcut(false)}
 							>
 								<DesktopAddIcon />
-								<span>Add Quick Launch to Desktop</span>
+								<span>Create Page Shortcut</span>
 							</button>
 						</Show>
-
-						<button
-							class={styles["menu-item"]}
-							onClick={() => handleCreateShortcut(false)}
-						>
-							<DesktopAddIcon />
-							<span>Add Page to Desktop</span>
-						</button>
 
 						<button class={styles["menu-item"]} onClick={copyUrl}>
 							<LinkIcon />

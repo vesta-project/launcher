@@ -960,6 +960,23 @@ mod parse_vesta_url_tests {
     }
 
     #[test]
+    fn parses_open_resource_query_links() {
+        let result = parse_vesta_url(
+            "vesta://open-resource?platform=modrinth&projectId=fabric-api".to_string(),
+        )
+        .expect("open-resource query");
+        assert_eq!(result.target, DeepLinkTarget::ResourceDetails);
+        assert_eq!(
+            result.params.get("platform").map(String::as_str),
+            Some("modrinth")
+        );
+        assert_eq!(
+            result.params.get("projectId").map(String::as_str),
+            Some("fabric-api")
+        );
+    }
+
+    #[test]
     fn parses_launch_instance_links() {
         let result = parse_vesta_url("vesta://launch-instance/my-slug".to_string())
             .expect("launch-instance");

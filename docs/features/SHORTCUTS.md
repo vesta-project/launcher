@@ -45,24 +45,16 @@ $Shortcut.Save();
 - Working directory specification
 - Normal window style (not minimized/maximized)
 
-### macOS (.inetloc files)
+### macOS (.app bundles)
 
-macOS uses Internet Location files that leverage Vesta's deep link system:
-
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>URL</key>
-    <string>vesta://launch-instance/vanilla-1-20-1</string>
-</dict>
-</plist>
-```
+macOS shortcuts are generated as tiny `.app` bundles on the Desktop. Each bundle
+contains an executable launcher script, an `Info.plist`, and a generated icon so
+Finder can show the branded shortcut artwork reliably. The launcher script opens
+a canonical Vesta deep link such as `vesta://launch-instance?slug=vanilla-1-20-1`.
 
 **Features:**
-- Converts CLI arguments to `vesta://` deep links
-- Uses .inetloc (Internet Location) format
+- Uses Vesta deep links for target routing
+- Uses a generated app bundle instead of `.inetloc` so custom artwork can display
 - Integrates with macOS URL handling
 
 ### Linux (.desktop files)
@@ -74,7 +66,7 @@ Linux uses freedesktop.org desktop entry specification:
 Version=1.0
 Type=Application
 Name=Vesta Shortcut
-Exec=/path/to/vesta-launcher --launch-instance vanilla-1-20-1
+Exec='/path/to/vesta-launcher' --launch-instance vanilla-1-20-1
 Icon=/path/to/icon.png
 Terminal=false
 Categories=Game;Launcher;
@@ -94,7 +86,7 @@ Categories=Game;Launcher;
 2. **Download/Cache**: Downloads remote images or loads local files
 3. **Resize**: Scales base image to 256x256 pixels
 4. **Overlay**: Adds Vesta logo (80x80) to bottom-right corner
-5. **Format Conversion**: Converts to appropriate format (.ico for Windows, .png for others)
+5. **Format Conversion**: Emits `.ico` for Windows, `.png` for Linux, and `.icns` for macOS when possible
 6. **Caching**: Stores processed icons in `app_cache_dir/shortcuts/`
 
 ### Icon Sources
@@ -107,8 +99,9 @@ Categories=Game;Launcher;
 
 ```rust
 let cache_dir = app_handle.path().app_cache_dir()?.join("shortcuts");
-let hash = calculate_hash(input_url);
-let cached_path = cache_dir.join(format!("{}.branded.ico", hash));
+let hash = calculate_hash(icon_source, shortcut_target);
+let png_path = cache_dir.join(format!("{}.branded.png", hash));
+let ico_path = cache_dir.join(format!("{}.branded.ico", hash));
 ```
 
 **Benefits:**
@@ -124,16 +117,22 @@ let cached_path = cache_dir.join(format!("{}.branded.ico", hash));
 #[command]
 pub async fn create_desktop_shortcut(
     app_handle: AppHandle,
-    mut name: String,
-    target_args: String,
-    icon_path: Option<String>,
-) -> Result<(), String>
+    name: String,
+    target: ShortcutTarget,
+    icon_source: Option<String>,
+) -> Result<ShortcutCreationResult, String>
 ```
 
 **Parameters:**
 - `name`: Display name (sanitized for filesystem)
-- `target_args`: CLI arguments (e.g., "--launch-instance slug")
-- `icon_path`: URL, data URI, or file path for icon
+- `target`: Structured shortcut target (`launch-instance`, `open-instance`, or `open-resource`)
+- `icon_source`: URL, data URI, or file path for icon
+
+**Result:**
+- `shortcutPath`: Created desktop artifact
+- `iconPath`: Generated branded icon path
+- `iconApplied`: Whether the platform artifact accepted the custom icon
+- `warnings`: Non-fatal issues, such as falling back to the Vesta app icon
 
 ### Frontend Usage
 
@@ -142,18 +141,20 @@ pub async fn create_desktop_shortcut(
 const handleCreateShortcut = async (quickLaunch = false) => {
     const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
     const name = pin.label + suffix;
-    
-    let args = "";
-    if (pin.page_type === "instance") {
-        args = quickLaunch 
-            ? `--launch-instance ${pin.target_id}` 
-            : `--open-instance ${pin.target_id}`;
-    }
-    
+
     await invoke("create_desktop_shortcut", {
         name,
-        targetArgs: args,
-        iconPath: pin.icon_url,
+        target: pin.page_type === "instance"
+            ? {
+                kind: quickLaunch ? "launch-instance" : "open-instance",
+                slug: pin.target_id,
+            }
+            : {
+                kind: "open-resource",
+                platform: pin.platform,
+                projectId: pin.target_id,
+            },
+        iconSource: pin.icon_url,
     });
 };
 ```
@@ -164,18 +165,20 @@ const createShortcut = async (quickLaunch: boolean) => {
     const info = getCurrentPageInfo();
     const suffix = quickLaunch ? " (Launch)" : " (Open Page)";
     const name = info.label + suffix;
-    
-    let args = "";
-    if (info.type === "instance") {
-        args = quickLaunch 
-            ? `--launch-instance ${info.id}` 
-            : `--open-instance ${info.id}`;
-    }
-    
+
     await invoke("create_desktop_shortcut", {
         name,
-        targetArgs: args,
-        iconPath: info.icon,
+        target: info.type === "instance"
+            ? {
+                kind: quickLaunch ? "launch-instance" : "open-instance",
+                slug: info.id,
+            }
+            : {
+                kind: "open-resource",
+                platform: info.platform,
+                projectId: info.id,
+            },
+        iconSource: info.icon,
     });
 };
 ```
@@ -190,20 +193,12 @@ const createShortcut = async (quickLaunch: boolean) => {
 
 ### Deep Link Conversion
 
-For macOS, CLI arguments are converted to deep links:
+For macOS, shortcut targets are rendered directly to canonical deep links:
 
 ```rust
-let deep_link = if target_args.starts_with("--") {
-    let parts: Vec<&str> = target_args.split_whitespace().collect();
-    if parts.len() >= 2 {
-        let action = parts[0].trim_start_matches("--");
-        format!("vesta://{}/{}", action, parts[1])
-    } else {
-        format!("vesta://{}", parts[0].trim_start_matches("--"))
-    }
-} else {
-    target_args.clone()
-};
+vesta://launch-instance?slug=<slug>
+vesta://open-instance?slug=<slug>
+vesta://open-resource?platform=<platform>&projectId=<id>
 ```
 
 ## User Interface
@@ -216,8 +211,8 @@ Shortcuts can be created from:
 
 ### Menu Options
 
-- **Create Shortcut (Open Page)**: Opens the page in launcher
-- **Create Shortcut (Launch)**: Directly launches instance (instances only)
+- **Create Page Shortcut**: Opens the page in launcher
+- **Create Launch Shortcut**: Directly launches instance (instances only)
 
 ### Feedback
 
@@ -231,8 +226,7 @@ Shortcuts can be created from:
 
 - **Permission Denied**: Cannot write to desktop directory
 - **Invalid Paths**: Icon URLs that fail to download
-- **Name Conflicts**: Automatic renaming for duplicates
-- **Icon Processing**: Fallback to default icon on processing failure
+- **Icon Processing**: Fallback to Vesta app icon on processing failure, returned as a warning
 
 ### Platform-Specific Considerations
 

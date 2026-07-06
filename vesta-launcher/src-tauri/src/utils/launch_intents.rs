@@ -136,6 +136,13 @@ pub fn ingest_launch_args(args: &[String]) {
 
 pub fn ingest_opened_urls(urls: &[tauri::Url]) {
     for url in urls {
+        if url.scheme() == "vesta" {
+            push_intent(QueuedIntent::Argv {
+                args: vec![url.as_str().to_string()],
+            });
+            continue;
+        }
+
         if let Some(path) = normalize_opened_path(url.as_str()) {
             push_intent(QueuedIntent::Path { path });
             continue;
@@ -174,6 +181,9 @@ pub fn signal_frontend_ready(app: tauri::AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
 
     fn reset_queue() {
         if let Ok(mut intents) = queue().lock() {
@@ -183,6 +193,7 @@ mod tests {
 
     #[test]
     fn ingest_launch_args_preserves_cli_argv() {
+        let _guard = TEST_LOCK.lock().expect("test lock");
         reset_queue();
         ingest_launch_args(&[
             "vesta".to_string(),
@@ -207,6 +218,7 @@ mod tests {
 
     #[test]
     fn ingest_launch_args_queues_file_paths_individually() {
+        let _guard = TEST_LOCK.lock().expect("test lock");
         reset_queue();
         ingest_launch_args(&["vesta".to_string(), "/tmp/pack.mrpack".to_string()]);
 
@@ -234,6 +246,22 @@ mod tests {
         assert_eq!(
             normalize_opened_path(r"C:\Users\pack.mrpack"),
             Some(r"C:\Users\pack.mrpack".to_string())
+        );
+    }
+
+    #[test]
+    fn ingest_opened_urls_queues_vesta_deep_links() {
+        let _guard = TEST_LOCK.lock().expect("test lock");
+        reset_queue();
+        let url = tauri::Url::parse("vesta://open-instance?slug=my-pack").expect("url");
+
+        ingest_opened_urls(&[url]);
+
+        assert_eq!(
+            drain_queue(),
+            vec![QueuedIntent::Argv {
+                args: vec!["vesta://open-instance?slug=my-pack".to_string()]
+            }]
         );
     }
 }
