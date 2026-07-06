@@ -2,9 +2,9 @@
 //! Used by both vanilla and modloader installations.
 
 use crate::game::installer::core::downloader::download_to_path;
-use crate::game::installer::core::library::LibraryDownloader;
+use crate::game::installer::core::library::{LibraryDownloader, LibrarySpec};
 use crate::game::installer::types::{InstallSpec, OsType, ProgressReporter};
-use crate::game::launcher::unified_manifest::UnifiedManifest;
+use crate::game::launcher::unified_manifest::{UnifiedLibrary, UnifiedManifest};
 use crate::game::launcher::version_parser::VersionManifest;
 use anyhow::{Context, Result};
 use futures::stream::{self, StreamExt};
@@ -43,15 +43,7 @@ pub async fn process_and_download_libraries(
     if !regular_libs.is_empty() {
         let lib_dir = spec.libraries_dir();
         let lib_downloader = LibraryDownloader::new(&client, &lib_dir, reporter.clone());
-        let library_specs: Vec<crate::game::installer::core::library::LibrarySpec> = regular_libs
-            .iter()
-            .map(|lib| crate::game::installer::core::library::LibrarySpec {
-                name: lib.name.clone(),
-                maven_url: lib.download_url.clone(),
-                explicit_url: lib.download_url.clone(),
-                sha1: lib.sha1.clone(),
-            })
-            .collect();
+        let library_specs = library_specs_from_regular_libraries(&regular_libs);
 
         lib_downloader
             .download_libraries_concurrent(library_specs, spec.concurrency, 40, 40)
@@ -170,6 +162,48 @@ pub async fn process_and_download_libraries(
     }
 
     Ok(unified)
+}
+
+fn library_specs_from_regular_libraries(libraries: &[&UnifiedLibrary]) -> Vec<LibrarySpec> {
+    libraries
+        .iter()
+        .map(|lib| LibrarySpec {
+            name: lib.name.clone(),
+            maven_url: None,
+            explicit_url: lib.download_url.clone(),
+            sha1: lib.sha1.clone(),
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn final_download_url_is_not_reused_as_maven_base() {
+        let library = UnifiedLibrary {
+            name: "net.minecraftforge:forge:26.1.2-64.0.8:client".to_string(),
+            path: "net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
+                .to_string(),
+            download_url: Some(
+                "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
+                    .to_string(),
+            ),
+            sha1: Some("abc123".to_string()),
+            size: None,
+            is_native: false,
+            classifier: Some("client".to_string()),
+            extract_rules: None,
+            include_in_classpath: true,
+        };
+
+        let specs = library_specs_from_regular_libraries(&[&library]);
+
+        assert_eq!(specs.len(), 1);
+        assert_eq!(specs[0].maven_url, None);
+        assert_eq!(specs[0].explicit_url, library.download_url);
+    }
 }
 
 /// Extract a native JAR (ZIP) into the natives directory.

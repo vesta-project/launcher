@@ -13,6 +13,7 @@ use tokio::sync::Mutex;
 #[derive(Clone)]
 pub struct LibrarySpec {
     pub name: String,
+    /// Maven repository base URL only. Do not put a final artifact URL here.
     pub maven_url: Option<String>,
     pub explicit_url: Option<String>,
     pub sha1: Option<String>,
@@ -46,6 +47,32 @@ mod tests {
             "https://libraries.minecraft.net/artifact.jar",
         );
         assert_eq!(resolved, "https://cdn.example.org/lib.jar");
+    }
+
+    #[test]
+    fn test_resolve_explicit_url_treats_artifact_maven_base_as_final() {
+        let artifact_url = "https://libraries.minecraft.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+        let resolved = LibraryDownloader::resolve_explicit_url(
+            Some("net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"),
+            Some(artifact_url),
+            "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar",
+        );
+
+        assert_eq!(resolved, artifact_url);
+        assert!(!resolved.contains(".jar/net/minecraftforge/"));
+    }
+
+    #[test]
+    fn test_resolve_library_static_treats_artifact_maven_url_as_final() {
+        let artifact_url = "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+        let (_path, resolved) = LibraryDownloader::resolve_library_static(
+            "net.minecraftforge:forge:26.1.2-64.0.8:client",
+            Some(artifact_url),
+        )
+        .unwrap();
+
+        assert_eq!(resolved, artifact_url);
+        assert!(!resolved.contains(".jar/net/minecraftforge/"));
     }
 }
 impl<'a> LibraryDownloader<'a> {
@@ -396,7 +423,14 @@ impl<'a> LibraryDownloader<'a> {
         );
 
         let base_url = maven_url.unwrap_or("https://libraries.minecraft.net/");
-        let url = if base_url.ends_with('/') {
+        let url = if looks_like_artifact_url(base_url) {
+            log::warn!(
+                "Library Maven base looked like a final artifact URL for {}: {}",
+                name,
+                base_url
+            );
+            base_url.to_string()
+        } else if base_url.ends_with('/') {
             format!("{}{}", base_url, rel_path)
         } else {
             format!("{}/{}", base_url, rel_path)
@@ -421,7 +455,13 @@ impl<'a> LibraryDownloader<'a> {
                 explicit.to_string()
             } else {
                 let base = maven_base.unwrap_or("https://libraries.minecraft.net/");
-                if base.ends_with('/') {
+                if looks_like_artifact_url(base) {
+                    log::warn!(
+                        "Library Maven base looked like a final artifact URL while resolving relative explicit URL: {}",
+                        base
+                    );
+                    base.to_string()
+                } else if base.ends_with('/') {
                     format!("{}{}", base, explicit)
                 } else {
                     format!("{}/{}", base, explicit)
@@ -431,4 +471,18 @@ impl<'a> LibraryDownloader<'a> {
             resolved_url.to_string()
         }
     }
+}
+
+fn looks_like_artifact_url(url: &str) -> bool {
+    let lower = url
+        .split(['?', '#'])
+        .next()
+        .unwrap_or(url)
+        .to_ascii_lowercase();
+
+    lower.ends_with(".jar")
+        || lower.ends_with(".zip")
+        || lower.ends_with(".lzma")
+        || lower.ends_with(".json")
+        || lower.ends_with(".pom")
 }

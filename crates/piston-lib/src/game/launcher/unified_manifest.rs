@@ -380,16 +380,12 @@ impl UnifiedLibrary {
         // we still might need it (e.g. Fabric/Quilt libraries often don't have downloads field)
         if normal_lib.is_none() && lib.natives.is_none() {
             let path = name_to_path(&lib.name);
-            let url = if let Some(lib_url) = &lib.url {
-                let base = if lib_url.ends_with('/') {
-                    lib_url.clone()
-                } else {
-                    format!("{}/", lib_url)
-                };
-                Some(format!("{}{}", base, path))
-            } else {
-                resolve_maven_url(&lib.name, ml_type)
-            };
+            let url = normalize_explicit_url(
+                None,
+                &path,
+                lib.url.as_deref(),
+                resolve_maven_url(&lib.name, ml_type),
+            );
 
             normal_lib = Some(UnifiedLibrary {
                 name: lib.name.clone(),
@@ -475,16 +471,12 @@ impl UnifiedLibrary {
             }
 
             if url.is_none() {
-                if let Some(lib_url) = &lib.url {
-                    let base = if lib_url.ends_with('/') {
-                        lib_url.clone()
-                    } else {
-                        format!("{}/", lib_url)
-                    };
-                    url = Some(format!("{}{}", base, path));
-                } else {
-                    url = resolve_maven_url_with_classifier(&lib.name, &classifier, ml_type);
-                }
+                url = normalize_explicit_url(
+                    None,
+                    &path,
+                    lib.url.as_deref(),
+                    resolve_maven_url_with_classifier(&lib.name, &classifier, ml_type),
+                );
             }
 
             results.push(UnifiedLibrary {
@@ -734,6 +726,29 @@ fn join_maven_url(base: &str, path: &str) -> String {
     }
 }
 
+fn is_absolute_url(value: &str) -> bool {
+    value.starts_with("http://") || value.starts_with("https://")
+}
+
+fn looks_like_artifact_url(value: &str, path: &str) -> bool {
+    let clean = value.split(['?', '#']).next().unwrap_or(value);
+    let clean_lower = clean.to_ascii_lowercase();
+    clean.trim_end_matches('/').ends_with(path)
+        || clean_lower.ends_with(".jar")
+        || clean_lower.ends_with(".zip")
+        || clean_lower.ends_with(".lzma")
+        || clean_lower.ends_with(".json")
+        || clean_lower.ends_with(".pom")
+}
+
+fn join_repository_base_or_final_url(base: &str, path: &str) -> String {
+    if is_absolute_url(base) && looks_like_artifact_url(base, path) {
+        return base.to_string();
+    }
+
+    join_maven_url(base, path)
+}
+
 fn resolve_maven_url(name: &str, ml_type: Option<&str>) -> Option<String> {
     let path = name_to_path(name);
     resolve_maven_base(name, ml_type).map(|base| join_maven_url(base, &path))
@@ -756,41 +771,31 @@ fn normalize_explicit_url(
 ) -> Option<String> {
     // If we have an explicit URL
     if let Some(s) = explicit {
-        if s.starts_with("http://") || s.starts_with("https://") {
+        if is_absolute_url(s) {
             return Some(s.to_string());
         }
         // Relative explicit - prefer lib_base, then maven_base
         if !s.is_empty() {
             if let Some(base) = lib_base {
-                if base.ends_with('/') {
-                    return Some(format!("{}{}", base, s.trim_start_matches('/')));
-                } else {
-                    return Some(format!("{}/{}", base, s.trim_start_matches('/')));
+                if is_absolute_url(base) && looks_like_artifact_url(base, path) {
+                    return Some(base.to_string());
                 }
+                return Some(join_maven_url(base, s.trim_start_matches('/')));
             }
             if let Some(mb) = maven_base.as_deref() {
-                if mb.ends_with('/') {
-                    return Some(format!("{}{}", mb, s.trim_start_matches('/')));
-                } else {
-                    return Some(format!("{}/{}", mb, s.trim_start_matches('/')));
+                if is_absolute_url(mb) && looks_like_artifact_url(mb, path) {
+                    return Some(mb.to_string());
                 }
+                return Some(join_maven_url(mb, s.trim_start_matches('/')));
             }
         }
     } else {
         // No explicit URL: build from lib_base + path or maven_base + path
         if let Some(base) = lib_base {
-            if base.ends_with('/') {
-                return Some(format!("{}{}", base, path));
-            } else {
-                return Some(format!("{}/{}", base.trim_end_matches('/'), path));
-            }
+            return Some(join_repository_base_or_final_url(base, path));
         }
         if let Some(mb) = maven_base.as_deref() {
-            if mb.ends_with('/') {
-                return Some(format!("{}{}", mb, path));
-            } else {
-                return Some(format!("{}/{}", mb.trim_end_matches('/'), path));
-            }
+            return Some(join_repository_base_or_final_url(mb, path));
         }
     }
 
@@ -1106,6 +1111,7 @@ mod tests {
         assert_eq!(reloaded.libraries.len(), 1);
     }
 
+    #[test]
     fn forge_sparse_libraries_use_mojang_or_modrinth_mirror_not_forge_maven() {
         let forge = Some("forge");
         assert_eq!(
@@ -1126,5 +1132,45 @@ mod tests {
             resolve_maven_url("net.minecraftforge:forge:1.8.9-11.15.1.2318-1.8.9", forge)
                 .expect("forge artifact url");
         assert!(forge_url.starts_with("https://maven.minecraftforge.net/"));
+    }
+
+    #[test]
+    fn forge_client_classifier_resolves_to_forge_maven_once() {
+        let forge_url = resolve_maven_url_with_classifier(
+            "net.minecraftforge:forge:26.1.2-64.0.8",
+            "client",
+            Some("forge"),
+        )
+        .expect("forge client artifact url");
+
+        assert_eq!(
+            forge_url,
+            "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
+        );
+        assert!(!forge_url.contains(".jar/net/minecraftforge/"));
+    }
+
+    #[test]
+    fn full_library_url_is_preserved_instead_of_treated_as_base() {
+        let path = "net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+        let final_url = "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+
+        assert_eq!(
+            normalize_explicit_url(None, path, Some(final_url), None),
+            Some(final_url.to_string())
+        );
+    }
+
+    #[test]
+    fn library_repository_base_appends_artifact_path_once() {
+        let path = "net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar";
+
+        assert_eq!(
+            normalize_explicit_url(None, path, Some("https://maven.minecraftforge.net/"), None),
+            Some(
+                "https://maven.minecraftforge.net/net/minecraftforge/forge/26.1.2-64.0.8/forge-26.1.2-64.0.8-client.jar"
+                    .to_string()
+            )
+        );
     }
 }
