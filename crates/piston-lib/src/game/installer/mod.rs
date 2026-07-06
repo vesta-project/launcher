@@ -16,6 +16,7 @@ use crate::game::installer::core::pipeline::process_and_download_libraries;
 use cache::{ArtifactCache, InstallArtifactRef};
 use std::path::Path;
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::Mutex;
 use verifier::verify_instance_readiness;
 
@@ -73,17 +74,26 @@ pub(crate) async fn track_artifact_from_path(
 
 pub(crate) async fn try_restore_artifact(label: &str, destination: &Path) -> Result<bool> {
     if let Some((cache, artifacts, dry_run, _max_bytes)) = install_scope_handles() {
-        let cache_guard = cache.lock().await;
-        if let Some(sha) = cache_guard.find_component(label) {
-            if dry_run {
-                return Ok(true);
-            }
+        let candidate = {
+            let cache_guard = cache.lock().await;
+            cache_guard.restore_candidate(label)
+        };
 
-            if cache_guard.restore_artifact(&sha, destination)? {
-                let mut artifacts_guard = artifacts.lock().await;
-                artifacts_guard.push(InstallArtifactRef::new(label.to_string(), sha));
-                return Ok(true);
-            }
+        let Some(candidate) = candidate else {
+            return Ok(false);
+        };
+
+        if dry_run {
+            return Ok(true);
+        }
+
+        if ArtifactCache::restore_blob_to_path(&candidate.blob_path, destination)? {
+            let mut artifacts_guard = artifacts.lock().await;
+            artifacts_guard.push(InstallArtifactRef::new(
+                label.to_string(),
+                candidate.sha256,
+            ));
+            return Ok(true);
         }
     }
     Ok(false)
@@ -99,8 +109,13 @@ pub async fn install_instance(
         return install_instance_inner(spec, reporter).await;
     }
 
+    let cache_open_start = Instant::now();
     let mut cache = ArtifactCache::load_with_labels(spec.data_dir())?;
+    let cache_load_elapsed = cache_open_start.elapsed();
+
+    let startup_prune_start = Instant::now();
     let startup_prune = cache.prune_to_limit(spec.artifact_cache_max_bytes);
+    let startup_prune_elapsed = startup_prune_start.elapsed();
     if startup_prune.removed_artifacts > 0 {
         log::info!(
             "[installer] Pruned {} cached artifacts ({} bytes) while opening cache",
@@ -109,6 +124,11 @@ pub async fn install_instance(
         );
     }
     cache.save()?;
+    log::debug!(
+        "[installer] cache startup load_ms={} prune_ms={}",
+        cache_load_elapsed.as_millis(),
+        startup_prune_elapsed.as_millis()
+    );
 
     let cache = Arc::new(Mutex::new(cache));
     let artifacts = Arc::new(Mutex::new(Vec::new()));
@@ -133,7 +153,9 @@ pub async fn install_instance(
         let mut cache_guard = cache.lock().await;
         cache_guard.remove_install(&installed_id);
         cache_guard.record_install(&installed_id, loader, &tracked_artifacts);
+        let finalize_prune_start = Instant::now();
         let finalize_prune = cache_guard.prune_to_limit(spec.artifact_cache_max_bytes);
+        let finalize_prune_elapsed = finalize_prune_start.elapsed();
         cache_guard.save()?;
         if finalize_prune.removed_artifacts > 0 {
             log::info!(
@@ -142,9 +164,68 @@ pub async fn install_instance(
                 finalize_prune.removed_bytes
             );
         }
+        log::debug!(
+            "[installer] cache finalize prune_ms={}",
+            finalize_prune_elapsed.as_millis()
+        );
     }
 
     result
+}
+
+fn collect_missing_asset_downloads(
+    objects: &serde_json::Map<String, serde_json::Value>,
+    assets_dir: &Path,
+    reporter: &dyn ProgressReporter,
+) -> Result<Vec<BatchArtifact>> {
+    const ASSET_SCAN_PROGRESS_INTERVAL: usize = 250;
+
+    let total = objects.len();
+    reporter.set_message("Checking existing game assets...");
+    reporter.set_step_count(0, Some(total as u32));
+
+    let mut assets_to_download = Vec::new();
+
+    for (index, (asset_name, asset_obj)) in objects.iter().enumerate() {
+        let hash = asset_obj
+            .get("hash")
+            .and_then(|h| h.as_str())
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Asset '{}' in index is missing its hash \
+                     - asset index may be corrupt",
+                    asset_name
+                )
+            })?;
+        let hash_prefix = hash.get(..2).ok_or_else(|| {
+            anyhow::anyhow!(
+                "Asset '{}' in index has a hash shorter than 2 characters",
+                asset_name
+            )
+        })?;
+        let asset_url = format!(
+            "https://resources.download.minecraft.net/{}/{}",
+            hash_prefix, hash
+        );
+        let asset_path = assets_dir.join("objects").join(hash_prefix).join(hash);
+
+        if !asset_path.exists() {
+            assets_to_download.push(BatchArtifact {
+                name: asset_name.clone(),
+                urls: vec![asset_url],
+                path: asset_path,
+                sha1: Some(hash.to_string()),
+                label: format!("assets/objects/{}/{}", hash_prefix, hash),
+            });
+        }
+
+        let checked = index + 1;
+        if checked % ASSET_SCAN_PROGRESS_INTERVAL == 0 || checked == total {
+            reporter.set_step_count(checked as u32, Some(total as u32));
+        }
+    }
+
+    Ok(assets_to_download)
 }
 
 async fn install_instance_inner(
@@ -369,61 +450,42 @@ async fn install_instance_inner(
         reporter.set_percent(30);
 
         let asset_index_path = asset_index_path.clone();
+        let asset_index_parse_start = Instant::now();
         let asset_index_content =
             tokio::task::spawn_blocking(move || std::fs::read_to_string(&asset_index_path))
                 .await
                 .context("spawn_blocking panicked")??;
         let asset_index_parsed: serde_json::Value = serde_json::from_str(&asset_index_content)?;
+        log::debug!(
+            "[installer] asset index parse_ms={}",
+            asset_index_parse_start.elapsed().as_millis()
+        );
 
         if let Some(objects) = asset_index_parsed
             .get("objects")
             .and_then(|o| o.as_object())
         {
-            let mut assets_to_download = Vec::new();
-
-            for (asset_name, asset_obj) in objects {
-                let hash = asset_obj
-                    .get("hash")
-                    .and_then(|h| h.as_str())
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "Asset '{}' in index is missing its hash \
-                             — asset index may be corrupt",
-                            asset_name
-                        )
-                    })?;
-                let hash_prefix = hash.get(..2).ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "Asset '{}' in index has a hash shorter than 2 characters",
-                        asset_name
-                    )
-                })?;
-                let asset_url = format!(
-                    "https://resources.download.minecraft.net/{}/{}",
-                    hash_prefix, hash
-                );
-                let asset_path = spec
-                    .assets_dir()
-                    .join("objects")
-                    .join(hash_prefix)
-                    .join(hash);
-
-                if !asset_path.exists() {
-                    assets_to_download.push(BatchArtifact {
-                        name: asset_name.clone(),
-                        urls: vec![asset_url],
-                        path: asset_path,
-                        sha1: Some(hash.to_string()),
-                        label: format!("assets/objects/{}/{}", hash_prefix, hash),
-                    });
-                }
-            }
+            let asset_scan_start = Instant::now();
+            let assets_dir = spec.assets_dir();
+            let assets_to_download =
+                collect_missing_asset_downloads(objects, &assets_dir, reporter.as_ref())?;
+            log::info!(
+                "[installer] asset scan complete total={} missing={} elapsed_ms={}",
+                objects.len(),
+                assets_to_download.len(),
+                asset_scan_start.elapsed().as_millis()
+            );
 
             if !assets_to_download.is_empty() {
                 let batch = BatchDownloader::new(client.clone(), spec.concurrency);
+                let asset_batch_start = Instant::now();
                 batch
                     .download_all(assets_to_download, reporter.clone(), 30, 10.0)
                     .await?;
+                log::info!(
+                    "[installer] asset batch complete elapsed_ms={}",
+                    asset_batch_start.elapsed().as_millis()
+                );
             }
         }
     }
@@ -530,4 +592,94 @@ async fn install_instance_inner(
 /// Verify that an instance's runtime artifacts are present and valid.
 pub fn verify_instance(spec: &InstallSpec) -> Result<types::VerificationResult> {
     verify_instance_readiness(spec)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::installer::types::NotificationActionSpec;
+    use std::sync::Mutex as StdMutex;
+    use tempfile::tempdir;
+
+    #[derive(Default)]
+    struct RecordingReporter {
+        messages: StdMutex<Vec<String>>,
+        steps: StdMutex<Vec<(u32, Option<u32>)>>,
+    }
+
+    impl ProgressReporter for RecordingReporter {
+        fn start_step(&self, _name: &str, _total_steps: Option<u32>) {}
+        fn update_bytes(&self, _transferred: u64, _total: Option<u64>) {}
+        fn set_percent(&self, _percent: i32) {}
+
+        fn set_message(&self, message: &str) {
+            self.messages.lock().unwrap().push(message.to_string());
+        }
+
+        fn set_step_count(&self, current: u32, total: Option<u32>) {
+            self.steps.lock().unwrap().push((current, total));
+        }
+
+        fn set_substep(&self, _name: Option<&str>, _current: Option<u32>, _total: Option<u32>) {}
+        fn set_actions(&self, _actions: Option<Vec<NotificationActionSpec>>) {}
+        fn done(&self, _success: bool, _message: Option<&str>) {}
+
+        fn is_cancelled(&self) -> bool {
+            false
+        }
+
+        fn is_paused(&self) -> bool {
+            false
+        }
+    }
+
+    fn asset_object(hash: &str) -> serde_json::Value {
+        serde_json::json!({ "hash": hash })
+    }
+
+    #[test]
+    fn collect_missing_asset_downloads_reports_progress_and_preserves_queue_shape() {
+        let tmp = tempdir().unwrap();
+        let assets_dir = tmp.path().join("assets");
+        let existing_hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+        let missing_hash = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+        let existing_path = assets_dir
+            .join("objects")
+            .join("aa")
+            .join(existing_hash);
+        std::fs::create_dir_all(existing_path.parent().unwrap()).unwrap();
+        std::fs::write(&existing_path, b"already here").unwrap();
+
+        let mut objects = serde_json::Map::new();
+        objects.insert("existing".to_string(), asset_object(existing_hash));
+        objects.insert("missing".to_string(), asset_object(missing_hash));
+
+        let reporter = RecordingReporter::default();
+        let downloads =
+            collect_missing_asset_downloads(&objects, &assets_dir, &reporter).unwrap();
+
+        assert_eq!(downloads.len(), 1);
+        assert_eq!(downloads[0].name, "missing");
+        assert_eq!(downloads[0].sha1.as_deref(), Some(missing_hash));
+        assert_eq!(downloads[0].label, format!("assets/objects/bb/{missing_hash}"));
+        assert_eq!(
+            downloads[0].urls,
+            vec![format!(
+                "https://resources.download.minecraft.net/bb/{missing_hash}"
+            )]
+        );
+        assert_eq!(
+            downloads[0].path,
+            assets_dir.join("objects").join("bb").join(missing_hash)
+        );
+
+        assert_eq!(
+            reporter.messages.lock().unwrap().as_slice(),
+            ["Checking existing game assets..."]
+        );
+        assert_eq!(
+            reporter.steps.lock().unwrap().as_slice(),
+            [(0, Some(2)), (2, Some(2))]
+        );
+    }
 }

@@ -88,6 +88,12 @@ pub struct ArtifactCache {
     label_index: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone)]
+pub struct ArtifactRestoreCandidate {
+    pub sha256: String,
+    pub blob_path: PathBuf,
+}
+
 impl ArtifactCache {
     pub fn load(root: &Path) -> Result<Self> {
         let artifacts_path = root.join(ARTIFACTS_FILE);
@@ -130,7 +136,9 @@ impl ArtifactCache {
             cache.label_index = serde_json::from_str(&data)
                 .with_context(|| format!("Parse label index {:?}", label_path))?;
         }
-        cache.reconcile_with_disk();
+        cache
+            .label_index
+            .retain(|_, sha| cache.artifacts.contains_key(sha));
         Ok(cache)
     }
 
@@ -399,8 +407,21 @@ impl ArtifactCache {
         self.label_index.insert(label.into(), sha256.into());
     }
 
+    pub fn restore_candidate(&self, label: &str) -> Option<ArtifactRestoreCandidate> {
+        let sha256 = self.find_component(label)?;
+        let blob_path = self.get_artifact_path(&sha256);
+        blob_path.exists().then_some(ArtifactRestoreCandidate {
+            sha256,
+            blob_path,
+        })
+    }
+
     pub fn restore_artifact(&self, sha256: &str, destination: &Path) -> Result<bool> {
         let blob_path = self.get_artifact_path(sha256);
+        Self::restore_blob_to_path(&blob_path, destination)
+    }
+
+    pub fn restore_blob_to_path(blob_path: &Path, destination: &Path) -> Result<bool> {
         if !blob_path.exists() {
             return Ok(false);
         }
@@ -664,12 +685,21 @@ mod tests {
         let found_sha = cache.find_component("test-label").unwrap();
         assert_eq!(found_sha, sha);
 
-        let success = cache.restore_artifact(&found_sha, &restored_path).unwrap();
+        let candidate = cache.restore_candidate("test-label").unwrap();
+        assert_eq!(candidate.sha256, sha);
+
+        let success = ArtifactCache::restore_blob_to_path(&candidate.blob_path, &restored_path)
+            .unwrap();
         assert!(success);
         assert!(restored_path.exists());
 
         let content = fs::read_to_string(restored_path).unwrap();
         assert_eq!(content, "hello world");
+
+        let restored_again = tmp.path().join("restored-again.txt");
+        let success = cache.restore_artifact(&found_sha, &restored_again).unwrap();
+        assert!(success);
+        assert_eq!(fs::read_to_string(restored_again).unwrap(), "hello world");
     }
 
     #[test]
