@@ -51,6 +51,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { ACCOUNT_TYPE_GUEST, getActiveAccount } from "@utils/auth";
 import { getCrashDetails, parseCrashDetails } from "@utils/crash-handler";
+import { createAnimatedIconPreview } from "@utils/icon-animation";
 import type { Instance } from "@utils/instances";
 import {
 	DEFAULT_ICONS,
@@ -190,6 +191,7 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 		}
 		return null;
 	});
+	const iconPreview = createAnimatedIconPreview(resolvedUrl);
 
 	let wrapperRef: HTMLDivElement | undefined;
 	const [isNearViewport, setIsNearViewport] = createSignal(false);
@@ -212,7 +214,11 @@ const ResourceIcon = (props: { record?: any; name: string }) => {
 	return (
 		<div ref={wrapperRef} style="display: inline-flex; align-items: center;">
 			<Show
-				when={resolvedUrl() && isNearViewport() ? resolvedUrl() : false}
+				when={
+					iconPreview.displaySource() && isNearViewport()
+						? iconPreview.displaySource()
+						: false
+				}
 				fallback={
 					<div class={styles["res-icon-placeholder"]}>{displayChar()}</div>
 				}
@@ -348,6 +354,9 @@ export default function InstanceDetails(
 			throw e;
 		}
 	});
+	const headerIconPreview = createAnimatedIconPreview(
+		() => instance()?.iconPath || DEFAULT_ICONS[0],
+	);
 
 	const slug = createMemo(() => {
 		const inst = instance();
@@ -2461,15 +2470,19 @@ export default function InstanceDetails(
 								<header
 									class={styles["instance-details-header"]}
 									classList={{ [styles.shrunk]: activeTab() !== "home" }}
+									onMouseEnter={headerIconPreview.activate}
+									onMouseLeave={headerIconPreview.deactivate}
+									onFocusIn={headerIconPreview.activate}
+									onFocusOut={headerIconPreview.deactivate}
 								>
 									<div
 										class={styles["header-background"]}
 										style={{
-											"background-image": (inst().iconPath || "").startsWith(
-												"linear-gradient",
-											)
-												? inst().iconPath || ""
-												: `url('${resolveResourceUrl(inst().iconPath || DEFAULT_ICONS[0])}')`,
+											"background-image": (
+												headerIconPreview.displaySource() || ""
+											).startsWith("linear-gradient")
+												? headerIconPreview.displaySource() || ""
+												: `url('${headerIconPreview.displaySource() || resolveResourceUrl(inst().iconPath || DEFAULT_ICONS[0])}')`,
 										}}
 									/>
 									<div class={styles["header-content"]}>

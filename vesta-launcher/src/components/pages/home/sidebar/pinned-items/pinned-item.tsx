@@ -17,6 +17,7 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { resolveResourceUrl } from "@utils/assets";
 import { generateVestaDeepLink } from "@utils/deep-links";
+import { createAnimatedIconPreview } from "@utils/icon-animation";
 import {
 	DEFAULT_ICONS,
 	getInstanceSlug,
@@ -118,6 +119,7 @@ export function PinnedItem(props: PinnedItemProps) {
 
 		return props.pin.icon_url;
 	});
+	const iconPreview = createAnimatedIconPreview(() => displayIcon());
 
 	const handleClick = () => {
 		if (props.pin.page_type === "instance") {
@@ -255,8 +257,14 @@ export function PinnedItem(props: PinnedItemProps) {
 					class={clsx(styles["pinned-item-container"], {
 						[styles["item-hidden"]]: !isFullyVisible(),
 					})}
-					onMouseEnter={() => setIsHovered(true)}
-					onMouseLeave={() => setIsHovered(false)}
+					onMouseEnter={() => {
+						setIsHovered(true);
+						iconPreview.activate();
+					}}
+					onMouseLeave={() => {
+						setIsHovered(false);
+						iconPreview.deactivate();
+					}}
 				>
 					<HoverCard.Root
 						open={isHovered() && isFullyVisible()}
@@ -297,7 +305,10 @@ export function PinnedItem(props: PinnedItemProps) {
 									>
 										<div class={styles["icon-bg-blur"]} />
 										<img
-											src={resolveResourceUrl(displayIcon() as string)}
+											src={
+												iconPreview.displaySource() ||
+												resolveResourceUrl(displayIcon() as string)
+											}
 											alt=""
 											class={styles["pin-icon"]}
 										/>

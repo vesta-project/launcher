@@ -46,6 +46,7 @@ import {
 	isInstanceCrashed,
 	parseCrashDetails,
 } from "@utils/crash-handler";
+import { createAnimatedIconPreview } from "@utils/icon-animation";
 import type { Instance } from "@utils/instances";
 import {
 	getInstanceOperationLabel,
@@ -128,13 +129,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 		return status === "failed" || status?.startsWith("failed:");
 	});
 
-	const instanceBackgroundImage = () => {
-		const rawPath = resolveInstanceDisplayIcon(storeInstance());
-		if (rawPath.startsWith("linear-gradient")) {
-			return rawPath;
-		}
+	const cardIconPreview = createAnimatedIconPreview(() =>
+		resolveInstanceDisplayIcon(storeInstance()),
+	);
 
-		return `url('${resolveResourceUrl(rawPath)}')`;
+	const instanceBackgroundImage = () => {
+		const source =
+			cardIconPreview.displaySource() ||
+			resolveResourceUrl(resolveInstanceDisplayIcon(storeInstance()));
+		if (!source) return "none";
+		if (source.startsWith("linear-gradient")) return source;
+		return `url('${source}')`;
 	};
 
 	onMount(() => {
@@ -398,13 +403,17 @@ export default function InstanceCard(props: InstanceCardProps) {
 						styles["instance-card--crashed"],
 					leaveAnim() && styles["instance-card-leave"],
 				)}
-				onMouseOver={() => {
+				onMouseEnter={() => {
 					setLeaveAnim(false);
+					cardIconPreview.activate();
 				}}
 				onMouseLeave={() => {
+					cardIconPreview.deactivate();
 					setLeaveAnim(true);
 					setTimeout(() => setLeaveAnim(false), 250);
 				}}
+				onFocusIn={cardIconPreview.activate}
+				onFocusOut={cardIconPreview.deactivate}
 				onClick={openInstanceDetails}
 				style={{
 					"--instance-bg-image": instanceBackgroundImage(),

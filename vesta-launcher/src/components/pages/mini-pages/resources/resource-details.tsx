@@ -42,6 +42,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { resolveResourceUrl } from "@utils/assets";
 import { formatDate } from "@utils/date";
 import { openExternal } from "@utils/external-link";
+import {
+	createAnimatedIconPreview,
+	iconBackgroundStyle,
+} from "@utils/icon-animation";
 import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
@@ -337,6 +341,9 @@ const DependencyItem = (props: {
 	);
 
 	const displayData = () => props.project || data();
+	const iconPreview = createAnimatedIconPreview(
+		() => displayData()?.icon_url || "/default-pack.png",
+	);
 
 	return (
 		<Show
@@ -366,9 +373,13 @@ const DependencyItem = (props: {
 				}}
 			>
 				<img
-					src={displayData()?.icon_url || "/default-pack.png"}
+					src={iconPreview.displaySource() || "/default-pack.png"}
 					alt={displayData()?.name}
 					class={styles["dep-icon"]}
+					onMouseEnter={iconPreview.activate}
+					onMouseLeave={iconPreview.deactivate}
+					onFocusIn={iconPreview.activate}
+					onFocusOut={iconPreview.deactivate}
 				/>
 				<div class={styles["dep-info"]}>
 					<div class={styles["dep-header"]}>
@@ -413,6 +424,9 @@ const ResourceDetailsPage: Component<{
 	const activeRouter = createMemo(() => props.router || router());
 	const [project, setProject] = createSignal<ResourceProject | undefined>(
 		props.project,
+	);
+	const projectIconPreview = createAnimatedIconPreview(
+		() => project()?.icon_url,
 	);
 	const [loading, setLoading] = createSignal(false);
 	const [error, setError] = createSignal<string | null>(null);
@@ -639,7 +653,7 @@ const ResourceDetailsPage: Component<{
 
 	const InstanceIcon = (iconProps: { instance?: any }) => {
 		const iconPath = () => iconProps.instance?.iconPath || DEFAULT_ICONS[0];
-		const resolvedUrl = createMemo(() => resolveResourceUrl(iconPath()));
+		const iconPreview = createAnimatedIconPreview(iconPath);
 
 		const displayChar = createMemo(() => {
 			const name = iconProps.instance?.name || "?";
@@ -649,7 +663,7 @@ const ResourceDetailsPage: Component<{
 		return (
 			<Show when={iconProps.instance && iconProps.instance.id !== null}>
 				<Show
-					when={resolvedUrl()}
+					when={iconPreview.displaySource()}
 					fallback={
 						<div class={styles["instance-item-icon-placeholder"]}>
 							{displayChar()}
@@ -658,15 +672,11 @@ const ResourceDetailsPage: Component<{
 				>
 					<div
 						class={styles["instance-item-icon"]}
-						style={
-							resolvedUrl()?.startsWith("linear-gradient")
-								? { background: resolvedUrl() }
-								: {
-										"background-image": `url('${resolvedUrl()}')`,
-										"background-size": "cover",
-										"background-position": "center",
-									}
-						}
+						style={iconBackgroundStyle(iconPreview.displaySource())}
+						onMouseEnter={iconPreview.activate}
+						onMouseLeave={iconPreview.deactivate}
+						onFocusIn={iconPreview.activate}
+						onFocusOut={iconPreview.deactivate}
 					/>
 				</Show>
 			</Show>
@@ -2242,11 +2252,17 @@ const ResourceDetailsPage: Component<{
 							}}
 						>
 							<div class={styles["header-spacer"]} aria-hidden="true" />
-							<div class={styles["resource-details-header"]}>
+							<div
+								class={styles["resource-details-header"]}
+								onMouseEnter={projectIconPreview.activate}
+								onMouseLeave={projectIconPreview.deactivate}
+								onFocusIn={projectIconPreview.activate}
+								onFocusOut={projectIconPreview.deactivate}
+							>
 								<div class={styles["project-header-info"]}>
 									<Show when={project()?.icon_url}>
 										<img
-											src={project()?.icon_url ?? ""}
+											src={projectIconPreview.displaySource() ?? ""}
 											alt={project()?.name}
 											class={styles["project-icon"]}
 										/>

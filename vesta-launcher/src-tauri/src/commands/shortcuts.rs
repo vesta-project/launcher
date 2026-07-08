@@ -40,6 +40,7 @@ pub struct ShortcutCreationResult {
 
 #[derive(Debug)]
 struct RenderedTarget {
+    #[cfg(any(target_os = "windows", target_os = "linux", test))]
     argv: Vec<String>,
     deep_link: String,
 }
@@ -87,6 +88,7 @@ fn render_target(target: &ShortcutTarget) -> Result<RenderedTarget, String> {
         ShortcutKind::LaunchInstance => {
             let slug = require_target_field(&target.slug, "slug")?;
             Ok(RenderedTarget {
+                #[cfg(any(target_os = "windows", target_os = "linux", test))]
                 argv: vec!["--launch-instance".to_string(), slug.clone()],
                 deep_link: format!("vesta://launch-instance?slug={}", encode_query_value(&slug)),
             })
@@ -94,6 +96,7 @@ fn render_target(target: &ShortcutTarget) -> Result<RenderedTarget, String> {
         ShortcutKind::OpenInstance => {
             let slug = require_target_field(&target.slug, "slug")?;
             Ok(RenderedTarget {
+                #[cfg(any(target_os = "windows", target_os = "linux", test))]
                 argv: vec!["--open-instance".to_string(), slug.clone()],
                 deep_link: format!("vesta://open-instance?slug={}", encode_query_value(&slug)),
             })
@@ -102,6 +105,7 @@ fn render_target(target: &ShortcutTarget) -> Result<RenderedTarget, String> {
             let platform = require_target_field(&target.platform, "platform")?;
             let project_id = require_target_field(&target.project_id, "projectId")?;
             Ok(RenderedTarget {
+                #[cfg(any(target_os = "windows", target_os = "linux", test))]
                 argv: vec![
                     "--open-resource".to_string(),
                     platform.clone(),
@@ -122,6 +126,7 @@ fn powershell_single_quote(value: &str) -> String {
     value.replace('\'', "''")
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux", test))]
 fn shell_quote(value: &str) -> String {
     shlex::try_quote(value)
         .map(|quoted| quoted.into_owned())
@@ -131,6 +136,7 @@ fn shell_quote(value: &str) -> String {
         })
 }
 
+#[cfg(any(target_os = "windows", target_os = "linux", test))]
 fn render_cli_args(argv: &[String]) -> String {
     argv.iter()
         .map(|arg| shell_quote(arg))
@@ -138,6 +144,7 @@ fn render_cli_args(argv: &[String]) -> String {
         .join(" ")
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn desktop_entry_escape(value: &str) -> String {
     value
         .replace('\\', "\\\\")
@@ -366,6 +373,7 @@ fn build_icns_from_png(
     Ok(icns_path)
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn linux_desktop_content(name: &str, exe_path: &Path, argv: &[String], icon_path: &Path) -> String {
     format!(
         "[Desktop Entry]\n\

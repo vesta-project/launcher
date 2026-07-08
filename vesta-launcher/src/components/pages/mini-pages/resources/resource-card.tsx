@@ -24,6 +24,22 @@ import {
 } from "solid-js";
 import styles from "./resource-browser.module.css";
 
+const ProjectIcon = (props: { iconUrl?: string | null; name: string }) => {
+	const displayChar = () => {
+		const match = props.name.match(/[a-zA-Z]/);
+		return match ? match[0].toUpperCase() : props.name.charAt(0).toUpperCase();
+	};
+
+	return (
+		<Show
+			when={props.iconUrl}
+			fallback={<div class={styles["icon-placeholder"]}>{displayChar()}</div>}
+		>
+			<img src={props.iconUrl ?? ""} alt={props.name} />
+		</Show>
+	);
+};
+
 const ResourceCard: Component<{
 	project: ResourceProject;
 	viewMode: "grid" | "list";
@@ -536,25 +552,10 @@ const ResourceCard: Component<{
 				<div class={styles["card-content"]}>
 					<div class={styles["card-row-1"]}>
 						<div class={styles["card-icon"]}>
-							<Show
-								when={props.project.icon_url}
-								fallback={
-									<div class={styles["icon-placeholder"]}>
-										{(() => {
-											const name = props.project.name || "?";
-											const match = name.match(/[a-zA-Z]/);
-											return match
-												? match[0].toUpperCase()
-												: name.charAt(0).toUpperCase();
-										})()}
-									</div>
-								}
-							>
-								<img
-									src={props.project.icon_url ?? ""}
-									alt={props.project.name}
-								/>
-							</Show>
+							<ProjectIcon
+								iconUrl={props.project.icon_url}
+								name={props.project.name}
+							/>
 						</div>
 						<div class={styles["card-title-area"]}>
 							<h3 class={styles["card-title"]}>{props.project.name}</h3>
@@ -637,22 +638,10 @@ const ResourceCard: Component<{
 			</Show>
 			<Show when={props.viewMode === "list"}>
 				<div class={styles["card-list-thumb"]}>
-					<Show
-						when={props.project.icon_url}
-						fallback={
-							<div class={styles["icon-placeholder"]}>
-								{(() => {
-									const name = props.project.name || "?";
-									const match = name.match(/[a-zA-Z]/);
-									return match
-										? match[0].toUpperCase()
-										: name.charAt(0).toUpperCase();
-								})()}
-							</div>
-						}
-					>
-						<img src={props.project.icon_url ?? ""} alt={props.project.name} />
-					</Show>
+					<ProjectIcon
+						iconUrl={props.project.icon_url}
+						name={props.project.name}
+					/>
 				</div>
 				<div class={styles["card-list-body"]}>
 					<div class={styles["card-list-header"]}>

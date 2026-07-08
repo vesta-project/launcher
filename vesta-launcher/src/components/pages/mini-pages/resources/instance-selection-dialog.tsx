@@ -8,7 +8,10 @@ import {
 import { invoke } from "@tauri-apps/api/core";
 import Button from "@ui/button/button";
 import { Dialog, DialogContent, DialogHeader } from "@ui/dialog/dialog";
-import { resolveResourceUrl } from "@utils/assets";
+import {
+	createAnimatedIconPreview,
+	iconBackgroundStyle,
+} from "@utils/icon-animation";
 import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
 import { getCompatibilityForInstance } from "@utils/resources";
 import {
@@ -140,7 +143,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 
 	const InstanceIcon = (iconProps: { instance: Instance }) => {
 		const iconPath = () => iconProps.instance.iconPath || DEFAULT_ICONS[0];
-		const resolvedUrl = createMemo(() => resolveResourceUrl(iconPath()));
+		const iconPreview = createAnimatedIconPreview(iconPath);
 
 		const displayChar = createMemo(() => {
 			const name = iconProps.instance.name || "?";
@@ -149,7 +152,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 		});
 		return (
 			<Show
-				when={resolvedUrl()}
+				when={iconPreview.displaySource()}
 				fallback={
 					<div class={styles["instance-select-icon-placeholder"]}>
 						{displayChar()}
@@ -158,15 +161,11 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 			>
 				<div
 					class={styles["instance-select-icon"]}
-					style={
-						resolvedUrl()?.startsWith("linear-gradient")
-							? { background: resolvedUrl() }
-							: {
-									"background-image": `url('${resolvedUrl()}')`,
-									"background-size": "cover",
-									"background-position": "center",
-								}
-					}
+					style={iconBackgroundStyle(iconPreview.displaySource())}
+					onMouseEnter={iconPreview.activate}
+					onMouseLeave={iconPreview.deactivate}
+					onFocusIn={iconPreview.activate}
+					onFocusOut={iconPreview.deactivate}
 				/>
 			</Show>
 		);

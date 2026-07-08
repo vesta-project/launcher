@@ -16,6 +16,10 @@ import {
 } from "@ui/select/select";
 import { TextField } from "@ui/text-field/text-field";
 import { resolveResourceUrl } from "@utils/assets";
+import {
+	createAnimatedIconPreview,
+	iconBackgroundStyle,
+} from "@utils/icon-animation";
 import { DEFAULT_ICONS } from "@utils/instances";
 import { batch, createMemo, Show } from "solid-js";
 import { ActiveFilterChips } from "./active-filter-chips";
@@ -30,6 +34,35 @@ const RESOURCE_TYPES = [
 	{ value: "modpack", label: "Modpacks" },
 	{ value: "world", label: "Worlds" },
 ] as const;
+
+function InstanceOptionIcon(props: {
+	instance: any;
+	placeholderClass: string;
+}) {
+	const iconPath = () => props.instance?.iconPath || DEFAULT_ICONS[0];
+	const iconPreview = createAnimatedIconPreview(iconPath);
+	const displayChar = () => {
+		const name = props.instance?.name || "?";
+		const match = name.match(/[a-zA-Z]/);
+		return match ? match[0].toUpperCase() : name.charAt(0).toUpperCase();
+	};
+
+	return (
+		<Show
+			when={iconPreview.displaySource()}
+			fallback={<div class={props.placeholderClass}>{displayChar()}</div>}
+		>
+			<div
+				class={styles["instance-item-icon"]}
+				style={iconBackgroundStyle(iconPreview.displaySource())}
+				onMouseEnter={iconPreview.activate}
+				onMouseLeave={iconPreview.deactivate}
+				onFocusIn={iconPreview.activate}
+				onFocusOut={iconPreview.deactivate}
+			/>
+		</Show>
+	);
+}
 
 export function ResourceToolbar(props: {
 	router?: MiniRouter;
@@ -53,6 +86,9 @@ export function ResourceToolbar(props: {
 		if (!inst) return null;
 		return resolveResourceUrl(inst.iconPath || DEFAULT_ICONS[0]);
 	};
+	const selectedIconPreview = createAnimatedIconPreview(
+		() => selectedInstance()?.iconPath || DEFAULT_ICONS[0],
+	);
 
 	const instanceDisplayChar = () => {
 		const inst = selectedInstance();
@@ -220,31 +256,12 @@ export function ResourceToolbar(props: {
 							<SelectItem item={p.item} class={styles["instance-select-item"]}>
 								<div class={styles["instance-item-content"]}>
 									<Show when={p.item.rawValue && p.item.rawValue.id !== null}>
-										<Show
-											when={resolveResourceUrl(
-												p.item.rawValue?.iconPath || DEFAULT_ICONS[0],
-											)}
-											fallback={
-												<div class={styles["instance-item-icon-placeholder"]}>
-													{(() => {
-														const name = p.item.rawValue?.name || "?";
-														const match = name.match(/[a-zA-Z]/);
-														return match
-															? match[0].toUpperCase()
-															: name.charAt(0).toUpperCase();
-													})()}
-												</div>
+										<InstanceOptionIcon
+											instance={p.item.rawValue}
+											placeholderClass={
+												styles["instance-item-icon-placeholder"]
 											}
-										>
-											<div
-												class={styles["instance-item-icon"]}
-												style={{
-													"background-image": `url('${resolveResourceUrl(p.item.rawValue?.iconPath || DEFAULT_ICONS[0])}')`,
-													"background-size": "cover",
-													"background-position": "center",
-												}}
-											/>
-										</Show>
+										/>
 									</Show>
 									<span class={styles["instance-item-name"]}>
 										{p.item.rawValue?.name || "No Instance"}
@@ -296,7 +313,9 @@ export function ResourceToolbar(props: {
 							>
 								<div class={styles["instance-trigger-content"]}>
 									<Show
-										when={instanceIconUrl()}
+										when={
+											selectedIconPreview.displaySource() || instanceIconUrl()
+										}
 										fallback={
 											<div class={styles["instance-icon-placeholder"]}>
 												{instanceDisplayChar()}
@@ -305,11 +324,14 @@ export function ResourceToolbar(props: {
 									>
 										<div
 											class={styles["instance-item-icon"]}
-											style={{
-												"background-image": `url('${instanceIconUrl() || ""}')`,
-												"background-size": "cover",
-												"background-position": "center",
-											}}
+											style={iconBackgroundStyle(
+												selectedIconPreview.displaySource() ||
+													instanceIconUrl(),
+											)}
+											onMouseEnter={selectedIconPreview.activate}
+											onMouseLeave={selectedIconPreview.deactivate}
+											onFocusIn={selectedIconPreview.activate}
+											onFocusOut={selectedIconPreview.deactivate}
 										/>
 									</Show>
 									<span class={styles["instance-trigger-name"]}>
