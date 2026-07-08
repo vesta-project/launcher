@@ -1,5 +1,4 @@
 use crate::auth::{ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST};
-use crate::discord::DiscordManager;
 use crate::models::instance::{Instance, NewInstance};
 use crate::resources::ResourceWatcher;
 use crate::schema::instance::dsl::*;
@@ -39,20 +38,6 @@ fn find_instance_by_slug(instance_id_slug: &str) -> Result<Instance, String> {
         .into_iter()
         .find(|inst| inst.slug() == instance_id_slug)
         .ok_or_else(|| format!("Instance {} not found in database", instance_id_slug))
-}
-
-fn crash_event_payload(
-    instance_id_slug: &str,
-    crash_info: &crate::utils::crash_parser::CrashDetails,
-) -> serde_json::Value {
-    let mut value = serde_json::to_value(crash_info).unwrap_or_else(|_| serde_json::json!({}));
-    if let Some(obj) = value.as_object_mut() {
-        obj.insert(
-            "instance_id".to_string(),
-            serde_json::Value::String(instance_id_slug.to_string()),
-        );
-    }
-    value
 }
 
 struct LaunchInProgressGuard {
@@ -376,125 +361,12 @@ fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(
     Ok(())
 }
 
-/// Update playtime for an instance in the database
-fn update_instance_playtime(
-    app_handle: &tauri::AppHandle,
-    instance_id_slug: &str,
-    started_at_str: &str,
-    exited_at_str: &str,
-) -> Result<(), String> {
-    use crate::schema::instance::dsl::*;
-    // Parse timestamps
-    let started = chrono::DateTime::parse_from_rfc3339(started_at_str)
-        .map_err(|e| format!("Failed to parse started_at: {}", e))?;
-    let exited = chrono::DateTime::parse_from_rfc3339(exited_at_str)
-        .map_err(|e| format!("Failed to parse exited_at: {}", e))?;
-
-    // Calculate duration in minutes
-    let duration = exited.signed_duration_since(started);
-    let minutes = (duration.num_seconds() / 60).max(0) as i32;
-
-    log::info!(
-        "Updating playtime for instance {}: {} minutes (from {} to {})",
-        instance_id_slug,
-        minutes,
-        started_at_str,
-        exited_at_str
-    );
-
-    let mut conn =
-        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
-
-    // Find instance by slug
-    let instances_list = instance
-        .load::<Instance>(&mut conn)
-        .map_err(|e| format!("Failed to query instances: {}", e))?;
-
-    for inst in instances_list {
-        if inst.slug() == instance_id_slug {
-            let new_playtime = inst.total_playtime_minutes + minutes;
-            let now = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S").to_string();
-
-            diesel::update(instance.filter(id.eq(inst.id)))
-                .set((
-                    total_playtime_minutes.eq(new_playtime),
-                    last_played.eq(&now),
-                    updated_at.eq(&now),
-                ))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update playtime: {}", e))?;
-
-            log::info!(
-                "Updated playtime for instance {} (id {}): {} -> {} minutes",
-                instance_id_slug,
-                inst.id,
-                inst.total_playtime_minutes,
-                new_playtime
-            );
-
-            // Fetch the updated instance to emit
-            if let Ok(updated_inst) = instance.find(inst.id).first::<Instance>(&mut conn) {
-                use tauri::Emitter;
-                let _ = app_handle.emit(
-                    "core://instance-updated",
-                    process_instance_icon(updated_inst),
-                );
-            }
-
-            return Ok(());
-        }
-    }
-
-    log::warn!(
-        "Instance {} not found in database for playtime update",
-        instance_id_slug
-    );
-    Ok(())
-}
-
-/// Store crash details in the database for an instance
-fn store_crash_details(
-    instance_id_slug: &str,
-    crash_info: &crate::utils::crash_parser::CrashDetails,
-) -> Result<(), String> {
-    let mut conn =
-        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
-
-    let all_instances = instance
-        .load::<Instance>(&mut conn)
-        .map_err(|e| format!("Failed to query instances: {}", e))?;
-
-    for inst in all_instances {
-        if inst.slug() == instance_id_slug {
-            let crash_details_json = serde_json::to_string(crash_info)
-                .map_err(|e| format!("Failed to serialize crash details: {}", e))?;
-
-            diesel::update(instance.filter(id.eq(inst.id)))
-                .set((crashed.eq(true), crash_details.eq(crash_details_json)))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to update crash details: {}", e))?;
-
-            log::info!(
-                "Stored crash details for instance {} (id {})",
-                instance_id_slug,
-                inst.id
-            );
-            return Ok(());
-        }
-    }
-
-    Err(format!(
-        "Instance {} not found in database",
-        instance_id_slug
-    ))
-}
-
 #[tauri::command]
 pub fn clear_instance_crash(
     app_handle: tauri::AppHandle,
     instance_id_slug: String,
 ) -> Result<(), String> {
-    clear_crash_flag(&instance_id_slug, Some(&app_handle))
+    crate::instance_lifecycle::clear_crash_flag(&instance_id_slug, Some(&app_handle))
 }
 
 #[tauri::command]
@@ -609,11 +481,11 @@ fn emit_simulated_crash(
     instance_id_slug: &str,
     crash: crate::utils::crash_parser::CrashDetails,
 ) -> Result<(), String> {
-    store_crash_details(instance_id_slug, &crash)?;
+    crate::instance_lifecycle::store_crash_details(instance_id_slug, &crash)?;
     app_handle
         .emit(
             "core://instance-crashed",
-            crash_event_payload(instance_id_slug, &crash),
+            crate::instance_lifecycle::crash_event_payload(instance_id_slug, &crash),
         )
         .map_err(|e| e.to_string())
 }
@@ -1079,48 +951,6 @@ fn redact_split_argument_values(line: &str, key: &str) -> String {
 
     redacted.push_str(&line[cursor..]);
     redacted
-}
-
-/// Clear the crashed flag for an instance when it successfully launches
-fn clear_crash_flag(
-    instance_id_slug: &str,
-    app_handle: Option<&tauri::AppHandle>,
-) -> Result<(), String> {
-    let mut conn =
-        get_vesta_conn().map_err(|e| format!("Failed to get database connection: {}", e))?;
-
-    let all_instances = instance
-        .load::<Instance>(&mut conn)
-        .map_err(|e| format!("Failed to query instances: {}", e))?;
-
-    for inst in all_instances {
-        if inst.slug() == instance_id_slug {
-            diesel::update(instance.filter(id.eq(inst.id)))
-                .set((crashed.eq(false), crash_details.eq::<Option<String>>(None)))
-                .execute(&mut conn)
-                .map_err(|e| format!("Failed to clear crash flag: {}", e))?;
-
-            if let Some(app_handle) = app_handle {
-                let updated = instance
-                    .find(inst.id)
-                    .first::<Instance>(&mut conn)
-                    .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
-                let _ = app_handle.emit("core://instance-updated", process_instance_icon(updated));
-            }
-
-            log::info!(
-                "Cleared crash flag for instance {} (id {})",
-                instance_id_slug,
-                inst.id
-            );
-            return Ok(());
-        }
-    }
-
-    Err(format!(
-        "Instance {} not found in database",
-        instance_id_slug
-    ))
 }
 
 #[tauri::command]
@@ -2499,201 +2329,20 @@ pub async fn launch_instance(
     match join {
         Ok(result) => {
             log::info!("[launch_instance] Started PID: {}", result.instance.pid);
-            if let Err(e) = clear_crash_flag(&instance_id, Some(&app_handle)) {
-                log::error!("Failed to clear crash flag: {}", e);
-            }
-
-            let run_state = crate::utils::process_state::InstanceRunState {
-                instance_id: instance_id.clone(),
-                pid: result.instance.pid,
-                log_file: result.log_file.clone(),
-                game_dir: result.instance.game_dir.clone(),
-                version_id: result.instance.version_id.clone(),
-                modloader: result.instance.modloader.as_ref().map(|m| m.to_string()),
-                started_at: result.instance.started_at.to_rfc3339(),
-            };
-
-            if let Err(e) = crate::utils::process_state::add_running_process(run_state.clone()) {
-                log::warn!("Failed to persist process state: {}", e);
-            }
-
-            // Handle post-exit hook and cleanup if process handle is available
-            if let Some(handle) = result.handle {
-                if let Some(mut child) = handle.child {
-                    let iid_for_hook = instance_id.clone();
-                    tokio::spawn(async move {
-                        if let Err(e) = child.wait().await {
-                            log::error!(
-                                "[launch_instance] Failed to wait for game process for {}: {}",
-                                iid_for_hook,
-                                e
-                            );
-                        }
-                        log::info!("[launch_instance] Game process exited for {}, running cleanup and post-exit hook if any", iid_for_hook);
-
-                        // Unregister from piston-lib registry immediately
-                        if let Err(e) =
-                            piston_lib::game::launcher::registry::unregister_instance(&iid_for_hook)
-                                .await
-                        {
-                            log::error!("[launch_instance] Failed to unregister instance {} from piston-lib registry: {}", iid_for_hook, e);
-                        }
-                    });
-                }
-            }
-
-            use tauri::Emitter;
-            let _ = app_handle.emit(
-                "core://instance-launched",
-                serde_json::json!({
-                    "instance_id": instance_id,
-                    "name": instance_data.name,
-                    "pid": result.instance.pid,
-                    "start_time": std::time::SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs()
-                }),
-            );
+            let run_state = crate::instance_lifecycle::record_started_launch(
+                &app_handle,
+                &instance_data,
+                result,
+            )
+            .await?;
 
             apply_launcher_action_after_launch(&app_handle, resolved_launcher_action, tray_visible);
 
-            // Update Discord activity
-            if let Some(dm) = app_handle.try_state::<DiscordManager>() {
-                dm.add_running_instance(&instance_data.name).await;
-            }
-
-            // Monitor process
-            let app_handle_monitor = app_handle.clone();
-            let instance_id_monitor = instance_id.clone();
-            let instance_name_monitor = instance_data.name.clone();
-            let pid_monitor = result.instance.pid;
-            let started_at_monitor = result.instance.started_at.to_rfc3339();
-            let game_dir_monitor = result.instance.game_dir.clone();
-
-            tokio::spawn(async move {
-                use sysinfo::System;
-                let mut sys = System::new_all();
-                let launch_time = std::time::SystemTime::now();
-
-                loop {
-                    tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
-                    sys.refresh_all();
-                    if sys.process(sysinfo::Pid::from_u32(pid_monitor)).is_none() {
-                        log::info!("Process exited");
-
-                        // Update Discord activity on exit
-                        if let Some(dm) = app_handle_monitor.try_state::<DiscordManager>() {
-                            dm.remove_running_instance(&instance_name_monitor).await;
-                        }
-
-                        // Check exit status
-                        let exit_status_path =
-                            game_dir_monitor.join(".vesta").join("exit_status.json");
-                        let stop_requested =
-                            match piston_lib::utils::stop_intent::consume_stop_requested(
-                                &game_dir_monitor,
-                            ) {
-                                Ok(value) => value,
-                                Err(e) => {
-                                    log::warn!(
-                                        "Failed to consume stop-request marker for {}: {}",
-                                        instance_id_monitor,
-                                        e
-                                    );
-                                    false
-                                }
-                            };
-                        let (exited_at_ts, exit_code) = if exit_status_path.exists() {
-                            let path_for_blocking = exit_status_path.clone();
-                            match tokio::task::spawn_blocking(move || {
-                                std::fs::read_to_string(&path_for_blocking)
-                            })
-                            .await
-                            {
-                                Ok(Ok(content)) => {
-                                    if let Ok(status) =
-                                        serde_json::from_str::<serde_json::Value>(&content)
-                                    {
-                                        let ex = status
-                                            .get("exited_at")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        let code = status
-                                            .get("exit_code")
-                                            .and_then(|v| v.as_i64())
-                                            .unwrap_or(0)
-                                            as i32;
-                                        (
-                                            if ex.is_empty() {
-                                                chrono::Utc::now().to_rfc3339()
-                                            } else {
-                                                ex
-                                            },
-                                            code,
-                                        )
-                                    } else {
-                                        (chrono::Utc::now().to_rfc3339(), 0)
-                                    }
-                                }
-                                _ => (chrono::Utc::now().to_rfc3339(), 0),
-                            }
-                        } else {
-                            (chrono::Utc::now().to_rfc3339(), 0)
-                        };
-
-                        let mut is_crashed = false;
-                        if exit_code != 0 && !stop_requested {
-                            let log_file = game_dir_monitor.join("logs").join("latest.log");
-                            if let Some(crash_info) = crate::utils::crash_parser::detect_crash(
-                                &game_dir_monitor,
-                                &log_file,
-                                launch_time,
-                            ) {
-                                if let Err(e) =
-                                    store_crash_details(&instance_id_monitor, &crash_info)
-                                {
-                                    log::error!("Failed to store crash: {}", e);
-                                }
-                                let _ = app_handle_monitor.emit(
-                                    "core://instance-crashed",
-                                    crash_event_payload(&instance_id_monitor, &crash_info),
-                                );
-                                is_crashed = true;
-                            }
-                        }
-
-                        // Update playtime in database (only if not crashed)
-                        if !is_crashed {
-                            if let Err(e) = update_instance_playtime(
-                                &app_handle_monitor,
-                                &instance_id_monitor,
-                                &started_at_monitor,
-                                &exited_at_ts,
-                            ) {
-                                log::error!(
-                                    "Failed to update playtime for {}: {}",
-                                    instance_id_monitor,
-                                    e
-                                );
-                            }
-                        }
-
-                        // Remove from running processes
-                        if let Err(e) = crate::utils::process_state::remove_running_process(
-                            &instance_id_monitor,
-                        ) {
-                            log::error!("Failed to remove running process: {}", e);
-                        }
-
-                        // Notify frontend
-                        use tauri::Emitter;
-                        // Use app_handle_monitor
-                        let _ = app_handle_monitor.emit("core://instance-exited", serde_json::json!({
-                             "instance_id": instance_id_monitor, "pid": pid_monitor, "crashed": is_crashed
-                        }));
-                        break;
-                    }
-                }
-            });
+            crate::instance_lifecycle::spawn_exit_monitor(
+                app_handle.clone(),
+                instance_data.name.clone(),
+                run_state,
+            );
 
             Ok(())
         }
@@ -2703,28 +2352,7 @@ pub async fn launch_instance(
 
 #[tauri::command]
 pub async fn kill_instance(app_handle: tauri::AppHandle, inst: Instance) -> Result<String, String> {
-    log::info!("[kill_instance] Kill requested for instance: {}", inst.name);
-    let instance_id = inst.slug();
-
-    match piston_lib::game::launcher::kill_instance(&instance_id).await {
-        Ok(message) => {
-            let _ = crate::utils::process_state::remove_running_process(&instance_id);
-            use tauri::Emitter;
-            let _ = app_handle.emit(
-                "core://instance-killed",
-                serde_json::json!({ "instance_id": instance_id, "name": inst.name, "message": message }),
-            );
-            Ok(message)
-        }
-        Err(e) => {
-            if let Some(game_dir) = inst.game_directory.as_ref() {
-                let _ = piston_lib::utils::stop_intent::clear_stop_requested(std::path::Path::new(
-                    game_dir,
-                ));
-            }
-            Err(format!("Failed to kill instance: {}", e))
-        }
-    }
+    crate::instance_lifecycle::kill_instance(app_handle, inst).await
 }
 
 #[tauri::command]
