@@ -6,8 +6,6 @@
 
 use crate::auth::{ACCOUNT_TYPE_DEMO, ACCOUNT_TYPE_GUEST};
 use crate::models::instance::Instance;
-use crate::utils::db::get_vesta_conn;
-use diesel::prelude::*;
 use lazy_static::lazy_static;
 use piston_lib::game::installer::types::{
     InstallSpec, RemediationPolicy, RepairScope, SilentProgressReporter,
@@ -518,29 +516,13 @@ fn verify_modpack_resource_presence(inst: &Instance, game_dir: &Path) -> Result<
 
     if discovered_files == 0 {
         if inst.id > 0 {
-            use crate::schema::installed_resource::dsl as ir_dsl;
-            if let Ok(mut conn) = get_vesta_conn() {
-                let indexed_count = ir_dsl::installed_resource
-                    .filter(ir_dsl::instance_id.eq(inst.id))
-                    .filter(
-                        ir_dsl::resource_type
-                            .eq("mod")
-                            .or(ir_dsl::resource_type.eq("resourcepack"))
-                            .or(ir_dsl::resource_type.eq("shader"))
-                            .or(ir_dsl::resource_type.eq("datapack")),
-                    )
-                    .count()
-                    .get_result::<i64>(&mut conn)
-                    .unwrap_or(0);
-                if indexed_count > 0 {
-                    log::warn!(
-                        "[launch_instance] modpack-resource-check bypassed: no files found at {} but {} indexed resources exist in DB for instance={}",
+            if let Ok(true) = crate::resources::ledger::has_indexed_launch_resources(inst.id) {
+                log::warn!(
+                        "[launch_instance] modpack-resource-check bypassed: no files found at {} but indexed resources exist in DB for instance={}",
                         game_dir.display(),
-                        indexed_count,
                         inst.slug()
                     );
-                    return Ok(());
-                }
+                return Ok(());
             }
         }
 

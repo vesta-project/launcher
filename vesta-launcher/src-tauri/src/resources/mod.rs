@@ -1,3 +1,4 @@
+pub mod ledger;
 pub mod manager;
 pub mod sources;
 pub mod update_cache;

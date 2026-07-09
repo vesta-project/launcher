@@ -1,12 +1,9 @@
-use crate::models::installed_resource::{InstalledResource, NewInstalledResource};
 use crate::models::resource::{ResourceType, ResourceVersion, SourcePlatform};
 use crate::notifications::models::PROGRESS_INDETERMINATE;
-use crate::schema::installed_resource::dsl as installed_dsl;
 use crate::schema::instance::dsl as instances_dsl;
 use crate::tasks::manager::{Task, TaskContext};
 use crate::utils::db::get_vesta_conn;
 use crate::utils::instance_helpers::normalize_path;
-use chrono::Utc;
 use diesel::prelude::*;
 use reqwest::Url;
 use sha1::{Digest, Sha1};
@@ -292,17 +289,10 @@ impl Task for ResourceDownloadTask {
                     (0, 0)
                 };
 
-            // Check for existing database entry to find old file path
             let existing_resource = tauri::async_runtime::spawn_blocking({
                 let project_id = project_id.clone();
                 move || {
-                    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-                    installed_dsl::installed_resource
-                        .filter(installed_dsl::instance_id.eq(instance_id))
-                        .filter(installed_dsl::remote_id.eq(project_id))
-                        .filter(installed_dsl::source_kind.eq("custom"))
-                        .first::<InstalledResource>(&mut conn)
-                        .optional()
+                    crate::resources::ledger::find_custom_remote(instance_id, &project_id)
                         .map_err(|e| e.to_string())
                 }
             })
@@ -320,113 +310,43 @@ impl Task for ResourceDownloadTask {
                         let _ = fs::remove_file(&old_path).await;
                     }
                 }
-
-                let res_id = res.id;
-                let version_id = version.id.clone();
-                let project_name = project_name.clone();
-                let final_path_str = final_path_str.clone();
-                let version_number = version.version_number.clone();
-                let release_type = format!("{:?}", version.release_type).to_lowercase();
-                let version_hash = version.hash.clone();
-
-                tauri::async_runtime::spawn_blocking(move || {
-                    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-                    diesel::update(
-                        installed_dsl::installed_resource.filter(installed_dsl::id.eq(res_id)),
-                    )
-                    .set((
-                        installed_dsl::platform.eq(match platform {
-                            SourcePlatform::Modrinth => "modrinth",
-                            SourcePlatform::CurseForge => "curseforge",
-                        }),
-                        installed_dsl::remote_version_id.eq(version_id),
-                        installed_dsl::resource_type.eq(match resource_type {
-                            ResourceType::Mod => "mod",
-                            ResourceType::ResourcePack => "resourcepack",
-                            ResourceType::Shader => "shader",
-                            ResourceType::DataPack => "datapack",
-                            ResourceType::Modpack => "modpack",
-                            ResourceType::World => "world",
-                        }),
-                        installed_dsl::local_path.eq(final_path_str),
-                        installed_dsl::display_name.eq(project_name),
-                        installed_dsl::current_version.eq(version_number),
-                        installed_dsl::release_type.eq(release_type),
-                        installed_dsl::is_manual.eq(false),
-                        installed_dsl::is_enabled.eq(true),
-                        installed_dsl::last_updated.eq(Utc::now().to_rfc3339()),
-                        installed_dsl::file_size.eq(file_size),
-                        installed_dsl::file_mtime.eq(file_mtime),
-                        installed_dsl::hash.eq(Some(version_hash)),
-                        installed_dsl::source_kind.eq("custom"),
-                        installed_dsl::source_modpack_id.eq(Option::<String>::None),
-                        installed_dsl::source_modpack_version_id.eq(Option::<String>::None),
-                        installed_dsl::source_modpack_platform.eq(Option::<String>::None),
-                    ))
-                    .execute(&mut conn)
-                    .map_err(|e| e.to_string())
-                })
-                .await
-                .map_err(|e| format!("Failed to update installed resource: {}", e))??;
-            } else {
-                if tokio::fs::metadata(&final_path).await.is_ok() {
-                    fs::remove_file(&final_path)
-                        .await
-                        .map_err(|e| e.to_string())?;
-                }
-
-                fs::rename(&temp_file_path, &final_path)
+            }
+            if tokio::fs::metadata(&final_path).await.is_ok() {
+                fs::remove_file(&final_path)
                     .await
                     .map_err(|e| e.to_string())?;
-
-                let new_installed = NewInstalledResource {
-                    instance_id,
-                    platform: match platform {
-                        SourcePlatform::Modrinth => "modrinth",
-                        SourcePlatform::CurseForge => "curseforge",
-                    }
-                    .to_string(),
-                    remote_id: project_id.clone(),
-                    remote_version_id: version.id.clone(),
-                    resource_type: match resource_type {
-                        ResourceType::Mod => "mod",
-                        ResourceType::ResourcePack => "resourcepack",
-                        ResourceType::Shader => "shader",
-                        ResourceType::DataPack => "datapack",
-                        ResourceType::Modpack => "modpack",
-                        ResourceType::World => "world",
-                    }
-                    .to_string(),
-                    local_path: final_path_str.clone(),
-                    display_name: project_name.clone(),
-                    current_version: version.version_number.clone(),
-                    release_type: format!("{:?}", version.release_type).to_lowercase(),
-                    is_manual: false,
-                    is_enabled: true,
-                    last_updated: Utc::now().to_rfc3339(),
-                    hash: Some(version.hash.clone()),
-                    file_size,
-                    file_mtime,
-                    source_kind: "custom".to_string(),
-                    source_modpack_id: None,
-                    source_modpack_version_id: None,
-                    source_modpack_platform: None,
-                };
-
-                tauri::async_runtime::spawn_blocking(move || {
-                    let mut conn = get_vesta_conn().map_err(|e| e.to_string())?;
-                    diesel::insert_into(installed_dsl::installed_resource)
-                        .values(&new_installed)
-                        .execute(&mut conn)
-                        .map_err(|e| e.to_string())
-                })
+            }
+            fs::rename(&temp_file_path, &final_path)
                 .await
-                .map_err(|e| format!("Failed to insert installed resource: {}", e))??;
-            }
+                .map_err(|e| e.to_string())?;
 
-            if tokio::fs::metadata(&temp_file_path).await.is_ok() {
-                let _ = fs::rename(&temp_file_path, &final_path).await;
-            }
+            let project_id = project_id.clone();
+            let project_name = project_name.clone();
+            let version = version.clone();
+            let final_path = final_path.clone();
+            let resource_type_name = match resource_type {
+                ResourceType::Mod => "mod",
+                ResourceType::ResourcePack => "resourcepack",
+                ResourceType::Shader => "shader",
+                ResourceType::DataPack => "datapack",
+                ResourceType::Modpack => "modpack",
+                ResourceType::World => "world",
+            };
+            tauri::async_runtime::spawn_blocking(move || {
+                crate::resources::ledger::record_download(
+                    instance_id,
+                    &final_path,
+                    platform,
+                    &project_id,
+                    &project_name,
+                    &version,
+                    resource_type_name,
+                    (file_size, file_mtime),
+                )
+                .map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| format!("Failed to record installed resource: {}", e))??;
 
             if let Err(e) =
                 crate::resources::update_cache::invalidate_instance_update_snapshot(instance_id)

@@ -705,35 +705,8 @@ pub async fn find_peer_resource(
 
 #[tauri::command]
 pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-    use std::fs;
-
-    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
-    // Find the resource to get the path
-    let res = ir_dsl::installed_resource
-        .filter(ir_dsl::id.eq(resource_id))
-        .filter(ir_dsl::instance_id.eq(instance_id))
-        .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "Resource not found or does not belong to this instance: {}",
-                e
-            )
-        })?;
-
-    // Delete the file
-    if fs::metadata(&res.local_path).is_ok() {
-        fs::remove_file(&res.local_path)
-            .map_err(|e| anyhow::anyhow!("Failed to delete file at {}: {}", res.local_path, e))?;
-    }
-
-    // Remove from database
-    diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-        .execute(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Failed to delete from database: {}", e))?;
+    crate::resources::ledger::remove_resource(instance_id, resource_id)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     if let Err(e) = invalidate_instance_update_snapshot(instance_id) {
         log::warn!(
@@ -748,84 +721,15 @@ pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
 
 #[tauri::command]
 pub async fn toggle_resource(resource_id: i32, enabled: bool) -> Result<()> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-    use std::fs;
-    use std::path::Path;
-
-    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
-    let res = ir_dsl::installed_resource
-        .filter(ir_dsl::id.eq(resource_id))
-        .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Resource not found: {}", e))?;
-
-    let current_path = Path::new(&res.local_path);
-    if !current_path.exists() {
-        // Auto-delete dead entry
-        let _ = diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-            .execute(&mut conn);
-        return Err(anyhow::anyhow!(
-            "File not found on disk. The entry has been removed from the database."
-        )
-        .into());
-    }
-
-    let new_path = if enabled {
-        // Remove .disabled if it exists
-        if res.local_path.ends_with(".disabled") {
-            res.local_path[..res.local_path.len() - 9].to_string()
-        } else {
-            res.local_path.clone()
-        }
-    } else {
-        // Add .disabled if it doesn't exist
-        if !res.local_path.ends_with(".disabled") {
-            format!("{}.disabled", res.local_path)
-        } else {
-            res.local_path.clone()
-        }
-    };
-
-    if new_path != res.local_path {
-        fs::rename(&res.local_path, &new_path)
-            .map_err(|e| anyhow::anyhow!("Failed to rename file: {}", e))?;
-    }
-
-    // Update database
-    diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-        .set((
-            ir_dsl::local_path.eq(new_path),
-            ir_dsl::is_enabled.eq(enabled),
-        ))
-        .execute(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Failed to update database: {}", e))?;
-
+    crate::resources::ledger::set_enabled(resource_id, enabled)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn clear_modpack_resource_provenance(instance_id: i32) -> Result<()> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    diesel::update(
-        ir_dsl::installed_resource
-            .filter(ir_dsl::instance_id.eq(instance_id))
-            .filter(ir_dsl::source_kind.eq("modpack")),
-    )
-    .set((
-        ir_dsl::source_kind.eq("custom"),
-        ir_dsl::source_modpack_id.eq(Option::<String>::None),
-        ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
-        ir_dsl::source_modpack_platform.eq(Option::<String>::None),
-    ))
-    .execute(&mut conn)
-    .map_err(|e| anyhow::anyhow!("Failed to clear resource provenance: {}", e))?;
-
+    crate::resources::ledger::clear_modpack_provenance(instance_id)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(())
 }
 
@@ -1019,68 +923,7 @@ fn apply_resource_provenance_diff(
     resources: &[crate::models::installed_resource::InstalledResource],
     matched_ids: &std::collections::HashSet<i32>,
 ) -> anyhow::Result<usize> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let Some(modpack_id) = inst.modpack_id.clone() else {
-        return Ok(0);
-    };
-    let Some(modpack_version_id) = inst.modpack_version_id.clone() else {
-        return Ok(0);
-    };
-    let Some(modpack_platform) = inst.modpack_platform.clone() else {
-        return Ok(0);
-    };
-
-    let mut conn = get_vesta_conn()?;
-    let mut changed = 0usize;
-
-    for resource in resources {
-        let should_be_modpack = matched_ids.contains(&resource.id);
-
-        if should_be_modpack {
-            let already_correct = resource.source_kind == "modpack"
-                && resource.source_modpack_id.as_deref() == Some(modpack_id.as_str())
-                && resource.source_modpack_version_id.as_deref()
-                    == Some(modpack_version_id.as_str())
-                && resource.source_modpack_platform.as_deref() == Some(modpack_platform.as_str());
-            if already_correct {
-                continue;
-            }
-
-            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
-                .set((
-                    ir_dsl::source_kind.eq("modpack"),
-                    ir_dsl::source_modpack_id.eq(Some(modpack_id.clone())),
-                    ir_dsl::source_modpack_version_id.eq(Some(modpack_version_id.clone())),
-                    ir_dsl::source_modpack_platform.eq(Some(modpack_platform.clone())),
-                ))
-                .execute(&mut conn)?;
-            changed += 1;
-            continue;
-        }
-
-        let already_custom = resource.source_kind == "custom"
-            && resource.source_modpack_id.is_none()
-            && resource.source_modpack_version_id.is_none()
-            && resource.source_modpack_platform.is_none();
-        if already_custom {
-            continue;
-        }
-
-        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
-            .set((
-                ir_dsl::source_kind.eq("custom"),
-                ir_dsl::source_modpack_id.eq(Option::<String>::None),
-                ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
-                ir_dsl::source_modpack_platform.eq(Option::<String>::None),
-            ))
-            .execute(&mut conn)?;
-        changed += 1;
-    }
-
-    Ok(changed)
+    crate::resources::ledger::apply_modpack_provenance(inst, resources, matched_ids)
 }
 
 async fn load_modpack_manifest_for_backfill(
