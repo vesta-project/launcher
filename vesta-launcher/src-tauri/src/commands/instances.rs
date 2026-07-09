@@ -11,21 +11,17 @@ use crate::utils::db::get_vesta_conn;
 use diesel::prelude::*;
 use lazy_static::lazy_static;
 use rayon::prelude::*;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::Mutex;
-use std::time::UNIX_EPOCH;
-use std::time::{Duration, Instant};
+use std::time::{Duration, UNIX_EPOCH};
 use tauri::{Emitter, Manager, State};
-use walkdir::WalkDir;
 
 const MCLOGS_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const MCLOGS_MAX_LINES: usize = 25_000;
 
 lazy_static! {
-    static ref LAUNCH_AUTO_REPAIR_GUARD: Mutex<HashMap<String, Instant>> =
-        Mutex::new(HashMap::new());
     static ref LAUNCH_IN_PROGRESS: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 }
 
@@ -72,293 +68,9 @@ impl Drop for LaunchInProgressGuard {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-enum LauncherActionOnLaunch {
-    StayOpen,
-    Minimize,
-    HideToTray,
-    Quit,
-}
-
-impl LauncherActionOnLaunch {
-    fn from_config_value(value: &str) -> Self {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "minimize" => Self::Minimize,
-            "hide-to-tray" => Self::HideToTray,
-            "quit" => Self::Quit,
-            _ => Self::StayOpen,
-        }
-    }
-}
-
-fn resolve_launcher_action(
-    inst: &Instance,
-    app_config: &crate::utils::config::AppConfig,
-) -> LauncherActionOnLaunch {
-    if !inst.use_global_launcher_action {
-        if let Some(local_value) = inst.launcher_action_on_launch.as_deref() {
-            return LauncherActionOnLaunch::from_config_value(local_value);
-        }
-    }
-
-    LauncherActionOnLaunch::from_config_value(&app_config.default_launcher_action_on_launch)
-}
-
-fn apply_launcher_action_after_launch(
-    app_handle: &tauri::AppHandle,
-    resolved_action: LauncherActionOnLaunch,
-    tray_visible: bool,
-) {
-    let Some(main_window) = app_handle.get_webview_window("main") else {
-        log::warn!("Launcher action skipped: main window not found");
-        return;
-    };
-
-    match resolved_action {
-        LauncherActionOnLaunch::StayOpen => {
-            log::info!("Launcher action on launch resolved to stay-open");
-        }
-        LauncherActionOnLaunch::Minimize => {
-            log::info!("Launcher action on launch resolved to minimize");
-            let _ = main_window.minimize();
-        }
-        LauncherActionOnLaunch::HideToTray => {
-            log::info!("Launcher action on launch resolved to hide-to-tray");
-            if tray_visible {
-                let _ = main_window.hide();
-            } else {
-                log::info!("Tray hidden/unavailable, falling back to minimize");
-                let _ = main_window.minimize();
-            }
-        }
-        LauncherActionOnLaunch::Quit => {
-            log::info!("Launcher action on launch resolved to quit (guarded exit)");
-            let _ = crate::commands::app::request_guarded_exit(app_handle, "launch-action-quit");
-        }
-    }
-}
-
-fn game_proxy_jvm_args(app_config: &crate::utils::config::AppConfig) -> Vec<String> {
-    if !app_config.proxy_enabled || !app_config.proxy_apply_to_games {
-        return Vec::new();
-    }
-
-    let Some(proxy_url) = app_config.proxy_url.as_deref() else {
-        return Vec::new();
-    };
-
-    let parsed = match piston_lib::client::validate_proxy_url(proxy_url) {
-        Ok(parsed) => parsed,
-        Err(e) => {
-            log::warn!(
-                "Skipping game proxy JVM args because proxy URL is invalid: {}",
-                e
-            );
-            return Vec::new();
-        }
-    };
-
-    if parsed.has_credentials {
-        log::warn!(
-            "Game proxy credentials are not injected into JVM arguments; host/port only will be used"
-        );
-    }
-
-    match parsed.scheme.as_str() {
-        "http" | "https" => vec![
-            format!("-Dhttp.proxyHost={}", parsed.host),
-            format!("-Dhttp.proxyPort={}", parsed.port),
-            format!("-Dhttps.proxyHost={}", parsed.host),
-            format!("-Dhttps.proxyPort={}", parsed.port),
-        ],
-        "socks5" | "socks5h" => vec![
-            format!("-DsocksProxyHost={}", parsed.host),
-            format!("-DsocksProxyPort={}", parsed.port),
-        ],
-        _ => Vec::new(),
-    }
-}
-
-fn parse_user_jvm_args(raw_args: Option<String>) -> Result<Vec<String>, String> {
-    let Some(args) = raw_args else {
-        return Ok(Vec::new());
-    };
-
-    let trimmed = args.trim();
-    if trimmed.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    shlex::split(trimmed)
-        .ok_or_else(|| "JVM arguments contain malformed quotes or escapes".to_string())
-}
-
-#[cfg(test)]
-mod proxy_launch_tests {
-    use super::{game_proxy_jvm_args, parse_user_jvm_args};
-
-    #[test]
-    fn game_proxy_args_are_disabled_by_default() {
-        let config = crate::utils::config::AppConfig::default();
-        assert!(game_proxy_jvm_args(&config).is_empty());
-    }
-
-    #[test]
-    fn game_proxy_args_include_http_and_https_properties() {
-        let mut config = crate::utils::config::AppConfig::default();
-        config.proxy_enabled = true;
-        config.proxy_apply_to_games = true;
-        config.proxy_url = Some("http://127.0.0.1:8080".to_string());
-
-        assert_eq!(
-            game_proxy_jvm_args(&config),
-            vec![
-                "-Dhttp.proxyHost=127.0.0.1",
-                "-Dhttp.proxyPort=8080",
-                "-Dhttps.proxyHost=127.0.0.1",
-                "-Dhttps.proxyPort=8080",
-            ]
-        );
-    }
-
-    #[test]
-    fn game_proxy_args_include_socks_properties_without_credentials() {
-        let mut config = crate::utils::config::AppConfig::default();
-        config.proxy_enabled = true;
-        config.proxy_apply_to_games = true;
-        config.proxy_url = Some("socks5h://user:pass@example.test:1081".to_string());
-
-        assert_eq!(
-            game_proxy_jvm_args(&config),
-            vec!["-DsocksProxyHost=example.test", "-DsocksProxyPort=1081",]
-        );
-    }
-
-    #[test]
-    fn parses_quoted_user_jvm_args() {
-        assert_eq!(
-            parse_user_jvm_args(Some(r#"-Dfoo="a b" -Xmx2G"#.to_string())).unwrap(),
-            vec!["-Dfoo=a b", "-Xmx2G"]
-        );
-    }
-
-    #[test]
-    fn parses_paths_with_spaces() {
-        assert_eq!(
-            parse_user_jvm_args(Some(
-                r#"-Djava.library.path="/tmp/path with spaces""#.to_string()
-            ))
-            .unwrap(),
-            vec!["-Djava.library.path=/tmp/path with spaces"]
-        );
-    }
-
-    #[test]
-    fn rejects_malformed_user_jvm_args() {
-        assert!(parse_user_jvm_args(Some(r#"-Dfoo="unterminated"#.to_string())).is_err());
-    }
-
-    #[test]
-    fn appends_game_proxy_args_after_user_jvm_args() {
-        let mut config = crate::utils::config::AppConfig::default();
-        config.proxy_enabled = true;
-        config.proxy_apply_to_games = true;
-        config.proxy_url = Some("http://127.0.0.1:8080".to_string());
-
-        let mut args = parse_user_jvm_args(Some("-Xmx2G".to_string())).unwrap();
-        args.extend(game_proxy_jvm_args(&config));
-
-        assert_eq!(args[0], "-Xmx2G");
-        assert!(args.contains(&"-Dhttp.proxyHost=127.0.0.1".to_string()));
-    }
-}
-
 /// Compute canonical instance game directory path under the given instances root
 fn compute_instance_game_dir(root: &std::path::Path, slug: &str) -> String {
     root.join(slug).to_string_lossy().to_string()
-}
-
-fn verify_modpack_resource_presence(inst: &Instance, game_dir: &str) -> Result<(), String> {
-    let has_modpack_link = inst.modpack_platform.is_some()
-        || inst.modpack_id.is_some()
-        || inst.modpack_version_id.is_some();
-    let game_path = std::path::Path::new(game_dir);
-    let has_manifest = game_path
-        .join(piston_lib::game::modpack::manifest::ModpackManifest::FILE_NAME)
-        .is_file()
-        || game_path
-            .join(".vesta")
-            .join("modpack_manifest.json")
-            .is_file();
-
-    if !(has_modpack_link || has_manifest) {
-        return Ok(());
-    }
-
-    let critical_dirs = ["mods", "resourcepacks", "shaderpacks", "datapacks"];
-    let mut discovered_files = 0usize;
-    for dir_name in critical_dirs {
-        let dir = game_path.join(dir_name);
-        if !dir.exists() {
-            continue;
-        }
-        for entry in WalkDir::new(&dir)
-            .max_depth(3)
-            .into_iter()
-            .filter_map(Result::ok)
-        {
-            if entry.file_type().is_file() {
-                discovered_files += 1;
-                break;
-            }
-        }
-    }
-
-    log::info!(
-        "[launch_instance] modpack-resource-check instance={} linked={} manifest={} discovered_files={}",
-        inst.slug(),
-        has_modpack_link,
-        has_manifest,
-        discovered_files
-    );
-
-    if discovered_files == 0 {
-        // Fallback: if resources are already indexed in DB for this instance,
-        // do not hard-block launch due to path-layout drift.
-        if inst.id > 0 {
-            use crate::schema::installed_resource::dsl as ir_dsl;
-            if let Ok(mut conn) = get_vesta_conn() {
-                let indexed_count = ir_dsl::installed_resource
-                    .filter(ir_dsl::instance_id.eq(inst.id))
-                    .filter(
-                        ir_dsl::resource_type
-                            .eq("mod")
-                            .or(ir_dsl::resource_type.eq("resourcepack"))
-                            .or(ir_dsl::resource_type.eq("shader"))
-                            .or(ir_dsl::resource_type.eq("datapack")),
-                    )
-                    .count()
-                    .get_result::<i64>(&mut conn)
-                    .unwrap_or(0);
-                if indexed_count > 0 {
-                    log::warn!(
-                        "[launch_instance] modpack-resource-check bypassed: no files found at {} but {} indexed resources exist in DB for instance={}",
-                        game_dir,
-                        indexed_count,
-                        inst.slug()
-                    );
-                    return Ok(());
-                }
-            }
-        }
-
-        return Err(
-            "Modpack-linked instance has no modpack-managed resource files (mods/resourcepacks/shaderpacks/datapacks). Run Repair to restore missing files."
-                .to_string(),
-        );
-    }
-
-    Ok(())
 }
 
 #[tauri::command]
@@ -366,7 +78,7 @@ pub fn clear_instance_crash(
     app_handle: tauri::AppHandle,
     instance_id_slug: String,
 ) -> Result<(), String> {
-    crate::instance_lifecycle::clear_crash_flag(&instance_id_slug, Some(&app_handle))
+    crate::instance::lifecycle::clear_crash_flag(&instance_id_slug, Some(&app_handle))
 }
 
 #[tauri::command]
@@ -481,11 +193,11 @@ fn emit_simulated_crash(
     instance_id_slug: &str,
     crash: crate::utils::crash_parser::CrashDetails,
 ) -> Result<(), String> {
-    crate::instance_lifecycle::store_crash_details(instance_id_slug, &crash)?;
+    crate::instance::lifecycle::store_crash_details(instance_id_slug, &crash)?;
     app_handle
         .emit(
             "core://instance-crashed",
-            crate::instance_lifecycle::crash_event_payload(instance_id_slug, &crash),
+            crate::instance::lifecycle::crash_event_payload(instance_id_slug, &crash),
         )
         .map_err(|e| e.to_string())
 }
@@ -1825,432 +1537,26 @@ pub async fn launch_instance(
         instance_data.modloader_version
     );
 
-    // Load app configuration for defaults
-    let app_config = crate::utils::config::get_app_config().map_err(|e| e.to_string())?;
-    let resolved_launcher_action = resolve_launcher_action(&instance_data, &app_config);
-    let tray_visible = app_config.show_tray_icon;
-
-    // Get app config directory
-    let data_dir = crate::utils::db_manager::get_app_config_dir()
-        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-
-    let java_path_str = crate::utils::java::ensure_java_for_instance(
+    let prepared =
+        crate::instance::launch_preparation::prepare_instance_launch(&app_handle, &instance_data)
+            .await?;
+    crate::instance::launch_preparation::ensure_runtime_ready_for_launch(
         &app_handle,
         &instance_data,
-        None,
-        Some(format!(
-            "repair_managed_java_launch_{}",
-            instance_data.slug()
-        )),
+        prepared.install_spec.clone(),
     )
     .await?;
 
-    // Determine which data_dir to use
-    let spec_data_dir = if data_dir.join("data").exists() {
-        data_dir.join("data")
-    } else {
-        data_dir.clone()
-    };
-
-    // Determine game directory using the same resolver as duplicate/repair flows.
-    let app_config_dir = crate::utils::db_manager::get_app_config_dir()
-        .map_err(|e| format!("Failed to get app config dir: {}", e))?;
-    let instances_root = crate::utils::instance_helpers::resolve_instances_root(
-        &app_config_dir,
-        app_config.default_game_dir.as_deref(),
-    );
-    let game_dir = crate::utils::instance_helpers::resolve_instance_game_directory(
-        &instance_data,
-        &instances_root,
-        &data_dir,
-    )
-    .to_string_lossy()
-    .to_string();
-
-    verify_modpack_resource_presence(&instance_data, &game_dir)?;
-
-    // Resolve settings (Resolution, Memory, Java Args)
-    let res_width = if instance_data.use_global_resolution {
-        app_config.default_width
-    } else {
-        instance_data.game_width
-    };
-    let res_height = if instance_data.use_global_resolution {
-        app_config.default_height
-    } else {
-        instance_data.game_height
-    };
-    let system_ram_mb = piston_lib::utils::hardware::get_total_memory_mb() as i32;
-    let resolved_memory = crate::utils::memory_policy::clamp_manual_memory_range(
-        instance_data.min_memory,
-        instance_data.max_memory,
-        system_ram_mb,
-    );
-    let res_min_memory = resolved_memory.min;
-    let res_max_memory = resolved_memory.max;
-    let java_args_raw = if instance_data.use_global_java_args {
-        app_config.default_java_args.clone()
-    } else {
-        instance_data.java_args.clone()
-    };
-    let mut resolved_jvm_args = parse_user_jvm_args(java_args_raw)?;
-    resolved_jvm_args.extend(game_proxy_jvm_args(&app_config));
-
-    // Resolve Environment Variables
-    #[cfg(any(target_os = "linux", target_os = "windows"))]
-    let mut env_vars = crate::utils::hooks::resolve_env_vars(&app_config, &instance_data);
-    #[cfg(not(any(target_os = "linux", target_os = "windows")))]
-    let env_vars = crate::utils::hooks::resolve_env_vars(&app_config, &instance_data);
-
-    // Resolve Hooks
-    let res_pre_launch_hook = if instance_data.use_global_hooks {
-        app_config.default_pre_launch_hook.clone()
-    } else {
-        instance_data.pre_launch_hook.clone()
-    };
-    let res_wrapper_command = if instance_data.use_global_hooks {
-        app_config.default_wrapper_command.clone()
-    } else {
-        instance_data.wrapper_command.clone()
-    };
-    let res_post_exit_hook = if instance_data.use_global_hooks {
-        app_config.default_post_exit_hook.clone()
-    } else {
-        instance_data.post_exit_hook.clone()
-    };
-
-    // Parse modloader type
-    let modloader_type = instance_data
-        .modloader
-        .as_ref()
-        .and_then(|m| m.parse::<piston_lib::game::ModloaderType>().ok());
-
-    // Fast launch preflight: verify runtime artifacts before spawning JVM.
-    let verify_spec = piston_lib::game::installer::types::InstallSpec {
-        version_id: instance_data.minecraft_version.clone(),
-        modloader: modloader_type.clone(),
-        modloader_version: instance_data.modloader_version.clone(),
-        data_dir: spec_data_dir.clone(),
-        game_dir: std::path::PathBuf::from(&game_dir),
-        java_path: Some(std::path::PathBuf::from(&java_path_str)),
-        dry_run: false,
-        concurrency: 8,
-        artifact_cache_max_bytes: crate::utils::storage::normalize_artifact_cache_limit_bytes(
-            app_config.artifact_cache_max_bytes,
-        ) as u64,
-        force_overwrite_configs: false,
-        repair_scope: piston_lib::game::installer::types::RepairScope::Full,
-        remediation_policy: piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
-        finalize_reporter: true,
-    };
-    let preflight_report = piston_lib::game::installer::verify_instance(&verify_spec)
-        .map_err(|e| format!("Launch preflight verification failed: {}", e))?;
-    log::info!(
-        "[launch_instance] verify-summary ready={} checked={} missing={} mismatch={}",
-        preflight_report.ready,
-        preflight_report.checked,
-        preflight_report.missing_count(),
-        preflight_report.mismatch_count()
-    );
-    if !preflight_report.ready {
-        for issue in &preflight_report.issues {
-            log::warn!(
-                "[launch_instance] verify-issue kind={:?} class={} path={} detail={}",
-                issue.kind,
-                issue.artifact_class,
-                issue.path,
-                issue.detail
-            );
-        }
-
-        let now = Instant::now();
-        let recently_attempted = {
-            let guard = LAUNCH_AUTO_REPAIR_GUARD
-                .lock()
-                .map_err(|_| "Failed to lock launch auto-repair guard".to_string())?;
-            guard
-                .get(&instance_id)
-                .map(|t| now.duration_since(*t) < std::time::Duration::from_secs(90))
-                .unwrap_or(false)
-        };
-        if recently_attempted {
-            if instance_data.id > 0 {
-                let _ = crate::commands::instances::update_installation_status(
-                    &app_handle,
-                    instance_data.id,
-                    "installed",
-                );
-            }
-            return Err(format!(
-                "Launch blocked: runtime files are still missing/corrupt (missing={}, mismatched={}). Auto-repair was already attempted recently; run Repair to view detailed errors.",
-                preflight_report.missing_count(),
-                preflight_report.mismatch_count()
-            ));
-        }
-        {
-            let mut guard = LAUNCH_AUTO_REPAIR_GUARD
-                .lock()
-                .map_err(|_| "Failed to lock launch auto-repair guard".to_string())?;
-            guard.insert(instance_id.clone(), now);
-        }
-
-        log::info!(
-            "[launch_instance] runtime gaps detected, running one-shot auto-repair instance={}",
-            instance_id
-        );
-        if instance_data.id > 0 {
-            let _ = crate::commands::instances::update_installation_status(
-                &app_handle,
-                instance_data.id,
-                "launch-preflight-repair",
-            );
-        }
-        let silent_reporter: std::sync::Arc<
-            dyn piston_lib::game::installer::types::ProgressReporter,
-        > = std::sync::Arc::new(piston_lib::game::installer::types::SilentProgressReporter);
-        piston_lib::game::installer::install_instance(verify_spec, silent_reporter)
-            .await
-            .map_err(|e| {
-                if instance_data.id > 0 {
-                    let _ = crate::commands::instances::update_installation_status(
-                        &app_handle,
-                        instance_data.id,
-                        "installed",
-                    );
-                }
-                format!(
-                    "Launch auto-repair failed (missing={}, mismatched={}): {}",
-                    preflight_report.missing_count(),
-                    preflight_report.mismatch_count(),
-                    e
-                )
-            })?;
-        let post_repair = piston_lib::game::installer::verify_instance(
-            &piston_lib::game::installer::types::InstallSpec {
-                version_id: instance_data.minecraft_version.clone(),
-                modloader: modloader_type.clone(),
-                modloader_version: instance_data.modloader_version.clone(),
-                data_dir: spec_data_dir.clone(),
-                game_dir: std::path::PathBuf::from(&game_dir),
-                java_path: Some(std::path::PathBuf::from(&java_path_str)),
-                dry_run: false,
-                concurrency: 8,
-                artifact_cache_max_bytes:
-                    crate::utils::storage::normalize_artifact_cache_limit_bytes(
-                        app_config.artifact_cache_max_bytes,
-                    ) as u64,
-                force_overwrite_configs: false,
-                repair_scope: piston_lib::game::installer::types::RepairScope::Full,
-                remediation_policy:
-                    piston_lib::game::installer::types::RemediationPolicy::RepairIfNeeded,
-                finalize_reporter: true,
-            },
-        )
-        .map_err(|e| {
-            if instance_data.id > 0 {
-                let _ = crate::commands::instances::update_installation_status(
-                    &app_handle,
-                    instance_data.id,
-                    "installed",
-                );
-            }
-            format!("Post-repair verification failed: {}", e)
-        })?;
-        if !post_repair.ready {
-            if instance_data.id > 0 {
-                let _ = crate::commands::instances::update_installation_status(
-                    &app_handle,
-                    instance_data.id,
-                    "installed",
-                );
-            }
-            return Err(format!(
-                "Launch blocked after auto-repair: runtime files still missing/corrupt (missing={}, mismatched={}).",
-                post_repair.missing_count(),
-                post_repair.mismatch_count()
-            ));
-        }
-        if instance_data.id > 0 {
-            let _ = crate::commands::instances::update_installation_status(
-                &app_handle,
-                instance_data.id,
-                "installed",
-            );
-        }
-    }
-
-    // Attempt to read the current active account
-    let mut active_account = match crate::auth::get_active_account() {
-        Ok(Some(acc)) => Some(acc),
-        Ok(None) => None,
-        Err(e) => {
-            log::warn!("[launch_instance] Failed to read active account: {}", e);
-            None
-        }
-    };
-
-    // Check network status
-    let network_manager = app_handle.state::<crate::utils::network::NetworkManager>();
-    let is_offline = network_manager.get_status() == crate::utils::network::NetworkStatus::Offline;
-
-    // If we have an active account, ensure token validity
-    if let Some(acc) = active_account.clone() {
-        if acc.account_type == ACCOUNT_TYPE_GUEST || acc.account_type == ACCOUNT_TYPE_DEMO {
-            log::warn!(
-                "[launch_instance] Blocked launch attempt from {} account",
-                acc.account_type
-            );
-
-            // Show notification to user that Guest/Demo mode cannot launch games
-            if let Some(nm) =
-                app_handle.try_state::<crate::notifications::manager::NotificationManager>()
-            {
-                let _ = nm.create(crate::notifications::models::CreateNotificationInput {
-                    client_key: None,
-                    title: Some("Login Required".to_string()),
-                    description: Some(
-                        format!("You must be signed in with a Microsoft account to launch Minecraft. (Current: {})", acc.account_type)
-                    ),
-                    severity: Some("warning".to_string()),
-                    notification_type: Some(
-                        crate::notifications::models::NotificationType::Immediate,
-                    ),
-                    dismissible: Some(true),
-                    persist: Some(false),
-                    silent: Some(false),
-                    actions: None,
-                    progress: None,
-                    current_step: None,
-                    total_steps: None,
-                    metadata: None,
-                    show_on_completion: None,
-                });
-            }
-
-            return Err(
-                "You must be signed in with a Microsoft account to launch Minecraft.".to_string(),
-            );
-        } else if !is_offline {
-            if let Err(e) =
-                crate::auth::ensure_account_tokens_valid(app_handle.clone(), acc.uuid.clone()).await
-            {
-                log::error!("[launch_instance] Failed to refresh token: {}", e);
-                return Err(format!("Failed to refresh authentication: {}", e));
-            }
-
-            // Re-fetch
-            active_account = match crate::auth::get_active_account() {
-                Ok(Some(acc)) => Some(acc),
-                Ok(None) => None,
-                Err(_) => None,
-            };
-        } else {
-            log::info!("[launch_instance] Offline mode: skipping token refresh");
-        }
-    }
-
-    // Build launch spec
-    let exit_handler_jar = app_handle
-        .path()
-        .resource_dir()
-        .ok()
-        .map(|dir| dir.join("exit-handler.jar"))
-        .filter(|p| p.exists())
-        .or_else(|| {
-            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                .parent() // src-tauri -> vesta-launcher
-                .map(|p| {
-                    p.join("resources")
-                        .join("exit-handler")
-                        .join("exit-handler.jar")
-                })
-                .filter(|p| p.exists())
-        });
-
-    // Determine log file path
-    let log_file = spec_data_dir
-        .join("logs")
-        .join(format!("{}.log", instance_id));
-
-    let username = active_account
-        .as_ref()
-        .map(|a| a.username.clone())
-        .unwrap_or_else(|| "Player".to_string());
-
-    let uuid = if is_offline {
-        piston_lib::auth::generate_offline_uuid(&username)
-    } else {
-        active_account
-            .as_ref()
-            .map(|a| a.uuid.clone())
-            .unwrap_or_else(|| "00000000-0000-0000-0000-000000000000".to_string())
-    };
-
-    // Prepare GPU environment and preferences
-    if app_config.use_dedicated_gpu {
-        #[cfg(target_os = "linux")]
-        {
-            log::info!("[launch_instance] Enabling dedicated GPU variables for Linux (NVIDIA Prime / Mesa)");
-            env_vars.insert("__NV_PRIME_RENDER_OFFLOAD".to_string(), "1".to_string());
-            env_vars.insert(
-                "__GLX_VENDOR_LIBRARY_NAME".to_string(),
-                "nvidia".to_string(),
-            );
-            env_vars.insert("DRI_PRIME".to_string(), "1".to_string());
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            log::info!("[launch_instance] Setting Windows GPU preference for High Performance");
-            // Set Windows registry preference for the specific Java executable
-            let _ = crate::utils::windows::set_windows_gpu_preference(std::path::Path::new(
-                &java_path_str,
-            ));
-            // Hint for older drivers/wrappers
-            env_vars.insert("SHHighPerformanceGpuSelection".to_string(), "1".to_string());
-        }
-    }
-
-    let spec = piston_lib::game::launcher::LaunchSpec {
-        instance_id: instance_id.clone(),
-        version_id: instance_data.minecraft_version.clone(),
-        modloader: modloader_type.clone(),
-        modloader_version: instance_data.modloader_version.clone(),
-        data_dir: spec_data_dir.clone(),
-        game_dir: std::path::PathBuf::from(&game_dir),
-        java_path: std::path::PathBuf::from(&java_path_str),
-        min_memory: Some(res_min_memory as u32),
-        max_memory: Some(res_max_memory as u32),
-        username,
-        uuid,
-        access_token: if is_offline {
-            "offline".to_string()
-        } else {
-            active_account
-                .as_ref()
-                .and_then(|a| a.access_token.clone())
-                .unwrap_or_else(|| "offline".to_string())
-        },
-        xuid: None,
-        client_id: piston_lib::auth::CLIENT_ID.to_string(),
-        user_type: "msa".to_string(),
-        jvm_args: resolved_jvm_args,
-        game_args: vec![],
-        window_width: Some(res_width as u32),
-        window_height: Some(res_height as u32),
-        exit_handler_jar,
-        log_file: Some(log_file),
-        env_vars: env_vars.clone(),
-        wrapper_command: res_wrapper_command,
-        pre_launch_hook: res_pre_launch_hook,
-        post_exit_hook: res_post_exit_hook,
-    };
-
     log::info!(
         "[launch_instance] Launching game: {} {}",
-        spec.instance_id,
-        spec.version_id
+        prepared.instance_id,
+        prepared.launch_spec.version_id
     );
+    let offline_launch = prepared.offline;
+    let prepared_instance_name = prepared.instance_name.clone();
+    let launcher_action = prepared.launcher_action;
+    let tray_visible = prepared.tray_visible;
+    let launch_spec = prepared.launch_spec;
 
     // Log batching setup
     let (log_tx, mut log_rx) = tokio::sync::mpsc::unbounded_channel::<(String, String, String)>();
@@ -2294,32 +1600,16 @@ pub async fn launch_instance(
             let _ = log_tx.send((iid, line, stream));
         });
 
-    if is_offline {
-        if let Some(nm) =
-            app_handle.try_state::<crate::notifications::manager::NotificationManager>()
-        {
-            let _ = nm.create(crate::notifications::models::CreateNotificationInput {
-                client_key: None,
-                title: Some(format!("Launching {} (Offline)", instance_data.name)),
-                description: Some("Started in offline mode. Multiplayer on authenticated servers will not be available.".to_string()),
-                severity: Some("info".to_string()),
-                notification_type: Some(crate::notifications::models::NotificationType::Immediate),
-                dismissible: Some(true),
-                persist: Some(false),
-                silent: Some(false),
-                actions: None,
-                progress: None,
-                current_step: None,
-                total_steps: None,
-                metadata: None,
-                show_on_completion: None,
-            });
-        }
+    if offline_launch {
+        crate::instance::launch_preparation::notify_offline_launch(
+            &app_handle,
+            &prepared_instance_name,
+        );
     }
 
     let join = tokio::task::spawn_blocking(move || {
         futures::executor::block_on(piston_lib::game::launcher::launch_game(
-            spec,
+            launch_spec,
             Some(log_callback),
         ))
     })
@@ -2329,16 +1619,20 @@ pub async fn launch_instance(
     match join {
         Ok(result) => {
             log::info!("[launch_instance] Started PID: {}", result.instance.pid);
-            let run_state = crate::instance_lifecycle::record_started_launch(
+            let run_state = crate::instance::lifecycle::record_started_launch(
                 &app_handle,
                 &instance_data,
                 result,
             )
             .await?;
 
-            apply_launcher_action_after_launch(&app_handle, resolved_launcher_action, tray_visible);
+            crate::instance::launch_preparation::apply_launcher_action_after_launch(
+                &app_handle,
+                launcher_action,
+                tray_visible,
+            );
 
-            crate::instance_lifecycle::spawn_exit_monitor(
+            crate::instance::lifecycle::spawn_exit_monitor(
                 app_handle.clone(),
                 instance_data.name.clone(),
                 run_state,
@@ -2352,7 +1646,7 @@ pub async fn launch_instance(
 
 #[tauri::command]
 pub async fn kill_instance(app_handle: tauri::AppHandle, inst: Instance) -> Result<String, String> {
-    crate::instance_lifecycle::kill_instance(app_handle, inst).await
+    crate::instance::lifecycle::kill_instance(app_handle, inst).await
 }
 
 #[tauri::command]

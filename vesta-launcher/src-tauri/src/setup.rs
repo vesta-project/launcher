@@ -494,7 +494,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     // Reattach to already-running processes on startup
     {
-        crate::instance_lifecycle::reattach_or_reconcile_persisted_processes(app.handle().clone());
+        crate::instance::lifecycle::reattach_or_reconcile_persisted_processes(app.handle().clone());
     }
 
     // Initialize process registry (in-memory only, no persistence)

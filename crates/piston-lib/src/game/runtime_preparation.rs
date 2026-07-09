@@ -22,7 +22,7 @@ pub async fn prepare_runtime(
     spec: InstallSpec,
     reporter: Arc<dyn ProgressReporter>,
 ) -> Result<RuntimePreparationReport> {
-    let initial_report = installer::verify_instance(&spec)?;
+    let initial_report = verify_runtime(&spec)?;
 
     if !should_repair(&initial_report, spec.remediation_policy) {
         return Ok(RuntimePreparationReport {
@@ -33,13 +33,17 @@ pub async fn prepare_runtime(
     }
 
     installer::install_instance(spec.clone(), reporter).await?;
-    let final_report = installer::verify_instance(&spec)?;
+    let final_report = verify_runtime(&spec)?;
 
     Ok(RuntimePreparationReport {
         initial_report,
         final_report,
         repaired: true,
     })
+}
+
+pub fn verify_runtime(spec: &InstallSpec) -> Result<VerificationResult> {
+    installer::verify_instance(spec)
 }
 
 fn should_repair(report: &VerificationResult, policy: RemediationPolicy) -> bool {
@@ -72,12 +76,18 @@ mod tests {
 
     #[test]
     fn ready_runtime_does_not_repair() {
-        assert!(!should_repair(&report(true), RemediationPolicy::RepairIfNeeded));
+        assert!(!should_repair(
+            &report(true),
+            RemediationPolicy::RepairIfNeeded
+        ));
     }
 
     #[test]
     fn verify_only_runtime_does_not_repair() {
-        assert!(!should_repair(&report(false), RemediationPolicy::VerifyOnly));
+        assert!(!should_repair(
+            &report(false),
+            RemediationPolicy::VerifyOnly
+        ));
     }
 
     #[test]

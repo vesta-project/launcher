@@ -4,7 +4,7 @@
 pub mod auth;
 mod commands;
 pub mod discord;
-mod instance_lifecycle;
+mod instance;
 mod launcher_import;
 mod logging;
 mod metadata_cache;
