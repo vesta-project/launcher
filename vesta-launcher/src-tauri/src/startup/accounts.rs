@@ -2,10 +2,35 @@ use crate::utils::config::{get_app_config, update_app_config};
 use crate::utils::db::get_vesta_conn;
 use crate::utils::db_manager::get_app_config_dir;
 use diesel::prelude::*;
+use tauri::Manager;
 
 pub fn cleanup_temporary_accounts() {
     cleanup_guest_session();
     cleanup_demo_account();
+}
+
+pub fn submit_profile_sync(app: &tauri::App) {
+    if app
+        .try_state::<crate::tasks::manager::TaskManager>()
+        .is_none()
+    {
+        log::error!("[startup] TaskManager unavailable for account profile sync");
+        return;
+    }
+
+    log::info!("[startup] Submitting SyncAccountProfilesTask...");
+    let app_handle = app.handle().clone();
+    tauri::async_runtime::spawn(async move {
+        let task_manager = app_handle.state::<crate::tasks::manager::TaskManager>();
+        if let Err(error) = task_manager
+            .submit(Box::new(
+                crate::tasks::sync_profiles::SyncAccountProfilesTask::new(),
+            ))
+            .await
+        {
+            log::warn!("Failed to submit startup account profile sync: {}", error);
+        }
+    });
 }
 
 fn cleanup_guest_session() {

@@ -1,5 +1,4 @@
 use crate::discord::DiscordManager;
-use crate::metadata_cache::MetadataCache;
 use crate::notifications::manager::NotificationManager;
 use crate::notifications::subscriptions::manager::SubscriptionManager;
 use crate::tasks::manager::TaskManager;
@@ -9,7 +8,6 @@ use crate::utils::config::{
 };
 use crate::utils::db::{init_config_pool, init_vesta_pool};
 use crate::utils::db_manager::get_app_config_dir;
-use crate::utils::version_tracking::VersionTrackingRepository;
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder};
 use tauri::webview::Color;
@@ -130,10 +128,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         log::error!("Failed to normalize startup memory config state: {}", e);
     }
 
-    // Initialize version tracking defaults (including launcher version)
-    if let Err(e) = VersionTrackingRepository::initialize_defaults() {
-        log::error!("Failed to initialize version tracking defaults: {}", e);
-    }
+    crate::startup::updates::initialize_version_tracking();
 
     log::info!("✓ Database initialization complete");
 
@@ -186,132 +181,18 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let network_manager = crate::utils::network::NetworkManager::new(app.handle().clone());
     app.manage(network_manager);
 
-    // Initialize MetadataCache (in-memory fast path for manifest)
-    app.manage(MetadataCache::new());
-
-    // Start warming the manifest cache immediately in the background.
-    // By the time the user opens the install page, manifests are already
-    // cached in memory and on disk.
-    {
-        let app_handle = app.handle().clone();
-        tauri::async_runtime::spawn(async move {
-            let config_dir = get_app_config_dir().ok();
-            if let Some(dir) = config_dir {
-                let cache = piston_lib::game::manifest_cache::ManifestCache::new(
-                    dir.join("data").join("manifests"),
-                );
-                log::info!("[setup] Warming manifest cache in background...");
-                cache.warm_up().await;
-                log::info!("[setup] Manifest cache warmup complete");
-
-                // Populate MetadataCache from the warmed manifests
-                match cache.build_piston_metadata().await {
-                    Ok(meta) => {
-                        if let Some(mc) = app_handle.try_state::<MetadataCache>() {
-                            mc.set(&meta);
-                            log::info!(
-                                "[setup] MetadataCache populated: {} versions",
-                                meta.game_versions.len()
-                            );
-                        }
-                    }
-                    Err(e) => log::warn!("[setup] Failed to build metadata after warmup: {}", e),
-                }
-            }
-        });
-    }
-
-    // Sync profiles on startup
-    if let Some(task_manager) = app.try_state::<TaskManager>() {
-        log::info!("[setup] Submitting SyncAccountProfilesTask...");
-        let _ = task_manager.submit(Box::new(
-            crate::tasks::sync_profiles::SyncAccountProfilesTask::new(),
-        ));
-    } else {
-        log::error!("[setup] Failed to get TaskManager state for startup sync");
-    }
+    crate::startup::metadata::register_and_warm(app);
+    crate::startup::accounts::submit_profile_sync(app);
 
     // Initialize ResourceManager for external resources (Modrinth, CurseForge)
     app.manage(crate::resources::ResourceManager::new());
     app.manage(crate::launcher_import::ImportManager::new());
 
-    // Check for launcher updates/changelog on startup
-    {
-        let handle = app.handle().clone();
-        tauri::async_runtime::spawn(async move {
-            let current_version = handle.package_info().version.to_string();
-            match VersionTrackingRepository::is_version_newer("launcher", &current_version) {
-                Ok(true) => {
-                    log::info!(
-                        "New launcher version detected: {}. Triggering notification.",
-                        current_version
-                    );
-
-                    let manager = handle.state::<NotificationManager>();
-                    use crate::notifications::models::{
-                        CreateNotificationInput, NotificationAction, NotificationType,
-                    };
-
-                    let actions = vec![NotificationAction {
-                        action_id: "navigate".to_string(),
-                        label: "View Changelog".to_string(),
-                        action_type: "primary".to_string(),
-                        payload: Some(serde_json::json!({ "path": "/changelog" })),
-                    }];
-
-                    if let Err(e) = manager.create(CreateNotificationInput {
-                        client_key: Some("launcher_update".to_string()),
-                        title: Some("Vesta has been updated!".to_string()),
-                        description: Some(format!(
-                            "Welcome to version {}. Check out what's new in this release!",
-                            current_version
-                        )),
-                        severity: Some("info".to_string()),
-                        notification_type: Some(NotificationType::Patient),
-                        dismissible: Some(true),
-                        persist: Some(true),
-                        silent: Some(false),
-                        actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
-                        progress: None,
-                        current_step: None,
-                        total_steps: None,
-                        metadata: None,
-                        show_on_completion: None,
-                    }) {
-                        log::error!("Failed to create update notification: {}", e);
-                    }
-
-                    // Update the last seen version so we don't notify again
-                    if let Err(e) = VersionTrackingRepository::update_last_seen_version(
-                        "launcher",
-                        &current_version,
-                        true,
-                    ) {
-                        log::error!("Failed to update last seen launcher version: {}", e);
-                    }
-                }
-                Ok(false) => log::debug!("Launcher version is up to date in tracking."),
-                Err(e) => log::error!("Failed to check launcher version: {}", e),
-            }
-        });
-    }
+    crate::startup::updates::notify_current_version(app.handle().clone());
 
     crate::startup::resources::start_resource_watchers(app);
 
-    // Reattach to already-running processes on startup
-    {
-        crate::instance::lifecycle::reattach_or_reconcile_persisted_processes(app.handle().clone());
-    }
-
-    // Initialize process registry (in-memory only, no persistence)
-    {
-        tauri::async_runtime::spawn(async move {
-            log::info!("Initializing process registry");
-            if let Err(e) = piston_lib::game::launcher::load_registry().await {
-                log::error!("Failed to initialize process registry: {}", e);
-            }
-        });
-    }
+    crate::startup::processes::start(app.handle().clone());
 
     let os_str = if cfg!(target_os = "macos") {
         "macos"
@@ -443,27 +324,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         crate::utils::launch_intents::ingest_launch_args(&args);
     }
 
-    // Check for updates on startup
-    let handle = app.handle().clone();
-    tauri::async_runtime::spawn(async move {
-        // Wait for system to settle
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
-
-        // Get config to check startup_check_updates
-        let config = match get_app_config() {
-            Ok(c) => c,
-            Err(e) => {
-                log::error!("Failed to get app config for update check: {}", e);
-                return;
-            }
-        };
-
-        if config.startup_check_updates {
-            // Emit event to frontend to check for updates
-            use tauri::Emitter;
-            let _ = handle.emit("core://check-for-updates", ());
-        }
-    });
+    crate::startup::updates::schedule_update_check(app.handle().clone());
 
     Ok(())
 }
