@@ -477,11 +477,7 @@ fn verify_modpack_resource_presence(inst: &Instance, game_dir: &Path) -> Result<
         || inst.modpack_version_id.is_some();
     let has_manifest = game_dir
         .join(piston_lib::game::modpack::manifest::ModpackManifest::FILE_NAME)
-        .is_file()
-        || game_dir
-            .join(".vesta")
-            .join("modpack_manifest.json")
-            .is_file();
+        .is_file();
 
     if !(has_modpack_link || has_manifest) {
         return Ok(());

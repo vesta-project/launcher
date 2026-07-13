@@ -787,7 +787,7 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
     let instances_root = data_dir.join("instances");
     let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
 
-    let Some(manifest) = load_modpack_manifest_for_fast_backfill(&inst, &game_dir)? else {
+    let Some(manifest) = load_modpack_manifest_for_fast_backfill(&game_dir)? else {
         log::info!(
             "[resource-provenance] No local manifest for fast backfill on instance {}; skipping repair/bootstrap",
             instance_id
@@ -889,30 +889,12 @@ pub async fn backfill_modpack_resource_provenance(
 }
 
 fn load_modpack_manifest_for_fast_backfill(
-    inst: &crate::models::instance::Instance,
     game_dir: &std::path::Path,
 ) -> anyhow::Result<Option<piston_lib::game::modpack::manifest::ModpackManifest>> {
     use piston_lib::game::modpack::manifest::ModpackManifest;
-    use piston_lib::game::modpack::types::ModpackMetadata;
 
     if let Ok(manifest) = ModpackManifest::load(game_dir) {
         return Ok(Some(manifest));
-    }
-
-    let legacy_path = game_dir.join(".vesta").join(ModpackManifest::FILE_NAME);
-    if let Ok(content) = std::fs::read_to_string(&legacy_path) {
-        if let Ok(manifest) = serde_json::from_str::<ModpackManifest>(&content) {
-            return Ok(Some(manifest));
-        }
-        if let Ok(metadata) = serde_json::from_str::<ModpackMetadata>(&content) {
-            return Ok(Some(ModpackManifest::from_install(
-                &metadata,
-                &[],
-                &[],
-                None,
-                inst.modpack_id.clone(),
-            )));
-        }
     }
 
     Ok(None)
@@ -932,26 +914,9 @@ async fn load_modpack_manifest_for_backfill(
     game_dir: &std::path::Path,
 ) -> Result<piston_lib::game::modpack::manifest::ModpackManifest> {
     use piston_lib::game::modpack::manifest::ModpackManifest;
-    use piston_lib::game::modpack::types::ModpackMetadata;
 
     if let Ok(manifest) = ModpackManifest::load(game_dir) {
         return Ok(manifest);
-    }
-
-    let legacy_path = game_dir.join(".vesta").join(ModpackManifest::FILE_NAME);
-    if let Ok(content) = std::fs::read_to_string(&legacy_path) {
-        if let Ok(manifest) = serde_json::from_str::<ModpackManifest>(&content) {
-            return Ok(manifest);
-        }
-        if let Ok(metadata) = serde_json::from_str::<ModpackMetadata>(&content) {
-            return Ok(ModpackManifest::from_install(
-                &metadata,
-                &[],
-                &[],
-                None,
-                inst.modpack_id.clone(),
-            ));
-        }
     }
 
     Ok(
