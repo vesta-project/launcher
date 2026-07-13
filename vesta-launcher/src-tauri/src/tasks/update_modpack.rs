@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
-use crate::tasks::installers::modpack::enrich_manifest_platform_hashes;
 use crate::tasks::manager::{Task, TaskContext};
 use piston_lib::game::modpack::manifest::ModpackManifest;
 use piston_lib::game::modpack::parser::{read_zip_override_entry, read_zip_override_text};
@@ -12,9 +11,6 @@ use tauri::Manager;
 use tokio::sync::RwLock;
 
 use crate::sync::action_tree::{ActionTree, FileSource, SkipReason, SyncAction};
-use crate::sync::differ::ThreeWayDiffer;
-use crate::sync::manifest;
-use crate::sync::manifest_bootstrap::{self, TaskBootstrapProgress};
 use crate::sync::merger::{merge_config, MergeResult};
 use crate::sync::safeguards;
 use crate::sync::staging::StagingDir;
@@ -97,45 +93,14 @@ impl Task for UpdateModpackTask {
             }
 
             // ─── Phase 1: Manifest Fetch & Differential Audit ────────────
-            ctx.update_full(5, "Loading old manifest...".to_string(), Some(0), Some(6));
-            let progress = TaskBootstrapProgress(&ctx);
-            let mut old_manifest = manifest_bootstrap::ensure_old_manifest(
-                &app_handle,
-                &inst,
-                &game_dir,
-                Some(&progress),
-            )
-            .await
-            .map_err(|e| format!("Cannot update: no modpack manifest found. {}", e))?;
-            manifest::backfill_manifest_hashes(&mut old_manifest, &game_dir, instance_id)
-                .map_err(|e| format!("Failed to backfill old manifest hashes: {}", e))?;
-
-            ctx.update_full(
-                10,
-                "Fetching new modpack version...".to_string(),
-                Some(0),
-                Some(6),
-            );
-            let (new_manifest, zip_path) =
-                fetch_new_manifest(&app_handle, &inst, &new_version_id).await?;
-            let modpack_format = new_manifest.source;
-
-            ctx.update_full(
-                15,
-                "Scanning current files...".to_string(),
-                Some(0),
-                Some(6),
-            );
-            let current_hashes = manifest::hash_current_directory(&game_dir, &old_manifest);
-
-            ctx.update_full(
-                20,
-                "Computing update plan (three-way diff)...".to_string(),
-                Some(0),
-                Some(6),
-            );
-            let mut action_tree =
-                ThreeWayDiffer::diff(&old_manifest, &current_hashes, &new_manifest);
+            let plan =
+                crate::modpack::engine::plan(&app_handle, &inst, &game_dir, &new_version_id, &ctx)
+                    .await?;
+            let old_manifest = plan.old_manifest;
+            let new_manifest = plan.new_manifest;
+            let zip_path = plan.zip_path;
+            let modpack_format = plan.format;
+            let mut action_tree = plan.actions;
 
             let total_actions = action_tree.actionable_count();
             log::info!(
@@ -390,90 +355,6 @@ impl Task for UpdateModpackTask {
             Ok(())
         })
     }
-}
-
-/// Fetch the new modpack version ZIP and build the new manifest ($N$).
-async fn fetch_new_manifest(
-    app_handle: &tauri::AppHandle,
-    inst: &crate::models::instance::Instance,
-    new_version_id: &str,
-) -> Result<(ModpackManifest, PathBuf), String> {
-    let resource_manager = app_handle.state::<ResourceManager>();
-    let platform = match inst.modpack_platform.as_deref() {
-        Some("modrinth") => SourcePlatform::Modrinth,
-        _ => SourcePlatform::CurseForge,
-    };
-    let project_id = inst
-        .modpack_id
-        .as_deref()
-        .ok_or("Instance is not linked to a modpack")?;
-
-    // Fetch version metadata to get the download URL
-    let version = resource_manager
-        .get_version(platform, project_id, new_version_id)
-        .await
-        .map_err(|e| format!("Failed to fetch modpack version info: {}", e))?;
-
-    // Download the ZIP to a persistent cache location
-    let modpacks_dir = app_handle
-        .path()
-        .app_cache_dir()
-        .map_err(|e| e.to_string())?
-        .join("modpacks");
-    let _ = std::fs::create_dir_all(&modpacks_dir);
-
-    let file_stem = format!("{}-{}", project_id, new_version_id)
-        .replace(|c: char| !c.is_ascii_alphanumeric() && c != '-', "_");
-    let zip_path = modpacks_dir.join(format!("{}.zip", file_stem));
-
-    // Download if not already cached
-    if !zip_path.exists() {
-        use reqwest::Url;
-
-        let client = piston_lib::client::shared_client();
-
-        let url = Url::parse(&version.download_url)
-            .map_err(|e| format!("Invalid download URL: {}", e))?;
-
-        let response = client
-            .get(url)
-            .send()
-            .await
-            .map_err(|e| format!("Download failed: {}", e))?;
-
-        if !response.status().is_success() {
-            return Err(format!(
-                "Failed to download modpack: HTTP {}",
-                response.status()
-            ));
-        }
-
-        let data = response
-            .bytes()
-            .await
-            .map_err(|e| format!("Download read failed: {}", e))?;
-
-        // Verify SHA1 if available
-        if !version.hash.is_empty() {
-            let actual = crate::utils::hash::calculate_sha1_from_bytes(&data);
-            if actual.to_lowercase() != version.hash.to_lowercase() {
-                return Err(format!(
-                    "Modpack ZIP hash mismatch: expected {}, got {}",
-                    version.hash, actual
-                ));
-            }
-        }
-
-        std::fs::write(&zip_path, &data)
-            .map_err(|e| format!("Failed to write modpack ZIP: {}", e))?;
-    }
-
-    // Parse and build the new manifest
-    let mut new_manifest = manifest::build_new_manifest(&zip_path, inst.modpack_id.clone())
-        .map_err(|e| format!("Failed to parse new modpack manifest: {}", e))?;
-    enrich_manifest_platform_hashes(app_handle, &mut new_manifest).await;
-
-    Ok((new_manifest, zip_path))
 }
 
 /// Resolve all Merge actions by loading file contents and running the config merger.
