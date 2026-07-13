@@ -33,6 +33,47 @@ pub fn submit_profile_sync(app: &tauri::App) {
     });
 }
 
+pub fn validate_active_session(app_handle: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        log::info!("[startup] Performing proactive session validation...");
+
+        let active_account = match crate::auth::get_active_account() {
+            Ok(Some(account)) => Some(account),
+            Ok(None) => repair_missing_active_account(app_handle.clone()),
+            Err(error) => {
+                log::error!("Failed to get active account: {}", error);
+                None
+            }
+        };
+
+        if let Some(account) = active_account {
+            if account.uuid != crate::auth::GUEST_UUID {
+                match crate::auth::ensure_account_tokens_valid(app_handle, account.uuid).await {
+                    Ok(()) => log::info!("[startup] Proactive session validation succeeded"),
+                    Err(error) => {
+                        log::warn!("[startup] Proactive session validation failed: {}", error)
+                    }
+                }
+            }
+        }
+    });
+}
+
+fn repair_missing_active_account(
+    app_handle: tauri::AppHandle,
+) -> Option<crate::models::account::Account> {
+    let Ok(config) = get_app_config() else {
+        return None;
+    };
+    config.active_account_uuid.as_ref()?;
+
+    log::warn!("[startup] Active account is missing from database; repairing...");
+    crate::auth::repair_active_account(app_handle)
+        .ok()
+        .flatten()
+}
+
 fn cleanup_guest_session() {
     let Ok(config_dir) = get_app_config_dir() else {
         return;

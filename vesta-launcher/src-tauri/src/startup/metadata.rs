@@ -1,4 +1,6 @@
 use crate::metadata_cache::MetadataCache;
+use crate::tasks::manager::TaskManager;
+use crate::tasks::manifest::GenerateManifestTask;
 use crate::utils::db_manager::get_app_config_dir;
 use tauri::Manager;
 
@@ -32,6 +34,22 @@ pub fn register_and_warm(app: &mut tauri::App) {
                 );
             }
             Err(error) => log::warn!("Failed to build metadata after warmup: {}", error),
+        }
+    });
+}
+
+pub fn submit_manifest_generation(app_handle: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        log::info!("[startup] Submitting GenerateManifestTask");
+        let task_manager = app_handle.state::<TaskManager>();
+        match task_manager
+            .submit(Box::new(GenerateManifestTask::new()))
+            .await
+        {
+            Ok(()) => log::info!("[startup] GenerateManifestTask submitted"),
+            Err(error) => log::error!("Failed to submit GenerateManifestTask: {}", error),
         }
     });
 }
