@@ -2126,7 +2126,7 @@ pub async fn resume_instance_operation(
                 .map(std::path::PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
 
-            let version_id = crate::tasks::update_modpack::read_pending_modpack_update(&game_dir)
+            let version_id = crate::modpack::update::pending_target(&game_dir)
                 .ok_or_else(|| {
                     "Cannot resume modpack update: no pending version recorded. Open the instance Version tab to retry."
                         .to_string()

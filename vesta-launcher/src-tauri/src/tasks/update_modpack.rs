@@ -1,14 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
-
-use serde::{Deserialize, Serialize};
 
 use crate::models::SourcePlatform;
 use crate::resources::ResourceManager;
-use crate::tasks::installers::modpack::{
-    enrich_manifest_platform_hashes, spawn_manifest_resource_linking,
-};
-use crate::tasks::installers::InstallInstanceTask;
+use crate::tasks::installers::modpack::enrich_manifest_platform_hashes;
 use crate::tasks::manager::{Task, TaskContext};
 use piston_lib::game::modpack::manifest::ModpackManifest;
 use piston_lib::game::modpack::parser::{read_zip_override_entry, read_zip_override_text};
@@ -89,8 +84,11 @@ impl Task for UpdateModpackTask {
                 .map(PathBuf::from)
                 .unwrap_or_else(|| data_dir.join("instances").join(&inst.slug()));
 
-            let mut status_guard =
-                UpdateStatusGuard::new(app_handle.clone(), instance_id, game_dir.clone());
+            let mut status_guard = crate::modpack::update::StatusGuard::new(
+                app_handle.clone(),
+                instance_id,
+                game_dir.clone(),
+            );
 
             // ─── Safeguard: ensure Minecraft is not running ──────────────
             ctx.update_description("Checking that Minecraft is not running...".to_string());
@@ -156,7 +154,7 @@ impl Task for UpdateModpackTask {
                     Some(6),
                     Some(6),
                 );
-                finish_update(
+                crate::modpack::update::finish(
                     &app_handle,
                     &ctx,
                     &inst,
@@ -352,7 +350,7 @@ impl Task for UpdateModpackTask {
                 Some(5),
                 Some(6),
             );
-            finish_update(
+            crate::modpack::update::finish(
                 &app_handle,
                 &ctx,
                 &inst,
@@ -737,185 +735,4 @@ async fn download_bytes(url: &str, expected_sha1: Option<&str>) -> Result<Vec<u8
     }
 
     Ok(data.to_vec())
-}
-
-/// Finalize the update: persist manifest, update DB, emit events.
-async fn finish_update(
-    app_handle: &tauri::AppHandle,
-    ctx: &TaskContext,
-    inst: &crate::models::instance::Instance,
-    old_manifest: &ModpackManifest,
-    new_manifest: &ModpackManifest,
-    new_version_id: &str,
-    game_dir: &std::path::Path,
-    source_zip_path: &std::path::Path,
-) -> Result<(), String> {
-    let runtime_changed = crate::utils::instance_runtime::manifest_runtime_identity_changed(
-        old_manifest,
-        new_manifest,
-    );
-
-    // Persist the new manifest as $O$ for next update
-    let mut manifest = new_manifest.clone();
-    manifest.installed_at = chrono::Utc::now().to_rfc3339();
-    manifest.source_zip_path = Some(source_zip_path.to_path_buf());
-    manifest::backfill_manifest_hashes(&mut manifest, game_dir, inst.id)
-        .map_err(|e| format!("Failed to backfill manifest hashes: {}", e))?;
-    manifest
-        .persist(game_dir)
-        .map_err(|e| format!("Failed to persist manifest: {}", e))?;
-
-    spawn_manifest_resource_linking(app_handle, inst.id, game_dir, &manifest);
-
-    let runtime_fields =
-        crate::utils::instance_runtime::InstanceRuntimeFields::from_manifest(new_manifest);
-    crate::utils::instance_runtime::sync_fields(inst.id, &runtime_fields)?;
-
-    let mut conn = crate::utils::db::get_vesta_conn().map_err(|e| e.to_string())?;
-    use crate::schema::instance::dsl as inst_dsl;
-    use diesel::prelude::*;
-
-    diesel::update(inst_dsl::instance.filter(inst_dsl::id.eq(inst.id)))
-        .set((
-            inst_dsl::modpack_version_id.eq(Some(new_version_id.to_string())),
-            inst_dsl::installation_status.eq(Some("installed".to_string())),
-        ))
-        .execute(&mut conn)
-        .map_err(|e| format!("Failed to update modpack version metadata: {}", e))?;
-
-    let mut updated = inst_dsl::instance
-        .find(inst.id)
-        .first::<crate::models::instance::Instance>(&mut conn)
-        .map_err(|e| format!("Failed to fetch updated instance: {}", e))?;
-
-    if runtime_changed {
-        log::info!(
-            "[UpdateModpackTask] MC/loader changed {} {}/{} → {} {}/{}; reinstalling runtime",
-            old_manifest.minecraft_version,
-            old_manifest.modloader.loader_type,
-            old_manifest.modloader.version.as_deref().unwrap_or("?"),
-            new_manifest.minecraft_version,
-            new_manifest.modloader.loader_type,
-            new_manifest.modloader.version.as_deref().unwrap_or("?"),
-        );
-        ctx.update_description(
-            "Reinstalling game runtime for new Minecraft version...".to_string(),
-        );
-        let mut install_task = InstallInstanceTask::new(updated.clone());
-        install_task.set_update_notification_title(false);
-        install_task.run(ctx.clone()).await?;
-
-        updated = inst_dsl::instance
-            .find(inst.id)
-            .first::<crate::models::instance::Instance>(&mut conn)
-            .map_err(|e| format!("Failed to fetch instance after runtime install: {}", e))?;
-    }
-
-    crate::utils::java::ensure_java_for_instance(app_handle, &updated, None, None)
-        .await
-        .map_err(|e| format!("Java setup failed after modpack update: {}", e))?;
-
-    let processed = crate::commands::instances::get_instance(inst.id)
-        .map_err(|e| format!("Failed to fetch updated instance for emit: {}", e))?;
-
-    use tauri::Emitter;
-    let _ = app_handle.emit("core://instance-updated", processed.clone());
-    let _ = app_handle.emit("core://instance-installed", processed);
-
-    clear_pending_modpack_update(game_dir);
-
-    log::info!(
-        "[UpdateModpackTask] Update complete: {} → {} (MC {} {})",
-        inst.modpack_version_id.as_deref().unwrap_or("?"),
-        new_version_id,
-        runtime_fields.minecraft_version,
-        runtime_fields.modloader.as_deref().unwrap_or("vanilla"),
-    );
-
-    Ok(())
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct PendingModpackUpdate {
-    version_id: String,
-}
-
-fn pending_update_path(game_dir: &Path) -> PathBuf {
-    game_dir.join(".vesta").join("pending_update.json")
-}
-
-/// Persist the in-flight target version so interrupted updates can be resumed.
-pub fn write_pending_modpack_update(game_dir: &Path, version_id: &str) -> Result<(), String> {
-    let vesta_dir = game_dir.join(".vesta");
-    std::fs::create_dir_all(&vesta_dir).map_err(|e| e.to_string())?;
-    let payload = PendingModpackUpdate {
-        version_id: version_id.to_string(),
-    };
-    let json = serde_json::to_string(&payload).map_err(|e| e.to_string())?;
-    std::fs::write(pending_update_path(game_dir), json).map_err(|e| e.to_string())
-}
-
-pub fn read_pending_modpack_update(game_dir: &Path) -> Option<String> {
-    let path = pending_update_path(game_dir);
-    let content = std::fs::read_to_string(path).ok()?;
-    serde_json::from_str::<PendingModpackUpdate>(&content)
-        .ok()
-        .map(|p| p.version_id)
-}
-
-pub fn clear_pending_modpack_update(game_dir: &Path) {
-    let _ = std::fs::remove_file(pending_update_path(game_dir));
-}
-
-async fn restore_instance_after_update_failure(
-    app_handle: &tauri::AppHandle,
-    instance_id: i32,
-    game_dir: &Path,
-) -> Result<(), String> {
-    clear_pending_modpack_update(game_dir);
-    crate::commands::instances::update_installation_status(app_handle, instance_id, "installed")
-}
-
-struct UpdateStatusGuard {
-    app_handle: tauri::AppHandle,
-    instance_id: i32,
-    game_dir: PathBuf,
-    succeeded: bool,
-}
-
-impl UpdateStatusGuard {
-    fn new(app_handle: tauri::AppHandle, instance_id: i32, game_dir: PathBuf) -> Self {
-        Self {
-            app_handle,
-            instance_id,
-            game_dir,
-            succeeded: false,
-        }
-    }
-
-    fn mark_success(&mut self) {
-        self.succeeded = true;
-    }
-}
-
-impl Drop for UpdateStatusGuard {
-    fn drop(&mut self) {
-        if self.succeeded {
-            return;
-        }
-        let app_handle = self.app_handle.clone();
-        let instance_id = self.instance_id;
-        let game_dir = self.game_dir.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) =
-                restore_instance_after_update_failure(&app_handle, instance_id, &game_dir).await
-            {
-                log::warn!(
-                    "[UpdateModpackTask] Failed to restore instance {} after update failure: {}",
-                    instance_id,
-                    e
-                );
-            }
-        });
-    }
 }
