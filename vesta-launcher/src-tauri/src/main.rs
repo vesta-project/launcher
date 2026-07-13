@@ -9,6 +9,7 @@ mod launcher_import;
 mod logging;
 mod metadata_cache;
 pub mod models;
+mod modpack;
 mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions

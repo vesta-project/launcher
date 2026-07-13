@@ -787,7 +787,7 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
     let instances_root = data_dir.join("instances");
     let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
 
-    let Some(manifest) = load_modpack_manifest_for_fast_backfill(&game_dir)? else {
+    let Some(manifest) = crate::modpack::state::load_present(&game_dir)? else {
         log::info!(
             "[resource-provenance] No local manifest for fast backfill on instance {}; skipping repair/bootstrap",
             instance_id
@@ -802,8 +802,10 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
             .load::<InstalledResource>(&mut conn)?
     };
 
-    let matched_ids = match_manifest_owned_resources(&resources, &manifest, &game_dir);
-    let changed = apply_resource_provenance_diff(&inst, &resources, &matched_ids)?;
+    let matched_ids =
+        crate::modpack::state::match_owned_resources(&resources, &manifest, &game_dir);
+    let changed =
+        crate::modpack::state::apply_resource_provenance(&inst, &resources, &matched_ids)?;
     if changed > 0 {
         log::info!(
             "[resource-provenance] Fast backfilled {} provenance rows for instance {}",
@@ -849,23 +851,9 @@ pub async fn backfill_modpack_resource_provenance(
     let instances_root = data_dir.join("instances");
     let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
 
-    let mut manifest = load_modpack_manifest_for_backfill(&app_handle, &inst, &game_dir).await?;
-    if let Err(e) =
-        crate::sync::manifest::backfill_manifest_hashes(&mut manifest, &game_dir, instance_id)
-    {
-        log::warn!(
-            "[resource-provenance] Failed to backfill manifest hashes for instance {}: {}",
-            instance_id,
-            e
-        );
-    }
-    if let Err(e) = manifest.persist(&game_dir) {
-        log::warn!(
-            "[resource-provenance] Failed to persist manifest after backfill for instance {}: {}",
-            instance_id,
-            e
-        );
-    }
+    let mut manifest =
+        crate::modpack::state::load_or_bootstrap(&app_handle, &inst, &game_dir).await?;
+    crate::modpack::state::backfill_and_persist(&mut manifest, &game_dir, instance_id);
 
     let resources = {
         let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -875,10 +863,11 @@ pub async fn backfill_modpack_resource_provenance(
             .map_err(|e| anyhow::anyhow!("Failed to load installed resources: {}", e))?
     };
 
-    let matched_ids = match_manifest_owned_resources(&resources, &manifest, &game_dir);
+    let matched_ids =
+        crate::modpack::state::match_owned_resources(&resources, &manifest, &game_dir);
 
     let matched_vec: Vec<i32> = matched_ids.iter().copied().collect();
-    let changed = apply_resource_provenance_diff(&inst, &resources, &matched_ids)
+    let changed = crate::modpack::state::apply_resource_provenance(&inst, &resources, &matched_ids)
         .map_err(|e| anyhow::anyhow!("Failed to apply resource provenance: {}", e))?;
 
     if changed > 0 {
@@ -886,150 +875,6 @@ pub async fn backfill_modpack_resource_provenance(
     }
 
     Ok(matched_vec.len())
-}
-
-fn load_modpack_manifest_for_fast_backfill(
-    game_dir: &std::path::Path,
-) -> anyhow::Result<Option<piston_lib::game::modpack::manifest::ModpackManifest>> {
-    use piston_lib::game::modpack::manifest::ModpackManifest;
-
-    if let Ok(manifest) = ModpackManifest::load(game_dir) {
-        return Ok(Some(manifest));
-    }
-
-    Ok(None)
-}
-
-fn apply_resource_provenance_diff(
-    inst: &crate::models::instance::Instance,
-    resources: &[crate::models::installed_resource::InstalledResource],
-    matched_ids: &std::collections::HashSet<i32>,
-) -> anyhow::Result<usize> {
-    crate::resources::ledger::apply_modpack_provenance(inst, resources, matched_ids)
-}
-
-async fn load_modpack_manifest_for_backfill(
-    app_handle: &tauri::AppHandle,
-    inst: &crate::models::instance::Instance,
-    game_dir: &std::path::Path,
-) -> Result<piston_lib::game::modpack::manifest::ModpackManifest> {
-    use piston_lib::game::modpack::manifest::ModpackManifest;
-
-    if let Ok(manifest) = ModpackManifest::load(game_dir) {
-        return Ok(manifest);
-    }
-
-    Ok(
-        crate::sync::manifest_bootstrap::ensure_old_manifest(app_handle, inst, game_dir, None)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?,
-    )
-}
-
-fn match_manifest_owned_resources(
-    resources: &[crate::models::installed_resource::InstalledResource],
-    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
-    game_dir: &std::path::Path,
-) -> std::collections::HashSet<i32> {
-    use crate::utils::instance_helpers::normalize_path;
-    use piston_lib::game::modpack::manifest::{disabled_mod_path, resolve_mod_path_on_disk};
-    use std::collections::HashSet;
-
-    let mut matched_ids = HashSet::new();
-
-    for manifest_mod in &manifest.mods {
-        let mut path_candidates = HashSet::new();
-        path_candidates.insert(normalize_path(&game_dir.join(&manifest_mod.path)));
-        path_candidates.insert(normalize_path(
-            &game_dir.join(disabled_mod_path(&manifest_mod.path)),
-        ));
-        if let Some(path) = resolve_mod_path_on_disk(game_dir, &manifest_mod.path) {
-            path_candidates.insert(normalize_path(&path));
-        }
-
-        let manifest_sha1 = manifest_mod
-            .sha1
-            .as_deref()
-            .filter(|hash| !hash.is_empty())
-            .map(str::to_lowercase);
-
-        for resource in resources {
-            let path_matches = path_candidates
-                .contains(&normalize_path(std::path::Path::new(&resource.local_path)));
-            let hash_matches = manifest_sha1.as_ref().is_some_and(|sha1| {
-                resource
-                    .hash
-                    .as_deref()
-                    .is_some_and(|hash| hash.eq_ignore_ascii_case(sha1))
-            });
-            let platform_version_matches =
-                manifest_source_matches_resource(&manifest_mod.source, resource);
-
-            if path_matches || hash_matches || platform_version_matches {
-                matched_ids.insert(resource.id);
-            }
-        }
-    }
-
-    for override_path in &manifest.overrides.extracted {
-        let mut path_candidates = HashSet::new();
-        path_candidates.insert(normalize_path(&game_dir.join(override_path)));
-        path_candidates.insert(normalize_path(
-            &game_dir.join(disabled_mod_path(override_path)),
-        ));
-        let override_sha1 = manifest
-            .overrides
-            .hashes
-            .get(&override_path.to_lowercase())
-            .filter(|hash| !hash.is_empty())
-            .map(|hash| hash.to_lowercase());
-
-        for resource in resources {
-            let path_matches = path_candidates
-                .contains(&normalize_path(std::path::Path::new(&resource.local_path)));
-            let hash_matches = override_sha1.as_ref().is_some_and(|sha1| {
-                resource
-                    .hash
-                    .as_deref()
-                    .is_some_and(|hash| hash.eq_ignore_ascii_case(sha1))
-            });
-            if path_matches || hash_matches {
-                matched_ids.insert(resource.id);
-            }
-        }
-    }
-
-    matched_ids
-}
-
-fn manifest_source_matches_resource(
-    source: &piston_lib::game::modpack::manifest::ModSource,
-    resource: &crate::models::installed_resource::InstalledResource,
-) -> bool {
-    use piston_lib::game::modpack::manifest::ModSource;
-
-    match source {
-        ModSource::Modrinth {
-            project_id,
-            version_id,
-            ..
-        } => {
-            resource.platform == "modrinth"
-                && resource.remote_version_id == *version_id
-                && (project_id.is_empty() || resource.remote_id == *project_id)
-        }
-        ModSource::CurseForge {
-            project_id,
-            file_id,
-            ..
-        } => {
-            resource.platform == "curseforge"
-                && resource.remote_version_id == file_id.to_string()
-                && project_id
-                    .map(|id| resource.remote_id == id.to_string())
-                    .unwrap_or(true)
-        }
-    }
 }
 
 #[tauri::command]
