@@ -15,6 +15,7 @@ pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
 mod setup;
+mod startup;
 mod sync;
 mod tasks;
 pub mod utils;

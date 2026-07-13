@@ -189,38 +189,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     }
     // ---------------------------
 
-    // Recovery for interrupted installs - move any stuck 'installing' instances to 'interrupted'
-    let mut interrupted_instances = Vec::new();
-    {
-        use crate::schema::instance::dsl::*;
-        use crate::utils::db::get_vesta_conn;
-        use diesel::prelude::*;
-
-        if let Ok(mut conn) = get_vesta_conn() {
-            log::info!("Checking for interrupted installations...");
-            let result = diesel::update(instance.filter(installation_status.eq("installing")))
-                .set(installation_status.eq("interrupted"))
-                .execute(&mut conn);
-
-            match result {
-                Ok(count) if count > 0 => {
-                    log::info!(
-                        "Recovered {} interrupted installations (set to 'interrupted')",
-                        count
-                    );
-                    // Fetch them so we can notify later
-                    if let Ok(list) = instance
-                        .filter(installation_status.eq("interrupted"))
-                        .load::<crate::models::instance::Instance>(&mut conn)
-                    {
-                        interrupted_instances = list;
-                    }
-                }
-                Ok(_) => log::debug!("No interrupted installations found"),
-                Err(e) => log::error!("Failed to recover interrupted installations: {}", e),
-            }
-        }
-    }
+    let interrupted_instances = crate::startup::recovery::recover_interrupted_operations()
+        .unwrap_or_else(|error| {
+            log::error!("Failed to recover interrupted installations: {}", error);
+            Vec::new()
+        });
 
     // Clean up old log files (>30 days)
     cleanup_old_logs(app.handle());
@@ -229,60 +202,10 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let notification_manager = NotificationManager::new(app.handle().clone());
     let _ = notification_manager.clear_task_notifications();
 
-    // Create notifications for interrupted instances if any (using a clone before we manage it)
-    if !interrupted_instances.is_empty() {
-        let manager = notification_manager.clone();
-        tauri::async_runtime::spawn(async move {
-            use crate::notifications::models::{
-                CreateNotificationInput, NotificationAction, NotificationType,
-            };
-
-            for inst in interrupted_instances {
-                let raw_op = inst.last_operation.as_deref().unwrap_or("installation");
-                let display_op = match raw_op {
-                    "hard-reset" => "hard reset",
-                    "repair" => "repair",
-                    "external-import" => "import migration",
-                    "update" => "modpack update",
-                    _ => "installation",
-                };
-                let description = format!(
-                    "The {} for '{}' was interrupted. Would you like to resume?",
-                    display_op, inst.name
-                );
-
-                let actions = vec![NotificationAction {
-                    action_id: "resume_instance_operation".to_string(),
-                    label: "Resume Now".to_string(),
-                    action_type: "primary".to_string(),
-                    payload: None,
-                }];
-
-                if let Err(e) = manager.create(CreateNotificationInput {
-                    client_key: Some(format!("interrupted_instance_{}", inst.id)),
-                    title: Some("Interrupted Operation Detected".to_string()),
-                    description: Some(description),
-                    severity: Some("warning".to_string()),
-                    notification_type: Some(NotificationType::Patient),
-                    dismissible: Some(true),
-                    persist: Some(true),
-                    silent: Some(false),
-                    actions: Some(serde_json::to_string(&actions).unwrap_or_default()),
-                    progress: None,
-                    current_step: None,
-                    total_steps: None,
-                    metadata: None,
-                    show_on_completion: None,
-                }) {
-                    log::error!(
-                        "Failed to create interrupted-instance notification for {}: {}",
-                        inst.name,
-                        e
-                    );
-                }
-            }
-        });
-    }
+    crate::startup::recovery::publish_interrupted_notifications(
+        notification_manager.clone(),
+        interrupted_instances,
+    );
 
     app.manage(notification_manager);
 
