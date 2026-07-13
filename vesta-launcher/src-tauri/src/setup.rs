@@ -137,57 +137,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
 
     log::info!("✓ Database initialization complete");
 
-    // --- Guest Mode Cleanup ---
-    // If the app was closed while in guest mode, clean up the marker and guest session data
-    if let Ok(dir) = get_app_config_dir() {
-        let marker_path = dir.join(".guest_mode");
-        if marker_path.exists() {
-            log::info!("[setup] Cleaning up stale guest session...");
-            let _ = std::fs::remove_file(marker_path);
-
-            // Evict Guest account from database
-            if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
-                use crate::schema::account::dsl::*;
-                use diesel::prelude::*;
-                let _ = diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID)))
-                    .execute(&mut conn);
-            }
-
-            // Reset active account if it was guest
-            if let Ok(mut config) = crate::utils::config::get_app_config() {
-                if config.active_account_uuid == Some(crate::auth::GUEST_UUID.to_string()) {
-                    config.active_account_uuid = None;
-                }
-
-                // Guest mode is temporary; onboarding should restart from welcome after teardown.
-                config.setup_completed = false;
-                config.setup_step = 0;
-                let _ = crate::utils::config::update_app_config(&config);
-            }
-        }
-    }
-
-    // --- Demo Account Cleanup ---
-    // Always remove the temporal demo account on startup if it exists
-    if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
-        use crate::schema::account::dsl::*;
-        use diesel::prelude::*;
-
-        log::info!("[setup] Cleaning up temporal demo account if present...");
-
-        // Remove from DB
-        let _ = diesel::delete(account.filter(account_type.eq(crate::auth::ACCOUNT_TYPE_DEMO)))
-            .execute(&mut conn);
-
-        // Reset active account if it was the demo account
-        if let Ok(mut config) = crate::utils::config::get_app_config() {
-            if config.active_account_uuid == Some(crate::auth::DEMO_UUID.to_string()) {
-                config.active_account_uuid = None;
-                let _ = crate::utils::config::update_app_config(&config);
-            }
-        }
-    }
-    // ---------------------------
+    crate::startup::accounts::cleanup_temporary_accounts();
 
     let interrupted_instances = crate::startup::recovery::recover_interrupted_operations()
         .unwrap_or_else(|error| {
@@ -346,74 +296,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         });
     }
 
-    // Initialize ResourceWatcher
-    let resource_watcher = crate::resources::ResourceWatcher::new(app.handle().clone());
-    app.manage(resource_watcher);
-
-    // Start watching all existing instances
-    {
-        let handle = app.handle().clone();
-        tauri::async_runtime::spawn(async move {
-            use crate::models::instance::Instance;
-            use crate::resources::ResourceWatcher;
-            use crate::schema::instance::dsl::*;
-            use crate::utils::db::get_vesta_conn;
-            use diesel::prelude::*;
-
-            // Wait a bit to ensure everything is ready
-            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-            if let Ok(mut conn) = get_vesta_conn() {
-                if let Ok(instances_list) = instance.load::<Instance>(&mut conn) {
-                    if let Some(watcher) = handle.try_state::<ResourceWatcher>() {
-                        let startup_scan_limiter =
-                            std::sync::Arc::new(tokio::sync::Semaphore::new(2));
-                        let mut startup_scan_tasks = tokio::task::JoinSet::new();
-                        for inst in instances_list {
-                            if let Some(game_dir) = &inst.game_directory {
-                                log::info!("[Setup] Attaching watcher for instance: {}", inst.name);
-                                let _ = watcher
-                                    .watch_instance_without_scan(inst.id, game_dir.clone())
-                                    .await;
-                                let handle_for_task = handle.clone();
-                                let game_dir_clone = game_dir.clone();
-                                let instance_id = inst.id;
-                                let instance_name = inst.name.clone();
-                                let limiter = startup_scan_limiter.clone();
-                                startup_scan_tasks.spawn(async move {
-                                    let Ok(_permit) = limiter.acquire_owned().await else {
-                                        return;
-                                    };
-                                    let Some(watcher_clone) = handle_for_task.try_state::<ResourceWatcher>() else {
-                                        return;
-                                    };
-                                    log::info!(
-                                        "[Setup] Background startup resync start for instance: {}",
-                                        instance_name
-                                    );
-                                    if let Err(err) =
-                                        watcher_clone.refresh_instance(instance_id, game_dir_clone).await
-                                    {
-                                        log::warn!(
-                                            "[Setup] Background startup resync failed for instance {}: {}",
-                                            instance_name,
-                                            err
-                                        );
-                                    } else {
-                                        log::info!(
-                                            "[Setup] Background startup resync done for instance: {}",
-                                            instance_name
-                                        );
-                                    }
-                                });
-                            }
-                        }
-                        while startup_scan_tasks.join_next().await.is_some() {}
-                    }
-                }
-            }
-        });
-    }
+    crate::startup::resources::start_resource_watchers(app);
 
     // Reattach to already-running processes on startup
     {
