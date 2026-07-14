@@ -1,0 +1,4 @@
+interface:
+  display_name: "Vesta Architecture Memory"
+  short_description: "Keep Vesta architecture maps current during changes."
+  default_prompt: "Use $vesta-architecture-memory to orient on Vesta architecture, update the external atlas, and record new or changed Modules, Interfaces, seams, or decisions."

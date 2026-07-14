@@ -1,6 +1,7 @@
 import { type Instance, instancesState } from "@stores/instances";
 import {
 	findBestVersion,
+	type InstalledResource,
 	type ResourceProject,
 	type ResourceVersion,
 	resources,
@@ -13,7 +14,14 @@ import {
 	iconBackgroundStyle,
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS, isDefaultIcon } from "@utils/instances";
-import { getCompatibilityForInstance } from "@utils/resources";
+import {
+	findInstalledResource,
+	isResourceUpdateAvailable,
+} from "@utils/resource-install-intent";
+import {
+	getCompatibilityForInstance,
+	getProjectCompatibilityForInstance,
+} from "@utils/resources";
 import {
 	type Component,
 	createEffect,
@@ -38,16 +46,7 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 	props,
 ) => {
 	const [installedMap, setInstalledMap] = createSignal<
-		Record<
-			number,
-			{
-				id: string;
-				name: string;
-				type: string;
-				versionId: string;
-				hash: string | null;
-			}[]
-		>
+		Record<number, InstalledResource[]>
 	>({});
 	const [fetchedVersions, setFetchedVersions] = createSignal<ResourceVersion[]>(
 		[],
@@ -64,40 +63,22 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 	createEffect(async () => {
 		if (props.isOpen && props.project) {
 			const instances = sortedInstances();
-			const newMap: Record<
-				number,
-				{
-					id: string;
-					name: string;
-					type: string;
-					versionId: string;
-					hash: string | null;
-				}[]
-			> = {};
+			const newMap: Record<number, InstalledResource[]> = {};
 
 			await Promise.all(
 				instances.map(async (inst) => {
 					try {
 						// Check if it's the currently selected instance to avoid redundant fetch
 						if (inst.id === resources.state.selectedInstanceId) {
-							newMap[inst.id] = resources.state.installedResources.map((r) => ({
-								id: r.remote_id.toLowerCase(),
-								name: r.display_name.toLowerCase(),
-								type: r.resource_type.toLowerCase(),
-								versionId: r.remote_version_id,
-								hash: r.hash ?? null,
-							}));
+							newMap[inst.id] = [...resources.state.installedResources];
 						} else {
-							const installed = await invoke<any[]>("get_installed_resources", {
-								instanceId: inst.id,
-							});
-							newMap[inst.id] = installed.map((r) => ({
-								id: r.remote_id.toLowerCase(),
-								name: r.display_name.toLowerCase(),
-								type: r.resource_type.toLowerCase(),
-								versionId: r.remote_version_id,
-								hash: r.hash ?? null,
-							}));
+							const installed = await invoke<InstalledResource[]>(
+								"get_installed_resources",
+								{
+									instanceId: inst.id,
+								},
+							);
+							newMap[inst.id] = installed;
 						}
 					} catch (e) {
 						console.error(
@@ -182,50 +163,13 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 			);
 		}
 
-		const instLoader = instance.modloader?.toLowerCase() || "";
 		const resType = props.project.resource_type;
-
-		// 1. Immediate rejection for Vanilla
-		if (instLoader === "" || instLoader === "vanilla") {
-			if (resType === "mod" || resType === "shader") {
-				return {
-					type: "incompatible" as const,
-					reason: `Vanilla instances do not support ${resType}s.`,
-				};
-			}
-		}
-
-		// 2. Category-based check (fast path & added safety)
-		if (resType === "mod") {
-			const categories = props.project.categories.map((c) => c.toLowerCase());
-			const hasFabric = categories.includes("fabric");
-			const hasForge = categories.includes("forge");
-			const hasQuilt = categories.includes("quilt");
-			const hasNeoForge = categories.includes("neoforge");
-
-			// If it specifies loaders in categories, check against instance
-			if (hasFabric || hasForge || hasQuilt || hasNeoForge) {
-				if (instLoader === "fabric" && !hasFabric)
-					return {
-						type: "incompatible",
-						reason: "This mod is not compatible with Fabric.",
-					};
-				if (instLoader === "forge" && !hasForge)
-					return {
-						type: "incompatible",
-						reason: "This mod is not compatible with Forge.",
-					};
-				if (instLoader === "neoforge" && !hasNeoForge)
-					return {
-						type: "incompatible",
-						reason: "This mod is not compatible with NeoForge.",
-					};
-				if (instLoader === "quilt" && !hasQuilt && !hasFabric)
-					return {
-						type: "incompatible",
-						reason: "This mod is not compatible with Quilt.",
-					};
-			}
+		const projectCompatibility = getProjectCompatibilityForInstance(
+			props.project,
+			instance,
+		);
+		if (projectCompatibility.type !== "compatible") {
+			return projectCompatibility;
 		}
 
 		// 3. Version-based check (the "truth")
@@ -294,20 +238,8 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 
 							const installedResource = createMemo(() => {
 								if (!props.project) return null;
-								const p = props.project;
-								const mainId = p.id.toLowerCase();
-								const extIds = p.external_ids || {};
-								const projectName = p.name.toLowerCase();
-								const resType = p.resource_type;
-
 								const installedList = installedMap()[instance.id] || [];
-								return installedList.find((ir) => {
-									if (ir.id === mainId) return true;
-									for (const id of Object.values(extIds)) {
-										if (ir.id === id.toLowerCase()) return true;
-									}
-									return ir.type === resType && ir.name === projectName;
-								});
+								return findInstalledResource(props.project, installedList);
 							});
 
 							const isAlreadyInstalled = createMemo(
@@ -316,18 +248,12 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 
 							const isUpdateAvailable = createMemo(() => {
 								const ir = installedResource();
-								if (!ir) return false;
+								const project = props.project;
+								if (!ir || !project) return false;
 
 								// If we have a specific version we're trying to install
 								if (props.version) {
-									if (ir.versionId === props.version.id) return false;
-									if (
-										ir.hash &&
-										props.version.hash &&
-										ir.hash === props.version.hash
-									)
-										return false;
-									return true;
+									return isResourceUpdateAvailable(project, ir, props.version);
 								}
 
 								// If no specific version, check if the best version for this instance is different
@@ -341,13 +267,10 @@ const InstanceSelectionDialog: Component<InstanceSelectionDialogProps> = (
 										instance.minecraftVersion,
 										instance.modloader,
 										"release",
-										props.project?.resource_type,
+										project.resource_type,
 									);
 									if (best) {
-										if (ir.versionId === best.id) return false;
-										if (ir.hash && best.hash && ir.hash === best.hash)
-											return false;
-										return true;
+										return isResourceUpdateAvailable(project, ir, best);
 									}
 								}
 
