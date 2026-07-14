@@ -202,6 +202,7 @@ Primary modules:
 - `vesta-launcher/src-tauri/src/tasks/notification_actions.rs`
 - `vesta-launcher/src-tauri/src/instance/notification_actions.rs`
 - `vesta-launcher/src-tauri/src/startup/update_actions.rs`
+- `vesta-launcher/src-tauri/src/auth/notification_actions.rs`
 
 ### Architecture Memory
 

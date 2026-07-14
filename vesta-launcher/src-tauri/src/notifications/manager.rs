@@ -5,7 +5,7 @@ use crate::notifications::store::NotificationStore;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 /// Action handler trait for notification actions
 pub trait ActionHandler: Send + Sync {
@@ -15,63 +15,6 @@ pub trait ActionHandler: Send + Sync {
         client_key: Option<String>,
         payload: Option<serde_json::Value>,
     ) -> Result<()>;
-}
-
-/// Handler that logs out of guest mode and returns to onboarding
-struct LogoutGuestHandler {}
-
-impl ActionHandler for LogoutGuestHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        log::info!("[LogoutGuestHandler] Logging out guest...");
-
-        // 1. Cleanup marker file
-        if let Ok(app_data_dir) = crate::utils::db_manager::get_app_config_dir() {
-            let marker_path = app_data_dir.join(".guest_mode");
-            if marker_path.exists() {
-                let _ = std::fs::remove_file(marker_path);
-            }
-        }
-
-        // 2. Cleanup Guest account from database
-        if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
-            use crate::schema::account::dsl::*;
-            use diesel::prelude::*;
-            let _ =
-                diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID))).execute(&mut conn);
-        }
-
-        // 3. Cleanup the notification itself
-        if let Some(nm) =
-            app_handle.try_state::<crate::notifications::manager::NotificationManager>()
-        {
-            if let Some(key) = _client_key {
-                let _ = nm.delete(key);
-            } else {
-                let _ = nm.delete("guest_mode_warning".to_string());
-            }
-        }
-
-        // 4. Reset config state
-        use crate::utils::config::{get_app_config, update_app_config};
-        if let Ok(mut config) = get_app_config() {
-            config.setup_completed = false;
-            config.setup_step = 0;
-            config.active_account_uuid = None;
-            let _ = update_app_config(&config);
-        }
-
-        // 5. Notify frontend to redirect
-        app_handle
-            .emit("core://logout-guest", ())
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        Ok(())
-    }
 }
 
 /// Handler that opens a URL in the default browser
@@ -398,7 +341,6 @@ impl NotificationManager {
         };
 
         // Register built-in action handlers
-        manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
         manager.register_action("open_url", Arc::new(OpenUrlHandler {}));
         manager.register_action("navigate", Arc::new(NavigateHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
