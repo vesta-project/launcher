@@ -109,17 +109,7 @@ impl LaunchSpec {
     /// a modloader-installed version. Example: "fabric-loader-0.38.2-1.20.1".
     /// For vanilla launches this returns the raw minecraft version id.
     pub fn installed_version_id(&self) -> String {
-        match (&self.modloader, &self.modloader_version) {
-            (Some(loader), Some(loader_ver)) => {
-                format!(
-                    "{}-loader-{}-{}",
-                    loader.as_str(),
-                    loader_ver,
-                    self.version_id
-                )
-            }
-            _ => self.version_id.clone(),
-        }
+        crate::game::runtime_plan::RuntimeRequest::from(self).installed_version_id()
     }
 }
 

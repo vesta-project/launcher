@@ -2,11 +2,10 @@ use crate::notifications::models::{
     CreateNotificationInput, Notification, NotificationSeverity, NotificationType,
 };
 use crate::notifications::store::NotificationStore;
-use crate::tasks::manager::TaskManager;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Emitter};
 
 /// Action handler trait for notification actions
 pub trait ActionHandler: Send + Sync {
@@ -16,240 +15,6 @@ pub trait ActionHandler: Send + Sync {
         client_key: Option<String>,
         payload: Option<serde_json::Value>,
     ) -> Result<()>;
-}
-
-/// Handler that cancels running tasks when the notification action 'cancel_task' is invoked.
-struct CancelTaskHandler {}
-
-impl ActionHandler for CancelTaskHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        // Defensive: client_key is required for task cancellation
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for cancel_task action"),
-        };
-
-        // Resolve TaskManager from app state and forward cancellation
-        // NOTE: `try_state` may not be available on older Tauri versions; use `state` which is
-        // present and will panic if not registered. Tests/registering TaskManager should ensure
-        // it is managed on app start. If it's missing at runtime, return an error instead of panicking.
-        let tm = app_handle.state::<TaskManager>();
-        tm.cancel_task(&key).map_err(|e: String| anyhow::anyhow!(e))
-    }
-}
-
-/// Handler that pauses running tasks when the notification action 'pause_task' is invoked.
-struct PauseTaskHandler {}
-
-impl ActionHandler for PauseTaskHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for pause_task action"),
-        };
-        let tm = app_handle.state::<TaskManager>();
-        tm.pause_task(&key).map_err(|e: String| anyhow::anyhow!(e))
-    }
-}
-
-/// Handler that resumes paused tasks when the notification action 'resume_task' is invoked.
-struct ResumeTaskHandler {}
-
-impl ActionHandler for ResumeTaskHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for resume_task action"),
-        };
-        let tm = app_handle.state::<TaskManager>();
-        tm.resume_task(&key).map_err(|e: String| anyhow::anyhow!(e))
-    }
-}
-
-/// Handler that resumes an interrupted instance operation
-struct ResumeInstanceOperationHandler {}
-
-impl ActionHandler for ResumeInstanceOperationHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let key = match client_key {
-            Some(k) => k,
-            None => anyhow::bail!("Missing client_key for resume_instance_operation action"),
-        };
-
-        // Extract ID from key (interrupted_instance_{id})
-        let id_str = key.replace("interrupted_instance_", "");
-        let id = id_str
-            .parse::<i32>()
-            .map_err(|_| anyhow::anyhow!("Invalid instance ID in client_key"))?;
-
-        let handle = app_handle.clone();
-
-        tauri::async_runtime::spawn(async move {
-            let tm = handle.state::<TaskManager>();
-            if let Err(e) =
-                crate::commands::instances::resume_instance_operation(handle.clone(), tm, id).await
-            {
-                log::error!("[ResumeInstanceOperationHandler] Failed to resume: {}", e);
-            }
-        });
-
-        Ok(())
-    }
-}
-
-/// Handler that restarts the app when the notification action 'restart_app' is invoked.
-struct RestartAppHandler {}
-
-impl ActionHandler for RestartAppHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        log::info!("[RestartAppHandler] Restart requested - calling app_handle.restart()");
-        // Attempt a normal restart. In dev mode this may be a no-op because the
-        // runner keeps the process; production builds should relaunch correctly.
-        app_handle.restart();
-    }
-}
-
-/// Handler that triggers an update installation in the frontend
-struct InstallUpdateHandler {}
-
-impl ActionHandler for InstallUpdateHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        log::info!(
-            "[InstallUpdateHandler] Action invoked! Emitting core://install-app-update event..."
-        );
-        let handle = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = handle.emit("core://install-app-update", ()) {
-                log::error!("[InstallUpdateHandler] Failed to emit event: {}", e);
-            } else {
-                log::info!("[InstallUpdateHandler] Event emitted successfully.");
-            }
-        });
-        Ok(())
-    }
-}
-
-/// Handler that logs out of guest mode and returns to onboarding
-struct LogoutGuestHandler {}
-
-impl ActionHandler for LogoutGuestHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        log::info!("[LogoutGuestHandler] Logging out guest...");
-
-        // 1. Cleanup marker file
-        if let Ok(app_data_dir) = crate::utils::db_manager::get_app_config_dir() {
-            let marker_path = app_data_dir.join(".guest_mode");
-            if marker_path.exists() {
-                let _ = std::fs::remove_file(marker_path);
-            }
-        }
-
-        // 2. Cleanup Guest account from database
-        if let Ok(mut conn) = crate::utils::db::get_vesta_conn() {
-            use crate::schema::account::dsl::*;
-            use diesel::prelude::*;
-            let _ =
-                diesel::delete(account.filter(uuid.eq(crate::auth::GUEST_UUID))).execute(&mut conn);
-        }
-
-        // 3. Cleanup the notification itself
-        if let Some(nm) =
-            app_handle.try_state::<crate::notifications::manager::NotificationManager>()
-        {
-            if let Some(key) = _client_key {
-                let _ = nm.delete(key);
-            } else {
-                let _ = nm.delete("guest_mode_warning".to_string());
-            }
-        }
-
-        // 4. Reset config state
-        use crate::utils::config::{get_app_config, update_app_config};
-        if let Ok(mut config) = get_app_config() {
-            config.setup_completed = false;
-            config.setup_step = 0;
-            config.active_account_uuid = None;
-            let _ = update_app_config(&config);
-        }
-
-        // 5. Notify frontend to redirect
-        app_handle
-            .emit("core://logout-guest", ())
-            .map_err(|e| anyhow::anyhow!(e))?;
-
-        Ok(())
-    }
-}
-
-/// Handler that triggers an update download in the frontend
-struct DownloadUpdateHandler {}
-
-impl ActionHandler for DownloadUpdateHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let handle = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = handle.emit("core://download-app-update", ());
-        });
-        Ok(())
-    }
-}
-
-/// Handler that opens the update dialog
-struct OpenUpdateDialogHandler {}
-
-impl ActionHandler for OpenUpdateDialogHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let handle = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = handle.emit("core://open-update-ui", ());
-        });
-        Ok(())
-    }
 }
 
 /// Handler that opens a URL in the default browser
@@ -498,6 +263,7 @@ mod tests {
         // Initialize managers and add to app state
         let notification_manager = NotificationManager::new(handle.clone());
         let task_manager = crate::tasks::manager::TaskManager::new(handle.clone());
+        crate::tasks::notification_actions::register(&notification_manager);
 
         // Move managers into app state so handlers/commands can access them.
         handle.manage(notification_manager.clone());
@@ -575,18 +341,6 @@ impl NotificationManager {
         };
 
         // Register built-in action handlers
-        manager.register_action("cancel_task", Arc::new(CancelTaskHandler {}));
-        manager.register_action("pause_task", Arc::new(PauseTaskHandler {}));
-        manager.register_action("resume_task", Arc::new(ResumeTaskHandler {}));
-        manager.register_action(
-            "resume_instance_operation",
-            Arc::new(ResumeInstanceOperationHandler {}),
-        );
-        manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
-        manager.register_action("install_app_update", Arc::new(InstallUpdateHandler {}));
-        manager.register_action("download_update", Arc::new(DownloadUpdateHandler {}));
-        manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
-        manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
         manager.register_action("open_url", Arc::new(OpenUrlHandler {}));
         manager.register_action("navigate", Arc::new(NavigateHandler {}));
         // Future handlers (pause, resume, etc.) can be added here

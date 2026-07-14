@@ -653,18 +653,6 @@ impl Task for InstallModpackTask {
                 );
             }
 
-            let vesta_dir = game_dir.join(".vesta");
-            if let Err(e) = fs::create_dir_all(&vesta_dir).await {
-                log::error!("[InstallModpackTask] Failed to create .vesta dir: {}", e);
-            } else {
-                let manifest_path = vesta_dir.join("modpack_manifest.json");
-                if let Ok(json) = serde_json::to_string_pretty(&metadata) {
-                    if let Err(e) = fs::write(manifest_path, json).await {
-                        log::error!("[InstallModpackTask] Failed to save manifest: {}", e);
-                    }
-                }
-            }
-
             Ok(())
         })
     }

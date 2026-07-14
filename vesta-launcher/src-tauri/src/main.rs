@@ -4,15 +4,18 @@
 pub mod auth;
 mod commands;
 pub mod discord;
+mod instance;
 mod launcher_import;
 mod logging;
 mod metadata_cache;
 pub mod models;
+mod modpack;
 mod notifications;
 pub mod resources;
 pub mod schema; // Diesel schema definitions
 mod sentry_init;
 mod setup;
+mod startup;
 mod sync;
 mod tasks;
 pub mod utils;

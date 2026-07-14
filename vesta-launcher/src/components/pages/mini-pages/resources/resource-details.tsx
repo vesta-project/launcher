@@ -10,7 +10,6 @@ import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import {
-	findBestVersion,
 	type ResourceDependency,
 	type ResourceProject,
 	type ResourceVersion,
@@ -48,6 +47,7 @@ import {
 } from "@utils/icon-animation";
 import { DEFAULT_ICONS, type Instance } from "@utils/instances";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
+import { findBestVersionForInstance } from "@utils/resource-install-intent";
 import { decodeCurseForgeLinkout, parseResourceUrl } from "@utils/resource-url";
 import { getCompatibilityForInstance } from "@utils/resources";
 import { marked } from "marked";
@@ -527,13 +527,14 @@ const ResourceDetailsPage: Component<{
 		const inst = instancesState.instances.find((i) => i.id === instId);
 		if (!inst || !resources.state.versions.length) return null;
 
-		return findBestVersion(
-			resources.state.versions,
-			inst.minecraftVersion,
-			inst.modloader,
-			"release",
-			project()?.resource_type,
-		);
+		const currentProject = project();
+		return currentProject
+			? findBestVersionForInstance(
+					currentProject,
+					resources.state.versions,
+					inst,
+				)
+			: null;
 	});
 
 	const primaryVersion = createMemo(() => {
@@ -1142,7 +1143,10 @@ const ResourceDetailsPage: Component<{
 			// Logic similar to card quick install when no instance selected
 			const p = project();
 			if (p) {
-				resources.setRequestInstall(p, resources.state.versions);
+				resources.setInstallRequest({
+					project: p,
+					versions: resources.state.versions,
+				});
 				setIsInstanceDialogOpen(true);
 			}
 			return;
@@ -1475,8 +1479,7 @@ const ResourceDetailsPage: Component<{
 										: undefined,
 						}
 					: {
-							pendingResourceProject: p,
-							pendingResourceVersion: version,
+							pendingResource: { project: p, version },
 						},
 			);
 		}
@@ -1484,7 +1487,7 @@ const ResourceDetailsPage: Component<{
 
 	const handleSelectInstance = (instance: Instance) => {
 		setIsInstanceDialogOpen(false);
-		resources.setRequestInstall(null);
+		resources.setInstallRequest(null);
 		// Also update the global selection so the UI reflects the choice
 		resources.setInstance(instance.id);
 
@@ -1494,7 +1497,10 @@ const ResourceDetailsPage: Component<{
 			setInstallContext(null);
 		} else {
 			// This was a quick install from the header button
-			const best = bestVersionForCurrent();
+			const p = project();
+			const best = p
+				? findBestVersionForInstance(p, resources.state.versions, instance)
+				: null;
 			if (best) {
 				handleInstall(best, instance);
 			}
@@ -3063,7 +3069,7 @@ const ResourceDetailsPage: Component<{
 						isOpen={isInstanceDialogOpen()}
 						onClose={() => {
 							setIsInstanceDialogOpen(false);
-							resources.setRequestInstall(null);
+							resources.setInstallRequest(null);
 						}}
 						onSelect={handleSelectInstance}
 						onCreateNew={handleCreateNew}

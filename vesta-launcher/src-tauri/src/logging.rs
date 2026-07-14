@@ -1,3 +1,6 @@
+use std::fs;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 pub fn register_log_plugin(
     app: &tauri::App,
     log_level: log::LevelFilter,
@@ -81,4 +84,69 @@ pub fn register_log_plugin(
 
     app.handle().plugin(log_plugin)?;
     Ok(())
+}
+
+pub fn cleanup_old_logs() {
+    tauri::async_runtime::spawn(async move {
+        let Ok(log_dir) = crate::utils::db_manager::get_launcher_log_dir() else {
+            return;
+        };
+        log::debug!("Cleaning up old logs in: {:?}", log_dir);
+
+        let Ok(entries) = fs::read_dir(&log_dir) else {
+            return;
+        };
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs();
+        let retention_secs = 30 * 24 * 60 * 60;
+
+        for entry in entries.flatten() {
+            let file_name = entry.file_name();
+            let file_name = file_name.to_string_lossy();
+            if !entry.path().is_file() || !is_launcher_log_file(&file_name) {
+                continue;
+            }
+
+            let Ok(metadata) = entry.metadata() else {
+                continue;
+            };
+            let Ok(modified) = metadata.modified() else {
+                continue;
+            };
+            let Ok(duration) = modified.duration_since(UNIX_EPOCH) else {
+                continue;
+            };
+            if now.saturating_sub(duration.as_secs()) <= retention_secs {
+                continue;
+            }
+
+            if let Err(error) = fs::remove_file(entry.path()) {
+                log::warn!(
+                    "Failed to remove old log file {:?}: {}",
+                    entry.path(),
+                    error
+                );
+            } else {
+                log::debug!("Removed old log file: {:?}", entry.path());
+            }
+        }
+    });
+}
+
+fn is_launcher_log_file(name: &str) -> bool {
+    name.starts_with("vesta-log-") && name.ends_with(".log")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_launcher_log_file;
+
+    #[test]
+    fn recognizes_only_launcher_session_logs() {
+        assert!(is_launcher_log_file("vesta-log-2026-07-13_120000.log"));
+        assert!(!is_launcher_log_file("vesta-log-2026-07-13_120000.txt"));
+        assert!(!is_launcher_log_file("other.log"));
+    }
 }

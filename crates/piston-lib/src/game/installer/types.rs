@@ -292,17 +292,7 @@ impl InstallSpec {
     /// represents a modloader variant. Example: "forge-loader-47.2.0-1.20.1".
     /// When no modloader is present this returns the raw minecraft version id.
     pub fn installed_version_id(&self) -> String {
-        match (&self.modloader, &self.modloader_version) {
-            (Some(loader), Some(loader_ver)) => {
-                format!(
-                    "{}-loader-{}-{}",
-                    loader.as_str(),
-                    loader_ver,
-                    self.version_id
-                )
-            }
-            _ => self.version_id.clone(),
-        }
+        crate::game::runtime_plan::RuntimeRequest::from(self).installed_version_id()
     }
 }
 

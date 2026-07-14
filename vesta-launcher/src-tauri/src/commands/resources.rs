@@ -3,8 +3,8 @@ use base64::{engine::general_purpose, Engine as _};
 
 use crate::auth::ACCOUNT_TYPE_GUEST;
 use crate::models::resource::{
-    ReleaseType, ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef,
-    ResourceType, ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
+    ResourceCategory, ResourceProject, ResourceProjectRecord, ResourceProjectRef, ResourceType,
+    ResourceVersion, SearchQuery, SearchResponse, SourcePlatform,
 };
 use crate::models::resource_update::{
     InstanceUpdateCheckResult, InstanceUpdateSnapshotResponse, ResourceUpdateCheckResult,
@@ -515,7 +515,12 @@ pub async fn check_instance_updates_lightweight(
                     .get_versions(platform, &res.remote_id, ignore_version_cache, None, None)
                     .await
                     .ok()?;
-                let best = find_best_resource_update(&versions, &res, &mc_version, &loader)?;
+                let best = crate::resources::update_policy::find_best_update(
+                    &versions,
+                    &res,
+                    &mc_version,
+                    &loader,
+                )?;
                 if best.id == res.remote_version_id {
                     return Some((res.id, None));
                 }
@@ -571,130 +576,6 @@ fn source_platform_from_str(platform: &str) -> Option<SourcePlatform> {
     }
 }
 
-fn resource_type_from_str(resource_type: &str) -> Option<ResourceType> {
-    match resource_type {
-        "mod" => Some(ResourceType::Mod),
-        "resourcepack" => Some(ResourceType::ResourcePack),
-        "shader" => Some(ResourceType::Shader),
-        "datapack" => Some(ResourceType::DataPack),
-        "modpack" => Some(ResourceType::Modpack),
-        "world" => Some(ResourceType::World),
-        _ => None,
-    }
-}
-
-fn release_type_from_str(release_type: &str) -> ReleaseType {
-    match release_type {
-        "alpha" => ReleaseType::Alpha,
-        "beta" => ReleaseType::Beta,
-        _ => ReleaseType::Release,
-    }
-}
-
-fn is_release_allowed(candidate: ReleaseType, current: ReleaseType) -> bool {
-    match current {
-        ReleaseType::Release => candidate == ReleaseType::Release,
-        ReleaseType::Beta => candidate == ReleaseType::Release || candidate == ReleaseType::Beta,
-        ReleaseType::Alpha => true,
-    }
-}
-
-fn release_rank(release_type: ReleaseType) -> u8 {
-    match release_type {
-        ReleaseType::Release => 0,
-        ReleaseType::Beta => 1,
-        ReleaseType::Alpha => 2,
-    }
-}
-
-fn is_game_version_compatible(supported: &[String], target: &str) -> bool {
-    let normalized_target = normalize_mc_version(target);
-    let target_major_minor = normalized_target
-        .split('.')
-        .take(2)
-        .collect::<Vec<_>>()
-        .join(".");
-
-    supported.iter().any(|version| {
-        let normalized = normalize_mc_version(version);
-        normalized == normalized_target || normalized == format!("{}.x", target_major_minor)
-    })
-}
-
-fn normalize_mc_version(version: &str) -> String {
-    version.strip_suffix(".0").unwrap_or(version).to_string()
-}
-
-fn version_matches_loader(
-    version: &ResourceVersion,
-    instance_loader: &str,
-    resource_type: Option<ResourceType>,
-) -> bool {
-    let inst_loader = instance_loader.to_lowercase();
-    let normalized_loaders = version
-        .loaders
-        .iter()
-        .map(|loader| loader.to_lowercase())
-        .collect::<Vec<_>>();
-
-    match resource_type {
-        Some(ResourceType::Shader) => inst_loader != "vanilla" && !inst_loader.is_empty(),
-        Some(ResourceType::ResourcePack) | Some(ResourceType::DataPack) => true,
-        Some(ResourceType::Mod) => {
-            if inst_loader == "vanilla" || inst_loader.is_empty() {
-                return false;
-            }
-            normalized_loaders
-                .iter()
-                .any(|loader| loader == &inst_loader)
-                || (inst_loader == "quilt"
-                    && normalized_loaders.iter().any(|loader| loader == "fabric"))
-                || (inst_loader == "neoforge"
-                    && normalized_loaders.iter().any(|loader| loader == "forge"))
-        }
-        Some(ResourceType::Modpack) => true,
-        _ => {
-            if inst_loader == "vanilla" || inst_loader.is_empty() {
-                normalized_loaders.is_empty()
-                    || normalized_loaders
-                        .iter()
-                        .any(|loader| loader == "minecraft")
-            } else {
-                normalized_loaders
-                    .iter()
-                    .any(|loader| loader == &inst_loader)
-                    || (inst_loader == "quilt"
-                        && normalized_loaders.iter().any(|loader| loader == "fabric"))
-                    || (inst_loader == "neoforge"
-                        && normalized_loaders.iter().any(|loader| loader == "forge"))
-            }
-        }
-    }
-}
-
-fn find_best_resource_update(
-    versions: &[ResourceVersion],
-    resource: &crate::models::installed_resource::InstalledResource,
-    game_version: &str,
-    loader: &str,
-) -> Option<ResourceVersion> {
-    let current_release = release_type_from_str(&resource.release_type);
-    let resource_type = resource_type_from_str(&resource.resource_type);
-
-    versions
-        .iter()
-        .filter(|version| {
-            is_game_version_compatible(&version.game_versions, game_version)
-                && version_matches_loader(version, loader, resource_type)
-                && is_release_allowed(version.release_type, current_release)
-        })
-        .min_by_key(|version| {
-            let explicit = version.game_versions.iter().any(|v| v == game_version);
-            (!explicit, release_rank(version.release_type))
-        })
-        .cloned()
-}
-
 #[tauri::command]
 pub async fn find_peer_resource(
     resource_manager: State<'_, ResourceManager>,
@@ -705,35 +586,8 @@ pub async fn find_peer_resource(
 
 #[tauri::command]
 pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-    use std::fs;
-
-    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
-    // Find the resource to get the path
-    let res = ir_dsl::installed_resource
-        .filter(ir_dsl::id.eq(resource_id))
-        .filter(ir_dsl::instance_id.eq(instance_id))
-        .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "Resource not found or does not belong to this instance: {}",
-                e
-            )
-        })?;
-
-    // Delete the file
-    if fs::metadata(&res.local_path).is_ok() {
-        fs::remove_file(&res.local_path)
-            .map_err(|e| anyhow::anyhow!("Failed to delete file at {}: {}", res.local_path, e))?;
-    }
-
-    // Remove from database
-    diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-        .execute(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Failed to delete from database: {}", e))?;
+    crate::resources::ledger::remove_resource(instance_id, resource_id)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     if let Err(e) = invalidate_instance_update_snapshot(instance_id) {
         log::warn!(
@@ -748,84 +602,15 @@ pub async fn delete_resource(instance_id: i32, resource_id: i32) -> Result<()> {
 
 #[tauri::command]
 pub async fn toggle_resource(resource_id: i32, enabled: bool) -> Result<()> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-    use std::fs;
-    use std::path::Path;
-
-    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-
-    let res = ir_dsl::installed_resource
-        .filter(ir_dsl::id.eq(resource_id))
-        .first::<crate::models::installed_resource::InstalledResource>(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Resource not found: {}", e))?;
-
-    let current_path = Path::new(&res.local_path);
-    if !current_path.exists() {
-        // Auto-delete dead entry
-        let _ = diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-            .execute(&mut conn);
-        return Err(anyhow::anyhow!(
-            "File not found on disk. The entry has been removed from the database."
-        )
-        .into());
-    }
-
-    let new_path = if enabled {
-        // Remove .disabled if it exists
-        if res.local_path.ends_with(".disabled") {
-            res.local_path[..res.local_path.len() - 9].to_string()
-        } else {
-            res.local_path.clone()
-        }
-    } else {
-        // Add .disabled if it doesn't exist
-        if !res.local_path.ends_with(".disabled") {
-            format!("{}.disabled", res.local_path)
-        } else {
-            res.local_path.clone()
-        }
-    };
-
-    if new_path != res.local_path {
-        fs::rename(&res.local_path, &new_path)
-            .map_err(|e| anyhow::anyhow!("Failed to rename file: {}", e))?;
-    }
-
-    // Update database
-    diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource_id)))
-        .set((
-            ir_dsl::local_path.eq(new_path),
-            ir_dsl::is_enabled.eq(enabled),
-        ))
-        .execute(&mut conn)
-        .map_err(|e| anyhow::anyhow!("Failed to update database: {}", e))?;
-
+    crate::resources::ledger::set_enabled(resource_id, enabled)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(())
 }
 
 #[tauri::command]
 pub async fn clear_modpack_resource_provenance(instance_id: i32) -> Result<()> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
-    diesel::update(
-        ir_dsl::installed_resource
-            .filter(ir_dsl::instance_id.eq(instance_id))
-            .filter(ir_dsl::source_kind.eq("modpack")),
-    )
-    .set((
-        ir_dsl::source_kind.eq("custom"),
-        ir_dsl::source_modpack_id.eq(Option::<String>::None),
-        ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
-        ir_dsl::source_modpack_platform.eq(Option::<String>::None),
-    ))
-    .execute(&mut conn)
-    .map_err(|e| anyhow::anyhow!("Failed to clear resource provenance: {}", e))?;
-
+    crate::resources::ledger::clear_modpack_provenance(instance_id)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     Ok(())
 }
 
@@ -883,7 +668,7 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
     let instances_root = data_dir.join("instances");
     let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
 
-    let Some(manifest) = load_modpack_manifest_for_fast_backfill(&inst, &game_dir)? else {
+    let Some(manifest) = crate::modpack::state::load_present(&game_dir)? else {
         log::info!(
             "[resource-provenance] No local manifest for fast backfill on instance {}; skipping repair/bootstrap",
             instance_id
@@ -898,8 +683,10 @@ fn backfill_modpack_resource_provenance_fast_inner(instance_id: i32) -> anyhow::
             .load::<InstalledResource>(&mut conn)?
     };
 
-    let matched_ids = match_manifest_owned_resources(&resources, &manifest, &game_dir);
-    let changed = apply_resource_provenance_diff(&inst, &resources, &matched_ids)?;
+    let matched_ids =
+        crate::modpack::state::match_owned_resources(&resources, &manifest, &game_dir);
+    let changed =
+        crate::modpack::state::apply_resource_provenance(&inst, &resources, &matched_ids)?;
     if changed > 0 {
         log::info!(
             "[resource-provenance] Fast backfilled {} provenance rows for instance {}",
@@ -945,23 +732,9 @@ pub async fn backfill_modpack_resource_provenance(
     let instances_root = data_dir.join("instances");
     let game_dir = resolve_instance_game_directory(&inst, &instances_root, &data_dir);
 
-    let mut manifest = load_modpack_manifest_for_backfill(&app_handle, &inst, &game_dir).await?;
-    if let Err(e) =
-        crate::sync::manifest::backfill_manifest_hashes(&mut manifest, &game_dir, instance_id)
-    {
-        log::warn!(
-            "[resource-provenance] Failed to backfill manifest hashes for instance {}: {}",
-            instance_id,
-            e
-        );
-    }
-    if let Err(e) = manifest.persist(&game_dir) {
-        log::warn!(
-            "[resource-provenance] Failed to persist manifest after backfill for instance {}: {}",
-            instance_id,
-            e
-        );
-    }
+    let mut manifest =
+        crate::modpack::state::load_or_bootstrap(&app_handle, &inst, &game_dir).await?;
+    crate::modpack::state::backfill_and_persist(&mut manifest, &game_dir, instance_id);
 
     let resources = {
         let mut conn = get_vesta_conn().map_err(|e| anyhow::anyhow!(e.to_string()))?;
@@ -971,10 +744,11 @@ pub async fn backfill_modpack_resource_provenance(
             .map_err(|e| anyhow::anyhow!("Failed to load installed resources: {}", e))?
     };
 
-    let matched_ids = match_manifest_owned_resources(&resources, &manifest, &game_dir);
+    let matched_ids =
+        crate::modpack::state::match_owned_resources(&resources, &manifest, &game_dir);
 
     let matched_vec: Vec<i32> = matched_ids.iter().copied().collect();
-    let changed = apply_resource_provenance_diff(&inst, &resources, &matched_ids)
+    let changed = crate::modpack::state::apply_resource_provenance(&inst, &resources, &matched_ids)
         .map_err(|e| anyhow::anyhow!("Failed to apply resource provenance: {}", e))?;
 
     if changed > 0 {
@@ -982,246 +756,6 @@ pub async fn backfill_modpack_resource_provenance(
     }
 
     Ok(matched_vec.len())
-}
-
-fn load_modpack_manifest_for_fast_backfill(
-    inst: &crate::models::instance::Instance,
-    game_dir: &std::path::Path,
-) -> anyhow::Result<Option<piston_lib::game::modpack::manifest::ModpackManifest>> {
-    use piston_lib::game::modpack::manifest::ModpackManifest;
-    use piston_lib::game::modpack::types::ModpackMetadata;
-
-    if let Ok(manifest) = ModpackManifest::load(game_dir) {
-        return Ok(Some(manifest));
-    }
-
-    let legacy_path = game_dir.join(".vesta").join(ModpackManifest::FILE_NAME);
-    if let Ok(content) = std::fs::read_to_string(&legacy_path) {
-        if let Ok(manifest) = serde_json::from_str::<ModpackManifest>(&content) {
-            return Ok(Some(manifest));
-        }
-        if let Ok(metadata) = serde_json::from_str::<ModpackMetadata>(&content) {
-            return Ok(Some(ModpackManifest::from_install(
-                &metadata,
-                &[],
-                &[],
-                None,
-                inst.modpack_id.clone(),
-            )));
-        }
-    }
-
-    Ok(None)
-}
-
-fn apply_resource_provenance_diff(
-    inst: &crate::models::instance::Instance,
-    resources: &[crate::models::installed_resource::InstalledResource],
-    matched_ids: &std::collections::HashSet<i32>,
-) -> anyhow::Result<usize> {
-    use crate::schema::installed_resource::dsl as ir_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let Some(modpack_id) = inst.modpack_id.clone() else {
-        return Ok(0);
-    };
-    let Some(modpack_version_id) = inst.modpack_version_id.clone() else {
-        return Ok(0);
-    };
-    let Some(modpack_platform) = inst.modpack_platform.clone() else {
-        return Ok(0);
-    };
-
-    let mut conn = get_vesta_conn()?;
-    let mut changed = 0usize;
-
-    for resource in resources {
-        let should_be_modpack = matched_ids.contains(&resource.id);
-
-        if should_be_modpack {
-            let already_correct = resource.source_kind == "modpack"
-                && resource.source_modpack_id.as_deref() == Some(modpack_id.as_str())
-                && resource.source_modpack_version_id.as_deref()
-                    == Some(modpack_version_id.as_str())
-                && resource.source_modpack_platform.as_deref() == Some(modpack_platform.as_str());
-            if already_correct {
-                continue;
-            }
-
-            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
-                .set((
-                    ir_dsl::source_kind.eq("modpack"),
-                    ir_dsl::source_modpack_id.eq(Some(modpack_id.clone())),
-                    ir_dsl::source_modpack_version_id.eq(Some(modpack_version_id.clone())),
-                    ir_dsl::source_modpack_platform.eq(Some(modpack_platform.clone())),
-                ))
-                .execute(&mut conn)?;
-            changed += 1;
-            continue;
-        }
-
-        let already_custom = resource.source_kind == "custom"
-            && resource.source_modpack_id.is_none()
-            && resource.source_modpack_version_id.is_none()
-            && resource.source_modpack_platform.is_none();
-        if already_custom {
-            continue;
-        }
-
-        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(resource.id)))
-            .set((
-                ir_dsl::source_kind.eq("custom"),
-                ir_dsl::source_modpack_id.eq(Option::<String>::None),
-                ir_dsl::source_modpack_version_id.eq(Option::<String>::None),
-                ir_dsl::source_modpack_platform.eq(Option::<String>::None),
-            ))
-            .execute(&mut conn)?;
-        changed += 1;
-    }
-
-    Ok(changed)
-}
-
-async fn load_modpack_manifest_for_backfill(
-    app_handle: &tauri::AppHandle,
-    inst: &crate::models::instance::Instance,
-    game_dir: &std::path::Path,
-) -> Result<piston_lib::game::modpack::manifest::ModpackManifest> {
-    use piston_lib::game::modpack::manifest::ModpackManifest;
-    use piston_lib::game::modpack::types::ModpackMetadata;
-
-    if let Ok(manifest) = ModpackManifest::load(game_dir) {
-        return Ok(manifest);
-    }
-
-    let legacy_path = game_dir.join(".vesta").join(ModpackManifest::FILE_NAME);
-    if let Ok(content) = std::fs::read_to_string(&legacy_path) {
-        if let Ok(manifest) = serde_json::from_str::<ModpackManifest>(&content) {
-            return Ok(manifest);
-        }
-        if let Ok(metadata) = serde_json::from_str::<ModpackMetadata>(&content) {
-            return Ok(ModpackManifest::from_install(
-                &metadata,
-                &[],
-                &[],
-                None,
-                inst.modpack_id.clone(),
-            ));
-        }
-    }
-
-    Ok(
-        crate::sync::manifest_bootstrap::ensure_old_manifest(app_handle, inst, game_dir, None)
-            .await
-            .map_err(|e| anyhow::anyhow!(e))?,
-    )
-}
-
-fn match_manifest_owned_resources(
-    resources: &[crate::models::installed_resource::InstalledResource],
-    manifest: &piston_lib::game::modpack::manifest::ModpackManifest,
-    game_dir: &std::path::Path,
-) -> std::collections::HashSet<i32> {
-    use crate::utils::instance_helpers::normalize_path;
-    use piston_lib::game::modpack::manifest::{disabled_mod_path, resolve_mod_path_on_disk};
-    use std::collections::HashSet;
-
-    let mut matched_ids = HashSet::new();
-
-    for manifest_mod in &manifest.mods {
-        let mut path_candidates = HashSet::new();
-        path_candidates.insert(normalize_path(&game_dir.join(&manifest_mod.path)));
-        path_candidates.insert(normalize_path(
-            &game_dir.join(disabled_mod_path(&manifest_mod.path)),
-        ));
-        if let Some(path) = resolve_mod_path_on_disk(game_dir, &manifest_mod.path) {
-            path_candidates.insert(normalize_path(&path));
-        }
-
-        let manifest_sha1 = manifest_mod
-            .sha1
-            .as_deref()
-            .filter(|hash| !hash.is_empty())
-            .map(str::to_lowercase);
-
-        for resource in resources {
-            let path_matches = path_candidates
-                .contains(&normalize_path(std::path::Path::new(&resource.local_path)));
-            let hash_matches = manifest_sha1.as_ref().is_some_and(|sha1| {
-                resource
-                    .hash
-                    .as_deref()
-                    .is_some_and(|hash| hash.eq_ignore_ascii_case(sha1))
-            });
-            let platform_version_matches =
-                manifest_source_matches_resource(&manifest_mod.source, resource);
-
-            if path_matches || hash_matches || platform_version_matches {
-                matched_ids.insert(resource.id);
-            }
-        }
-    }
-
-    for override_path in &manifest.overrides.extracted {
-        let mut path_candidates = HashSet::new();
-        path_candidates.insert(normalize_path(&game_dir.join(override_path)));
-        path_candidates.insert(normalize_path(
-            &game_dir.join(disabled_mod_path(override_path)),
-        ));
-        let override_sha1 = manifest
-            .overrides
-            .hashes
-            .get(&override_path.to_lowercase())
-            .filter(|hash| !hash.is_empty())
-            .map(|hash| hash.to_lowercase());
-
-        for resource in resources {
-            let path_matches = path_candidates
-                .contains(&normalize_path(std::path::Path::new(&resource.local_path)));
-            let hash_matches = override_sha1.as_ref().is_some_and(|sha1| {
-                resource
-                    .hash
-                    .as_deref()
-                    .is_some_and(|hash| hash.eq_ignore_ascii_case(sha1))
-            });
-            if path_matches || hash_matches {
-                matched_ids.insert(resource.id);
-            }
-        }
-    }
-
-    matched_ids
-}
-
-fn manifest_source_matches_resource(
-    source: &piston_lib::game::modpack::manifest::ModSource,
-    resource: &crate::models::installed_resource::InstalledResource,
-) -> bool {
-    use piston_lib::game::modpack::manifest::ModSource;
-
-    match source {
-        ModSource::Modrinth {
-            project_id,
-            version_id,
-            ..
-        } => {
-            resource.platform == "modrinth"
-                && resource.remote_version_id == *version_id
-                && (project_id.is_empty() || resource.remote_id == *project_id)
-        }
-        ModSource::CurseForge {
-            project_id,
-            file_id,
-            ..
-        } => {
-            resource.platform == "curseforge"
-                && resource.remote_version_id == file_id.to_string()
-                && project_id
-                    .map(|id| resource.remote_id == id.to_string())
-                    .unwrap_or(true)
-        }
-    }
 }
 
 #[tauri::command]

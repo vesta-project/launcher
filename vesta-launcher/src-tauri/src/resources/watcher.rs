@@ -1,5 +1,6 @@
 use crate::models::installed_resource::InstalledResource;
 use crate::models::resource::SourcePlatform;
+pub use crate::resources::ledger::ResourceProvenance;
 use crate::resources::ResourceManager;
 use crate::schema::installed_resource::dsl as ir_dsl;
 use crate::utils::hash::{calculate_curseforge_fingerprint, calculate_sha1};
@@ -42,52 +43,8 @@ pub struct ResourceWatcher {
     in_flight_scans: Arc<Mutex<HashSet<String>>>,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct ResourceProvenance {
-    pub source_kind: String,
-    pub source_modpack_id: Option<String>,
-    pub source_modpack_version_id: Option<String>,
-    pub source_modpack_platform: Option<String>,
-}
-
-impl ResourceProvenance {
-    pub fn custom() -> Self {
-        Self {
-            source_kind: "custom".to_string(),
-            ..Self::default()
-        }
-    }
-
-    pub fn modpack(
-        source_modpack_id: Option<String>,
-        source_modpack_version_id: Option<String>,
-        source_modpack_platform: Option<String>,
-    ) -> Self {
-        Self {
-            source_kind: "modpack".to_string(),
-            source_modpack_id,
-            source_modpack_version_id,
-            source_modpack_platform,
-        }
-    }
-}
-
 pub fn modpack_provenance_for_instance(instance_id: i32) -> Result<ResourceProvenance> {
-    use crate::models::instance::Instance;
-    use crate::schema::instance::dsl as inst_dsl;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let mut conn = get_vesta_conn()?;
-    let inst = inst_dsl::instance
-        .filter(inst_dsl::id.eq(instance_id))
-        .first::<Instance>(&mut conn)?;
-
-    Ok(ResourceProvenance::modpack(
-        inst.modpack_id,
-        inst.modpack_version_id,
-        inst.modpack_platform,
-    ))
+    crate::resources::ledger::modpack_provenance_for_instance(instance_id)
 }
 
 impl ResourceWatcher {
@@ -333,36 +290,11 @@ impl ResourceWatcher {
     }
 
     async fn cleanup_missing_resources(&self, db_id: i32, folder_path: &Path) -> Result<()> {
-        use crate::utils::db::get_vesta_conn;
-        use diesel::prelude::*;
-
-        let mut conn = get_vesta_conn()?;
-        let folder_prefix = normalize_path(folder_path);
-
         log::debug!(
             "[ResourceWatcher] Cleaning up missing resources in: {:?}",
             folder_path
         );
-
-        // Get all resources for this instance
-        let resources = ir_dsl::installed_resource
-            .filter(ir_dsl::instance_id.eq(db_id))
-            .load::<InstalledResource>(&mut conn)?;
-
-        for res in resources {
-            // If the resource is in the folder we just scanned, check if it exists
-            if res.local_path.starts_with(&folder_prefix) {
-                if !Path::new(&res.local_path).exists() {
-                    log::info!(
-                        "[ResourceWatcher] Removing dead resource from DB: {}",
-                        res.local_path
-                    );
-                    diesel::delete(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
-                        .execute(&mut conn)?;
-                }
-            }
-        }
-
+        crate::resources::ledger::remove_missing_in_folder(db_id, folder_path)?;
         Ok(())
     }
 
@@ -574,6 +506,8 @@ async fn identify_and_link_resource(
 
     // 1. FAST CHECK: Metadata Skip
     {
+        use crate::models::installed_resource::InstalledResource;
+        use crate::schema::installed_resource::dsl as ir_dsl;
         use crate::utils::db::get_vesta_conn;
         use diesel::prelude::*;
         if let Ok(mut conn) = get_vesta_conn() {
@@ -638,7 +572,9 @@ async fn identify_and_link_resource(
     let mut preferred_platform = None;
     let mut instance_platform = None;
     {
+        use crate::models::installed_resource::InstalledResource;
         use crate::models::instance::Instance;
+        use crate::schema::installed_resource::dsl as ir_dsl;
         use crate::schema::instance::dsl as inst_dsl;
         use crate::utils::db::get_vesta_conn;
         use diesel::prelude::*;
@@ -769,130 +705,16 @@ pub async fn link_manual_resource_to_db(
     platform: &str,
     provenance: Option<ResourceProvenance>,
 ) -> Result<()> {
-    use crate::models::installed_resource::InstalledResource;
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let mut conn = get_vesta_conn()?;
-    let path_str = normalize_path(path);
-    let provenance = provenance.unwrap_or_else(|| {
-        if platform == "modpack" {
-            modpack_provenance_for_instance(instance_id)
-                .unwrap_or_else(|_| ResourceProvenance::modpack(None, None, None))
-        } else {
-            ResourceProvenance::custom()
-        }
-    });
-    let file_name = path
-        .file_name()
-        .and_then(|s| s.to_str())
-        .unwrap_or("Unknown Resource")
-        .to_string();
-    let is_enabled = is_enabled_path(path);
-    let (file_size_val, file_mtime_val) = metadata;
-
-    log::debug!(
-        "[ResourceWatcher] Linking manual resource: {} (path: {})",
-        file_name,
-        path_str
-    );
-
-    // Infer type from folder
-    let inferred_type = if let Some(parent) = path.parent() {
-        match parent.file_name().and_then(|s| s.to_str()) {
-            Some("mods") => "Mod",
-            Some("resourcepacks") => "ResourcePack",
-            Some("shaderpacks") => "ShaderPack",
-            Some("datapacks") => "DataPack",
-            _ => "unknown",
-        }
-    } else {
-        "unknown"
-    };
-
-    if inferred_type == "unknown" {
-        return Ok(());
+    if crate::resources::ledger::record_manual(
+        instance_id,
+        path,
+        hash,
+        metadata,
+        platform,
+        provenance,
+    )? {
+        app.emit("resources-updated", instance_id)?;
     }
-
-    // Check if path already exists
-    let existing = ir_dsl::installed_resource
-        .filter(ir_dsl::local_path.eq(&path_str))
-        .first::<InstalledResource>(&mut conn)
-        .optional()?;
-
-    if let Some(res) = existing {
-        log::debug!(
-            "[ResourceWatcher] Updating existing record for manual resource: {}",
-            res.display_name
-        );
-        let has_canonical_link = !res.remote_id.is_empty()
-            && (res.platform == "curseforge" || res.platform == "modrinth");
-        if has_canonical_link {
-            // Preserve canonical linkage data when transient states (e.g. offline) force manual linking path.
-            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
-                .set((
-                    ir_dsl::is_enabled.eq(is_enabled),
-                    ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
-                    ir_dsl::hash.eq(hash),
-                    ir_dsl::file_size.eq(file_size_val),
-                    ir_dsl::file_mtime.eq(file_mtime_val),
-                    ir_dsl::resource_type.eq(inferred_type),
-                    ir_dsl::source_kind.eq(&provenance.source_kind),
-                    ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
-                    ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
-                    ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
-                ))
-                .execute(&mut conn)?;
-        } else {
-            diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
-                .set((
-                    ir_dsl::is_enabled.eq(is_enabled),
-                    ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
-                    ir_dsl::hash.eq(hash),
-                    ir_dsl::file_size.eq(file_size_val),
-                    ir_dsl::file_mtime.eq(file_mtime_val),
-                    ir_dsl::resource_type.eq(inferred_type),
-                    ir_dsl::platform.eq(platform),
-                    ir_dsl::source_kind.eq(&provenance.source_kind),
-                    ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
-                    ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
-                    ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
-                ))
-                .execute(&mut conn)?;
-        }
-        return Ok(());
-    }
-
-    log::info!(
-        "[ResourceWatcher] Creating new database record for manual resource: {}",
-        file_name
-    );
-
-    diesel::insert_into(ir_dsl::installed_resource)
-        .values((
-            ir_dsl::instance_id.eq(instance_id),
-            ir_dsl::platform.eq(platform),
-            ir_dsl::remote_id.eq(""),
-            ir_dsl::remote_version_id.eq(""),
-            ir_dsl::resource_type.eq(inferred_type),
-            ir_dsl::local_path.eq(&path_str),
-            ir_dsl::display_name.eq(&file_name),
-            ir_dsl::current_version.eq("unknown"),
-            ir_dsl::release_type.eq("release"),
-            ir_dsl::is_manual.eq(true),
-            ir_dsl::is_enabled.eq(is_enabled),
-            ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
-            ir_dsl::hash.eq(hash),
-            ir_dsl::file_size.eq(file_size_val),
-            ir_dsl::file_mtime.eq(file_mtime_val),
-            ir_dsl::source_kind.eq(&provenance.source_kind),
-            ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
-            ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
-            ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
-        ))
-        .execute(&mut conn)?;
-
-    app.emit("resources-updated", instance_id)?;
 
     Ok(())
 }
@@ -908,98 +730,20 @@ pub async fn link_resource_to_db(
     metadata: (i64, i64),
     provenance: Option<ResourceProvenance>,
 ) -> Result<()> {
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let mut conn = get_vesta_conn()?;
-
     // Cache project metadata (including icon) beforehand
     let rm = app.state::<ResourceManager>();
     let _ = rm.cache_project_metadata(platform, &project).await;
-
-    let path_str = normalize_path(path);
-    let platform_str = match platform {
-        SourcePlatform::Modrinth => "modrinth",
-        SourcePlatform::CurseForge => "curseforge",
-    };
-    let provenance = provenance.unwrap_or_else(ResourceProvenance::custom);
-
-    let release_type_str = format!("{:?}", version.release_type).to_lowercase();
-    let res_type_str = format!("{:?}", project.resource_type);
-    let is_enabled = is_enabled_path(path);
-    let (file_size_val, file_mtime_val) = metadata;
-
-    // 1. Try to find by path first (exact file match)
-    let existing_by_path = ir_dsl::installed_resource
-        .filter(ir_dsl::local_path.eq(&path_str))
-        .first::<InstalledResource>(&mut conn)
-        .optional()?;
-
-    // 2. If not found by path, try by remote_id (the same mod but maybe different file name)
-    // This prevents duplicates when a file is renamed (e.g. adding .disabled)
-    let existing_by_id = if existing_by_path.is_none() {
-        ir_dsl::installed_resource
-            .filter(ir_dsl::instance_id.eq(instance_db_id))
-            .filter(ir_dsl::remote_id.eq(&project.id))
-            .filter(ir_dsl::platform.eq(platform_str))
-            .filter(ir_dsl::source_kind.eq(&provenance.source_kind))
-            .first::<InstalledResource>(&mut conn)
-            .optional()?
-    } else {
-        None
-    };
-
-    let existing = existing_by_path.or(existing_by_id);
-
-    if let Some(res) = existing {
-        // Update
-        diesel::update(ir_dsl::installed_resource.filter(ir_dsl::id.eq(res.id)))
-            .set((
-                ir_dsl::platform.eq(platform_str),
-                ir_dsl::remote_id.eq(&project.id),
-                ir_dsl::remote_version_id.eq(&version.id),
-                ir_dsl::local_path.eq(&path_str),
-                ir_dsl::display_name.eq(&project.name),
-                ir_dsl::current_version.eq(&version.version_number),
-                ir_dsl::release_type.eq(&release_type_str),
-                ir_dsl::is_manual.eq(false),
-                ir_dsl::is_enabled.eq(is_enabled),
-                ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
-                ir_dsl::hash.eq(hash),
-                ir_dsl::file_size.eq(file_size_val),
-                ir_dsl::file_mtime.eq(file_mtime_val),
-                ir_dsl::source_kind.eq(&provenance.source_kind),
-                ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
-                ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
-                ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
-            ))
-            .execute(&mut conn)?;
-    } else {
-        // Insert
-        diesel::insert_into(ir_dsl::installed_resource)
-            .values((
-                ir_dsl::instance_id.eq(instance_db_id),
-                ir_dsl::platform.eq(platform_str),
-                ir_dsl::remote_id.eq(&project.id),
-                ir_dsl::remote_version_id.eq(&version.id),
-                ir_dsl::resource_type.eq(res_type_str),
-                ir_dsl::local_path.eq(path_str),
-                ir_dsl::display_name.eq(&project.name),
-                ir_dsl::current_version.eq(&version.version_number),
-                ir_dsl::release_type.eq(&release_type_str),
-                ir_dsl::is_manual.eq(false),
-                ir_dsl::is_enabled.eq(is_enabled),
-                ir_dsl::last_updated.eq(chrono::Utc::now().to_rfc3339()),
-                ir_dsl::hash.eq(hash),
-                ir_dsl::file_size.eq(file_size_val),
-                ir_dsl::file_mtime.eq(file_mtime_val),
-                ir_dsl::source_kind.eq(&provenance.source_kind),
-                ir_dsl::source_modpack_id.eq(&provenance.source_modpack_id),
-                ir_dsl::source_modpack_version_id.eq(&provenance.source_modpack_version_id),
-                ir_dsl::source_modpack_platform.eq(&provenance.source_modpack_platform),
-            ))
-            .execute(&mut conn)?;
-    }
+    crate::resources::ledger::record_remote(
+        instance_db_id,
+        path,
+        &project,
+        &version,
+        platform,
+        hash,
+        metadata,
+        provenance,
+        None,
+    )?;
 
     // Emit event to frontend
     app.emit("resources-updated", instance_db_id)?;
@@ -1164,18 +908,7 @@ async fn version_is_at_least(
 }
 
 async fn unlink_resource_from_db(app: &AppHandle, instance_db_id: i32, path: &Path) -> Result<()> {
-    use crate::utils::db::get_vesta_conn;
-    use diesel::prelude::*;
-
-    let mut conn = get_vesta_conn()?;
-    let path_str = normalize_path(path);
-
-    diesel::delete(
-        ir_dsl::installed_resource
-            .filter(ir_dsl::instance_id.eq(instance_db_id))
-            .filter(ir_dsl::local_path.eq(&path_str)),
-    )
-    .execute(&mut conn)?;
+    crate::resources::ledger::unlink_path(instance_db_id, path)?;
 
     app.emit("resources-updated", instance_db_id)?;
 

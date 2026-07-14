@@ -1,6 +1,8 @@
+pub mod ledger;
 pub mod manager;
 pub mod sources;
 pub mod update_cache;
+pub mod update_policy;
 pub mod watcher;
 
 pub use manager::ResourceManager;

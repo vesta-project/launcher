@@ -2,6 +2,8 @@
 //!
 //! Handles device-code authentication flow, token management, and account persistence.
 
+pub mod notification_actions;
+
 use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
 use diesel::prelude::*;

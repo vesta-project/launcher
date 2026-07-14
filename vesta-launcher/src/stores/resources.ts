@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import type { ResourceInstallRequest } from "@utils/resource-install-intent";
 import { createStore, reconcile } from "solid-js/store";
 import { Instance } from "./instances";
 
@@ -122,8 +123,7 @@ type ResourceStoreState = {
 	viewMode: "grid" | "list";
 	showFilters: boolean;
 	reconcilingCategories: boolean;
-	requestInstallProject: ResourceProject | null;
-	requestInstallVersions: ResourceVersion[];
+	installRequest: ResourceInstallRequest | null;
 	selection: Record<string, boolean>;
 	sorting: { id: string; desc: boolean }[];
 };
@@ -156,8 +156,7 @@ const [resourceStore, setResourceStore] = createStore<ResourceStoreState>({
 	viewMode: "grid",
 	showFilters: true,
 	reconcilingCategories: false,
-	requestInstallProject: null,
-	requestInstallVersions: [],
+	installRequest: null,
 	selection: {},
 	sorting: [{ id: "display_name", desc: false }],
 });
@@ -187,13 +186,8 @@ function currentSearchCacheKey() {
 export const resources = {
 	state: resourceStore,
 
-	setRequestInstall: (
-		p: ResourceProject | null,
-		versions: ResourceVersion[] = [],
-	) => {
-		setResourceStore("requestInstallProject", p);
-		setResourceStore("requestInstallVersions", versions);
-	},
+	setInstallRequest: (request: ResourceInstallRequest | null) =>
+		setResourceStore("installRequest", request),
 
 	setQuery: (q: string) => setResourceStore("query", q),
 	setSource: (s: SourcePlatform) => {
@@ -590,133 +584,4 @@ if (typeof window !== "undefined") {
 			);
 		}
 	});
-}
-
-export function isGameVersionCompatible(
-	supported: string[],
-	target: string,
-): boolean {
-	// Normalize versions to handle 1.21 vs 1.21.0 consistently
-	// We normalize both to X.Y for comparison, but we must be careful with patches.
-	const normalize = (v: string) => (v.endsWith(".0") ? v.slice(0, -2) : v);
-	const nTarget = normalize(target);
-	const targetParts = nTarget.split(".");
-
-	// Major.Minor group of the target (e.g., "1.21" from "1.21.4")
-	const targetMajorMinor = targetParts.slice(0, 2).join(".");
-
-	for (const s of supported) {
-		const ns = normalize(s);
-
-		// 1. Exact match (including normalized 1.21 vs 1.21.0)
-		if (ns === nTarget) return true;
-
-		// 2. Explicit wildcard match (e.g., "1.21.x")
-		if (ns === `${targetMajorMinor}.x`) return true;
-
-		// 3. Range support (if we implement it later, e.g., "[1.21, 1.21.2]")
-		// (Not implemented yet)
-
-		// Note: We NO LONGER allow a bare "1.21" to match "1.21.4" by default.
-		// If a mod supports "1.21.x", it should be tagged as such or list all patches.
-		// This prevents the "mod for 1.21 and 1.21.1 doesn't match 1.21.11" issue.
-	}
-
-	return false;
-}
-
-export function findBestVersion(
-	versions: ResourceVersion[],
-	gameVersion: string,
-	modloader: string | null,
-	currentReleaseType?: "release" | "beta" | "alpha",
-	resourceType?: ResourceType,
-): ResourceVersion | null {
-	// Filter by game version and loader
-	const instLoader = modloader?.toLowerCase() || "";
-
-	const allowedReleaseTypes =
-		currentReleaseType === "release" || !currentReleaseType
-			? ["release"]
-			: currentReleaseType === "beta"
-				? ["release", "beta"]
-				: ["release", "beta", "alpha"];
-
-	const compatible = versions.filter((v) => {
-		const matchesVersion = isGameVersionCompatible(
-			v.game_versions,
-			gameVersion,
-		);
-
-		// Loader logic
-		const normalizedLoaders = v.loaders.map((l) => l.toLowerCase());
-		let matchesLoader = false;
-
-		if (
-			resourceType === "shader" ||
-			resourceType === "resourcepack" ||
-			resourceType === "datapack"
-		) {
-			matchesLoader = true;
-			if (
-				resourceType === "shader" &&
-				(instLoader === "" || instLoader === "vanilla")
-			) {
-				matchesLoader = false;
-			}
-		} else {
-			const isVanilla = instLoader === "" || instLoader === "vanilla";
-			if (isVanilla) {
-				if (resourceType === "mod") {
-					matchesLoader = false;
-				} else if (resourceType === "modpack") {
-					matchesLoader = true;
-				} else {
-					matchesLoader =
-						normalizedLoaders.length === 0 ||
-						normalizedLoaders.includes("minecraft");
-				}
-			} else {
-				matchesLoader = normalizedLoaders.some((l) => l === instLoader);
-			}
-
-			if (!matchesLoader && instLoader === "quilt") {
-				matchesLoader = normalizedLoaders.includes("fabric");
-			}
-			if (!matchesLoader && instLoader === "neoforge") {
-				matchesLoader = normalizedLoaders.includes("forge");
-			}
-		}
-
-		const matchesStability = allowedReleaseTypes.includes(v.release_type);
-
-		return matchesVersion && matchesLoader && matchesStability;
-	});
-
-	if (compatible.length === 0) return null;
-
-	// Sort compatible versions:
-	// 1. Prefer explicit version match over fuzzy prefix match
-	// 2. Prefer release over beta/alpha
-	// 3. Prefer most recent version (by ID or list order)
-
-	const sorted = [...compatible].sort((a, b) => {
-		const aExplicit = a.game_versions.includes(gameVersion);
-		const bExplicit = b.game_versions.includes(gameVersion);
-
-		if (aExplicit && !bExplicit) return -1;
-		if (!aExplicit && bExplicit) return 1;
-
-		// Then by stability
-		const stabilityOrder = { release: 0, beta: 1, alpha: 2 };
-		const aStab = stabilityOrder[a.release_type] ?? 99;
-		const bStab = stabilityOrder[b.release_type] ?? 99;
-
-		if (aStab !== bStab) return aStab - bStab;
-
-		// Same stability and explicit/fuzzy status, stick with original order (usually newest first from API)
-		return 0;
-	});
-
-	return sorted[0] || null;
 }

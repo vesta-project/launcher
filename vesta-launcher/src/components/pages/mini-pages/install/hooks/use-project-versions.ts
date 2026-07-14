@@ -1,10 +1,10 @@
 import {
-	findBestVersion,
 	type ResourceVersion,
 	resources,
 	type SourcePlatform,
 } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
+import { findBestVersion } from "@utils/resource-install-intent";
 import {
 	type Accessor,
 	batch,

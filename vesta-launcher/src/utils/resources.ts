@@ -1,14 +1,58 @@
 import type { Instance } from "@stores/instances";
-import {
-	isGameVersionCompatible,
-	type ResourceProject,
-	type ResourceVersion,
-} from "@stores/resources";
+import { type ResourceProject, type ResourceVersion } from "@stores/resources";
+import { isGameVersionCompatible } from "@utils/resource-install-intent";
 
 export interface CompatibilityResult {
 	type: "compatible" | "warning" | "incompatible";
 	reason?: string;
 }
+
+export const getProjectCompatibilityForInstance = (
+	project: ResourceProject,
+	instance: Instance,
+): CompatibilityResult => {
+	const loader = instance.modloader?.toLowerCase() || "";
+	const resourceType = project.resource_type;
+
+	if (loader === "" || loader === "vanilla") {
+		if (resourceType === "mod" || resourceType === "shader") {
+			return {
+				type: "incompatible",
+				reason: `Vanilla instances do not support ${resourceType}s.`,
+			};
+		}
+		return { type: "compatible" };
+	}
+
+	if (
+		resourceType === "shader" ||
+		resourceType === "resourcepack" ||
+		resourceType === "datapack"
+	) {
+		return { type: "compatible" };
+	}
+
+	const categories = new Set(
+		project.categories.map((category) => category.toLowerCase()),
+	);
+	const declaresLoader = ["fabric", "forge", "quilt", "neoforge"].some(
+		(category) => categories.has(category),
+	);
+	if (!declaresLoader) return { type: "compatible" };
+
+	if (categories.has(loader)) return { type: "compatible" };
+	if (loader === "quilt" && categories.has("fabric")) {
+		return { type: "warning", reason: "Fabric mod on Quilt instance." };
+	}
+	if (loader === "neoforge" && categories.has("forge")) {
+		return { type: "warning", reason: "Forge mod on NeoForge instance." };
+	}
+
+	return {
+		type: "incompatible",
+		reason: `This resource is not compatible with ${instance.modloader || "Vanilla"}.`,
+	};
+};
 
 export const getCompatibilityForInstance = (
 	project: ResourceProject | undefined,

@@ -4,6 +4,8 @@ pub mod launcher;
 pub mod manifest_cache;
 pub mod metadata;
 pub mod modpack;
+pub mod runtime_plan;
+pub mod runtime_preparation;
 
 // Re-export commonly used types
 pub use launcher::{GameInstance, LaunchResult, LaunchSpec};

@@ -4,7 +4,6 @@ import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { instancesState } from "@stores/instances";
 import {
-	findBestVersion,
 	type ResourceProject,
 	type ResourceVersion,
 	resources,
@@ -14,6 +13,12 @@ import Button from "@ui/button/button";
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
+import {
+	findBestVersionForInstance,
+	findInstalledResource,
+	isResourceUpdateAvailable,
+} from "@utils/resource-install-intent";
+import { getProjectCompatibilityForInstance } from "@utils/resources";
 import {
 	type Component,
 	createEffect,
@@ -48,55 +53,24 @@ const ResourceCard: Component<{
 	const activeRouter = createMemo(() => props.router || router());
 	const isInstalled = createMemo(() => {
 		const instanceId = resources.state.selectedInstanceId;
-		const mainId = props.project.id.toLowerCase();
-		const extIds = props.project.external_ids || {};
-		const projectName = props.project.name.toLowerCase();
-		const resType = props.project.resource_type;
-
-		return resources.state.installedResources.some((ir) => {
-			if (instanceId && ir.instance_id !== instanceId) return false;
-
-			const irRemoteId = ir.remote_id.toLowerCase();
-			if (irRemoteId === mainId) return true;
-
-			if (ir.hash && props.project.source !== ir.platform) {
-				const versions = resources.state.versions.filter(
-					(v) => v.project_id === props.project.id,
-				);
-				if (versions.some((v) => v.hash === ir.hash)) return true;
-			}
-
-			for (const id of Object.values(extIds)) {
-				if (irRemoteId === id.toLowerCase()) return true;
-			}
-
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
-		});
+		return !!findInstalledResource(
+			props.project,
+			resources.state.installedResources.filter(
+				(resource) => !instanceId || resource.instance_id === instanceId,
+			),
+			resources.state.versions,
+		);
 	});
 
 	const installedResource = createMemo(() => {
 		const instanceId = resources.state.selectedInstanceId;
-		const mainId = props.project.id.toLowerCase();
-		const extIds = props.project.external_ids || {};
-		const projectName = props.project.name.toLowerCase();
-		const resType = props.project.resource_type;
-
-		return resources.state.installedResources.find((ir) => {
-			if (instanceId && ir.instance_id !== instanceId) return false;
-
-			const irRemoteId = ir.remote_id.toLowerCase();
-			if (irRemoteId === mainId) return true;
-			for (const id of Object.values(extIds)) {
-				if (irRemoteId === id.toLowerCase()) return true;
-			}
-			return (
-				ir.resource_type === resType &&
-				ir.display_name.toLowerCase() === projectName
-			);
-		});
+		return findInstalledResource(
+			props.project,
+			resources.state.installedResources.filter(
+				(resource) => !instanceId || resource.instance_id === instanceId,
+			),
+			resources.state.versions,
+		);
 	});
 
 	const isInstallingProject = createMemo(() => {
@@ -110,19 +84,11 @@ const ResourceCard: Component<{
 	const installing = () => localInstalling() || isInstallingProject();
 
 	const isUpdateAvailable = createMemo(() => {
-		const installed = installedResource();
-		const latest = latestCompatibleVersion();
-		if (!installed || !latest) return false;
-
-		if (installed.hash && latest.hash && installed.hash === latest.hash)
-			return false;
-
-		if (
-			installed.platform.toLowerCase() === props.project.source.toLowerCase()
-		) {
-			return installed.remote_version_id !== latest.id;
-		}
-		return installed.current_version !== latest.version_number;
+		return isResourceUpdateAvailable(
+			props.project,
+			installedResource(),
+			latestCompatibleVersion(),
+		);
 	});
 
 	createEffect(async () => {
@@ -136,13 +102,7 @@ const ResourceCard: Component<{
 						project.source,
 						project.id,
 					);
-					const best = findBestVersion(
-						versions,
-						inst.minecraftVersion,
-						inst.modloader,
-						"release",
-						project.resource_type,
-					);
+					const best = findBestVersionForInstance(project, versions, inst);
 					setLatestCompatibleVersion(best);
 				} catch (_) {
 					// Silently fail
@@ -160,84 +120,7 @@ const ResourceCard: Component<{
 		const instance = instancesState.instances.find((i) => i.id === instanceId);
 		if (!instance) return { type: "compatible" as const };
 
-		const instLoader = instance.modloader?.toLowerCase() || "";
-		const resType = props.project.resource_type;
-
-		if (instLoader === "" || instLoader === "vanilla") {
-			if (resType === "mod" || resType === "shader") {
-				return {
-					type: "incompatible" as const,
-					reason: `Vanilla instances do not support ${resType}s.`,
-				};
-			}
-			return { type: "compatible" as const };
-		}
-
-		if (
-			resType === "shader" ||
-			resType === "resourcepack" ||
-			resType === "datapack"
-		)
-			return { type: "compatible" as const };
-
-		const categories = props.project.categories.map((c) => c.toLowerCase());
-		const hasFabric = categories.includes("fabric");
-		const hasForge = categories.includes("forge");
-		const hasQuilt = categories.includes("quilt");
-		const hasNeoForge = categories.includes("neoforge");
-
-		if (!hasFabric && !hasForge && !hasQuilt && !hasNeoForge)
-			return { type: "compatible" as const };
-
-		if (instLoader === "fabric") {
-			if (hasFabric) return { type: "compatible" as const };
-			return {
-				type: "incompatible" as const,
-				reason: "This mod is not compatible with Fabric.",
-			};
-		}
-
-		if (instLoader === "forge") {
-			if (hasForge) return { type: "compatible" as const };
-			return {
-				type: "incompatible" as const,
-				reason: "This mod is not compatible with Forge.",
-			};
-		}
-
-		if (instLoader === "quilt") {
-			if (hasQuilt || hasFabric) {
-				if (!hasQuilt && hasFabric) {
-					return {
-						type: "warning" as const,
-						reason: "Fabric mod on Quilt instance.",
-					};
-				}
-				return { type: "compatible" as const };
-			}
-			return {
-				type: "incompatible" as const,
-				reason: "This mod is not compatible with Quilt.",
-			};
-		}
-
-		if (instLoader === "neoforge") {
-			if (hasNeoForge || hasForge) {
-				if (!hasNeoForge && hasForge) {
-					return {
-						type: "warning" as const,
-						reason: "Forge mod on NeoForge instance.",
-					};
-				}
-				return { type: "compatible" as const };
-			}
-			return {
-				type: "incompatible" as const,
-				reason: "This mod is not compatible with NeoForge.",
-			};
-		}
-
-		return { type: "compatible" as const };
+		return getProjectCompatibilityForInstance(props.project, instance);
 	});
 
 	const buttonVariant = createMemo(() => {
@@ -325,7 +208,7 @@ const ResourceCard: Component<{
 	});
 
 	const navigateToDetails = () => {
-		resources.setRequestInstall(null);
+		resources.setInstallRequest(null);
 		activeRouter()?.navigate(
 			"/resource-details",
 			{
@@ -423,10 +306,10 @@ const ResourceCard: Component<{
 					props.project.source,
 					props.project.id,
 				);
-				resources.setRequestInstall(props.project, versions);
+				resources.setInstallRequest({ project: props.project, versions });
 			} catch (err) {
 				console.error("Failed to fetch versions for request install:", err);
-				resources.setRequestInstall(props.project);
+				resources.setInstallRequest({ project: props.project, versions: [] });
 			} finally {
 				setLocalInstalling(false);
 			}
@@ -442,12 +325,10 @@ const ResourceCard: Component<{
 				props.project.source,
 				props.project.id,
 			);
-			const best = findBestVersion(
+			const best = findBestVersionForInstance(
+				props.project,
 				versions,
-				instance.minecraftVersion,
-				instance.modloader,
-				"release",
-				props.project.resource_type,
+				instance,
 			);
 			if (best) {
 				const instLoader = instance.modloader?.toLowerCase() || "";

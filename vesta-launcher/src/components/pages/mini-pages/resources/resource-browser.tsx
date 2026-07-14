@@ -1,7 +1,7 @@
 import type { MiniRouter } from "@components/page-viewer/mini-router";
 import { router } from "@components/page-viewer/page-viewer";
 import { type Instance, instancesState } from "@stores/instances";
-import { findBestVersion, resources } from "@stores/resources";
+import { resources } from "@stores/resources";
 import {
 	Pagination,
 	PaginationEllipsis,
@@ -19,6 +19,7 @@ import {
 } from "@ui/select/select";
 import { showToast } from "@ui/toast/toast";
 import { buildBrowseModpackInfo } from "@utils/modpack-prefill";
+import { findBestVersionForInstance } from "@utils/resource-install-intent";
 import { parseResourceUrl } from "@utils/resource-url";
 import {
 	batch,
@@ -88,30 +89,28 @@ const ResourceBrowser: Component<{
 	);
 
 	createEffect(() => {
-		if (resources.state.requestInstallProject) {
+		if (resources.state.installRequest) {
 			setIsInstanceDialogOpen(true);
 		}
 	});
 
 	const handleSelectInstance = async (instance: Instance) => {
-		const project = resources.state.requestInstallProject;
-		const versions = resources.state.requestInstallVersions;
-		if (!project) return;
+		const request = resources.state.installRequest;
+		if (!request) return;
+		const { project, versions } = request;
 
 		setIsInstanceDialogOpen(false);
-		resources.setRequestInstall(null);
+		resources.setInstallRequest(null);
 
 		try {
 			const finalVersions =
 				versions.length > 0
 					? versions
 					: await resources.getVersions(project.source, project.id);
-			const bestVersion = findBestVersion(
+			const bestVersion = findBestVersionForInstance(
+				project,
 				finalVersions,
-				instance.minecraftVersion,
-				instance.modloader,
-				"release",
-				project.resource_type,
+				instance,
 			);
 
 			if (bestVersion) {
@@ -133,12 +132,12 @@ const ResourceBrowser: Component<{
 	};
 
 	const handleCreateNew = () => {
-		const project = resources.state.requestInstallProject;
-		const versions = resources.state.requestInstallVersions;
-		if (!project) return;
+		const request = resources.state.installRequest;
+		if (!request) return;
+		const { project, versions } = request;
 
 		setIsInstanceDialogOpen(false);
-		resources.setRequestInstall(null);
+		resources.setInstallRequest(null);
 
 		const prefilledModpackInfo =
 			project.resource_type === "modpack"
@@ -174,8 +173,7 @@ const ResourceBrowser: Component<{
 							versions.length > 0 ? versions : undefined,
 					}
 				: {
-						pendingResourceProject: project,
-						pendingResourceVersion: versions[0],
+						pendingResource: { project, version: versions[0] },
 					},
 		);
 	};
@@ -641,12 +639,12 @@ const ResourceBrowser: Component<{
 				isOpen={isInstanceDialogOpen()}
 				onClose={() => {
 					setIsInstanceDialogOpen(false);
-					resources.setRequestInstall(null);
+					resources.setInstallRequest(null);
 				}}
 				onSelect={handleSelectInstance}
 				onCreateNew={handleCreateNew}
-				project={resources.state.requestInstallProject ?? undefined}
-				versions={resources.state.requestInstallVersions}
+				project={resources.state.installRequest?.project}
+				versions={resources.state.installRequest?.versions ?? []}
 			/>
 		</div>
 	);

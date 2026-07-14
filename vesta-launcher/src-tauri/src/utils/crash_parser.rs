@@ -72,7 +72,59 @@ pub fn detect_crash(
         }
     }
 
-    None
+    check_new_crash_report(game_dir, launch_start_time)
+}
+
+fn check_new_crash_report(game_dir: &Path, launch_start_time: SystemTime) -> Option<CrashDetails> {
+    let report_path =
+        find_latest_crash_report(&game_dir.join("crash-reports"), Some(launch_start_time))?;
+    let content = fs::read_to_string(&report_path).ok()?;
+    let native_failure = content.contains("UnsatisfiedLinkError")
+        && content.to_lowercase().contains("failed to locate library");
+    let message = content
+        .lines()
+        .find(|line| line.contains("Exception") || line.contains("Error:"))
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+        .unwrap_or("Minecraft wrote a crash report during launch")
+        .to_string();
+
+    Some(build_crash(
+        "runtime",
+        if native_failure {
+            "native_library"
+        } else {
+            "runtime"
+        },
+        if native_failure {
+            "Native library failure"
+        } else {
+            "Minecraft crash report"
+        },
+        message,
+        extract_evidence(
+            &content,
+            if native_failure {
+                &["UnsatisfiedLinkError", "Failed to locate library"]
+            } else {
+                &["Description:", "Exception", "Error:"]
+            },
+        ),
+        generic_suspects(&content),
+        if native_failure {
+            vec![
+                "Repair the instance runtime files and launch again.".to_string(),
+                "Check that the launcher selected native libraries for this operating system and architecture."
+                    .to_string(),
+            ]
+        } else {
+            vec!["Open the crash report and inspect the first exception.".to_string()]
+        },
+        None,
+        Some(report_path),
+        None,
+        if native_failure { 0.98 } else { 0.85 },
+    ))
 }
 
 /// Check for runtime exceptions in latest.log
@@ -1079,5 +1131,29 @@ More details:
         let crash = check_launch_crash(log, &log_path()).expect("crash");
         assert_eq!(crash.category, "launch");
         assert_eq!(crash.crash_type, "launch_other");
+    }
+
+    #[test]
+    fn detects_native_failure_from_crash_report_without_log_marker() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let reports = dir.path().join("crash-reports");
+        std::fs::create_dir(&reports).expect("create reports");
+        std::fs::write(dir.path().join("latest.log"), "[main/INFO]: Starting").expect("write log");
+        std::fs::write(
+            reports.join("crash-2026-07-09_22.50.15-client.txt"),
+            "---- Minecraft Crash Report ----\nDescription: Loading library LWJGL system\n\njava.lang.UnsatisfiedLinkError: Failed to locate library: liblwjgl.dylib",
+        )
+        .expect("write report");
+
+        let crash = detect_crash(
+            dir.path(),
+            &dir.path().join("latest.log"),
+            SystemTime::UNIX_EPOCH,
+        )
+        .expect("crash");
+
+        assert_eq!(crash.category, "native_library");
+        assert_eq!(crash.title, "Native library failure");
+        assert!(crash.report_path.is_some());
     }
 }

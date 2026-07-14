@@ -34,6 +34,10 @@ import {
 import { showToast } from "@ui/toast/toast";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@ui/tooltip/tooltip";
 import {
+	buildInstanceInstallPayload,
+	createInstanceInstallDraft,
+} from "@utils/instance-draft";
+import {
 	DEFAULT_ICONS,
 	type GameVersionMetadata,
 	getStableIconId,
@@ -131,39 +135,35 @@ interface ModpackMetaRow {
  */
 export function InstallForm(props: InstallFormProps) {
 	// --- Core Instance State ---
-	const [name, setName] = createSignal(
-		props.initialData?.name || props.initialName || "",
-	);
-	const [icon, setIcon] = createSignal<string | null>(
-		props.initialData?.iconPath ||
-			props.initialIcon ||
-			getStableIconId(DEFAULT_ICONS[0]) ||
-			DEFAULT_ICONS[0],
-	);
-	const [mcVersion, setMcVersion] = createSignal(
-		props.initialData?.minecraftVersion || props.initialVersion || "",
-	);
-	const [loader, setLoader] = createSignal(
-		props.initialData?.modloader || props.initialModloader || "vanilla",
-	);
-	const [loaderVer, setLoaderVer] = createSignal(
-		props.initialData?.modloaderVersion || props.initialModloaderVersion || "",
-	);
-	const [memory, setMemory] = createSignal<number[]>([
-		props.initialData?.minMemory ||
-			props.initialMinMemory ||
-			instanceDefaults().default_min_memory ||
-			DEFAULT_MIN_MEMORY_MB,
-		props.initialData?.maxMemory ||
-			props.initialMaxMemory ||
+	const initialDraft = createInstanceInstallDraft({
+		initialData: props.initialData,
+		initialName: props.initialName,
+		initialIcon: props.initialIcon,
+		initialVersion: props.initialVersion,
+		initialModloader: props.initialModloader,
+		initialModloaderVersion: props.initialModloaderVersion,
+		initialMinMemory: props.initialMinMemory,
+		initialMaxMemory: props.initialMaxMemory,
+		initialIncludeSnapshots: props.initialIncludeSnapshots,
+		defaultIcon: getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0],
+		defaultMinMemory:
+			instanceDefaults().default_min_memory || DEFAULT_MIN_MEMORY_MB,
+		defaultMaxMemory:
 			instanceDefaults().default_max_memory ||
 			getDynamicPreferredMaxMemoryMb(16384),
+	});
+	const [name, setName] = createSignal(initialDraft.name);
+	const [icon, setIcon] = createSignal<string | null>(initialDraft.iconPath);
+	const [mcVersion, setMcVersion] = createSignal(initialDraft.minecraftVersion);
+	const [loader, setLoader] = createSignal(initialDraft.modloader);
+	const [loaderVer, setLoaderVer] = createSignal(initialDraft.modloaderVersion);
+	const [memory, setMemory] = createSignal<number[]>([
+		initialDraft.minMemory,
+		initialDraft.maxMemory,
 	]);
 	const [memoryUnit, setMemoryUnit] = createSignal<"MB" | "GB">("MB");
 	const [includeSnapshots, setIncludeSnapshots] = createSignal(
-		(props.initialData as any)?.includeSnapshots ??
-			props.initialIncludeSnapshots ??
-			false,
+		initialDraft.includeSnapshots,
 	);
 
 	// --- State Propagation ---
@@ -315,9 +315,7 @@ export function InstallForm(props: InstallFormProps) {
 
 	// Flag to track if the user has manually changed fields
 	// These are persisted across window handoffs via props.initialData._dirty
-	const [dirty, setDirty] = createStore<DirtyState>(
-		(props.initialData as any)?._dirty || {},
-	);
+	const [dirty, setDirty] = createStore<DirtyState>(initialDraft.dirty);
 
 	const isNameDirty = () => !!dirty.name;
 	const isIconDirty = () => !!dirty.icon;
@@ -889,38 +887,24 @@ export function InstallForm(props: InstallFormProps) {
 		});
 		const effectiveIcon =
 			icon() || getStableIconId(DEFAULT_ICONS[0]) || DEFAULT_ICONS[0];
-		const data: Partial<Instance> = {
-			name: name(),
-			iconPath: effectiveIcon,
-			modpackIconUrl:
-				(effectiveIcon.startsWith("http") ? effectiveIcon : null) || null,
-			minecraftVersion: mcVersion(),
-			modloader: loader(),
-			modloaderVersion: loaderVer() || null,
-			minMemory: memory()[0],
-			maxMemory: memory()[1],
-			javaArgs: null,
-			// Linking data
-			useGlobalResolution: true,
-			useGlobalJavaArgs: true,
-			useGlobalJavaPath: true,
-			useGlobalHooks: true,
-			useGlobalEnvironmentVariables: true,
-			preLaunchHook: null,
-			wrapperCommand: null,
-			postExitHook: null,
-			modpackId: normalizedIsModpack()
-				? props.projectId || props.modpackInfo?.modpackId || null
-				: null,
-			modpackPlatform: normalizedIsModpack()
-				? props.platform || props.modpackInfo?.modpackPlatform || null
-				: null,
-			modpackVersionId: normalizedIsModpack()
-				? props.selectedModpackVersionId ||
-					props.modpackInfo?.modpackVersionId ||
-					null
-				: null,
-		};
+		const data = buildInstanceInstallPayload(
+			{
+				name: name(),
+				iconPath: effectiveIcon,
+				minecraftVersion: mcVersion(),
+				modloader: loader(),
+				modloaderVersion: loaderVer(),
+				minMemory: memory()[0],
+				maxMemory: memory()[1],
+			},
+			{
+				isModpack: normalizedIsModpack(),
+				projectId: props.projectId || props.modpackInfo?.modpackId,
+				platform: props.platform || props.modpackInfo?.modpackPlatform,
+				versionId:
+					props.selectedModpackVersionId || props.modpackInfo?.modpackVersionId,
+			},
+		);
 		props.onInstall(data);
 	};
 

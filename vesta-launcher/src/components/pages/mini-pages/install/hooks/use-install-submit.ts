@@ -1,8 +1,4 @@
-import {
-	type ResourceProject,
-	type ResourceVersion,
-	resources,
-} from "@stores/resources";
+import { resources } from "@stores/resources";
 import { showToast } from "@ui/toast/toast";
 import {
 	createInstance,
@@ -11,6 +7,7 @@ import {
 	installInstance,
 } from "@utils/instances";
 import { installModpackFromUrl, installModpackFromZip } from "@utils/modpacks";
+import type { PendingResourceInstall } from "@utils/resource-install-intent";
 import { type Accessor, createSignal } from "solid-js";
 
 interface UseInstallSubmitParams {
@@ -20,8 +17,7 @@ interface UseInstallSubmitParams {
 	modpackUrl: Accessor<string>;
 	modpackPath: Accessor<string>;
 	modpackInfo: Accessor<{ fullMetadata?: any } | undefined>;
-	pendingResourceProject?: Accessor<ResourceProject | undefined>;
-	pendingResourceVersion?: Accessor<ResourceVersion | undefined>;
+	pendingResource?: Accessor<PendingResourceInstall | undefined>;
 }
 
 export function useInstallSubmit(params: UseInstallSubmitParams) {
@@ -55,8 +51,9 @@ export function useInstallSubmit(params: UseInstallSubmitParams) {
 				if (id) {
 					const instance = await getInstance(id);
 					await installInstance(instance);
-					const project = params.pendingResourceProject?.();
-					const version = params.pendingResourceVersion?.();
+					const pendingResource = params.pendingResource?.();
+					const project = pendingResource?.project;
+					const version = pendingResource?.version;
 					if (project && version) {
 						await resources.install(project, version, id);
 						showToast({
