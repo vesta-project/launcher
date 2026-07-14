@@ -17,48 +17,6 @@ pub trait ActionHandler: Send + Sync {
     ) -> Result<()>;
 }
 
-/// Handler that restarts the app when the notification action 'restart_app' is invoked.
-struct RestartAppHandler {}
-
-impl ActionHandler for RestartAppHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        log::info!("[RestartAppHandler] Restart requested - calling app_handle.restart()");
-        // Attempt a normal restart. In dev mode this may be a no-op because the
-        // runner keeps the process; production builds should relaunch correctly.
-        app_handle.restart();
-    }
-}
-
-/// Handler that triggers an update installation in the frontend
-struct InstallUpdateHandler {}
-
-impl ActionHandler for InstallUpdateHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        log::info!(
-            "[InstallUpdateHandler] Action invoked! Emitting core://install-app-update event..."
-        );
-        let handle = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = handle.emit("core://install-app-update", ()) {
-                log::error!("[InstallUpdateHandler] Failed to emit event: {}", e);
-            } else {
-                log::info!("[InstallUpdateHandler] Event emitted successfully.");
-            }
-        });
-        Ok(())
-    }
-}
-
 /// Handler that logs out of guest mode and returns to onboarding
 struct LogoutGuestHandler {}
 
@@ -112,42 +70,6 @@ impl ActionHandler for LogoutGuestHandler {
             .emit("core://logout-guest", ())
             .map_err(|e| anyhow::anyhow!(e))?;
 
-        Ok(())
-    }
-}
-
-/// Handler that triggers an update download in the frontend
-struct DownloadUpdateHandler {}
-
-impl ActionHandler for DownloadUpdateHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let handle = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = handle.emit("core://download-app-update", ());
-        });
-        Ok(())
-    }
-}
-
-/// Handler that opens the update dialog
-struct OpenUpdateDialogHandler {}
-
-impl ActionHandler for OpenUpdateDialogHandler {
-    fn handle(
-        &self,
-        app_handle: &AppHandle,
-        _client_key: Option<String>,
-        _payload: Option<serde_json::Value>,
-    ) -> Result<()> {
-        let handle = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = handle.emit("core://open-update-ui", ());
-        });
         Ok(())
     }
 }
@@ -476,11 +398,7 @@ impl NotificationManager {
         };
 
         // Register built-in action handlers
-        manager.register_action("restart_app", Arc::new(RestartAppHandler {}));
-        manager.register_action("install_app_update", Arc::new(InstallUpdateHandler {}));
-        manager.register_action("download_update", Arc::new(DownloadUpdateHandler {}));
         manager.register_action("logout_guest", Arc::new(LogoutGuestHandler {}));
-        manager.register_action("open_update_dialog", Arc::new(OpenUpdateDialogHandler {}));
         manager.register_action("open_url", Arc::new(OpenUrlHandler {}));
         manager.register_action("navigate", Arc::new(NavigateHandler {}));
         // Future handlers (pause, resume, etc.) can be added here
