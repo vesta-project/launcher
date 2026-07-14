@@ -50,7 +50,7 @@ export const getProjectCompatibilityForInstance = (
 
 	return {
 		type: "incompatible",
-		reason: `This mod is not compatible with ${instance.modloader || "Vanilla"}.`,
+		reason: `This resource is not compatible with ${instance.modloader || "Vanilla"}.`,
 	};
 };
 
