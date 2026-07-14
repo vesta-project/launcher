@@ -2,7 +2,6 @@ pub mod cache;
 pub mod config;
 pub mod core;
 pub mod modloaders;
-pub mod transaction;
 pub mod types;
 pub mod verifier;
 
