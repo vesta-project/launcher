@@ -226,10 +226,34 @@ impl UnifiedManifest {
     /// Drop redundant generic native libraries when an arch-specific variant exists
     /// for the same Maven group:artifact. Returns true if the library list changed.
     pub fn apply_native_arch_policy(&mut self, os: OsType) -> bool {
+        let uses_classpath_natives = self.jvm_arguments.iter().any(|argument| {
+            matches!(
+                argument,
+                Argument::Simple(value)
+                    if value.starts_with("-Dorg.lwjgl.system.SharedLibraryExtractPath=")
+            )
+        });
+        let mut changed = false;
+        if uses_classpath_natives {
+            for library in &mut self.libraries {
+                if library.is_native
+                    && library.include_in_classpath
+                    && library.extract_rules.is_none()
+                    && library
+                        .classifier
+                        .as_deref()
+                        .is_some_and(is_native_classifier)
+                {
+                    library.is_native = false;
+                    changed = true;
+                }
+            }
+        }
+
         let before = self.libraries.len();
         self.libraries =
             filter_native_libraries_by_arch_policy(std::mem::take(&mut self.libraries), os);
-        self.libraries.len() != before
+        changed || self.libraries.len() != before
     }
 
     pub fn save_to_path(&self, path: &std::path::Path) -> anyhow::Result<()> {
@@ -337,12 +361,9 @@ impl UnifiedLibrary {
                     resolve_maven_url(&lib.name, ml_type),
                 );
 
-                // In modern Minecraft, native libraries are often separate entries with
-                // ":natives-<os>" or ":native-<name>:<os>-<arch>" in their name. We need
-                // to mark them as native so they get extracted.
                 let name_lower = lib.name.to_lowercase();
                 let parts: Vec<&str> = lib.name.split(':').collect();
-                let is_native_by_name = name_lower.contains(":natives-")
+                let has_native_classifier = name_lower.contains(":natives-")
                     || name_lower.contains(":native-")
                     || (name_lower.contains("natives-") && parts.len() > 3)
                     || (name_lower.contains("native-") && parts.len() > 3)
@@ -354,6 +375,11 @@ impl UnifiedLibrary {
                             || cl.starts_with("windows-")
                             || cl.starts_with("win-")
                     });
+                // Modern manifests put platform-native JARs on the classpath so libraries
+                // such as LWJGL can extract them. Only legacy extraction metadata makes an
+                // artifact extract-only.
+                let is_native =
+                    has_native_classifier && (lib.natives.is_some() || lib.extract.is_some());
 
                 // Extract the classifier from the name
                 let classifier = if parts.len() > 3 {
@@ -368,7 +394,7 @@ impl UnifiedLibrary {
                     download_url: url,
                     sha1: artifact.sha1.clone(),
                     size: artifact.size,
-                    is_native: is_native_by_name,
+                    is_native,
                     classifier,
                     extract_rules: lib.extract.clone(),
                     include_in_classpath: lib.include_in_classpath,
@@ -833,7 +859,7 @@ fn filter_native_libraries_by_arch_policy(
     // Group OS-matching native libraries by group:artifact (any version).
     let mut base_to_libs: HashMap<String, Vec<&UnifiedLibrary>> = HashMap::new();
     for lib in &libraries {
-        if !lib.is_native {
+        if !lib.is_native && !lib.classifier.as_deref().is_some_and(is_native_classifier) {
             continue;
         }
         if !lib
@@ -881,6 +907,16 @@ fn filter_native_libraries_by_arch_policy(
         .into_iter()
         .filter(|lib| !skip_names.contains(&lib.name))
         .collect()
+}
+
+fn is_native_classifier(classifier: &str) -> bool {
+    let classifier = classifier.to_lowercase();
+    classifier.contains("native")
+        || classifier.starts_with("osx-")
+        || classifier.starts_with("macos-")
+        || classifier.starts_with("linux-")
+        || classifier.starts_with("windows-")
+        || classifier.starts_with("win-")
 }
 
 /// Deduplicate game arguments by flag name.
@@ -963,6 +999,52 @@ mod tests {
     }
 
     #[test]
+    fn modern_native_artifact_remains_on_classpath() {
+        let lib = Library {
+            name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
+            downloads: Some(crate::game::launcher::version_parser::LibraryDownloads {
+                artifact: Some(crate::game::launcher::version_parser::Artifact {
+                    path: Some(
+                        "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-natives-macos-arm64.jar".to_string(),
+                    ),
+                    url: None,
+                    sha1: None,
+                    size: None,
+                }),
+                classifiers: None,
+            }),
+            include_in_classpath: true,
+            ..Default::default()
+        };
+
+        let resolved = UnifiedLibrary::from_library(&lib, None, OsType::MacOSArm64);
+        assert_eq!(resolved.len(), 1);
+        assert!(!resolved[0].is_native);
+        assert!(resolved[0].include_in_classpath);
+    }
+
+    #[test]
+    fn native_artifact_with_legacy_extract_metadata_remains_extract_only() {
+        let lib = Library {
+            name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
+            downloads: Some(crate::game::launcher::version_parser::LibraryDownloads {
+                artifact: Some(crate::game::launcher::version_parser::Artifact {
+                    path: Some("native.jar".to_string()),
+                    url: None,
+                    sha1: None,
+                    size: None,
+                }),
+                classifiers: None,
+            }),
+            extract: Some(ExtractRules { exclude: vec![] }),
+            ..Default::default()
+        };
+
+        let resolved = UnifiedLibrary::from_library(&lib, None, OsType::MacOSArm64);
+        assert!(resolved[0].is_native);
+    }
+
+    #[test]
     fn should_exclude_arm64_native_classifier_on_intel_macos() {
         let mut lib = Library {
             name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
@@ -1012,6 +1094,42 @@ mod tests {
         let filtered = filter_native_libraries_by_arch_policy(libs, OsType::MacOSArm64);
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].classifier.as_deref(), Some("natives-osx-arm64"));
+    }
+
+    #[test]
+    fn filter_native_drops_generic_modern_classpath_artifact() {
+        let libs = vec![
+            UnifiedLibrary {
+                name: "org.lwjgl:lwjgl:3.4.1:natives-macos".to_string(),
+                path: "generic.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: false,
+                classifier: Some("natives-macos".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            },
+            UnifiedLibrary {
+                name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
+                path: "arm64.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: false,
+                classifier: Some("natives-macos-arm64".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            },
+        ];
+
+        let filtered = filter_native_libraries_by_arch_policy(libs, OsType::MacOSArm64);
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(
+            filtered[0].classifier.as_deref(),
+            Some("natives-macos-arm64")
+        );
+        assert!(!filtered[0].is_native);
     }
 
     #[test]
@@ -1106,6 +1224,43 @@ mod tests {
 
         let reloaded = UnifiedManifest::load_from_path(&path).expect("reload manifest");
         assert_eq!(reloaded.libraries.len(), 1);
+    }
+
+    #[test]
+    fn normalize_stale_modern_manifest_restores_native_classpath_artifact() {
+        let mut manifest = UnifiedManifest {
+            id: "26.2".to_string(),
+            main_class: "net.minecraft.client.main.Main".to_string(),
+            minecraft_version: "26.2".to_string(),
+            java_version: None,
+            libraries: vec![UnifiedLibrary {
+                name: "org.lwjgl:lwjgl:3.4.1:natives-macos-arm64".to_string(),
+                path: "native.jar".to_string(),
+                download_url: None,
+                sha1: None,
+                size: None,
+                is_native: true,
+                classifier: Some("natives-macos-arm64".to_string()),
+                extract_rules: None,
+                include_in_classpath: true,
+            }],
+            asset_index: None,
+            game_arguments: vec![],
+            jvm_arguments: vec![Argument::Simple(
+                "-Dorg.lwjgl.system.SharedLibraryExtractPath=${natives_directory}/lwjgl"
+                    .to_string(),
+            )],
+            processors: vec![],
+            data: HashMap::new(),
+            assets: None,
+            version_type: None,
+            is_legacy: false,
+            logging: None,
+        };
+
+        assert!(manifest.apply_native_arch_policy(OsType::MacOSArm64));
+        assert!(!manifest.libraries[0].is_native);
+        assert!(manifest.libraries[0].include_in_classpath);
     }
 
     #[test]

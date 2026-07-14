@@ -631,8 +631,8 @@ mod tests {
 
         let os = OsType::current();
         let classifier = native_classifier_for_os(os);
-        let library_name = format!("org.lwjgl:lwjgl:3.4.1:{}", classifier);
         let artifact_path = format!("org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1-{}.jar", classifier);
+        let os_name = os_rule_name(os);
 
         let manifest = json!({
             "id": version_id,
@@ -652,19 +652,19 @@ mod tests {
                     "downloads": {
                         "artifact": {
                             "path": "org/lwjgl/lwjgl/3.4.1/lwjgl-3.4.1.jar"
-                        }
-                    }
-                },
-                {
-                    "name": library_name,
-                    "downloads": {
-                        "artifact": {
-                            "path": artifact_path
+                        },
+                        "classifiers": {
+                            (classifier): {
+                                "path": artifact_path
+                            }
                         }
                     },
-                    "rules": [
-                        { "action": "allow", "os": { "name": os_rule_name(os) } }
-                    ]
+                    "natives": {
+                        (os_name): classifier
+                    },
+                    "extract": {
+                        "exclude": ["META-INF/"]
+                    }
                 }
             ]
         });
