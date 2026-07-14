@@ -106,15 +106,10 @@ function InstallPage(props: InstallPageRouteProps) {
 	const effectivePrefetchedModpackVersions = createMemo(
 		() => props.prefetchedModpackVersions,
 	);
-	const effectivePendingResourceProject = createMemo(
-		() => props.pendingResourceProject,
-	);
-	const effectivePendingResourceVersion = createMemo(
-		() => props.pendingResourceVersion,
-	);
+	const effectivePendingResource = createMemo(() => props.pendingResource);
 	const pendingResourceIsNonModpack = createMemo(() => {
 		const resourceType =
-			effectivePendingResourceProject()?.resource_type?.toLowerCase();
+			effectivePendingResource()?.project.resource_type.toLowerCase();
 		return (
 			!!resourceType &&
 			resourceType !== "modpack" &&
@@ -133,11 +128,11 @@ function InstallPage(props: InstallPageRouteProps) {
 				effectiveResourceType()?.toLowerCase() === "modpacks"),
 	);
 	const isResourceInstanceMode = createMemo(
-		() => !isModpackMode() && !!effectivePendingResourceProject(),
+		() => !isModpackMode() && !!effectivePendingResource(),
 	);
 	const resourceTypeLabel = createMemo(() => {
 		const raw =
-			effectivePendingResourceProject()?.resource_type ||
+			effectivePendingResource()?.project.resource_type ||
 			effectiveResourceType();
 		if (!raw) return undefined;
 		if (raw === "resourcepack") return "Resource Pack";
@@ -176,8 +171,7 @@ function InstallPage(props: InstallPageRouteProps) {
 		modpackUrl: source.modpackUrl,
 		modpackPath: source.modpackPath,
 		modpackInfo: source.modpackInfo as any,
-		pendingResourceProject: effectivePendingResourceProject,
-		pendingResourceVersion: effectivePendingResourceVersion,
+		pendingResource: effectivePendingResource,
 	});
 
 	const { projectVersions, handleModpackVersionChange } = useProjectVersions({
@@ -344,8 +338,7 @@ function InstallPage(props: InstallPageRouteProps) {
 			originalIcon: source.originalIcon(),
 			prefilledModpackInfo: source.modpackInfo(),
 			prefetchedModpackVersions: projectVersions(),
-			pendingResourceProject: effectivePendingResourceProject(),
-			pendingResourceVersion: effectivePendingResourceVersion(),
+			pendingResource: effectivePendingResource(),
 		}));
 	});
 
@@ -385,7 +378,7 @@ function InstallPage(props: InstallPageRouteProps) {
 	const loadingMessage = createMemo(() => {
 		if (install.isInstalling()) {
 			if (isResourceInstanceMode()) {
-				return `Installing ${effectivePendingResourceProject()?.name || "the selected resource"} after the instance is created.`;
+				return `Installing ${effectivePendingResource()?.project.name || "the selected resource"} after the instance is created.`;
 			}
 			return "Creating files and applying the selected configuration.";
 		}
@@ -432,7 +425,7 @@ function InstallPage(props: InstallPageRouteProps) {
 					isModpackMode()
 						? undefined
 						: isResourceInstanceMode()
-							? `Create a new instance with ${effectivePendingResourceProject()?.name || "this resource"} installed.`
+							? `Create a new instance with ${effectivePendingResource()?.project.name || "this resource"} installed.`
 							: "Create a clean slate and customize it."
 				}
 				label={
@@ -446,7 +439,7 @@ function InstallPage(props: InstallPageRouteProps) {
 					isModpackMode()
 						? effectiveProjectIcon() || source.modpackInfo()?.iconUrl
 						: isResourceInstanceMode()
-							? effectivePendingResourceProject()?.icon_url
+							? effectivePendingResource()?.project.icon_url
 							: undefined
 				}
 				minecraftVersion={
@@ -503,12 +496,12 @@ function InstallPage(props: InstallPageRouteProps) {
 						onModpackVersionChange={handleModpackVersionChange}
 						supportedMcVersions={
 							isResourceInstanceMode()
-								? effectivePendingResourceVersion()?.game_versions
+								? effectivePendingResource()?.version?.game_versions
 								: capabilities.supportedMcVersions()
 						}
 						supportedModloaders={
 							isResourceInstanceMode()
-								? effectivePendingResourceVersion()?.loaders
+								? effectivePendingResource()?.version?.loaders
 								: capabilities.supportedModloaders()
 						}
 						onStateChange={setFormState}
@@ -544,7 +537,7 @@ function InstallPage(props: InstallPageRouteProps) {
 						initialModloader={
 							effectiveInitialModloader() ||
 							source.modpackInfo()?.modloader ||
-							effectivePendingResourceVersion()?.loaders[0]
+							effectivePendingResource()?.version?.loaders[0]
 						}
 						initialModloaderVersion={
 							source.modpackInfo()?.modloaderVersion ||

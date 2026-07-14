@@ -11,6 +11,11 @@ export interface ResourceInstallRequest {
 	versions: ResourceVersion[];
 }
 
+export interface PendingResourceInstall {
+	project: ResourceProject;
+	version?: ResourceVersion;
+}
+
 export function isGameVersionCompatible(
 	supported: readonly string[],
 	target: string,

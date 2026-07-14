@@ -1479,8 +1479,7 @@ const ResourceDetailsPage: Component<{
 										: undefined,
 						}
 					: {
-							pendingResourceProject: p,
-							pendingResourceVersion: version,
+							pendingResource: { project: p, version },
 						},
 			);
 		}

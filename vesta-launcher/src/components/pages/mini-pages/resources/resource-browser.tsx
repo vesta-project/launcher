@@ -173,8 +173,7 @@ const ResourceBrowser: Component<{
 							versions.length > 0 ? versions : undefined,
 					}
 				: {
-						pendingResourceProject: project,
-						pendingResourceVersion: versions[0],
+						pendingResource: { project, version: versions[0] },
 					},
 		);
 	};
